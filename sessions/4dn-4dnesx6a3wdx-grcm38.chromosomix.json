@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:07Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:07Z",
+      "producer": "chromosomix make_store.py",
+      "name": "4DN 4DNESX6A3WDX (GRCm38)",
+      "state": {
+        "uri": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/b8b47785-0d87-4cd4-9fb0-3691388f30d6/4DNFIIZQDVOR.mcool",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "track",
+          "label": "Hi-C on thymocytes +/- Lbr — 4DNFIJF73VUU (bw)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIJF73VUU.bw",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/5812a722-0d6d-4157-b775-01d2b8e28d4a/4DNFIJF73VUU.bw"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "track",
+          "label": "Hi-C on thymocytes +/- Lbr — 4DNFIGK5OASZ (bw)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIGK5OASZ.bw",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/b7c1d648-c1a7-402b-96fc-0e9c616d54ba/4DNFIGK5OASZ.bw"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on thymocytes +/- Lbr — 4DNFICKWAEXJ (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFICKWAEXJ.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/f9ac8cb2-a1b5-4928-b2aa-f40c770b5428/4DNFICKWAEXJ.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

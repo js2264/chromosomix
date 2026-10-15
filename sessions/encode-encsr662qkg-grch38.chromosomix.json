@@ -1,0 +1,52 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR662QKG (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2016/12/01/815bec7a-29a1-44b5-b558-22c82fad69ce/ENCFF740KVX.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens A549 — ENCFF513HKS (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF513HKS.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2016/12/01/c9e0bd28-c099-415a-bee4-9e73e700e52f/ENCFF513HKS.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:07Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:07Z",
+      "producer": "chromosomix make_store.py",
+      "name": "4DN 4DNESWMJBQMR (GRCh38)",
+      "state": {
+        "uri": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/f2220cf7-da5c-424f-a208-a5b27d84cdb6/4DNFIYGT4QT4.mcool",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on sync. SCC1-AID or CTCF-AID tagged Hela — 4DNFI5JXWZFU (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI5JXWZFU.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/2a590e84-3455-4e2a-9369-5a126a7e4a05/4DNFI5JXWZFU.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "track",
+          "label": "Hi-C on sync. SCC1-AID or CTCF-AID tagged Hela — 4DNFIQ7Z7GOE (bw)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIQ7Z7GOE.bw",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/4c2c9e9c-2522-4bbf-af99-001f392ce99a/4DNFIQ7Z7GOE.bw"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Hi-C on sync. SCC1-AID or CTCF-AID tagged Hela — 4DNFI42MAQQ9 (bw)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI42MAQQ9.bw",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/ade54883-c5ee-40d9-b87e-58cbf6876eaa/4DNFI42MAQQ9.bw"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

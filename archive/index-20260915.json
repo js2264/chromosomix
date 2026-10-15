@@ -1,0 +1,151 @@
+{
+  "generatedAt": "2026-09-15T22:47:15Z",
+  "stores": [
+    {
+      "id": "4dn-sessions",
+      "file": "4dn-sessions.json",
+      "name": "4DN sessions",
+      "entries": 686,
+      "bytes": 316887,
+      "generatedAt": "2026-09-15T22:45:28Z"
+    },
+    {
+      "id": "4dn",
+      "file": "4dn.json",
+      "name": "4DN open data",
+      "entries": 17076,
+      "bytes": 11375872,
+      "generatedAt": "2026-09-15T22:45:28Z"
+    },
+    {
+      "id": "dnazoo",
+      "file": "dnazoo.json",
+      "name": "DNA Zoo",
+      "entries": 1619,
+      "bytes": 661810,
+      "generatedAt": "2026-09-15T22:47:13Z"
+    },
+    {
+      "id": "encode-GRCh38-alignment",
+      "file": "encode-GRCh38-alignment.json",
+      "name": "ENCODE \u2014 GRCh38 alignments",
+      "entries": 19250,
+      "bytes": 12450230,
+      "generatedAt": "2026-09-15T22:46:42Z"
+    },
+    {
+      "id": "encode-GRCh38-annotation",
+      "file": "encode-GRCh38-annotation.json",
+      "name": "ENCODE \u2014 GRCh38 peaks and annotations",
+      "entries": 51800,
+      "bytes": 30306311,
+      "generatedAt": "2026-09-15T22:46:42Z"
+    },
+    {
+      "id": "encode-GRCh38-signal",
+      "file": "encode-GRCh38-signal.json",
+      "name": "ENCODE \u2014 GRCh38 signal",
+      "entries": 55237,
+      "bytes": 28831609,
+      "generatedAt": "2026-09-15T22:46:41Z"
+    },
+    {
+      "id": "encode-hg19-alignment",
+      "file": "encode-hg19-alignment.json",
+      "name": "ENCODE \u2014 hg19 alignments",
+      "entries": 8357,
+      "bytes": 5487144,
+      "generatedAt": "2026-09-15T22:46:43Z"
+    },
+    {
+      "id": "encode-hg19-annotation",
+      "file": "encode-hg19-annotation.json",
+      "name": "ENCODE \u2014 hg19 peaks and annotations",
+      "entries": 16136,
+      "bytes": 9802416,
+      "generatedAt": "2026-09-15T22:46:42Z"
+    },
+    {
+      "id": "encode-hg19-signal",
+      "file": "encode-hg19-signal.json",
+      "name": "ENCODE \u2014 hg19 signal",
+      "entries": 28355,
+      "bytes": 14028411,
+      "generatedAt": "2026-09-15T22:46:42Z"
+    },
+    {
+      "id": "encode-mm10-alignment",
+      "file": "encode-mm10-alignment.json",
+      "name": "ENCODE \u2014 mouse alignments",
+      "entries": 6658,
+      "bytes": 3606105,
+      "generatedAt": "2026-09-15T22:46:43Z"
+    },
+    {
+      "id": "encode-mm10-annotation",
+      "file": "encode-mm10-annotation.json",
+      "name": "ENCODE \u2014 mouse peaks and annotations",
+      "entries": 6810,
+      "bytes": 3980032,
+      "generatedAt": "2026-09-15T22:46:43Z"
+    },
+    {
+      "id": "encode-mm10-signal",
+      "file": "encode-mm10-signal.json",
+      "name": "ENCODE \u2014 mouse signal",
+      "entries": 3527,
+      "bytes": 2188334,
+      "generatedAt": "2026-09-15T22:46:43Z"
+    },
+    {
+      "id": "encode-other-alignment",
+      "file": "encode-other-alignment.json",
+      "name": "ENCODE \u2014 other assemblies alignments",
+      "entries": 4314,
+      "bytes": 4094562,
+      "generatedAt": "2026-09-15T22:46:43Z"
+    },
+    {
+      "id": "encode-other-annotation",
+      "file": "encode-other-annotation.json",
+      "name": "ENCODE \u2014 other assemblies peaks and annotations",
+      "entries": 4417,
+      "bytes": 4374300,
+      "generatedAt": "2026-09-15T22:46:43Z"
+    },
+    {
+      "id": "encode-other-signal",
+      "file": "encode-other-signal.json",
+      "name": "ENCODE \u2014 other assemblies signal",
+      "entries": 4075,
+      "bytes": 3997659,
+      "generatedAt": "2026-09-15T22:46:43Z"
+    },
+    {
+      "id": "encode-sessions",
+      "file": "encode-sessions.json",
+      "name": "ENCODE sessions",
+      "entries": 794,
+      "bytes": 300764,
+      "generatedAt": "2026-09-15T22:46:48Z"
+    },
+    {
+      "id": "igv-sessions",
+      "file": "igv-sessions.json",
+      "name": "IGV genome sessions",
+      "entries": 35,
+      "bytes": 14581,
+      "generatedAt": "2026-09-15T22:44:54Z"
+    },
+    {
+      "id": "igv",
+      "file": "igv.json",
+      "name": "IGV genomes",
+      "entries": 64,
+      "bytes": 35562,
+      "generatedAt": "2026-09-15T22:44:54Z"
+    }
+  ],
+  "sessions": 1515,
+  "entries": 229210
+}

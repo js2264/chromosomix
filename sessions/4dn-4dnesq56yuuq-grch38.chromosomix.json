@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:07Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:07Z",
+      "producer": "chromosomix make_store.py",
+      "name": "4DN 4DNESQ56YUUQ (GRCh38)",
+      "state": {
+        "uri": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/8ce7b2e4-c44e-4da3-9abd-3553ab40fd9b/4DNFI64T1MDG.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "in situ ChIA-PET in HCT116 cell line — 4DNFI4KMVSMY (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI4KMVSMY.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/1c3226fc-dc22-41e9-9bc9-1e1e9be3820c/4DNFI4KMVSMY.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "track",
+          "label": "in situ ChIA-PET in HCT116 cell line — 4DNFIWMT6U4V (bedgraph.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIWMT6U4V.bedGraph.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/d1931238-c879-421b-88b6-92bf246a216b/4DNFIWMT6U4V.bedGraph.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "in situ ChIA-PET in HCT116 cell line — 4DNFIKWEKWGC (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIKWEKWGC.bedpe.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/e1632832-2fd3-4282-ba71-064e83fc45af/4DNFIKWEKWGC.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

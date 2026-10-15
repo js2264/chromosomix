@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:07Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:07Z",
+      "producer": "chromosomix make_store.py",
+      "name": "4DN 4DNESCDQ9OV3 (GRCm38)",
+      "state": {
+        "uri": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/8f7f5e93-3fb5-42c0-b7a0-ac866998e7dc/4DNFIE15EFM4.mcool",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "track",
+          "label": "Hi-C on mouse cerebellar granule neurons — 4DNFIBSODDPI (bw)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIBSODDPI.bw",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/78014875-4485-45f4-a74f-01bb627887dc/4DNFIBSODDPI.bw"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "track",
+          "label": "Hi-C on mouse cerebellar granule neurons — 4DNFIC4ONN6Y (bw)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIC4ONN6Y.bw",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/bb9e5301-af6b-468e-b683-13e362b6a630/4DNFIC4ONN6Y.bw"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on mouse cerebellar granule neurons — 4DNFIIUTXNN6 (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIIUTXNN6.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/deea41aa-5db8-4cd6-a4d9-5904a45f9be4/4DNFIIUTXNN6.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

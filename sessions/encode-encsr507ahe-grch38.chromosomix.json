@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR507AHE (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/02/27/4e78d5d4-e1ca-4b9e-9614-45f862558805/ENCFF068LTZ.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens brain microvascular endothelial cell — ENCFF046ROF (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF046ROF.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/02/27/4a349335-312c-4bb4-adb5-c24ae0bd0d42/ENCFF046ROF.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens brain microvascular endothelial cell — ENCFF277KJA (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF277KJA.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/02/27/7a04ba1d-f249-4f2a-a2ca-9b23b9a8fa2c/ENCFF277KJA.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens brain microvascular endothelial cell — ENCFF852ZEG (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF852ZEG.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/02/27/dbd57890-8daa-4f30-8598-d924daebea80/ENCFF852ZEG.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

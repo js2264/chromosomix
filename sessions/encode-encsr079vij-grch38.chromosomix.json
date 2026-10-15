@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR079VIJ (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/03/09/135e4d00-b9bf-4f07-a1dd-103214c246bd/ENCFF247KEK.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens G401 — ENCFF685ZIM (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF685ZIM.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/09/6090113d-adfe-41dd-b1e5-8ab8fcc7a279/ENCFF685ZIM.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens G401 — ENCFF361OVL (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF361OVL.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/09/dec2e679-5a93-4557-93f4-353b06204723/ENCFF361OVL.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens G401 — ENCFF544JJD (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF544JJD.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/09/8f126155-87ae-47fe-ad79-66ba0e232ebf/ENCFF544JJD.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

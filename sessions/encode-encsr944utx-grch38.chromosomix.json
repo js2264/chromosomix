@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR944UTX (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/08/29/38028b37-1393-4a76-90b5-787aa5503c84/ENCFF531LKA.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens mesothelial cell of epicardium — ENCFF751FYY (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF751FYY.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/10/01/5a9853df-15ed-434a-b81d-6397bee0584a/ENCFF751FYY.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens mesothelial cell of epicardium — ENCFF150JWG (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF150JWG.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/10/01/1938761d-ed25-4a8d-8328-e14d7bf2094a/ENCFF150JWG.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens mesothelial cell of epicardium — ENCFF101JQC (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF101JQC.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/08/29/66f97e7b-d92a-42fd-ad65-955f937aa916/ENCFF101JQC.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

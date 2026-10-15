@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR305GRJ (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/08/07/55dd459b-a153-43a1-9002-6adbd30a8537/ENCFF025AAN.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens left lung tissue male adult (40 years) — ENCFF901FFL (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF901FFL.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/27/18d2220b-73d0-469e-8c85-9e9b31702569/ENCFF901FFL.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens left lung tissue male adult (40 years) — ENCFF380ODM (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF380ODM.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/27/d1d39117-3daf-4923-b3cc-02851285439e/ENCFF380ODM.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens left lung tissue male adult (40 years) — ENCFF394TSJ (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF394TSJ.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/08/07/e30bdd3f-ac53-4f86-8d4a-0b3292280370/ENCFF394TSJ.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

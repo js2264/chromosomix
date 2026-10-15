@@ -1,0 +1,52 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR733UHL (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/02/02/4473df6a-3373-4e62-93ba-c99f6e900aab/ENCFF790FVC.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "genome subcompartments — ENCFF037QTG (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF037QTG.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/02/28/72e6b3d3-088c-4acf-b563-8473880039a5/ENCFF037QTG.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

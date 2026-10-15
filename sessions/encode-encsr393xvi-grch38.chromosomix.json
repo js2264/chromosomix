@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR393XVI (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/03/19/8bd288cc-0398-4793-91cc-42447ed93eeb/ENCFF357BFS.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens ectodermal cell — ENCFF049NPQ (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF049NPQ.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/19/6b2629c7-f0bd-4f47-b808-6c6021b8862f/ENCFF049NPQ.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens ectodermal cell — ENCFF875FQO (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF875FQO.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/19/9de70d1b-bbf5-4b9d-b628-35440f2e3af2/ENCFF875FQO.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens ectodermal cell — ENCFF770TVD (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF770TVD.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/19/a618091c-ddbe-43a5-8094-a52492e097c5/ENCFF770TVD.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

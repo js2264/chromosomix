@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR797MWY (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/01/31/f4f5a55a-6a68-413b-abdc-0ee8b5261c0d/ENCFF592DEU.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens aorta tissue female adult (41 years) — ENCFF179VRR (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF179VRR.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/07/bf9d19cf-fed0-4330-9992-ec6b7b1166ee/ENCFF179VRR.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens aorta tissue female adult (41 years) — ENCFF850AGK (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF850AGK.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/07/394ce1de-3d58-4e89-a6d2-b9a2eb896f51/ENCFF850AGK.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens aorta tissue female adult (41 years) — ENCFF734YMV (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF734YMV.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/31/8beac725-956b-4800-af6a-991ce3afa034/ENCFF734YMV.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

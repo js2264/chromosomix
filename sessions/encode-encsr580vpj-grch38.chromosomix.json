@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR580VPJ (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2025/08/26/8355bcb2-110f-4956-b117-0cfe767831ac/ENCFF295EJI.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens GM19099 — ENCFF856BNG (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF856BNG.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2025/09/10/338ad385-4dc7-4ed1-bc58-de2b0085c242/ENCFF856BNG.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens GM19099 — ENCFF156DFJ (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF156DFJ.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/10/25/5dcb90e8-de58-48ed-88bb-97be9d03724b/ENCFF156DFJ.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "variants",
+          "label": "Homo sapiens GM19099 — ENCFF284WWQ (vcf.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF284WWQ.vcf.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2025/09/05/92a024f2-d3fa-479a-bbc6-4b7b40210490/ENCFF284WWQ.vcf.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

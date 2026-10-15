@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR185PEE (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/03/30/6112a8f5-efc9-4129-8f27-6ac6d5cc4c2a/ENCFF123PLS.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens Caco-2 — ENCFF155AUX (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF155AUX.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/30/ecf618cb-cea6-4d88-8392-766d222663ea/ENCFF155AUX.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens Caco-2 — ENCFF331VUF (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF331VUF.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/30/51e4ab3e-d8a3-464f-8ebf-c8ba57cb1010/ENCFF331VUF.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens Caco-2 — ENCFF973ATA (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF973ATA.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/30/fc520159-c018-418e-91d2-3af5a5df10e4/ENCFF973ATA.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens Caco-2 — ENCFF280CYK (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF280CYK.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/30/b00bc740-b1fb-4833-b660-e990f589bfee/ENCFF280CYK.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens Caco-2 — ENCFF960TCF (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF960TCF.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/30/9017b6fe-5efe-4989-a317-647945ea4359/ENCFF960TCF.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

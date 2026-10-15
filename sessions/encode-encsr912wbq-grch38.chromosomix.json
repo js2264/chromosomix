@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR912WBQ (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2025/08/23/50e5e556-03e9-48b5-b766-34148930a272/ENCFF609GSL.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens GM12282 — ENCFF193BEC (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF193BEC.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2025/09/10/0d277f73-53cc-475b-b4fd-d5b9b8890b1e/ENCFF193BEC.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens GM12282 — ENCFF204IMR (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF204IMR.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/12/30/272951ef-c7af-44c4-938a-95e64f148195/ENCFF204IMR.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "variants",
+          "label": "Homo sapiens GM12282 — ENCFF560VPH (vcf.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF560VPH.vcf.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2025/09/05/cd9aac33-514f-4245-8700-0f559b4fcf31/ENCFF560VPH.vcf.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

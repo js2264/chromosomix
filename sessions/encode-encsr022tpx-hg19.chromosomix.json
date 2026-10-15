@@ -1,0 +1,52 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR022TPX (hg19)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2020/08/26/3f1a7e38-4974-4aa1-8990-25385df41d3d/ENCFF964RSP.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens Ramos — ENCFF026YKA (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF026YKA.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2020/08/26/e13cfcb1-2601-4718-a625-52f6ae5a68da/ENCFF026YKA.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

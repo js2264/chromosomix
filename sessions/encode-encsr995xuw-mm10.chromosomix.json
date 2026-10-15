@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR995XUW (mm10)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2021/08/15/3e6b03b2-5fc1-4e98-b873-695f2f97779c/ENCFF286IYN.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Mus musculus strain C57BL/6J embryonic stem cell male embryo — ENCFF029YQJ (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF029YQJ.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2021/08/15/1643581e-7316-4204-89c2-5347eb112dcb/ENCFF029YQJ.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Mus musculus strain C57BL/6J embryonic stem cell male embryo — ENCFF095TZW (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF095TZW.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/08/15/c424e209-cfd6-48ce-843c-b6dd68347865/ENCFF095TZW.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Mus musculus strain C57BL/6J embryonic stem cell male embryo — ENCFF537OPA (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF537OPA.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/08/15/321918cb-498d-4469-8d50-12da797524fc/ENCFF537OPA.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Mus musculus strain C57BL/6J embryonic stem cell male embryo — ENCFF357ZTK (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF357ZTK.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2021/08/15/acea4590-1fc1-4390-9a43-d1859311a183/ENCFF357ZTK.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Mus musculus strain C57BL/6J embryonic stem cell male embryo — ENCFF635XNE (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF635XNE.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2021/08/15/a6d9503e-b410-4709-95e3-82f9dd806fd5/ENCFF635XNE.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR164VMZ (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2025/08/23/8d009895-0423-4a99-9339-c4f516189222/ENCFF173KUM.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "loops — ENCFF122NGU (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF122NGU.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2025/09/10/94e9b2d0-5d1b-4b9b-ac08-338b11474645/ENCFF122NGU.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "variants",
+          "label": "phased variant calls — ENCFF854UDW (vcf.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF854UDW.vcf.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2025/09/05/1adb8ae3-28b9-4e71-a6d2-b1ba503b7d8f/ENCFF854UDW.vcf.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

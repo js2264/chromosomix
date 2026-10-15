@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR169JKC (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/12/08/78133455-8e04-4219-8332-bc7d556c2de4/ENCFF767ILM.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens posterior cingulate gyrus tissue female adult (87 years) — ENCFF187CHQ (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF187CHQ.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/11/07/fa1b3804-09f4-427f-9cff-431c0f2483aa/ENCFF187CHQ.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens posterior cingulate gyrus tissue female adult (87 years) — ENCFF276NXF (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF276NXF.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/11/07/c21edbcb-e31c-47e1-8626-f7cec67efda1/ENCFF276NXF.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens posterior cingulate gyrus tissue female adult (87 years) — ENCFF887VSN (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF887VSN.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/12/08/d4fd44f8-66eb-460d-a3e4-b6790e376050/ENCFF887VSN.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

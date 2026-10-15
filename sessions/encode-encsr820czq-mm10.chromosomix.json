@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR820CZQ (mm10)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/12/11/5c73053d-51cb-4715-b444-c12a8750658f/ENCFF417VZK.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Mus musculus strain B6XCast EiJ adrenal gland tissue — ENCFF541AHB (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF541AHB.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/12/11/bb917673-bc8a-44b2-8872-7aaf05223daa/ENCFF541AHB.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Mus musculus strain B6XCast EiJ adrenal gland tissue — ENCFF454QEL (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF454QEL.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/12/11/ac7459d4-d89f-4e61-a590-3ab5a595ef98/ENCFF454QEL.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Mus musculus strain B6XCast EiJ adrenal gland tissue — ENCFF961BVO (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF961BVO.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/12/11/e3e516a9-480e-43cc-9b09-1f03cdc8b656/ENCFF961BVO.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

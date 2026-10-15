@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR030KAB (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2020/08/19/7c3cb047-fc85-45fa-99f2-7f73cad94d92/ENCFF776MWM.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens RWPE1 — ENCFF825KMG (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF825KMG.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2020/08/19/c5840ced-73d4-4190-b3d3-b94469d7e824/ENCFF825KMG.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens RWPE1 — ENCFF970ATQ (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF970ATQ.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2020/08/19/36fb4833-c0bd-4673-ab3f-a305de2615e0/ENCFF970ATQ.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens RWPE1 — ENCFF479KLF (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF479KLF.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2020/08/19/bdebce2b-9a5b-4c94-b9fc-c74d2c8ae9f1/ENCFF479KLF.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens RWPE1 — ENCFF826TFA (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF826TFA.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2020/10/09/fd921d47-cf37-4932-9161-ae38f344983a/ENCFF826TFA.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens RWPE1 — ENCFF300GCF (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF300GCF.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2020/10/09/55e381d9-dead-4d9a-a653-631abbe9ace6/ENCFF300GCF.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

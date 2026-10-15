@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR298WSI (mm10)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/07/25/2659d38c-de2c-439a-9200-0abf00bb7393/ENCFF584EDJ.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Mus musculus strain 129/Ola mouse embryonic stem cell — ENCFF448XEZ (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF448XEZ.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/07/25/7385d2db-bfdd-4781-b3e0-3efecdeb2655/ENCFF448XEZ.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Mus musculus strain 129/Ola mouse embryonic stem cell — ENCFF374AEW (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF374AEW.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/07/25/3937ae89-10d4-4f37-a037-edfa06e22459/ENCFF374AEW.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Mus musculus strain 129/Ola mouse embryonic stem cell — ENCFF942NIJ (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF942NIJ.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/07/25/0ec9d120-b022-4c0a-9ea0-a6256d71df23/ENCFF942NIJ.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

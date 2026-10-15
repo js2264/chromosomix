@@ -1,0 +1,52 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR996MMH (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/10/31/424fa841-fbc9-4488-b2af-73864427e6c3/ENCFF041ZHA.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "variants",
+          "label": "phased variant calls — ENCFF751AVV (vcf.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF751AVV.vcf.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/10/31/29d6dce7-e441-48e8-ac11-99e1f1d55c69/ENCFF751AVV.vcf.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

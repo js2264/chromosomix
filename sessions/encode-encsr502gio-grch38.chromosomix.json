@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR502GIO (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/11/02/26c35d47-2d8a-40b6-9bdc-75320f8bbabc/ENCFF996NVG.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens pancreas tissue female child (16 years) — ENCFF666THV (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF666THV.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/04/11/34910d08-1e64-4b18-b79b-1533fa74302e/ENCFF666THV.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens pancreas tissue female child (16 years) — ENCFF283DIW (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF283DIW.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/04/11/13eed607-a204-44af-b48b-447b05586266/ENCFF283DIW.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens pancreas tissue female child (16 years) — ENCFF258UFT (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF258UFT.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/11/02/e374e925-1db0-40ca-afc6-32ea733abc1a/ENCFF258UFT.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

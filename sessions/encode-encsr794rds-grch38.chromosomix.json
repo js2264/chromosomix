@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR794RDS (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/10/25/ae1b54dc-e765-4199-a96e-e9b4a12a6914/ENCFF280JBR.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens motor neuron — ENCFF278JPA (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF278JPA.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/10/25/500ab901-30be-4ada-9823-13312acdd27f/ENCFF278JPA.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens motor neuron — ENCFF317MHI (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF317MHI.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/10/25/5a1973fa-f358-4afa-be3f-5f959865285c/ENCFF317MHI.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens motor neuron — ENCFF196HAJ (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF196HAJ.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/10/25/6217ba37-e66a-4f5a-9337-406de09ae8ef/ENCFF196HAJ.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

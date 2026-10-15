@@ -1,0 +1,52 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR683OJZ (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/02/09/0af291df-354f-4a89-b4f3-1c4954b67dcb/ENCFF703IAR.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "genome subcompartments — ENCFF980OFC (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF980OFC.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/02/28/9e6eedf8-80c3-4e89-959d-9c1a4f46c26f/ENCFF980OFC.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

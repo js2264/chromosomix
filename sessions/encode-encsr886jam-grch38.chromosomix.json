@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR886JAM (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/02/06/04746795-15e4-400d-bcb7-1ee7873afd93/ENCFF176LIZ.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens vagina tissue female adult (53 years) — ENCFF897CRG (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF897CRG.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/02/06/90132a8f-7c62-4cbd-bbc2-2aa5b8cd4cd1/ENCFF897CRG.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens vagina tissue female adult (53 years) — ENCFF781QKB (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF781QKB.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/02/06/50c828d8-99cd-40cb-a9ee-66e2b713ebc9/ENCFF781QKB.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens vagina tissue female adult (53 years) — ENCFF325DUS (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF325DUS.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/02/06/e174caf0-18d2-4b6c-a0e3-aa8a5afbe1da/ENCFF325DUS.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

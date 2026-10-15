@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR536ZNI (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2021/10/14/04a68e9b-d85d-468c-bfbf-738fed3744c4/ENCFF790JAR.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens B cell male adult (22 years) — ENCFF627NDD (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF627NDD.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2021/10/14/9ded3739-c78c-447e-8f66-3cbf2453e061/ENCFF627NDD.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens B cell male adult (22 years) — ENCFF454FPY (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF454FPY.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/10/14/4096bdab-dec9-4ebf-89b4-0b5549ed1b96/ENCFF454FPY.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens B cell male adult (22 years) — ENCFF013IKM (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF013IKM.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/10/14/02a47101-e19a-414a-b80c-fc2dce2ed110/ENCFF013IKM.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens B cell male adult (22 years) — ENCFF863IBK (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF863IBK.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2021/10/14/5477f0d9-c006-4326-b02d-60b22626dd8e/ENCFF863IBK.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens B cell male adult (22 years) — ENCFF972SSR (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF972SSR.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2021/10/14/880110a9-8c61-42d1-813d-528e98d2fe7e/ENCFF972SSR.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

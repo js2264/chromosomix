@@ -1,0 +1,300 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:07Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:07Z",
+      "producer": "chromosomix make_store.py",
+      "name": "4DN 4DNES7BZ38JT (GRCh38)",
+      "state": {
+        "uri": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/56fc24cb-0ac0-4598-9c83-7e3dd90c5d58/4DNFI942MCWK.mcool",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "track",
+          "label": "HiChIP on HG00731cells — 4DNFISCT4SEZ (bw)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFISCT4SEZ.bw",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/2724623e-c04e-4ed3-879c-aaa6c79539b8/4DNFISCT4SEZ.bw"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "track",
+          "label": "HiChIP on HG00731cells — 4DNFI9QTY12P (bw)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI9QTY12P.bw",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/389ab18e-a35a-4210-9906-85ebb71aba05/4DNFI9QTY12P.bw"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "segments",
+          "label": "HiChIP on HG00731cells — 4DNFIY5YNSPZ (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIY5YNSPZ.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/4fe0b36d-927d-487c-ae51-625745e688ba/4DNFIY5YNSPZ.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "HiChIP on HG00731cells — 4DNFIY93PGZY (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIY93PGZY.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/722e4b99-0341-4907-88d0-4ef1125b656b/4DNFIY93PGZY.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "HiChIP on HG00731cells — 4DNFIINZDBRI (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIINZDBRI.bedpe.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/9d7fa444-c849-4818-907f-006b1757acb8/4DNFIINZDBRI.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-5",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "HiChIP on HG00731cells — 4DNFIYG3QMZD (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIYG3QMZD.bedpe.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/a33a97b1-252c-4358-8d3c-248447770225/4DNFIYG3QMZD.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#e69f00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-6",
+          "card": "linear",
+          "kind": "segments",
+          "label": "HiChIP on HG00731cells — 4DNFIYRX7I79 (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIYRX7I79.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/a4d19e69-938b-434d-b34a-443718ba30f3/4DNFIYRX7I79.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#56b4e9",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-7",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "HiChIP on HG00731cells — 4DNFIHYBHE1Z (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIHYBHE1Z.bedpe.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/b8ebe527-55fe-458f-ba9d-94a1e9834356/4DNFIHYBHE1Z.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#8c6d31",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-8",
+          "card": "linear",
+          "kind": "track",
+          "label": "HiChIP on HG00731cells — 4DNFIYH44KV6 (bw)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIYH44KV6.bw",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/ba67567a-40a2-49ef-9d13-535d21cf5fb9/4DNFIYH44KV6.bw"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

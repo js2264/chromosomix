@@ -1,0 +1,115 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:16:46Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:16:46Z",
+      "producer": "chromosomix make_store.py",
+      "name": "IGV ASM294v2",
+      "state": {
+        "uri": "https://s3.amazonaws.com/igv.org.genomes/ASM294v2/Schizosaccharomyces_pombe_all_chromosomes.fa",
+        "view": "browser"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "sequence",
+          "label": "sequence",
+          "source": {
+            "kind": "remote",
+            "name": "Schizosaccharomyces_pombe_all_chromosomes.fa",
+            "url": "https://s3.amazonaws.com/igv.org.genomes/ASM294v2/Schizosaccharomyces_pombe_all_chromosomes.fa",
+            "index": "https://s3.amazonaws.com/igv.org.genomes/ASM294v2/Schizosaccharomyces_pombe_all_chromosomes.fa.fai"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 46,
+            "mode": "line",
+            "limits": {
+              "auto": false,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "gtf",
+          "label": "Pombase forward strand",
+          "source": {
+            "kind": "remote",
+            "name": "Schizosaccharomyces_pombe_all_chromosomes.plus.gff3.gz",
+            "url": "https://s3.amazonaws.com/igv.org.genomes/ASM294v2/Schizosaccharomyces_pombe_all_chromosomes.plus.gff3.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 92,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "gtf",
+          "label": "Pombase reverse strand",
+          "source": {
+            "kind": "remote",
+            "name": "Schizosaccharomyces_pombe_all_chromosomes.minus.gff3.gz",
+            "url": "https://s3.amazonaws.com/igv.org.genomes/ASM294v2/Schizosaccharomyces_pombe_all_chromosomes.minus.gff3.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 92,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

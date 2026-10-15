@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR110KDI (mm10)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/01/28/2481e875-d744-49ab-af01-2967e37b8a12/ENCFF999KXH.h5",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "transcription start sites — ENCFF682KEF (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF682KEF.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/28/fd6d1bd8-0fab-421c-9723-28bf27c2d0c0/ENCFF682KEF.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "track",
+          "label": "minus strand normalized end position signal — ENCFF294CRA (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF294CRA.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/28/e5d222cb-0042-4ecb-acc0-6dd219a0bc91/ENCFF294CRA.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "gtf",
+          "label": "transcriptome reference — ENCFF200RSU (gtf.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF200RSU.gtf.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/28/6839c631-61aa-4f8a-9f2b-0f20829d71e2/ENCFF200RSU.gtf.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 92,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

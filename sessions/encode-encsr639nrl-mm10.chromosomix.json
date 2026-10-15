@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR639NRL (mm10)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/12/29/409469b6-4768-41e6-9d16-61b7ea62b03d/ENCFF969SFG.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Mus musculus strain B6CASTF1/J left cerebral cortex tissue adult (2 months) — ENCFF992EHG (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF992EHG.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/12/29/98821819-d388-4ff0-aed4-624a17316ae9/ENCFF992EHG.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Mus musculus strain B6CASTF1/J left cerebral cortex tissue adult (2 months) — ENCFF807GHT (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF807GHT.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/12/29/3e9a29f2-7a40-4018-b48f-b409b44f86e3/ENCFF807GHT.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Mus musculus strain B6CASTF1/J left cerebral cortex tissue adult (2 months) — ENCFF539TWY (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF539TWY.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/12/29/bacf1cb0-73b3-4cdb-8a10-f3a872c74420/ENCFF539TWY.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

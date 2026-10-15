@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR956IXE (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2021/09/22/8b085e2c-3dcb-40f2-a037-f55a51cccb49/ENCFF525WHR.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens BJ — ENCFF036SWA (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF036SWA.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2021/09/22/5c93aa66-31d0-484d-b0c2-fd7bd7028b9d/ENCFF036SWA.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens BJ — ENCFF678THQ (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF678THQ.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/09/22/acf15938-47e6-41e2-970c-835e970d93e1/ENCFF678THQ.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens BJ — ENCFF775SCY (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF775SCY.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/09/22/3c649bb6-008a-4dae-8804-ae0b10ac2bc5/ENCFF775SCY.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens BJ — ENCFF205TJW (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF205TJW.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2021/09/22/9032ef8b-4e4e-46a5-9cca-ca9fb2524415/ENCFF205TJW.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens BJ — ENCFF155KAE (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF155KAE.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2021/09/22/12068945-216a-497d-931e-912bf1c85f33/ENCFF155KAE.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

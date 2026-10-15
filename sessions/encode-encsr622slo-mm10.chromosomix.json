@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR622SLO (mm10)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/12/08/96e096a5-0731-4f1b-b9f8-bb091aeb7e47/ENCFF371FGB.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Mus musculus strain B6CASTF1/J gastrocnemius tissue adult (2 months) — ENCFF072UYG (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF072UYG.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/12/08/5cb84579-916f-4e18-a24b-77692c89660a/ENCFF072UYG.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Mus musculus strain B6CASTF1/J gastrocnemius tissue adult (2 months) — ENCFF843IEZ (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF843IEZ.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/12/08/51279325-8967-4b70-b5cb-2549f29ad575/ENCFF843IEZ.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Mus musculus strain B6CASTF1/J gastrocnemius tissue adult (2 months) — ENCFF345HXY (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF345HXY.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/12/08/e8b48611-8b22-49dc-a59c-bb0c45e4713f/ENCFF345HXY.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

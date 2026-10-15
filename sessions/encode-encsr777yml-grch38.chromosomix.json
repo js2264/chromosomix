@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR777YML (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2025/09/05/119fa433-70fc-4dc7-bee9-b9f26ba03013/ENCFF973XNN.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens HCT116 genetically modified (insertion) using CRISPR inserting O. sativa LOC4335696, (insertion) using CRISPR targeting H. sapiens SMARCA5 — ENCFF749PZK (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF749PZK.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/07/961f2413-f730-42dc-8426-2fcc1fe0ae84/ENCFF749PZK.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens HCT116 genetically modified (insertion) using CRISPR inserting O. sativa LOC4335696, (insertion) using CRISPR targeting H. sapiens SMARCA5 — ENCFF255PJE (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF255PJE.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/07/6feb60ab-a707-46ec-a642-e969b934227a/ENCFF255PJE.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens HCT116 genetically modified (insertion) using CRISPR inserting O. sativa LOC4335696, (insertion) using CRISPR targeting H. sapiens SMARCA5 — ENCFF720WPC (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF720WPC.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/07/8021d238-72b5-4e02-a627-802e1fa73910/ENCFF720WPC.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

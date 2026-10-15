@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR941KKW (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/04/08/ee68574f-5c97-4311-ac16-5b6643398ee3/ENCFF736ITL.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens heart right ventricle tissue female adult (56 years) — ENCFF292DBE (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF292DBE.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/04/08/fbf4038f-bcf1-425a-8587-6f2d1f5dfb46/ENCFF292DBE.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens heart right ventricle tissue female adult (56 years) — ENCFF107JLV (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF107JLV.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/04/08/9161cc4c-bed5-4bc6-ac76-ea85b5440d21/ENCFF107JLV.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens heart right ventricle tissue female adult (56 years) — ENCFF632PUQ (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF632PUQ.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/04/08/3a0cddcc-685d-4a10-8e66-0e9c088e60fa/ENCFF632PUQ.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR411UEL (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/05/24/81c23708-bc44-4d0f-a08c-c7f3477ee26b/ENCFF893DJP.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens activated T-cell male adult (35 years) treated with 50 U/mL Interleukin-2 for 72 hours, anti-CD3 and anti-CD28 coated beads for 72 hours — ENCFF031BOQ (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF031BOQ.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/24/808bcf1b-5b97-4a06-b9f7-88bcf505c7fe/ENCFF031BOQ.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens activated T-cell male adult (35 years) treated with 50 U/mL Interleukin-2 for 72 hours, anti-CD3 and anti-CD28 coated beads for 72 hours — ENCFF673MBN (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF673MBN.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/24/8ad9c5d7-c0a9-41d1-9a73-20965c1ebe13/ENCFF673MBN.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens activated T-cell male adult (35 years) treated with 50 U/mL Interleukin-2 for 72 hours, anti-CD3 and anti-CD28 coated beads for 72 hours — ENCFF754OVC (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF754OVC.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/24/92577d96-ed26-4a46-a06b-8e65dd5169b5/ENCFF754OVC.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens activated T-cell male adult (35 years) treated with 50 U/mL Interleukin-2 for 72 hours, anti-CD3 and anti-CD28 coated beads for 72 hours — ENCFF597IUH (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF597IUH.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/24/c04b52fd-3573-45fb-98a7-502a0df9780a/ENCFF597IUH.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens activated T-cell male adult (35 years) treated with 50 U/mL Interleukin-2 for 72 hours, anti-CD3 and anti-CD28 coated beads for 72 hours — ENCFF320QUJ (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF320QUJ.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/24/8b8ae8ed-8fa5-45f3-8c26-41257c39d04a/ENCFF320QUJ.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

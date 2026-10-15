@@ -1,0 +1,52 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR260SDC (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2025/09/07/9d389522-ccdd-4da6-b3ff-c5fd5cfc2ecb/ENCFF084OER.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "loops — ENCFF302ANN (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF302ANN.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2025/09/10/935a1a83-514f-4c0f-bb11-8fb9901bb168/ENCFF302ANN.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

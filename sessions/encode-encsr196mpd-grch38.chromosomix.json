@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR196MPD (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/03/21/80b2e673-8391-44ac-a78d-a991ac4403e3/ENCFF658KTB.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens GM11168 — ENCFF394QUS (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF394QUS.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/21/79190838-9217-4b7f-976d-d3f6ce4e3062/ENCFF394QUS.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens GM11168 — ENCFF231LWD (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF231LWD.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/21/2d3d97ad-d479-4390-958c-71ee7423427f/ENCFF231LWD.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens GM11168 — ENCFF218XDG (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF218XDG.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/21/41c20a36-055c-4c3a-9029-0354b0306a4a/ENCFF218XDG.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

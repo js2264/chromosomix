@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR870SXX (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/01/29/d192df0b-5af3-48e3-a95a-544407eef278/ENCFF982GKV.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens testis tissue male adult (54 years) — ENCFF782HUH (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF782HUH.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/29/83cf62a3-b706-4cff-9438-88a2fe16c140/ENCFF782HUH.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens testis tissue male adult (54 years) — ENCFF160RJO (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF160RJO.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/29/df6e35bc-d1a5-4b4e-bbda-530108443cbf/ENCFF160RJO.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens testis tissue male adult (54 years) — ENCFF643BJD (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF643BJD.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/29/b20ac32b-239d-4585-9338-de8936174699/ENCFF643BJD.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

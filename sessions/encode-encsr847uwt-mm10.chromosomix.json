@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR847UWT (mm10)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/07/27/0b72b4bb-1d58-4bf4-b092-eac4c6caa186/ENCFF710YJN.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Mus musculus strain C57BL/6J mature B cell treated with 50 μg/mL lipopolysaccharide for 24 hours, 5 ng/mL Interleukin-4 for 24 hours, 500 ng/mL anti-CD180 for 24 hours, 99.7 ng/mL oligomycin for 2 hours, 820.8 μg/mL 2-Deoxy-D-glucose for 2 hours — ENCFF752ORB (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF752ORB.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/07/27/ad2bfb0b-d522-4cd6-b744-f4d9af3b9c48/ENCFF752ORB.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Mus musculus strain C57BL/6J mature B cell treated with 50 μg/mL lipopolysaccharide for 24 hours, 5 ng/mL Interleukin-4 for 24 hours, 500 ng/mL anti-CD180 for 24 hours, 99.7 ng/mL oligomycin for 2 hours, 820.8 μg/mL 2-Deoxy-D-glucose for 2 hours — ENCFF245PNZ (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF245PNZ.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/07/27/c2d8ce01-e906-4700-9a93-d96cb2cd5220/ENCFF245PNZ.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Mus musculus strain C57BL/6J mature B cell treated with 50 μg/mL lipopolysaccharide for 24 hours, 5 ng/mL Interleukin-4 for 24 hours, 500 ng/mL anti-CD180 for 24 hours, 99.7 ng/mL oligomycin for 2 hours, 820.8 μg/mL 2-Deoxy-D-glucose for 2 hours — ENCFF359PFZ (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF359PFZ.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/07/27/4c12ab27-1ca0-449c-b811-cbb8d3373ceb/ENCFF359PFZ.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

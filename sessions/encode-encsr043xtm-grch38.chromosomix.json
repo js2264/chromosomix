@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR043XTM (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/10/29/848865f4-5155-40d6-aef5-2a770d75ae78/ENCFF645KJW.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens thyroid gland tissue female adult (53 years) — ENCFF269MHX (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF269MHX.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/12/07/36528044-d1f3-4c9d-ae7e-fe9be5276c16/ENCFF269MHX.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens thyroid gland tissue female adult (53 years) — ENCFF204VWR (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF204VWR.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/12/07/13946cab-c423-4394-b8bd-7b7c2e05a985/ENCFF204VWR.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens thyroid gland tissue female adult (53 years) — ENCFF124DHJ (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF124DHJ.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/10/29/f543b236-20d4-4f2d-9720-8004d3e36e0c/ENCFF124DHJ.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

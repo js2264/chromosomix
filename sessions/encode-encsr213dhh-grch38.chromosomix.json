@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR213DHH (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/03/01/09c27b3d-6dae-4e09-ad4e-aadfc4c956f1/ENCFF530EAB.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens DLD1 — ENCFF651KPP (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF651KPP.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/01/091142e3-aa91-4b00-9ecc-34cb3eb720cc/ENCFF651KPP.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens DLD1 — ENCFF053ZOQ (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF053ZOQ.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/01/b7412780-aefd-41e2-8a9b-575e813ff363/ENCFF053ZOQ.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens DLD1 — ENCFF852UUA (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF852UUA.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/01/b1151195-30d2-41cd-a5db-37af8eafa5db/ENCFF852UUA.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

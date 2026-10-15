@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR550JJT (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2021/07/19/eaa66f1a-6087-46b7-9237-9e1201697bae/ENCFF275GRR.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens activated naive CD4-positive, alpha-beta T cell male adult (43 years) treated with 10 ng/mL Interleukin-2 for 5 days, anti-CD3 and anti-CD28 coated beads for 7 days — ENCFF838UQC (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF838UQC.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/19/42f23fae-2d63-41ab-b2b3-45e7a31af3f2/ENCFF838UQC.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens activated naive CD4-positive, alpha-beta T cell male adult (43 years) treated with 10 ng/mL Interleukin-2 for 5 days, anti-CD3 and anti-CD28 coated beads for 7 days — ENCFF074LHL (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF074LHL.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/19/2727273b-a53b-4095-9ace-4b62432ea50f/ENCFF074LHL.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens activated naive CD4-positive, alpha-beta T cell male adult (43 years) treated with 10 ng/mL Interleukin-2 for 5 days, anti-CD3 and anti-CD28 coated beads for 7 days — ENCFF561KEO (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF561KEO.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/19/ee17906e-9668-4021-8c6a-34c3eb6489f1/ENCFF561KEO.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens activated naive CD4-positive, alpha-beta T cell male adult (43 years) treated with 10 ng/mL Interleukin-2 for 5 days, anti-CD3 and anti-CD28 coated beads for 7 days — ENCFF199LTI (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF199LTI.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/19/0946d05a-5790-4085-b046-10c5c5c333e0/ENCFF199LTI.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens activated naive CD4-positive, alpha-beta T cell male adult (43 years) treated with 10 ng/mL Interleukin-2 for 5 days, anti-CD3 and anti-CD28 coated beads for 7 days — ENCFF998YDT (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF998YDT.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/19/4bb8ac88-7fc3-4c0b-b6dd-e57f465d99c5/ENCFF998YDT.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

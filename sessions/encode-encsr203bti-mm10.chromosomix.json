@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR203BTI (mm10)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/11/13/e0f17ad0-bfc2-4779-81ea-c8c0f1236b6f/ENCFF268CCF.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Mus musculus strain C57BL/6J T-helper 17 cell — ENCFF857KLU (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF857KLU.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/11/13/923e4f0a-6b2f-4fcc-b80c-a9c98e6b8ce8/ENCFF857KLU.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Mus musculus strain C57BL/6J T-helper 17 cell — ENCFF217HHO (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF217HHO.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/11/13/a29443c9-b961-45a5-8f5c-202ad4081bea/ENCFF217HHO.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Mus musculus strain C57BL/6J T-helper 17 cell — ENCFF965CGH (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF965CGH.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/11/13/86b80c25-e253-4d0f-9f99-ecb3aee2f877/ENCFF965CGH.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

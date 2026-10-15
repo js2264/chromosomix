@@ -1,0 +1,83 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR974LXZ (hg19)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2017/07/12/61dabaae-f35b-453f-abe5-1b6ad116d869/ENCFF941LBD.h5",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens astrocyte of the spinal cord — ENCFF444XGA (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF444XGA.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2017/07/12/21d0e7b1-1e0d-4b28-9fde-0d069554eede/ENCFF444XGA.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens astrocyte of the spinal cord — ENCFF595YGT (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF595YGT.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2017/07/12/586b2c64-dbb1-40a4-a0f7-df55a3f9f56f/ENCFF595YGT.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

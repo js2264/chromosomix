@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR096ZPB (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2021/07/29/5665a296-48ce-4313-9225-917a2f4b5354/ENCFF405WEO.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens activated B cell male adult (22 years) treated with 0.5 μM CpG ODN for 24 hours — ENCFF869FTL (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF869FTL.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/29/6f2b5e9c-29d1-4424-9ee2-8477a6c0fa96/ENCFF869FTL.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens activated B cell male adult (22 years) treated with 0.5 μM CpG ODN for 24 hours — ENCFF429VZJ (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF429VZJ.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/29/65d50f3a-a67d-48d3-8a98-bdcdf2cefe08/ENCFF429VZJ.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens activated B cell male adult (22 years) treated with 0.5 μM CpG ODN for 24 hours — ENCFF798RVS (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF798RVS.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/29/374ffc23-d579-4d51-b74e-79d0a30cc23b/ENCFF798RVS.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens activated B cell male adult (22 years) treated with 0.5 μM CpG ODN for 24 hours — ENCFF753NMZ (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF753NMZ.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/29/58474c48-e519-4b14-a3c8-ef01b9dfc512/ENCFF753NMZ.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens activated B cell male adult (22 years) treated with 0.5 μM CpG ODN for 24 hours — ENCFF919LNC (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF919LNC.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/29/6a32d3f9-f30c-4f08-a8f7-5ccbe86cc1bf/ENCFF919LNC.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

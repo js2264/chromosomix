@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR028AOM (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/09/08/d51225cf-88eb-45f9-85f0-f777087a9424/ENCFF923BLG.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens HCT116 — ENCFF626YXT (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF626YXT.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2023/09/08/6781fcb9-933a-438e-a97f-af3d403275fd/ENCFF626YXT.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens HCT116 — ENCFF209UVB (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF209UVB.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/10/26/1d823d02-8732-434b-80df-29519cfe3839/ENCFF209UVB.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens HCT116 — ENCFF625LBL (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF625LBL.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/09/09/cf25ab4b-9cc3-446a-96a6-b953469d1a7a/ENCFF625LBL.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens HCT116 — ENCFF849NNV (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF849NNV.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2023/12/14/59ac5dd8-05f5-4dd5-9ca2-fa1a6ff053cd/ENCFF849NNV.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens HCT116 — ENCFF184HZN (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF184HZN.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/09/08/e6bf6e26-ba65-4cfd-a891-245bdb40f00f/ENCFF184HZN.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

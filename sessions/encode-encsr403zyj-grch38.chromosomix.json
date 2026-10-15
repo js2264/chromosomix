@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR403ZYJ (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2020/08/16/d7591a18-ac8f-40a9-b052-b8dd13d35c30/ENCFF117NPC.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens MCF 10A — ENCFF713UCW (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF713UCW.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2020/08/16/0f37cf97-c34d-4d69-87f1-3287ceb95ce0/ENCFF713UCW.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens MCF 10A — ENCFF140RPA (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF140RPA.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2020/08/16/e60d5cdd-620e-4bb1-bf2c-3aab1adb0bdc/ENCFF140RPA.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens MCF 10A — ENCFF035RRT (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF035RRT.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2020/08/16/7edab09b-e26f-49e5-bb72-38d70fb3238e/ENCFF035RRT.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens MCF 10A — ENCFF406DBT (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF406DBT.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2020/10/20/0986e2ec-d26e-4087-ad8a-68d4b9aea570/ENCFF406DBT.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens MCF 10A — ENCFF736GKY (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF736GKY.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2020/10/20/d692dc6f-dbde-473e-9015-207696b2ed2a/ENCFF736GKY.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

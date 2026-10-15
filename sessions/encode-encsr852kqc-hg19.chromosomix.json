@@ -1,0 +1,52 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR852KQC (hg19)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2019/02/15/8e787cd8-e388-4bc2-a236-7a5e6f39e0c0/ENCFF999YXX.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens IMR-90 — ENCFF307RGV (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF307RGV.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2019/02/15/61c15e87-5f91-4eef-adeb-0fc6cc1303e1/ENCFF307RGV.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

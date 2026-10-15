@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR661EJQ (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/03/26/d9174432-968f-4477-b824-11d51caf1bb6/ENCFF991WCK.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens HL-60/S4 — ENCFF754YAY (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF754YAY.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/26/44e5775d-80fd-4649-b5c0-4cbd4962b00e/ENCFF754YAY.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens HL-60/S4 — ENCFF472LQL (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF472LQL.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/26/284c7be0-766b-4584-815c-2843cd3cf49e/ENCFF472LQL.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens HL-60/S4 — ENCFF732KRC (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF732KRC.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/26/0b86237b-769d-47c8-8012-463b07c9174e/ENCFF732KRC.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

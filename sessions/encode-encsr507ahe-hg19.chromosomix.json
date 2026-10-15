@@ -1,0 +1,83 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR507AHE (hg19)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2017/07/12/6c7da80d-2171-4f26-9109-dc1abe8d308a/ENCFF010WBP.h5",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens brain microvascular endothelial cell — ENCFF373MCF (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF373MCF.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2017/07/12/a9f073a8-152e-4234-a817-bb504ebe4d56/ENCFF373MCF.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens brain microvascular endothelial cell — ENCFF514DIG (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF514DIG.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2017/07/12/83bdc494-48f7-4807-bfff-39ea7e474748/ENCFF514DIG.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

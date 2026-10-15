@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR274ZVY (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/06/13/37081537-6daf-4fcc-98ef-c92e22bc95cb/ENCFF669TQU.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens PC-9 — ENCFF404JZF (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF404JZF.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/13/ea134f7b-181b-433b-a02a-48bd7e86a084/ENCFF404JZF.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens PC-9 — ENCFF755YRH (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF755YRH.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/13/d2e60b8f-c2b2-4cb1-bf00-db61624849ec/ENCFF755YRH.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens PC-9 — ENCFF505POB (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF505POB.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/13/2efb9f3a-7c7a-43ff-b931-3e27e5908615/ENCFF505POB.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens PC-9 — ENCFF354BPZ (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF354BPZ.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/13/4bc7aff9-2f29-4663-bca8-039e4c0be4b0/ENCFF354BPZ.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens PC-9 — ENCFF987AJZ (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF987AJZ.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/13/caf5a1bb-0e3a-4fcd-a1bb-2685b0a4cd11/ENCFF987AJZ.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

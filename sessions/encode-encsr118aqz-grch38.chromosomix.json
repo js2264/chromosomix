@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR118AQZ (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/01/26/f6adbdbb-75b9-4981-a76e-5d0a78226749/ENCFF111LFJ.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens Calu3 — ENCFF178QPO (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF178QPO.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/02/14/16c5ff3c-3b84-4722-a754-89c5cf15ca76/ENCFF178QPO.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens Calu3 — ENCFF362QUB (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF362QUB.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/02/14/38494d38-57ed-4274-810b-43fe687916d7/ENCFF362QUB.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens Calu3 — ENCFF259JPG (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF259JPG.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/26/200ffb9c-e5bc-4361-b014-ea853efa8fcb/ENCFF259JPG.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

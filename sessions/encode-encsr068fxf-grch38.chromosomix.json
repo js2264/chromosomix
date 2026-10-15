@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR068FXF (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/01/31/a5572c13-ac64-474c-a264-c998bb25d529/ENCFF633LHF.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens lower lobe of left lung tissue male adult (60 years) — ENCFF093CLB (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF093CLB.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/15/1d78d40b-f216-4b1b-96d0-cbf44a31f645/ENCFF093CLB.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens lower lobe of left lung tissue male adult (60 years) — ENCFF226FMS (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF226FMS.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/15/b78fdfaa-bb55-4180-b061-e74191043b03/ENCFF226FMS.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens lower lobe of left lung tissue male adult (60 years) — ENCFF501SUG (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF501SUG.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/31/4df6ecb8-5f72-4c5e-9785-84bc0a441172/ENCFF501SUG.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

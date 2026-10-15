@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR974LXZ (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/02/27/7c5cd353-77bf-4e10-8378-c063cec015a1/ENCFF815ZPR.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens astrocyte of the spinal cord — ENCFF960XWO (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF960XWO.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/02/27/d313a0a0-aace-483c-b27e-64b94c724296/ENCFF960XWO.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens astrocyte of the spinal cord — ENCFF244FWG (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF244FWG.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/02/27/6356b00c-4416-4281-9ac9-2c07bc3f91ac/ENCFF244FWG.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens astrocyte of the spinal cord — ENCFF455JBK (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF455JBK.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/02/27/b89c89cf-686e-4d74-9902-da1b069c301d/ENCFF455JBK.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

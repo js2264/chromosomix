@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR326YHP (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/02/13/5b1290b0-9684-4e9a-8e96-7f7792bd31d4/ENCFF924WYB.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens breast epithelium tissue female adult (53 years) — ENCFF661YAH (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF661YAH.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/02/13/b11a311b-e8c0-4fa9-a79c-07de44f6fe71/ENCFF661YAH.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens breast epithelium tissue female adult (53 years) — ENCFF347RBR (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF347RBR.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/02/13/8270475e-a785-4dcc-9497-fff4e8e75a52/ENCFF347RBR.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens breast epithelium tissue female adult (53 years) — ENCFF589SUI (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF589SUI.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/02/13/3101ceab-e125-4bad-92a8-0b240b12af9e/ENCFF589SUI.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

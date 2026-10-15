@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR333BMU (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/01/31/2ffffbd7-26f5-4f43-b5f3-60d410f6e2aa/ENCFF203TVE.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens left ventricle myocardium superior tissue male adult (60 years) — ENCFF223OLX (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF223OLX.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/02/23/48bcb8cf-efdf-4381-93cc-3e306805e311/ENCFF223OLX.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens left ventricle myocardium superior tissue male adult (60 years) — ENCFF779CLL (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF779CLL.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/02/23/37640066-0fa3-4faf-ba6b-d8a4ec0ff68a/ENCFF779CLL.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens left ventricle myocardium superior tissue male adult (60 years) — ENCFF178GNM (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF178GNM.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/31/ff2d61c8-278b-4159-974a-376ab54b122b/ENCFF178GNM.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

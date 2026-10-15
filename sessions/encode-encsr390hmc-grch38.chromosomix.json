@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR390HMC (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/08/26/9e376b20-16b1-43ce-97d7-373da96530c3/ENCFF898HRO.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens HAP-1 — ENCFF200OSV (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF200OSV.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/08/26/77261f6f-6b0d-454d-bea4-1d7ebb84a6bd/ENCFF200OSV.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens HAP-1 — ENCFF670SVJ (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF670SVJ.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/08/26/48cd3101-e804-4ade-80e9-b892e845f9de/ENCFF670SVJ.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens HAP-1 — ENCFF205CWJ (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF205CWJ.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/08/26/6e72d563-e481-4f34-84ab-e27aba40bfd0/ENCFF205CWJ.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

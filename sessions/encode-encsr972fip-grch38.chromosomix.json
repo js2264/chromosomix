@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR972FIP (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/11/01/14a36215-c684-4233-ab91-e54e7e609d64/ENCFF170JAQ.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens left colon tissue female adult (46 years) — ENCFF775YCE (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF775YCE.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/04/12/76e15be3-c65d-473d-84ac-989bf17e8b27/ENCFF775YCE.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens left colon tissue female adult (46 years) — ENCFF153FHD (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF153FHD.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/04/12/4e00668f-7b12-4ac6-bba6-0fe8879bc979/ENCFF153FHD.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens left colon tissue female adult (46 years) — ENCFF986EHS (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF986EHS.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/11/01/78987d61-717f-40c6-8086-d805a3033c79/ENCFF986EHS.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

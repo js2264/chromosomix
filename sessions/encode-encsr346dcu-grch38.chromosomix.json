@@ -1,0 +1,83 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR346DCU (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/05/26/0da59684-1d97-448f-a735-16c54e5547fe/ENCFF678ZLX.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens LNCaP clone FGC — ENCFF264YWN (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF264YWN.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/26/8ee5b7a9-f57e-44f7-afa9-7ff73dcc4110/ENCFF264YWN.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens LNCaP clone FGC — ENCFF205XOA (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF205XOA.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/26/020f2018-1f8f-4e95-ad5b-f53278c7c533/ENCFF205XOA.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

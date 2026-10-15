@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR514HBO (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2020/08/19/8c89cf87-3540-4e00-b874-eb9e647f851a/ENCFF038YOP.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens SK-N-SH — ENCFF299QAY (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF299QAY.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2020/08/19/0459e496-12fd-4a19-b5a1-38d4f9cb5b4b/ENCFF299QAY.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens SK-N-SH — ENCFF546UUP (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF546UUP.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2020/08/19/cba8fc38-e0bf-4da4-b92f-8a7d36a2db71/ENCFF546UUP.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens SK-N-SH — ENCFF775DIU (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF775DIU.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2020/08/19/e0714106-9832-4bf6-b940-5449dd71d015/ENCFF775DIU.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens SK-N-SH — ENCFF050YGO (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF050YGO.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2020/10/08/450e3f2c-d031-45e1-8bf6-2f256ef0f2aa/ENCFF050YGO.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens SK-N-SH — ENCFF125SNT (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF125SNT.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2020/10/08/5b269225-5965-4df0-bd1a-e875c79907ee/ENCFF125SNT.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

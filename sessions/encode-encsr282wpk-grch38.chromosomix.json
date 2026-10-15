@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR282WPK (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/03/11/57107388-1a17-4671-93af-65f486f48511/ENCFF190RGO.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens HUES64 — ENCFF928HKU (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF928HKU.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/11/30fc922b-6291-4c4b-a86a-6f3c49a9ae0e/ENCFF928HKU.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens HUES64 — ENCFF762OVX (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF762OVX.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/11/30ef4ca3-6081-434f-8fe8-645d8ce3891a/ENCFF762OVX.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens HUES64 — ENCFF621NSQ (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF621NSQ.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/11/aaece1a4-cc2e-4089-a550-298b5fbcf6aa/ENCFF621NSQ.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

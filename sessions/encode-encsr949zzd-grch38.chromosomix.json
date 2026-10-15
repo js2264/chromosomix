@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR949ZZD (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/03/19/30095000-499a-43a9-bf3f-0509acd261f1/ENCFF654GEN.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens T-helper 1 cell male adult (35 years) treated with 30 ng/mL Interleukin-12 subunit beta for 36 hours, 30 ng/mL Interleukin-12 subunit alpha for 36 hours, 1 μg/mL Interleukin-4 antibody for 36 hours — ENCFF385DNL (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF385DNL.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/19/8d4eb241-6916-4507-8864-d0d11408b9e5/ENCFF385DNL.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens T-helper 1 cell male adult (35 years) treated with 30 ng/mL Interleukin-12 subunit beta for 36 hours, 30 ng/mL Interleukin-12 subunit alpha for 36 hours, 1 μg/mL Interleukin-4 antibody for 36 hours — ENCFF605JPJ (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF605JPJ.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/19/e22f416d-d4cc-4681-81d0-8f84908be0ab/ENCFF605JPJ.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens T-helper 1 cell male adult (35 years) treated with 30 ng/mL Interleukin-12 subunit beta for 36 hours, 30 ng/mL Interleukin-12 subunit alpha for 36 hours, 1 μg/mL Interleukin-4 antibody for 36 hours — ENCFF717SQH (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF717SQH.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/19/9c64a5dd-3bf2-4dc0-88f0-649392afc5c2/ENCFF717SQH.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

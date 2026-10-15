@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR095SXC (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2021/08/31/42ad95b4-4dd6-4114-bea4-98ad4ac04417/ENCFF906YLZ.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens H1 — ENCFF521HAD (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF521HAD.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2021/08/31/faf399bb-28b1-4432-9856-aa86487d9cb3/ENCFF521HAD.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens H1 — ENCFF927MDN (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF927MDN.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/08/31/0cb1583d-9523-4788-91ac-e92d26a45a85/ENCFF927MDN.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens H1 — ENCFF401IWZ (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF401IWZ.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/08/31/952ffbb2-3aad-4ad4-beef-6413d9f03b78/ENCFF401IWZ.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens H1 — ENCFF273QUJ (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF273QUJ.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2021/08/31/1692b21e-d2a1-4c7f-af2c-99099832d915/ENCFF273QUJ.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens H1 — ENCFF591SNE (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF591SNE.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2021/08/31/1caff7b4-c996-4362-b385-665bd4a2756c/ENCFF591SNE.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

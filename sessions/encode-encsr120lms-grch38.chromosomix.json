@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR120LMS (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2021/07/17/2a99d2a4-37e6-439c-bba8-291c4148a9ac/ENCFF110TCW.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens naive thymus-derived CD4-positive, alpha-beta T cell male adult (43 years) — ENCFF762THY (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF762THY.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/17/4c36a51e-b1a4-4353-a89a-12d7a9e9e209/ENCFF762THY.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens naive thymus-derived CD4-positive, alpha-beta T cell male adult (43 years) — ENCFF247IZL (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF247IZL.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/17/ab6132af-90ae-4e4e-8f1e-ae54c8fd6ecb/ENCFF247IZL.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens naive thymus-derived CD4-positive, alpha-beta T cell male adult (43 years) — ENCFF344AXG (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF344AXG.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/17/1bb4b2f5-d662-411c-8249-a7b6ea8563ab/ENCFF344AXG.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens naive thymus-derived CD4-positive, alpha-beta T cell male adult (43 years) — ENCFF857QGC (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF857QGC.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/17/487a12b9-286c-4297-b5b8-9b68147d1e76/ENCFF857QGC.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens naive thymus-derived CD4-positive, alpha-beta T cell male adult (43 years) — ENCFF826AXK (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF826AXK.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/17/d35b4f9a-a224-442f-a44b-d6a3b32d1c26/ENCFF826AXK.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

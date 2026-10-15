@@ -1,0 +1,52 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR315KQP (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2025/09/07/28801a57-8a75-4535-be67-ff9a2bef0ab3/ENCFF114SSQ.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "loops — ENCFF081TTH (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF081TTH.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2025/09/10/69d02d92-bc00-45ea-9c92-5c4c83992084/ENCFF081TTH.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

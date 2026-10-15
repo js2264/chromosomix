@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR011GNI (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/03/01/b1c6853b-bef6-4e38-b8ec-6cf1d946a647/ENCFF163YBP.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens astrocyte of the cerebellum — ENCFF463NGM (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF463NGM.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/01/6cddb687-9511-40b3-b1cd-cf2c91e9849d/ENCFF463NGM.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens astrocyte of the cerebellum — ENCFF174DMO (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF174DMO.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/01/12d04d18-a3e2-4fea-b20e-36f3a7e5721d/ENCFF174DMO.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens astrocyte of the cerebellum — ENCFF206SAS (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF206SAS.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/01/118a2b77-fa54-4334-85ab-ebdf19397ce9/ENCFF206SAS.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

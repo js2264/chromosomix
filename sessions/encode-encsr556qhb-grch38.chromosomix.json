@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR556QHB (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/02/01/15c3792c-5e55-4a9e-8318-030b57f8aaed/ENCFF689JVY.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens cardiac septum tissue female adult (41 years) — ENCFF792XOU (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF792XOU.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/04/11/2bd8e791-915f-40b8-a833-925573e76021/ENCFF792XOU.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens cardiac septum tissue female adult (41 years) — ENCFF991JNA (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF991JNA.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/04/11/d64fb808-1693-4e88-9cde-463d63d44165/ENCFF991JNA.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens cardiac septum tissue female adult (41 years) — ENCFF225OES (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF225OES.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/02/01/7f3a0b6f-392f-44be-a31e-bf78a463b3b3/ENCFF225OES.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR393LOP (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2016/12/01/d75d2d3e-79ee-4488-b1f3-2768410eeadf/ENCFF378RZT.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens A549 treated with 100 nM dexamethasone (agonist) for 4 hours — ENCFF296ETQ (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF296ETQ.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2016/12/01/d99f49d6-b8e5-498e-a2d8-a064d8b04945/ENCFF296ETQ.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR743YTL (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/06/02/023a5dbc-e4dc-4ab6-bc9f-2ea7276366b6/ENCFF434TIP.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens T-cell female adult (21 years) — ENCFF847KLB (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF847KLB.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/02/41fb3b3a-ab97-4d84-981a-d435908faf96/ENCFF847KLB.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens T-cell female adult (21 years) — ENCFF545NAO (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF545NAO.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/02/01f2921f-8aa5-4e31-8293-f790903d89d0/ENCFF545NAO.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens T-cell female adult (21 years) — ENCFF219EQQ (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF219EQQ.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/02/a5adbc36-4f65-4ab8-886d-eead38d383ac/ENCFF219EQQ.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens T-cell female adult (21 years) — ENCFF665ZQJ (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF665ZQJ.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/02/921c466c-c6c4-4149-ac07-4aad9d5c3767/ENCFF665ZQJ.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens T-cell female adult (21 years) — ENCFF179XIX (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF179XIX.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/02/480b2c9f-9587-4be6-911b-19effb4612f5/ENCFF179XIX.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

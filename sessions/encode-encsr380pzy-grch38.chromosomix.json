@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR380PZY (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/11/21/8ed008d4-a1c8-4f4b-b5fe-dd33814c404a/ENCFF329CIO.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "genome subcompartments — ENCFF288VNI (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF288VNI.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/11/21/b152838c-7226-4878-ad1b-eb0b6782b87f/ENCFF288VNI.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "loops — ENCFF083JRF (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF083JRF.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/11/21/24ceb0ca-f28d-4d18-ac40-2b3050f4a9f0/ENCFF083JRF.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "nuclease cleavage frequency — ENCFF532IWV (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF532IWV.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/11/21/06a224a3-c305-479e-ae74-71526ab7673b/ENCFF532IWV.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

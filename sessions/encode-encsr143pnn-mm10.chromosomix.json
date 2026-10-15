@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR143PNN (mm10)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/12/08/6c040129-7fb2-466a-9ab9-51353a82f754/ENCFF046OTG.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Mus musculus strain B6CASTF1/J left cerebral cortex tissue postnatal (10 days) — ENCFF867LUF (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF867LUF.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/12/08/d77a4fdb-67fa-449f-828a-a986fbd8578c/ENCFF867LUF.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Mus musculus strain B6CASTF1/J left cerebral cortex tissue postnatal (10 days) — ENCFF008WXB (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF008WXB.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/12/08/ac6c66bb-25d7-4ef4-8e7f-0c5d02fd94ca/ENCFF008WXB.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Mus musculus strain B6CASTF1/J left cerebral cortex tissue postnatal (10 days) — ENCFF623GOC (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF623GOC.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/12/08/6ef5b3b9-17d4-490b-865d-e679a27e7e1d/ENCFF623GOC.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

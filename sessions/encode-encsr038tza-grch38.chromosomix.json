@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR038TZA (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/11/01/c45f105b-ed45-42c1-a7da-bd1e5897d173/ENCFF497HIS.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens PC-3 — ENCFF747YPU (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF747YPU.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/02/01/89c31f16-0613-4e83-a384-64e62a483ad6/ENCFF747YPU.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens PC-3 — ENCFF201GVW (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF201GVW.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/02/01/ef173f63-9bbe-4c02-a3e2-33d7c7928123/ENCFF201GVW.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens PC-3 — ENCFF698RIS (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF698RIS.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/11/01/e0947c64-19d9-436d-8ac5-c517daaa5458/ENCFF698RIS.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,362 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:07Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:07Z",
+      "producer": "chromosomix make_store.py",
+      "name": "4DN 4DNESLO7U5XD (GRCh38)",
+      "state": {
+        "uri": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/c7b1aaa4-6443-4f18-b45c-9ee22994520a/4DNFIARR7LP4.mcool",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "in situ ChIA-PET on GM12878 — 4DNFIW9ANE47 (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIW9ANE47.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/36ea0d4d-76b0-478b-a0d1-7ebd702edd66/4DNFIW9ANE47.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "in situ ChIA-PET on GM12878 — 4DNFISIDL2Y2 (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFISIDL2Y2.bedpe.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/4316d043-4bd5-48f0-9d8e-d4177c8e68dc/4DNFISIDL2Y2.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "segments",
+          "label": "in situ ChIA-PET in GM12878 cell line — 4DNFIO2A613Z (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIO2A613Z.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/5e204240-83e4-43da-8429-6fae3621c82e/4DNFIO2A613Z.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "track",
+          "label": "in situ ChIA-PET on GM12878 — 4DNFIQ83Z55S (bedgraph.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIQ83Z55S.bedGraph.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/8ab9a658-c654-4096-81d7-b68b41da0ae1/4DNFIQ83Z55S.bedGraph.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "in situ ChIA-PET on GM12878 — 4DNFIQ83Z55S (bw)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIQ83Z55S.bw",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/8ab9a658-c654-4096-81d7-b68b41da0ae1/4DNFIQ83Z55S.bw"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-5",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "in situ ChIA-PET in GM12878 cell line — 4DNFILNTHTC1 (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFILNTHTC1.bedpe.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/ab1cf2c2-7075-46c3-b33c-a82783a51c44/4DNFILNTHTC1.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#e69f00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-6",
+          "card": "linear",
+          "kind": "track",
+          "label": "in situ ChIA-PET on GM12878 — 4DNFIMMJO5ZO (bedgraph.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIMMJO5ZO.bedGraph.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/b71f44eb-76fd-4938-88cd-3c1cbe1d4b94/4DNFIMMJO5ZO.bedGraph.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#56b4e9",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-7",
+          "card": "linear",
+          "kind": "track",
+          "label": "in situ ChIA-PET on GM12878 — 4DNFIMMJO5ZO (bw)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIMMJO5ZO.bw",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/b71f44eb-76fd-4938-88cd-3c1cbe1d4b94/4DNFIMMJO5ZO.bw"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#8c6d31",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-8",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "in situ ChIA-PET on GM12878 — 4DNFIDW5Q7D4 (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIDW5Q7D4.bedpe.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/df226dc6-3568-4350-ac1a-f60b3e7555de/4DNFIDW5Q7D4.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-9",
+          "card": "linear",
+          "kind": "segments",
+          "label": "in situ ChIA-PET on GM12878 — 4DNFIR6QSZHU (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIR6QSZHU.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/e2f9b2e4-4829-4b26-b029-c4aec6bebd09/4DNFIR6QSZHU.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-10",
+          "card": "linear",
+          "kind": "track",
+          "label": "in situ ChIA-PET in GM12878 cell line — 4DNFIVSIZQFH (bedgraph.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIVSIZQFH.bedGraph.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/e9cc0751-1a9e-4cee-861f-d91d719735c3/4DNFIVSIZQFH.bedGraph.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

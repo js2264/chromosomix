@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR707XVJ (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/11/01/2a8d2308-2e41-4b70-acfb-568bec7b2ac9/ENCFF039SIJ.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens mammary epithelial cell female adult (19 years) — ENCFF196XGH (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF196XGH.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/14/95d5bb91-a86a-4c4e-8d72-e3bd95f7f490/ENCFF196XGH.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens mammary epithelial cell female adult (19 years) — ENCFF090JBQ (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF090JBQ.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/14/db225b3c-f4ad-4471-b47d-403a233f66c4/ENCFF090JBQ.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens mammary epithelial cell female adult (19 years) — ENCFF012ONY (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF012ONY.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/11/01/4845c96f-5abc-418b-a0eb-244928b796fe/ENCFF012ONY.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

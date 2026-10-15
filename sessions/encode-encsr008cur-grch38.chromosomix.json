@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR008CUR (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/01/29/287283f9-cf3f-4eac-bd0d-6621cb30a37a/ENCFF983KVN.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens uterus tissue female adult (53 years) — ENCFF951MJF (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF951MJF.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/29/0f1abb49-9158-4ea0-bb73-3350c14bbc41/ENCFF951MJF.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens uterus tissue female adult (53 years) — ENCFF558REP (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF558REP.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/29/c160da01-6e90-4571-8d24-361f6d2861c5/ENCFF558REP.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens uterus tissue female adult (53 years) — ENCFF380EJM (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF380EJM.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/29/f7a498a3-379f-4441-822a-cba606870bca/ENCFF380EJM.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

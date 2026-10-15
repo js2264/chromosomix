@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR407TGO (mm10)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/07/27/a5d0d009-8d11-4fb3-8db0-d675f08548d3/ENCFF026SNO.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Mus musculus strain C57BL/6J mature B cell — ENCFF161DEA (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF161DEA.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/07/27/01ca059f-e487-4c04-b1cd-88d9d5ab29da/ENCFF161DEA.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Mus musculus strain C57BL/6J mature B cell — ENCFF719PJM (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF719PJM.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/07/27/e49abb14-e028-4b7d-90b5-62bfd7d32dbb/ENCFF719PJM.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Mus musculus strain C57BL/6J mature B cell — ENCFF738LKB (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF738LKB.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/07/27/841971b2-cdfc-46b2-a60b-c7e5b6f4c919/ENCFF738LKB.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

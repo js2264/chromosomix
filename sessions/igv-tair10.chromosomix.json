@@ -1,0 +1,84 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:16:46Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:16:46Z",
+      "producer": "chromosomix make_store.py",
+      "name": "IGV tair10",
+      "state": {
+        "uri": "https://s3.amazonaws.com/igv.org.genomes/tair10/TAIR10_chr_all.fas",
+        "view": "browser"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "sequence",
+          "label": "sequence",
+          "source": {
+            "kind": "remote",
+            "name": "TAIR10_chr_all.fas",
+            "url": "https://s3.amazonaws.com/igv.org.genomes/tair10/TAIR10_chr_all.fas",
+            "index": "https://s3.amazonaws.com/igv.org.genomes/tair10/TAIR10_chr_all.fas.fai"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 46,
+            "mode": "line",
+            "limits": {
+              "auto": false,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "gtf",
+          "label": "Genes",
+          "source": {
+            "kind": "remote",
+            "name": "TAIR10_GFF3_genes.gff",
+            "url": "https://s3.amazonaws.com/igv.org.genomes/tair10/TAIR10_GFF3_genes.gff"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 92,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

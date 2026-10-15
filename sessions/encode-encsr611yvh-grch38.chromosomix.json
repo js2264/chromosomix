@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR611YVH (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2025/08/23/4bb082b4-b694-4e08-9db8-b576c12d4818/ENCFF638ODW.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens GM20431 — ENCFF896RJI (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF896RJI.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2025/09/10/1d0f9ca6-c9cb-4603-9933-21019cc89cec/ENCFF896RJI.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens GM20431 — ENCFF808QKV (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF808QKV.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/01/11/213257dc-39ee-4e78-92ca-7744174c0202/ENCFF808QKV.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "variants",
+          "label": "Homo sapiens GM20431 — ENCFF413IVH (vcf.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF413IVH.vcf.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2025/09/05/81ee1b32-a1ae-433b-bb13-9ffd9479c2f2/ENCFF413IVH.vcf.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

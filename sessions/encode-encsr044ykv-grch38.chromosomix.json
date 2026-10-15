@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR044YKV (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/05/20/296bafcc-3536-4d65-9969-e00524149a79/ENCFF889UUC.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens kidney tissue female adult (47 years) — ENCFF951XBI (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF951XBI.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/02/d011e901-40ba-4818-8082-487721604943/ENCFF951XBI.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens kidney tissue female adult (47 years) — ENCFF099YPS (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF099YPS.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/02/a2872a56-93dd-4ef1-acc1-15c540e9763c/ENCFF099YPS.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens kidney tissue female adult (47 years) — ENCFF497UFS (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF497UFS.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/05/20/d4356a60-1145-4fc2-8dc8-23170564d8e2/ENCFF497UFS.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

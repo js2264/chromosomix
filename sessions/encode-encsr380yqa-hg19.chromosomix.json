@@ -1,0 +1,52 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR380YQA (hg19)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2019/02/08/fc1d9d5d-8fa0-4e29-9080-3da674d9490d/ENCFF543USQ.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens mammary epithelial cell — ENCFF351HVI (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF351HVI.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2019/02/15/7199903a-ef62-4982-a2dc-2283ebbf0caf/ENCFF351HVI.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR185VQH (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2021/07/23/367f37cd-2ad0-4ac9-b13d-631a2364ca32/ENCFF041LDC.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens CD8-positive, alpha-beta T cell male adult (21 years) — ENCFF718OFU (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF718OFU.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/23/0e9d74ab-184c-4bbc-aa38-7016c47df2c6/ENCFF718OFU.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens CD8-positive, alpha-beta T cell male adult (21 years) — ENCFF650YBP (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF650YBP.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/23/08016303-1280-4364-bcf0-3e00e58f03ee/ENCFF650YBP.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens CD8-positive, alpha-beta T cell male adult (21 years) — ENCFF296PQY (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF296PQY.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/23/c49db013-af85-47a9-9f0c-9f81aba81696/ENCFF296PQY.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens CD8-positive, alpha-beta T cell male adult (21 years) — ENCFF993DTY (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF993DTY.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/23/8a315760-4cab-46b6-9052-979f48f88a83/ENCFF993DTY.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens CD8-positive, alpha-beta T cell male adult (21 years) — ENCFF589PCA (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF589PCA.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/23/4f5ab607-77e0-4b0b-a490-eee50b55d87e/ENCFF589PCA.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

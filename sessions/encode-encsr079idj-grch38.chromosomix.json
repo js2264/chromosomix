@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR079IDJ (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/01/23/a0e528e9-a1d4-4b4e-ac2c-3417fd2fa3f3/ENCFF149IHN.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens transverse colon tissue male adult (54 years) — ENCFF905VAK (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF905VAK.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/23/a624f870-6da7-44a1-b559-21670dc1eaec/ENCFF905VAK.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens transverse colon tissue male adult (54 years) — ENCFF275EDO (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF275EDO.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/23/e512f3fb-e305-4a20-8102-59dc82f325a7/ENCFF275EDO.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens transverse colon tissue male adult (54 years) — ENCFF907WHI (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF907WHI.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/23/c214d098-386d-4872-bbc4-4204986103e5/ENCFF907WHI.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

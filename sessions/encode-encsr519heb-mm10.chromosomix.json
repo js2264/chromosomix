@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR519HEB (mm10)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/03/19/2ef233f7-c3cf-424b-a383-e568cb6fe9c6/ENCFF020BXY.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Mus musculus mouse trophoblast stem cell — ENCFF387FLD (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF387FLD.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/19/739698bc-711c-4176-bef1-3c07878b47b1/ENCFF387FLD.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Mus musculus mouse trophoblast stem cell — ENCFF087SUR (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF087SUR.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/19/5ee5bdda-90ac-4de3-a8d3-442089979d71/ENCFF087SUR.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Mus musculus mouse trophoblast stem cell — ENCFF908DGE (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF908DGE.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/19/f4a0a3ab-6bd7-4b9d-a137-72b88efa5e13/ENCFF908DGE.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR395DZW (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/10/29/ca99bb3c-4263-4b44-a264-3e696934ef9e/ENCFF613NZC.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens placenta tissue female embryo — ENCFF122BCE (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF122BCE.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/12/06/dd46388b-28ce-49cc-a580-5f013184a116/ENCFF122BCE.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens placenta tissue female embryo — ENCFF019QFL (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF019QFL.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/12/06/4830e539-8735-4a11-a251-a55ec76d5026/ENCFF019QFL.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens placenta tissue female embryo — ENCFF345SJY (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF345SJY.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/10/29/2e675a57-b46c-49e7-84b7-fb2ac2c1894b/ENCFF345SJY.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

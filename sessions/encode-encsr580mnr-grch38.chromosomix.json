@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR580MNR (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2020/08/19/efc74fdb-1fc0-432a-971e-afb892631dfb/ENCFF820SLA.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens AG04449 — ENCFF651NUS (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF651NUS.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2020/08/19/dad1ddfe-b94c-4777-a536-4017b8d644d7/ENCFF651NUS.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens AG04449 — ENCFF683NKB (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF683NKB.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2020/08/19/31a578ab-b0c3-4374-8c7f-79d162378a87/ENCFF683NKB.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens AG04449 — ENCFF807RBK (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF807RBK.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2020/08/19/55ee6069-aba1-4b4b-bfda-38b3f51355d6/ENCFF807RBK.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens AG04449 — ENCFF142CZE (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF142CZE.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2020/10/09/7f19a5d2-de36-4bf6-9399-de2addf3eade/ENCFF142CZE.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens AG04449 — ENCFF546GBC (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF546GBC.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2020/10/09/3ec8ef2c-915d-44f4-9688-a1a361b6ece2/ENCFF546GBC.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

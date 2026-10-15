@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR387RQD (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/08/07/899b7149-4340-42c6-9e96-9ee4d1e3cf1d/ENCFF171GTA.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens pancreas tissue female adult (59 years) — ENCFF112SMG (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF112SMG.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/02/68725d64-c599-42eb-a906-75a18df0156a/ENCFF112SMG.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens pancreas tissue female adult (59 years) — ENCFF656PWO (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF656PWO.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/02/a7fb083c-2f6e-4848-a94f-c33185c09105/ENCFF656PWO.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens pancreas tissue female adult (59 years) — ENCFF679IKW (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF679IKW.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/08/07/0de0aa96-3f87-485b-880c-fb97192466f9/ENCFF679IKW.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

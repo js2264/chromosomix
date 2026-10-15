@@ -1,0 +1,115 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:16:46Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:16:46Z",
+      "producer": "chromosomix make_store.py",
+      "name": "IGV GCA_011100615.1",
+      "state": {
+        "uri": "https://s3.amazonaws.com/igv.org.genomes/GCA_011100615.1/Macaca_fascicularis.Macaca_fascicularis_6.0.dna.toplevel.fa.gz",
+        "view": "browser"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "sequence",
+          "label": "sequence",
+          "source": {
+            "kind": "remote",
+            "name": "Macaca_fascicularis.Macaca_fascicularis_6.0.dna.toplevel.fa.gz",
+            "url": "https://s3.amazonaws.com/igv.org.genomes/GCA_011100615.1/Macaca_fascicularis.Macaca_fascicularis_6.0.dna.toplevel.fa.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 46,
+            "mode": "line",
+            "limits": {
+              "auto": false,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "gtf",
+          "label": "Annotations",
+          "source": {
+            "kind": "remote",
+            "name": "Macaca_fascicularis.Macaca_fascicularis_6.0.108.sorted.gff3.gz",
+            "url": "https://s3.amazonaws.com/igv.org.genomes/GCA_011100615.1/Macaca_fascicularis.Macaca_fascicularis_6.0.108.sorted.gff3.gz",
+            "index": "https://s3.amazonaws.com/igv.org.genomes/GCA_011100615.1/Macaca_fascicularis.Macaca_fascicularis_6.0.108.sorted.gff3.gz.tbi"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 92,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Genes",
+          "source": {
+            "kind": "remote",
+            "name": "GCA_011100615.1_ucsc_ensGene.bed",
+            "url": "https://s3.amazonaws.com/igv.org.genomes/GCA_011100615.1/GCA_011100615.1_ucsc_ensGene.bed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

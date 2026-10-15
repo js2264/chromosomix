@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR543HLV (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2021/09/01/c4e6151f-bbe4-42a0-9ffd-48bed3abbcee/ENCFF405RKZ.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens WTC11 genetically modified (insertion) using CRISPR — ENCFF785SKP (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF785SKP.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2021/09/01/de7daf74-e669-4132-bd1c-d48eef4d45a6/ENCFF785SKP.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens WTC11 genetically modified (insertion) using CRISPR — ENCFF322BZB (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF322BZB.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/09/01/df8e328e-fd9f-4c34-a16a-afb93772eb05/ENCFF322BZB.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens WTC11 genetically modified (insertion) using CRISPR — ENCFF674MPM (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF674MPM.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/09/01/5ea0eb76-e3f8-4313-ac59-d5a3bcdac47a/ENCFF674MPM.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens WTC11 genetically modified (insertion) using CRISPR — ENCFF190NTL (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF190NTL.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2021/09/01/bfb40a6a-984c-43a5-9a56-3fdd2832f84c/ENCFF190NTL.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens WTC11 genetically modified (insertion) using CRISPR — ENCFF342CAD (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF342CAD.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2021/09/01/364438e2-602e-4c96-bb51-f256fa8da889/ENCFF342CAD.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR181LJD (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/12/08/e4eb5752-6a54-44ef-b307-a38ef3459baf/ENCFF984HFF.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens ovary tissue female adult (53 years) — ENCFF356JRL (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF356JRL.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/12/26/e44fdf5d-73af-4567-9503-b4ffa6f32b10/ENCFF356JRL.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens ovary tissue female adult (53 years) — ENCFF764TUI (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF764TUI.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/12/26/d47e720d-41f3-46a0-a7eb-868750c17b84/ENCFF764TUI.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens ovary tissue female adult (53 years) — ENCFF587FUG (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF587FUG.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/12/08/55b0b101-e317-40a5-89ad-2e47be0ff228/ENCFF587FUG.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

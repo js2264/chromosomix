@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR385MKW (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/01/26/fcb9accc-94f2-4621-881d-aeb77bb24690/ENCFF259OTY.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens heart left ventricle tissue male adult (69 years) — ENCFF404MBK (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF404MBK.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/09/823ce487-052b-4c1b-a900-d9822253ff3e/ENCFF404MBK.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens heart left ventricle tissue male adult (69 years) — ENCFF043QJE (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF043QJE.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/09/202d56ed-ae7e-40e3-a093-bca2516ef448/ENCFF043QJE.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens heart left ventricle tissue male adult (69 years) — ENCFF173SIR (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF173SIR.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/26/df60e2a6-89c6-456f-a11b-0bdb5f5e5224/ENCFF173SIR.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

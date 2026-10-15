@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR080OMN (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2021/03/23/23e9b751-269e-43d0-9d47-47fe33f15f5f/ENCFF041BUO.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens endothelial cell of umbilical vein newborn — ENCFF303EHP (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF303EHP.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2021/03/23/2dd751c4-bb64-4598-ae9f-507ea3d6b400/ENCFF303EHP.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens endothelial cell of umbilical vein newborn — ENCFF321ABO (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF321ABO.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/03/23/04a2ea13-8253-4105-b07e-f107ef7cf21c/ENCFF321ABO.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens endothelial cell of umbilical vein newborn — ENCFF095AVT (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF095AVT.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/03/23/e5921ad8-cbd6-4b45-9902-d71449dc4358/ENCFF095AVT.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens endothelial cell of umbilical vein newborn — ENCFF457NKX (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF457NKX.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2021/03/23/0ec80636-398d-4eee-b641-8fe14956917a/ENCFF457NKX.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens endothelial cell of umbilical vein newborn — ENCFF812TIM (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF812TIM.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2021/03/23/44870925-5d43-41d9-a9ab-ace5cf25816b/ENCFF812TIM.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR089CCK (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/10/25/29ae131b-c3b3-4b00-9023-a902c18a868c/ENCFF629SXU.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens gastrocnemius medialis tissue female adult (53 years) — ENCFF281RYF (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF281RYF.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/10/25/568bc299-dc6a-436d-ab32-1093bb51a2b3/ENCFF281RYF.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens gastrocnemius medialis tissue female adult (53 years) — ENCFF793YKB (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF793YKB.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/10/25/dbc79a2f-7c25-4c28-858d-baf5ba88fa4f/ENCFF793YKB.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens gastrocnemius medialis tissue female adult (53 years) — ENCFF454QBA (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF454QBA.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/10/25/b6f45976-bcdc-40ef-bfa5-c11a4dfce329/ENCFF454QBA.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

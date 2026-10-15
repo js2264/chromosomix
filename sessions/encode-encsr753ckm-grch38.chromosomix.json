@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR753CKM (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/01/26/a6802985-7dbb-4515-aa22-8ddfc5e44343/ENCFF475KEC.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens right lobe of liver tissue female adult (47 years) — ENCFF844AFR (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF844AFR.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/21/a0f564cb-8f29-474d-8486-4ff2579242f2/ENCFF844AFR.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens right lobe of liver tissue female adult (47 years) — ENCFF480GSX (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF480GSX.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/21/e57e7977-4cad-428f-834d-85e706de5f56/ENCFF480GSX.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens right lobe of liver tissue female adult (47 years) — ENCFF913UXM (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF913UXM.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/26/b5446531-a82d-4d68-a9a3-36449ae62bf3/ENCFF913UXM.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

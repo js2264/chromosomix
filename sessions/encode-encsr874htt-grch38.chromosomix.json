@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR874HTT (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/09/13/f380ae61-8607-4471-82bc-35b5f0f1fa2f/ENCFF898TKX.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens head of caudate nucleus tissue female adult (89 years) — ENCFF716FFU (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF716FFU.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/10/26/28361069-d57b-4969-8a9c-12fea05cd97c/ENCFF716FFU.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens head of caudate nucleus tissue female adult (89 years) — ENCFF261UOU (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF261UOU.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/10/26/c9612ec0-e1d0-4272-bbdd-e495f6de71cd/ENCFF261UOU.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens head of caudate nucleus tissue female adult (89 years) — ENCFF647XFN (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF647XFN.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/09/13/25533e46-4236-47ab-ad4e-88e711e59cac/ENCFF647XFN.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

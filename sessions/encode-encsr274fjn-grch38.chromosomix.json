@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR274FJN (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/10/29/089a48b6-a256-42d8-bddb-676fc7712ba5/ENCFF729FGS.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens esophagus muscularis mucosa tissue female adult (53 years) — ENCFF332SBA (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF332SBA.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/12/06/c24f330c-f321-4559-bc0d-c86b3cfd8304/ENCFF332SBA.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens esophagus muscularis mucosa tissue female adult (53 years) — ENCFF904JIT (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF904JIT.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/12/06/5b9f8556-ff9a-4336-bead-17a158c49b0c/ENCFF904JIT.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens esophagus muscularis mucosa tissue female adult (53 years) — ENCFF220ZTI (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF220ZTI.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/10/29/83515033-3fca-4e1f-a9b2-706fb5c8641a/ENCFF220ZTI.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

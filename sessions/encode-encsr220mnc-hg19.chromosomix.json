@@ -1,0 +1,52 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR220MNC (hg19)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2020/06/01/82793b96-7d33-4273-a9ad-b22e64355c1d/ENCFF768UBD.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens GM23248 — ENCFF350KKT (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF350KKT.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2020/06/05/135b47a8-77bb-48c6-97e1-08aebdfd76bf/ENCFF350KKT.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

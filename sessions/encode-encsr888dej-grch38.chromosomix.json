@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR888DEJ (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/11/02/e11c01f7-84d5-4f91-b4e1-f58485a5d801/ENCFF932WBX.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens HepG2 — ENCFF042EUL (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF042EUL.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/14/2dae64c3-82ac-484b-aac4-d3a01a321b88/ENCFF042EUL.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens HepG2 — ENCFF652ESQ (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF652ESQ.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/14/1f3ac10b-b3a3-448c-9124-fba6f41f407a/ENCFF652ESQ.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens HepG2 — ENCFF976PPG (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF976PPG.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/11/02/f4dc2d93-af13-4b18-8e55-2b9191c5937d/ENCFF976PPG.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

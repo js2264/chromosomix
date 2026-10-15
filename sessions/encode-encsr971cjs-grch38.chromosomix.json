@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR971CJS (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/11/04/bc3e4cad-d838-436a-8907-8ceef6ccb732/ENCFF205TKZ.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens natural killer cell male adult (33 years) — ENCFF916NMP (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF916NMP.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/17/d76fe48c-4ffe-4d6e-b15c-0673ce8298cb/ENCFF916NMP.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens natural killer cell male adult (33 years) — ENCFF482FJM (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF482FJM.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/17/d0f6540e-b0c1-4009-9c08-4a3c63c69086/ENCFF482FJM.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens natural killer cell male adult (33 years) — ENCFF807XQG (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF807XQG.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/11/04/d874b093-9450-46ec-84bf-471711550782/ENCFF807XQG.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

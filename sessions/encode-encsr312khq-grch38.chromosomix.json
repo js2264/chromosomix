@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR312KHQ (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/03/01/f7917572-45c1-48e3-8488-9ef713546268/ENCFF557CTN.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens SK-MEL-5 — ENCFF688WCL (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF688WCL.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/01/43036c9e-9ec8-4cbd-9205-dbceaf24807b/ENCFF688WCL.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens SK-MEL-5 — ENCFF150PMY (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF150PMY.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/01/f912cec6-5d66-4a2a-aa7d-1f6a5ea4cbcd/ENCFF150PMY.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens SK-MEL-5 — ENCFF702WXP (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF702WXP.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/01/d7fe86ad-05f1-4124-9efa-b2e848438b01/ENCFF702WXP.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR592BWZ (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/05/25/5aa26794-36d2-4171-871e-ad9760afcf7f/ENCFF651WKQ.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens T-cell male adult (35 years) — ENCFF331KHX (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF331KHX.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/25/9e6263ba-3192-46f0-9c2b-bb10c625a1d1/ENCFF331KHX.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens T-cell male adult (35 years) — ENCFF433URV (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF433URV.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/25/ab8bb327-8cf6-4aac-8925-8e3ec798c97e/ENCFF433URV.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens T-cell male adult (35 years) — ENCFF403XKA (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF403XKA.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/25/1ab071b0-b70f-4d53-ab0f-65bc4cbc97ab/ENCFF403XKA.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens T-cell male adult (35 years) — ENCFF790VWO (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF790VWO.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/25/84b06f77-a27e-4f20-80fd-100512ababc3/ENCFF790VWO.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens T-cell male adult (35 years) — ENCFF108WLV (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF108WLV.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/25/9cd4b815-9cca-49a6-8eb9-51b9e93d8186/ENCFF108WLV.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

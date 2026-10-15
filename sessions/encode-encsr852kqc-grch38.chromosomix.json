@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR852KQC (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/08/26/f6b82ca1-9b83-4d1b-8958-10c4b30df9be/ENCFF188SSH.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens IMR-90 — ENCFF457YBL (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF457YBL.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/08/26/e90d160f-ff80-4c5f-949f-c6cca832868f/ENCFF457YBL.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens IMR-90 — ENCFF623YCS (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF623YCS.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/08/26/c45f99a1-6eb1-477c-9692-d794e29b1718/ENCFF623YCS.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens IMR-90 — ENCFF515BOD (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF515BOD.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/08/26/940492fc-bf58-43ff-b2bb-2cafe00e58eb/ENCFF515BOD.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

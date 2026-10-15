@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR882BUM (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/05/13/cf1329ce-0868-4d53-a10e-419eb2bffff8/ENCFF095PRU.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens OCI-LY7 — ENCFF772OTZ (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF772OTZ.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/13/c497e12f-ece1-4d8a-b42c-3073c2451cdf/ENCFF772OTZ.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens OCI-LY7 — ENCFF632LYX (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF632LYX.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/13/aec3eb37-f6b1-4a79-a476-331f6f16f8bb/ENCFF632LYX.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens OCI-LY7 — ENCFF951DLB (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF951DLB.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/13/ffe7e3bc-63a6-41f7-bd10-ffcbd9d14ed5/ENCFF951DLB.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens OCI-LY7 — ENCFF124ZAU (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF124ZAU.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/13/cb87c35a-bb67-491e-9df5-2afe8e6169ad/ENCFF124ZAU.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens OCI-LY7 — ENCFF546HYO (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF546HYO.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/05/13/c84f4971-c610-4543-96e9-7b2f361f27d9/ENCFF546HYO.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR410UHV (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2020/08/19/f55470ce-c6f8-4496-aa0c-ce35d6806f9b/ENCFF399BGW.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens HEK293 — ENCFF252DRX (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF252DRX.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2020/08/19/14b05241-0460-44be-a2f4-3bf6bb0fd3f2/ENCFF252DRX.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens HEK293 — ENCFF430IRE (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF430IRE.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2020/08/19/d75c9727-52e9-4ed8-bf57-7fb2d704ac1d/ENCFF430IRE.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens HEK293 — ENCFF701GLV (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF701GLV.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2020/08/19/4c853ffb-f2b9-442f-9c90-f2265f493249/ENCFF701GLV.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens HEK293 — ENCFF727FPY (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF727FPY.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2020/10/09/a187f530-680d-4e65-9d0c-1308bf133dc1/ENCFF727FPY.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens HEK293 — ENCFF942DVD (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF942DVD.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2020/10/09/3bfe12f4-8990-4ac7-93e7-d8ddee0a6f06/ENCFF942DVD.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

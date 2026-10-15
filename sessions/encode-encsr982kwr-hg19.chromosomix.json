@@ -1,0 +1,83 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR982KWR (hg19)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2017/07/12/6f281ca3-5037-4225-aa0a-272a131af335/ENCFF720ZUE.h5",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens endothelial cell of hepatic sinusoid — ENCFF879NDS (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF879NDS.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2017/07/12/99533585-ddf1-46b9-b88d-5f8c8aa388c0/ENCFF879NDS.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens endothelial cell of hepatic sinusoid — ENCFF587ERG (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF587ERG.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2017/07/12/3316df94-0738-4b47-b6a4-26b6a68083a6/ENCFF587ERG.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

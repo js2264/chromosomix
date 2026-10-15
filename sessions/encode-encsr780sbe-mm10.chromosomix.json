@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR780SBE (mm10)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2021/08/15/da7514dd-3dab-4f7d-bd65-7b447191539b/ENCFF642QVJ.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Mus musculus strain 129S1/SvImJ embryonic stem cell male embryo — ENCFF130VGH (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF130VGH.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2021/08/15/0c2e2c42-5cbe-4e79-ad55-c5165833b4d0/ENCFF130VGH.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Mus musculus strain 129S1/SvImJ embryonic stem cell male embryo — ENCFF472SAE (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF472SAE.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/08/15/3eaef995-1a45-45d5-b077-8fe2bac7cf58/ENCFF472SAE.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Mus musculus strain 129S1/SvImJ embryonic stem cell male embryo — ENCFF112DXO (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF112DXO.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/08/15/051d5667-701f-4b0a-9b3f-d985ac0cdd84/ENCFF112DXO.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Mus musculus strain 129S1/SvImJ embryonic stem cell male embryo — ENCFF609VNY (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF609VNY.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2021/08/15/cd22cd3a-e313-4a47-80be-d4908b8a250f/ENCFF609VNY.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Mus musculus strain 129S1/SvImJ embryonic stem cell male embryo — ENCFF088GFF (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF088GFF.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2021/08/15/ab025099-3620-405a-9bd5-920e532da872/ENCFF088GFF.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR258OVY (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/02/07/e81148a4-2513-422a-8ce0-68d9aafb0dc9/ENCFF858ZGP.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens transverse colon tissue female adult (53 years) — ENCFF886HGI (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF886HGI.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/02/07/a53dc8b4-9842-4625-bf51-264c4ec30d4a/ENCFF886HGI.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens transverse colon tissue female adult (53 years) — ENCFF279PTS (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF279PTS.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/02/07/0e30e154-35e3-4218-9792-79e6129d49a1/ENCFF279PTS.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens transverse colon tissue female adult (53 years) — ENCFF243CKX (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF243CKX.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/02/07/d23b83b0-56a9-44b0-9ef5-8e83f3d3be6d/ENCFF243CKX.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

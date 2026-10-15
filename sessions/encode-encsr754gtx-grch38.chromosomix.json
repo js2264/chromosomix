@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR754GTX (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/03/19/841fd8ad-1244-4f53-b786-b2d7c5ae2575/ENCFF427CCR.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens mesodermal cell — ENCFF234HIE (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF234HIE.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/19/38f107e6-ed04-4931-bb77-079c3b73b7c1/ENCFF234HIE.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens mesodermal cell — ENCFF480RCI (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF480RCI.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/19/68b2b51d-9856-44f1-b419-df9a9fac7949/ENCFF480RCI.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens mesodermal cell — ENCFF777RII (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF777RII.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/19/69e58fb3-4563-4964-8d95-215cce2e400f/ENCFF777RII.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

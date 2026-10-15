@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR869CSI (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/01/20/dbf0109a-d929-4ce7-b885-4abc5d51f208/ENCFF148AQB.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens keratinocyte female — ENCFF335PUD (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF335PUD.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/10/06/0fe4f92a-a574-4a21-9352-16714aa6bb5f/ENCFF335PUD.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens keratinocyte female — ENCFF437LCB (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF437LCB.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/10/06/a978407e-acad-4307-ab5c-cb4933d9a57c/ENCFF437LCB.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens keratinocyte female — ENCFF527EKX (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF527EKX.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/01/20/aaf6099c-6119-48ec-9392-bf27800fdd35/ENCFF527EKX.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR551IPY (hg19)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2017/07/12/b831221f-30f3-4977-abcf-fd0106ac7353/ENCFF261ZYP.h5",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens endometrial microvascular endothelial cells — ENCFF633ORE (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF633ORE.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2017/07/12/7be387c4-a433-48f3-b782-7fa9f5f04006/ENCFF633ORE.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens endometrial microvascular endothelial cells — ENCFF387RQL (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF387RQL.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2017/07/12/12e83b45-6842-4204-952c-780900b8da99/ENCFF387RQL.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

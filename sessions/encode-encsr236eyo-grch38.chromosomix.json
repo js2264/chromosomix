@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR236EYO (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/08/29/0e6073e5-f1f0-45c8-b1d7-85ee0f21b86f/ENCFF782YMN.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens CD14-positive monocyte male adult (30 years) — ENCFF752HAR (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF752HAR.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/29/4b72e3e8-93c3-479b-b62c-f17e1cbd9426/ENCFF752HAR.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens CD14-positive monocyte male adult (30 years) — ENCFF569KUV (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF569KUV.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/29/eab86651-0d22-4d22-838a-575ba4d50ef9/ENCFF569KUV.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens CD14-positive monocyte male adult (30 years) — ENCFF231DUZ (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF231DUZ.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/08/29/f6bdf817-e136-4f49-8e2a-6bbeb9dd6d1d/ENCFF231DUZ.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

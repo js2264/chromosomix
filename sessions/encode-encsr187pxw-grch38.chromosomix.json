@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR187PXW (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2021/07/26/329736c0-d9f7-4bf5-b951-d4ccabdb6d93/ENCFF688UPI.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens CD8-positive, alpha-beta memory T cell male adult (30 years) — ENCFF633EGJ (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF633EGJ.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/26/69fa636a-80c7-4d65-a8e7-e1944ba7ce22/ENCFF633EGJ.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens CD8-positive, alpha-beta memory T cell male adult (30 years) — ENCFF457DQD (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF457DQD.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/26/dc4be497-27f0-4d0c-8e76-a8c53be460b9/ENCFF457DQD.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens CD8-positive, alpha-beta memory T cell male adult (30 years) — ENCFF486AYQ (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF486AYQ.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/26/f70ddffe-5d8b-46b4-b877-dddcaf9e102a/ENCFF486AYQ.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens CD8-positive, alpha-beta memory T cell male adult (30 years) — ENCFF705LZL (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF705LZL.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/26/9e6eba23-755f-4fd9-9b4e-78314f8d2476/ENCFF705LZL.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens CD8-positive, alpha-beta memory T cell male adult (30 years) — ENCFF324OMO (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF324OMO.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/26/f72caee7-28d4-4492-ad11-042e34d6ef47/ENCFF324OMO.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

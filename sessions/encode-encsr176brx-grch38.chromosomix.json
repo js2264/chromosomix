@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR176BRX (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/11/02/251bd3ca-5932-4d6b-b027-403bea2a8d7b/ENCFF775PBO.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens HCT116 genetically modified (insertion) using CRISPR inserting O. sativa LOC4335696, (insertion) using CRISPR targeting H. sapiens RAD21 20 minutes after the sample was treated with 87.6 μg/mL indole-3-acetic acid for 6 hours — ENCFF913PIX (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF913PIX.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/11/02/4ddd938c-844b-45a6-9719-0df7e5a80a4e/ENCFF913PIX.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens HCT116 genetically modified (insertion) using CRISPR inserting O. sativa LOC4335696, (insertion) using CRISPR targeting H. sapiens RAD21 20 minutes after the sample was treated with 87.6 μg/mL indole-3-acetic acid for 6 hours — ENCFF231THL (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF231THL.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/11/02/58a03798-d395-4aad-ba3a-6e1f2a52291f/ENCFF231THL.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens HCT116 genetically modified (insertion) using CRISPR inserting O. sativa LOC4335696, (insertion) using CRISPR targeting H. sapiens RAD21 20 minutes after the sample was treated with 87.6 μg/mL indole-3-acetic acid for 6 hours — ENCFF566YIK (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF566YIK.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/11/02/5f6d2e4e-5322-4978-a17d-a20d8b00b522/ENCFF566YIK.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

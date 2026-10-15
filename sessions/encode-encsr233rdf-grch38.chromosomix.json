@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR233RDF (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/03/19/2e9d221d-acf3-4279-a226-21fdc143665f/ENCFF988NQQ.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens endodermal cell — ENCFF883ICW (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF883ICW.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/19/db78ff01-02b8-45eb-8708-1ebb48b24cec/ENCFF883ICW.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens endodermal cell — ENCFF923GTK (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF923GTK.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/19/45beee6b-b1fd-4557-8b1a-8e1067792cc2/ENCFF923GTK.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens endodermal cell — ENCFF449HYA (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF449HYA.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/19/3373cad5-5e6f-4384-8434-57a0692485d6/ENCFF449HYA.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

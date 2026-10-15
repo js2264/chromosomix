@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR456QYU (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/09/13/58606296-0c01-4056-ac33-fd8632c5341b/ENCFF692VQW.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens dendritic cell male adult (51 years) treated with 50 ng/mL granulocyte-macrophage colony-stimulating factor for 4 days, 40 ng/mL Interleukin-4 for 4 days — ENCFF718WCZ (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF718WCZ.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/11/01/b94bb8d8-a890-419d-bf0a-3b28270800b0/ENCFF718WCZ.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens dendritic cell male adult (51 years) treated with 50 ng/mL granulocyte-macrophage colony-stimulating factor for 4 days, 40 ng/mL Interleukin-4 for 4 days — ENCFF674ZEF (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF674ZEF.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/11/01/2e1d4f01-2e9b-4443-b706-d2e62f0c18c7/ENCFF674ZEF.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens dendritic cell male adult (51 years) treated with 50 ng/mL granulocyte-macrophage colony-stimulating factor for 4 days, 40 ng/mL Interleukin-4 for 4 days — ENCFF326QQM (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF326QQM.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/09/13/10709a06-ba0c-42ba-a865-1384af029326/ENCFF326QQM.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

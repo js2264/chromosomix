@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR338LIB (mm10)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/09/15/fe368bb8-1c37-4633-818e-91259783397f/ENCFF254MVW.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Mus musculus strain B10.H-2aH-4bp/Wts CH12.LX — ENCFF849UTA (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF849UTA.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/09/15/76cdba84-5be9-4550-881f-0a027247070e/ENCFF849UTA.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Mus musculus strain B10.H-2aH-4bp/Wts CH12.LX — ENCFF113GSG (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF113GSG.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/09/15/4b774459-6968-46c6-89b7-30252650378e/ENCFF113GSG.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Mus musculus strain B10.H-2aH-4bp/Wts CH12.LX — ENCFF575NRC (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF575NRC.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/09/15/3cc92211-f6c6-4c82-8f91-580863508662/ENCFF575NRC.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

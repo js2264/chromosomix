@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR551IPY (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/03/01/24921ea4-0864-4ac2-8008-21ee8a6a6cd1/ENCFF774FYI.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens endometrial microvascular endothelial cells — ENCFF789RLL (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF789RLL.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/01/cd77c555-dc76-41bc-9a22-d30486d38cb2/ENCFF789RLL.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens endometrial microvascular endothelial cells — ENCFF246KOM (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF246KOM.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/01/e455b368-2aed-45fb-952f-41b40746d730/ENCFF246KOM.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens endometrial microvascular endothelial cells — ENCFF850AUQ (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF850AUQ.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/01/4ab60bac-4728-4aca-9d30-21c653625ab8/ENCFF850AUQ.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

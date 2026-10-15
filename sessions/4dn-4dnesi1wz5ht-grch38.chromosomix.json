@@ -1,0 +1,517 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:07Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:07Z",
+      "producer": "chromosomix make_store.py",
+      "name": "4DN 4DNESI1WZ5HT (GRCh38)",
+      "state": {
+        "uri": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/72a2da9d-f0b7-40ca-9634-2f3dc467e051/4DNFII7KD33N.mcool",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "track",
+          "label": "ChIA-PET in HFFc6 — 4DNFIERCIUQI (bedgraph.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIERCIUQI.bedGraph.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/1fd6e117-5033-4a49-b14c-9ca597a5b1f6/4DNFIERCIUQI.bedGraph.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "track",
+          "label": "ChIA-PET in HFFc6 — 4DNFIERCIUQI (bw)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIERCIUQI.bw",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/1fd6e117-5033-4a49-b14c-9ca597a5b1f6/4DNFIERCIUQI.bw"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "segments",
+          "label": "ChIA-PET in HFFc6 — 4DNFIBJXF29V (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIBJXF29V.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/35b0d7c5-2b29-42bc-803b-94e20a0c6205/4DNFIBJXF29V.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "ChIA-PET in HFFc6 — 4DNFI7II92GB (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI7II92GB.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/43139f1e-1569-4942-825c-38ea9c0fd2ed/4DNFI7II92GB.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "segments",
+          "label": "ChIA-PET in HFFc6 — 4DNFIJZV3BCK (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIJZV3BCK.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/67142027-eb4f-44bf-9dc8-48c37966c039/4DNFIJZV3BCK.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-5",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "ChIA-PET in HFFc6 — 4DNFI9167MAE (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI9167MAE.bedpe.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/a059c9c2-682c-471e-85e3-a3754b45461c/4DNFI9167MAE.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#e69f00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-6",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "ChIA-PET in HFFc6 — 4DNFI1UORG7J (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI1UORG7J.bedpe.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/b1dffa41-38c5-4862-a2c1-cba5d0cee85f/4DNFI1UORG7J.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#56b4e9",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-7",
+          "card": "linear",
+          "kind": "track",
+          "label": "ChIA-PET in HFFc6 — 4DNFIZCY6YXJ (bedgraph.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIZCY6YXJ.bedGraph.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/b4707632-b5d5-434b-b6aa-60ba7eda54f3/4DNFIZCY6YXJ.bedGraph.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#8c6d31",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-8",
+          "card": "linear",
+          "kind": "track",
+          "label": "ChIA-PET in HFFc6 — 4DNFIZCY6YXJ (bw)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIZCY6YXJ.bw",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/b4707632-b5d5-434b-b6aa-60ba7eda54f3/4DNFIZCY6YXJ.bw"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-9",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "ChIA-PET in HFFc6 — 4DNFIS7YNPMM (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIS7YNPMM.bedpe.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/c8abef8b-8f64-43f5-a6a0-2c251df2c5ab/4DNFIS7YNPMM.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-10",
+          "card": "linear",
+          "kind": "segments",
+          "label": "ChIA-PET in HFFc6 — 4DNFIYLT16OE (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIYLT16OE.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/e03186c6-d49d-4324-8708-936f54f58c37/4DNFIYLT16OE.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-11",
+          "card": "linear",
+          "kind": "track",
+          "label": "ChIA-PET in HFFc6 — 4DNFITQ3JVRS (bedgraph.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFITQ3JVRS.bedGraph.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/e821a6dc-6d45-44c7-8fa1-73d341d2477d/4DNFITQ3JVRS.bedGraph.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-12",
+          "card": "linear",
+          "kind": "track",
+          "label": "ChIA-PET in HFFc6 — 4DNFITQ3JVRS (bw)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFITQ3JVRS.bw",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/e821a6dc-6d45-44c7-8fa1-73d341d2477d/4DNFITQ3JVRS.bw"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-13",
+          "card": "linear",
+          "kind": "track",
+          "label": "ChIA-PET in HFFc6 — 4DNFIQGMPXOM (bedgraph.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIQGMPXOM.bedGraph.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/ec9481a8-3cbb-40d6-9bc9-136dcea1f732/4DNFIQGMPXOM.bedGraph.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#e69f00",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-14",
+          "card": "linear",
+          "kind": "track",
+          "label": "ChIA-PET in HFFc6 — 4DNFIQGMPXOM (bw)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIQGMPXOM.bw",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/ec9481a8-3cbb-40d6-9bc9-136dcea1f732/4DNFIQGMPXOM.bw"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#56b4e9",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-15",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "ChIA-PET in HFFc6 — 4DNFITUL6FAB (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFITUL6FAB.bedpe.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/fa209327-0890-4491-8cae-493f13a707a5/4DNFITUL6FAB.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#8c6d31",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

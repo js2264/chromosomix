@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR474VTW (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/12/23/9f639892-61b7-48df-8fd4-eb7cc82d84f2/ENCFF687ATD.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens activated T-helper 2 cell male adult (35 years) treated with 5 μg/mL Interferon-gamma antibody for 36 hours, anti-CD3 and anti-CD28 coated beads for 24 hours, 10 ng/mL Interleukin-2 for 14 days, anti-CD3 and anti-CD28 coated beads for 14 days, 100 ng/mL Interleukin-4 for 36 hours — ENCFF070DND (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF070DND.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/12/23/088b8061-6a0f-4bd1-afe2-7c40cf432f46/ENCFF070DND.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens activated T-helper 2 cell male adult (35 years) treated with 5 μg/mL Interferon-gamma antibody for 36 hours, anti-CD3 and anti-CD28 coated beads for 24 hours, 10 ng/mL Interleukin-2 for 14 days, anti-CD3 and anti-CD28 coated beads for 14 days, 100 ng/mL Interleukin-4 for 36 hours — ENCFF794HEY (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF794HEY.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/12/23/666cf576-70d5-4cf0-b90c-40a3db350f3d/ENCFF794HEY.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens activated T-helper 2 cell male adult (35 years) treated with 5 μg/mL Interferon-gamma antibody for 36 hours, anti-CD3 and anti-CD28 coated beads for 24 hours, 10 ng/mL Interleukin-2 for 14 days, anti-CD3 and anti-CD28 coated beads for 14 days, 100 ng/mL Interleukin-4 for 36 hours — ENCFF892AUV (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF892AUV.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/12/23/7e2a8798-f9a1-415d-88f7-42cb75b1538d/ENCFF892AUV.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

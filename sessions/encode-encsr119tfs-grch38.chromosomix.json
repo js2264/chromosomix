@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR119TFS (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/01/31/6796d40d-f949-4f47-ad8d-91929f7a6464/ENCFF911TJH.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens sciatic nerve tissue female adult (41 years) — ENCFF261FGA (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF261FGA.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/22/b938a266-35b7-4338-88ec-4b2f5b690a5d/ENCFF261FGA.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens sciatic nerve tissue female adult (41 years) — ENCFF321DCC (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF321DCC.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/22/eedf7dde-2951-4476-b602-0c34089ce402/ENCFF321DCC.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens sciatic nerve tissue female adult (41 years) — ENCFF258RPD (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF258RPD.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/31/2b5ea6c6-d22a-4a51-933a-53aa2a296a44/ENCFF258RPD.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

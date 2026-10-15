@@ -1,0 +1,115 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:16:46Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:16:46Z",
+      "producer": "chromosomix make_store.py",
+      "name": "IGV panTro6",
+      "state": {
+        "uri": "https://s3.amazonaws.com/igv.org.genomes/panTro6/panTro6.fa",
+        "view": "browser"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "sequence",
+          "label": "sequence",
+          "source": {
+            "kind": "remote",
+            "name": "panTro6.fa",
+            "url": "https://s3.amazonaws.com/igv.org.genomes/panTro6/panTro6.fa",
+            "index": "https://s3.amazonaws.com/igv.org.genomes/panTro6/panTro6.fa.fai"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 46,
+            "mode": "line",
+            "limits": {
+              "auto": false,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "ideogram",
+          "label": "Cytobands",
+          "source": {
+            "kind": "remote",
+            "name": "cytoBandIdeo.txt.gz",
+            "url": "https://hgdownload.soe.ucsc.edu/goldenPath/panTro6/database/cytoBandIdeo.txt.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Genes",
+          "source": {
+            "kind": "remote",
+            "name": "geneLocations_panTro6.bed.gz",
+            "url": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_panTro6.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

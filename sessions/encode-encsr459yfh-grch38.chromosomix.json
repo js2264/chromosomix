@@ -1,0 +1,52 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR459YFH (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/04/20/58ff01f8-391b-42b0-b695-57d059cc1bff/ENCFF314TXL.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens GM12878 — ENCFF379CQQ (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF379CQQ.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/04/20/ddc9fd71-8a40-4030-8046-16a79dd590af/ENCFF379CQQ.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

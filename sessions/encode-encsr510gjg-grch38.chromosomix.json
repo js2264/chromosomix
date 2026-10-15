@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR510GJG (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/03/11/c790182d-7d48-4fe4-b24b-317b87ac5f5f/ENCFF716LNI.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens Jurkat — ENCFF124KAX (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF124KAX.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/11/db4dc45e-e5ab-45f3-8055-871d34f4e6c2/ENCFF124KAX.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens Jurkat — ENCFF573RXE (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF573RXE.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/11/a3eb64be-a065-43b4-8546-b178399af9e9/ENCFF573RXE.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens Jurkat — ENCFF622IVH (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF622IVH.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/03/11/d761d266-49a5-4291-9cf3-881dd931584a/ENCFF622IVH.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

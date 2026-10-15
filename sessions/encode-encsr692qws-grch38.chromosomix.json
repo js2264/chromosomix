@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR692QWS (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/01/26/b847861c-5939-46d9-a46c-6652ca3d5529/ENCFF280EYD.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens spleen tissue female adult (61 years) — ENCFF470JHX (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF470JHX.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/26/c877ef78-4216-47e1-a403-ad19da847e79/ENCFF470JHX.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens spleen tissue female adult (61 years) — ENCFF787QSM (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF787QSM.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/26/5a3ba964-b84d-4cbf-850d-87cbec23ca5b/ENCFF787QSM.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens spleen tissue female adult (61 years) — ENCFF742VTR (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF742VTR.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/26/2a888ca9-acd8-4bf3-a071-1b8aaaa357a6/ENCFF742VTR.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

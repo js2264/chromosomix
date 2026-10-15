@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR168PIR (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/01/26/ac53e4eb-4254-4067-bcd3-760ff819200d/ENCFF963NXO.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens right cardiac atrium tissue female adult (46 years) — ENCFF040QLO (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF040QLO.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/02/23/58707437-0638-428a-85c4-5153121fd3e8/ENCFF040QLO.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens right cardiac atrium tissue female adult (46 years) — ENCFF635GJQ (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF635GJQ.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/02/23/58a77723-f220-4a27-9440-cccab784f01e/ENCFF635GJQ.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens right cardiac atrium tissue female adult (46 years) — ENCFF604MUJ (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF604MUJ.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/26/1d010e2c-db73-4637-9216-7a948f4ec8c6/ENCFF604MUJ.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

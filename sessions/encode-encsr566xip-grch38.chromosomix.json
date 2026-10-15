@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR566XIP (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/01/26/df1d9cd9-131a-4af7-b4a5-bfb687ca8706/ENCFF757POS.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens hTERT RPE-1 genetically modified (deletion) using TALEN — ENCFF735JCK (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF735JCK.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/10/06/ce11bf05-89bd-484f-9140-5797dcd87ac4/ENCFF735JCK.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens hTERT RPE-1 genetically modified (deletion) using TALEN — ENCFF578EZK (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF578EZK.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/10/06/4fc3db8b-c66d-4262-89b6-1b76922e4f67/ENCFF578EZK.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens hTERT RPE-1 genetically modified (deletion) using TALEN — ENCFF777WXF (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF777WXF.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/01/26/65aa94a5-c021-4992-abcb-5e5374bcc04f/ENCFF777WXF.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

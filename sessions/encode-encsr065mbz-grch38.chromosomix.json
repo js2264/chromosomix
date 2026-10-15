@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR065MBZ (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2021/07/29/82098213-3588-4a5f-ab69-3aaa2f8b8527/ENCFF018ERB.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens common myeloid progenitor, CD34-positive — ENCFF314USC (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF314USC.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/29/6182f786-1d26-4c6b-9d30-75c03515e978/ENCFF314USC.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens common myeloid progenitor, CD34-positive — ENCFF128DSJ (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF128DSJ.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/29/8ca9134e-5607-4b33-906f-bc2dd8b20b7d/ENCFF128DSJ.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens common myeloid progenitor, CD34-positive — ENCFF982OLQ (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF982OLQ.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/29/263f16c6-22ef-405c-87ed-5396b639ef31/ENCFF982OLQ.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens common myeloid progenitor, CD34-positive — ENCFF285EFH (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF285EFH.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/29/72860904-6e41-41c5-a6fc-b0412101cd7d/ENCFF285EFH.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens common myeloid progenitor, CD34-positive — ENCFF323URO (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF323URO.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/29/f6c0592e-a916-46cb-80f0-c6a045ccd454/ENCFF323URO.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

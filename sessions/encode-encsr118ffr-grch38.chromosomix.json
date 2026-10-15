@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR118FFR (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/03/21/a777954e-e5f5-4a30-a688-beb2d479007f/ENCFF571ZQR.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens GM18951 — ENCFF847OOI (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF847OOI.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/21/a97336e7-3f79-41da-8a2b-65867ca3d37c/ENCFF847OOI.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens GM18951 — ENCFF925XBJ (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF925XBJ.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/21/811c071d-e0c3-4347-b589-81ba76eb41d5/ENCFF925XBJ.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens GM18951 — ENCFF302OXI (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF302OXI.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/21/b011f7b6-13b3-4d41-9551-bb05cae82367/ENCFF302OXI.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

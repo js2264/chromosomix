@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR064OTE (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2021/07/25/032c82d2-b1c3-4f2e-be5b-eb7605e62aea/ENCFF063NSP.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens naive thymus-derived CD8-positive, alpha-beta T cell male adult (30 years) — ENCFF886RRP (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF886RRP.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/25/18d8e53f-67ba-49e4-a14b-1731f4fa5d60/ENCFF886RRP.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens naive thymus-derived CD8-positive, alpha-beta T cell male adult (30 years) — ENCFF395VGP (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF395VGP.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/25/86641e12-ffff-4da4-9f3d-eeae51322026/ENCFF395VGP.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens naive thymus-derived CD8-positive, alpha-beta T cell male adult (30 years) — ENCFF218BSY (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF218BSY.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/25/dbb7e33d-984f-4bca-a919-16429cdc72ba/ENCFF218BSY.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens naive thymus-derived CD8-positive, alpha-beta T cell male adult (30 years) — ENCFF571SKO (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF571SKO.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/25/e825682e-20f7-43bb-8960-5f690769626a/ENCFF571SKO.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens naive thymus-derived CD8-positive, alpha-beta T cell male adult (30 years) — ENCFF319XVG (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF319XVG.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/25/a200bea6-3dcd-4430-9691-cde279510aee/ENCFF319XVG.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

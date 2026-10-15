@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR832NED (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/02/02/f3102619-0b95-4199-a9f5-e0697d7bab3b/ENCFF333WCK.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens adrenal gland tissue male adult (54 years) — ENCFF942BVL (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF942BVL.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/02/02/da85d2e9-4ede-4b4f-ad98-1e456942d711/ENCFF942BVL.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens adrenal gland tissue male adult (54 years) — ENCFF200UTB (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF200UTB.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/02/02/2d22bf44-5f6f-410d-b6da-a8aa4558a561/ENCFF200UTB.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens adrenal gland tissue male adult (54 years) — ENCFF674DUV (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF674DUV.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/02/02/be6b4b52-daae-43c4-aaa3-59e965e0e2c1/ENCFF674DUV.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

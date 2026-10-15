@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR097DFP (mm10)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2025/01/06/8e1a20c4-746d-495f-8c3f-5a2876fbf033/ENCFF334TEY.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Mus musculus strain B6CASTF1/J heart tissue postnatal (10 days) — ENCFF904OAD (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF904OAD.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2025/01/06/2b65f705-7b7e-43ac-a90b-7e0d5684fe1d/ENCFF904OAD.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Mus musculus strain B6CASTF1/J heart tissue postnatal (10 days) — ENCFF454MTD (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF454MTD.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2025/01/06/2ef8d5c7-3e18-4060-8df3-74fac70f970b/ENCFF454MTD.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Mus musculus strain B6CASTF1/J heart tissue postnatal (10 days) — ENCFF009GZX (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF009GZX.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2025/01/06/062e6dd4-9df1-4092-bb9b-c7e7eb1e0f42/ENCFF009GZX.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

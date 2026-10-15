@@ -1,0 +1,1868 @@
+{
+  "kind": "chromosomix.store",
+  "version": 1,
+  "name": "IGV genomes",
+  "description": "The reference genomes IGV ships with, and the annotation tracks published beside them: one row per FASTA and one per track this viewer can draw. Read from IGV's own genome table, which is the file the IGV desktop app and igv.js both load their genome menu from.",
+  "generatedAt": "2026-10-15T14:17:07Z",
+  "source": "https://s3.amazonaws.com/igv.org.genomes/genomes.json",
+  "columns": [
+    {
+      "key": "assembly",
+      "label": "Assembly"
+    },
+    {
+      "key": "genome",
+      "label": "Genome"
+    },
+    {
+      "key": "role",
+      "label": "Role"
+    },
+    {
+      "key": "format",
+      "label": "Format"
+    },
+    {
+      "key": "host",
+      "label": "Host"
+    }
+  ],
+  "entries": [
+    {
+      "label": "S. pombe (ASM294v2) — ASM294v2 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/ASM294v2/Schizosaccharomyces_pombe_all_chromosomes.fa",
+      "kind": "genome",
+      "size": 12842130,
+      "note": "ASM294v2 · 2 tracks published with it",
+      "fields": {
+        "assembly": "ASM294v2",
+        "genome": "S. pombe (ASM294v2)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Pombase forward strand",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/ASM294v2/Schizosaccharomyces_pombe_all_chromosomes.plus.gff3.gz"
+        },
+        {
+          "label": "Pombase reverse strand",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/ASM294v2/Schizosaccharomyces_pombe_all_chromosomes.minus.gff3.gz"
+        }
+      ]
+    },
+    {
+      "label": "S. pombe (ASM294v2) — Pombase forward strand (gff3.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/ASM294v2/Schizosaccharomyces_pombe_all_chromosomes.plus.gff3.gz",
+      "kind": "genome",
+      "size": 259069,
+      "note": "ASM294v2 · Pombase forward strand",
+      "fields": {
+        "assembly": "ASM294v2",
+        "genome": "S. pombe (ASM294v2)",
+        "role": "annotation",
+        "format": "gff3.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "S. pombe (ASM294v2) — Pombase reverse strand (gff3.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/ASM294v2/Schizosaccharomyces_pombe_all_chromosomes.minus.gff3.gz",
+      "kind": "genome",
+      "size": 256234,
+      "note": "ASM294v2 · Pombase reverse strand",
+      "fields": {
+        "assembly": "ASM294v2",
+        "genome": "S. pombe (ASM294v2)",
+        "role": "annotation",
+        "format": "gff3.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Sars-CoV-2 (ASM985889v3) — ASM985889v3 (fna)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/ASM985889v3/GCF_009858895.2_ASM985889v3_genomic.fna",
+      "kind": "genome",
+      "size": 30374,
+      "note": "ASM985889v3 · 1 track published with it",
+      "fields": {
+        "assembly": "ASM985889v3",
+        "genome": "Sars-CoV-2 (ASM985889v3)",
+        "role": "sequence",
+        "format": "fna",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Annotations",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/ASM985889v3/GCF_009858895.2_ASM985889v3_genomic.gff.gz"
+        }
+      ]
+    },
+    {
+      "label": "Sars-CoV-2 (ASM985889v3) — Annotations (gff.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/ASM985889v3/GCF_009858895.2_ASM985889v3_genomic.gff.gz",
+      "kind": "genome",
+      "size": 1680,
+      "note": "ASM985889v3 · Annotations",
+      "fields": {
+        "assembly": "ASM985889v3",
+        "genome": "Sars-CoV-2 (ASM985889v3)",
+        "role": "annotation",
+        "format": "gff.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Peanut (GCA_003086295.2) — Annotations (gff.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/GCA_003086295.2/GCF_003086295.2_arahy.Tifrunner.gnm1.KYV3_genomic.gff.gz",
+      "kind": "genome",
+      "size": 31386379,
+      "note": "GCA_003086295.2 · Annotations",
+      "fields": {
+        "assembly": "GCA_003086295.2",
+        "genome": "Peanut (GCA_003086295.2)",
+        "role": "annotation",
+        "format": "gff.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Peanut (GCA_003086295.2) — GCA_003086295.2 (fna)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/GCA_003086295.2/GCF_003086295.2_arahy.Tifrunner.gnm1.KYV3_genomic.fna",
+      "kind": "genome",
+      "size": 2589093653,
+      "note": "GCA_003086295.2 · 1 track published with it",
+      "fields": {
+        "assembly": "GCA_003086295.2",
+        "genome": "Peanut (GCA_003086295.2)",
+        "role": "sequence",
+        "format": "fna",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Annotations",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/GCA_003086295.2/GCF_003086295.2_arahy.Tifrunner.gnm1.KYV3_genomic.gff.gz"
+        }
+      ]
+    },
+    {
+      "label": "Macaca fascicularis 6.0 (GCA_011100615.1) — Annotations (gff3.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/GCA_011100615.1/Macaca_fascicularis.Macaca_fascicularis_6.0.108.sorted.gff3.gz",
+      "kind": "genome",
+      "size": 16241968,
+      "note": "GCA_011100615.1 · Annotations",
+      "fields": {
+        "assembly": "GCA_011100615.1",
+        "genome": "Macaca fascicularis 6.0 (GCA_011100615.1)",
+        "role": "annotation",
+        "format": "gff3.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Macaca fascicularis 6.0 (GCA_011100615.1) — GCA_011100615.1 (fa.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/GCA_011100615.1/Macaca_fascicularis.Macaca_fascicularis_6.0.dna.toplevel.fa.gz",
+      "kind": "genome",
+      "size": 879807762,
+      "note": "GCA_011100615.1 · 2 tracks published with it",
+      "fields": {
+        "assembly": "GCA_011100615.1",
+        "genome": "Macaca fascicularis 6.0 (GCA_011100615.1)",
+        "role": "sequence",
+        "format": "fa.gz",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Annotations",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/GCA_011100615.1/Macaca_fascicularis.Macaca_fascicularis_6.0.108.sorted.gff3.gz"
+        },
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/GCA_011100615.1/GCA_011100615.1_ucsc_ensGene.bed"
+        }
+      ]
+    },
+    {
+      "label": "Macaca fascicularis 6.0 (GCA_011100615.1) — Genes (bed)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/GCA_011100615.1/GCA_011100615.1_ucsc_ensGene.bed",
+      "kind": "genome",
+      "size": 10678142,
+      "note": "GCA_011100615.1 · Genes",
+      "fields": {
+        "assembly": "GCA_011100615.1",
+        "genome": "Macaca fascicularis 6.0 (GCA_011100615.1)",
+        "role": "annotation",
+        "format": "bed",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "O. sativa IRGSP-1.0 (GCF_001433935.1) — GCF_001433935.1 (fna.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/GCF_001433935.1/GCF_001433935.1_IRGSP-1.0_genomic.fna.gz",
+      "kind": "genome",
+      "size": 124465210,
+      "note": "GCF_001433935.1 · 1 track published with it",
+      "fields": {
+        "assembly": "GCF_001433935.1",
+        "genome": "O. sativa IRGSP-1.0 (GCF_001433935.1)",
+        "role": "sequence",
+        "format": "fna.gz",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "MSU V7 genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/GCF_001433935.1/MSU_V7.gff3.gz"
+        }
+      ]
+    },
+    {
+      "label": "O. sativa IRGSP-1.0 (GCF_001433935.1) — MSU V7 genes (gff3.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/GCF_001433935.1/MSU_V7.gff3.gz",
+      "kind": "genome",
+      "size": 8764140,
+      "note": "GCF_001433935.1 · MSU V7 genes",
+      "fields": {
+        "assembly": "GCF_001433935.1",
+        "genome": "O. sativa IRGSP-1.0 (GCF_001433935.1)",
+        "role": "annotation",
+        "format": "gff3.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Cow (UMD_3.1.1/bosTau8) — Cytobands (cytoband)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/bosTau8/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 17173,
+      "note": "bosTau8 · Cytobands",
+      "fields": {
+        "assembly": "bosTau8",
+        "genome": "Cow (UMD_3.1.1/bosTau8)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Cow (UMD_3.1.1/bosTau8) — Genes (bed.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_bosTau8.bed.gz",
+      "kind": "genome",
+      "size": 189735,
+      "note": "bosTau8 · Genes",
+      "fields": {
+        "assembly": "bosTau8",
+        "genome": "Cow (UMD_3.1.1/bosTau8)",
+        "role": "annotation",
+        "format": "bed.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Cow (UMD_3.1.1/bosTau8) — bosTau8 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/bosTau8/bosTau8.fa",
+      "kind": "genome",
+      "size": 2723503842,
+      "note": "bosTau8 · 2 tracks published with it",
+      "fields": {
+        "assembly": "bosTau8",
+        "genome": "Cow (UMD_3.1.1/bosTau8)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/bosTau8/cytoBandIdeo.txt.gz"
+        },
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_bosTau8.bed.gz"
+        }
+      ]
+    },
+    {
+      "label": "Cow (ARS-UCD1.2/bosTau9) — Cytobands (cytoband)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/bosTau9/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 13522,
+      "note": "bosTau9 · Cytobands",
+      "fields": {
+        "assembly": "bosTau9",
+        "genome": "Cow (ARS-UCD1.2/bosTau9)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Cow (ARS-UCD1.2/bosTau9) — Genes (bed.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_bosTau9.bed.gz",
+      "kind": "genome",
+      "size": 375223,
+      "note": "bosTau9 · Genes",
+      "fields": {
+        "assembly": "bosTau9",
+        "genome": "Cow (ARS-UCD1.2/bosTau9)",
+        "role": "annotation",
+        "format": "bed.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Cow (ARS-UCD1.2/bosTau9) — bosTau9 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/bosTau9/bosTau9.fa",
+      "kind": "genome",
+      "size": 2770220137,
+      "note": "bosTau9 · 2 tracks published with it",
+      "fields": {
+        "assembly": "bosTau9",
+        "genome": "Cow (ARS-UCD1.2/bosTau9)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/bosTau9/cytoBandIdeo.txt.gz"
+        },
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_bosTau9.bed.gz"
+        }
+      ]
+    },
+    {
+      "label": "Dog (Broad CanFam3.1/canFam3) — Cytobands (cytoband)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/canFam3/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 18614,
+      "note": "canFam3 · Cytobands",
+      "fields": {
+        "assembly": "canFam3",
+        "genome": "Dog (Broad CanFam3.1/canFam3)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Dog (Broad CanFam3.1/canFam3) — Genes (bed.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_canFam3.bed.gz",
+      "kind": "genome",
+      "size": 406302,
+      "note": "canFam3 · Genes",
+      "fields": {
+        "assembly": "canFam3",
+        "genome": "Dog (Broad CanFam3.1/canFam3)",
+        "role": "annotation",
+        "format": "bed.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Dog (Broad CanFam3.1/canFam3) — canFam3 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/canFam3/canFam3.fa",
+      "kind": "genome",
+      "size": 2459258986,
+      "note": "canFam3 · 2 tracks published with it",
+      "fields": {
+        "assembly": "canFam3",
+        "genome": "Dog (Broad CanFam3.1/canFam3)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/canFam3/cytoBandIdeo.txt.gz"
+        },
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_canFam3.bed.gz"
+        }
+      ]
+    },
+    {
+      "label": "Dog (UU_Cfam_GSD_1.0/canFam4) — Cytobands (cytoband)",
+      "uri": "https://hgdownload.soe.ucsc.edu/goldenPath/canFam4/database/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 13786,
+      "note": "canFam4 · Cytobands",
+      "fields": {
+        "assembly": "canFam4",
+        "genome": "Dog (UU_Cfam_GSD_1.0/canFam4)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "hgdownload.soe.ucsc.edu"
+      }
+    },
+    {
+      "label": "Dog (UU_Cfam_GSD_1.0/canFam4) — Genes (genepred)",
+      "uri": "https://hgdownload.soe.ucsc.edu/goldenPath/canFam4/database/ncbiRefSeq.txt.gz",
+      "kind": "genome",
+      "size": 4473200,
+      "note": "canFam4 · Genes",
+      "fields": {
+        "assembly": "canFam4",
+        "genome": "Dog (UU_Cfam_GSD_1.0/canFam4)",
+        "role": "annotation",
+        "format": "genepred",
+        "host": "hgdownload.soe.ucsc.edu"
+      }
+    },
+    {
+      "label": "Dog (UU_Cfam_GSD_1.0/canFam4) — canFam4 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/canFam4/canFam4.fa",
+      "kind": "genome",
+      "size": 2531694226,
+      "note": "canFam4 · 2 tracks published with it",
+      "fields": {
+        "assembly": "canFam4",
+        "genome": "Dog (UU_Cfam_GSD_1.0/canFam4)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://hgdownload.soe.ucsc.edu/goldenPath/canFam4/database/cytoBandIdeo.txt.gz"
+        },
+        {
+          "label": "Genes",
+          "url": "https://hgdownload.soe.ucsc.edu/goldenPath/canFam4/database/ncbiRefSeq.txt.gz"
+        }
+      ]
+    },
+    {
+      "label": "Dog (canFam5) — Cytobands (cytoband)",
+      "uri": "https://hgdownload.soe.ucsc.edu/goldenPath/canFam5/database/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 4780,
+      "note": "canFam5 · Cytobands",
+      "fields": {
+        "assembly": "canFam5",
+        "genome": "Dog (canFam5)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "hgdownload.soe.ucsc.edu"
+      }
+    },
+    {
+      "label": "Dog (canFam5) — Genes (bed.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_canFam5.bed.gz",
+      "kind": "genome",
+      "size": 28671,
+      "note": "canFam5 · Genes",
+      "fields": {
+        "assembly": "canFam5",
+        "genome": "Dog (canFam5)",
+        "role": "annotation",
+        "format": "bed.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Dog (canFam5) — Genes (genepred)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/canFam5/refGene.txt.gz",
+      "kind": "genome",
+      "size": 186472,
+      "note": "canFam5 · Genes",
+      "fields": {
+        "assembly": "canFam5",
+        "genome": "Dog (canFam5)",
+        "role": "annotation",
+        "format": "genepred",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Dog (canFam5) — canFam5 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/canFam5/canFam5.fa",
+      "kind": "genome",
+      "size": 2390100368,
+      "note": "canFam5 · 3 tracks published with it",
+      "fields": {
+        "assembly": "canFam5",
+        "genome": "Dog (canFam5)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://hgdownload.soe.ucsc.edu/goldenPath/canFam5/database/cytoBandIdeo.txt.gz"
+        },
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/canFam5/refGene.txt.gz"
+        },
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_canFam5.bed.gz"
+        }
+      ]
+    },
+    {
+      "label": "C. elegans (ce11) — Cytobands (cytoband)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/ce11/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 118,
+      "note": "ce11 · Cytobands",
+      "fields": {
+        "assembly": "ce11",
+        "genome": "C. elegans (ce11)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "C. elegans (ce11) — ce11 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.broadinstitute.org/genomes/seq/ce11/ce11.fa",
+      "kind": "genome",
+      "size": 102292178,
+      "note": "ce11 · 1 track published with it",
+      "fields": {
+        "assembly": "ce11",
+        "genome": "C. elegans (ce11)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/ce11/cytoBandIdeo.txt.gz"
+        }
+      ]
+    },
+    {
+      "label": "Human (T2T CHM13-v1.1) — Annotations (bb)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/t2t-chm13-v1.1/CHM13.combined.v4.bb",
+      "kind": "genome",
+      "size": 67566716,
+      "note": "chm13v1.1 · Annotations",
+      "fields": {
+        "assembly": "chm13v1.1",
+        "genome": "Human (T2T CHM13-v1.1)",
+        "role": "annotation",
+        "format": "bb",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Human (T2T CHM13-v1.1) — Cytobands (cytoband)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/t2t-chm13-v1.1/cytoBandIdeo.bed",
+      "kind": "genome",
+      "size": 27827,
+      "note": "chm13v1.1 · Cytobands",
+      "fields": {
+        "assembly": "chm13v1.1",
+        "genome": "Human (T2T CHM13-v1.1)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Human (T2T CHM13-v1.1) — Genes (bed.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/t2t-chm13-v1.1/CHM13.names.bed.gz",
+      "kind": "genome",
+      "size": 2434311,
+      "note": "chm13v1.1 · Genes",
+      "fields": {
+        "assembly": "chm13v1.1",
+        "genome": "Human (T2T CHM13-v1.1)",
+        "role": "annotation",
+        "format": "bed.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Human (T2T CHM13-v1.1) — chm13v1.1 (fna)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/t2t-chm13-v1.1/GCA_009914755.3_CHM13_T2T_v1.1_genomic.fna",
+      "kind": "genome",
+      "size": 3093018731,
+      "note": "chm13v1.1 · 3 tracks published with it",
+      "fields": {
+        "assembly": "chm13v1.1",
+        "genome": "Human (T2T CHM13-v1.1)",
+        "role": "sequence",
+        "format": "fna",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/t2t-chm13-v1.1/cytoBandIdeo.bed"
+        },
+        {
+          "label": "Annotations",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/t2t-chm13-v1.1/CHM13.combined.v4.bb"
+        },
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/t2t-chm13-v1.1/CHM13.names.bed.gz"
+        }
+      ]
+    },
+    {
+      "label": "Zebrafish (GRCZ10/danRer10) — Cytobands (cytoband)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/danRer10/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 6417,
+      "note": "danRer10 · Cytobands",
+      "fields": {
+        "assembly": "danRer10",
+        "genome": "Zebrafish (GRCZ10/danRer10)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Zebrafish (GRCZ10/danRer10) — Genes (bed.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_danRer10.bed.gz",
+      "kind": "genome",
+      "size": 425951,
+      "note": "danRer10 · Genes",
+      "fields": {
+        "assembly": "danRer10",
+        "genome": "Zebrafish (GRCZ10/danRer10)",
+        "role": "annotation",
+        "format": "bed.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Zebrafish (GRCZ10/danRer10) — danRer10 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.broadinstitute.org/genomes/seq/danRer10/danRer10.fa",
+      "kind": "genome",
+      "size": 1399173082,
+      "note": "danRer10 · 2 tracks published with it",
+      "fields": {
+        "assembly": "danRer10",
+        "genome": "Zebrafish (GRCZ10/danRer10)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/danRer10/cytoBandIdeo.txt.gz"
+        },
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_danRer10.bed.gz"
+        }
+      ]
+    },
+    {
+      "label": "Zebrafish (GRCZ11/danRer11) — Cytobands (cytoband)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/danRer11/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 12997,
+      "note": "danRer11 · Cytobands",
+      "fields": {
+        "assembly": "danRer11",
+        "genome": "Zebrafish (GRCZ11/danRer11)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Zebrafish (GRCZ11/danRer11) — Genes (bed.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_danRer11.bed.gz",
+      "kind": "genome",
+      "size": 392419,
+      "note": "danRer11 · Genes",
+      "fields": {
+        "assembly": "danRer11",
+        "genome": "Zebrafish (GRCZ11/danRer11)",
+        "role": "annotation",
+        "format": "bed.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Zebrafish (GRCZ11/danRer11) — danRer11 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/danRer11/danRer11.fa",
+      "kind": "genome",
+      "size": 1712826111,
+      "note": "danRer11 · 2 tracks published with it",
+      "fields": {
+        "assembly": "danRer11",
+        "genome": "Zebrafish (GRCZ11/danRer11)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/danRer11/cytoBandIdeo.txt.gz"
+        },
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_danRer11.bed.gz"
+        }
+      ]
+    },
+    {
+      "label": "D. melanogaster (dm3) — Cytobands (cytoband)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/dm3/cytoBand.txt.gz",
+      "kind": "genome",
+      "size": 46320,
+      "note": "dm3 · Cytobands",
+      "fields": {
+        "assembly": "dm3",
+        "genome": "D. melanogaster (dm3)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "D. melanogaster (dm3) — UCSC Refseq Genes (genepred)",
+      "uri": "https://hgdownload.soe.ucsc.edu/goldenPath/dm3/database/refGene.txt.gz",
+      "kind": "genome",
+      "size": 1982294,
+      "note": "dm3 · UCSC Refseq Genes",
+      "fields": {
+        "assembly": "dm3",
+        "genome": "D. melanogaster (dm3)",
+        "role": "annotation",
+        "format": "genepred",
+        "host": "hgdownload.soe.ucsc.edu"
+      }
+    },
+    {
+      "label": "D. melanogaster (dm3) — dm3 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/dm3/dm3.fa",
+      "kind": "genome",
+      "size": 172111398,
+      "note": "dm3 · 2 tracks published with it",
+      "fields": {
+        "assembly": "dm3",
+        "genome": "D. melanogaster (dm3)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/dm3/cytoBand.txt.gz"
+        },
+        {
+          "label": "UCSC Refseq Genes",
+          "url": "https://hgdownload.soe.ucsc.edu/goldenPath/dm3/database/refGene.txt.gz"
+        }
+      ]
+    },
+    {
+      "label": "D. melanogaster (dm6) — Cytobands (cytoband)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/dm6/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 56739,
+      "note": "dm6 · Cytobands",
+      "fields": {
+        "assembly": "dm6",
+        "genome": "D. melanogaster (dm6)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "D. melanogaster (dm6) — Refseq Genes (genepred)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/dm6/ncbiRefSeq.txt.gz",
+      "kind": "genome",
+      "size": 1322315,
+      "note": "dm6 · Refseq Genes",
+      "fields": {
+        "assembly": "dm6",
+        "genome": "D. melanogaster (dm6)",
+        "role": "annotation",
+        "format": "genepred",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "D. melanogaster (dm6) — dm6 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.broadinstitute.org/genomes/seq/dm6/dm6.fa",
+      "kind": "genome",
+      "size": 146638899,
+      "note": "dm6 · 2 tracks published with it",
+      "fields": {
+        "assembly": "dm6",
+        "genome": "D. melanogaster (dm6)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/dm6/cytoBandIdeo.txt.gz"
+        },
+        {
+          "label": "Refseq Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/dm6/ncbiRefSeq.txt.gz"
+        }
+      ]
+    },
+    {
+      "label": "D. melanogaster (dmel_r5.9) — Transcripts (gff.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/dmel_r5.9/dmel-r5.9.transcripts.sorted.gff.gz",
+      "kind": "genome",
+      "size": 5474577,
+      "note": "dmel_r5.9 · Transcripts",
+      "fields": {
+        "assembly": "dmel_r5.9",
+        "genome": "D. melanogaster (dmel_r5.9)",
+        "role": "annotation",
+        "format": "gff.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "D. melanogaster (dmel_r5.9) — dmel_r5.9 (fasta)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/dmel_r5.9/dmel-all-chromosome-r5.9.fasta",
+      "kind": "genome",
+      "size": 172113655,
+      "note": "dmel_r5.9 · 1 track published with it",
+      "fields": {
+        "assembly": "dmel_r5.9",
+        "genome": "D. melanogaster (dmel_r5.9)",
+        "role": "sequence",
+        "format": "fasta",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Transcripts",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/dmel_r5.9/dmel-r5.9.transcripts.sorted.gff.gz"
+        }
+      ]
+    },
+    {
+      "label": "Chicken (galGal6) — Cytobands (cytoband)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/galGal6/cytoBandIdeo.txt",
+      "kind": "genome",
+      "size": 17529,
+      "note": "galGal6 · Cytobands",
+      "fields": {
+        "assembly": "galGal6",
+        "genome": "Chicken (galGal6)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Chicken (galGal6) — NCBI Refseq Genes (genepred)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/galGal6/ncbiRefSeq.txt.gz",
+      "kind": "genome",
+      "size": 3322291,
+      "note": "galGal6 · NCBI Refseq Genes",
+      "fields": {
+        "assembly": "galGal6",
+        "genome": "Chicken (galGal6)",
+        "role": "annotation",
+        "format": "genepred",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Chicken (galGal6) — galGal6 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/galGal6/galGal6.fa",
+      "kind": "genome",
+      "size": 1086683182,
+      "note": "galGal6 · 2 tracks published with it",
+      "fields": {
+        "assembly": "galGal6",
+        "genome": "Chicken (galGal6)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/galGal6/cytoBandIdeo.txt"
+        },
+        {
+          "label": "NCBI Refseq Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/galGal6/ncbiRefSeq.txt.gz"
+        }
+      ]
+    },
+    {
+      "label": "Gorilla (gorGor4.1/gorGor4) — Cytobands (cytoband)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/gorGor4/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 205055,
+      "note": "gorGor4 · Cytobands",
+      "fields": {
+        "assembly": "gorGor4",
+        "genome": "Gorilla (gorGor4.1/gorGor4)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Gorilla (gorGor4.1/gorGor4) — Refseq Genes (genepred)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/gorGor4/refGene.txt.gz",
+      "kind": "genome",
+      "size": 18237,
+      "note": "gorGor4 · Refseq Genes",
+      "fields": {
+        "assembly": "gorGor4",
+        "genome": "Gorilla (gorGor4.1/gorGor4)",
+        "role": "annotation",
+        "format": "genepred",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Gorilla (gorGor4.1/gorGor4) — gorGor4 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/gorGor4/gorGor4.fa",
+      "kind": "genome",
+      "size": 3125535021,
+      "note": "gorGor4 · 2 tracks published with it",
+      "fields": {
+        "assembly": "gorGor4",
+        "genome": "Gorilla (gorGor4.1/gorGor4)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/gorGor4/cytoBandIdeo.txt.gz"
+        },
+        {
+          "label": "Refseq Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/gorGor4/refGene.txt.gz"
+        }
+      ]
+    },
+    {
+      "label": "Gorilla (Kamilah_GGO_v0/gorGor6) — Cytobands (cytoband)",
+      "uri": "https://hgdownload.soe.ucsc.edu/goldenPath/gorGor6/database/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 31997,
+      "note": "gorGor6 · Cytobands",
+      "fields": {
+        "assembly": "gorGor6",
+        "genome": "Gorilla (Kamilah_GGO_v0/gorGor6)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "hgdownload.soe.ucsc.edu"
+      }
+    },
+    {
+      "label": "Gorilla (Kamilah_GGO_v0/gorGor6) — Genes (bed.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_gorGor6.bed.gz",
+      "kind": "genome",
+      "size": 327596,
+      "note": "gorGor6 · Genes",
+      "fields": {
+        "assembly": "gorGor6",
+        "genome": "Gorilla (Kamilah_GGO_v0/gorGor6)",
+        "role": "annotation",
+        "format": "bed.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Gorilla (Kamilah_GGO_v0/gorGor6) — Refseq Genes (genepred)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/gorGor6/ncbiRefSeq.txt.gz",
+      "kind": "genome",
+      "size": 3484171,
+      "note": "gorGor6 · Refseq Genes",
+      "fields": {
+        "assembly": "gorGor6",
+        "genome": "Gorilla (Kamilah_GGO_v0/gorGor6)",
+        "role": "annotation",
+        "format": "genepred",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Gorilla (Kamilah_GGO_v0/gorGor6) — gorGor6 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/gorGor6/gorGor6.fa",
+      "kind": "genome",
+      "size": 3105893940,
+      "note": "gorGor6 · 3 tracks published with it",
+      "fields": {
+        "assembly": "gorGor6",
+        "genome": "Gorilla (Kamilah_GGO_v0/gorGor6)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://hgdownload.soe.ucsc.edu/goldenPath/gorGor6/database/cytoBandIdeo.txt.gz"
+        },
+        {
+          "label": "Refseq Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/gorGor6/ncbiRefSeq.txt.gz"
+        },
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_gorGor6.bed.gz"
+        }
+      ]
+    },
+    {
+      "label": "Human (hg18) — Cytobands (cytoband)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/hg18/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 6200,
+      "note": "hg18 · Cytobands",
+      "fields": {
+        "assembly": "hg18",
+        "genome": "Human (hg18)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Human (hg18) — Refseq Genes (genepred)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/hg18/refGene.txt.gz",
+      "kind": "genome",
+      "size": 7861704,
+      "note": "hg18 · Refseq Genes",
+      "fields": {
+        "assembly": "hg18",
+        "genome": "Human (hg18)",
+        "role": "annotation",
+        "format": "genepred",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Human (hg18) — hg18 (fasta)",
+      "uri": "https://s3.amazonaws.com/igv.broadinstitute.org/genomes/seq/hg18/hg18.fasta",
+      "kind": "genome",
+      "size": 3142044949,
+      "note": "hg18 · 2 tracks published with it",
+      "fields": {
+        "assembly": "hg18",
+        "genome": "Human (hg18)",
+        "role": "sequence",
+        "format": "fasta",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/hg18/cytoBandIdeo.txt.gz"
+        },
+        {
+          "label": "Refseq Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/hg18/refGene.txt.gz"
+        }
+      ]
+    },
+    {
+      "label": "Human (hg38 1kg/GATK) — Cytobands (cytoband)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/hg38/annotations/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 9886,
+      "note": "hg38_1kg · Cytobands",
+      "fields": {
+        "assembly": "hg38_1kg",
+        "genome": "Human (hg38 1kg/GATK)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Human (hg38 1kg/GATK) — Refseq Genes (genepred)",
+      "uri": "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/ncbiRefSeq.txt.gz",
+      "kind": "genome",
+      "size": 7331668,
+      "note": "hg38_1kg · Refseq Genes",
+      "fields": {
+        "assembly": "hg38_1kg",
+        "genome": "Human (hg38 1kg/GATK)",
+        "role": "annotation",
+        "format": "genepred",
+        "host": "hgdownload.soe.ucsc.edu"
+      }
+    },
+    {
+      "label": "Human (hg38 1kg/GATK) — hg38_1kg (fa)",
+      "uri": "https://1000genomes.s3.amazonaws.com/technical/reference/GRCh38_reference_genome/GRCh38_full_analysis_set_plus_decoy_hla.fa",
+      "kind": "genome",
+      "size": 3263683042,
+      "note": "hg38_1kg · 2 tracks published with it",
+      "fields": {
+        "assembly": "hg38_1kg",
+        "genome": "Human (hg38 1kg/GATK)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "1000genomes.s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/hg38/annotations/cytoBandIdeo.txt.gz"
+        },
+        {
+          "label": "Refseq Genes",
+          "url": "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/ncbiRefSeq.txt.gz"
+        }
+      ]
+    },
+    {
+      "label": "Human (T2T CHM13-v2.0/hs1) — Augustus (bb)",
+      "uri": "https://hgdownload.soe.ucsc.edu/hubs/GCA/009/914/755/GCA_009914755.4/bbi/GCA_009914755.4_T2T-CHM13v2.0.augustus.bb",
+      "kind": "genome",
+      "size": 2214066,
+      "note": "hs1 · Augustus",
+      "fields": {
+        "assembly": "hs1",
+        "genome": "Human (T2T CHM13-v2.0/hs1)",
+        "role": "annotation",
+        "format": "bb",
+        "host": "hgdownload.soe.ucsc.edu"
+      }
+    },
+    {
+      "label": "Human (T2T CHM13-v2.0/hs1) — CAT/Liftoff Genes (bb)",
+      "uri": "https://hgdownload.soe.ucsc.edu/hubs/GCA/009/914/755/GCA_009914755.4/bbi/GCA_009914755.4_T2T-CHM13v2.0.catLiftOffGenesV1/catLiftOffGenesV1.bb",
+      "kind": "genome",
+      "size": 67473007,
+      "note": "hs1 · CAT/Liftoff Genes",
+      "fields": {
+        "assembly": "hs1",
+        "genome": "Human (T2T CHM13-v2.0/hs1)",
+        "role": "annotation",
+        "format": "bb",
+        "host": "hgdownload.soe.ucsc.edu"
+      }
+    },
+    {
+      "label": "Human (T2T CHM13-v2.0/hs1) — Cytobands (cytoband)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/chm13v2.0/CHM13_v2.0.cytoBandMapped.bed",
+      "kind": "genome",
+      "size": 30753,
+      "note": "hs1 · Cytobands",
+      "fields": {
+        "assembly": "hs1",
+        "genome": "Human (T2T CHM13-v2.0/hs1)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Human (T2T CHM13-v2.0/hs1) — Genes (bed.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/chm13v2.0/chm13v2.0_geneLocations.short.bed.gz",
+      "kind": "genome",
+      "size": 752938,
+      "note": "hs1 · Genes",
+      "fields": {
+        "assembly": "hs1",
+        "genome": "Human (T2T CHM13-v2.0/hs1)",
+        "role": "annotation",
+        "format": "bed.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Human (T2T CHM13-v2.0/hs1) — hs1 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/chm13v2.0/chm13v2.0.fa",
+      "kind": "genome",
+      "size": 3156259703,
+      "note": "hs1 · 4 tracks published with it",
+      "fields": {
+        "assembly": "hs1",
+        "genome": "Human (T2T CHM13-v2.0/hs1)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/chm13v2.0/CHM13_v2.0.cytoBandMapped.bed"
+        },
+        {
+          "label": "CAT/Liftoff Genes",
+          "url": "https://hgdownload.soe.ucsc.edu/hubs/GCA/009/914/755/GCA_009914755.4/bbi/GCA_009914755.4_T2T-CHM13v2.0.catLiftOffGenesV1/catLiftOffGenesV1.bb"
+        },
+        {
+          "label": "Augustus",
+          "url": "https://hgdownload.soe.ucsc.edu/hubs/GCA/009/914/755/GCA_009914755.4/bbi/GCA_009914755.4_T2T-CHM13v2.0.augustus.bb"
+        },
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/chm13v2.0/chm13v2.0_geneLocations.short.bed.gz"
+        }
+      ]
+    },
+    {
+      "label": "Macaca fascicularis (macFas5) — Cytobands (cytoband)",
+      "uri": "https://hgdownload.soe.ucsc.edu/goldenPath/macFas5/database/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 38700,
+      "note": "macFas5 · Cytobands",
+      "fields": {
+        "assembly": "macFas5",
+        "genome": "Macaca fascicularis (macFas5)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "hgdownload.soe.ucsc.edu"
+      }
+    },
+    {
+      "label": "Macaca fascicularis (macFas5) — Genes (bed.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_macFas5.bed.gz",
+      "kind": "genome",
+      "size": 367384,
+      "note": "macFas5 · Genes",
+      "fields": {
+        "assembly": "macFas5",
+        "genome": "Macaca fascicularis (macFas5)",
+        "role": "annotation",
+        "format": "bed.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Macaca fascicularis (macFas5) — Genes (genepred)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/macFas5/ncbiRefSeq.txt.gz",
+      "kind": "genome",
+      "size": 3922757,
+      "note": "macFas5 · Genes",
+      "fields": {
+        "assembly": "macFas5",
+        "genome": "Macaca fascicularis (macFas5)",
+        "role": "annotation",
+        "format": "genepred",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Macaca fascicularis (macFas5) — macFas5 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/macFas5/macFas5.fa",
+      "kind": "genome",
+      "size": 3005932380,
+      "note": "macFas5 · 3 tracks published with it",
+      "fields": {
+        "assembly": "macFas5",
+        "genome": "Macaca fascicularis (macFas5)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://hgdownload.soe.ucsc.edu/goldenPath/macFas5/database/cytoBandIdeo.txt.gz"
+        },
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/macFas5/ncbiRefSeq.txt.gz"
+        },
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_macFas5.bed.gz"
+        }
+      ]
+    },
+    {
+      "label": "Mouse (GRCm38/mm10) — Refseq Genes (genepred)",
+      "uri": "https://hgdownload.soe.ucsc.edu/goldenPath/mm10/database/ncbiRefSeq.txt.gz",
+      "kind": "genome",
+      "size": 5585058,
+      "note": "mm10 · Refseq Genes",
+      "fields": {
+        "assembly": "mm10",
+        "genome": "Mouse (GRCm38/mm10)",
+        "role": "annotation",
+        "format": "genepred",
+        "host": "hgdownload.soe.ucsc.edu"
+      }
+    },
+    {
+      "label": "Mouse (GRCm38/mm10) — mm10 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.broadinstitute.org/genomes/seq/mm10/mm10.fa",
+      "kind": "genome",
+      "size": 2785490220,
+      "note": "mm10 · 1 track published with it",
+      "fields": {
+        "assembly": "mm10",
+        "genome": "Mouse (GRCm38/mm10)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Refseq Genes",
+          "url": "https://hgdownload.soe.ucsc.edu/goldenPath/mm10/database/ncbiRefSeq.txt.gz"
+        }
+      ]
+    },
+    {
+      "label": "Mouse (GRCm39/mm39) — Cytobands (cytoband)",
+      "uri": "https://hgdownload.soe.ucsc.edu/goldenPath/mm39/database/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 743,
+      "note": "mm39 · Cytobands",
+      "fields": {
+        "assembly": "mm39",
+        "genome": "Mouse (GRCm39/mm39)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "hgdownload.soe.ucsc.edu"
+      }
+    },
+    {
+      "label": "Mouse (GRCm39/mm39) — Refseq Genes (genepred)",
+      "uri": "https://hgdownload.soe.ucsc.edu/goldenPath/mm39/database/ncbiRefSeq.txt.gz",
+      "kind": "genome",
+      "size": 5735393,
+      "note": "mm39 · Refseq Genes",
+      "fields": {
+        "assembly": "mm39",
+        "genome": "Mouse (GRCm39/mm39)",
+        "role": "annotation",
+        "format": "genepred",
+        "host": "hgdownload.soe.ucsc.edu"
+      }
+    },
+    {
+      "label": "Mouse (GRCm39/mm39) — mm39 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/mm39/mm39.fa",
+      "kind": "genome",
+      "size": 2782787884,
+      "note": "mm39 · 2 tracks published with it",
+      "fields": {
+        "assembly": "mm39",
+        "genome": "Mouse (GRCm39/mm39)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://hgdownload.soe.ucsc.edu/goldenPath/mm39/database/cytoBandIdeo.txt.gz"
+        },
+        {
+          "label": "Refseq Genes",
+          "url": "https://hgdownload.soe.ucsc.edu/goldenPath/mm39/database/ncbiRefSeq.txt.gz"
+        }
+      ]
+    },
+    {
+      "label": "Mouse (NCBI37/mm9) — Cytobands (cytoband)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/mm9/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 4103,
+      "note": "mm9 · Cytobands",
+      "fields": {
+        "assembly": "mm9",
+        "genome": "Mouse (NCBI37/mm9)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Mouse (NCBI37/mm9) — Genes (bed.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_mm9.bed.gz",
+      "kind": "genome",
+      "size": 335835,
+      "note": "mm9 · Genes",
+      "fields": {
+        "assembly": "mm9",
+        "genome": "Mouse (NCBI37/mm9)",
+        "role": "annotation",
+        "format": "bed.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Mouse (NCBI37/mm9) — mm9 (fasta)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/mm9/mm9.fasta",
+      "kind": "genome",
+      "size": 2708009902,
+      "note": "mm9 · 2 tracks published with it",
+      "fields": {
+        "assembly": "mm9",
+        "genome": "Mouse (NCBI37/mm9)",
+        "role": "sequence",
+        "format": "fasta",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/mm9/cytoBandIdeo.txt.gz"
+        },
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_mm9.bed.gz"
+        }
+      ]
+    },
+    {
+      "label": "Bonobo (MPI-EVA panpan1.1/panPan2) — Cytobands (cytoband)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/panPan2/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 54925,
+      "note": "panPan2 · Cytobands",
+      "fields": {
+        "assembly": "panPan2",
+        "genome": "Bonobo (MPI-EVA panpan1.1/panPan2)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Bonobo (MPI-EVA panpan1.1/panPan2) — Genes (bed.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_panPan2.bed.gz",
+      "kind": "genome",
+      "size": 334010,
+      "note": "panPan2 · Genes",
+      "fields": {
+        "assembly": "panPan2",
+        "genome": "Bonobo (MPI-EVA panpan1.1/panPan2)",
+        "role": "annotation",
+        "format": "bed.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Bonobo (MPI-EVA panpan1.1/panPan2) — Refseq Genes (genepred)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/panPan2/ncbiRefSeq.txt.gz",
+      "kind": "genome",
+      "size": 3391476,
+      "note": "panPan2 · Refseq Genes",
+      "fields": {
+        "assembly": "panPan2",
+        "genome": "Bonobo (MPI-EVA panpan1.1/panPan2)",
+        "role": "annotation",
+        "format": "genepred",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Bonobo (MPI-EVA panpan1.1/panPan2) — panPan2 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/panPan2/panPan2.fa",
+      "kind": "genome",
+      "size": 3352607619,
+      "note": "panPan2 · 3 tracks published with it",
+      "fields": {
+        "assembly": "panPan2",
+        "genome": "Bonobo (MPI-EVA panpan1.1/panPan2)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/panPan2/cytoBandIdeo.txt.gz"
+        },
+        {
+          "label": "Refseq Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/panPan2/ncbiRefSeq.txt.gz"
+        },
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_panPan2.bed.gz"
+        }
+      ]
+    },
+    {
+      "label": "Chimp (SAC 2.1.4/panTro4) — Cytobands (cytoband)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/panTro4/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 136597,
+      "note": "panTro4 · Cytobands",
+      "fields": {
+        "assembly": "panTro4",
+        "genome": "Chimp (SAC 2.1.4/panTro4)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Chimp (SAC 2.1.4/panTro4) — Genes (bed.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_panTro4.bed.gz",
+      "kind": "genome",
+      "size": 33584,
+      "note": "panTro4 · Genes",
+      "fields": {
+        "assembly": "panTro4",
+        "genome": "Chimp (SAC 2.1.4/panTro4)",
+        "role": "annotation",
+        "format": "bed.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Chimp (SAC 2.1.4/panTro4) — panTro4 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/panTro4/panTro4.fa",
+      "kind": "genome",
+      "size": 3376351399,
+      "note": "panTro4 · 2 tracks published with it",
+      "fields": {
+        "assembly": "panTro4",
+        "genome": "Chimp (SAC 2.1.4/panTro4)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/panTro4/cytoBandIdeo.txt.gz"
+        },
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_panTro4.bed.gz"
+        }
+      ]
+    },
+    {
+      "label": "Chimp (panTro5) (panTro5) — Cytobands (cytoband)",
+      "uri": "https://hgdownload.soe.ucsc.edu/goldenPath/panTro5/database/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 240514,
+      "note": "panTro5 · Cytobands",
+      "fields": {
+        "assembly": "panTro5",
+        "genome": "Chimp (panTro5) (panTro5)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "hgdownload.soe.ucsc.edu"
+      }
+    },
+    {
+      "label": "Chimp (panTro5) (panTro5) — Genes (bed.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_panTro5.bed.gz",
+      "kind": "genome",
+      "size": 374546,
+      "note": "panTro5 · Genes",
+      "fields": {
+        "assembly": "panTro5",
+        "genome": "Chimp (panTro5) (panTro5)",
+        "role": "annotation",
+        "format": "bed.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Chimp (panTro5) (panTro5) — Refseq Genes (genepred)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/panTro5/ncbiRefSeq.txt.gz",
+      "kind": "genome",
+      "size": 4699830,
+      "note": "panTro5 · Refseq Genes",
+      "fields": {
+        "assembly": "panTro5",
+        "genome": "Chimp (panTro5) (panTro5)",
+        "role": "annotation",
+        "format": "genepred",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Chimp (panTro5) (panTro5) — panTro5 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/panTro5/panTro5.fa",
+      "kind": "genome",
+      "size": 3296804036,
+      "note": "panTro5 · 3 tracks published with it",
+      "fields": {
+        "assembly": "panTro5",
+        "genome": "Chimp (panTro5) (panTro5)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://hgdownload.soe.ucsc.edu/goldenPath/panTro5/database/cytoBandIdeo.txt.gz"
+        },
+        {
+          "label": "Refseq Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/panTro5/ncbiRefSeq.txt.gz"
+        },
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_panTro5.bed.gz"
+        }
+      ]
+    },
+    {
+      "label": "Chimp (panTro6) (panTro6) — Cytobands (cytoband)",
+      "uri": "https://hgdownload.soe.ucsc.edu/goldenPath/panTro6/database/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 25805,
+      "note": "panTro6 · Cytobands",
+      "fields": {
+        "assembly": "panTro6",
+        "genome": "Chimp (panTro6) (panTro6)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "hgdownload.soe.ucsc.edu"
+      }
+    },
+    {
+      "label": "Chimp (panTro6) (panTro6) — Genes (bed.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_panTro6.bed.gz",
+      "kind": "genome",
+      "size": 403675,
+      "note": "panTro6 · Genes",
+      "fields": {
+        "assembly": "panTro6",
+        "genome": "Chimp (panTro6) (panTro6)",
+        "role": "annotation",
+        "format": "bed.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Chimp (panTro6) (panTro6) — Refseq Genes (genepred)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/panTro6/ncbiRefSeq.txt.gz",
+      "kind": "genome",
+      "size": 4779248,
+      "note": "panTro6 · Refseq Genes",
+      "fields": {
+        "assembly": "panTro6",
+        "genome": "Chimp (panTro6) (panTro6)",
+        "role": "annotation",
+        "format": "genepred",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Chimp (panTro6) (panTro6) — panTro6 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/panTro6/panTro6.fa",
+      "kind": "genome",
+      "size": 3111503379,
+      "note": "panTro6 · 3 tracks published with it",
+      "fields": {
+        "assembly": "panTro6",
+        "genome": "Chimp (panTro6) (panTro6)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://hgdownload.soe.ucsc.edu/goldenPath/panTro6/database/cytoBandIdeo.txt.gz"
+        },
+        {
+          "label": "Refseq Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/panTro6/ncbiRefSeq.txt.gz"
+        },
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_panTro6.bed.gz"
+        }
+      ]
+    },
+    {
+      "label": "Rat (rn7) — Cytobands (cytoband)",
+      "uri": "https://hgdownload.soe.ucsc.edu/goldenPath/rn7/database/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 1294,
+      "note": "rn7 · Cytobands",
+      "fields": {
+        "assembly": "rn7",
+        "genome": "Rat (rn7)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "hgdownload.soe.ucsc.edu"
+      }
+    },
+    {
+      "label": "Rat (rn7) — Genes (bed.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_rn7.bed.gz",
+      "kind": "genome",
+      "size": 435262,
+      "note": "rn7 · Genes",
+      "fields": {
+        "assembly": "rn7",
+        "genome": "Rat (rn7)",
+        "role": "annotation",
+        "format": "bed.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Rat (rn7) — Genes (genepred)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/rn7/ncbiRefSeq.txt.gz",
+      "kind": "genome",
+      "size": 4723328,
+      "note": "rn7 · Genes",
+      "fields": {
+        "assembly": "rn7",
+        "genome": "Rat (rn7)",
+        "role": "annotation",
+        "format": "genepred",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Rat (rn7) — rn7 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/rn7/rn7.fa",
+      "kind": "genome",
+      "size": 2700877725,
+      "note": "rn7 · 3 tracks published with it",
+      "fields": {
+        "assembly": "rn7",
+        "genome": "Rat (rn7)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://hgdownload.soe.ucsc.edu/goldenPath/rn7/database/cytoBandIdeo.txt.gz"
+        },
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/rn7/ncbiRefSeq.txt.gz"
+        },
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_rn7.bed.gz"
+        }
+      ]
+    },
+    {
+      "label": "S. cerevisiae (sacCer3) — sacCer3 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/sacCer3/sacCer3.fa",
+      "kind": "genome",
+      "size": 12400379,
+      "note": "sacCer3 · no tracks this viewer can draw",
+      "fields": {
+        "assembly": "sacCer3",
+        "genome": "S. cerevisiae (sacCer3)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Pig (SGSC Sscrofa11.1/susScr11) — Cytobands (cytoband)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/susScr11/cytoBandIdeo.txt.gz",
+      "kind": "genome",
+      "size": 4073,
+      "note": "susScr11 · Cytobands",
+      "fields": {
+        "assembly": "susScr11",
+        "genome": "Pig (SGSC Sscrofa11.1/susScr11)",
+        "role": "annotation",
+        "format": "cytoband",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Pig (SGSC Sscrofa11.1/susScr11) — Genes (bed.gz)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_susScr11.bed.gz",
+      "kind": "genome",
+      "size": 59187,
+      "note": "susScr11 · Genes",
+      "fields": {
+        "assembly": "susScr11",
+        "genome": "Pig (SGSC Sscrofa11.1/susScr11)",
+        "role": "annotation",
+        "format": "bed.gz",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "Pig (SGSC Sscrofa11.1/susScr11) — susScr11 (fa)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/susScr11/susScr11.fa",
+      "kind": "genome",
+      "size": 2551964142,
+      "note": "susScr11 · 2 tracks published with it",
+      "fields": {
+        "assembly": "susScr11",
+        "genome": "Pig (SGSC Sscrofa11.1/susScr11)",
+        "role": "sequence",
+        "format": "fa",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Cytobands",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/susScr11/cytoBandIdeo.txt.gz"
+        },
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/locations/geneLocations_susScr11.bed.gz"
+        }
+      ]
+    },
+    {
+      "label": "A. thaliana (TAIR 10) — Genes (gff)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/tair10/TAIR10_GFF3_genes.gff",
+      "kind": "genome",
+      "size": 42375774,
+      "note": "tair10 · Genes",
+      "fields": {
+        "assembly": "tair10",
+        "genome": "A. thaliana (TAIR 10)",
+        "role": "annotation",
+        "format": "gff",
+        "host": "s3.amazonaws.com"
+      }
+    },
+    {
+      "label": "A. thaliana (TAIR 10) — tair10 (fas)",
+      "uri": "https://s3.amazonaws.com/igv.org.genomes/tair10/TAIR10_chr_all.fas",
+      "kind": "genome",
+      "size": 121183059,
+      "note": "tair10 · 1 track published with it",
+      "fields": {
+        "assembly": "tair10",
+        "genome": "A. thaliana (TAIR 10)",
+        "role": "sequence",
+        "format": "fas",
+        "host": "s3.amazonaws.com"
+      },
+      "tracks": [
+        {
+          "label": "Genes",
+          "url": "https://s3.amazonaws.com/igv.org.genomes/tair10/TAIR10_GFF3_genes.gff"
+        }
+      ]
+    }
+  ]
+}

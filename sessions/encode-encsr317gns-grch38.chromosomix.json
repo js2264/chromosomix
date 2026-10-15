@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR317GNS (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/08/29/2a007c35-6093-42ea-969d-c1164ecff05d/ENCFF433ONY.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens chondrocyte — ENCFF751XIE (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF751XIE.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/08/14/b2dc447f-b3b3-4a6d-bbfe-530b766e5d35/ENCFF751XIE.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens chondrocyte — ENCFF404CJM (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF404CJM.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/08/14/8d4a0f1c-c7e6-4ce1-967c-31e7f8aa695e/ENCFF404CJM.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens chondrocyte — ENCFF494XUL (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF494XUL.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/08/29/871ce095-966b-45ca-95e5-803048b49464/ENCFF494XUL.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

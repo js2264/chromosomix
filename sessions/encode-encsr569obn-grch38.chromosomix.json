@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR569OBN (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/12/06/92626f79-8e60-4601-8d50-e3ae51549b13/ENCFF883XXW.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens stomach tissue female adult (53 years) — ENCFF122XRH (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF122XRH.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/12/06/09e64989-c2f1-43be-b2eb-cdb0df51dba2/ENCFF122XRH.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens stomach tissue female adult (53 years) — ENCFF262LGL (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF262LGL.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/12/06/70cb3a99-afa4-4ecd-8ce2-5d7b6251f8cb/ENCFF262LGL.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens stomach tissue female adult (53 years) — ENCFF059RGP (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF059RGP.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/12/06/22c30c93-4ac1-4846-95c8-c2090f65a9aa/ENCFF059RGP.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR447IUA (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/06/22/6b8c692e-ea01-41ae-8b6f-31e5b0843edc/ENCFF407OZU.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens Panc1 — ENCFF698NFE (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF698NFE.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/22/2e88bb91-41e0-4f7e-954c-02eddcf79b3c/ENCFF698NFE.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens Panc1 — ENCFF552GKZ (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF552GKZ.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/22/0623f75c-23b6-44b8-8dc7-1efdbab9e782/ENCFF552GKZ.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens Panc1 — ENCFF008OPR (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF008OPR.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/22/efd8b9ba-5162-4ba2-a19e-d0348b5249f9/ENCFF008OPR.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens Panc1 — ENCFF882RJI (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF882RJI.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/22/8c2b5498-1982-4894-a4b0-5adc5d70c905/ENCFF882RJI.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens Panc1 — ENCFF328UAE (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF328UAE.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/06/22/92fefdf4-460f-4112-b34b-afca83d3e4b6/ENCFF328UAE.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

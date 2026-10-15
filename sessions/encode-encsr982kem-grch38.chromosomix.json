@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR982KEM (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2021/07/24/8917db9b-9bfa-444d-ad9e-c3fbd20f3e1a/ENCFF565KLJ.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens activated CD8-positive, alpha-beta T cell male adult (21 years) treated with anti-CD3 and anti-CD28 coated beads for 36 hours — ENCFF453CEG (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF453CEG.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/24/74804be4-4810-47b6-9430-d6e0b557b1e7/ENCFF453CEG.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens activated CD8-positive, alpha-beta T cell male adult (21 years) treated with anti-CD3 and anti-CD28 coated beads for 36 hours — ENCFF233SEH (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF233SEH.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/24/ba6af677-02ef-4bf2-9e98-3921c7edf2f2/ENCFF233SEH.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens activated CD8-positive, alpha-beta T cell male adult (21 years) treated with anti-CD3 and anti-CD28 coated beads for 36 hours — ENCFF393IDF (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF393IDF.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/24/e8839db3-b92f-4982-bd54-b9c0c0dc0a00/ENCFF393IDF.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens activated CD8-positive, alpha-beta T cell male adult (21 years) treated with anti-CD3 and anti-CD28 coated beads for 36 hours — ENCFF756UGA (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF756UGA.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/24/de77151d-a7ae-4d50-9f43-743acbbe96c3/ENCFF756UGA.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens activated CD8-positive, alpha-beta T cell male adult (21 years) treated with anti-CD3 and anti-CD28 coated beads for 36 hours — ENCFF570TOU (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF570TOU.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2021/07/24/eee0b5b8-97bc-4bda-ae2b-cad5fc98d2c4/ENCFF570TOU.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

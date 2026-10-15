@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR455KLX (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/11/01/8f11dfdd-3c79-4797-9e1d-ede3cf9bfe23/ENCFF227WDN.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens A673 — ENCFF573WBY (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF573WBY.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/02/27/fac27fe6-0bfa-4525-8989-6e56a80b229b/ENCFF573WBY.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens A673 — ENCFF740IBX (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF740IBX.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/02/27/af18e23e-302b-412e-8781-d8f88ca5dd0f/ENCFF740IBX.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens A673 — ENCFF120CTJ (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF120CTJ.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/11/01/c8ff303b-e390-45d6-8a34-66f31617f6f4/ENCFF120CTJ.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

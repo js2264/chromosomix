@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR045WUV (mm10)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2021/08/12/dac8d56f-b69a-4a8a-a2c4-5dfc92c49bf3/ENCFF604KJK.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Mus musculus strain Patski Patski — ENCFF947SHR (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF947SHR.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2021/08/12/e6e4438a-943f-43c5-b0ad-82199e9ac4d1/ENCFF947SHR.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Mus musculus strain Patski Patski — ENCFF922EBM (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF922EBM.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/08/12/fc33a3fe-e30d-493c-a448-5ab45dd8560c/ENCFF922EBM.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Mus musculus strain Patski Patski — ENCFF022YGR (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF022YGR.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2021/08/12/680978f4-f76b-417d-abd6-3a029dd45572/ENCFF022YGR.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Mus musculus strain Patski Patski — ENCFF726HZP (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF726HZP.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2021/08/12/a5cf3a62-6261-4547-b785-53d20521354f/ENCFF726HZP.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Mus musculus strain Patski Patski — ENCFF297QOV (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF297QOV.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2021/08/12/7cb97a5d-d438-46bc-87fc-480c9f0631df/ENCFF297QOV.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR204CGS (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/03/01/f381bf66-1b77-488b-b39e-8fbe46e3e794/ENCFF580HTZ.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens SK-N-DZ treated with dimethyl sulfoxide for 72 hours — ENCFF626DFM (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF626DFM.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/01/44c62822-b08e-473a-86f5-6ded9da822ae/ENCFF626DFM.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens SK-N-DZ treated with dimethyl sulfoxide for 72 hours — ENCFF684TLC (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF684TLC.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/01/a7dd3165-a26c-4954-89ca-b6502e1cdbf6/ENCFF684TLC.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens SK-N-DZ treated with dimethyl sulfoxide for 72 hours — ENCFF626GJI (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF626GJI.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/03/01/6ca1538b-9441-4507-b202-6e80275807d5/ENCFF626GJI.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

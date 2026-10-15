@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR136LVP (mm10)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2025/01/22/73cc2b8b-b39e-4e1b-80f8-faa9dddbe244/ENCFF934JXJ.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Mus musculus strain B6CASTF1/J gastrocnemius tissue postnatal (36 days) — ENCFF377YXI (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF377YXI.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2025/01/22/10d080d7-4f2e-41dc-8abb-a0e1bc6713fe/ENCFF377YXI.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Mus musculus strain B6CASTF1/J gastrocnemius tissue postnatal (36 days) — ENCFF362JQY (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF362JQY.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2025/01/22/99d6fea9-ca19-4600-a747-69b0d9955242/ENCFF362JQY.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Mus musculus strain B6CASTF1/J gastrocnemius tissue postnatal (36 days) — ENCFF574NFL (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF574NFL.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2025/01/22/0b20ffda-a65c-4f4a-8f1b-191d5ba05bcb/ENCFF574NFL.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

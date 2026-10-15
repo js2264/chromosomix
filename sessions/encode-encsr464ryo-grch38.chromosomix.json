@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR464RYO (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/12/08/6e8160dd-07db-4a7b-99c2-8390512ef30c/ENCFF420LPY.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens ascending aorta tissue female adult (53 years) — ENCFF663OMY (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF663OMY.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/12/23/46d597c3-933f-4663-8e9b-a0396e298e9c/ENCFF663OMY.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens ascending aorta tissue female adult (53 years) — ENCFF672HNZ (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF672HNZ.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/12/23/0f31eabb-11df-4e4d-a13e-0f9f41221b3b/ENCFF672HNZ.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens ascending aorta tissue female adult (53 years) — ENCFF087DNI (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF087DNI.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/12/08/51a8428d-cd87-491e-b159-df4e3a909465/ENCFF087DNI.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

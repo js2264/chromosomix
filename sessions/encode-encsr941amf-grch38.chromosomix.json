@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR941AMF (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2024/08/13/7d688b4e-e349-4220-bf49-a4e7f1e26a2f/ENCFF939NMB.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens posterior vena cava tissue female adult (59 years) — ENCFF180YGQ (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF180YGQ.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/04/11/10ffd305-2957-4696-ae35-ddbcd6697355/ENCFF180YGQ.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens posterior vena cava tissue female adult (59 years) — ENCFF257LLA (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF257LLA.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/04/11/66f9ad47-7804-4f2e-94ca-3a3f117414fb/ENCFF257LLA.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens posterior vena cava tissue female adult (59 years) — ENCFF267WDZ (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF267WDZ.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2024/08/13/29a13857-3926-46d0-912d-431a3b520825/ENCFF267WDZ.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR711AVS (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/01/18/6481c5fc-4a0d-4980-a7f4-99f3ae6d08ec/ENCFF943JRY.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens mammary epithelial cell — ENCFF600BAU (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF600BAU.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/20/373bc2bd-4855-4769-a90c-ccb4ffd4c5a7/ENCFF600BAU.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens mammary epithelial cell — ENCFF456VBD (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF456VBD.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/20/4eb4b10c-f6ea-4f9c-b5f3-3bb6cce1e311/ENCFF456VBD.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens mammary epithelial cell — ENCFF320MUW (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF320MUW.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/20/7c4b05ef-bcd1-4990-b5e9-5001add7e7ea/ENCFF320MUW.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

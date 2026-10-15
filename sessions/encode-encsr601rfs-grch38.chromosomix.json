@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR601RFS (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/01/30/749a4d28-24a2-42e2-94c7-3b4cc719505e/ENCFF746QHK.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens tibial artery tissue female adult (53 years) — ENCFF933EOY (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF933EOY.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/30/84f8f18e-be56-49d7-8d54-1534d877cfbb/ENCFF933EOY.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens tibial artery tissue female adult (53 years) — ENCFF740CYK (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF740CYK.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/30/d6dfa2d8-a419-4d84-b02b-6fbc0abf21ca/ENCFF740CYK.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens tibial artery tissue female adult (53 years) — ENCFF939RZT (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF939RZT.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/30/5e7c73bd-305f-4b05-8cc1-9aafefe4f52e/ENCFF939RZT.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

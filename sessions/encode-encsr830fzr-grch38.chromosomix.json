@@ -1,0 +1,176 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR830FZR (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2022/02/10/e0e6d6bf-5dbb-425c-8537-8f45fc2f72dd/ENCFF251OGA.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "alignments",
+          "label": "Homo sapiens HCT116 genetically modified (insertion) using CRISPR inserting O. sativa LOC4335696, (insertion) using CRISPR targeting H. sapiens SUPT16H treated with 1 μM 5-Phenyl-1H-indole-3-acetic acid for 6 hours — ENCFF219PCV (bam)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF219PCV.bam",
+            "url": "https://encode-public.s3.amazonaws.com/2022/02/10/be791ca8-4d6a-416c-b04a-d13ac40c6647/ENCFF219PCV.bam"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 96,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens HCT116 genetically modified (insertion) using CRISPR inserting O. sativa LOC4335696, (insertion) using CRISPR targeting H. sapiens SUPT16H treated with 1 μM 5-Phenyl-1H-indole-3-acetic acid for 6 hours — ENCFF609OUY (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF609OUY.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/02/10/be3a81cd-40e1-43b1-b2a9-5d61304e2c90/ENCFF609OUY.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens HCT116 genetically modified (insertion) using CRISPR inserting O. sativa LOC4335696, (insertion) using CRISPR targeting H. sapiens SUPT16H treated with 1 μM 5-Phenyl-1H-indole-3-acetic acid for 6 hours — ENCFF914CHV (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF914CHV.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/02/10/5616e988-777f-4e62-b5c5-bae295231f1a/ENCFF914CHV.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens HCT116 genetically modified (insertion) using CRISPR inserting O. sativa LOC4335696, (insertion) using CRISPR targeting H. sapiens SUPT16H treated with 1 μM 5-Phenyl-1H-indole-3-acetic acid for 6 hours — ENCFF102SJX (bigbed)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF102SJX.bigBed",
+            "url": "https://encode-public.s3.amazonaws.com/2022/02/10/a187dc8f-fc3e-4708-b5a4-95a5aa280389/ENCFF102SJX.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens HCT116 genetically modified (insertion) using CRISPR inserting O. sativa LOC4335696, (insertion) using CRISPR targeting H. sapiens SUPT16H treated with 1 μM 5-Phenyl-1H-indole-3-acetic acid for 6 hours — ENCFF300KVY (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF300KVY.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2022/02/10/207b7ea5-a524-4888-9a2f-41b95ed4f56f/ENCFF300KVY.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:40Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:40Z",
+      "producer": "chromosomix make_store.py",
+      "name": "ENCODE ENCSR994DPD (GRCh38)",
+      "state": {
+        "uri": "https://encode-public.s3.amazonaws.com/2023/01/31/c80c0f0e-599d-43fb-9099-302e1d0ade16/ENCFF700QYS.hic",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Homo sapiens right cardiac atrium tissue male adult (40 years) — ENCFF749ROD (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF749ROD.bed.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/04/08/3a778b0e-9ebb-4ef6-bc20-162b2901f2af/ENCFF749ROD.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "Homo sapiens right cardiac atrium tissue male adult (40 years) — ENCFF488UMN (bedpe.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF488UMN.bedpe.gz",
+            "url": "https://encode-public.s3.amazonaws.com/2022/04/08/4e5ef6be-b9f9-4598-8c67-888295286d09/ENCFF488UMN.bedpe.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Homo sapiens right cardiac atrium tissue male adult (40 years) — ENCFF990ZXF (bigwig)",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF990ZXF.bigWig",
+            "url": "https://encode-public.s3.amazonaws.com/2023/01/31/0291f161-f4b7-47ae-aa13-322d7069f5fa/ENCFF990ZXF.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}
