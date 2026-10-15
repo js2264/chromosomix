@@ -246,15 +246,31 @@ export class SessionCompare {
       this.session.remount()
       return
     }
-    const state = this.session.store.state
+    const carry = this.carryTo(held.uri)
     this.drop()
-    const carry =
-      state === null
-        ? undefined
-        : (({ vmin: _vmin, vmax: _vmax, uri2: _uri2, ...rest }) => ({ ...rest, uri: held.uri }))(
-            state,
-          )
     void this.session.open(held.uri, held.source, carry)
+  }
+
+  /**
+   * The view carried to the file that takes the first triangle — closing the
+   * first, or a swap — which is a reopen rather than a rebuild.
+   *
+   * The clip is the first file's counts and means nothing in the other's, so
+   * it is dropped; the transform and the ramp are the ones **before** any ratio
+   * or difference took them over (§7.5). The hash holds what the derivation
+   * drew with, and carrying that made a closed comparison a single map of
+   * counts on a ratio's `log2` and diverging ramp.
+   */
+  private carryTo(uri: string): ViewState | undefined {
+    const state = this.session.store.state
+    if (state === null) return undefined
+    const { vmin: _vmin, vmax: _vmax, uri2: _uri2, ...rest } = state
+    const base = this.session.current?.panel?.borrowedFrom() ?? null
+    return {
+      ...rest,
+      uri,
+      ...(base === null ? {} : { transform: base.transform, colormap: base.colormap }),
+    }
   }
 
   /**
@@ -271,13 +287,7 @@ export class SessionCompare {
     const held = this.second
     const file = this.session.file
     if (held === null || file === null) return
-    const state = this.session.store.state
-    const carry =
-      state === null
-        ? undefined
-        : (({ vmin: _vmin, vmax: _vmax, uri2: _uri2, ...rest }) => ({ ...rest, uri: held.uri }))(
-            state,
-          )
+    const carry = this.carryTo(held.uri)
     const previous = { uri: file.uri, source: file.source }
     this.drop()
     await this.session.open(held.uri, held.source, carry)

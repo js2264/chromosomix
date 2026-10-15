@@ -1191,6 +1191,12 @@ lower triangle* — not *a second map*, which is what §16's companion cell is c
 absent until a map is open, because a triangle of nothing is a promise with nothing to keep it
 (§8.5). A session with no map has one drop zone on that card, asking for a contact map.
 
+The zone takes a file from the desktop and a **row out of the Files column** (§20.5) alike — the
+file behind the row read at the drop, through the folder it names, with the credential that folder
+lists with and the name a Drive or a Dropbox gives it — and nothing else: it no longer lights for
+the card's own grips, nor for a word of text dragged across it. On a session with no map the row is
+the first map, through the door every pick takes.
+
 Either file can be closed. Closing the second returns to one map; closing the first promotes the
 second, so the map that remains is an ordinary one. *swap sides* puts the other file above the
 diagonal, re-opening both rather than relabelling them, since the first file is the one whose axes,
@@ -2544,6 +2550,17 @@ The panel takes the transform, the colormap and the clip when a derivation is sw
 all three back when it is switched off, because none of them means the same thing about a ratio as
 about a count — a `vmax` of 8 is a sensible ceiling on `log1p` counts and nonsense on `log2` of a
 ratio.
+
+**The give-back outlives the panel that took them.** A change of comparison — split, ratio,
+difference — and the second map's eye rebuild the map rather than repaint it, and the hash a rebuilt
+map is seeded from holds what the derivation drew with, so the split after a ratio stayed on the
+ratio's `log2` and diverging ramp. What the derivation took over is carried to the map built in its
+place, which gives it back if it derives nothing and keeps it to give back later if it still does —
+so ratio → difference → split ends on the count map's own scale, and a diverging ramp the reader
+chose under the ratio stays through the difference. A derivation that arrived already drawn — a link,
+a reload or Back landing on a ratio — never saw the scale before it, and gives back the file's
+defaults (§7.1). Closing the first file of a comparison, and *swap sides*, reopen rather than rebuild,
+and carry the scale from before the derivation to the file that takes the first triangle.
 
 **Pooling changes too.** A contact map is pooled by its brightest cell, because its signal *is* the
 bright cell. A ratio pooled that way shows only the arm above neutral, so every region where the
@@ -9522,8 +9539,9 @@ name is the first verb.
 Dragging a file lets the reader say *where*: onto the map's edge rectangles for a lane in a named
 stack (§8.9), onto the rectangle in the middle of a map for that map alone — an overlay's one target
 (§8.1) — onto a companion for a track on that map (§16), onto the Tracks card, onto a deck's edge or
-an empty cell for a cell of its own (§16.9), onto a 3D cell for the model it draws (§25.3), onto an
-analysis form's file box as the run's input rather than as anything opened (§18.8), onto the content
+an empty cell for a cell of its own (§16.9), onto a 3D cell for the model it draws (§25.3), onto the
+Contact maps card's *Load a map into the lower triangle* for the second file in the square (§5.7),
+onto an analysis form's file box as the run's input rather than as anything opened (§18.8), onto the content
 area, onto the landing page's drop zone — which replaces, because that is what the landing page has
 always meant.
 

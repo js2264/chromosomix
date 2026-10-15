@@ -40,7 +40,7 @@ import { regionLabel, typedLocusToRegion } from '../genome/assembly'
 import { ViewerError } from '../errors'
 import type { ReaderClient } from '../worker/client'
 import { button, el, titleWhenCut } from './dom'
-import type { ScaleState } from './GenomeView'
+import type { PanelSeed, ScaleState } from './GenomeView'
 import {
   MatrixPanel,
   type AnnotationContext,
@@ -108,7 +108,7 @@ export interface RegionViewProps {
    * which picture the whole view is of.
    */
   boxControl?: HTMLElement
-  scale: ScaleState
+  scale: PanelSeed
   balance: boolean
   /** Whether the file carries a weight column at all. */
   hasWeights: boolean

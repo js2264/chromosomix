@@ -314,6 +314,14 @@ const ARM_BASELINE_HINT =
 const ARMS_ON_ARM_BASELINE_HINT =
   'The cells already are the expected along both arms. Choose another score to get the toggle back.'
 
+/** A colour scale a derivation took over, to be given back when it is switched off (§7.5). */
+export interface BorrowedScale {
+  transform: Transform
+  colormap: string
+  vmin?: number
+  vmax?: number
+}
+
 export interface MatrixPanelOptions {
   /** Bin size in bp, for the coordinate readout. */
   binsize: number
@@ -332,6 +340,20 @@ export interface MatrixPanelOptions {
     vmin?: number
     vmax?: number
     level?: 'bin' | 'contig'
+    /**
+     * The scale a derivation on the panel this one replaces had taken over, and
+     * would have given back (§7.5): carried across a rebuild of the same map,
+     * which is what a change of comparison and the second map's eye both are.
+     * The seed above is then the borrowed scale, and this is what a map that
+     * no longer derives anything goes back to.
+     */
+    restore?: BorrowedScale
+    /**
+     * What this map is drawn on with nothing set (§7.1), given back by a
+     * derivation that arrived already drawn — a link, a reload, Back — whose
+     * seed is the borrowed scale and never saw the one it replaced.
+     */
+    defaults?: { transform: Transform; colormap: string }
   }
   /** Whether counts are currently multiplied by their bin weights (§6.4). */
   balance?: boolean
@@ -1133,6 +1155,12 @@ export class MatrixPanel {
     vmax: number | undefined
   } | null = null
   private divergingApplied: Transform | null = null
+  /**
+   * Whether the scale on this panel is still the seed it was built with, and
+   * nobody said what that seed was borrowed from — true until the first
+   * derivation is weighed, or the reader touches the scale.
+   */
+  private freshSeed: boolean
   private transform: Transform
   /** `clip`, or `clip (log10)` under a transform; see {@link paintClipUnits}. */
   private readonly clipLabel: HTMLElement
@@ -1265,6 +1293,20 @@ export class MatrixPanel {
     this.colormap = options.initial?.colormap ?? DEFAULT_UI_COLORMAP
     this.manualVmin = options.initial?.vmin
     this.manualVmax = options.initial?.vmax
+    // A scale carried from the panel this one replaces, while a derivation had
+    // it: the seed is what that derivation drew with, so it is held as applied,
+    // and the next weighing either keeps it or gives back what it took.
+    const carried = options.initial?.restore
+    if (carried !== undefined) {
+      this.divergingRestore = {
+        transform: carried.transform,
+        colormap: carried.colormap,
+        vmin: carried.vmin,
+        vmax: carried.vmax,
+      }
+      this.divergingApplied = this.transform
+    }
+    this.freshSeed = carried === undefined
     this.level = options.initial?.level ?? 'bin'
     this.derivation = new MapDerivation({
       options,
@@ -4627,6 +4669,22 @@ export class MatrixPanel {
   }
 
   /**
+   * The scale a derivation on this panel has taken over, or `null` where none
+   * has: what a rebuild of the same map carries to its replacement
+   * (`initial.restore`), so the give-back outlives this panel.
+   */
+  borrowedFrom(): BorrowedScale | null {
+    const back = this.divergingRestore
+    if (this.divergingApplied === null || back === null) return null
+    return {
+      transform: back.transform,
+      colormap: back.colormap,
+      ...(back.vmin === undefined ? {} : { vmin: back.vmin }),
+      ...(back.vmax === undefined ? {} : { vmax: back.vmax }),
+    }
+  }
+
+  /**
    * Record which derivation this panel is drawing, without recomputing.
    *
    * Separate from {@link rederive} because a panel that is *about* to be handed
@@ -4814,6 +4872,8 @@ export class MatrixPanel {
    */
   private syncDivergingScale(): boolean {
     const wanted = preferredTransform(this.neutral)
+    const fresh = this.freshSeed
+    this.freshSeed = false
     if (wanted === this.divergingApplied) return false
     if (wanted === null) {
       const back = this.divergingRestore
@@ -4827,12 +4887,14 @@ export class MatrixPanel {
       this.syncScaleControls()
       return true
     }
-    this.divergingRestore ??= {
-      transform: this.transform,
-      colormap: this.colormap,
-      vmin: this.manualVmin,
-      vmax: this.manualVmax,
-    }
+    // A seed that already is the borrowed scale — a link, a reload or Back
+    // landing on a ratio carries what the derivation drew with, and not what it
+    // took over — has nothing of its own to give back but the map's defaults.
+    const defaults = this.options.initial?.defaults
+    this.divergingRestore ??=
+      fresh && defaults !== undefined && this.transform === wanted && isDivergingColormap(this.colormap)
+        ? { transform: defaults.transform, colormap: defaults.colormap, vmin: undefined, vmax: undefined }
+        : { transform: this.transform, colormap: this.colormap, vmin: this.manualVmin, vmax: this.manualVmax }
     this.transform = wanted
     // Only where the reader has not already chosen a diverging ramp: somebody
     // who picked one deliberately keeps it across a change of operation.
@@ -4996,6 +5058,8 @@ export class MatrixPanel {
   }
 
   private rescale(): void {
+    // The reader's own scale, whatever the seed was.
+    this.freshSeed = false
     this.paintClipUnits()
     this.heatmap.setScale(this.scale())
     this.options.onScaleChange?.({

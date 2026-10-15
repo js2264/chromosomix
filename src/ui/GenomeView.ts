@@ -15,6 +15,7 @@ import type { ReaderClient } from '../worker/client'
 import { el, titleWhenCut } from './dom'
 import { MatrixPanel,
   type AnnotationContext,
+  type BorrowedScale,
   type DerivePresentation,
   type TurnPresentation,
  type FigureSubject} from './MatrixPanel'
@@ -32,6 +33,17 @@ export interface ScaleState {
   /** Colour-scale clip in transformed units; absent means auto (§7.1). */
   vmin?: number
   vmax?: number
+}
+
+/**
+ * The scale a view's map starts on: the hash's, with what a derivation on the
+ * map it replaces had taken over and the file's own defaults (§7.5) — neither
+ * of which is in the hash, and neither of which a view does anything with but
+ * hand to its panel.
+ */
+export interface PanelSeed extends ScaleState {
+  restore?: BorrowedScale
+  defaults?: { transform: Transform; colormap: string }
 }
 
 export interface GenomeViewProps {
@@ -55,7 +67,7 @@ export interface GenomeViewProps {
   binsPerCell?: number
   genome: string
   level: 'bin' | 'contig'
-  scale: ScaleState
+  scale: PanelSeed
   balance: boolean
   hasWeights: boolean
   /**

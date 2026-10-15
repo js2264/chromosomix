@@ -41,7 +41,7 @@ import { ViewerError, isAllocationFailure } from '../errors'
 import { typedLocusToRegion } from '../genome/assembly'
 import { button, el, fmt, titleWhenCut } from './dom'
 import { resolutionLabel } from '../units'
-import type { ScaleState } from './GenomeView'
+import type { PanelSeed, ScaleState } from './GenomeView'
 import {
   MatrixPanel,
   type AnnotationContext,
@@ -155,7 +155,7 @@ export interface WholeViewProps {
    */
   nContigs: number
   level: 'bin' | 'contig'
-  scale: ScaleState
+  scale: PanelSeed
   balance: boolean
   /** Whether the file carries a weight column at all. */
   hasWeights: boolean

@@ -14,6 +14,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A row of the Files column dropped on *Load a map into the lower triangle* is the second map in
+  the square (§5.7, §20.5).** The Contact maps card's slot took only a file from the desktop: a row
+  dragged out of a connected folder lit it and fell in for nothing. The row's file is read at the
+  drop, through its folder, with the credential the folder lists with and the name a Drive or a
+  Dropbox gives it; on a session with no map it is the first map. The slot no longer lights for the
+  card's own grips or for text dragged across it.
+
 - **The validation and the timings are published with every release, at
   <https://chromosomix.app/validation/> and <https://chromosomix.app/timings/> (§18.10).** A new
   workflow, `.github/workflows/notebooks.yml`, installs every reference on a fresh runner at the
@@ -2260,6 +2267,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that collides never reaches that refusal.
 
 ### Fixed
+
+- **Split after a ratio is drawn on the counts' own scale again (§7.5).** A ratio takes the
+  transform, the ramp and the clip — `log2` and the diverging ramp — and was to give them back when
+  switched off, but a change of comparison rebuilds the map, and the panel that would have given them
+  back was the one torn down: the split after a ratio stayed on `log2` and blue to red, and so did a
+  map whose second triangle was hidden under a ratio. What a derivation took over is now carried to
+  the map built in its place, so ratio → split and ratio → difference → split end on the scale before
+  the ratio, `log10` and the default ramp on a balanced cooler; a ratio reached by a link, a reload or
+  Back gives back the file's defaults. Closing the first file of a comparison and *swap sides* carry
+  the scale from before the ratio too.
 
 - **APA's track aggregates stay unticked once unticked (§18.2, §18.8).** With every track unticked,
   the next run ticked the starred one back on: the drawer hands the form its context around a run, and
