@@ -282,6 +282,7 @@ chromosomix tasks
 ##       --window (default 21)  half-width
 ##       --grid (default 51)  grid
 ##       --flankFraction (default 0.5)  flank
+##       --minDiag (default 2)  diagonals left out
 ##       --norm (default "matched")  normalisation
 ##       --csPattern (default "loops")  template
 ##       --controls (default 5)  controls per pair
@@ -326,6 +327,7 @@ chromosomix tasks
 ## motif
 ##     Find a motif
 ##       --sequence  reference
+##       --sequences  sequences
 ##       --pattern  motif
 ##       --bothStrands (default true)  both strands
 ##       --mismatches (default 0)  mismatches
