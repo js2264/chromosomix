@@ -84,6 +84,14 @@ export interface PickedFile {
    */
   index?: File
   /**
+   * Where the file is, when it was picked out of a directory connected on
+   * this machine: the folder's id and name, and the path inside it from the
+   * folder's root — what the installed app writes into a workspace so the file
+   * can be found in that folder again (§20.6). Absent for every other kind of
+   * place, whose files are named by a URL.
+   */
+  folder?: { id: string; name: string; path: string }
+  /**
    * What to call the file when its URI does not say.
    *
    * A Drive file is addressed by an id (`…/files/<id>?alt=media`) and a Dropbox
@@ -120,11 +128,18 @@ export interface ConnectedFolder {
   /**
    * `false` for a folder that will be gone after a reload.
    *
-   * True of the fallback local backend and of nothing else, and the panel says
-   * so on the row: a reader who connected a directory in Firefox has a snapshot
-   * of it, and finding that out at the next reload is finding it out too late.
+   * True of the fallback local backend, and of a granted directory in a
+   * browser tab, which is held for the visit (§20.6); and the panel says so on
+   * the row: a reader who connected a directory and finds it gone at the next
+   * reload has found that out too late.
    */
   durable: boolean
+  /**
+   * Why a folder is not {@link durable}: a `snapshot` of a directory this
+   * browser cannot hold, or a directory held for this `visit` — a tab keeps
+   * none, and only the installed app does.
+   */
+  transient?: 'snapshot' | 'visit'
   /** One level. `path` is `root` or something a previous listing handed back. */
   list(path: string): Promise<FolderListing>
   /**

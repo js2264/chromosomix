@@ -41,7 +41,8 @@
  */
 
 import { canonicalUrl } from '../sources/rewrite'
-import { hasHandle, resolveHandle } from '../state/handles'
+import { hasHandle } from '../state/handles'
+import { hasLocation, resolveLocal } from '../state/locations'
 import { splitUri } from '../ui/labels'
 import type { SourceSpec } from '../worker/protocol'
 
@@ -82,7 +83,7 @@ export function inferSource(uri: string): SourceSpec | null {
  * costs a reader one click and being pessimistic costs them the feature.
  */
 export function mayResolve(uri: string): boolean {
-  return inferSource(uri) !== null || hasHandle(uri)
+  return inferSource(uri) !== null || hasHandle(uri) || hasLocation(uri)
 }
 
 /**
@@ -102,6 +103,8 @@ export async function resolveSource(
 ): Promise<SourceSpec | null> {
   const remote = inferSource(uri)
   if (remote !== null) return remote
-  const file = await resolveHandle(uri, options)
+  // The grant for the file itself, then its place in a folder the installed
+  // app keeps (§20.6).
+  const file = await resolveLocal(uri, options)
   return file === null ? null : { kind: 'local', file }
 }

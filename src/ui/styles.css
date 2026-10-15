@@ -14230,3 +14230,20 @@ span.deck-name {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+
+/* The folder a file a session is waiting on was in (§20.6): the sentence that
+   names it and the button that connects it, between the note above the picker
+   and the picker — the one thing on the page that finds the file without the
+   reader looking for it. */
+.folders-asked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin: 0 1rem 0.75rem;
+}
+
+.folders-asked .hint {
+  flex: 1 1 20rem;
+  margin: 0;
+}

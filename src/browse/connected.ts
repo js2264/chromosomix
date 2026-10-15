@@ -25,6 +25,7 @@
 
 import { readScopes, writeScopes } from '../s3/credentials'
 import {
+  directoriesKept,
   directoryRows,
   directoryUsable,
   forgetDirectory,
@@ -60,7 +61,8 @@ const listeners = new Set<() => void>()
  * this is the only door to a directory.
  */
 export function connectedFolders(): ConnectedFolder[] {
-  const local = directoryRows().map((row) => handleFolder(row.id, row.name, row.handle))
+  const kept = directoriesKept()
+  const local = directoryRows().map((row) => handleFolder(row.id, row.name, row.handle, kept))
   const buckets = readScopes().map(bucketFolder)
   const others = sources.flatMap((source) => source.folders())
   return [...local, ...snapshots.values(), ...buckets, ...others]

@@ -30,7 +30,8 @@
  */
 
 import { clearAll as clearDurableStores } from './idb'
-import { forgetAllDirectories, directoryRows, hydrateDirectories } from './directories'
+import { forgetAllDirectories, storedDirectoryNames } from './directories'
+import { forgetLocations, storedLocationNames } from './locations'
 import { forgetAllHandles, handleRows, hydrateHandles } from './handles'
 import { forgetWorkspace, readWorkspace, suspendWorkspace } from './workspace'
 import { readStoreRows } from './stores'
@@ -167,8 +168,10 @@ export async function storedItems(): Promise<StoredItem[]> {
     })
   }
 
-  await hydrateDirectories()
-  const folders = directoryRows()
+  // What is *stored*, read from storage, rather than what this page holds: a
+  // tab keeps no folder of its own (§20.6), and shares its storage with the
+  // installed app on the same origin, which does.
+  const folders = await storedDirectoryNames()
   if (folders.length > 0) {
     items.push({
       label: 'Folders you connected',
@@ -177,8 +180,18 @@ export async function storedItems(): Promise<StoredItem[]> {
       // to list *and read whatever is in it*, again after a restart, and a
       // reader deciding whether to press "forget everything" on a borrowed
       // machine should not have to infer that from the word "folder".
-      detail: `${folders.map((row) => row.name).join(', ')} — this browser may list and read ` +
-        'what is in them until you disconnect them',
+      detail: `${folders.join(', ')} — the installed app may list and read what is in them until ` +
+        'you disconnect them',
+    })
+  }
+
+  // Where files opened from those folders are, so a session finds them again.
+  // Named, as the files above are: the names are the sensitive part.
+  const placed = storedLocationNames()
+  if (placed.length > 0) {
+    items.push({
+      label: 'Where your files are',
+      detail: `${placed.join(', ')} — each file's path inside the folder it was opened from`,
     })
   }
 
@@ -319,5 +332,8 @@ export async function forgetEverything(): Promise<void> {
   // the folders, went on listing a directory it no longer had permission for.
   await forgetAllHandles()
   await forgetAllDirectories()
+  // …and the places of the files in those folders, held in memory as well as
+  // under the key the sweep dropped (§20.6).
+  forgetLocations()
   await clearDurableStores()
 }

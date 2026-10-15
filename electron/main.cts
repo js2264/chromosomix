@@ -164,6 +164,18 @@ async function handleAppRequest(request: Request): Promise<Response> {
 }
 
 /**
+ * Whether a file-system permission is the app reading what the user chose.
+ *
+ * The page's own origin, and read access: a request from anywhere else -- a
+ * page this window should never have navigated to -- or for writing is refused,
+ * as every other permission is. `fileAccessType` absent is a request that has
+ * not said, which is treated as the narrower of the two.
+ */
+function readsOwnFile(url: string, access: 'readable' | 'writable' | undefined): boolean {
+  return url.startsWith(`${APP_ORIGIN}/`) && access !== 'writable'
+}
+
+/**
  * Ask remote hosts not to compress, which is the one thing this build can do
  * that a browser cannot.
  *
@@ -336,11 +348,27 @@ if (!app.requestSingleInstanceLock()) {
     // notifications, no clipboard read, no USB, no serial -- and a prompt the
     // app has no reason to show is a prompt the user cannot evaluate.
     //
+    // With one exception, and it is the app's own: **reading** a file or a
+    // folder the user chose, from the app's own origin. The picker is the
+    // user's answer -- they pointed at the folder -- and what this lets
+    // through is the browser asking again, on the next launch, whether that
+    // answer still stands: refused, a folder connected yesterday was dead
+    // today, and a workspace naming its files could not find them (SPECS
+    // §20.6). Never writing, and never for any other origin.
+    //
     // All three, because they are asked in different circumstances and denying
     // one leaves the other two answering with their defaults.
     const current = session.defaultSession
-    current.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
-    current.setPermissionCheckHandler(() => false)
+    current.setPermissionRequestHandler((contents, permission, callback, details) => {
+      callback(
+        permission === 'fileSystem' &&
+          readsOwnFile(contents.getURL(), 'fileAccessType' in details ? details.fileAccessType : undefined),
+      )
+    })
+    current.setPermissionCheckHandler(
+      (_contents, permission, origin, details) =>
+        permission === 'fileSystem' && origin === APP_ORIGIN && details.fileAccessType !== 'writable',
+    )
     current.setDevicePermissionHandler(() => false)
 
     askForUncompressedTransfers(current)

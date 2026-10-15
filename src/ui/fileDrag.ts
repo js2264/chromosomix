@@ -36,6 +36,7 @@
 
 import { folderById } from '../browse/connected'
 import type { PickedFile } from '../browse/folder'
+import { noteLocation } from '../state/locations'
 
 /**
  * The type a dragged **unread file** carries.
@@ -93,7 +94,10 @@ export async function readFileDrag(event: DragEvent): Promise<PickedFile | null>
   const folder = folderById(payload.folder)
   if (folder === null) return null
   try {
-    return await folder.pick({ kind: 'file', name: payload.name, path: payload.path, size: null })
+    const picked = await folder.pick({ kind: 'file', name: payload.name, path: payload.path, size: null })
+    // As a row opened by a click is (`FilesCard`): where it came from (§20.6).
+    noteLocation(picked)
+    return picked
   } catch {
     return null
   }

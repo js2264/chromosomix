@@ -126,6 +126,8 @@ import type { WireSource } from '../annotations/worker/protocol'
 import type { PickedFile } from '../browse/folder'
 import { routeFor, routeOf, type FileRoute } from '../browse/route'
 import { driveFileName } from '../browse/driveName'
+import { connectDirectory, subscribeFolders } from '../browse/connected'
+import { adoptFolders, hasLocation, missingFolderOf } from '../state/locations'
 import type { AssemblyResult } from '../annotations/worker/protocol'
 import { isHicProMatrix, splitBinsFragment, splitIndexFragment } from '../annotations/sidecar'
 import { readFileDrag } from '../ui/fileDrag'
@@ -941,6 +943,8 @@ export class Session {
    * the note and opens something else entirely gets that file plain.
    */
   private pendingConfig: SessionConfig | null = null
+  /** Lets go of the connected folders' announcements; see {@link foldersChanged}. */
+  private readonly stopFolders: () => void
   /**
    * The config being applied, for the length of one open.
    *
@@ -1030,6 +1034,34 @@ export class Session {
       this.host.stateChanged(this, change)
       void this.render(state)
     })
+    this.stopFolders = subscribeFolders(() => this.foldersChanged())
+  }
+
+  /**
+   * A folder was connected or let go (§20.6). A workspace's files the
+   * installed app knows the places of may be in it: its tracks are tried
+   * again, and so is the file this session is of while it is still asking for
+   * it — without a gesture, since connecting the folder was the gesture.
+   */
+  private foldersChanged(): void {
+    if (this.destroyed) return
+    this.annotations?.loader.refind()
+    if (this.file !== null) return
+    const config = this.pendingConfig
+    if (config !== null) {
+      if (!hasLocation(config.state.uri)) return
+      void (async () => {
+        const source = await resolveSource(config.state.uri)
+        if (source === null || this.destroyed || this.pendingConfig !== config || this.file !== null) return
+        await this.openWithConfig(config.state.uri, source)
+      })()
+      return
+    }
+    // A view state naming a local file — a restored tab, a workspace's — that
+    // was waiting on its picker: rendered again, it asks for the file again,
+    // and finds it in the folder now.
+    const state = this.store.state
+    if (state !== null && hasLocation(state.uri)) void this.render(state)
   }
 
   // -------------------------------------------------------------------------
@@ -1331,6 +1363,7 @@ export class Session {
 
   destroy(): void {
     this.destroyed = true
+    this.stopFolders()
     // What it said goes with the tab.
     this.unsay()
     // The stage goes with the tab; the edit it made is kept with the file.
@@ -1668,6 +1701,9 @@ export class Session {
   async openConfig(config: SessionConfig): Promise<void> {
     setPlotOptions(config.plot)
     this.host.applyPanelLayout(config.panels)
+    // Where its files are, in the installed app's kept folders (§20.6), before
+    // the first of them is asked for.
+    adoptFolders(config.folders)
     const source = await resolveSource(config.state.uri, { prompt: true })
     if (this.destroyed) return
     if (source === null) {
@@ -7977,7 +8013,42 @@ export class Session {
           'page can re-open one by name. Drop it below and everything else comes back with it' +
           (tracks === 0 ? '.' : `: the view, and ${fmt.int(tracks)} tracks with their settings.`),
       }),
+      this.folderAsked(config.state.uri),
       this.picker.el,
+    )
+  }
+
+  /**
+   * The folder a waiting file is known to be in, where the installed app has
+   * no grant for it (§20.6): a sentence naming it, and a button that connects
+   * it — after which the session finds the file there on its own
+   * ({@link foldersChanged}). Nothing where the file has no known place, and
+   * nothing outside the installed app, which keeps no folder to find one in.
+   */
+  private folderAsked(uri: string): HTMLElement | null {
+    const wanted = missingFolderOf(uri)
+    if (wanted === null) return null
+    const button = el('button', {
+      class: 'btn',
+      type: 'button',
+      text: `Connect ${wanted.name}…`,
+      title: `Choose the folder called ${wanted.name} on this machine; ${fileLabel(uri)} is at ${wanted.path} in it`,
+    })
+    button.addEventListener('click', () => {
+      void connectDirectory().then((id) => {
+        if (id !== null) this.host.folderConnected(id)
+      })
+    })
+    return el(
+      'div',
+      { class: 'folders-asked' },
+      el('p', {
+        class: 'hint',
+        text:
+          `It was in a folder called ${wanted.name}, at ${wanted.path}. Connect that folder and it is ` +
+          'found there, with every other file of this session that was in it.',
+      }),
+      button,
     )
   }
 
@@ -7995,6 +8066,7 @@ export class Session {
           (devFeature('metacool') ? '(genome, region, colour scale)' : '(region, colour scale)') +
           ' will be restored.',
       }),
+      this.folderAsked(uri),
       this.picker.el,
     )
   }

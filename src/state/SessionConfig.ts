@@ -33,6 +33,7 @@ import { EDIT_SCOPE, LEARNED_SCOPE, genomeEditKey, readEdit, readLearned, type L
 import type { ReferenceEdit } from '../genome/edit'
 import { RESOLUTIONS_SCOPE } from './resolutions'
 import { recall, recallBelow, remember } from './UiMemory'
+import { adoptFolders, foldersOf, type FolderRecord } from './locations'
 import { ANALYSIS_SCOPE, type AnalysisMemory } from '../analysis/memory'
 import { FIGURES_SCOPE, type FigureMemory } from '../figures/style'
 import { formatUri, parseUri } from '../uri'
@@ -275,6 +276,19 @@ export interface SessionConfig {
    */
   compare?: string
   /**
+   * Where this session's local files are, in folders the installed app keeps
+   * (§20.6): each folder by its id and name, and its files by name with each
+   * one's path inside it — so a workspace reopened by the installed app finds
+   * its files there again rather than asking for each, and one reopened on
+   * another machine can say which folder to connect.
+   *
+   * Written by the installed app only (`state/locations.ts`): a path is a fact
+   * about somebody's disk, and the website in a tab keeps none. Never in a
+   * shared link, and dropped from a workspace published at a URL — both reach
+   * people whose disks these paths are not about.
+   */
+  folders?: FolderRecord[]
+  /**
    * What the reader called each map, when they called it anything.
    *
    * Keyed by the *file* each name is for, which is the same key
@@ -497,6 +511,31 @@ const SCOPES = {
  * the session, and a config built from it cannot drift from what a reload would
  * restore. The one thing not in there is the view state, which lives in the hash.
  */
+/**
+ * Every local file a config names: the one the session is of, its compare
+ * file, its deck's local companions and its local tracks — what
+ * {@link SessionConfig.folders} is gathered for.
+ */
+export function localNamesOf(config: SessionConfig): string[] {
+  const local = (uri: string): boolean => !/^[a-z][a-z0-9+.-]*:/i.test(splitPath(uri))
+  const names = [
+    config.state.uri,
+    ...(config.compare === undefined ? [] : [config.compare]),
+    ...(config.deck.locals ?? []).map((held) => held.uri),
+    ...config.tracks.filter((track) => track.source.kind === 'local').map((track) => track.source.name),
+  ]
+  return [...new Set(names.filter((uri) => uri !== '' && local(uri)).map(splitPath))]
+}
+
+/** The file half of a URI, `::` and all after it dropped. */
+function splitPath(uri: string): string {
+  try {
+    return parseUri(uri).path
+  } catch {
+    return uri
+  }
+}
+
 export function buildConfig(options: {
   state: ViewState
   memoryKey: string
@@ -522,7 +561,7 @@ export function buildConfig(options: {
   source?: { name: string; size?: number; lastModified?: number }
 }): SessionConfig {
   const key = options.memoryKey
-  return {
+  const config: SessionConfig = {
     version: CONFIG_VERSION,
     createdAt: options.now.toISOString(),
     // Stamped always, and the commit only where there is one. See the fields'
@@ -563,6 +602,10 @@ export function buildConfig(options: {
     plot: options.plot,
     ...(options.panels === undefined ? {} : { panels: options.panels }),
   }
+  // Where its local files are, in the installed app's kept folders (§20.6);
+  // nothing anywhere else, which writes no path down.
+  const folders = foldersOf(localNamesOf(config))
+  return folders.length === 0 ? config : { ...config, folders }
 }
 
 /**
@@ -667,6 +710,9 @@ function nameOf(name: string | null | undefined): { name?: string } {
  */
 export function applyConfig(config: SessionConfig, memoryKey: string): void {
   const key = memoryKey
+  // Its files' places in kept folders, before anything asks for their bytes —
+  // in the installed app; nowhere else keeps a path (§20.6).
+  adoptFolders(config.folders)
   remember(key, SCOPES.tracks, config.tracks)
   remember(key, SCOPES.manual, config.manual)
   remember(key, SCOPES.bookmarks, config.bookmarks)
@@ -910,6 +956,7 @@ export function readTab(parsed: unknown): SessionConfig | ConfigRefusal {
       readDeckLead(deck['lead']),
     ),
     ...compareOf(typeof row['compare'] === 'string' ? row['compare'] : undefined),
+    ...foldersFrom(row['folders']),
     // Through `ui/mapNames.ts`'s own reader rather than a second one here, on
     // `looksOf`'s rule: what a name is — and how long, and what an empty one
     // means — belongs beside the store that keeps them.
@@ -944,6 +991,26 @@ export function readTab(parsed: unknown): SessionConfig | ConfigRefusal {
         : null,
     ),
   }
+}
+
+/**
+ * `{ folders }` from a config, checked member by member — a folder with an id,
+ * a name and its files as name to path — or nothing where none survives.
+ */
+function foldersFrom(value: unknown): { folders?: FolderRecord[] } {
+  if (!Array.isArray(value)) return {}
+  const folders: FolderRecord[] = []
+  for (const entry of value as unknown[]) {
+    if (typeof entry !== 'object' || entry === null) continue
+    const { id, name, files } = entry as Partial<FolderRecord>
+    if (typeof id !== 'string' || typeof name !== 'string' || typeof files !== 'object' || files === null) continue
+    const kept: Record<string, string> = {}
+    for (const [file, path] of Object.entries(files as Record<string, unknown>)) {
+      if (typeof path === 'string' && path !== '' && file !== '') kept[file] = path
+    }
+    if (Object.keys(kept).length > 0) folders.push({ id, name, files: kept })
+  }
+  return folders.length === 0 ? {} : { folders }
 }
 
 /**
@@ -1148,6 +1215,9 @@ export function resolveConfig(config: SessionConfig, base: string): SessionConfi
   // holding nothing is a third state, and every reader here treats absence as
   // the answer.
   delete resolved.compare
+  // …and where the author's local files were on the author's disk (§20.6),
+  // which a published workspace's readers have no folder of.
+  delete resolved.folders
   return resolved
 }
 

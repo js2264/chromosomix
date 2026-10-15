@@ -9560,12 +9560,14 @@ actionable.
 **A grant**, where `showDirectoryPicker` exists — Chromium and the desktop build. The page holds a
 `FileSystemDirectoryHandle`: a capability, not a path and not a copy. Listings are read through it
 when they are asked for, so the folder is live — a file a pipeline writes into it five minutes later
-is simply there — and the handle is structured-cloneable, so it survives in IndexedDB and the folder
-is still connected after a reload. A grant can lapse — browsers hand a directory back for a while
-and then ask once more — and the folder then stays in the column with a *reconnect* button rather
-than vanishing, since a folder that vanished reads as one never connected and the fix is one click
-only the reader can make; a grant the reader *denied* is forgotten instead of asked for on every
-reload.
+is simply there — and the handle is structured-cloneable, so it can survive in IndexedDB and the
+folder be still connected after a reload. **It is kept only by the installed app** (§20.6): the
+desktop build, the single-file build, and the site installed as an app. In a browser tab a granted
+folder is connected for the visit, as a snapshot is, and the row says so in the same two words. A
+grant can lapse — browsers hand a directory back for a while and then ask once more — and the folder
+then stays in the column with a *reconnect* button rather than vanishing, since a folder that
+vanished reads as one never connected and the fix is one click only the reader can make; a grant the
+reader *denied* is forgotten instead of asked for on every reload.
 
 **A snapshot**, everywhere else. Firefox and Safari have no picker; `<input webkitdirectory>` hands
 back a flat `File[]` carrying `webkitRelativePath`, from which the tree is rebuilt once. It does not
@@ -9721,13 +9723,43 @@ Wider than a chosen file, and worth being exact about how. The page can see the 
 everything under the directory and read any of them without a further gesture — that is what makes
 browsing possible — and, for the durable shape, it can do so again after a restart.
 
+**Kept by the installed app, and by nothing else.** An app the reader installed on their own machine
+— the desktop build, the single-file build they saved and open from their disk, or the site installed
+as an app, which a browser opens in a window of its own (`installed.ts`: the `standalone`,
+`minimal-ui` and `window-controls-overlay` display modes, or Safari's home-screen flag; never
+`fullscreen`, which a tab answers too) — is a place they have chosen to keep things. A browser tab is a
+page on whatever machine opened it — a shared one, somebody else's, one reached from a link — and a
+page that kept a grant to a directory of unpublished data would be keeping it for the next person at
+that browser. So in a tab a folder is connected for the visit: held in memory, listed and browsed
+like any other, and gone with the page; nothing about it is written down, and the connect button and
+the row both say *this visit*. Grants a tab stored before this rule are left in storage for the
+installed app on the same origin, which shares it, and are listed — and forgettable — in the
+stored-data screen like everything else.
+
+**And it finds a workspace's files there again.** A file opened from a kept folder is remembered by
+the folder it was in and its path from that folder's root (`state/locations.ts`), and a workspace
+saved by the installed app carries the same (`folders`: each folder by its id and name, and its files
+by name with their paths). A session that comes back — after a restart, from the workspace file,
+in another window — asks for `rep1.cool` and finds it at `run2/hic/rep1.cool` through the grant on
+`run2`, its tracks too, and nobody is asked to find anything. A workspace opened by another
+installation knows the folder by a different id or none: there the folder's **name** is what is left,
+and then any kept folder the path is found in, and a file found must carry the name asked for, as a
+file grant's must (`state/handles.ts`). Where no such folder is connected, the note over the picker
+names it and its path, with a button that connects it, after which the session's files are found
+there on their own. None of this is written outside the installed app; a share link carries no
+`folders`, and a workspace published at a URL has them dropped, since both reach people whose disks
+those paths are not about. The desktop build lets its own page re-read what the user chose — a
+`fileSystem` permission, read access, its own origin only — and refuses every other permission as
+before.
+
 What has not changed is where the bytes go: **nowhere**. §11 holds exactly as it held for a dropped
 file. A local folder is read in place, a slice at a time, by code on the reader's own machine; a
 bucket is read by the browser from the bucket. There is no server in between because there is no
 server. Every connected folder this browser keeps is accounted for in the stored-data screen — *What
-this browser is remembering* — beside the file grants, and is revocable one at a time by its × in
-the Files column or all at once by that screen's *forget everything* — which is the same bargain
-`state/handles.ts` already struck for a single file, made visible at the wider grant.
+this browser is remembering* — beside the file grants and the places of the files opened from them,
+and is revocable one at a time by its × in the Files column or all at once by that screen's *forget
+everything* — which is the same bargain `state/handles.ts` already struck for a single file, made
+visible at the wider grant.
 
 In the standalone build (§19) the bucket half is absent — the origin is opaque, so every remote read
 fails before a byte moves — and the local half has no shape of its own: a `file://` page is a secure

@@ -14,6 +14,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The installed app keeps its folders, and a saved workspace finds its files in them again
+  (§20.6).** In the desktop app — or the site installed as an app — a connected folder is kept
+  across restarts, and a workspace saved there records which folder each of its local files was in
+  and where: reopened, it opens the map and its tracks from the folder with nobody asked for a file,
+  and on another machine its note names the folder to connect, with a button that does. The desktop
+  app now lets its own page re-read what the user chose, and nothing else.
+
 - **The tracks' names beside the map, in its corners (§8.8).** Each stack's names now stand in the
   corner that follows it clockwise — left of the tracks under the map, below the ones on its right,
   above the ones on its left, right of the ones above it — instead of over the start of each track,
@@ -1036,6 +1043,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   as a sequence of its own, last, as the file reads it, selected and framed to be moved into place.
 
 ### Changed
+
+- **A browser tab keeps a connected folder for the visit only (§20.6).** It was kept across
+  reloads in Chromium tabs too; a tab is a page on whatever machine opened it, so only the installed
+  app keeps folders now, and the connect button and the Files row say *this visit* in a tab.
 
 - **The metaplot's per-feature heatmap is one smooth picture (§18.13).** It was a chart of one
   rectangle per cell below twenty thousand cells — seams between them, a border lit under the
