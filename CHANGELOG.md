@@ -24,7 +24,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   of timed runs and whether to publish. Each page opens on when it was rendered, from which version,
   commit and release, by which run, on what machine, and closes on how long it took, and the two
   link to each other. The service worker leaves both addresses to the network, as it does archived
-  builds, so a visitor who has installed the app reaches the page rather than the app.
+  builds, so a visitor who has installed the app reaches the page rather than the app — once their
+  copy has taken this version's update; until then, an older worker answers there with the app.
 
 - **`chromosomix boost` writes Boost-HiC's map of each sequence (§6.5).** The map an oversample
   draws a sequence's new contacts from, which nothing showed: each sequence's stored counts, the

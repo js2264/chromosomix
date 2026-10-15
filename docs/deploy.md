@@ -618,8 +618,9 @@ Each page says, in a block under its title, when it was rendered, from which ver
 release, by which run, and on what machine; `rendered.json` beside it says the same for a script.
 The service worker leaves both addresses to the network (`src/sw.js`), as it does `v/` and `pr/`:
 they are pages of their own, and the app's shell answered there would be the app wearing their
-address. Absent until the workflow has published once; the first run is by hand, or the next
-release.
+address. A reader whose worker predates this sees the app at those two addresses until they take
+the update the app offers. Absent until the workflow has published once; the first run is by
+hand, or the next release.
 
 ## Why Pages works at all for this app
 

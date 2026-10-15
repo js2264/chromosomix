@@ -8754,8 +8754,9 @@ keeps its own copies as assets. It runs when a release is published and on deman
 on a block saying when it was rendered, from which version, commit and release, by which run or by
 hand, and on what machine, and closes on how long it took; the two link to each other there and on
 a reader's disk alike. The pages are no build of the app, so the service worker leaves those two
-addresses to the network, as it does `v/` and `pr/`, and an app shell an older worker served at
-either is unregistered and reloaded once (`recoverPinnedNavigation`).
+addresses to the network, as it does `v/` and `pr/`, and the app, from this version on, finding
+itself at either unregisters its worker and reloads once (`recoverPinnedNavigation`), as at `v/`;
+a worker from before answers there with its own app until its reader takes the update it offers.
 
 ### 18.11 A set of scales is one picture
 
