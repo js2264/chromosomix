@@ -1530,24 +1530,25 @@ The mean window about a set of loops. The loops are chromosight's own calls on t
 either side of a loop, ±50 kb. Both cut a window as coolpuppy does by default: from the upper triangle
 only — a window that crosses the diagonal holds the same contacts twice there, once above it and once
 mirrored below — with the main diagonal and the one beside it left out (`min_diag=2`); and both
-leave out every loop nearer the diagonal than twice the flank and two bins (`mindist='auto'`, the
-app's *nearest loop*), which is where a window would start to reach those two diagonals. Both run at
-those defaults, and then again with every loop (`mindist=0`, `--minDist 0`): those are the windows
-that reach the diagonal.
+leave out every loop nearer the diagonal than twice the flank and two bins (`mindist='auto'`), which
+is where a window would start to reach those two diagonals. That floor is coolpuppy's default and
+not the app's, whose *nearest loop* is five bins unless told otherwise, so the app is given it,
+`--minDist 12` — as it is given the window, the diagonals left out and the normalisation, each at
+coolpuppy's value rather than at a default of its own. Both run at coolpuppy's defaults, and then
+again with every loop (`mindist=0`, `--minDist 0`): those are the windows that reach the diagonal.
 
 Six pileups are compared cell for cell, gap for gap: raw and over the expected — each window divided
 cell by cell by its chromosome's expected at that cell's own diagonal before the mean, the expected
-being cooltools' `expected_cis` from § 4, which coolpuppy reads as `balanced.avg` — at the defaults
-and with every loop; and the same two on the diagonal, at every loop anchor. Then the app's default
-normalisation: each pileup over the pileup
-of controls, five per loop, shifted along the diagonal by 50 to 500 bins either way — against
-coolpuppy's own shifted controls over the same range. Both draw their controls at random, so each is
-run with five seeds.
+being cooltools' `expected_cis` from § 4, which coolpuppy reads as `balanced.avg` — at coolpuppy's
+defaults and with every loop; and the same two on the diagonal, at every loop anchor. Then the
+distance-matched normalisation: each pileup over the pileup of controls, five per loop, shifted along
+the diagonal by 50 to 500 bins either way — against coolpuppy's own shifted controls over the same
+range. Both draw their controls at random, so each is run with five seeds.
 
 | | chromosomix | coolpuppy |
 |---|---|---|
-| window | `--window 5` (bins either side) | `flank=50_000` |
-| near the diagonal | nothing: `--minDiag` is 2, and `--minDist` twice `--window` and 2, by default | nothing: `min_diag` is 2, and `mindist` `'auto'`, by default |
+| window | `--mode fixed --window 5` (bins either side) | `flank=50_000` |
+| near the diagonal | `--minDiag 2 --minDist 12`: twice `--window` and 2 | nothing: `min_diag` is 2, and `mindist` `'auto'`, by default |
 | every loop | `--minDist 0` | `mindist=0` |
 | raw | `--norm none` | `ooe=False` |
 | over the expected | `--norm oe` | `expected_df=` § 4's table, `ooe=True` |
@@ -1570,16 +1571,21 @@ ends = [called[[f'chrom{k}', f'start{k}', f'end{k}']].set_axis(['chrom', 'start'
 anchors = pd.concat(ends).drop_duplicates().sort_values(['chrom', 'start'])
 anchors.to_csv(ANCHORS, sep='\t', header=False, index=False)
 # A window reaches the first two diagonals where its loop is nearer than twice the flank and two, which
-# is also where both tools' default floor is; with every loop, the lower-left corner, nearest the
-# diagonal, comes only from the loops whose windows do not.
-reaching = int((apart < 2 * FLANK + 2).sum())
+# is also where coolpuppy's default floor is, `mindist='auto'`; the app's own is five bins, so it is
+# given this one. With every loop, the lower-left corner, nearest the diagonal, comes only from the
+# loops whose windows do not.
+MIN_DIAG, MIN_DIST = 2, 2 * FLANK + 2
+reaching = int((apart < MIN_DIST).sum())
 cornered = int((apart - 2 * FLANK >= 2).sum())
 PILEUP = script('coolpuppy_pileup')
 EXPECTED_MOUSE = PS / 'mouse-cooltools.tsv'
-#: name: (label, chromosomix's arguments, coolpuppy's features and options)
+#: name: (label, chromosomix's arguments, coolpuppy's features and options). The app's window, its
+#: diagonals left out, its nearest loop and its normalisation are named at coolpuppy's values: the
+#: app's own defaults are not all coolpuppy's, and a default can move.
 CUTS = {
-    'raw': ('raw', ['--pairs', LOOPS, '--norm', 'none'], [LOOPS]),
-    'oe': ('over the expected', ['--pairs', LOOPS, '--norm', 'oe'], [LOOPS, '--expected', EXPECTED_MOUSE]),
+    'raw': ('raw', ['--pairs', LOOPS, '--norm', 'none', '--minDist', MIN_DIST], [LOOPS]),
+    'oe': ('over the expected', ['--pairs', LOOPS, '--norm', 'oe', '--minDist', MIN_DIST],
+           [LOOPS, '--expected', EXPECTED_MOUSE]),
     'raw-every': ('raw, every loop', ['--pairs', LOOPS, '--norm', 'none', '--minDist', 0], [LOOPS, '--mindist', 0]),
     'oe-every': ('over the expected, every loop', ['--pairs', LOOPS, '--norm', 'oe', '--minDist', 0],
                  [LOOPS, '--expected', EXPECTED_MOUSE, '--mindist', 0]),
@@ -1590,15 +1596,16 @@ CUTS = {
                  [ANCHORS, '--local', '--expected', EXPECTED_MOUSE]),
 }
 for key, (label, app_args, (features_, *options)) in CUTS.items():
-    mr('apa', MOUSE_10K, *app_args, '--window', FLANK, out=APA / key, name=f'apa-{key}',
-       analysis='Aggregate peak analysis', label=label)
+    mr('apa', MOUSE_10K, *app_args, '--mode', 'fixed', '--window', FLANK, '--minDiag', MIN_DIAG,
+       out=APA / key, name=f'apa-{key}', analysis='Aggregate peak analysis', label=label)
     reference(f'coolpuppy-{key}', 'Aggregate peak analysis', 'coolpuppy',
               [PYTHON, PILEUP, MOUSE_10K, features_, FLANK * clr10.binsize, OUT, THREADS, *options],
               out=APA / f'coolpuppy-{key}.tsv', label=label, threads=THREADS)
 SHIFTS = range(5)
 for seed in SHIFTS:
     mr('apa', MOUSE_10K, '--pairs', LOOPS, '--norm', 'matched', '--controls', 5, '--minShift', 50,
-       '--maxShift', 500, '--seed', seed + 1, '--window', FLANK, out=APA / f'controls-seed{seed + 1}',
+       '--maxShift', 500, '--seed', seed + 1, '--mode', 'fixed', '--window', FLANK, '--minDiag', MIN_DIAG,
+       '--minDist', MIN_DIST, out=APA / f'controls-seed{seed + 1}',
        name=f'apa-controls-seed{seed + 1}', analysis='Aggregate peak analysis', label=f'controls, seed {seed + 1}',
        group='controls', bench=seed == 0)
     reference(f'coolpuppy-controls-seed{seed}', 'Aggregate peak analysis', 'coolpuppy',
@@ -1647,7 +1654,7 @@ gap_cross, gap_ref, gap_app = (np.median(g) for g in (gaps(controls_app, control
 by_chance = stats.binom.sf(int((welch < 0.01).sum()) - 1, welch.size, 0.01) > 0.05
 centre = FLANK
 measures({
-    'loops called; nearer than the default floor (windows reaching the first two diagonals); anchors':
+    'loops called; nearer than coolpuppy\'s floor (windows reaching the first two diagonals); anchors':
         f"{len(called):,}; {reaching:,}; {len(anchors):,}",
     'with every loop, the loops the lower-left corner cell is a mean of, in both tools': f'{cornered:,}',
     **{f'{CUTS[k][0]}: max relative difference; cells left as gaps, chromosomix / coolpuppy':
@@ -1667,7 +1674,7 @@ measures({
 
 ```{python}
 #| label: fig-apa
-#| fig-cap: "Pileups at chromosight's loops, mouse Hi-C at 10 kb, ±50 kb. a, every loop over the expected, as chromosomix draws it with `--minDist 0`; the cells towards the lower left are means of fewer loops, those whose windows stay clear of the diagonal there; b, every cell of the six pileups against coolpuppy's, raw and over the expected (O/E); c, over shifted controls at the defaults, the centre and P2LL of each tool's five seeds."
+#| fig-cap: "Pileups at chromosight's loops, mouse Hi-C at 10 kb, ±50 kb. a, every loop over the expected, as chromosomix draws it with `--minDist 0`; the cells towards the lower left are means of fewer loops, those whose windows stay clear of the diagonal there; b, every cell of the six pileups against coolpuppy's, raw and over the expected (O/E); c, over shifted controls at coolpuppy's defaults, the centre and P2LL of each tool's five seeds."
 TEXT['apa_loops'] = f'{len(called):,}'
 TEXT['apa_reaching'] = f'{reaching:,}'
 TEXT['apa_anchors'] = f'{len(anchors):,}'
@@ -1708,9 +1715,9 @@ ax.legend(loc='upper right')
 plt.show()
 ```
 
-Raw and over the expected, at the defaults and with every loop, and on the diagonal both ways, the
-two tools draw `{python} TEXT['apa_gaps']` and every other cell within `{python} TEXT['apa_rel']`
-(float32, six digits written). At the defaults both leave out the same
+Raw and over the expected, at coolpuppy's defaults and with every loop, and on the diagonal both
+ways, the two tools draw `{python} TEXT['apa_gaps']` and every other cell within
+`{python} TEXT['apa_rel']` (float32, six digits written). At coolpuppy's floor both leave out the same
 `{python} TEXT['apa_reaching']` of the `{python} TEXT['apa_loops']` loops, those near enough that
 their windows would reach the diagonal; with every loop, a cell near the diagonal is the mean of the
 loops whose windows have it above the diagonal — the lower-left corner, of
@@ -1724,7 +1731,7 @@ differ at `{python} TEXT['apa_welch']` cells at p < 0.01, `{python} TEXT['apa_ch
 
 ```{python}
 record('Aggregate peak analysis', f"mouse Hi-C, 10 kb, {TEXT['apa_loops']} loops", f"coolpuppy {VERSIONS['coolpuppy']}",
-       f"raw and over the expected, at the defaults and with every loop, and on the diagonal: "
+       f"raw and over the expected, at coolpuppy's defaults and with every loop, and on the diagonal: "
        f"{TEXT['apa_gaps']}, every other cell within "
        f"{TEXT['apa_rel']}; over controls, two runs of the two tools differ as two of coolpuppy do "
        f"({TEXT['apa_cross']} against {TEXT['apa_self']}), and no more cells than chance gives "
