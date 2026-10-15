@@ -55,12 +55,12 @@ function lanesWith(edge: LaneEdge, label: string, corners = true, size = 24): An
   const store = new AnnotationStore(`corners-${Math.random()}.cool`, { persist: false })
   store.begin({
     card: 'linear',
-    kind: 'bed',
+    kind: 'segments',
     id: 'peaks',
     label,
     source: { kind: 'local', name: 'peaks.bed', file: new File([], 'peaks.bed') },
     placement: { top: edge === 'top', right: edge === 'right', bottom: edge === 'bottom', left: edge === 'left' },
-    style: { ...defaultStyle('bed', '#0072b2'), size },
+    style: { ...defaultStyle('segments', '#0072b2'), size },
     visible: true,
   })
   store.update('peaks', {
