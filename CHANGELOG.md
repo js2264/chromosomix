@@ -2232,10 +2232,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   covers: a 17 kb record laid whole over a 10 kb window. On 4DN's two mouse ATAC-seq replicates at
   10 kb that gave r = 0.808 where the windows' own means give 0.884. Every track is now read at its
   own resolution, a megabase at a time, and each record weighted by its overlap — pyBigWig's
-  `stats(…, exact=True)` — so the two replicates read 0.884, and six yeast tracks agree with
-  pyBigWig's exact means and SciPy to 5 × 10⁻⁷ at 100 bp, 1 kb and 10 kb, by both methods. A window
-  was also an object each and a sequence one request: a single 61 Mb chromosome at 100 bp was
-  killed for memory, and the whole mouse genome at 100 bp now takes three minutes and 2.3 GB.
+  `stats(…, exact=True)` — so the two replicates read 0.884, and on chr19 they and a Hi-C insulation
+  score agree with pyBigWig's exact means and SciPy to 4 × 10⁻⁷ at 100 bp, 1 kb and 10 kb, by both
+  methods. A window was also an object each and a sequence one request: a single 61 Mb chromosome
+  at 100 bp was killed for memory, and the whole mouse genome at 100 bp now takes three minutes and
+  2.3 GB.
 
 - **An aggregate peak analysis is now coolpuppy's pileup wherever a window reaches the diagonal,
   and its observed / expected normalisation is coolpuppy's (§18.8).** A loop window that crossed the
