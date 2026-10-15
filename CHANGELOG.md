@@ -14,6 +14,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A scalogram's lane reads in distances (§18.12).** Its range said `0 – 16.7`, the logarithms of
+  the reach, and its floor sat at one base pair, so the lower half of the lane was a band no value
+  could reach. It now says `1 kb – 104 kb`, starts at the power of ten below its data, and carries an
+  axis of its own: a faint dashed rule at 10 kb, 100 kb, 1 Mb… with the distance written at the
+  lane's far end, stepping round the names rather than through them — beside a map, in the browser
+  and in a saved figure. Any `log2` lane gets the rules and the floor; one whose values are lengths
+  gets them in kb and Mb.
+
 - **A box over the Analysis column narrows the task list (§18.1).** `filter 25 tasks…`: every word
   typed must be in a task's title, its blurb, its card's heading or its other names — each task now
   carries the words a reader looks for it by, *TAD* for insulation and the directionality index,

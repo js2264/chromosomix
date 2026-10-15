@@ -17,7 +17,7 @@
  * because it says what the average hid.
  */
 
-import { OUTLINE_WIDTH, valueAcross, laneRect, laneX, laneY, type LaneFrame } from './lane'
+import { OUTLINE_WIDTH, valueAcross, laneRect, laneText, laneX, laneY, type LaneFrame } from './lane'
 import { stretchOf, unitAt, type LocusAxis } from './locus'
 import {
   onScale,
@@ -272,11 +272,25 @@ export function profileOf(
 export function resolveLimits(
   limits: Limits,
   extent: { min: number; max: number } | null,
+  /**
+   * The lane's scale. On `log2` the values are logarithms, and anchoring them
+   * at zero anchored the axis at *one* — 1 bp under a scalogram, whose nearest
+   * quantile is a bin away, so the bottom half of every lane was a band from
+   * one base to a kilobase that no value could reach. There the floor is the
+   * round number below the data instead: the decade below it for a length
+   * (`unit`), the power of two below it otherwise.
+   */
+  scale: TrackScale = 'linear',
+  unit?: 'bp',
 ): { min: number; max: number } {
   if (!limits.auto) {
     return limits.max > limits.min ? { min: limits.min, max: limits.max } : { min: 0, max: 1 }
   }
   if (extent === null) return { min: 0, max: 1 }
+  if (scale === 'log2') {
+    const floor = unit === 'bp' ? Math.log2(10 ** Math.floor(Math.log10(2 ** extent.min) + 1e-9)) : Math.floor(extent.min)
+    return { min: floor, max: extent.max > floor ? extent.max : floor + 1 }
+  }
   if (extent.min >= 0) return { min: 0, max: extent.max > 0 ? extent.max : 1 }
   if (extent.max <= 0) return { min: extent.min < 0 ? extent.min : -1, max: 0 }
   const reach = Math.max(Math.abs(extent.min), Math.abs(extent.max))
@@ -943,6 +957,173 @@ export function formatLimit(value: number): string {
   if (magnitude >= 1e5 || magnitude < 1e-3) return value.toExponential(1)
   if (magnitude >= 100) return value.toFixed(0)
   return String(Number(value.toPrecision(3)))
+}
+
+/**
+ * A limit of a `log2` lane, as the quantity it stands for rather than its
+ * logarithm: `2^16.7` of base pairs is `106 kb`. The label of a scalogram's lane
+ * read `0 – 16.7`, which is a range of exponents nobody reads a distance from.
+ */
+export function formatScaledLimit(value: number, scale: TrackScale, unit?: 'bp'): string {
+  if (scale !== 'log2') return formatLimit(value)
+  if (!Number.isFinite(value)) return '—'
+  const linear = 2 ** value
+  return unit === 'bp' ? formatLength(linear) : formatLimit(linear)
+}
+
+/** A length to three figures in the unit that keeps it short: `1 kb`, `106 kb`, `2.1 Mb`. */
+function formatLength(bp: number): string {
+  const three = (x: number): string => String(Number(x.toPrecision(3)))
+  if (bp >= 1e6) return `${three(bp / 1e6)} Mb`
+  if (bp >= 1e3) return `${three(bp / 1e3)} kb`
+  return `${three(bp)} bp`
+}
+
+/** One rule of a `log2` lane's axis: where it is, as a logarithm, and what it reads. */
+export interface LogTick {
+  at: number
+  label: string
+}
+
+/**
+ * The round numbers inside a `log2` lane's limits — every power of ten, as a
+ * length where the lane is one (`1 kb`, `10 kb`, `100 kb`, `1 Mb`) — which is
+ * the axis a reader reads a distance off (§18.12). A lane spanning less than
+ * two of them takes the 1–2–5 steps between them where it is a length (every
+ * whole step, on one narrower still), and the powers of two otherwise.
+ */
+export function logAxisTicks(limits: { min: number; max: number }, unit?: 'bp'): LogTick[] {
+  const lo = Math.min(limits.min, limits.max)
+  const hi = Math.max(limits.min, limits.max)
+  if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) return []
+  const label = (linear: number): string =>
+    unit === 'bp' ? resolutionLabelOf(linear) : formatLimit(linear)
+  const steps = (mantissas: readonly number[]): LogTick[] => {
+    const out: LogTick[] = []
+    const first = Math.floor(Math.log10(2 ** lo))
+    const last = Math.ceil(Math.log10(2 ** hi))
+    for (let decade = first; decade <= last; decade++) {
+      for (const mantissa of mantissas) {
+        const linear = mantissa * 10 ** decade
+        const at = Math.log2(linear)
+        if (at >= lo - 1e-9 && at <= hi + 1e-9) out.push({ at, label: label(linear) })
+      }
+    }
+    return out
+  }
+  const decades = steps([1])
+  if (decades.length >= 2) return decades
+  if (unit === 'bp') {
+    const fives = steps([1, 2, 5])
+    return fives.length >= 2 ? fives : steps([1, 2, 3, 4, 5, 6, 7, 8, 9])
+  }
+  const out: LogTick[] = []
+  for (let power = Math.ceil(lo - 1e-9); power <= Math.floor(hi + 1e-9); power++) {
+    out.push({ at: power, label: label(2 ** power) })
+  }
+  return out
+}
+
+/** A round length as a bin size is written — `1 kb`, `10 kb`, `1 Mb` — with no trailing zeros. */
+function resolutionLabelOf(bp: number): string {
+  const trim = (x: number): string => String(Number(x.toFixed(2)))
+  if (bp >= 1e6) return `${trim(bp / 1e6)} Mb`
+  if (bp >= 1e3) return `${trim(bp / 1e3)} kb`
+  return `${trim(bp)} bp`
+}
+
+/**
+ * The rules of a `log2` lane's axis: a faint dashed line along the lane at each
+ * of {@link logAxisTicks} (§18.12), so a scalogram's bands are read against
+ * `1 kb`, `10 kb` and `100 kb` rather than guessed from a range of exponents.
+ *
+ * Over the bands and under the label's plate, at the strength of the zero line
+ * a signed track has. A rule on the lane's own edge would be the edge drawn
+ * twice, and is left out; its word is not ({@link drawLogWords}).
+ */
+export function drawLogRules(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  ticks: readonly LogTick[],
+  paint: Pick<TrackPaint, 'limits' | 'flip' | 'guideColour'>,
+): void {
+  const norm = logNorm(paint)
+  ctx.save()
+  ctx.globalAlpha = 0.5
+  ctx.strokeStyle = paint.guideColour
+  ctx.lineWidth = 0.5
+  ctx.setLineDash([2, 3])
+  for (const tick of ticks) {
+    const where = norm(tick.at)
+    if (!(where > 0.01 && where < 0.99)) continue
+    const across = valueAcross(frame, where)
+    ctx.beginPath()
+    ctx.moveTo(laneX(frame, frame.alongFrom, across), laneY(frame, frame.alongFrom, across))
+    ctx.lineTo(laneX(frame, frame.alongTo, across), laneY(frame, frame.alongTo, across))
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
+/**
+ * The words of a `log2` lane's axis: the distance each rule stands at, written
+ * at the end of the lane its name is not at (§18.12) — the right of a lane
+ * across the page, the foot of one down it, read up the page — with the
+ * plate's halo behind each so a band under one does not take it.
+ *
+ * Kept inside the lane: a word on a rule at the edge is set in from it by half
+ * its height, beside the edge it names, rather than cut in two by the clip. And
+ * written after the lane's label, so a word that would land on the label's
+ * block (`avoid`, its plates) is left out rather than written through a name —
+ * on a scalogram's lane five names can run the length of it, and the range in
+ * the block already says where the lane ends.
+ */
+export function drawLogWords(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  ticks: readonly LogTick[],
+  paint: Pick<TrackPaint, 'limits' | 'flip' | 'guideColour' | 'haloColour' | 'font'>,
+  avoid: ReadonlyArray<readonly [number, number, number, number]> = [],
+): void {
+  if (ticks.length === 0) return
+  const norm = logNorm(paint)
+  const horizontal = frame.orientation === 'top' || frame.orientation === 'bottom'
+  const size = Number(/(\d+(?:\.\d+)?)px/.exec(paint.font)?.[1] ?? 9)
+  const half = size / 2 + 1
+  // Too thin a lane for a word clear of both edges has no room for an axis.
+  if (frame.thickness < 2 * half) return
+  ctx.save()
+  ctx.font = paint.font
+  // From the lane's far end back into it: right-aligned across the page, and
+  // down it — turned a quarter anticlockwise, so it reads up the page — set
+  // from the foot so it grows back up into the lane.
+  ctx.textAlign = horizontal ? 'right' : 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = paint.guideColour
+  const anchor = frame.alongTo - 3
+  for (const tick of ticks) {
+    const where = norm(tick.at)
+    if (where < -0.001 || where > 1.001) continue
+    const across = Math.min(frame.thickness - half, Math.max(half, valueAcross(frame, where)))
+    const width = ctx.measureText(tick.label).width
+    const box = laneRect(frame, anchor - width - 2, anchor + 2, across - half, across + half)
+    if (avoid.some((other) => overlaps(box, other))) continue
+    laneText(ctx, frame, tick.label, anchor, across, { halo: paint.haloColour })
+  }
+  ctx.restore()
+}
+
+/** Where a value falls across a lane, `0` at the baseline, as the bands are drawn. */
+function logNorm(paint: Pick<TrackPaint, 'limits' | 'flip'>): (value: number) => number {
+  const linear = normaliser(paint.limits)
+  return paint.flip ? (value: number) => 1 - linear(value) : linear
+}
+
+function overlaps(
+  a: readonly [number, number, number, number],
+  b: readonly [number, number, number, number],
+): boolean {
+  return a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3]
 }
 
 /**

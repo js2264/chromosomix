@@ -42,6 +42,7 @@ import {
   laneLabelOf,
   readsOf,
   scaleOf,
+  unitOf,
   searchesByName,
   translationOf,
 } from '../annotations/types'
@@ -148,6 +149,7 @@ import {
   drawLaneLabel,
   labelEndFor,
   positionLabel,
+  type LabelBox,
   type LaneLabelBoxes,
   type LaneLabelSpec,
   type LaneLabelStyle,
@@ -175,8 +177,12 @@ import {
 } from '../render/frames'
 import {
   ceilingFactor,
+  drawLogRules,
+  drawLogWords,
   drawTrack,
   drawTrackScaling,
+  logAxisTicks,
+  type LogTick,
   nudgedLimits,
   profileOf,
   resolveLimits,
@@ -2680,6 +2686,9 @@ export class BrowserView {
     // The bands a stack of heatmaps was divided into, kept for the label: one
     // name per row, in the row it names (§18.11).
     let labelBands: LaneFrame[] | null = lane.translation === null ? null : [frame]
+    // A `log2` lane's axis words, written after the label so they can keep
+    // clear of it (§18.12).
+    let logWords: { ticks: LogTick[]; paint: Parameters<typeof drawLogWords>[3] } | null = null
     clipLane(ctx, lane.frame)
     if (lane.reads.length > 0) {
       label = this.paintPile(ctx, lane, palette)
@@ -2721,7 +2730,7 @@ export class BrowserView {
       for (const [at, { entry: member, profile, junctions }] of lane.profiles.entries()) {
         const laneFrame = bands?.[at] ?? frame
         const extent = extentFor(member, profile.extent, groups)
-        const limits = resolveLimits(member.style.limits, extent)
+        const limits = resolveLimits(member.style.limits, extent, scaleOf(member.style), unitOf(member.style))
         const paint = {
           colour: member.style.colour,
           mode: member.style.mode,
@@ -2775,11 +2784,27 @@ export class BrowserView {
       const resolved = resolveLimits(
         first.entry.style.limits,
         extentFor(first.entry, first.profile.extent, groups),
+        scaleOf(first.entry.style),
+        unitOf(first.entry.style),
       )
       // Mid-drag the range says where the hand is going, not where it came from:
       // the faded copy behind it is already saying that, and the number a reader
       // is watching is the one they are setting.
       const limits = dragged === null ? resolved : scaledTo(resolved, dragged)
+      // A `log2` lane's own axis, as beside a map (§18.12): the rules now, the
+      // words once the label is down.
+      if (scaleOf(first.entry.style) === 'log2') {
+        const axisPaint = {
+          limits,
+          flip: first.entry.style.flip,
+          guideColour: palette.labelColor,
+          haloColour: palette.labelHaloColor,
+          font: scaleFont(LANE_FONT),
+        }
+        const ticks = logAxisTicks(limits, unitOf(first.entry.style))
+        drawLogRules(ctx, frame, ticks, axisPaint)
+        if (this.text) logWords = { ticks, paint: axisPaint }
+      }
       if (this.text) {
         label = {
           // A sequence drawn as a value track is drawn as its GC content, and
@@ -2797,7 +2822,12 @@ export class BrowserView {
           detail:
             lane.pending !== null
               ? progressDetail(lane.pending)
-              : (laneNote(lane.profiles) ?? { kind: 'limits', ...limits }),
+              : (laneNote(lane.profiles) ?? {
+                  kind: 'limits',
+                  ...limits,
+                  scale: scaleOf(first.entry.style),
+                  ...(unitOf(first.entry.style) === undefined ? {} : { unit: unitOf(first.entry.style) }),
+                }),
           at: labelEndFor(frame, limits, first.entry.style.flip),
         }
       }
@@ -2906,9 +2936,11 @@ export class BrowserView {
     }
     if (lane.translation !== null) this.paintFrames(ctx, lane.translation, entry, palette)
     ctx.restore()
-    if (label !== null && !bare) {
-      this.labelLane(ctx, lane, palette, label.entries, label.detail, label.at, labelBands)
-    }
+    const plates =
+      label !== null && !bare
+        ? this.labelLane(ctx, lane, palette, label.entries, label.detail, label.at, labelBands)
+        : []
+    if (logWords !== null && !bare) drawLogWords(ctx, frame, logWords.ticks, logWords.paint, plates)
     if (lane.translation !== null && !bare) this.labelFrames(ctx, lane.translation, palette)
   }
 
@@ -3048,7 +3080,7 @@ export class BrowserView {
      * once: it is the *lane's* axis and every row shares it.
      */
     bands: LaneFrame[] | null = null,
-  ): void {
+  ): LabelBox[] {
     // Where a right-aligned label block ends: clear of the data, and clear of
     // the handle hanging in front of it. Without the handle's room the name ran
     // straight into the dots, which is exactly what a label and a control must
@@ -3083,10 +3115,14 @@ export class BrowserView {
         palette: { text: palette.labelColor, halo: palette.labelHaloColor },
       })
     const boxes = blockOf(0)
+    // What the block covers over the data — nothing, in the column — for
+    // anything else written on the lane to keep out of.
+    const plates: LabelBox[] = boxes.plate === null ? [] : [boxes.plate]
     for (let index = 1; index < frames.length; index++) {
       const more = blockOf(index)
       boxes.names.push(...more.names)
       boxes.swatches.push(...more.swatches)
+      if (more.plate !== null) plates.push(more.plate)
       this.wanted(more.wanted)
     }
     this.wanted(boxes.wanted)
@@ -3108,6 +3144,7 @@ export class BrowserView {
     if (boxes.auto !== null && entries.some((entry) => hasAMovableAxis(entry.kind))) {
       this.marks.push({ kind: 'auto', entries, at: boxes.auto })
     }
+    return plates
   }
 
   /**
@@ -3176,7 +3213,7 @@ export class BrowserView {
     for (const lane of this.lanes) {
       const entry = this.memberOf(lane, id)
       if (entry === null) continue
-      return resolveLimits(entry.style.limits, extent)
+      return resolveLimits(entry.style.limits, extent, scaleOf(entry.style), unitOf(entry.style))
     }
     return null
   }

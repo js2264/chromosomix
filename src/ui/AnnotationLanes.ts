@@ -70,6 +70,7 @@ import {
   labelEndFor,
   labelReach,
   positionLabel,
+  type LabelBox,
   type LaneLabelSpec,
   type LaneLabelStyle,
   type LimitBox,
@@ -86,8 +87,12 @@ import type { OverlayAxes } from '../render/overlays'
 import type { Rect } from '../render/heatmap'
 import type { Scale } from '../render/scale'
 import {
+  drawLogRules,
+  drawLogWords,
   drawTrack,
   drawTrackScaling,
+  logAxisTicks,
+  type LogTick,
   profileOf,
   resolveLimits,
   scaledTo,
@@ -102,6 +107,7 @@ import {
   nestsAsRibbons,
   stacksAsHeatmaps,
   scaleOf,
+  unitOf,
   LANE_EDGES,
   drawnFromSamples,
   drawsAProfile,
@@ -1322,6 +1328,9 @@ export class AnnotationLanes {
       // The bands a stack of heatmaps was divided into, kept for the label: a
       // name per row rather than four names in a line across the third of them.
       let labelBands: LaneFrame[] | null = null
+      // A `log2` lane's axis words, written after the label so they can keep
+      // clear of it (§18.12).
+      let logWords: { ticks: LogTick[]; paint: Parameters<typeof drawLogWords>[3] } | null = null
       clipLane(ctx, frame)
       if (profiles.length > 0) {
         // While a ceiling is being dragged this lane is drawn twice: once as it
@@ -1347,6 +1356,8 @@ export class AnnotationLanes {
           const limits = resolveLimits(
             member.style.limits,
             extentFor(member, profile.extent, groups),
+            scaleOf(member.style),
+            unitOf(member.style),
           )
           const paint = {
             colour: member.style.colour,
@@ -1404,7 +1415,25 @@ export class AnnotationLanes {
         const limits = resolveLimits(
           first.entry.style.limits,
           extentFor(first.entry, first.profile.extent, groups),
+          scaleOf(first.entry.style),
+          unitOf(first.entry.style),
         )
+        // A `log2` lane's own axis — a scalogram's 1 kb, 10 kb, 100 kb — its
+        // rules over the bands and under the label's plate, its words once the
+        // label is down and can be kept clear of (§18.12).
+        if (scaleOf(first.entry.style) === 'log2') {
+          const axisLimits = dragged === null ? limits : scaledTo(limits, dragged)
+          const axisPaint = {
+            limits: axisLimits,
+            flip: first.entry.style.flip,
+            guideColour: geometry.palette.guide,
+            haloColour: geometry.palette.halo,
+            font: scaleFont(LANE_FONT),
+          }
+          const ticks = logAxisTicks(axisLimits, unitOf(first.entry.style))
+          drawLogRules(ctx, frame, ticks, axisPaint)
+          if (text) logWords = { ticks, paint: axisPaint }
+        }
         // Every member's axis is the lane's, so one entry per member: the
         // ceiling gesture and the limit editor both act on the lane. The
         // *committed* pair, never the one under a drag — this is what the next
@@ -1430,7 +1459,12 @@ export class AnnotationLanes {
             detail:
               lane.pending !== null
                 ? progressDetail(lane.pending)
-                : (laneNote(profiles) ?? { kind: 'limits', ...shown }),
+                : (laneNote(profiles) ?? {
+                    kind: 'limits',
+                    ...shown,
+                    scale: scaleOf(first.entry.style),
+                    ...(unitOf(first.entry.style) === undefined ? {} : { unit: unitOf(first.entry.style) }),
+                  }),
             at: labelEndFor(frame, shown, first.entry.style.flip),
             // A GC trace lives in the middle of its lane — yeast sits at 0.4 of
             // a 0–1 axis, which on the 46-pixel default is within a pixel of
@@ -1574,7 +1608,8 @@ export class AnnotationLanes {
       }
       ctx.restore()
       if (bare) continue
-      if (label !== null) this.labelLane(ctx, lane, geometry, label, state, labelBands)
+      const plates = label === null ? [] : this.labelLane(ctx, lane, geometry, label, state, labelBands)
+      if (logWords !== null) drawLogWords(ctx, frame, logWords.ticks, logWords.paint, plates)
 
       // The handle, outside the clip because it hangs outside the lane: in the
       // plot's own margin, just before the column of the map this track is drawn
@@ -1789,7 +1824,7 @@ export class AnnotationLanes {
      * once: it is the *lane's* axis and every row shares it.
      */
     bands: LaneFrame[] | null = null,
-  ): void {
+  ): LabelBox[] {
     const stacked = bands !== null && bands.length === label.entries.length
     const frames = stacked && bands !== null ? bands : [lane.frame]
     const runs = stacked
@@ -1808,6 +1843,9 @@ export class AnnotationLanes {
       style: laneLabelStyle(),
       palette: { text: geometry.palette.guide, halo: geometry.palette.halo },
     })
+    // What the block covers over the data, for anything else written on the
+    // lane to keep out of.
+    const plates: LabelBox[] = boxes.plate === null ? [] : [boxes.plate]
     for (let at = 1; at < frames.length; at++) {
       const more = drawLaneLabel(ctx, frames[at], {
         names: runs[at].map((entry) => ({
@@ -1824,11 +1862,12 @@ export class AnnotationLanes {
       })
       boxes.names.push(...more.names)
       boxes.swatches.push(...more.swatches)
+      if (more.plate !== null) plates.push(more.plate)
     }
     state.gripRows.set(lane.entry.id, boxes.nameAcross)
     // Chrome, not picture: the export asks for no handles, and it must get no
     // hit boxes either — a saved figure has nothing to be pointed at.
-    if (!geometry.handles) return
+    if (!geometry.handles) return plates
     for (const hit of boxes.limits) state.ranges.push({ entries: label.entries, hit })
     // One name, one track: a lane drawn as an overlay carries a name each, and
     // the id the paint recorded is what keeps a rename on the one pointed at.
@@ -1843,6 +1882,7 @@ export class AnnotationLanes {
     if (boxes.auto !== null && label.entries.some((entry) => hasAMovableAxis(entry.kind))) {
       state.marks.push({ kind: 'auto', entries: label.entries, at: boxes.auto })
     }
+    return plates
   }
 
   // -------------------------------------------------------------------------

@@ -25,7 +25,8 @@
  */
 
 import { laneIsHorizontal, laneRect, laneText, valueAcross, type LaneFrame } from './lane'
-import { formatLimit, normaliser } from './tracks'
+import { formatScaledLimit, normaliser } from './tracks'
+import type { TrackScale } from '../annotations/types'
 import { formatPosition } from '../genome/assembly'
 import { fmt } from '../units'
 
@@ -286,7 +287,18 @@ export interface LaneLabelSpec {
    */
   detail:
     | { kind: 'text'; text: string }
-    | { kind: 'limits'; min: number; max: number }
+    | {
+        kind: 'limits'
+        min: number
+        max: number
+        /**
+         * The lane's scale and unit, so a `log2` lane's ends are written as the
+         * quantity they stand for — `1 kb – 106 kb` on a scalogram's lane —
+         * rather than as the exponents `9.97 – 16.7` (§18.12).
+         */
+        scale?: TrackScale
+        unit?: 'bp'
+      }
     /**
      * A read on its way: a phrase and a bar. `total` is `0` where the host
      * would not say how much is coming, and the bar is then drawn half full
@@ -414,6 +426,15 @@ export interface LaneLabelBoxes {
   nameAcross: number
   /** How wide a column this block would like, including the column's padding. */
   wanted: number
+  /**
+   * What the block covers over the data — its plate, names, range and all — or
+   * `null` where it was written in a column beside the lane, or not at all.
+   *
+   * Drawn whatever the lane's height, unlike the click targets above, because
+   * it is what anything else written on the lane keeps out of: the words of a
+   * scalogram's distance axis (§18.12) are left out where they would land on it.
+   */
+  plate: LabelBox | null
 }
 
 /**
@@ -436,6 +457,7 @@ export function drawLaneLabel(
     auto: null,
     nameAcross: style.nameTop,
     wanted: 0,
+    plate: null,
   }
   if (names.length === 0) return out
 
@@ -617,10 +639,11 @@ export function drawLaneLabel(
   if (column === null && blockAlong > 0) {
     const from = nameTop - style.hitHeight / 2
     const to = (stacked ? nameTop + block + style.detailDrop : nameTop + block) + style.hitHeight / 2
+    out.plate = laneRect(frame, near - dir * 2, near + dir * (blockAlong + 2), from, to)
     ctx.save()
     ctx.globalAlpha = PLATE_ALPHA
     ctx.fillStyle = palette.halo
-    ctx.fillRect(...laneRect(frame, near - dir * 2, near + dir * (blockAlong + 2), from, to))
+    ctx.fillRect(...out.plate)
     ctx.restore()
   }
 
@@ -774,8 +797,8 @@ export function drawLaneLabel(
   }
 
   // Each end written separately, so each end has a box of its own to point at.
-  const min = formatLimit(spec.detail.min)
-  const max = formatLimit(spec.detail.max)
+  const min = formatScaledLimit(spec.detail.min, spec.detail.scale ?? 'linear', spec.detail.unit)
+  const max = formatScaledLimit(spec.detail.max, spec.detail.scale ?? 'linear', spec.detail.unit)
   // The range goes wherever its names went, so the two stay one label — and in
   // the column it is right-aligned like them, with the lane's autoscale button
   // kept inside the column rather than pushed onto the data.
@@ -921,7 +944,10 @@ function detailAlong(
     width = text + (detail.text === '' ? 0 : NAME_GAP) + style.progressWidth
   } else {
     width =
-      ctx.measureText(`${formatLimit(detail.min)} ${DASH} ${formatLimit(detail.max)}`).width +
+      ctx.measureText(
+        `${formatScaledLimit(detail.min, detail.scale ?? 'linear', detail.unit)} ${DASH} ` +
+          formatScaledLimit(detail.max, detail.scale ?? 'linear', detail.unit),
+      ).width +
       style.autoSlot
   }
   ctx.font = font

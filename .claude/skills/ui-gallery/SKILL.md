@@ -87,6 +87,7 @@ node scripts/ui-locus-pairs.mjs gallery       # two windows typed as one (§5.4)
 node scripts/ui-history-list.mjs gallery      # the list of steps back beside the header's back (§5.5): five steps taken, the list, a row three back pressed, a reload and the list still there, Back and the list one shorter, the dark theme: hl01 … hl04
 node scripts/ui-task-filter.mjs gallery       # the box over the Analysis column's task list (§18.1): the column, `TAD`, `pileup`, `a/b`, a word nothing matches, Escape, and Enter opening the first task left: tf01 … tf06
 node scripts/ui-metaplot-heatmap.mjs gallery  # the metaplot's per-feature heatmap as one smoothed image (§18.13): ATAC over its peaks, close up, the pointer over it with nothing lit, enlarged, and its PNG and PDF under files/, the PDF checked for one interpolated image: mh01 … mh05
+node scripts/ui-scalogram-axis.mjs gallery    # the distance axis on a scalogram's lane (§18.12): the Scalogram run on the yeast demo, its lane beside the map and close up (range in kb, rules at the decades, words clear of the names), the map's PNG under files/, and the lane in the browser: sa01 … sa04
 ```
 
 The second script drives the part the first only passes through: the figures a task returns

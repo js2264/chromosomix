@@ -9078,6 +9078,23 @@ by whichever bin reached furthest. A suggestion like the group and the style, wr
 style on the way in and the reader's from that moment, and a display scale and nothing else — the
 numbers behind the lane and every number that leaves it as a file stay as they were computed.
 
+**A `log2` lane is read in what it measures.** Its values are logarithms, so its label wrote exponents
+— `0 – 16.7` on a scalogram's lane, which is a range nobody reads a distance from — and its autoscale
+anchored it at zero as a linear lane is, which on a logarithm is *one*: one base pair, a bin below the
+nearest band, so the lower half of every lane was a stretch no value could reach. An output says what
+its values measure as well as how they are drawn, and the scalogram's are **base pairs** (`unit: 'bp'`,
+written into the row's style beside the scale, and carried by the output into a workspace). On such a
+lane the autoscaled floor is the **power of ten below the data** — `1 kb` under a 1 kb run — and on a
+`log2` lane with no unit the power of two below it; a limit the reader typed is theirs, as everywhere.
+The ends of the range are written as the quantity: `1 kb – 104 kb`. And the lane carries **its own
+axis**: a faint dashed rule at every power of ten inside it — the 1–2–5 steps, or every whole step,
+where the lane spans less than two of them; the powers of two on a lane with no unit — none on the
+lane's own edges, which are the edges, and each rule's distance written at the end of the lane its name
+is not at, set in from the edge by half its height rather than cut by it, with the label's halo behind
+it. The words are written **after** the label and left out where they would land on its block —
+on a scalogram's lane five names can run its length, and the range in the block already says where the
+lane ends. The axis is drawn wherever the lane is — beside a map, in the browser, in a saved figure.
+
 ### 18.13 A figure is a spec, a style and a renderer
 
 Every picture a task produces is now **restylable**, and the whole of how is one separation: what a
