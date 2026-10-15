@@ -30,9 +30,10 @@
  * - **Coverage** — `cooltools_cis == ours + diagonal`, exactly. cooltools sums
  *   the pixel table by both ends, so a diagonal pixel counts twice; this repo
  *   counts it once, on purpose (`analysis/coverage.ts`).
- * - **APA** — exact, once the loops whose window would cross the main diagonal
- *   are excluded. With them in, the two pileups differ by about 1 % and every
- *   differing cell sits below the diagonal.
+ * - **APA** — exact. The hand-built pileup reads the map whole, both triangles,
+ *   so it is held to coolpuppy on the loops whose windows clear the diagonal;
+ *   the task's own runner cuts its windows as coolpuppy does, and is held to it
+ *   on every loop, raw, over the expected and on the diagonal.
  * - **Insulation** — exact. The diamond is cooltools' own — the mean of the
  *   valid cells of a window cornered on the bin, over the sequence's median —
  *   and so are the boundaries, strength for strength.
@@ -46,6 +47,10 @@ import { BigWig } from '@gmod/bbi'
 import { LocalFile } from 'generic-filehandle2'
 
 import { PileupAccumulator, p2ll } from '@/analysis/apa'
+import type { JobContext } from '@/analysis/job'
+import { runApa } from '@/analysis/run/apa'
+import { MIN_DIAG_DEFAULT } from '@/analysis/tasks/apa'
+import type { MatrixOutput, Params } from '@/analysis/types'
 import {
   correlationMatrix,
   observedOverExpected,
@@ -65,7 +70,7 @@ import { referenceWindows, windowRow } from '@/analysis/metaplot'
 import { compareSets } from '@/analysis/overlap'
 import { ViewpointAccumulator } from '@/analysis/viewpoint'
 import { parseBed } from '@/annotations/parse'
-import type { TrackSamples } from '@/annotations/types'
+import type { FeatureSet, PairSet, TrackSamples } from '@/annotations/types'
 import { MetaCooler } from '@/metacooler/MetaCooler'
 import { LocalFileSource } from '@/sources/LocalFileSource'
 import type { DenseMatrix } from '@/types'
@@ -823,6 +828,146 @@ suite('APA, against numpy and coolpuppy', () => {
     const { values } = await pileup(g)
     expect(g.direct.p2ll).not.toBeNull()
     expect(p2ll(values, g.width, g.width)).toBeCloseTo(g.direct.p2ll!, 6)
+  })
+})
+
+interface ApaDiagonalGolden {
+  binsize: number
+  flank_bins: number
+  width: number
+  min_diag: number
+  crossing: number
+  pairs: Array<{ chrom: string; start1: number; end1: number; start2: number; end2: number }>
+  reference: {
+    tolerance: number
+    anchors: Array<{ chrom: string; start: number; end: number }>
+  } & Record<
+    'raw' | 'raw_min_diag_0' | 'oe' | 'local_raw' | 'local_oe',
+    { n: number; pileup: GoldenNumbers }
+  >
+}
+
+/**
+ * The task's own runner over the demo file, where the golden above checks a
+ * pileup built by hand: windows that reach the diagonal are exactly where the
+ * two used to part company, and the runner is where the rule now lives.
+ */
+suite('APA reaching the diagonal, through the runner, against coolpuppy', () => {
+  const golden = ready ? loadAnalysisGolden<ApaDiagonalGolden>('apa_diagonal') : null
+
+  async function run(params: Params, inputs: Record<string, unknown>): Promise<MatrixOutput> {
+    const g = golden!
+    const mc = await demo.open()
+    const job: JobContext = {
+      mc,
+      params: { mode: 'fixed', window: g.flank_bins, balance: true, ...params },
+      framing: {
+        uri: COOLER,
+        label: 'demo',
+        binsize: g.binsize,
+        binsPerCell: 1,
+        rows: [0, mc.nBins],
+        cols: [0, mc.nBins],
+        balance: true,
+        value: '',
+        normalise: null,
+        level: 'bin',
+      },
+      inputs: inputs as never,
+      cancelled: () => false,
+      throwIfCancelled: () => {},
+      breathe: async () => {},
+      progress: () => {},
+      note: () => {},
+      toBp: (bins: number) => bins * g.binsize,
+      toBins: (bp: number) => Math.max(1, Math.round(bp / g.binsize)),
+    }
+    const matrix = (await runApa(job)).find((out): out is MatrixOutput => out.kind === 'matrix')
+    if (matrix === undefined) throw new Error('no pileup')
+    return matrix
+  }
+
+  function loopSet(g: ApaDiagonalGolden): PairSet {
+    const n = g.pairs.length
+    const contigs = [...new Set(g.pairs.map((pair) => pair.chrom))]
+    const contig = Int32Array.from(g.pairs.map((pair) => contigs.indexOf(pair.chrom)))
+    return {
+      contigs,
+      length: n,
+      contig1: contig,
+      start1: Int32Array.from(g.pairs.map((pair) => pair.start1)),
+      end1: Int32Array.from(g.pairs.map((pair) => pair.end1)),
+      contig2: contig,
+      start2: Int32Array.from(g.pairs.map((pair) => pair.start2)),
+      end2: Int32Array.from(g.pairs.map((pair) => pair.end2)),
+      score: new Float32Array(n).fill(Number.NaN),
+      name: g.pairs.map((_, i) => `l${i}`),
+      detail: g.pairs.map(() => ''),
+    }
+  }
+
+  function anchorSet(g: ApaDiagonalGolden): FeatureSet {
+    const anchors = g.reference.anchors
+    const n = anchors.length
+    const contigs = [...new Set(anchors.map((anchor) => anchor.chrom))]
+    return {
+      contigs,
+      length: n,
+      contig: Int32Array.from(anchors.map((anchor) => contigs.indexOf(anchor.chrom))),
+      start: Int32Array.from(anchors.map((anchor) => anchor.start)),
+      end: Int32Array.from(anchors.map((anchor) => anchor.end)),
+      strand: new Int8Array(n),
+      score: new Float32Array(n).fill(Number.NaN),
+      name: anchors.map((_, i) => `a${i}`),
+      id: anchors.map(() => ''),
+      detail: anchors.map(() => ''),
+    } as unknown as FeatureSet
+  }
+
+  const loops = (g: ApaDiagonalGolden) => ({ pairs: { pairs: loopSet(g) } })
+  const anchors = (g: ApaDiagonalGolden) => ({ features: { features: anchorSet(g) } })
+
+  it('keeps loops whose windows reach the diagonal, which is what this golden is for', () => {
+    const g = golden!
+    expect(g.crossing).toBeGreaterThan(20)
+    expect(g.min_diag).toBe(MIN_DIAG_DEFAULT)
+  })
+
+  it('piles up every loop as coolpuppy does at its defaults, gap for gap', async () => {
+    const g = golden!
+    const matrix = await run({ anchors: 'pairs', pairs: 'loops', norm: 'none' }, loops(g))
+    expect(matrix.stats?.[0]?.value).toBe(g.reference.raw.n)
+    expectSeries(matrix.values, numbers(g.reference.raw.pileup), g.reference.tolerance, 'raw')
+  })
+
+  it('takes nothing from below the diagonal with no diagonal left out, as coolpuppy', async () => {
+    const g = golden!
+    const matrix = await run({ anchors: 'pairs', pairs: 'loops', norm: 'none', minDiag: 0 }, loops(g))
+    expectSeries(
+      matrix.values,
+      numbers(g.reference.raw_min_diag_0.pileup),
+      g.reference.tolerance,
+      'min_diag 0',
+    )
+  })
+
+  it('divides every window by its sequence’s expected, as coolpuppy’s ooe does', async () => {
+    const g = golden!
+    const matrix = await run({ anchors: 'pairs', pairs: 'loops', norm: 'oe' }, loops(g))
+    expect(matrix.stats?.[0]?.value).toBe(g.reference.oe.n)
+    expectSeries(matrix.values, numbers(g.reference.oe.pileup), g.reference.tolerance, 'oe')
+  })
+
+  it('is coolpuppy’s local pileup on the diagonal, raw and over the expected', async () => {
+    const g = golden!
+    for (const [norm, which] of [
+      ['none', 'local_raw'],
+      ['oe', 'local_oe'],
+    ] as const) {
+      const matrix = await run({ anchors: 'features', features: 'anchors', norm }, anchors(g))
+      expect(matrix.stats?.[0]?.value, which).toBe(g.reference[which].n)
+      expectSeries(matrix.values, numbers(g.reference[which].pileup), g.reference.tolerance, which)
+    }
   })
 })
 

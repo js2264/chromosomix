@@ -1750,6 +1750,16 @@ the map is the file's own pixels. Each pair's share of the new contacts is
 binomial in its share of the old, so the total is again exactly `N`. An oversample is an
 **inference** where a subsample is not, and everything that names a drawn map says which it was.
 
+**The map an oversample draws from is a command of its own.** `chromosomix boost <map>` hands
+Boost-HiC each sequence's stored counts — the square an oversample hands it (`cisSquare`) — and
+writes what `main.py` writes, `boostedmat`: the boosted map over the bins the outlier filter kept, in
+SCN units, one square TSV a sequence, its rows and columns named by each kept bin's start
+(`--sequences` names some, `--alpha` another exponent). Nothing on screen shows that map, and a draw
+from it is a poor way to hold a port to its upstream; with it, `notebooks/validation.qmd` holds the
+port to Boost-HiC's own Python cell for cell over whole chromosomes, where the golden holds a hundred
+bins (§18.10). A sequence past the limit below is refused by name, as an oversample refuses it, and the
+others are still written.
+
 Floyd–Warshall is cubic in a sequence's bins. It runs as a WebAssembly SIMD kernel
 (`metacooler/wasm/floyd.c`, built by `npm run wasm:floyd` and committed as base64, bit-identical to
 the TypeScript loop it falls back to), which walks yeast's chromosome IV at 1 kb — 1,532 bins — in
@@ -5330,6 +5340,7 @@ satisfy and is therefore the one that is tested first:
 | 4C, with trans | one streaming pass over pixels with `bin1 < anchor_end`; progress, cancel, and a pre-flight estimate before it starts |
 | APA, k windows, local file | 0 network; ≤ k bounded reads after coalescing |
 | APA, k windows, remote | ≤ 2 range requests per *coalesced* window, with the estimate shown before **Run** |
+| APA over the expected | the windows, and one band per sequence the anchors sit on, read in tiles as deep as its farthest window reaches and never held whole; the estimate says so in words, since the depth is the loop set's |
 | Metaplot, k features | 0 matrix reads; ≤ 1 `sample` request per contig touched |
 | Correlation / eigenvectors | 0 range requests beyond the block; refused above the bin-count gate (§18.6) |
 | Adaptive smoothing of a block | 0 range requests; the arrays go over and back. Inline below 1 M cells (78 ms at 353²); on the analysis thread above it — 1.5 s at 4 M, 7.4 s at the 16 M cap. The map draws **unsmoothed** meanwhile, never blank and never captioned as smoothed |
@@ -8164,6 +8175,25 @@ axis label says which point it is; *bins from the centre* over a pileup of four 
 caption for a figure nobody drew. Hidden where there is no point to choose: a loaded loop set brings
 its own two anchors, and a domain pileup's window *is* the feature, start to end.
 
+**A window is cut as coolpuppy cuts one, and observed/expected is coolpuppy's.** Nothing is taken
+from below the diagonal. The map is read whole, both triangles, and a loop window that crosses the
+diagonal holds the same contacts twice there — once above it and once mirrored below — so the cells
+below it are left out, as coolpuppy, which cuts its windows from the upper triangle, leaves them out.
+The main diagonal and the one beside it go too (*diagonals left out*, coolpuppy's `min_diag`, 2 by
+default), being mostly what ligation could not separate. A window on the diagonal is its own mirror
+and is kept whole but for those diagonals, either side of the main one, which is coolpuppy's local
+pileup folded onto its transpose; and a distance-matched control is cut by the same rule as the
+window it divides, or the ratio would carry a pattern that is in neither. Observed/expected divides
+**each window, cell by cell, by its own sequence's expected at that cell's own diagonal**, then
+averages the ratios: coolpuppy's `ooe`, with cooltools' `balanced.avg` — the mean of each diagonal
+over the whole sequence — read as a band as deep as the farthest window reaches. It used to divide
+the finished pileup by an expected looked up at each cell's distance from the *pileup's* centre,
+which is a cell's diagonal only for a window on the diagonal, and to take that expected from the
+windows' own cells, which over a loop set are the places the set picked, enriched by construction.
+On a mouse loop set whose centre coolpuppy puts at 2.9 that said 0.2; read whole, the raw pileup of
+the same set was up to ten per cent from coolpuppy's in the cells nearest the diagonal, and more at
+coolpuppy's default `min_diag`. Cut this way, every cell agrees to 5e-6, gap for gap (§18.10).
+
 **Tracks aggregate along the pileup's two edges.** Any number of bigWigs or synthetic tracks may be
 chosen, each averaged over the **same windows** the pileup is taken from — the real ones, never the
 shifted controls, which are the denominator of the picture rather than the picture — and drawn as a
@@ -8348,8 +8378,9 @@ the reasons are worth recording where the descriptions are:
 - **Aggregate peak analysis is not a composite**, despite needing an expected curve for one of its
   four normalisations. `requires` is resolved before every run, so declaring it would compute a
   whole-file P(s) on every pileup while observed/expected is not the default — and the expected a
-  pileup needs is narrower than the task that produces one: the diagonal offsets its own windows
-  span, which it accumulates from squares it is already reading. **The inter-MAG network is** a
+  pileup needs is narrower than the task that produces one: the diagonals its own windows reach, on
+  the sequences its anchors sit on, read as one band per sequence and never deeper than the
+  farthest window. **The inter-MAG network is** a
   genuine composite, for the mirror-image reason: its upstream is the whole input, unconditionally.
 - **Multi-scale insulation is a doubling ladder from a settable base**, not a list of widths. A list
   needs a free-text control the parameter model does not have, and a parser with failure modes of its
@@ -8582,8 +8613,9 @@ only the second would force a choice between a tolerance loose enough to cover a
 definition and a test that fails on a difference that is correct. `direct` asks whether the code
 computes what it says; `reference` asks whether what it says is the quantity the field means by that
 name. Four of the relations are exact — P(s) against `expected_cis`, coverage against `coverage` up to
-the diagonal being counted once here and twice there, APA against coolpuppy once the diagonal-crossing
-windows are excluded, and **insulation against `cooltools.insulation`**, bin for bin: the score, the
+the diagonal being counted once here and twice there, APA against coolpuppy — raw, over the expected
+and on the diagonal, the windows that cross the diagonal included, through the task's own runner — and
+**insulation against `cooltools.insulation`**, bin for bin: the score, the
 cells each diamond counted and the boundary strength, at three windows, with the calls at the threshold.
 It was once only correlated — the diamond here was a sum, half a bin along, over the contig's mean —
 and the golden recorded the correlation and asserted it had not degraded; the diamond is now cooltools'
@@ -8671,16 +8703,26 @@ place, and on the demo pair — ATAC against a Pol II ChIP, which drives the EM 
 takes the same coordinate-ascent fallback, with SciPy's bounded Brent ported beside it, and passes
 the same 1,615 to 1,630 peaks at the six thresholds.
 
-**And beside the goldens, a notebook at full size.** `notebooks/validation.qmd`, rendered with
-Quarto, runs eight analyses twice over public data, each file named by its accession (4DN, GEO) —
-once through `chromosomix`, once through the package each reproduces, called as it is meant to be
-called and never re-implemented — and lines the two up bin by bin or call by call: insulation,
-compartments and P(s) against cooltools, the directionality index against `domaincaller`, peak
-calling with IDR on two replicates against yapc 0.1, loops against chromosight 1.6.3,
-reproducibility against `hicrep` 0.2.6, and the 3D model against pastis; and it times every command,
-giving each `chromosomix` command's speed as a fold over its reference. It is a document, not a
-test: it needs the data (about 6 GB), the reference packages and yapc's own environment, and nothing
-in the suite runs it.
+**And beside the goldens, two notebooks at full size.** `notebooks/validation.qmd`, rendered with
+Quarto, runs seventeen analyses twice over public data, each file named by its accession (4DN, GEO,
+and UCSC's mm10 sequence and RefSeq genes as Illumina iGenomes distributes them) — once through
+`chromosomix`, once through the package each reproduces, called as it is meant to be called and never
+re-implemented — and lines the two up bin by bin or call by call: insulation, compartments, P(s),
+coverage and virtual 4C against cooltools; the directionality index against `domaincaller`; peak
+calling with IDR on two replicates against yapc 0.1; loops against chromosight 1.6.3, and the
+pileup's chromosight score against `chromosight quantify`; pileups — raw, over the expected and over
+distance-matched controls, off the diagonal and on it — against coolpuppy; reproducibility against `hicrep` 0.2.6; the 3D model against pastis;
+Boost-HiC against its own Python, through `chromosomix boost` (§6.5); the metaplot against deepTools;
+interval overlap and its shuffled null against bedtools; base composition against bioframe and
+Biopython; and the motif search against seqkit. Where a reference draws at random — a pileup's
+controls, an overlap's shuffles, IDR's ties — two distributions are compared, the reference's own
+spread from seed to seed the yardstick. It writes every command it ran to
+`notebooks/work/validation/commands.json`, and `notebooks/timing.qmd` runs each of them again, five
+times round robin, each a fresh process: every run is one line of the tidy table
+`notebooks/work/validation/timings.tsv` — CPU and wall-clock seconds and peak memory, with the machine
+and every version — and each `chromosomix` command's speed is a fold over the reference commands it is
+paired with. They are documents, not tests: they need the data (about 6 GB), the reference packages
+and yapc's own environment, and nothing in the suite runs them.
 
 ### 18.11 A set of scales is one picture
 

@@ -14,6 +14,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **`chromosomix boost` writes Boost-HiC's map of each sequence (§6.5).** The map an oversample
+  draws a sequence's new contacts from, which nothing showed: each sequence's stored counts, the
+  square an oversample hands Boost-HiC, through the same port, written as Boost-HiC's `main.py`
+  writes its own — the bins its outlier filter keeps and the boosted map over them, in SCN units, one
+  square TSV a sequence. `--sequences` names some and `--alpha` another exponent; a sequence past
+  3,000 bins is refused by name, as an oversample refuses it. Over three mouse chromosomes at 100 kb
+  it keeps the same bins as Boost-HiC's Python and agrees with it within 5 × 10⁻¹⁰, ten times faster
+  on chr1.
+
 - **Copy beside PNG and PDF on every task's figure (§18.13).** It puts the figure's PNG — the same
   300 dpi redraw the PNG button saves — on the clipboard, to paste into a slide or a message without
   a file in between, and says in the corner what was copied and at what size.
@@ -962,6 +971,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   as a sequence of its own, last, as the file reads it, selected and framed to be moved into place.
 
 ### Changed
+
+- **The validation notebook holds nine more analyses to their references, and its timings are a
+  notebook of their own (§18.10).** `notebooks/validation.qmd` adds coverage and virtual 4C against
+  cooltools, pileups — raw, over the expected and over distance-matched controls, off the diagonal and
+  on it — against coolpuppy, the pileup's chromosight score against `chromosight quantify`, Boost-HiC
+  against its own Python, the metaplot against deepTools, interval overlap and its shuffled null
+  against bedtools, base composition against bioframe and Biopython, and the motif search against
+  seqkit, on 4DN's mouse Hi-C and ATAC-seq and UCSC's mm10 and RefSeq genes. Where the reference
+  draws at random, the two are compared as distributions, against the reference's own spread from
+  seed to seed. It writes every command to `notebooks/work/validation/commands.json`, and the new
+  `notebooks/timing.qmd` runs each again, round robin, writing every run — CPU and wall-clock seconds,
+  peak memory, the machine and the versions — to one tidy table,
+  `notebooks/work/validation/timings.tsv`, from which its tables and figures are drawn.
 
 - **The site moves to its own domain, <https://chromosomix.app/>.** `public/CNAME` names it, so the
   deploy builds for the root and a pull request's preview is announced at `chromosomix.app/pr/<n>/`;
@@ -2186,6 +2208,30 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that collides never reaches that refusal.
 
 ### Fixed
+
+- **An aggregate peak analysis is now coolpuppy's pileup wherever a window reaches the diagonal,
+  and observed / expected is coolpuppy's everywhere (§18.8).** A loop window that crossed the
+  diagonal took the cells below it from the map read whole — contacts it already held above,
+  mirrored — where coolpuppy cuts from the upper triangle and leaves them out: on 4DN's mouse Hi-C at
+  10 kb, with chromosight's 2,515 loops, the two pileups were up to ten per cent apart in the cells
+  nearest the diagonal. Those cells are left out now, and so are the main diagonal and the one beside
+  it, as coolpuppy leaves them out by default — *diagonals left out*, a new setting, 2 to begin with
+  and 0 for every diagonal. A pileup on the diagonal keeps its whole window but for those diagonals,
+  which is coolpuppy's local pileup, and its P2LL — whose centre there is mostly the diagonal — falls
+  with them: from 60 to 15 over the yeast demo's ATAC peaks. Observed / expected was wrong off the
+  diagonal: it divided the finished pileup by an expected looked up at each cell's distance from the
+  pileup's centre, taken from the windows' own cells, and put the centre of that loop set at 0.2
+  where coolpuppy puts it at 2.9. Each window is now divided, cell by cell, by its own sequence's
+  expected at the cell's own diagonal — cooltools' `balanced.avg`, read as a band as deep as the
+  farthest window — before the mean. Raw, over the expected and on the diagonal, every cell agrees
+  with coolpuppy's to 5 × 10⁻⁶, the same cells left as gaps; a new golden, `apa_diagonal`, holds the
+  task's own runner to it on the demo map's loops, the 55 of 200 that reach the diagonal included.
+
+- **A track named to `chromosomix` is no longer read whole to learn what it is (§23.1).** Every file
+  under `--tracks` was read into memory to look at its first four bytes before a bigWig or a `.2bit`
+  was opened by range: a second a gigabyte before any run began, and a refusal for any file past
+  2 GiB, Node's ceiling for one read. Four bytes are read now. A metaplot over a 957 MB ATAC-seq
+  bigWig went from 15 s to 11, with the same numbers.
 
 - **An archived build survives the site moving (§21).** Every build on the archive branch carries
   the base it was built for in each asset URL, so the day the site's base changes every one of them,

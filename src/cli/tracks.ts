@@ -38,7 +38,7 @@
  * meant.
  */
 
-import { readFile } from 'node:fs/promises'
+import { open, readFile } from 'node:fs/promises'
 import { basename } from 'node:path'
 
 import { BigWig } from '@gmod/bbi'
@@ -94,9 +94,13 @@ export async function loadTracks(paths: readonly string[]): Promise<Map<string, 
 
 async function loadTrack(path: string): Promise<LoadedTrack> {
   const name = basename(path)
-  const raw = new Uint8Array(await readFile(path))
-  if (bbiMagic(raw.subarray(0, 4)) === 'bigwig') return openBigWig(path, name)
-  if (bbiMagic(raw.subarray(0, 4)) === 'bigbed') {
+  // The four bytes that settle the reader, and only those. A bigWig and a
+  // `.2bit` are read by range from here on, and reading one whole to look at
+  // its magic cost a second a gigabyte before the run began — and refused any
+  // file past 2 GiB, which is `readFile`'s ceiling.
+  const magic = await headOf(path, 4)
+  if (bbiMagic(magic) === 'bigwig') return openBigWig(path, name)
+  if (bbiMagic(magic) === 'bigbed') {
     throw new Error(
       `${name} is a bigBed, which is a feature set and not a signal: name it with --features.`,
     )
@@ -105,8 +109,8 @@ async function loadTrack(path: string): Promise<LoadedTrack> {
   // settles it — and never read whole: a `.2bit` of a human genome is 800 MB on
   // disk and 3.1 GB unpacked, so the CLI reads it by range just as the browser
   // does (§8.21).
-  if (looksLikeTwoBit(raw.subarray(0, 4))) return twoBitTrack(path, name)
-  const bytes = await decodeAnnotationBytes(raw)
+  if (looksLikeTwoBit(magic)) return twoBitTrack(path, name)
+  const bytes = await decodeAnnotationBytes(new Uint8Array(await readFile(path)))
   if (looksLikeFasta(bytes)) return gcTrack(path, name, heldReference(parseFasta(bytes)))
   const text = await decodeAnnotationText(bytes)
   // Asked before `sniffSignal` for the reason it is asked before it everywhere:
@@ -125,6 +129,18 @@ async function loadTrack(path: string): Promise<LoadedTrack> {
   }
   const set = format === 'wig' ? parseWig(text) : parseBedGraph(text)
   return signalTrack(path, name, format, new IntervalTrack(set), set)
+}
+
+/** The first `length` bytes of a file, or fewer where it is shorter. */
+async function headOf(path: string, length: number): Promise<Uint8Array> {
+  const handle = await open(path, 'r')
+  try {
+    const head = new Uint8Array(length)
+    const { bytesRead } = await handle.read(head, 0, length, 0)
+    return head.subarray(0, bytesRead)
+  } finally {
+    await handle.close()
+  }
 }
 
 // ---------------------------------------------------------------------------

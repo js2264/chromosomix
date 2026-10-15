@@ -130,6 +130,8 @@ import { openReference, type Reference } from './reference'
 import { regionLabel, typedLocusToRegion } from '../genome/assembly'
 import { parseBins } from '../hicpro/parse'
 import { DEFAULT_COUNT_COLUMN } from '../metacooler/matrix'
+import { BOOST_ALPHA, BOOST_MAX_BINS, boostSteps } from '../metacooler/boost'
+import { cisSquare } from '../metacooler/resample'
 import { contactsText, depthPhrase, parseContacts, type DrawnDepth } from '../contacts'
 import { hicProMap } from '../worker/open'
 import { isRefusal, refusalMessage } from '../state/SessionConfig'
@@ -1659,6 +1661,16 @@ const USAGE = `chromosomix — the Analysis panel, from a shell
       and yes or no where it could be decided: a sequence needs 50 bins at the
       resolution read. The names to hand every other run as --circular.
 
+  chromosomix boost <file.mcool::/resolutions/<bp>> [...]
+      Boost-HiC's map of each sequence: what an oversample (--contacts above the
+      file's own total) draws the sequence's new contacts from, written as
+      Boost-HiC's main.py writes it — the bins its outlier filter keeps, and the
+      boosted map over them in SCN units. One square TSV per sequence, rows and
+      columns named by each kept bin's start, into --out.
+      --sequences <a,b>    the sequences to boost. Default: every one; a
+                           sequence past 3,000 bins is refused by name
+      --alpha <a>          Boost-HiC's exponent. Default: main.py's, 0.2
+
   chromosomix replay <workspace.chromosomix.json> --over <file> [...]
       Re-run every analysis recorded in a saved workspace, with the parameters
       it recorded, over the files named by --over. The workspace is what the
@@ -1999,6 +2011,142 @@ async function circularCommand(args: Args): Promise<number> {
   return failures === 0 ? 0 : 1
 }
 
+/**
+ * Boost-HiC's map of each sequence, as an oversample makes it (§6.5) and as
+ * Boost-HiC's own `main.py` writes it.
+ *
+ * An oversample draws a sequence's new contacts from that map, and nothing else
+ * shows it: what reaches the screen is a draw from it, and a draw is a poor way
+ * to hold a port to its upstream. So this hands Boost-HiC the square an
+ * oversample hands it — the sequence's stored counts through `cisSquare` and
+ * `boostSteps` — and writes what `main.py` writes, `boostedmat`: the boosted
+ * map over the bins its outlier filter kept, in SCN units. `notebooks/
+ * validation.qmd` holds that to Boost-HiC's Python cell for cell, over whole
+ * chromosomes, where the golden holds a hundred bins.
+ *
+ * One square per sequence, rows and columns named by each kept bin's start;
+ * the bins the filter took out are the ones not named. A sequence past
+ * {@link BOOST_MAX_BINS} is refused by name, as an oversample refuses it, and
+ * the others are still written.
+ */
+async function boostCommand(args: Args): Promise<number> {
+  if (args.positional.length === 0) {
+    process.stderr.write('boost needs at least one file.\n')
+    return 2
+  }
+  const asked = one(args, 'alpha')
+  const alpha = asked === undefined ? BOOST_ALPHA : Number(asked)
+  if (!Number.isFinite(alpha) || alpha <= 0) {
+    process.stderr.write(`--alpha needs a positive number; got ${JSON.stringify(asked)}.\n`)
+    return 2
+  }
+  const named = all(args, 'sequences').flatMap((item) => item.split(',')).filter((item) => item !== '')
+  const directory = one(args, 'out') ?? one(args, 'o') ?? '.'
+  const quiet = flag(args, 'quiet')
+  let failures = 0
+  for (const path of args.positional) {
+    try {
+      if (!quiet) process.stderr.write(`${path}\n`)
+      const { mc } = await openLocal(resolve(path), { binning: pairsBinningOf(args), quiet })
+      try {
+        // The two maps an oversample refuses, for the reasons it gives (§6.5):
+        // a sum of cells is not one library, and a square store holds every
+        // contact twice, which the square below would then count twice.
+        if (mc.cells.length > 0) {
+          throw new Error('a single-cell container’s map is a sum of its cells rather than one library.')
+        }
+        if (mc.storageMode !== 'symmetric-upper') {
+          throw new Error('this map stores both triangles; Boost-HiC reads an upper-triangular file.')
+        }
+        for (const name of named.length === 0 ? mc.chromnames : named) {
+          const id = mc.chromnames.indexOf(name)
+          if (id < 0) {
+            failures += 1
+            process.stderr.write(`  failed: ${basename(parseUri(path).path)} has no sequence ${name}.\n`)
+            continue
+          }
+          const [from, to] = mc.contigExtent(id)
+          const n = to - from
+          if (n > BOOST_MAX_BINS) {
+            failures += 1
+            process.stderr.write(
+              `  failed: ${name} is ${n.toLocaleString('en-US')} bins at this resolution, and Boost-HiC ` +
+                `walks every path between them: at most ${BOOST_MAX_BINS.toLocaleString('en-US')}. ` +
+                'Open a coarser resolution.\n',
+            )
+            continue
+          }
+          const started = Date.now()
+          const steps = boostSteps(cisSquare(await cisPixels(mc, from, to), from, n), n, alpha)
+          if (steps === null) {
+            process.stderr.write(`  note: ${name}: fewer than two bins survive the outlier filter.\n`)
+            continue
+          }
+          const lines = [
+            `# chromosomix ${APP}`,
+            `# created: ${new Date().toISOString()}`,
+            `# file: ${path}`,
+            '# method: Boost-HiC (Carron et al. 2019) as main.py runs it: get_outliers, SCN, ' +
+              'fastFloyd on 1/SCN^alpha, adjustPdS (§6.5)',
+            `# alpha: ${alpha}`,
+            `# sequence: ${name}, ${n} bins at ${mc.binsize} bp, ${steps.kept.length} kept`,
+            '# units: SCN, as main.py writes boostedmat',
+          ]
+          const starts = Array.from(steps.kept, (bin) => String(bin * mc.binsize))
+          lines.push(['start', ...starts].join('\t'))
+          const size = steps.kept.length
+          for (let row = 0; row < size; row++) {
+            const cells = [starts[row]]
+            for (let col = 0; col < size; col++) {
+              cells.push(String(Number(steps.boosted[row * size + col].toPrecision(10))))
+            }
+            lines.push(cells.join('\t'))
+          }
+          await mkdir(directory, { recursive: true })
+          const file = join(directory, `${stemOf(path)}.boost-${name.replace(/[\\/\s]+/g, '_')}.tsv`)
+          await writeFile(file, `${lines.join('\n')}\n`)
+          if (!quiet) {
+            process.stderr.write(
+              `  ${name}: ${steps.kept.length} of ${n} bins kept, ${((Date.now() - started) / 1000).toFixed(1)} s; ` +
+                `wrote ${file}\n`,
+            )
+          }
+        }
+      } finally {
+        mc.close()
+      }
+    } catch (error) {
+      failures += 1
+      process.stderr.write(`  failed: ${error instanceof Error ? error.message : String(error)}\n`)
+    }
+  }
+  return failures === 0 ? 0 : 1
+}
+
+/**
+ * The stored pixels of one sequence's own block, as an oversample collects them
+ * before it draws: every row of the sequence read as a band, kept where the
+ * column is in it too, an empty pixel skipped.
+ */
+async function cisPixels(
+  mc: MetaCooler,
+  from: number,
+  to: number,
+): Promise<{ bin1: Int32Array; bin2: Int32Array; count: Float64Array }> {
+  const bin1: number[] = []
+  const bin2: number[] = []
+  const count: number[] = []
+  await mc.storedPixels.forEachBands([[from, to]], (chunk) => {
+    for (let i = 0; i < chunk.length; i++) {
+      if (chunk.count[i] === 0 || chunk.bin2[i] < from || chunk.bin2[i] >= to) continue
+      bin1.push(chunk.bin1[i])
+      bin2.push(chunk.bin2[i])
+      count.push(chunk.count[i])
+    }
+  })
+  return { bin1: Int32Array.from(bin1), bin2: Int32Array.from(bin2), count: Float64Array.from(count) }
+}
+
 /** The tasks a session recorded parameters for, in catalogue order. */
 export function recordedTasks(config: {
   analysis?: Record<string, Params> | undefined
@@ -2054,6 +2202,7 @@ export async function main(argv: readonly string[]): Promise<number> {
   }
   if (args.command === 'replay') return replayCommand(args)
   if (args.command === 'circular') return circularCommand(args)
+  if (args.command === 'boost') return boostCommand(args)
   return runCommand(args)
 }
 

@@ -7,6 +7,7 @@
  ],
  "coverage": {
   "apa": "a raw loop pileup, against numpy and coolpuppy",
+  "apa_diagonal": "loop and local pileups reaching the diagonal, raw and O/E, against coolpuppy",
   "chromosight": "detection of loops and borders, against chromosight itself",
   "chromosight_quantify": "scores and the pileup for a given loop set, against chromosight quantify",
   "compartments": "O/E, correlation and the leading eigenvector, against numpy and cooltools.eigs_cis",
@@ -59,6 +60,19 @@
    "bytes": 42116,
    "golden": "apa.json",
    "name": "apa"
+  },
+  {
+   "bytes": 72529,
+   "environment": {
+    "chromosight": "1.6.3",
+    "cooler": "0.10.4",
+    "coolpuppy": "1.1.0",
+    "cooltools": "0.7.1",
+    "numpy": "2.5.4",
+    "pyBigWig": "0.3.26"
+   },
+   "golden": "apa_diagonal.json",
+   "name": "apa_diagonal"
   },
   {
    "bytes": 279693,

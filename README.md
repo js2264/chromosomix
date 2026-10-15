@@ -507,6 +507,9 @@ chromosomix compartments sample.cool --sequence ref.fa.gz --phaseSequence ref.fa
 # Maps drawn to one number of contacts before the task reads them: an exact
 # subsample below the file's own total, Boost-HiC above it, with the app's seed.
 chromosomix insulation rep1.cool --contacts 10M --out results/
+# The map that oversample draws each chromosome's new contacts from, written as
+# Boost-HiC's own main.py writes it: one square TSV per sequence.
+chromosomix boost rep1.mcool::/resolutions/100000 --sequences chr19 --out results/
 
 # A bacterial chromosome: which sequences join their own ends (the test the app
 # runs on a first open), then the alignment of its two arms about its origin.
