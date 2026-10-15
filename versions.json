@@ -214,6 +214,13 @@
   ],
   "pulls": [
     {
+      "number": 109,
+      "commit": "48b4579",
+      "title": "Evaluation and timing notebooks, published at /evaluation/ and /timings/ with every release",
+      "branch": "ccr-bbb73609-u7oxgq-notebooks",
+      "date": "2026-10-15T20:58:03Z"
+    },
+    {
       "number": 108,
       "commit": "c9a7736",
       "title": "APA as coolpuppy computes it, exact track-correlation windows, and chromosomix boost",
