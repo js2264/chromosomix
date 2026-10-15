@@ -68,6 +68,7 @@ import {
 } from '../render/overlays'
 import {
   AnnotationLanes,
+  CORNER_SIDE,
   LANE_GAP,
   type LaneEdge,
   type LaneGeometry,
@@ -1276,6 +1277,12 @@ export class MatrixPanel {
   /** The stack thicknesses the stylesheet was last told about, per edge. */
   private laneBudget: Record<LaneEdge, number> = { top: -1, right: -1, bottom: -1, left: -1 }
   /**
+   * How far the stacks' names run out into the map's corners, by the *side*
+   * of the map each corner widens (§8.8) — the left of the map for the bottom
+   * stack's names, and so on round.
+   */
+  private cornerBudget: Record<LaneEdge, number> = { top: 0, right: 0, bottom: 0, left: 0 }
+  /**
    * Room to leave on each edge whether or not this panel has a stack there.
    *
    * Zero on its own, and set by a deck to the largest any of its panels needs
@@ -1347,6 +1354,9 @@ export class MatrixPanel {
       ...(options.annotations?.metadata === undefined
         ? {}
         : { metadata: options.annotations.metadata }),
+      // Each stack's names beside the map, in the corner that follows it
+      // clockwise, rather than over its data (§8.8).
+      corners: true,
       onChange: () => this.schedule(),
     })
 
@@ -2094,6 +2104,7 @@ export class MatrixPanel {
       { class: 'panel-grid' },
       wrap,
       ...LANE_EDGES.map((edge) => this.lanes.canvasFor(edge)),
+      ...LANE_EDGES.map((edge) => this.lanes.labelCanvases[edge]),
       ...this.laneLayers.values(),
       this.readout.tooltip,
     )
@@ -2103,7 +2114,9 @@ export class MatrixPanel {
       shownLimits: (id) => this.lanes.shownLimits(id),
       onChange: () => this.schedule(),
     })
-    for (const edge of LANE_EDGES) this.laneGestures.watchLane(edge, this.lanes.canvasFor(edge))
+    for (const edge of LANE_EDGES) {
+      this.laneGestures.watchLane(edge, this.lanes.canvasFor(edge), this.lanes.labelCanvases[edge])
+    }
     this.laneGestures.watchEdgeDrops()
     this.laneListeners.push(offerLanding(this.laneGestures.laneSurface))
     // A restyle, a rename or a move of any lane is a different picture. Taken
@@ -5968,8 +5981,16 @@ export class MatrixPanel {
       bottom: this.lanes.thicknessOf('bottom'),
       left: this.lanes.thicknessOf('left'),
     }
-    if (LANE_EDGES.every((edge) => next[edge] === this.laneBudget[edge])) return
+    const corners = { top: 0, right: 0, bottom: 0, left: 0 }
+    for (const edge of LANE_EDGES) corners[CORNER_SIDE[edge]] = this.lanes.cornerOf(edge)
+    if (
+      LANE_EDGES.every((edge) => next[edge] === this.laneBudget[edge]) &&
+      LANE_EDGES.every((side) => corners[side] === this.cornerBudget[side])
+    ) {
+      return
+    }
     this.laneBudget = next
+    this.cornerBudget = corners
     this.writeLaneMetrics()
     // …and to whoever is laying this panel out beside others. A deck exists so
     // that N pictures of one place can be compared, and a picture inset by a
@@ -6018,7 +6039,10 @@ export class MatrixPanel {
    */
   private roomOn(edge: LaneEdge): number {
     const thickness = this.laneBudget[edge]
-    return thickness <= 0 ? 0 : thickness + LANE_GAP
+    const stack = thickness <= 0 ? 0 : thickness + LANE_GAP
+    // …or the corner on that side, where a stack's names run out wider than
+    // the stack beside it (§8.8): the grid's track is the wider of the two.
+    return Math.max(stack, this.cornerBudget[edge])
   }
 
   /**

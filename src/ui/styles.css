@@ -3603,6 +3603,8 @@ p {
    plot's own height budget; see `.heatmap-wrap`. */
 .lane-top {
   grid-area: 1 / 2;
+  /* Against the map when the corner beside it makes its row taller (§8.8). */
+  align-self: end;
   margin-bottom: 4px;
   /* The map must not shift sideways when a strip appears above it, and it will
      if the strip is ever wider than its column. */
@@ -3622,7 +3624,46 @@ p {
 
 .lane-left {
   grid-area: 2 / 1;
+  /* Against the map when the corner below it makes its column wider (§8.8). */
+  justify-self: end;
   margin-right: 4px;
+}
+
+/* A stack's names beside the map, in the corner that follows the stack
+   clockwise (§8.8): left of the bottom stack, above the left one, right of the
+   top one, below the right one — one stack to a corner, so the four never meet.
+   Each stands flush against the end of its stack's canvas, on the same row or
+   the same column, because the paint reads it as that canvas continued past its
+   edge; the margins are the stacks' own four pixels, repeated. */
+.lane-labels {
+  display: block;
+  touch-action: none;
+}
+
+.lane-labels-bottom {
+  grid-area: 3 / 1;
+  justify-self: end;
+  margin-top: 4px;
+}
+
+.lane-labels-left {
+  grid-area: 1 / 1;
+  justify-self: end;
+  align-self: end;
+  margin-right: 4px;
+}
+
+.lane-labels-top {
+  grid-area: 1 / 3;
+  justify-self: start;
+  align-self: end;
+  margin-bottom: 4px;
+}
+
+.lane-labels-right {
+  grid-area: 3 / 3;
+  justify-self: start;
+  margin-left: 4px;
 }
 
 /* An edge with no annotations takes no space and receives no events. */
@@ -3998,7 +4039,8 @@ p {
    painted. The arrowhead is the affordance everywhere else on this canvas, and
    this is the one thing it cannot say: "there is a caret behind this number". */
 .browser-canvas.is-text,
-.lane-canvas.is-text {
+.lane-canvas.is-text,
+.lane-labels.is-text {
   cursor: text;
 }
 

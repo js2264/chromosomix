@@ -71,6 +71,8 @@ import {
   labelReach,
   positionLabel,
   type LabelBox,
+  type LaneLabelBoxes,
+  type LaneLabelColumn,
   type LaneLabelSpec,
   type LaneLabelStyle,
   type LimitBox,
@@ -361,6 +363,15 @@ interface EdgeState {
   names: Array<{ entry: AnnotationEntry; hit: NameBox }>
   /** The colour chips and autoscale buttons this edge wants over it. */
   marks: LaneMark[]
+  /**
+   * Every name block this edge wrote in its column, as a redraw — what the
+   * corner beside the stack is painted from, the same blocks in the same
+   * places, so a name that starts in the stack's margin and runs out over the
+   * corner is one name (§8.8).
+   */
+  labels: Array<(ctx: CanvasRenderingContext2D) => void>
+  /** The widest block of names written in the column, as `drawLaneLabel` wants it. */
+  wanted: number
 }
 
 function emptyEdgeState(): EdgeState {
@@ -370,8 +381,47 @@ function emptyEdgeState(): EdgeState {
     ranges: [],
     names: [],
     marks: [],
+    labels: [],
+    wanted: 0,
   }
 }
+
+/**
+ * Where a stack's names go beside a map (§8.8): into the corner that follows
+ * it clockwise, which leaves one corner to each stack whichever of the four
+ * have lanes — left of the bottom stack, above the left one, right of the top
+ * one, below the right one.
+ */
+export const CORNER_OF: Record<LaneEdge, 'bottom-left' | 'top-left' | 'top-right' | 'bottom-right'> = {
+  bottom: 'bottom-left',
+  left: 'top-left',
+  top: 'top-right',
+  right: 'bottom-right',
+}
+
+/**
+ * The side of the map a stack's corner widens: the left of the map for the
+ * bottom stack's names, and so on round — what the panel adds to that side's
+ * room, and a figure to its margin.
+ */
+export const CORNER_SIDE: Record<LaneEdge, LaneEdge> = {
+  bottom: 'left',
+  left: 'top',
+  top: 'right',
+  right: 'bottom',
+}
+
+/** Air between a corner's names and the panel's edge beyond them. */
+const CORNER_PAD = 4
+/** Air between a corner's names and the handle or group bar they stand beside. */
+const CORNER_GAP = 4
+/**
+ * The longest a corner's names may run before they wrap onto a second line, or
+ * are cut in the middle on a lane too thin for one (§8.8). A corner the width
+ * of the longest name a session ever loads would take the map's room for one
+ * track; this is the browser's own default column.
+ */
+const CORNER_MAX = 150
 
 /**
  * How close to a lane's far border counts as being on it.
@@ -452,6 +502,19 @@ function alongOf(
 export class AnnotationLanes {
   /** The four canvases, mounted by the panel. Hidden when their stack is empty. */
   readonly canvases: Record<LaneEdge, HTMLCanvasElement>
+  /**
+   * The four corners' canvases, one per stack, that its names run out onto
+   * past its own canvas (§8.8) — mounted by a panel that asked for
+   * `corners`, and hidden while a stack's names fit its own margin.
+   */
+  readonly labelCanvases: Record<LaneEdge, HTMLCanvasElement>
+  /**
+   * How far each stack's names run past its own canvas into its corner, as
+   * the last screen paint measured them. A frame behind, as the browser's name
+   * column is, and for its reason: the width is the text's, and the text is
+   * measured by writing it.
+   */
+  private corners: Record<LaneEdge, number> = { top: 0, right: 0, bottom: 0, left: 0 }
 
   private axes: OverlayAxes = { rows: null, cols: null }
   /**
@@ -528,6 +591,14 @@ export class AnnotationLanes {
        * being read.
        */
       metadata?: MetaSource
+      /**
+       * Write each stack's names beside the map, in the corner that follows
+       * the stack clockwise, rather than over its data (§8.8) — on
+       * {@link labelCanvases}, which the caller mounts in those corners.
+       * Absent where nobody does: the assembly editor's stage, whose stacks
+       * keep their names on their lanes.
+       */
+      corners?: boolean
       /** Ask for a repaint; the panel coalesces it into its own frame. */
       onChange(): void
     },
@@ -537,6 +608,12 @@ export class AnnotationLanes {
       right: el('canvas', { class: 'lane-canvas lane-right' }),
       bottom: el('canvas', { class: 'lane-canvas lane-bottom' }),
       left: el('canvas', { class: 'lane-canvas lane-left' }),
+    }
+    this.labelCanvases = {
+      top: el('canvas', { class: 'lane-labels lane-labels-top hidden' }),
+      right: el('canvas', { class: 'lane-labels lane-labels-right hidden' }),
+      bottom: el('canvas', { class: 'lane-labels lane-labels-bottom hidden' }),
+      left: el('canvas', { class: 'lane-labels lane-labels-left hidden' }),
     }
     this.cache =
       options.client === undefined
@@ -865,7 +942,8 @@ export class AnnotationLanes {
     overlaid: readonly AnnotationEntry[]
     thickness: number
   }): number {
-    if (!getPlotOptions().text) return 0
+    // Beside the map the names are in a corner, and nothing hangs off a lane.
+    if (!getPlotOptions().text || this.options.corners === true) return 0
     const members = [lane.entry, ...lane.overlaid]
     const row = stacksAsHeatmaps(members) ? lane.thickness / members.length : lane.thickness
     return Math.ceil(labelReach(row, laneLabelStyle()) - row)
@@ -944,6 +1022,7 @@ export class AnnotationLanes {
       if (lanes.length === 0) continue
       this.state[edge] = this.paintEdge(ctx, edge, geometry, lanes, built.groups, this.dpr)
     }
+    if (this.options.corners === true) this.paintCorners(geometry)
   }
 
   /** The colour chips and autoscale buttons one stack wants laid over it. */
@@ -1783,6 +1862,176 @@ export class AnnotationLanes {
   }
 
   /**
+   * How far one stack's names run past its own canvas into the corner beside
+   * it (§8.8), in CSS pixels — `0` where they fit its own margin, or are not
+   * written at all.
+   */
+  cornerOf(edge: LaneEdge): number {
+    return this.options.corners === true ? this.corners[edge] : 0
+  }
+
+  /**
+   * How far past the map's own canvas the corners' names reach, by side of the
+   * map: the room a figure leaves round the plot for them, beside the room it
+   * already leaves for the stacks (`MapFigure.laneStacks`).
+   */
+  cornerReach(geometry: LaneGeometry): Record<LaneEdge, number> {
+    const below = this.cornerOf('right')
+    return {
+      left: this.cornerOf('bottom'),
+      top: this.cornerOf('left'),
+      right: this.cornerOf('top'),
+      // Past the right stack's own tail, which its canvas runs on into.
+      bottom: below === 0 ? 0 : this.tailFor('right', geometry) + below,
+    }
+  }
+
+  /** How long one stack's canvas is along the map: the plot, and any tail its handles need. */
+  private cssAlongOf(edge: LaneEdge, geometry: LaneGeometry): number {
+    return (laneIsHorizontal(edge) ? geometry.cssWidth : geometry.cssHeight) + this.tailFor(edge, geometry)
+  }
+
+  /**
+   * The end of a stack's name column nearest its data, in the stack's own
+   * canvas coordinates — clear of the handle a horizontal lane hangs before
+   * its data and a vertical one after it, and of the group bars at each
+   * stack's other end (§8.8, §8.9).
+   */
+  private columnInner(edge: LaneEdge, geometry: LaneGeometry): number {
+    const { data } = geometry
+    switch (edge) {
+      case 'bottom':
+        return Math.max(0, data.x - GRIP_ROOM) - CORNER_GAP
+      case 'left':
+        return data.y - GROUP_GAP - GROUP_BAR - CORNER_GAP
+      case 'top':
+        return data.x + data.width + GROUP_GAP + GROUP_BAR + CORNER_GAP
+      case 'right':
+        return data.y + data.height + GRIP_ROOM + CORNER_GAP
+    }
+  }
+
+  /** How much of a stack's name column is inside its own canvas — its margin there — which can be none. */
+  private columnInside(edge: LaneEdge, geometry: LaneGeometry): number {
+    const inner = this.columnInner(edge, geometry)
+    return edge === 'bottom' || edge === 'left' ? inner : this.cssAlongOf(edge, geometry) - inner
+  }
+
+  /**
+   * The column one stack's names are written in beside the map (§8.8), in its
+   * own canvas's coordinates: from the corner's outer edge to the end nearest
+   * the data, flush with that end — so a short name stands in the stack's own
+   * margin and a long one runs out over the corner. `null` over the data, on
+   * a surface with no corners.
+   */
+  private labelColumn(edge: LaneEdge, geometry: LaneGeometry): LaneLabelColumn | null {
+    if (this.options.corners !== true) return null
+    const corner = this.corners[edge]
+    const pad = scaleLength(CORNER_PAD)
+    const inner = this.columnInner(edge, geometry)
+    const along = this.cssAlongOf(edge, geometry)
+    const shared = { pad, nameLines: 2, besideToo: true }
+    switch (edge) {
+      case 'bottom':
+        return { ...shared, start: Math.min(inner, -corner + pad), end: inner, align: 'end' }
+      case 'left':
+        return { ...shared, start: Math.min(inner, -corner + pad), end: inner, align: 'start', flip: true }
+      case 'top':
+        return { ...shared, start: inner, end: Math.max(inner, along + corner - pad), align: 'start', flip: true }
+      case 'right':
+        return { ...shared, start: inner, end: Math.max(inner, along + corner - pad), align: 'end' }
+    }
+  }
+
+  /**
+   * Draw inside a stack's name column and nowhere else: never over the handle
+   * or the data beside it, which a block measured for a corner not yet laid
+   * out — the first frame of a stack — would otherwise run out over.
+   */
+  private withinColumn<T>(
+    ctx: CanvasRenderingContext2D,
+    edge: LaneEdge,
+    geometry: LaneGeometry,
+    column: LaneLabelColumn | null,
+    draw: () => T,
+  ): T {
+    if (column === null) return draw()
+    const inner = this.columnInner(edge, geometry)
+    const far = 1e5
+    ctx.save()
+    ctx.beginPath()
+    if (edge === 'bottom') ctx.rect(-far, -far, far + inner + 1, 2 * far)
+    else if (edge === 'left') ctx.rect(-far, -far, 2 * far, far + inner + 1)
+    else if (edge === 'top') ctx.rect(inner - 1, -far, far, 2 * far)
+    else ctx.rect(-far, inner - 1, 2 * far, far)
+    ctx.clip()
+    try {
+      return draw()
+    } finally {
+      ctx.restore()
+    }
+  }
+
+  /**
+   * Paint each stack's corner from the blocks its own paint wrote, and measure
+   * the corners for the next frame (§8.8).
+   *
+   * Painted at the size this frame's blocks were laid out for, and re-measured
+   * after: a corner is as wide as its widest block wants, less the stack's own
+   * margin, and a frame behind — the browser's name column's rule, safe for
+   * its reason, since what a block wants is its text's natural width and not
+   * the column it was given.
+   */
+  private paintCorners(geometry: LaneGeometry): void {
+    const cap = scaleLength(CORNER_MAX) + scaleLength(CORNER_PAD)
+    const next = { ...this.corners }
+    for (const edge of EDGES) {
+      const state = this.state[edge]
+      this.paintCorner(edge, geometry, state)
+      const wanted = this.thicknessOf(edge) > 0 ? Math.min(state.wanted, cap) : 0
+      next[edge] = wanted <= 0 ? 0 : Math.max(0, Math.ceil(wanted - this.columnInside(edge, geometry)))
+    }
+    if (EDGES.some((edge) => next[edge] !== this.corners[edge])) {
+      this.corners = next
+      this.options.onChange()
+    }
+  }
+
+  /** One corner's canvas: sized to the corner, and the stack's blocks redrawn into it. */
+  private paintCorner(edge: LaneEdge, geometry: LaneGeometry, state: EdgeState): void {
+    const canvas = this.labelCanvases[edge]
+    const corner = this.corners[edge]
+    const total = this.thicknessOf(edge)
+    if (corner <= 0 || total <= 0 || state.labels.length === 0) {
+      canvas.classList.add('hidden')
+      return
+    }
+    canvas.classList.remove('hidden')
+    const horizontal = laneIsHorizontal(edge)
+    const cssWidth = horizontal ? corner : total
+    const cssHeight = horizontal ? total : corner
+    canvas.style.width = `${cssWidth}px`
+    canvas.style.height = `${cssHeight}px`
+    const wantWidth = Math.max(1, Math.round(cssWidth * this.dpr))
+    const wantHeight = Math.max(1, Math.round(cssHeight * this.dpr))
+    if (canvas.width !== wantWidth) canvas.width = wantWidth
+    if (canvas.height !== wantHeight) canvas.height = wantHeight
+    const ctx = canvas.getContext('2d')
+    if (ctx === null) return
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
+    ctx.clearRect(0, 0, cssWidth, cssHeight)
+    // From the stack's canvas to its corner's: the corner stands before the
+    // stack's own origin left of the bottom stack and above the left one, and
+    // past its far end right of the top stack and below the right one.
+    const along = this.cssAlongOf(edge, geometry)
+    if (edge === 'bottom') ctx.translate(corner, 0)
+    else if (edge === 'left') ctx.translate(0, corner)
+    else if (edge === 'top') ctx.translate(-along, 0)
+    else ctx.translate(0, -along)
+    for (const replay of state.labels) replay(ctx)
+  }
+
+  /**
    * The lane's name, its colour chip, and what its value axis spans.
    *
    * Inside the lane rather than in a gutter beside it. The gutters belong to the
@@ -1830,39 +2079,48 @@ export class AnnotationLanes {
     const runs = stacked
       ? label.entries.map((entry) => [entry])
       : [label.entries]
-    const boxes = drawLaneLabel(ctx, frames[0], {
-      names: runs[0].map((entry) => ({
-        id: entry.id,
-        text: entry.label,
-        colour: entry.style.colour,
-      })),
-      detail: label.detail,
-      labelAt: label.at,
-      column: null,
-      ...(label.beside === true ? { detailBeside: true } : {}),
-      style: laneLabelStyle(),
-      palette: { text: geometry.palette.guide, halo: geometry.palette.halo },
-    })
-    // What the block covers over the data, for anything else written on the
-    // lane to keep out of.
-    const plates: LabelBox[] = boxes.plate === null ? [] : [boxes.plate]
-    for (let at = 1; at < frames.length; at++) {
-      const more = drawLaneLabel(ctx, frames[at], {
+    const edge = lane.frame.orientation
+    // Beside the map, the corner's column; over the data where there is none.
+    const column = this.labelColumn(edge, geometry)
+    const specs = frames.map((frame, at) => ({
+      frame,
+      spec: {
         names: runs[at].map((entry) => ({
           id: entry.id,
           text: entry.label,
           colour: entry.style.colour,
         })),
         // The range is the lane's and is written once, on the first band.
-        detail: null,
+        detail: at === 0 ? label.detail : null,
         labelAt: label.at,
-        column: null,
+        column,
+        ...(at === 0 && label.beside === true ? { detailBeside: true } : {}),
         style: laneLabelStyle(),
         palette: { text: geometry.palette.guide, halo: geometry.palette.halo },
-      })
+      } satisfies LaneLabelSpec,
+    }))
+    const paint = (target: CanvasRenderingContext2D): LaneLabelBoxes[] =>
+      this.withinColumn(target, edge, geometry, column, () =>
+        specs.map(({ frame, spec }) => drawLaneLabel(target, frame, spec)),
+      )
+    const drawn = paint(ctx)
+    const boxes = drawn[0]
+    // What the block covers over the data, for anything else written on the
+    // lane to keep out of.
+    const plates: LabelBox[] = boxes.plate === null ? [] : [boxes.plate]
+    for (const more of drawn.slice(1)) {
       boxes.names.push(...more.names)
       boxes.swatches.push(...more.swatches)
       if (more.plate !== null) plates.push(more.plate)
+    }
+    // The same blocks again on the corner beside the stack, where the part of
+    // them past its own canvas is seen (§8.8); and how wide they were, which
+    // is how wide the corner is made.
+    if (column !== null) {
+      state.labels.push((target) => {
+        paint(target)
+      })
+      for (const one of drawn) state.wanted = Math.max(state.wanted, one.wanted)
     }
     state.gripRows.set(lane.entry.id, boxes.nameAcross)
     // Chrome, not picture: the export asks for no handles, and it must get no

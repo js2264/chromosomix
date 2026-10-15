@@ -474,11 +474,14 @@ export class MapFigure {
    * corner is not the canvas's.
    */
   private laneStacks(): Record<LaneEdge, number> {
+    // …or the corner on that side, where the stacks' names run out past them
+    // (§8.8): the bottom stack's to the left of the map, and so on round.
+    const corners = this.lanes.cornerReach(this.figureGeometry())
     return {
-      top: this.lanes.thicknessOf('top'),
-      right: this.lanes.thicknessOf('right'),
-      bottom: this.lanes.thicknessOf('bottom'),
-      left: this.lanes.thicknessOf('left'),
+      top: Math.max(this.lanes.thicknessOf('top'), corners.top),
+      right: Math.max(this.lanes.thicknessOf('right'), corners.right),
+      bottom: Math.max(this.lanes.thicknessOf('bottom'), corners.bottom),
+      left: Math.max(this.lanes.thicknessOf('left'), corners.left),
     }
   }
 }

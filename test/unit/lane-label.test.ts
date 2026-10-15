@@ -545,3 +545,63 @@ describe('how far a label block reaches across its lane', () => {
     expect(reachOf(frameOf('right', 14))).toBeLessThanOrEqual(14)
   })
 })
+
+/**
+ * The column a stack's names stand in beside a map (§8.8): the stack's margin
+ * running on into the corner that follows it clockwise, the block set flush with
+ * the end beside the data — which is the far end of the column left of a bottom
+ * stack and the near end right of a top one, and on a vertical stack, whose text
+ * reads up the page, the top of the column below a right stack and the foot of
+ * the one above a left stack.
+ */
+describe('a column beside a map', () => {
+  const column = (overrides: Record<string, unknown> = {}) => ({ start: -100, end: 30, pad: 4, ...overrides })
+
+  it('ends the block against the data by default, as the browser’s column does', () => {
+    const boxes = label(frameOf('bottom', 60), { column: column() })
+    const name = boxes.names[0].box
+    expect(name[0] + name[2]).toBeCloseTo(30, 9)
+  })
+
+  it('starts the block against the data with `start`', () => {
+    const boxes = label(frameOf('bottom', 60), { column: column({ align: 'start' }) })
+    expect(boxes.swatches[0].box[0]).toBeCloseTo(-100, 9)
+  })
+
+  it('stops a vertical block at the column’s top with `end`, reading up the page', () => {
+    const boxes = label(frameOf('right', 60), { column: column({ start: 410, end: 600 }) })
+    // The name's box runs along `y` on a vertical lane; its top is where it ends.
+    expect(boxes.names[0].box[1]).toBeCloseTo(410, 9)
+    // …and the chip, which comes first, is at the bottom of it.
+    const chip = boxes.swatches[0].box
+    expect(chip[1]).toBeGreaterThan(boxes.names[0].box[1])
+  })
+
+  it('starts a vertical block at the column’s foot with `start`', () => {
+    const boxes = label(frameOf('right', 60), { column: column({ start: -200, end: 30, align: 'start' }) })
+    const chip = boxes.swatches[0].box
+    expect(chip[1] + chip[3]).toBeCloseTo(30, 9)
+  })
+
+  it('sets the range on the other side of its name in a flipped column, the block where it was', () => {
+    const plain = label(frameOf('bottom', 60), { column: column() })
+    const flipped = label(frameOf('bottom', 60), { column: column({ flip: true }) })
+    expect(plain.nameAcross + flipped.nameAcross).toBe(60)
+    const below = (boxes: typeof plain): boolean => boxes.limits[0].box[1] > boxes.names[0].box[1]
+    expect(below(plain)).toBe(true)
+    expect(below(flipped)).toBe(false)
+  })
+
+  it('holds a range beside its name inside the column, on a lane too thin to stack it', () => {
+    const frame = frameOf('bottom', 20)
+    const loose = label(frame, { column: column() })
+    const held = label(frame, { column: column({ besideToo: true }) })
+    // The range and its autoscale slot are counted into what the column wants…
+    expect(held.wanted).toBeGreaterThan(loose.wanted)
+    // …and the line ends at the column's end with them, not past it.
+    const max = held.limits[1].box
+    expect(max[0] + max[2] + STYLE.autoSlot).toBeCloseTo(30, 9)
+    const runs = loose.limits[1].box
+    expect(runs[0] + runs[2]).toBeGreaterThan(30)
+  })
+})
