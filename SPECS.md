@@ -8175,24 +8175,26 @@ axis label says which point it is; *bins from the centre* over a pileup of four 
 caption for a figure nobody drew. Hidden where there is no point to choose: a loaded loop set brings
 its own two anchors, and a domain pileup's window *is* the feature, start to end.
 
-**A window is cut as coolpuppy cuts one, and observed/expected is coolpuppy's.** Nothing is taken
-from below the diagonal. The map is read whole, both triangles, and a loop window that crosses the
-diagonal holds the same contacts twice there — once above it and once mirrored below — so the cells
-below it are left out, as coolpuppy, which cuts its windows from the upper triangle, leaves them out.
-The main diagonal and the one beside it go too (*diagonals left out*, coolpuppy's `min_diag`, 2 by
-default), being mostly what ligation could not separate. A window on the diagonal is its own mirror
-and is kept whole but for those diagonals, either side of the main one, which is coolpuppy's local
-pileup folded onto its transpose; and a distance-matched control is cut by the same rule as the
-window it divides, or the ratio would carry a pattern that is in neither. Observed/expected divides
-**each window, cell by cell, by its own sequence's expected at that cell's own diagonal**, then
-averages the ratios: coolpuppy's `ooe`, with cooltools' `balanced.avg` — the mean of each diagonal
-over the whole sequence — read as a band as deep as the farthest window reaches. It used to divide
-the finished pileup by an expected looked up at each cell's distance from the *pileup's* centre,
-which is a cell's diagonal only for a window on the diagonal, and to take that expected from the
-windows' own cells, which over a loop set are the places the set picked, enriched by construction.
-On a mouse loop set whose centre coolpuppy puts at 2.9 that said 0.2; read whole, the raw pileup of
-the same set was up to ten per cent from coolpuppy's in the cells nearest the diagonal, and more at
-coolpuppy's default `min_diag`. Cut this way, every cell agrees to 5e-6, gap for gap (§18.10).
+**A pileup's window is cut as coolpuppy cuts one, and its observed/expected is coolpuppy's.**
+Nothing is taken from below the diagonal. The map is read whole, both triangles, and a loop window
+that crosses the diagonal holds the same contacts twice there — once above it and once mirrored
+below — so the cells below it are left out, as coolpuppy, which cuts its windows from the upper
+triangle, leaves them out. The main diagonal and the one beside it go too (*diagonals left out*,
+coolpuppy's `min_diag`, 2 by default), being mostly what ligation could not separate. A window on
+the diagonal is its own mirror and is kept whole but for those diagonals, either side of the main
+one, which is coolpuppy's local pileup folded onto its transpose; and a distance-matched control is
+cut by the same rule as the window it divides, or the ratio would carry a pattern that is in
+neither. Observed/expected divides **each window, cell by cell, by its own sequence's expected at
+that cell's own diagonal**, then averages the ratios: coolpuppy's `ooe`, with cooltools'
+`balanced.avg` — the mean of each diagonal over the whole sequence — read as a band as deep as the
+farthest window reaches. That is the pileup's normalisation and nothing else's: the map's own O/E
+(§7.5) divides by the curve it always has. It used to divide the finished pileup by an expected
+looked up at each cell's distance from the *pileup's* centre, which is a cell's diagonal only for a
+window on the diagonal, and to take that expected from the windows' own cells, which over a loop set
+are the places the set picked, enriched by construction. On a mouse loop set whose centre coolpuppy
+puts at 2.9 that said 0.2; read whole, the raw pileup of the same set was up to ten per cent from
+coolpuppy's in the cells nearest the diagonal, and more at coolpuppy's default `min_diag`. Cut this
+way, every cell agrees to 5e-6, gap for gap (§18.10).
 
 **Tracks aggregate along the pileup's two edges.** Any number of bigWigs or synthetic tracks may be
 chosen, each averaged over the **same windows** the pileup is taken from — the real ones, never the

@@ -2210,7 +2210,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 ### Fixed
 
 - **An aggregate peak analysis is now coolpuppy's pileup wherever a window reaches the diagonal,
-  and observed / expected is coolpuppy's everywhere (§18.8).** A loop window that crossed the
+  and its observed / expected normalisation is coolpuppy's (§18.8).** A loop window that crossed the
   diagonal took the cells below it from the map read whole — contacts it already held above,
   mirrored — where coolpuppy cuts from the upper triangle and leaves them out: on 4DN's mouse Hi-C at
   10 kb, with chromosight's 2,515 loops, the two pileups were up to ten per cent apart in the cells
@@ -2223,7 +2223,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   pileup's centre, taken from the windows' own cells, and put the centre of that loop set at 0.2
   where coolpuppy puts it at 2.9. Each window is now divided, cell by cell, by its own sequence's
   expected at the cell's own diagonal — cooltools' `balanced.avg`, read as a band as deep as the
-  farthest window — before the mean. Raw, over the expected and on the diagonal, every cell agrees
+  farthest window — before the mean. That is the pileup's normalisation alone: the map's own O/E
+  (§7.5) is computed as it was. Raw, over the expected and on the diagonal, every cell agrees
   with coolpuppy's to 5 × 10⁻⁶, the same cells left as gaps; a new golden, `apa_diagonal`, holds the
   task's own runner to it on the demo map's loops, the 55 of 200 that reach the diagonal included.
 
