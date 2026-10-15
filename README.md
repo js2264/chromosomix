@@ -488,10 +488,11 @@ chromosomix fourc sample.cool --anchor IV:1,200,001-1,210,000 --out results/
 
 # The domain pileup: a set of TADs — the span from one insulation boundary to
 # the next — every one of them stretched to the same width, with half a domain
-# of padding each side. The distance-matched control is shifted by a multiple of
-# the window, so it never overlaps the domain it is the denominator of.
+# of padding each side, over its distance-matched control rather than over the
+# expected. The control is shifted by a multiple of the window, so it never
+# overlaps the domain it is the denominator of.
 chromosomix apa sample.cool --features domains.bed --anchors features \
-  --mode scaled --grid 48 --flankFraction 0.5 --out results/
+  --mode scaled --grid 48 --flankFraction 0.5 --norm matched --out results/
 
 # Two of the tasks that run beside the tracks rather than on the map. A motif
 # search reads the reference `--sequence` names and writes both halves: the

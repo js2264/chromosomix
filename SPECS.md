@@ -8529,10 +8529,10 @@ the reasons are worth recording where the descriptions are:
 
 - **Aggregate peak analysis is not a composite**, despite needing an expected curve for one of its
   four normalisations. `requires` is resolved before every run, so declaring it would compute a
-  whole-file P(s) on every pileup while observed/expected is not the default — and the expected a
-  pileup needs is narrower than the task that produces one: the diagonals its own windows reach, on
-  the sequences its anchors sit on, read as one band per sequence and never deeper than the
-  farthest window. **The inter-MAG network is** a
+  whole-file P(s) on every pileup, under the three normalisations that never read it too — and the
+  expected a pileup needs is narrower than the task that produces one: the diagonals its own
+  windows reach, on the sequences its anchors sit on, read as one band per sequence and never
+  deeper than the farthest window. **The inter-MAG network is** a
   genuine composite, for the mirror-image reason: its upstream is the whole input, unconditionally.
 - **Multi-scale insulation is a doubling ladder from a settable base**, not a list of widths. A list
   needs a free-text control the parameter model does not have, and a parser with failure modes of its
