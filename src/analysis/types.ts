@@ -1477,6 +1477,12 @@ export interface AnalysisTask {
   title: string
   /** One line for the panel row. */
   blurb: string
+  /**
+   * The other names a reader looks for the task by, which neither its title
+   * nor its blurb says — *TAD* for insulation, *pileup* for APA, *A/B* for the
+   * compartments — matched by the filter over the list as its title is (§18.1).
+   */
+  keywords?: readonly string[]
   group: TaskGroup
   venue: TaskVenue
   /**

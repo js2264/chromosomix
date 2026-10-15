@@ -8080,6 +8080,19 @@ body.is-carrying-card * {
   min-height: 0;
 }
 
+/* The Analysis column's box over its task list (§18.1): the width of the
+   column, as the Sequences card's is. */
+.analysis-filter {
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+
+/* Taken away by that box: a class of its own rather than `.hidden`, which the
+   list's ten-hertz paint already toggles on the same nodes for another reason. */
+.analysis-tasks .is-filtered-out {
+  display: none;
+}
+
 .seq-filter {
   width: 100%;
 }

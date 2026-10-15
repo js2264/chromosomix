@@ -170,6 +170,7 @@ export const CIS_TRANS_TASK: AnalysisTask = {
   id: 'cistrans',
   title: 'Cis and trans per sequence',
   blurb: 'How much of each sequence’s contact stays on it, and which pairs touch.',
+  keywords: ['interchromosomal', 'trans ratio', 'karyotype', 'cis/trans'],
   group: '2d',
   venue: 'analysis',
   version: 1,

@@ -273,6 +273,7 @@ export const DI_TASK: AnalysisTask = {
   id: 'di',
   title: 'Directionality index',
   blurb: 'Which way each bin looks, and the domains the sign flips call.',
+  keywords: ['DI', 'TAD', 'domains', 'boundaries'],
   group: '2d',
   venue: 'analysis',
   version: 1,

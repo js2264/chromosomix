@@ -6941,6 +6941,16 @@ run, queued, running, done, failed, cancelled. It carries no controls — bar a 
 is queued or running — because a panel that both lists twenty tasks and configures them is a panel
 that does neither.
 
+**Over the cards, a box narrows the list** — `filter 25 tasks…` — because thirty tasks in four cards
+is a list read top to bottom by somebody who already knows the one they want. It is a filter over the
+list rather than a control over any task: every word typed must be found in a task's title, its
+blurb, its card's heading or its other names — a descriptor's `keywords`, the words a reader looks
+for a task by that neither of the first two says: *TAD* for insulation and the directionality index,
+*pileup* for APA, *A/B* and *eigenvector* for the compartments, *decay* for P(s). A card with nothing
+left in it goes, a list narrowed to nothing says *No task matches “…”*, Escape gives the list back
+and Enter opens the first task left that can run. The rows are hidden rather than rebuilt, so a job
+running under a filter that has taken its row away keeps counting and comes back as it is.
+
 **A task that could never mean anything here is absent; one that is waiting for a file is listed and
 greyed.** The first half is §8.5's doctrine and it stands: a disabled row is a promise the file cannot
 keep, and a `.cool` has no genomes, so it offers no MAG tasks — nothing the reader does next produces

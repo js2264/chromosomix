@@ -274,6 +274,7 @@ export const INSULATION_TASK: AnalysisTask = {
   id: 'insulation',
   title: 'Diamond insulation',
   blurb: 'How much contact crosses each bin, and where the boundaries are.',
+  keywords: ['TAD', 'domains', 'boundaries', 'insulation score'],
   group: '2d',
   venue: 'analysis',
   // 2: cooltools' definition — the mean of the diamond's valid cells over the

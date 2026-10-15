@@ -834,6 +834,7 @@ export const APA_TASK: AnalysisTask = {
   id: 'apa',
   title: 'Aggregate peak analysis',
   blurb: 'Pile up the matrix at a set of loops or features, against a control.',
+  keywords: ['APA', 'pileup', 'aggregate', 'loops', 'coolpup'],
   group: '2d',
   venue: 'analysis',
   // 3: windows cut as coolpuppy cuts them, observed / expected divided window by

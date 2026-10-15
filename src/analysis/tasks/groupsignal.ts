@@ -177,6 +177,7 @@ export const GROUP_SIGNAL_TASK: AnalysisTask = {
   id: 'groupsignal',
   title: 'Signal by group',
   blurb: 'A track’s values in each group of the genome — A against B — compared and tested.',
+  keywords: ['A versus B', 'compartment signal', 'box plot', 'test'],
   group: '1d',
   // Tracks and interval sets, which live in the annotations worker; no map is
   // needed, so a 1D browser runs it as well as a map does.

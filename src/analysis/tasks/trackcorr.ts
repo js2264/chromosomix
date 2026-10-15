@@ -108,6 +108,7 @@ export const TRACK_CORRELATION_TASK: AnalysisTask = {
   id: 'trackcorr',
   title: 'Track correlation',
   blurb: 'How much every pair of loaded tracks agrees.',
+  keywords: ['Pearson', 'Spearman', 'compare tracks'],
   group: '1d',
   venue: 'annotations',
   // 2: a window's value is the exact mean over the bases it covers, where it was

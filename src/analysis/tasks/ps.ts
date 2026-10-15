@@ -433,6 +433,7 @@ export const EXPECTED_TASK: AnalysisTask = {
   id: 'expected',
   title: 'Contact probability P(s)',
   blurb: 'How contact frequency falls with genomic separation.',
+  keywords: ['P(s)', 'Ps', 'decay', 'distance', 'scaling', 'expected', 'slope'],
   group: '2d',
   venue: 'analysis',
   version: 2,

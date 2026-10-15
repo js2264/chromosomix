@@ -85,6 +85,7 @@ node scripts/ui-compare-modes.mjs gallery     # two maps in one square (§5.7, �
 node scripts/ui-map-look.mjs gallery          # the map's look and what leaves it (§7.1, §7.2): the key's short ramp on one map, on a split pair and on their ratio, the lines between chromosomes at 2×, then the dark theme and its exports — the map's PNG and PDF and a task's figure from the stage dialog, each on white, written under files/: lk01 … lk10
 node scripts/ui-locus-pairs.mjs gallery       # two windows typed as one (§5.4): a space, ` x ` and `|` between them in the region box, each opening IV × V, the box showing the pair and Enter on it not moving, `I x II` in the whole genome's box, a pair in the Chromosomes table's: lp01 … lp05
 node scripts/ui-history-list.mjs gallery      # the list of steps back beside the header's back (§5.5): five steps taken, the list, a row three back pressed, a reload and the list still there, Back and the list one shorter, the dark theme: hl01 … hl04
+node scripts/ui-task-filter.mjs gallery       # the box over the Analysis column's task list (§18.1): the column, `TAD`, `pileup`, `a/b`, a word nothing matches, Escape, and Enter opening the first task left: tf01 … tf06
 ```
 
 The second script drives the part the first only passes through: the figures a task returns

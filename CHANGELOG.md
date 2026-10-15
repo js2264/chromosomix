@@ -14,6 +14,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A box over the Analysis column narrows the task list (§18.1).** `filter 25 tasks…`: every word
+  typed must be in a task's title, its blurb, its card's heading or its other names — each task now
+  carries the words a reader looks for it by, *TAD* for insulation and the directionality index,
+  *pileup* for APA, *A/B* and *eigenvector* for the compartments, *decay* for P(s). A card with
+  nothing left goes, nothing left at all is said, Escape gives the list back and Enter opens the
+  first task left that can run.
+
 - **Every step back, as a list, from a chevron beside the header's back button (§5.5).** It names
   each step behind the one on screen — the window, a block of two, the whole genome, a table — with
   the resolution, the O/E or the comparison it set beside it and the file where that is another one,

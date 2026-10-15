@@ -318,6 +318,7 @@ export const FOURC_TASK: AnalysisTask = {
   id: 'fourc',
   title: '4C profile from an anchor',
   blurb: 'What one locus touches, as a track you can export.',
+  keywords: ['virtual 4C', 'v4C', 'viewpoint', 'anchor'],
   group: '2d',
   venue: 'analysis',
   version: 1,

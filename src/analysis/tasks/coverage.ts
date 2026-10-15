@@ -120,6 +120,7 @@ export const COVERAGE_TASK: AnalysisTask = {
   id: 'coverage',
   title: 'Coverage and marginals',
   blurb: 'How much contact each bin carries, and how much of it stays at home.',
+  keywords: ['depth', 'marginal', 'balancing', 'weights'],
   group: '2d',
   venue: 'analysis',
   version: 1,

@@ -101,6 +101,7 @@ export const OVERLAP_TASK: AnalysisTask = {
   id: 'overlap',
   title: 'Interval set overlap',
   blurb: 'Jaccard, shared bases, how many features touch — and whether that is more than chance.',
+  keywords: ['intersect', 'Jaccard', 'bedtools'],
   group: '1d',
   venue: 'annotations',
   version: 2,

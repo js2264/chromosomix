@@ -444,6 +444,7 @@ export const CHROMOSIGHT_TASK: AnalysisTask = {
   id: 'chromosight',
   title: 'Pattern detection',
   blurb: 'Find loops, borders, hairpins, centromeres or stripes by template matching (chromosight).',
+  keywords: ['loop calling', 'dots', 'call loops', 'borders', 'stripes'],
   group: '2d',
   venue: 'analysis',
   version: 1,

@@ -576,6 +576,7 @@ export const COMPARTMENTS_TASK: AnalysisTask = {
   id: 'compartments',
   title: 'Compartments',
   blurb: 'Observed/expected, correlated or taken as it is, and its leading components.',
+  keywords: ['A/B', 'eigenvector', 'E1', 'PCA', 'saddle', 'correlation'],
   group: '2d',
   venue: 'analysis',
   // 2: a sequence declared circular is divided by its own decay measured the

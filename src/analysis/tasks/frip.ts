@@ -98,6 +98,7 @@ export const FRIP_TASK: AnalysisTask = {
   id: 'frip',
   title: 'Fraction of signal in features',
   blurb: 'How much of each track sits inside a feature set, against how much of the genome it is.',
+  keywords: ['FRiP', 'reads in peaks', 'enrichment'],
   group: '1d',
   venue: 'annotations',
   version: 1,
