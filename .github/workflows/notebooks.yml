@@ -29,10 +29,10 @@ name: Notebooks
 # the notebook was written against. Quarto comes with the reference
 # environment, as the `quarto-cli` package.
 #
-# **What it costs.** About 6 GB of public data (4DN, UCSC's mm10 through
-# iGenomes, GEO's yeast Micro-C and the lab's tracks on `rsglab-data`, each
-# checked against its MD5) is fetched on every run rather than cached: a cache
-# that size would evict the repository's npm and Electron caches, and the
+# **What it costs.** About 6 GB of public data (4DN's, UCSC's mm10 through
+# iGenomes, and GEO's yeast Micro-C, each from where it was published) is
+# fetched on every run rather than cached: a cache that size would evict the
+# repository's npm and Electron caches, and the
 # buckets answer a runner at hundreds of megabytes a second. From nothing, the
 # evaluation renders in about an hour on a standard runner (4 cores, 16 GB —
 # the heaviest reference peaks at about 4 GB), every reference run for the

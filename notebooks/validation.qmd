@@ -56,7 +56,7 @@ as it ran, from `notebooks/work/validation/`, and written to `commands.json` the
 | 15 | Interval overlap | ATAC-seq peaks and promoters, chr19 | bedtools `jaccard`, `intersect`, `shuffle` |
 | 16 | Base composition | mm10, 10 kb | `bioframe.frac_gc`, Biopython `GC_skew` |
 | 17 | Motif search | mm10, chr19 | `seqkit locate` |
-| 18 | Track correlation | six yeast tracks, 100 bp to 10 kb | pyBigWig and SciPy; deepTools `multiBigwigSummary`, `plotCorrelation` |
+| 18 | Track correlation | mouse ATAC-seq, two replicates, and insulation, chr19, 100 bp to 10 kb | pyBigWig and SciPy; deepTools `multiBigwigSummary`, `plotCorrelation` |
 
 **To render.** `npm run build:cli` at the repository root builds this checkout's `chromosomix`.
 yapc needs an environment of its own (numpy < 1.24; the recipe is in the yapc section of
@@ -386,19 +386,20 @@ def record(task, data, reference_, agreement_, verdict, apps, refs):
 Every file is public, read by its accession and fetched from the URL listed. 4DN files come from the
 4DN Data Portal's open-data bucket on AWS; the mm10 sequence, used to phase compartments by GC
 content and read for composition and motifs, and the RefSeq genes, for the metaplot's TSS and the
-promoters, are UCSC's as distributed by Illumina iGenomes. The yeast Micro-C map is GEO's
-GSE151553 as the lab keeps it in its public `rsglab-data` bucket on AWS, where its MD5 is checked
-against the bucket's own, and so are the yeast tracks the track correlation reads.
+promoters, are UCSC's as distributed by Illumina iGenomes; the yeast Micro-C map is GEO's
+GSE151553, fetched from GEO. Two are also held to an MD5, and a file of either name that does not
+match is refused rather than compared: the yeast map, and 4DN's insulation score for § 18, to the
+MD5 4DN publishes for it.
 
 ```{python}
 FOURDN = 'https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput'
 IGENOMES = 'https://ngi-igenomes.s3.amazonaws.com/igenomes/Mus_musculus/UCSC/mm10'
-RSGLAB = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/demo'
+GEO = 'https://ftp.ncbi.nlm.nih.gov/geo/series'
 DATASETS = [
     dict(data='Mouse Hi-C (mm10)', accession='4DNFIOZ1TRUS', source='4DN',
          url=f'{FOURDN}/727b405d-c9f5-4b13-ae58-1dbf29d19a8f/4DNFIOZ1TRUS.mcool'),
-    dict(data='Yeast Micro-C, G2/M (Costantino et al. 2020)', accession='GSE151553', source='GEO, rsglab-data copy',
-         url=f'{RSGLAB}/store/GSE151553_A364_merged.mcool', md5='319a04a8d7e41d9eb88e2378ea3ea373'),
+    dict(data='Yeast Micro-C, G2/M (Costantino et al. 2020)', accession='GSE151553', source='GEO',
+         url=f'{GEO}/GSE151nnn/GSE151553/suppl/GSE151553_A364_merged.mcool', md5='319a04a8d7e41d9eb88e2378ea3ea373'),
     dict(data='Chicken Hi-C (galGal5)', accession='4DNFIH8L6WON', source='4DN',
          url=f'{FOURDN}/4e321fa9-1abe-48e6-9920-bcf88ee3b8ce/4DNFIH8L6WON.mcool'),
     dict(data='Chicken Hi-C (galGal5)', accession='4DNFITBCUX56', source='4DN',
@@ -409,19 +410,12 @@ DATASETS = [
          url=f'{FOURDN}/7fb6d419-a8de-4bc8-9c17-f68f814496a2/4DNFIIY4QW2D.bw'),
     dict(data='Mouse ATAC-seq (mm10), replicate 2', accession='4DNFITBRHVZE', source='4DN',
          url=f'{FOURDN}/e567a80e-c7d2-41ff-b12d-67047906c076/4DNFITBRHVZE.bw'),
+    dict(data='Mouse ES-cell Hi-C, insulation score (mm10; Bonev et al. 2017)', accession='4DNFIUJ5CJVN', source='4DN',
+         url=f'{FOURDN}/dfe47343-08e7-48aa-ac1e-7cfbef055ded/4DNFIUJ5CJVN.bw', md5='66c3c8c6e8351aaff6eeab4767a72b66'),
     dict(data='Mouse genome sequence (Illumina iGenomes copy)', accession='mm10', source='UCSC', name='mm10.fa',
          url=f'{IGENOMES}/Sequence/WholeGenomeFasta/genome.fa'),
     dict(data='Mouse RefSeq genes (Illumina iGenomes copy)', accession='refGene', source='UCSC mm10',
          name='mm10.genes.gtf', url=f'{IGENOMES}/Annotation/Genes/genes.gtf'),
-    *[dict(data=f'Yeast {what} (the lab’s demo set)', accession=f'Yeast_{key}', source='rsglab-data',
-           url=f'{RSGLAB}/yeast/{name}', md5=md5)
-      for key, what, name, md5 in (
-          ('ATAC', 'ATAC-seq', 'Yeast_ATAC.bw', '6c38d218b47bf8e8114f2040d833eef4'),
-          ('Pol2', 'Pol II ChIP-seq over input', 'Yeast_ChIP_Pol2-vs-input.bw', 'd2a52faa8977fcc90e1936a890fac259'),
-          ('MNase', 'MNase-seq', 'Yeast_MNase.bw', 'aec50292e928826b8fdb6290027057a8'),
-          ('RNA_fwd', 'RNA-seq, forward strand', 'Yeast_RNA_fwd.bw', '9c144ba54a4a41b5471c2002e3cc0328'),
-          ('RNA_rev', 'RNA-seq, reverse strand', 'Yeast_RNA_rev.bw', 'ea05680a7310f82965233668b3716577'),
-          ('Shotgun', 'shotgun DNA-seq coverage', 'Yeast_Shotgun.bw', '57b21d59525bce7c9ede1b4c451189d9'))],
 ]
 PATHS = {d['accession']: fetch(d['url'], d.get('name'), d.get('md5')) for d in DATASETS}
 MOUSE, YEAST, MM10, GENES = PATHS['4DNFIOZ1TRUS'], PATHS['GSE151553'], PATHS['mm10'], PATHS['refGene']
@@ -1459,11 +1453,12 @@ def promoter_bin(gene, binsize=10_000):
 
 VIEWPOINTS = {gene: promoter_bin(gene) for gene in ('Sox2', 'Nanog', 'Pou5f1')}
 for gene, (chrom, start, end) in VIEWPOINTS.items():
+    # Timed at Sox2 alone: the other two viewpoints are the same computation from another bin.
     mr('fourc', MOUSE_10K, '--anchor', f'{chrom}:{start + 1:,}-{end:,}', '--no-cis', out=V4C / gene,
-       name=f'fourc-{gene}', analysis='Virtual 4C', label=gene)
+       name=f'fourc-{gene}', analysis='Virtual 4C', label=gene, bench=gene == 'Sox2')
     reference(f'cooltools-virtual4c-{gene}', 'Virtual 4C', 'cooltools',
               [PYTHON, script('cooltools_virtual4c'), MOUSE_10K, f'{chrom}:{start}-{end}', OUT, THREADS],
-              out=V4C / f'cooltools-{gene}.tsv', label=gene, threads=THREADS)
+              out=V4C / f'cooltools-{gene}.tsv', label=gene, threads=THREADS, bench=gene == 'Sox2')
 
 profiles, rows = {}, []
 for gene, (chrom, start, end) in VIEWPOINTS.items():
@@ -1596,11 +1591,14 @@ CUTS = {
                  [ANCHORS, '--local', '--expected', EXPECTED_MOUSE]),
 }
 for key, (label, app_args, (features_, *options)) in CUTS.items():
+    # Timed raw and over controls, not over the expected: there coolpuppy is handed § 4's expected,
+    # computed beforehand, and chromosomix computes its own, so the two times are not of one job.
+    timed = 'oe' not in key.split('-')
     mr('apa', MOUSE_10K, *app_args, '--mode', 'fixed', '--window', FLANK, '--minDiag', MIN_DIAG,
-       out=APA / key, name=f'apa-{key}', analysis='Aggregate peak analysis', label=label)
+       out=APA / key, name=f'apa-{key}', analysis='Aggregate peak analysis', label=label, bench=timed)
     reference(f'coolpuppy-{key}', 'Aggregate peak analysis', 'coolpuppy',
               [PYTHON, PILEUP, MOUSE_10K, features_, FLANK * clr10.binsize, OUT, THREADS, *options],
-              out=APA / f'coolpuppy-{key}.tsv', label=label, threads=THREADS)
+              out=APA / f'coolpuppy-{key}.tsv', label=label, threads=THREADS, bench=timed)
 SHIFTS = range(5)
 for seed in SHIFTS:
     mr('apa', MOUSE_10K, '--pairs', LOOPS, '--norm', 'matched', '--controls', 5, '--minShift', 50,
@@ -1830,10 +1828,12 @@ BH = WORK / 'boost-hic'
 BOOSTED = {chrom: int(np.diff(clr100.extent(chrom))[0]) for chrom in ('chr19', 'chr11', 'chr1')}
 for chrom, n in BOOSTED.items():
     label = f'{chrom}, {n:,} bins'
+    # Timed on chr1 alone, the largest: the other two are the same computation on fewer bins.
     mr('boost', MOUSE_100K, '--sequences', chrom, out=BH / chrom, name=f'boost-{chrom}', analysis='Boost-HiC',
-       label=label)
+       label=label, bench=chrom == 'chr1')
     reference(f'boosthic-{chrom}', 'Boost-HiC', 'Boost-HiC', [PYTHON, script('boosthic'), MOUSE_100K, chrom, OUT],
-              out=BH / f'boosthic-{chrom}', made=BH / f'boosthic-{chrom}-boosted.npy', env=BOOSTHIC_ENV, label=label)
+              out=BH / f'boosthic-{chrom}', made=BH / f'boosthic-{chrom}-boosted.npy', env=BOOSTHIC_ENV, label=label,
+              bench=chrom == 'chr1')
 
 boosted, rows = {}, []
 for chrom, n in BOOSTED.items():
@@ -2246,11 +2246,15 @@ record('Motif search', 'mm10 chr19, two motifs, both strands', f"seqkit {PROGRAM
 
 ## 18 · Track correlation (deepTools)
 
-How much every pair of six yeast tracks agrees — ATAC-seq, Pol II ChIP-seq over input, MNase-seq,
-RNA-seq on each strand and shotgun coverage, the lab's demo set, all on one assembly — over whole
-windows of 100 bp, 1 kb and 10 kb, by Pearson's r and by Spearman's ρ. A window's value is the mean
-over the bases a track has a value for, and each pair is correlated over the windows where both have
-one. The reference for exactly that is pyBigWig's own exact mean, `stats(..., exact=True)`,
+How much every pair of three public mouse tracks agrees, over whole windows of 100 bp, 1 kb and
+10 kb, by Pearson's r and by Spearman's ρ: the two ATAC-seq replicates of § 5, and the diamond
+insulation score 4DN computed from mouse ES-cell Hi-C (Bonev et al. 2017), one value every 5 kb and
+none where the map is too sparse to give one. All three are 4DN's, on mm10, and every tool is given
+them cut to chr19, interval for interval, as § 5 cuts them. Genome-wide, the two replicates are
+1.7 GB of bigWig, and one deepTools summary of them at 100 bp — 27 million windows — took 23 minutes
+and 4.8 GB here and wrote 1.5 GB of text: a cost the timings would pay at three window sizes, five
+times over. A window's value is the mean over the bases a track has a value for, and each pair is
+correlated over the windows where both have one. The reference for exactly that is pyBigWig's own exact mean, `stats(..., exact=True)`,
 correlated by SciPy (`notebooks/scripts/pybigwig_correlation.py`). Beside it is deepTools as it is
 usually run, `multiBigwigSummary bins` then `plotCorrelation`, which differs in two ways that are
 measured below: its window means are pyBigWig's default, read from a zoom level wherever the file
@@ -2265,8 +2269,12 @@ has one fine enough, and it drops a window from every pair as soon as any one tr
 
 ```{python}
 TC = WORK / 'trackcorr'
-YEAST_TRACKS = [PATHS[f'Yeast_{key}'] for key in ('ATAC', 'Pol2', 'MNase', 'RNA_fwd', 'RNA_rev', 'Shotgun')]
-TRACK_NAMES = [path.name for path in YEAST_TRACKS]
+# § 5's two replicates as § 5 cut them, and the insulation score cut by the same hand.
+INSULATION = DATA / f"{PATHS['4DNFIUJ5CJVN'].stem}.chr19.bw"
+chr19(PATHS['4DNFIUJ5CJVN'], INSULATION)
+TRACKS = [*REPS, INSULATION]
+TRACK_NAMES = [path.name for path in TRACKS]
+SHORT = dict(zip(TRACK_NAMES, ('ATAC, rep. 1', 'ATAC, rep. 2', 'insulation')))
 SIZES, METHODS = (100, 1_000, 10_000), ('pearson', 'spearman')
 CORR = script('pybigwig_correlation')
 for size in SIZES:
@@ -2274,14 +2282,14 @@ for size in SIZES:
     # one summary of the windows.
     group = f'{size:,} bp windows'
     for method in METHODS:
-        mr('trackcorr', '--tracks', ','.join(rel(path) for path in YEAST_TRACKS), '--binsize', size,
+        mr('trackcorr', '--tracks', ','.join(rel(path) for path in TRACKS), '--binsize', size,
            '--method', method, out=TC / f'app-{size}-{method}', name=f'trackcorr-{size}-{method}',
            analysis='Track correlation', label=f'{size:,} bp, {method}', group=group)
         reference(f'pybigwig-correlation-{size}-{method}', 'Track correlation', 'pyBigWig, SciPy',
-                  [PYTHON, CORR, OUT, size, method, *YEAST_TRACKS], out=TC / f'exact-{size}-{method}.tsv',
+                  [PYTHON, CORR, OUT, size, method, *TRACKS], out=TC / f'exact-{size}-{method}.tsv',
                   label=f'{size:,} bp, {method}', group='exact means', bench=False)
     reference(f'multibigwigsummary-{size}', 'Track correlation', 'deepTools',
-              [MULTIBIGWIGSUMMARY, 'bins', '-b', *YEAST_TRACKS, '--binSize', size, '-p', THREADS,
+              [MULTIBIGWIGSUMMARY, 'bins', '-b', *TRACKS, '--binSize', size, '-p', THREADS,
                '-o', OUT + '.npz', '--outRawCounts', OUT + '.tab'],
               out=TC / f'deeptools-{size}', made=TC / f'deeptools-{size}.npz', label=f'{size:,} bp, the windows',
               group=group, threads=THREADS)
@@ -2304,7 +2312,7 @@ def square_of(path):
 def exact_windows(size):
     """Every track's exact mean over each whole window, by pyBigWig itself: one column a track."""
     def compute():
-        handles = [pyBigWig.open(str(path)) for path in YEAST_TRACKS]
+        handles = [pyBigWig.open(str(path)) for path in TRACKS]
         chroms = handles[0].chroms()
         return np.stack([np.concatenate([np.array(h.stats(c, 0, (n := chroms[c] // size) * size, nBins=n, exact=True),
                                                   dtype=float) for c in chroms if chroms[c] // size > 0])
@@ -2346,7 +2354,7 @@ show(TC_TABLE, **{c: '{:.1e}' for c in TC_TABLE.columns if 'Δ' in c or '…' in
 
 ```{python}
 #| label: fig-trackcorr
-#| fig-cap: "Six yeast tracks, correlated. a, Spearman's ρ over 100 bp windows, as chromosomix draws it; b, every coefficient of both methods at all three window sizes against the exact reference — chromosomix in blue, deepTools in orange."
+#| fig-cap: "Three mouse tracks on chr19, correlated. a, Spearman's ρ over 100 bp windows, as chromosomix draws it; b, every coefficient of both methods at all three window sizes against the exact reference — chromosomix in blue, deepTools in orange."
 TEXT['tc_n'] = f"{sum(len(v['app']) for v in tc.values())}"
 TEXT['tc_app'] = f"{TC_TABLE['chromosomix vs exact, max |Δ|'].max():.1e}"
 TEXT['tc_deep'] = f"{TC_TABLE['deepTools vs exact, max |Δ|'].max():.3f}"
@@ -2358,7 +2366,7 @@ fig, axes = plt.subplots(1, 2, figsize=(11, 4.6), layout='constrained', width_ra
 ax = axes[0]
 heat = square_of(one(TC / 'app-100-spearman', '*.trackcorr.tsv'))
 image = ax.imshow(heat, cmap='RdBu_r', vmin=-1, vmax=1)
-short = [name.removeprefix('Yeast_').removesuffix('.bw').replace('ChIP_Pol2-vs-input', 'Pol II') for name in TRACK_NAMES]
+short = [SHORT[name] for name in TRACK_NAMES]
 ax.set_xticks(range(len(short)), short, rotation=45, ha='right')
 ax.set_yticks(range(len(short)), short)
 ax.grid(False)
@@ -2382,7 +2390,7 @@ by up to `{python} TEXT['tc_means']`, and its rule of leaving a window out of ev
 track lacks it by up to `{python} TEXT['tc_rule']`.
 
 ```{python}
-record('Track correlation', 'yeast tracks, six, 100 bp to 10 kb windows',
+record('Track correlation', 'mouse ATAC-seq, two replicates, and insulation, chr19, 100 bp to 10 kb windows',
        f"pyBigWig {VERSIONS['pyBigWig']} and SciPy {VERSIONS['scipy']}; deepTools {VERSIONS['deeptools']}",
        f"{TEXT['tc_n']} coefficients within {TEXT['tc_app']} of the exact means; deepTools within "
        f"{TEXT['tc_deep']}, from its zoom-level means and its rule for a missing window",

@@ -1009,14 +1009,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   Boost-HiC against its own Python, the metaplot against deepTools, interval overlap and its
   shuffled null against bedtools, base composition against bioframe and Biopython, the motif search
   against seqkit, and the track correlation against pyBigWig's exact window means and against
-  deepTools, on 4DN's mouse Hi-C and ATAC-seq, UCSC's mm10 and RefSeq genes, and GEO's yeast Micro-C
-  and the lab's yeast tracks as its public `rsglab-data` bucket keeps them, each checked against its
-  MD5. Where the reference draws at random, the two are compared as distributions, against the
-  reference's own spread from seed to seed. It writes every command to
-  `notebooks/work/validation/commands.json`, and the new `notebooks/timing.qmd` runs each again,
-  round robin, writing every run — CPU and wall-clock seconds, peak memory, the machine and the
-  versions — to one tidy table, `notebooks/work/validation/timings.tsv`, from which its tables and
-  figures are drawn.
+  deepTools, on 4DN's mouse Hi-C, ATAC-seq and insulation score, UCSC's mm10 and RefSeq genes, and
+  GEO's yeast Micro-C, each fetched from where it was published. Where the reference draws at
+  random, the two are compared as distributions, against the reference's own spread from seed to
+  seed. It writes every command to
+  `notebooks/work/validation/commands.json`, and the new `notebooks/timing.qmd` runs them again,
+  round robin, writing every run (CPU and wall-clock seconds, peak memory, the machine and the
+  versions) to one tidy table, `notebooks/work/validation/timings.tsv`, from which its tables and
+  figures are drawn. It times one seed of the controls, one virtual 4C viewpoint, Boost-HiC on chr1,
+  and APA raw and over controls but not over the expected, and sums a side's commands where it takes
+  several: deepTools' `computeMatrix` and `plotProfile` against one metaplot.
 
 - **Electron 43.2.0 → 43.7.9 (§15).** Past GHSA-gr2m-v5gq-v685, GHSA-j84w-jfhq-vhvj,
   GHSA-qmv3-fv6v-rmhq and GHSA-9qh4-3jw8-366w, four high advisories against the version 0.13.0

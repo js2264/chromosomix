@@ -8858,28 +8858,33 @@ takes the same coordinate-ascent fallback, with SciPy's bounded Brent ported bes
 the same 1,615 to 1,630 peaks at the six thresholds.
 
 **And beside the goldens, two notebooks at full size.** `notebooks/validation.qmd`, rendered with
-Quarto, runs eighteen analyses twice over public data, each file named by its accession (4DN; GEO's
-yeast Micro-C and the lab's yeast tracks, from its public bucket, each held to its MD5; and UCSC's
-mm10 sequence and RefSeq genes as Illumina iGenomes distributes them) — once through `chromosomix`,
-once through the package each reproduces, called as it is meant to be called and never
-re-implemented — and lines the two up bin by bin or call by call: insulation, compartments, P(s),
-coverage and virtual 4C against cooltools; the directionality index against `domaincaller`; peak
-calling with IDR on two replicates against yapc 0.1; loops against chromosight 1.6.3, and the
-pileup's chromosight score against `chromosight quantify`; pileups — raw, over the expected and over
-distance-matched controls, off the diagonal and on it — against coolpuppy; reproducibility against
-`hicrep` 0.2.6; the 3D model against pastis; Boost-HiC against its own Python, through `chromosomix
-boost` (§6.5); the metaplot against deepTools; interval overlap and its shuffled null against
-bedtools; base composition against bioframe and Biopython; the motif search against seqkit; and the
-track correlation against pyBigWig's exact window means with SciPy, and against deepTools, whose
-zoom-level means and rule for a missing window are measured apart. Where a reference draws at random
-— a pileup's controls, an overlap's shuffles, IDR's ties — two distributions are compared, the
-reference's own spread from seed to seed the yardstick. It writes every command it ran to
-`notebooks/work/validation/commands.json`, and `notebooks/timing.qmd` runs each of them again, five
-times round robin, each a fresh process: every run is one line of the tidy table
+Quarto, runs eighteen analyses twice over public data, each file named by its accession and fetched
+from where it was published (4DN's; GEO's yeast Micro-C; and UCSC's mm10 sequence and RefSeq genes
+as Illumina iGenomes distributes them) — once through `chromosomix`, once through the package each
+reproduces, called as it is meant to be called and never re-implemented — and lines the two up bin
+by bin or call by call: insulation, compartments, P(s), coverage and virtual 4C against cooltools;
+the directionality index against `domaincaller`; peak calling with IDR on two replicates against
+yapc 0.1; loops against chromosight 1.6.3, and the pileup's chromosight score against `chromosight
+quantify`; pileups — raw, over the expected and over distance-matched controls, off the diagonal and
+on it — against coolpuppy; reproducibility against `hicrep` 0.2.6; the 3D model against pastis;
+Boost-HiC against its own Python, through `chromosomix boost` (§6.5); the metaplot against
+deepTools; interval overlap and its shuffled null against bedtools; base composition against
+bioframe and Biopython; the motif search against seqkit; and the track correlation, on two ATAC-seq
+replicates and a Hi-C insulation score cut to chr19, against pyBigWig's exact window means with
+SciPy, and against deepTools, whose zoom-level means and rule for a missing window are measured
+apart. Where a reference draws at random — a pileup's controls, an overlap's shuffles, IDR's ties —
+two distributions are compared, the reference's own spread from seed to seed the yardstick. It
+writes every command it ran to `notebooks/work/validation/commands.json`, and `notebooks/timing.qmd`
+runs them again, five times round robin, each a fresh process — all but the ones that would time a
+job twice or two different jobs: one seed of the shifted controls, the *Sox2* viewpoint of virtual
+4C, Boost-HiC on chr1, and APA raw and over controls but not over the expected, where coolpuppy is
+handed an expected computed beforehand. Every run is one line of the tidy table
 `notebooks/work/validation/timings.tsv` — CPU and wall-clock seconds and peak memory, with the
 machine and every version — and each `chromosomix` command's speed is a fold over the reference
-commands it is paired with. They are documents, not tests: they need the data (about 6 GB), the
-reference packages and yapc's own environment, and nothing in the suite runs them.
+commands it is paired with, a side's commands summed where there are several (deepTools'
+`computeMatrix` and then `plotProfile` against one metaplot). They are documents, not tests: they
+need the data (about 6 GB), the reference packages and yapc's own environment, and nothing in the
+suite runs them.
 
 **They are published with every release.** `.github/workflows/notebooks.yml` installs all of it on a
 fresh runner — the reference environment pinned package by package in `notebooks/requirements.txt`,

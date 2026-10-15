@@ -80,6 +80,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections import Counter
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -243,11 +244,33 @@ show(per[['section', 'analysis', 'tool', 'variant', 'CPU s', 'wall s', 'peak MB'
 
 For each analysis, the `chromosomix` commands against the reference commands they are paired with — the
 same variant, or the analysis's one reference — as a fold: the reference's seconds over the app's,
-summed where a side is several commands (deepTools' metaplot is `computeMatrix` and then
-`plotProfile`).
+summed where a side is several commands, which the table names. deepTools' metaplot is
+`computeMatrix` and then `plotProfile`, against one `chromosomix metaplot`; its track correlation is
+`multiBigwigSummary` and then `plotCorrelation` once a method, against `chromosomix trackcorr` once a
+method.
 
 ```{python}
 #| column: page
+#: Each timed command's line, by its name, for what the pairs below add up.
+LINES = {job['name']: job['command'] for job in JOBS}
+
+
+def program(name):
+    """What a timed command runs: chromosomix's task, a reference script's name, or the program."""
+    words = shlex.split(LINES[name])
+    if words[0] == 'chromosomix':
+        return words[1]
+    if words[0].endswith('python'):
+        return Path(words[1]).stem
+    return words[0]
+
+
+def summed(rows):
+    """The commands one side of a pair adds up, in order, a repeated one counted: `plotCorrelation ×2`."""
+    counts = Counter(program(name) for name in rows['command'])
+    return ' + '.join(name if n == 1 else f'{name} ×{n}' for name, n in counts.items())
+
+
 def pairs():
     out = []
     for (section, analysis), rows in per.groupby(['section', 'analysis'], sort=False):
@@ -260,6 +283,7 @@ def pairs():
                 continue
             out.append({'section': section, 'analysis': analysis, 'variant': group or '—',
                         'reference': ', '.join(dict.fromkeys(theirs['tool'])),
+                        'chromosomix commands': summed(mine), 'reference commands': summed(theirs),
                         'chromosomix CPU s': mine['cpu'].sum(), 'reference CPU s': theirs['cpu'].sum(),
                         'chromosomix wall s': mine['wall'].sum(), 'reference wall s': theirs['wall'].sum(),
                         'chromosomix peak MB': mine['rss'].max(), 'reference peak MB': theirs['rss'].max()})
