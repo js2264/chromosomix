@@ -14,6 +14,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Each cell of the deck can be on a sequence of its own (§16.3).** Every map's heading now says
+  which sequence it shows, as a quiet picker beside its name: pick `V` on one cell and that map
+  leaves the chain and reads the whole of V at its own resolution while the others stay on IV — its
+  window is remembered with the map, and the `×` on it puts the map back on the others' window. On
+  the first map the picker goes where the locus box would, and every map following it goes along.
+
 - **A scalogram's lane reads in distances (§18.12).** Its range said `0 – 16.7`, the logarithms of
   the reach, and its floor sat at one base pair, so the lower half of the lane was a band no value
   could reach. It now says `1 kb – 104 kb`, starts at the power of ten below its data, and carries an

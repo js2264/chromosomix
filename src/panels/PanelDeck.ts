@@ -128,6 +128,7 @@ import { canonicalUrl } from '../sources/rewrite'
 import { fileLabel } from '../ui/labels'
 import { routeFor } from '../browse/route'
 import { placementOn } from '../annotations/types'
+import { paintSequencePicker, sequencePicker, shownSequence } from './sequencePicker'
 
 /** The id the lock knows the session's own map by. */
 const LEAD = 'lead'
@@ -347,6 +348,16 @@ export interface PanelDeckProps {
    * a region rather than a file.
    */
   leadName?(): string | undefined
+  /**
+   * The session's own file's sequences, in its order, for the picker on the
+   * first map's heading (§16.3) — `null` before its table is read.
+   */
+  leadSequences?(): readonly string[] | null
+  /**
+   * A sequence picked on the first map's heading: the session goes there, as
+   * its locus box would, and every map following it goes along (§16.3).
+   */
+  onLeadSequence?(name: string): void
   /**
    * The derivation every panel of the deck draws (§7.5), or `undefined`.
    *
@@ -629,6 +640,14 @@ export class PanelDeck {
     class: 'btn-close',
     size: 14,
   })
+  /**
+   * The sequence the first map is on, as every map cell's heading says it
+   * (§16.3) — a pick here is the session's navigation, so it goes where the
+   * locus box would and the maps following it go along.
+   */
+  private readonly leadSequence = sequencePicker((name) => this.props.onLeadSequence?.(name))
+  /** What {@link leadSequence} last said, so a frame of the lead's pan does not repaint it. */
+  private leadSequenceKey = ''
   /**
    * Where the lead view's own heading goes while a deck is on.
    *
@@ -1073,6 +1092,8 @@ export class PanelDeck {
     })
     panel.setViewportListener((rows, cols) => {
       this.lock.report(LEAD, rows, cols)
+      // A report is also the first word that a new block is drawn.
+      this.syncLeadSequence()
       // One way, to the cells that light what the maps are looking at (§25).
       // Read back from the panel as loci rather than converted from the cell
       // spans above: a structure has no cells, and base pairs are what it has.
@@ -1990,9 +2011,22 @@ export class PanelDeck {
       // A map reading a window of its own is not one place with the others, so
       // the chain's line and the pointer echoes have to be asked again.
       onOwnPlace: () => slot.panel?.syncLock(),
+      onPickSequence: (name) => this.sequencePicked(slot, name),
     })
     slot.panel.syncLock()
     return slot
+  }
+
+  /**
+   * A sequence picked on a companion's heading (§16.3): that map reads it for
+   * itself and the others stay where they are. Off the chain first, where it
+   * was on it — a map on the chain shows the lead's window by definition, and
+   * the chain is what closing it again gives back.
+   */
+  private sequencePicked(slot: Slot, name: string): void {
+    if (slot.panel === null) return
+    if (slot.locked) this.toggleLock(slot)
+    slot.panel.readSequence(name)
   }
 
   /**
@@ -3374,6 +3408,7 @@ export class PanelDeck {
       rename === undefined
         ? el('span', { class: 'deck-name', text: name, title })
         : renameBox(name, title, rename),
+      this.leadSequence,
       this.leadStar,
       this.leadLock,
       this.leadClose,
@@ -3381,6 +3416,35 @@ export class PanelDeck {
     this.leadClose.classList.toggle('hidden', this.slots.length === 0)
     this.paintStars()
     this.syncLeadLock()
+    this.syncLeadSequence(true)
+  }
+
+  /**
+   * Say on the first map's picker which sequence its block is of.
+   *
+   * Asked on every report of the lead's, which is every frame of a pan, so it
+   * repaints only when what it would say has changed — or when `force`d, by a
+   * heading painted afresh.
+   */
+  private syncLeadSequence(force = false): void {
+    const names = this.props.leadSequences?.() ?? null
+    const lead = this.lead
+    if (names === null || lead === null || this.props.onLeadSequence === undefined) {
+      this.leadSequence.classList.add('hidden')
+      this.leadSequenceKey = ''
+      return
+    }
+    const block = lead.blockSequences()
+    const key = `${names.length}\u0000${block.rows.join('\u0000')}\u0001${block.cols.join('\u0000')}`
+    if (!force && key === this.leadSequenceKey) return
+    this.leadSequenceKey = key
+    paintSequencePicker(
+      this.leadSequence,
+      names,
+      shownSequence(block.rows, block.cols),
+      'The sequence this map shows. Pick another to go there — as the locus box would, so every map ' +
+        'following this one goes with it; a map moving on its own has a picker of its own.',
+    )
   }
 
   /**

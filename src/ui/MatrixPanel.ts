@@ -5935,6 +5935,18 @@ export class MatrixPanel {
   }
 
   /**
+   * The sequences the block read runs over along each axis, in axis order —
+   * what a deck cell's heading says its map is on (§16.3). Off the block's own
+   * runs, so in this map's own names and whatever the window on screen.
+   */
+  blockSequences(): { rows: string[]; cols: string[] } {
+    const names = (groups: MatrixResult['rowGroups'] | undefined): string[] => [
+      ...new Set((groups ?? []).map((group) => group.label)),
+    ]
+    return { rows: names(this.data?.rowGroups), cols: names(this.data?.colGroups) }
+  }
+
+  /**
    * Tell the stylesheet how much vertical budget the horizontal stacks take, and
    * re-measure whenever any stack changes thickness.
    *

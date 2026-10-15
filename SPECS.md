@@ -5949,6 +5949,20 @@ selection (§16.2), resolved through the map's own reader, and remembered with i
 (`deck:looks`); relinking the chain drops it, since a chained map shows the lead's window by
 definition.
 
+**Every map cell's heading names the sequence its map is on**, and is the road to another one. A
+quiet picker beside the name — the rung's own idiom (`::1000`) — lists the cell's **own** file's
+sequences in its order and in its names, and stands on the one the block it read is of; a block between
+two says `IV × V`, one over several says how many, neither of which is a place to go. On a companion a
+pick is a window of its own, the **whole** of that sequence: the map leaves the chain where it was on
+it (a chained map shows the lead's window by definition), reads it at its own rung, and the others stay
+where they are — so micro-C can stay on IV while Hi-C beside it shows V. It is the box's window in
+every other respect: the pill says the map reads its own window (without repeating the name the picker
+beside it says), its `×` gives it back to the deck's, and it is remembered with the map's looks. On the
+first map a pick is the session's own navigation — the locus box's, the view as it is on another
+sequence — so every map on the deck's window goes with it. A file of one sequence has nothing to pick
+from, and one of more than a thousand has a table rather than a menu (a metagenome's contigs): there
+the picker is not offered, and the box drawn on the cell is the road.
+
 On a companion **still on the lead**, the same box navigates the deck — it is forwarded to the first
 map's own marquee, so every chained map moves to it, which is what drawing a box on one of several
 maps locked together can only mean. The pointer's echo between two maps that are not showing the

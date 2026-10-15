@@ -10411,6 +10411,32 @@ span.deck-name {
   color: var(--text);
 }
 
+/* The sequence a cell's map is on (§16.3), and the road to another one for that
+   cell alone. Quiet like the rung beside it until it is approached, and in the
+   heading's own face rather than the rung's mono: it is a sequence's name, not
+   a piece of an address. It keeps its width while the name gives way. */
+.deck-seq {
+  flex: 0 0 auto;
+  max-width: 9rem;
+  /* As wide as the sequence it says, where the engine can size a select to
+     its value: else the widest name in the file, which on yeast is `2-micron`
+     beside an `IV`. */
+  field-sizing: content;
+  padding: 0.05rem 0.15rem;
+  border-color: transparent;
+  background: none;
+  color: var(--text-dim);
+  font-size: var(--step--2);
+  cursor: pointer;
+}
+
+.deck-seq:hover,
+.deck-seq:focus-visible {
+  border-color: var(--border-strong);
+  background: var(--bg-raised);
+  color: var(--text);
+}
+
 /* The handle a map is dragged by. Only the grip, not the whole heading: the
    heading holds a chain and a close, and the map below it takes a drag as a
    pan — a panel draggable everywhere is a panel a reader cannot navigate. */
