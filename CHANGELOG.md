@@ -994,6 +994,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The lines between chromosomes are a little heavier (§7.1).** The dividers (`d`) were drawn at
+  `metacooler show`'s 0.5 and 1 or one device pixel, whichever was larger — half a pixel on a 2×
+  screen, a hairline in a 300 dpi PNG and, inconsistently, a whole one in the PDF. They are now 1.5
+  CSS pixels between sequences and 2 between genomes or selection blocks, on screen, in a PNG and in
+  the PDF alike, in the CLI's two greys, and each is centred on the pixel grid by its own width so it
+  stays crisp rather than smudged across three pixels.
+
 - **An aggregate peak analysis over a loop set leaves out the loops nearest the diagonal (§18.8).**
   *Nearest loop*, a new setting under Separation, is coolpuppy's `mindist`: a loop whose two
   anchors' centres are nearer than that many bins is not piled up. It is five bins by default, and 0

@@ -1873,7 +1873,12 @@ diverges from what a reader reproduces locally.
 - the **cell size** is named in the key, on its own line under the scale's name, and in the exported
   key as well — it is the one fact about a refining map that cannot be recovered from the pixels, and
   a figure that carries it needs no caption to say it
-- separators at genome or contig boundaries, thin grey
+- separators at genome or contig boundaries, in `metacooler show`'s two greys — and **heavier than its
+  0.5 and 1**: 1.5 CSS pixels between sequences and 2 between genomes or selection blocks, in every
+  picture, since drawn at the larger of the CLI's width and one device pixel a line between two
+  chromosomes was half a pixel on a 2× screen and a hairline in a PNG, and the reader lost it on a
+  dense map. A line is centred on the device grid by its width, so its whole pixels are solid and only
+  a fraction is shared with a neighbour; the PDF carries the widths as they are, 1.125 and 1.5 pt
 - ticks in base pairs on any axis that stays inside one contig, and the contig names on any axis that
   does not — `_bin_axis`'s rule, because a bin index is not a position and does not restart at zero
   where the block does. An axis of **several** contigs is then ruled one contig at a time on top of
