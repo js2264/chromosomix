@@ -215,10 +215,10 @@
   "pulls": [
     {
       "number": 108,
-      "commit": "f955ba9",
-      "title": "Validate APA against coolpuppy with diagonal handling",
+      "commit": "f7df202",
+      "title": "APA as coolpuppy computes it, exact track-correlation windows, and chromosomix boost",
       "branch": "ccr-bbb73609-u7oxgq",
-      "date": "2026-10-15T18:36:42Z"
+      "date": "2026-10-15T20:37:36Z"
     },
     {
       "number": 107,
