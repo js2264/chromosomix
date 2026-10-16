@@ -1,6 +1,13 @@
 {
-  "latest": "015b766",
+  "latest": "478b1c8",
   "versions": [
+    {
+      "commit": "478b1c8",
+      "version": "0.13.0",
+      "date": "2026-10-16T09:45:13+02:00",
+      "subject": "Validation and timing notebooks, published at /validation/ and /timings/ with every release (#109)",
+      "tag": ""
+    },
     {
       "commit": "015b766",
       "version": "0.13.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "54f178c",
-      "version": "0.13.0",
-      "date": "2026-10-01T16:46:59+02:00",
-      "subject": "Vector PDF export and 3D model support improvements (#86)",
-      "tag": ""
-    },
-    {
       "commit": "7a6fea2",
       "version": "0.13.0",
       "date": "2026-09-20T22:39:26+02:00",
@@ -213,13 +213,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 109,
-      "commit": "fa86ea8",
-      "title": "Validation and timing notebooks, published at /validation/ and /timings/ with every release",
-      "branch": "ccr-bbb73609-u7oxgq-notebooks",
-      "date": "2026-10-16T06:58:49Z"
-    },
     {
       "number": 107,
       "commit": "2bc0aec",
