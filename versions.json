@@ -1,6 +1,13 @@
 {
-  "latest": "478b1c8",
+  "latest": "c9e4449",
   "versions": [
+    {
+      "commit": "c9e4449",
+      "version": "0.13.0",
+      "date": "2026-10-16T18:31:08+02:00",
+      "subject": "Tab navigation, derived resolution tasks, and figure rendering (#110)",
+      "tag": ""
+    },
     {
       "commit": "478b1c8",
       "version": "0.13.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "b5b951a",
-      "version": "0.13.0",
-      "date": "2026-10-01T18:14:41+02:00",
-      "subject": "Inter-arm alignment: one row per sequence, reach to alignment edge (#87)",
-      "tag": ""
-    },
-    {
       "commit": "7a6fea2",
       "version": "0.13.0",
       "date": "2026-09-20T22:39:26+02:00",
@@ -213,13 +213,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 110,
-      "commit": "3fb3f3c",
-      "title": "Tab navigation, derived resolution tasks, and figure rendering",
-      "branch": "claude/bugs-and-features-batch-qngfme",
-      "date": "2026-10-16T16:17:21Z"
-    },
     {
       "number": 107,
       "commit": "d91a5ed",
