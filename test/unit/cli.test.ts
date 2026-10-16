@@ -299,7 +299,7 @@ describe('Boost-HiC, on its own', () => {
     expect(await readdir(where)).toEqual(['sample.boost-chrII.tsv'])
     const written = await square(join(where, 'sample.boost-chrII.tsv'))
     expect(written.head).toMatch(/^# alpha: 0\.2$/m)
-    expect(written.head).toMatch(/^# units: SCN, as main\.py writes boostedmat$/m)
+    expect(written.head).toMatch(/^# units: SCN$/m)
 
     // The oracle reads the counts through the dense path, not the band the
     // command reads, and hands them to the port directly.

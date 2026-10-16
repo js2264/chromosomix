@@ -973,14 +973,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 ### Changed
 
 - **An aggregate peak analysis over a loop set leaves out the loops nearest the diagonal (§18.8).**
-  *Nearest loop*, a new setting under Separation, is coolpuppy's `mindist`: a loop whose two anchors'
-  centres are nearer than that many bins is not piled up. It is five bins by default, and 0 piles up
-  every loop, which is what it did before. coolpuppy's own default, `mindist='auto'`, is twice the
-  half-width and two, where a window stops reaching the two diagonals left out; typed, the run says it
-  is coolpuppy's. On the yeast demo's 1,506 loops at the default ±21 kb window, five bins leaves out
-  none and coolpuppy's floor 959. The run says how many loops it left out and how near they were; at
-  coolpuppy's floor it keeps the same 142 of the demo map's first 200 loops as coolpuppy, cell for
-  cell.
+  *Nearest loop*, a new setting under Separation, is coolpuppy's `mindist`: a loop whose two
+  anchors' centres are nearer than that many bins is not piled up. It is five bins by default, and 0
+  piles up every loop, which is what it did before. coolpuppy's own default, `mindist='auto'`, is
+  twice the half-width and two, where a window stops reaching the two diagonals left out. On the
+  yeast demo's 1,506 loops at the default ±21 kb window, five bins leaves out none and coolpuppy's
+  floor 959. The run says how many loops it left out and how near they were; at coolpuppy's floor it
+  keeps the same 142 of the demo map's first 200 loops as coolpuppy, cell for cell.
 
 - **APA opens on observed / expected, and its form shows only the cards that apply (§18.2, §18.8).**
   The normalisation starts on observed / expected rather than on distance-matched controls. The

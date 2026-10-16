@@ -383,7 +383,6 @@ describe('the nearest loop', () => {
     expectSame(matrix.values, coolpup(kept, { minDiag: 2 }))
     expect(matrix.stats?.[0]?.value).toBe(3)
     expect(notes.join(' ')).toMatch(/1 of 4 loops are nearer the diagonal than 5 bins \(5\.0 kb\)/)
-    expect(notes.join(' ')).not.toMatch(/coolpuppy’s default/)
   })
 
   it('is measured between the anchors’ centres, in base pairs, as coolpuppy measures it', async () => {
@@ -409,7 +408,7 @@ describe('the nearest loop', () => {
     expectSame(matrix.values, coolpup(kept, { minDiag: 2 }))
   })
 
-  it('says so when what was typed is coolpuppy’s own, twice the half-width and two', async () => {
+  it('leaves out what coolpuppy’s own floor does, twice the half-width and two, and names no tool', async () => {
     const notes: string[] = []
     const minDist = autoMinDist({ mode: 'fixed', window: HALF })
     expect(minDist).toBe(2 * HALF + 2)
@@ -417,7 +416,8 @@ describe('the nearest loop', () => {
     const kept = LOOPS.filter(([a, b]) => b - a >= minDist)
     expect(matrix.stats?.[0]?.value).toBe(kept.length)
     expectSame(matrix.values, coolpup(kept, { minDiag: 2 }))
-    expect(notes.join(' ')).toMatch(/nearer the diagonal than 12 bins \(12 kb\), coolpuppy’s default,/)
+    expect(notes.join(' ')).toMatch(/of 4 loops are nearer the diagonal than 12 bins \(12 kb\) and are left out/)
+    expect(notes.join(' ')).not.toMatch(/coolpuppy/i)
   })
 
   it('leaves a pileup on the diagonal alone, which has no loops to be near', async () => {

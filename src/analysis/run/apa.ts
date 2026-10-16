@@ -83,7 +83,6 @@ import {
   flankFractionOf,
   isChromosight,
   isDomainPileup,
-  autoMinDist,
   isScaled,
   minDiagOf,
   minDistOf,
@@ -756,9 +755,7 @@ function nearEnough(job: JobContext, anchors: Anchor[]): Anchor[] {
   const out = anchors.filter((anchor) => (anchor.centreDistance ?? Number.POSITIVE_INFINITY) >= floor)
   const left = anchors.length - out.length
   if (left === 0) return out
-  const how =
-    `nearer the diagonal than ${nearest.toLocaleString()} bins (${shortBp(floor)})` +
-    (nearest === autoMinDist(job.params) ? ', coolpuppy’s default,' : '')
+  const how = `nearer the diagonal than ${nearest.toLocaleString()} bins (${shortBp(floor)})`
   job.note(
     out.length === 0
       ? `Every loop of this set is ${how} so there is nothing to pile up. Set the nearest loop lower, ` +
