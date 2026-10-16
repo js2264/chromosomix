@@ -8326,10 +8326,10 @@ as coolpuppy does: every loop whose two anchors' centres are nearer than *neares
 file, **five by default**, measured as coolpuppy measures it, in base pairs between the centres.
 coolpuppy's own default, `mindist='auto'`, is further out — twice the half-width and two, the
 separation at which a window stops reaching the two diagonals left out, so that at that floor no loop
-window has a gap cut in it — and leaves out 959 of the yeast demo's 1,506 loops at 1 kb; the run says
-so when it is the number typed, and the evaluation types it to hold the two to each other (§18.10). The
-run says how many loops it left out and how near they were, and 0 piles up every loop; *every pair*
-of a feature set keeps its own separation range instead. It used to divide
+window has a gap cut in it — and leaves out 959 of the yeast demo's 1,506 loops at 1 kb; the
+evaluation types it to hold the two to each other (§18.10). The run says how many loops it left out
+and how near they were, and 0 piles up every loop; *every pair* of a feature set keeps its own
+separation range instead. It used to divide
 the finished pileup by an expected looked up at each cell's distance from the *pileup's* centre,
 which is a cell's diagonal only for a window on the diagonal, and to take that expected from the
 windows' own cells, which over a loop set are the places the set picked, enriched by construction.

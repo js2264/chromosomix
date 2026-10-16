@@ -361,7 +361,7 @@ const PARAMS: readonly ParamSpec[] = [
     // holds the same contacts twice there, once above it and once mirrored
     // below, and coolpuppy cuts its windows from the upper triangle for that
     // reason. On the diagonal the window is its own mirror and is drawn whole.
-    hint: 'The main diagonal and the ones beside it, left out of every window as coolpuppy does.',
+    hint: 'The main diagonal and the ones beside it, left out of every window; 0 keeps every one.',
     default: MIN_DIAG_DEFAULT,
     min: 0,
     max: 50,
@@ -501,7 +501,9 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'minDist',
     label: 'nearest loop',
-    hint: 'Loops nearer the diagonal than this are left out. coolpuppy’s own default is twice the half-width and two.',
+    hint:
+      'Loops nearer the diagonal than this are left out, 0 keeping every one; from twice the ' +
+      'half-width and two, no window reaches the first two diagonals.',
     default: MIN_DIST_DEFAULT,
     min: 0,
     integer: true,

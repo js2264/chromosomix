@@ -2094,14 +2094,15 @@ const USAGE = `chromosomix — the Analysis panel, from a shell
       resolution read. The names to hand every other run as --circular.
 
   chromosomix boost <file.mcool::/resolutions/<bp>> [...]
-      Boost-HiC's map of each sequence: what an oversample (--contacts above the
-      file's own total) draws the sequence's new contacts from, written as
-      Boost-HiC's main.py writes it — the bins its outlier filter keeps, and the
-      boosted map over them in SCN units. One square TSV per sequence, rows and
-      columns named by each kept bin's start, into --out.
+      The boosted map of each sequence: what an oversample (--contacts above
+      the file's own total) draws the sequence's new contacts from — the bins
+      the outlier filter keeps, and the boosted map over them in SCN units.
+      One square TSV per sequence, rows and columns named by each kept bin's
+      start, into --out.
       --sequences <a,b>    the sequences to boost. Default: every one; a
                            sequence past 3,000 bins is refused by name
-      --alpha <a>          Boost-HiC's exponent. Default: main.py's, 0.2
+      --alpha <a>          the exponent of the distances, 1/SCN^a.
+                           Default: 0.2
 
   chromosomix replay <workspace.chromosomix.json> --over <file> [...]
       Re-run every analysis recorded in a saved workspace, with the parameters
@@ -2589,7 +2590,7 @@ async function boostCommand(args: Args, downloads: Downloads): Promise<number> {
           throw new Error('a single-cell container’s map is a sum of its cells rather than one library.')
         }
         if (mc.storageMode !== 'symmetric-upper') {
-          throw new Error('this map stores both triangles; Boost-HiC reads an upper-triangular file.')
+          throw new Error('this map stores both triangles, and a boost reads an upper-triangular one.')
         }
         for (const name of named.length === 0 ? mc.chromnames : named) {
           const id = mc.chromnames.indexOf(name)
@@ -2603,7 +2604,7 @@ async function boostCommand(args: Args, downloads: Downloads): Promise<number> {
           if (n > BOOST_MAX_BINS) {
             failures += 1
             process.stderr.write(
-              `  failed: ${name} is ${n.toLocaleString('en-US')} bins at this resolution, and Boost-HiC ` +
+              `  failed: ${name} is ${n.toLocaleString('en-US')} bins at this resolution, and a boost ` +
                 `walks every path between them: at most ${BOOST_MAX_BINS.toLocaleString('en-US')}. ` +
                 'Open a coarser resolution.\n',
             )
@@ -2619,11 +2620,11 @@ async function boostCommand(args: Args, downloads: Downloads): Promise<number> {
             `# chromosomix ${APP}`,
             `# created: ${new Date().toISOString()}`,
             `# file: ${path}`,
-            '# method: Boost-HiC (Carron et al. 2019) as main.py runs it: get_outliers, SCN, ' +
-              'fastFloyd on 1/SCN^alpha, adjustPdS (§6.5)',
+            '# method: Boost-HiC (Carron et al. 2019): the outlier filter, SCN, shortest paths on ' +
+              '1/SCN^alpha, adjusted to P(s) (§6.5)',
             `# alpha: ${alpha}`,
             `# sequence: ${name}, ${n} bins at ${mc.binsize} bp, ${steps.kept.length} kept`,
-            '# units: SCN, as main.py writes boostedmat',
+            '# units: SCN',
           ]
           const starts = Array.from(steps.kept, (bin) => String(bin * mc.binsize))
           lines.push(['start', ...starts].join('\t'))

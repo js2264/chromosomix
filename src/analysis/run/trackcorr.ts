@@ -72,8 +72,7 @@ export const runTrackCorrelation: TrackTaskRunner = async (job) => {
     job.note(
       `${left.toLocaleString()} of the ${units.count.toLocaleString()} ${noun} ` +
         `${one ? 'has' : 'have'} no value in at least one track, and ${one ? 'is' : 'are'} left out ` +
-        `of every pair, as deepTools leaves ${one ? 'it' : 'them'} out: every coefficient is over ` +
-        `the other ${compared.toLocaleString()}.`,
+        `of every pair: every coefficient is over the other ${compared.toLocaleString()}.`,
     )
   }
 
