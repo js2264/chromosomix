@@ -215,10 +215,10 @@
   "pulls": [
     {
       "number": 110,
-      "commit": "02e9867",
+      "commit": "3fb3f3c",
       "title": "Tab navigation, derived resolution tasks, and figure rendering",
       "branch": "claude/bugs-and-features-batch-qngfme",
-      "date": "2026-10-16T15:07:57Z"
+      "date": "2026-10-16T16:17:21Z"
     },
     {
       "number": 107,
