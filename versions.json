@@ -214,6 +214,13 @@
   ],
   "pulls": [
     {
+      "number": 111,
+      "commit": "36c6073",
+      "title": "Faster DI, compartments, coverage and metaplot: Lanczos, rows from the index, held bigWig reads",
+      "branch": "claude/task-performance-optimization-n3ccg1",
+      "date": "2026-10-16T21:00:07Z"
+    },
+    {
       "number": 107,
       "commit": "d91a5ed",
       "title": "Add circular visualization of metagenome contact maps (§7.6)",
