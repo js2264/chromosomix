@@ -42,6 +42,7 @@ import {
   laneLabelOf,
   readsOf,
   scaleOf,
+  unitOf,
   searchesByName,
   translationOf,
 } from '../annotations/types'
@@ -103,9 +104,9 @@ import {
 } from '../render/browser'
 import {
   orderedSpan,
+  rectSpans,
   type ManualMark,
   type ManualPoint,
-  type ManualSpan,
   type ManualStore,
 } from '../annotations/manual'
 import { MARK_REACH } from '../render/overlays'
@@ -129,6 +130,7 @@ import {
 import {
   laneBand,
   laneBands,
+  MARK_WASH,
   GRIP_ROOM,
   GROUP_BAR,
   GROUP_FONT,
@@ -148,6 +150,7 @@ import {
   drawLaneLabel,
   labelEndFor,
   positionLabel,
+  type LabelBox,
   type LaneLabelBoxes,
   type LaneLabelSpec,
   type LaneLabelStyle,
@@ -175,8 +178,12 @@ import {
 } from '../render/frames'
 import {
   ceilingFactor,
+  drawLogRules,
+  drawLogWords,
   drawTrack,
   drawTrackScaling,
+  logAxisTicks,
+  type LogTick,
   nudgedLimits,
   profileOf,
   resolveLimits,
@@ -193,7 +200,7 @@ import {
   LaneControls,
   type LaneMark,
 } from './LaneControls'
-import { LaneEditor } from './LaneEditor'
+import { LaneEditor, tabAlong, type EditorAt, type TabStop } from './LaneEditor'
 import { Modal } from './Modal'
 import { openFeatureDialog } from './FeatureDialog'
 import { openReadDialog } from './ReadDialog'
@@ -227,7 +234,6 @@ import {
   exportBaseName,
   fileStamp,
   largestDpiThatFits,
-  readPageBackground,
   scaleForDpi,
   type ExportFormat,
 } from './export'
@@ -250,7 +256,7 @@ import {
 } from '../render/heatmap'
 import { everyTrackOpacityField } from './AnnotationCard'
 import { laneMenuFeature, openLaneMenu } from './laneMenu'
-import { readCanvasPalette } from './canvasPalette'
+import { FIGURE_BACKGROUND, readCanvasPalette } from './canvasPalette'
 import type { DeckExport } from './MatrixPanel'
 import { marksMenu } from './marksMenu'
 import { openMenu } from './Menu'
@@ -327,16 +333,6 @@ const FRAME_FONT = '600 9.5px system-ui, sans-serif'
 const DOUBLE_CLICK_MS = 250
 /** Smallest window the browser will zoom to: forty bases fill a wide screen. */
 const MIN_SPAN = 40
-/**
- * How much ink a hand-drawn rectangle's wash is worth.
- *
- * A tenth, because the thing it is drawn over is the reason the reader put it
- * there: a band that made the tracks under it harder to read would be a mark
- * that hid its own subject. Enough to be seen against both themes' plot
- * backgrounds and not enough to change the colour of a track through it.
- */
-const MARK_WASH = 0.1
-
 export interface BrowserViewProps {
   assembly: Assembly
   store: AnnotationStore
@@ -656,6 +652,8 @@ export class BrowserView {
    * they point at has to be the box the text was measured into.
    */
   private nameHits: NameHit[] = []
+  /** A Tab out of a lane's box, waiting for the paint of what it committed (§26.8). */
+  private tabbing: { from: EditorAt; step: 1 | -1 } | null = null
   /** This frame's on-lane controls, in the order the layer holds them. */
   private marks: LaneMark[] = []
   /**
@@ -957,6 +955,11 @@ export class BrowserView {
       store: props.store,
       shownLimits: (id) => this.shownLimits(id),
       onChange: () => this.schedule(),
+      // Walked once the commit is painted, from that paint's boxes (§26.8).
+      onTab: (from, step) => {
+        this.tabbing = { from, step }
+        this.schedule()
+      },
     })
 
     this.cache = new SampleCache(props.client, () => this.schedule())
@@ -2141,7 +2144,33 @@ export class BrowserView {
     this.frameHandle = requestAnimationFrame(() => {
       this.frameHandle = 0
       this.draw()
+      // A Tab out of a lane's box, now that the boxes are the ones on screen.
+      const tabbing = this.tabbing
+      if (tabbing !== null) {
+        this.tabbing = null
+        this.tabOn(tabbing.from, tabbing.step)
+      }
     })
+  }
+
+  /**
+   * Put the caret in the next lane box of the kind a Tab left (§26.8): the
+   * next track's name down the stack, or the next end of a range — a lane's
+   * bottom, its top, then the next lane's. None past the last, where the
+   * caret is let go.
+   */
+  private tabOn(from: EditorAt, step: 1 | -1): void {
+    const stops: TabStop[] =
+      from.kind === 'name'
+        ? this.nameHits.map((target) => ({
+            at: { kind: 'name', id: target.entry.id, place: '' },
+            open: () => this.editor.openName(target, NO_OFFSET),
+          }))
+        : this.rangeHits.map((target) => ({
+            at: { kind: 'limit', id: target.entries[0]?.id ?? '', part: target.hit.part, place: '' },
+            open: () => this.editor.openLimit(target, NO_OFFSET),
+          }))
+    tabAlong(stops, from, step)
   }
 
   private draw(): void {
@@ -2489,7 +2518,7 @@ export class BrowserView {
     // Washes first, so the rules and the triangles that name the same coordinate
     // are drawn over their own shading rather than under it.
     for (const rect of store.rects) {
-      for (const span of sameSpan(rect.a, rect.b) ? [rect.a] : [rect.a, rect.b]) {
+      for (const span of rectSpans(rect)) {
         const from = this.trackAxis.locusToUnit(span.contig, span.from)
         const to = this.trackAxis.locusToUnit(span.contig, span.to)
         if (from === null || to === null || to < low || from > high) continue
@@ -2681,6 +2710,9 @@ export class BrowserView {
     // The bands a stack of heatmaps was divided into, kept for the label: one
     // name per row, in the row it names (§18.11).
     let labelBands: LaneFrame[] | null = lane.translation === null ? null : [frame]
+    // A `log2` lane's axis words, written after the label so they can keep
+    // clear of it (§18.12).
+    let logWords: { ticks: LogTick[]; paint: Parameters<typeof drawLogWords>[3] } | null = null
     clipLane(ctx, lane.frame)
     if (lane.reads.length > 0) {
       label = this.paintPile(ctx, lane, palette)
@@ -2722,7 +2754,7 @@ export class BrowserView {
       for (const [at, { entry: member, profile, junctions }] of lane.profiles.entries()) {
         const laneFrame = bands?.[at] ?? frame
         const extent = extentFor(member, profile.extent, groups)
-        const limits = resolveLimits(member.style.limits, extent)
+        const limits = resolveLimits(member.style.limits, extent, scaleOf(member.style), unitOf(member.style))
         const paint = {
           colour: member.style.colour,
           mode: member.style.mode,
@@ -2776,11 +2808,27 @@ export class BrowserView {
       const resolved = resolveLimits(
         first.entry.style.limits,
         extentFor(first.entry, first.profile.extent, groups),
+        scaleOf(first.entry.style),
+        unitOf(first.entry.style),
       )
       // Mid-drag the range says where the hand is going, not where it came from:
       // the faded copy behind it is already saying that, and the number a reader
       // is watching is the one they are setting.
       const limits = dragged === null ? resolved : scaledTo(resolved, dragged)
+      // A `log2` lane's own axis, as beside a map (§18.12): the rules now, the
+      // words once the label is down.
+      if (scaleOf(first.entry.style) === 'log2') {
+        const axisPaint = {
+          limits,
+          flip: first.entry.style.flip,
+          guideColour: palette.labelColor,
+          haloColour: palette.labelHaloColor,
+          font: scaleFont(LANE_FONT),
+        }
+        const ticks = logAxisTicks(limits, unitOf(first.entry.style))
+        drawLogRules(ctx, frame, ticks, axisPaint)
+        if (this.text) logWords = { ticks, paint: axisPaint }
+      }
       if (this.text) {
         label = {
           // A sequence drawn as a value track is drawn as its GC content, and
@@ -2798,7 +2846,12 @@ export class BrowserView {
           detail:
             lane.pending !== null
               ? progressDetail(lane.pending)
-              : (laneNote(lane.profiles) ?? { kind: 'limits', ...limits }),
+              : (laneNote(lane.profiles) ?? {
+                  kind: 'limits',
+                  ...limits,
+                  scale: scaleOf(first.entry.style),
+                  ...(unitOf(first.entry.style) === undefined ? {} : { unit: unitOf(first.entry.style) }),
+                }),
           at: labelEndFor(frame, limits, first.entry.style.flip),
         }
       }
@@ -2907,9 +2960,11 @@ export class BrowserView {
     }
     if (lane.translation !== null) this.paintFrames(ctx, lane.translation, entry, palette)
     ctx.restore()
-    if (label !== null && !bare) {
-      this.labelLane(ctx, lane, palette, label.entries, label.detail, label.at, labelBands)
-    }
+    const plates =
+      label !== null && !bare
+        ? this.labelLane(ctx, lane, palette, label.entries, label.detail, label.at, labelBands)
+        : []
+    if (logWords !== null && !bare) drawLogWords(ctx, frame, logWords.ticks, logWords.paint, plates)
     if (lane.translation !== null && !bare) this.labelFrames(ctx, lane.translation, palette)
   }
 
@@ -3008,7 +3063,7 @@ export class BrowserView {
     this.paintLane(ctx, lane, this.groupRanges(), readCanvasPalette(this.canvas), true)
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.globalCompositeOperation = 'destination-over'
-    ctx.fillStyle = readPageBackground()
+    ctx.fillStyle = FIGURE_BACKGROUND
     ctx.fillRect(0, 0, out.width, out.height)
     ctx.globalCompositeOperation = 'source-over'
     return out
@@ -3049,7 +3104,7 @@ export class BrowserView {
      * once: it is the *lane's* axis and every row shares it.
      */
     bands: LaneFrame[] | null = null,
-  ): void {
+  ): LabelBox[] {
     // Where a right-aligned label block ends: clear of the data, and clear of
     // the handle hanging in front of it. Without the handle's room the name ran
     // straight into the dots, which is exactly what a label and a control must
@@ -3084,10 +3139,14 @@ export class BrowserView {
         palette: { text: palette.labelColor, halo: palette.labelHaloColor },
       })
     const boxes = blockOf(0)
+    // What the block covers over the data — nothing, in the column — for
+    // anything else written on the lane to keep out of.
+    const plates: LabelBox[] = boxes.plate === null ? [] : [boxes.plate]
     for (let index = 1; index < frames.length; index++) {
       const more = blockOf(index)
       boxes.names.push(...more.names)
       boxes.swatches.push(...more.swatches)
+      if (more.plate !== null) plates.push(more.plate)
       this.wanted(more.wanted)
     }
     this.wanted(boxes.wanted)
@@ -3109,6 +3168,7 @@ export class BrowserView {
     if (boxes.auto !== null && entries.some((entry) => hasAMovableAxis(entry.kind))) {
       this.marks.push({ kind: 'auto', entries, at: boxes.auto })
     }
+    return plates
   }
 
   /**
@@ -3177,7 +3237,7 @@ export class BrowserView {
     for (const lane of this.lanes) {
       const entry = this.memberOf(lane, id)
       if (entry === null) continue
-      return resolveLimits(entry.style.limits, extent)
+      return resolveLimits(entry.style.limits, extent, scaleOf(entry.style), unitOf(entry.style))
     }
     return null
   }
@@ -5016,18 +5076,6 @@ function scalableLane(lane: Lane | null): AnnotationEntry[] | null {
     hasAMovableAxis(entry.kind),
   )
   return tracks.length === 0 ? null : tracks
-}
-
-/**
- * Whether a rectangle's two sides are the same stretch — the on-diagonal box.
- *
- * By value and not by identity: a mark that has been round-tripped through
- * session storage is two equal objects rather than one shared one, and a
- * diagonal box that came back from a previous visit would otherwise be washed
- * over the tracks twice.
- */
-function sameSpan(one: ManualSpan, two: ManualSpan): boolean {
-  return one.contig === two.contig && one.from === two.from && one.to === two.to
 }
 
 

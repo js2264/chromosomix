@@ -24,7 +24,8 @@ import type {
 } from './types'
 import type { AnnotationClient } from './worker/client'
 import type { DetectedFormat, WireSource } from './worker/protocol'
-import { hasHandle, rememberHandle, resolveHandle } from '../state/handles'
+import { hasHandle, rememberHandle } from '../state/handles'
+import { hasLocation, resolveLocal } from '../state/locations'
 import {
   basesForIndex,
   guessedIndexUrl,
@@ -367,7 +368,8 @@ export class AnnotationLoader {
       // set hydrated at boot, so it costs nothing and cannot be wrong in the
       // direction that matters — a row it calls remembered and then fails to
       // open falls back to the detached wording a moment later.
-      const remembered = computed === null && hasHandle(row.source.name)
+      const remembered =
+        computed === null && (hasHandle(row.source.name) || hasLocation(row.source.name))
       const summary =
         computed !== null
           ? `computed by ${computed.task} · recompute to draw it again`
@@ -405,6 +407,21 @@ export class AnnotationLoader {
   }
 
   /**
+   * Try every detached local row again — a folder has just been connected
+   * (§20.6), and a workspace's tracks that were waiting on it are in it.
+   * Rows with no place to look and no grant are left as they are, with the
+   * button beside them that has always been the way back.
+   */
+  refind(): void {
+    for (const entry of this.store.entries) {
+      if (entry.status !== 'detached' || entry.source.kind !== 'detached') continue
+      const name = entry.source.name
+      if (!hasHandle(name) && !hasLocation(name)) continue
+      void this.reopenRemembered(entry.id, name)
+    }
+  }
+
+  /**
    * Re-open a restored local row from a remembered grant, or leave it detached.
    *
    * The whole of the difference this makes is that the reader is not asked to
@@ -414,7 +431,9 @@ export class AnnotationLoader {
    * already in, with the button beside it that has always been the way back.
    */
   private async reopenRemembered(id: string, name: string): Promise<void> {
-    const file = await resolveHandle(name)
+    // The grant for the file, then its place in a folder the installed app
+    // keeps (§20.6).
+    const file = await resolveLocal(name)
     const entry = this.store.byId(id)
     // Gone while we were asking — the tab was closed, the file re-dropped by
     // hand, the row removed. Any of those makes this answer stale.
@@ -429,7 +448,7 @@ export class AnnotationLoader {
     // that reopens refusing, since there is no whole-file fallback (§8.13).
     let index: File | undefined
     for (const candidate of indexNamesFor(name)) {
-      const held = await resolveHandle(candidate)
+      const held = await resolveLocal(candidate)
       if (held !== null) {
         index = held
         break

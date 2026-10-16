@@ -424,17 +424,18 @@ async function measure(
  * The separations the figure opens on, in base pairs.
  *
  * A default view, not a limit: the marquee, the axis boxes and a double-click
- * all move it (`figures/FigureBlock.ts`), and the curve underneath runs from one
- * base pair to the length of the longest sequence whatever this says.
+ * all move it (`figures/FigureBlock.ts`), and the curve underneath runs from the
+ * minimum separation to the length of the longest sequence whatever this says.
  *
- * It is here because the full extent is a bad picture of a good curve. The first
- * break holds the diagonal and the first off-diagonal — on a 1 kb map that is
- * two thirds of every cis contact in the file — at a separation of 1 bp, so a
- * log axis drawn over everything spends a third of its width on one point four
- * orders of magnitude above the rest and squashes the decades anybody reads into
- * the right-hand quarter. The other end is the mirror of it: past a megabase the
- * curve is a handful of bins with a few cells each, and it is noise drawn at the
- * same weight as the data.
+ * It is here because the full extent is a bad picture of a good curve. Kept, at
+ * a minimum separation of 0, the diagonal and the first off-diagonal fill the
+ * first break — on a 1 kb map that is two thirds of every cis contact in the
+ * file — at a separation of 1 bp, so a log axis drawn over everything spends a
+ * third of its width on one point four orders of magnitude above the rest and
+ * squashes the decades anybody reads into the right-hand quarter; left out, as
+ * they are by default, the next few bins are still the ligation artefacts. The
+ * other end is the mirror of it: past a megabase the curve is a handful of bins
+ * with a few cells each, and it is noise drawn at the same weight as the data.
  *
  * 4 kb to 1 Mb is the range a P(s) is read over on a yeast or a mammalian map
  * alike — past the ligation artefacts at the bottom and inside the shortest
@@ -447,6 +448,8 @@ export const runExpected: TaskRunner = async (job) => {
   const scope = strParam(job.params, 'scope', 'contig')
   const ticked = tickedSequences(job.params, 'sequences')
   const factor = numParam(job.params, 'factor', 1.1)
+  // 2 is the form's default (`tasks/ps.ts`); a session stored without the key
+  // comes back as it was drawn, from the diagonal.
   const minSeparation = numParam(job.params, 'minSeparation', 0)
   // Unrecognised falls back to the density, which is what the panel has drawn
   // since the choice existed — the same rule `planUnits` follows for the scope,
@@ -593,9 +596,14 @@ async function strandedCurves(job: JobContext): Promise<TaskOutput | null> {
     if (counts === null) return null
   }
 
+  // **From the first record, whatever the minimum separation says.** That trims
+  // the matrix's near-diagonal, a fact about its grid; the records are counted
+  // below any grid, and the separation the four converge at — usually shorter
+  // than one bin of the map — is the one thing this figure is drawn for. Floored
+  // at the curve's two bins it would be cut off, and the run would report that
+  // the four never settle.
   const figure = orientationFigure(counts, {
     factor: Math.max(1.01, numParam(job.params, 'factor', 1.1)),
-    minSeparation: job.toBp(Math.max(0, numParam(job.params, 'minSeparation', 0))),
   })
   if (figure === null) {
     job.note(

@@ -80,6 +80,8 @@ import {
   type Quantizer,
 } from './picture'
 import { BinLens, LensStore, lensFor, lensedHandle, sequenceTable } from './lens'
+import { CoarseGrid } from './coarsen'
+import { CoarseStore, coarsenedHandle } from './coarseMap'
 import type { ReferenceEdit } from '../genome/edit'
 import {
   ResampledStore,
@@ -1471,6 +1473,47 @@ export class MetaCooler {
       chromOffset: lens.chromOffset,
       store: new LensStore(mc.store, lens, mc.storageMode === 'symmetric-upper'),
       unlensed: mc,
+    })
+    return { map, refusal: null }
+  }
+
+  /**
+   * This map at a resolution the reader added (§3.4): every `factor` of its bins
+   * along each sequence summed into one, as the map is drawn there — see
+   * `metacooler/coarseMap.ts`. Everything above sees an ordinary map at the
+   * coarser bin size, which is what lets a task measure the map the reader is
+   * looking at rather than the rung the file stores (§18.4).
+   *
+   * A new map over the same handle and the same pixels, as {@link withLens}
+   * makes one, and made after it and after a resample, so that it sums the map
+   * as drawn: closing it closes the file. The map as it was for a factor of one,
+   * and a refusal, with the map as it was, for a container of cells, whose cell
+   * set is chosen on the map that reads it rather than through one.
+   */
+  static coarsened(mc: MetaCooler, factor: number): { map: MetaCooler; refusal: string | null } {
+    if (!Number.isInteger(factor) || factor < 1) {
+      return { map: mc, refusal: `A resolution is a whole number of this map's bins, not ${factor} of them.` }
+    }
+    if (factor === 1) return { map: mc, refusal: null }
+    if (mc.layout.kind === 'scool') {
+      return { map: mc, refusal: 'A single-cell file is not yet measured at a resolution you added; measure it at one it stores.' }
+    }
+    const grid = CoarseGrid.of(mc.chromOffset, factor)
+    // `nnz` is the fine table's length, and the coarse map's is not known
+    // without summing every block: left out, as a file that does not say is.
+    const { nnz: _fine, ...kept } = mc.handle.attrs()
+    void _fine
+    const attrs = { ...kept, 'bin-size': mc.binsize * factor, nbins: grid.nBins }
+    const map = new MetaCooler({
+      uri: mc.uri,
+      handle: coarsenedHandle(mc.handle, grid, attrs),
+      layout: mc.layout,
+      attrs,
+      contigs: mc.contigs,
+      chromOffset: grid.chromOffset,
+      ...(mc.genomes === null ? {} : { genomes: mc.genomes, genomeOffset: mc.genomeOffset }),
+      store: new CoarseStore(mc.store, grid, mc.storageMode),
+      ...(mc.unlensed === null ? {} : { unlensed: mc.unlensed }),
     })
     return { map, refusal: null }
   }

@@ -32,7 +32,8 @@ import { ceilingFactor, nudgedLimits } from '../render/tracks'
 import type { AnnotationLanes, LaneEdge, LaneGeometry } from './AnnotationLanes'
 import { filesFrom } from './chooseFiles'
 import { TRACK_DRAG_TYPE, dragHasFiles, dragHasOverlay, dragHasTrack, dropEffectFor, el } from './dom'
-import { copyPicture, readPageBackground } from './export'
+import { FIGURE_BACKGROUND } from './canvasPalette'
+import { copyPicture } from './export'
 import { openFeatureDialog } from './FeatureDialog'
 import { dragHasFileRow } from './fileDrag'
 import { HOVER_SOURCE_MAP, setHoverPlace } from './hoverLocus'
@@ -598,7 +599,7 @@ export class LaneGestures {
    * to the grid's — the tooltip is parented there and knows nothing about which
    * canvas asked for it.
    */
-  watchLane(edge: LaneEdge, canvas: HTMLCanvasElement): void {
+  watchLane(edge: LaneEdge, canvas: HTMLCanvasElement, labels?: HTMLCanvasElement): void {
     const lanes = this.lanes
     const onMove = (event: MouseEvent): void => {
       // A track being carried to an edge is not a position being pointed at.
@@ -649,7 +650,7 @@ export class LaneGestures {
       canvas.removeEventListener('mouseleave', onLeave)
     })
     this.driveFromLane(edge, canvas)
-    this.dragLane(edge, canvas)
+    this.dragLane(edge, canvas, labels)
   }
 
   /**
@@ -742,7 +743,7 @@ export class LaneGestures {
    * leaves a 44-pixel strip — which every resize does — must not be dropped on
    * the map underneath, where it would become a pan.
    */
-  private dragLane(edge: LaneEdge, canvas: HTMLCanvasElement): void {
+  private dragLane(edge: LaneEdge, canvas: HTMLCanvasElement, labels?: HTMLCanvasElement): void {
     const lanes = this.lanes
     const store = this.laneStore
     const horizontal = laneIsHorizontal(edge)
@@ -848,7 +849,7 @@ export class LaneGestures {
       const limit = lanes.limitAt(edge, x, y)
       if (limit !== null && this.laneEditor !== null) {
         event.preventDefault()
-        this.laneEditor.openLimit(limit, { left: canvas.offsetLeft, top: canvas.offsetTop })
+        this.laneEditor.openLimit(limit, { left: canvas.offsetLeft, top: canvas.offsetTop }, edge)
         return
       }
       // The handle next: it sits inside the lane's own rectangle, so the lane
@@ -889,7 +890,7 @@ export class LaneGestures {
       const named = lanes.nameAt(edge, x, y)
       if (named !== null && this.laneEditor !== null) {
         event.preventDefault()
-        this.laneEditor.openName(named, { left: canvas.offsetLeft, top: canvas.offsetTop })
+        this.laneEditor.openName(named, { left: canvas.offsetLeft, top: canvas.offsetTop }, edge)
         return
       }
       const hit = lanes.laneAt(edge, x, y)
@@ -1164,7 +1165,7 @@ export class LaneGestures {
           : laneMenuFeature(found.set, found.index, { open: () => this.openFeature(found) })
       // The lane under the pointer, alone, as this stack draws it (§7.2).
       const copy = (): void =>
-        copyPicture('track', lanes.laneImage(edge, hit.entry.id, this.host.laneGeometry(), readPageBackground()))
+        copyPicture('track', lanes.laneImage(edge, hit.entry.id, this.host.laneGeometry(), FIGURE_BACKGROUND))
       openLaneMenu(
         event.clientX,
         event.clientY,
@@ -1200,6 +1201,62 @@ export class LaneGestures {
       canvas.removeEventListener('pointerup', onUp)
       canvas.removeEventListener('pointercancel', onCancel)
       canvas.removeEventListener('contextmenu', onMenu)
+    })
+    if (labels !== undefined) this.watchLabels(edge, canvas, labels, onMenu)
+  }
+
+  /**
+   * The corner a stack's names run out onto (§8.8), as the stack's own names:
+   * a press on a name or an end of its range opens the same caret there, and a
+   * right click the same lane's menu.
+   *
+   * Read in the **stack's** coordinates — the corner's pixels are past the
+   * stack canvas's edge, so a point there is a negative or an overlong one in
+   * the stack's own terms, which is what the names were measured in — and only
+   * for what a name is: no pan, no handle, no zoom starts in a corner, which
+   * has no genome under it.
+   */
+  private watchLabels(
+    edge: LaneEdge,
+    canvas: HTMLCanvasElement,
+    labels: HTMLCanvasElement,
+    onMenu: (event: MouseEvent) => void,
+  ): void {
+    const lanes = this.lanes
+    const inStack = (event: MouseEvent): { x: number; y: number } => {
+      const box = canvas.getBoundingClientRect()
+      return { x: event.clientX - box.left, y: event.clientY - box.top }
+    }
+    const onDown = (event: PointerEvent): void => {
+      if (event.button !== 0 || this.host.isPicking() || this.laneEditor === null) return
+      const { x, y } = inStack(event)
+      const offset = { left: canvas.offsetLeft, top: canvas.offsetTop }
+      const limit = lanes.limitAt(edge, x, y)
+      if (limit !== null) {
+        event.preventDefault()
+        this.laneEditor.openLimit(limit, offset, edge)
+        return
+      }
+      const named = lanes.nameAt(edge, x, y)
+      if (named !== null) {
+        event.preventDefault()
+        this.laneEditor.openName(named, offset, edge)
+      }
+    }
+    const onMove = (event: PointerEvent): void => {
+      const { x, y } = inStack(event)
+      labels.classList.toggle('is-text', lanes.limitAt(edge, x, y) !== null || lanes.nameAt(edge, x, y) !== null)
+    }
+    const onLeave = (): void => labels.classList.remove('is-text')
+    labels.addEventListener('pointerdown', onDown)
+    labels.addEventListener('pointermove', onMove)
+    labels.addEventListener('pointerleave', onLeave)
+    labels.addEventListener('contextmenu', onMenu)
+    this.laneListeners.push(() => {
+      labels.removeEventListener('pointerdown', onDown)
+      labels.removeEventListener('pointermove', onMove)
+      labels.removeEventListener('pointerleave', onLeave)
+      labels.removeEventListener('contextmenu', onMenu)
     })
   }
 

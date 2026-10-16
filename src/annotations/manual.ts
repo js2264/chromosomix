@@ -125,6 +125,23 @@ export interface ManualRect {
 
 export type ManualMark = ManualLine | ManualArrowhead | ManualRect
 
+/**
+ * The stretches of one axis a rectangle covers, seen along that axis alone —
+ * what a picture with one axis washes over its tracks (§8.1): the one stretch
+ * of a box on the diagonal, and both where they differ. An off-diagonal box is
+ * genuinely two stretches — a locus against an arm, two loci a megabase apart —
+ * and drawing one of them would say the mark is somewhere it is not.
+ *
+ * Compared by value and not by identity: a mark that has been round-tripped
+ * through session storage is two equal objects rather than one shared one, and
+ * a diagonal box that came back from a previous visit would otherwise be washed
+ * over the tracks twice.
+ */
+export function rectSpans(rect: Pick<ManualRect, 'a' | 'b'>): ManualSpan[] {
+  const { a, b } = rect
+  return a.contig === b.contig && a.from === b.from && a.to === b.to ? [a] : [a, b]
+}
+
 /** Whether a mark is drawn: hidden by neither hand ({@link MarkHidden}). */
 export function isShown(mark: ManualMark): boolean {
   return mark.hidden === undefined

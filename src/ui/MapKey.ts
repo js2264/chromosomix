@@ -1,5 +1,6 @@
 /**
- * The key in the corner of a map, as DOM: a title, two swatches, two numbers.
+ * The key in the corner of a map, as DOM: a title, two numbers and the ramp
+ * between them.
  *
  * DOM and not a canvas, and the two numbers are why. A colourbar's ticks are a
  * picture of a scale; these are the *bounds the reader set*, and a reader who
@@ -14,6 +15,14 @@
 
 import type { KeyContent } from '../render/legend'
 import { el } from './dom'
+import { TAB_WALKS, tabStep } from './tabWalk'
+
+/**
+ * Every key whose numbers a reader may type, by its element: what a Tab past
+ * one key's ends finds the next key by, in the order a deck's cells are on the
+ * page (§26.8). Weak, so a key gone with its panel is gone from here too.
+ */
+const editable = new WeakMap<Element, MapKey>()
 
 export interface MapKeyProps {
   /**
@@ -32,9 +41,10 @@ export class MapKey {
   private readonly noteEl = el('span', { class: 'map-key-note' })
   private readonly loEl: HTMLElement
   private readonly hiEl: HTMLElement
-  private readonly loSwatch = el('span', { class: 'map-key-swatch' })
-  private readonly hiSwatch = el('span', { class: 'map-key-swatch' })
+  private readonly rampEl = el('span', { class: 'map-key-ramp', attrs: { 'aria-hidden': 'true' } })
   private content: KeyContent | null = null
+  /** How each end is put a caret in, where the key is editable. */
+  private readonly opens = new Map<'lo' | 'hi', () => void>()
 
   constructor(private readonly props: MapKeyProps = {}) {
     this.loEl = this.bound('lo')
@@ -48,10 +58,34 @@ export class MapKey {
         'div',
         { class: 'map-key-row' },
         this.loEl,
-        el('span', { class: 'map-key-ramp' }, this.loSwatch, this.hiSwatch),
+        this.rampEl,
         this.hiEl,
       ),
     )
+    if (props.onChange !== undefined) editable.set(this.el, this)
+  }
+
+  /** Put a caret in one end, as a click on it does. Nothing on a key that is not the reader's. */
+  edit(which: 'lo' | 'hi'): void {
+    this.opens.get(which)?.()
+  }
+
+  /**
+   * Where a Tab goes from one end (§26.8): low to high, then on to the next
+   * map's low in a deck — the keys in the order the deck's cells are on the
+   * page — and Shift+Tab the other way. Past the last, nowhere: the caret is
+   * let go, as Enter lets it go.
+   */
+  private tab(which: 'lo' | 'hi', step: 1 | -1): void {
+    if (which === 'lo' && step === 1) return this.edit('hi')
+    if (which === 'hi' && step === -1) return this.edit('lo')
+    const deck = this.el.closest('.deck-grid')
+    if (deck === null) return
+    const keys = [...deck.querySelectorAll('.map-key')]
+      .filter((node) => node.closest('.hidden, [hidden]') === null)
+      .flatMap((node) => editable.get(node) ?? [])
+    const at = keys.indexOf(this)
+    keys[at + step]?.edit(step === 1 ? 'lo' : 'hi')
   }
 
   set(content: KeyContent): void {
@@ -64,13 +98,30 @@ export class MapKey {
     // Hidden rather than emptied, so the key does not keep a blank line's worth
     // of height on a block that has no resolution to report.
     this.noteEl.classList.toggle('hidden', note === '')
-    this.loSwatch.style.background = content.loColor
-    this.hiSwatch.style.background = content.hiColor
+    const stops = content.ramp.length > 1 ? content.ramp : [content.loColor, content.hiColor]
+    this.rampEl.style.background = `linear-gradient(to right, ${stops.join(', ')})`
     // Not while a caret is in it: the panel repaints on every frame of a drag
     // over the map, and rewriting the box under a reader mid-number is the one
     // way an editable legend is worse than a printed one.
     if (this.loEl.querySelector('input') === null) this.loEl.textContent = content.loLabel
     if (this.hiEl.querySelector('input') === null) this.hiEl.textContent = content.hiLabel
+  }
+
+  /**
+   * What a box opens on: the number the key shows, which is the one being read
+   * and so the one to edit from — rounded, as the clip card's boxes are
+   * (`trimNumber`), rather than the float the scale holds, whose sixteen
+   * digits overflowed the box and left its end in view instead of its start.
+   * The label is the bound itself, formatted (`keyContent`), so nothing is
+   * lost by an end opened and left alone: an unchanged box is no decision. A
+   * label that does not read as a number falls back to the bound as held.
+   */
+  private seed(which: 'lo' | 'hi'): string {
+    const content = this.content
+    if (content === null) return ''
+    const label = which === 'lo' ? content.loLabel : content.hiLabel
+    if (label.trim() !== '' && Number.isFinite(Number(label))) return label
+    return String(which === 'lo' ? content.lo : content.hi)
   }
 
   private bound(which: 'lo' | 'hi'): HTMLElement {
@@ -91,11 +142,12 @@ export class MapKey {
 
     const open = (): void => {
       if (node.querySelector('input') !== null) return
-      const held = which === 'lo' ? this.content?.lo : this.content?.hi
+      const seeded = this.seed(which)
       const input = el('input', {
         class: 'map-key-input',
         type: 'text',
-        value: held === undefined ? '' : String(held),
+        value: seeded,
+        attrs: { [TAB_WALKS]: '' },
       })
       // A flag rather than a DOM test, because the two ways out of the box fire
       // *inside each other*: taking the input away on Enter blurs it, the blur
@@ -111,7 +163,10 @@ export class MapKey {
         if (this.content !== null) {
           node.textContent = which === 'lo' ? this.content.loLabel : this.content.hiLabel
         }
-        if (!apply) return
+        // Opening a box and not changing it is not a decision: taken as one, a
+        // Tab through an end on its way to the other would fix a bound on auto
+        // at the number the key happened to show.
+        if (!apply || raw === seeded) return
         // An empty box is "auto", the same thing the clip card's own button
         // means, so a reader can undo a bound where they set it rather than
         // having to find the control they were avoiding.
@@ -119,6 +174,13 @@ export class MapKey {
         if (value === null || Number.isFinite(value)) onChange(which, value)
       }
       input.addEventListener('keydown', (event) => {
+        const step = tabStep(event)
+        if (step !== null) {
+          // Enter that goes on (§26.8).
+          event.preventDefault()
+          commit(true)
+          this.tab(which, step)
+        }
         if (event.key === 'Enter') commit(true)
         if (event.key === 'Escape') commit(false)
         // The map beneath reads every key it is given — `f` fits, arrows pan —
@@ -132,6 +194,7 @@ export class MapKey {
       input.focus()
       input.select()
     }
+    this.opens.set(which, open)
 
     node.addEventListener('click', (event) => {
       event.stopPropagation()

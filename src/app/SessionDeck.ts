@@ -271,6 +271,24 @@ export class SessionDeck {
           : this.session.file === null
             ? undefined
             : this.session.mapLabel(this.session.file.uri),
+      // The picker on the first map's heading (§16.3): the session's own
+      // sequences, and its own road to one of them — the locus box's, the view
+      // as it is on another sequence; from a whole-file map, at bin level.
+      leadSequences: () => this.session.contigNames(),
+      onLeadSequence: (name) => {
+        const state = this.session.store.state
+        if (state === null) return
+        const {
+          region2: _pair,
+          focus: _focus,
+          regions: _ticked,
+          genomes: _genomes,
+          locus: _locus,
+          level: _level,
+          ...rest
+        } = state
+        this.session.navigate({ ...rest, view: 'region', region: name })
+      },
       mapsAllowed: () => this.mapsAllowed,
       // Without the handler: §7.5's controls belong to the lead, and every
       // companion draws what they say without offering a second copy of them.

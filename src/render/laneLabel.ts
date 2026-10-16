@@ -25,7 +25,8 @@
  */
 
 import { laneIsHorizontal, laneRect, laneText, valueAcross, type LaneFrame } from './lane'
-import { formatLimit, normaliser } from './tracks'
+import { formatScaledLimit, normaliser } from './tracks'
+import type { TrackScale } from '../annotations/types'
 import { formatPosition } from '../genome/assembly'
 import { fmt } from '../units'
 
@@ -249,18 +250,46 @@ const isLower = (ch: string): boolean => ch >= 'a' && ch <= 'z'
 const isUpper = (ch: string): boolean => ch >= 'A' && ch <= 'Z'
 
 /**
- * A column to right-align the block in, when the surface has one.
+ * A column to align the block in, when the surface has one: the browser's
+ * gutter, and beside a map the stack's margin running on into the corner
+ * beside it (§8.8).
  *
  * `null` draws the block over the data, starting at the lane's near end, which
- * is what a lane beside a map always does — the margin there belongs to the
- * heatmap's own block labels, and a bottom canvas cannot grow backwards to make
- * one of its own.
+ * is what a surface with neither does — the assembly editor's stage.
  */
 export interface LaneLabelColumn {
-  /** The leftmost the block may start: past whatever hangs in the margin. */
+  /**
+   * The column's two ends along the lane, `start` the smaller: past whatever
+   * hangs in the margin, and clear of the data and of the handle. On a lane
+   * down the page the text reads *up* it, so there `end` is where a line of
+   * text starts and `start` where it stops.
+   */
   start: number
-  /** Where a right-aligned block ends: clear of the data and of the handle. */
   end: number
+  /**
+   * Which end of the column the block is set flush with, in the order the text
+   * reads: `end` (the default, and the browser's) puts the last glyph at the
+   * column's far end, beside the data after it; `start` puts the first glyph
+   * at its near end, beside the data before it. The corners beside a map want
+   * both (§8.8): the names left of a bottom stack end against it, the names
+   * right of a top stack start against it.
+   */
+  align?: 'start' | 'end'
+  /**
+   * Hold a range written *beside* a name — on a lane too thin to stack it —
+   * as part of the block: sized into what the column wants and aligned with
+   * the name, rather than run on past the column's end. The corners beside a
+   * map (§8.8), where past the end is the handle and then the data; the
+   * browser's column leaves it as it was.
+   */
+  besideToo?: boolean
+  /**
+   * Set the lines against `across` rather than along it: beside a stack above
+   * the map or left of it, where `across` runs up the page or leftward, so the
+   * range still reads *under* its name — on the line after it in the order a
+   * reader takes the lines — as it does beside the other two (§8.8).
+   */
+  flip?: boolean
   /** What to add to a measured width when reporting what the column wants. */
   pad: number
   /**
@@ -286,7 +315,18 @@ export interface LaneLabelSpec {
    */
   detail:
     | { kind: 'text'; text: string }
-    | { kind: 'limits'; min: number; max: number }
+    | {
+        kind: 'limits'
+        min: number
+        max: number
+        /**
+         * The lane's scale and unit, so a `log2` lane's ends are written as the
+         * quantity they stand for — `1 kb – 106 kb` on a scalogram's lane —
+         * rather than as the exponents `9.97 – 16.7` (§18.12).
+         */
+        scale?: TrackScale
+        unit?: 'bp'
+      }
     /**
      * A read on its way: a phrase and a bar. `total` is `0` where the host
      * would not say how much is coming, and the bar is then drawn half full
@@ -414,6 +454,15 @@ export interface LaneLabelBoxes {
   nameAcross: number
   /** How wide a column this block would like, including the column's padding. */
   wanted: number
+  /**
+   * What the block covers over the data — its plate, names, range and all — or
+   * `null` where it was written in a column beside the lane, or not at all.
+   *
+   * Drawn whatever the lane's height, unlike the click targets above, because
+   * it is what anything else written on the lane keeps out of: the words of a
+   * scalogram's distance axis (§18.12) are left out where they would land on it.
+   */
+  plate: LabelBox | null
 }
 
 /**
@@ -436,6 +485,7 @@ export function drawLaneLabel(
     auto: null,
     nameAcross: style.nameTop,
     wanted: 0,
+    plate: null,
   }
   if (names.length === 0) return out
 
@@ -448,6 +498,18 @@ export function drawLaneLabel(
   const dir = horizontal ? 1 : -1
   const want = (width: number): void => {
     if (width > out.wanted) out.wanted = width
+  }
+  /**
+   * Where a run `length` long starts along the lane, in a column: flush with
+   * the end its `align` names, in reading order — up the page on a lane down
+   * it — and never back past the other end.
+   */
+  const inColumn = (col: LaneLabelColumn, length: number): number => {
+    const first = horizontal ? col.start : col.end
+    const last = horizontal ? col.end : col.start
+    if (col.align === 'start') return first
+    const at = last - dir * length
+    return horizontal ? Math.max(first, at) : Math.min(first, at)
   }
   /**
    * Whether a click target on this line would clear the lane's resize border.
@@ -565,7 +627,14 @@ export function drawLaneLabel(
       : spec.labelAt === 'far'
         ? Math.max(6, frame.thickness - farGuard - (stacked ? style.detailDrop : 0) - block)
         : style.nameTop
-  out.nameAcross = nameTop
+  /**
+   * Where a line set `across` into the block stands across the lane: as set,
+   * or mirrored about the lane's middle for a column that sets its lines the
+   * other way ({@link LaneLabelColumn.flip}). The block is centred in a column,
+   * so the mirror keeps it where it was and only turns the order of its lines.
+   */
+  const place = (across: number): number => (column?.flip === true ? frame.thickness - across : across)
+  out.nameAcross = place(nameTop)
 
   // What the block is about to occupy along the lane, measured before anything
   // is drawn. Two things want it: the plate underneath, and — on a vertical lane
@@ -617,10 +686,11 @@ export function drawLaneLabel(
   if (column === null && blockAlong > 0) {
     const from = nameTop - style.hitHeight / 2
     const to = (stacked ? nameTop + block + style.detailDrop : nameTop + block) + style.hitHeight / 2
+    out.plate = laneRect(frame, near - dir * 2, near + dir * (blockAlong + 2), from, to)
     ctx.save()
     ctx.globalAlpha = PLATE_ALPHA
     ctx.fillStyle = palette.halo
-    ctx.fillRect(...laneRect(frame, near - dir * 2, near + dir * (blockAlong + 2), from, to))
+    ctx.fillRect(...out.plate)
     ctx.restore()
   }
 
@@ -634,8 +704,16 @@ export function drawLaneLabel(
     // not depend on where the name is drawn. Reporting a wrapped width would
     // shrink the column, un-wrap the name, grow the column, wrap it again.
     want(runWidth(run) + (column?.pad ?? 0))
+    // The range on the last name's line, in a column that holds it there.
+    const besideHere =
+      column !== null &&
+      column.besideToo === true &&
+      !stacked &&
+      detailRoom > 0 &&
+      index === runs.length - 1
+    if (besideHere && column !== null) want(runWidth(run) + NAME_GAP + detailRoom + column.pad)
     for (const [part, text] of cut.entries()) {
-      const across = nameTop + line * style.nameLine
+      const across = place(nameTop + line * style.nameLine)
       line++
       // Only the first line of a name carries its chip; a continuation is the
       // same name, and a second chip would read as a second track.
@@ -646,7 +724,13 @@ export function drawLaneLabel(
         drawn.reduce((sum, item) => sum + ctx.measureText(item.text).width, 0) +
         (first ? drawn.length * swatchRoom(style) : 0) +
         (drawn.length - 1) * NAME_GAP
-      let at = column === null ? near : Math.max(column.start, column.end - total)
+      let at =
+        column === null
+          ? near
+          : inColumn(
+              column,
+              total + (besideHere && part === cut.length - 1 ? NAME_GAP + detailRoom : 0),
+            )
       for (const item of drawn) {
         // The colour, immediately before the name it belongs to. Drawn on the
         // canvas rather than laid over it, so it is a legend rather than a
@@ -710,7 +794,7 @@ export function drawLaneLabel(
   ctx.font = style.rangeFont
   ctx.fillStyle = palette.text
   ctx.textAlign = 'left'
-  const across = stacked ? nameTop + block + style.detailDrop : nameTop + block
+  const across = place(stacked ? nameTop + block + style.detailDrop : nameTop + block)
   // The same slot the names gave up, so the range stays under the name it
   // belongs to rather than starting a handle's width to the side of it — and a
   // gap after the name when it goes *beside* one instead, which a thin lane
@@ -738,7 +822,7 @@ export function drawLaneLabel(
           : ''
     if (text !== '') {
       const width = ctx.measureText(text).width
-      const at = column !== null && stacked ? Math.max(column.start, column.end - width) : along
+      const at = column !== null && stacked ? inColumn(column, width) : along
       if (column !== null && stacked) want(width + column.pad)
       laneText(ctx, frame, text, at, across, { halo: palette.halo })
     }
@@ -754,7 +838,7 @@ export function drawLaneLabel(
     const bar = style.progressWidth
     const gap = text === '' ? 0 : NAME_GAP
     const whole = textWidth + gap + bar
-    const at = column !== null && stacked ? Math.max(column.start, column.end - whole) : along
+    const at = column !== null && stacked ? inColumn(column, whole) : along
     if (column !== null && stacked) want(whole + column.pad)
     if (text !== '') laneText(ctx, frame, text, at, across, { halo: palette.halo })
     const fraction =
@@ -774,16 +858,13 @@ export function drawLaneLabel(
   }
 
   // Each end written separately, so each end has a box of its own to point at.
-  const min = formatLimit(spec.detail.min)
-  const max = formatLimit(spec.detail.max)
+  const min = formatScaledLimit(spec.detail.min, spec.detail.scale ?? 'linear', spec.detail.unit)
+  const max = formatScaledLimit(spec.detail.max, spec.detail.scale ?? 'linear', spec.detail.unit)
   // The range goes wherever its names went, so the two stay one label — and in
   // the column it is right-aligned like them, with the lane's autoscale button
   // kept inside the column rather than pushed onto the data.
   const range = ctx.measureText(`${min} ${DASH} ${max}`).width
-  const from =
-    column !== null && stacked
-      ? Math.max(column.start, column.end - style.autoSlot - range)
-      : along
+  const from = column !== null && stacked ? inColumn(column, range + style.autoSlot) : along
   if (column !== null && stacked) want(range + style.autoSlot + column.pad)
   // …but the click targets are recorded only where the box is clear of the
   // lane's own far border, which is the resize grip — see `clearOfGrip`, which
@@ -921,7 +1002,10 @@ function detailAlong(
     width = text + (detail.text === '' ? 0 : NAME_GAP) + style.progressWidth
   } else {
     width =
-      ctx.measureText(`${formatLimit(detail.min)} ${DASH} ${formatLimit(detail.max)}`).width +
+      ctx.measureText(
+        `${formatScaledLimit(detail.min, detail.scale ?? 'linear', detail.unit)} ${DASH} ` +
+          formatScaledLimit(detail.max, detail.scale ?? 'linear', detail.unit),
+      ).width +
       style.autoSlot
   }
   ctx.font = font

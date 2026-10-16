@@ -49,6 +49,17 @@ export interface LaneFrame {
   thickness: number
 }
 
+/**
+ * How much ink a hand-drawn rectangle's wash over the tracks is worth, in the
+ * 1D browser and beside a map alike (§8.1).
+ *
+ * A tenth, because the thing it is drawn over is the reason the reader put it
+ * there: a band that made the tracks under it harder to read would be a mark
+ * that hid its own subject. Enough to be seen against both themes' plot
+ * backgrounds and not enough to change the colour of a track through it.
+ */
+export const MARK_WASH = 0.1
+
 /** Whether this edge's genomic axis runs across the page rather than down it. */
 export function laneIsHorizontal(edge: LaneEdge): boolean {
   return edge === 'top' || edge === 'bottom'

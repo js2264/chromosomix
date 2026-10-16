@@ -17,7 +17,9 @@
  * explicit choice; `.content` and `.analysis-figure` are the two boxes that
  * stay light while the furniture around them goes dark, each for a reason
  * stated where it is defined — a centre column is a figure, and so is a plot
- * that will be exported as one.
+ * that will be exported as one. `.figure-paper` is no box at all: one hidden
+ * node every export reads its ink from (`ui/canvasPalette.ts`), so a figure
+ * leaves the app on white whichever theme it was looked at in.
  *
  * One selector list rather than four copies, because it was four copies and
  * that already cost something: `--tab-rest` was added to the two `:root`
@@ -38,7 +40,8 @@
 :root[data-theme='light'],
 .content:has(.heatmap-wrap, .browser-stage, .deck-grid),
 .analysis-figure,
-.figure-chart {
+.figure-chart,
+.figure-paper {
   --bg: #ffffff;
   --bg-sunken: #f5f6f8;
   --bg-raised: #ffffff;
@@ -230,6 +233,16 @@
   --shadow-1: 0 1px 2px rgb(0 0 0 / 40%), 0 1px 1px rgb(0 0 0 / 28%);
   --shadow-2: 0 8px 22px -10px rgb(0 0 0 / 66%), 0 2px 6px -3px rgb(0 0 0 / 44%);
   --shadow-up: 0 -8px 22px -10px rgb(0 0 0 / 66%), 0 -2px 6px -3px rgb(0 0 0 / 44%);
+}
+
+/* The paper an export reads its colours from, and never seen. */
+.figure-paper {
+  position: fixed;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 * {
@@ -528,6 +541,22 @@ p {
   margin-left: 0.9rem;
   padding-left: 0.9rem;
   border-left: 1px solid var(--border);
+}
+
+/* The list of steps back, as the second half of **back** rather than a button
+   of its own: narrow, butted against it, its left corners squared and back's
+   right ones, so the pair reads as one control with a menu — the shape every
+   browser gives its own back button's history. */
+.head-history .head-history-list {
+  padding-inline: 0.1rem;
+  margin-left: -0.25rem;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.head-history .btn-icon:has(+ .head-history-list) {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .head-actions {
@@ -3574,6 +3603,8 @@ p {
    plot's own height budget; see `.heatmap-wrap`. */
 .lane-top {
   grid-area: 1 / 2;
+  /* Against the map when the corner beside it makes its row taller (§8.8). */
+  align-self: end;
   margin-bottom: 4px;
   /* The map must not shift sideways when a strip appears above it, and it will
      if the strip is ever wider than its column. */
@@ -3593,7 +3624,46 @@ p {
 
 .lane-left {
   grid-area: 2 / 1;
+  /* Against the map when the corner below it makes its column wider (§8.8). */
+  justify-self: end;
   margin-right: 4px;
+}
+
+/* A stack's names beside the map, in the corner that follows the stack
+   clockwise (§8.8): left of the bottom stack, above the left one, right of the
+   top one, below the right one — one stack to a corner, so the four never meet.
+   Each stands flush against the end of its stack's canvas, on the same row or
+   the same column, because the paint reads it as that canvas continued past its
+   edge; the margins are the stacks' own four pixels, repeated. */
+.lane-labels {
+  display: block;
+  touch-action: none;
+}
+
+.lane-labels-bottom {
+  grid-area: 3 / 1;
+  justify-self: end;
+  margin-top: 4px;
+}
+
+.lane-labels-left {
+  grid-area: 1 / 1;
+  justify-self: end;
+  align-self: end;
+  margin-right: 4px;
+}
+
+.lane-labels-top {
+  grid-area: 1 / 3;
+  justify-self: start;
+  align-self: end;
+  margin-bottom: 4px;
+}
+
+.lane-labels-right {
+  grid-area: 3 / 3;
+  justify-self: start;
+  margin-left: 4px;
 }
 
 /* An edge with no annotations takes no space and receives no events. */
@@ -3969,7 +4039,8 @@ p {
    painted. The arrowhead is the affordance everywhere else on this canvas, and
    this is the one thing it cannot say: "there is a caret behind this number". */
 .browser-canvas.is-text,
-.lane-canvas.is-text {
+.lane-canvas.is-text,
+.lane-labels.is-text {
   cursor: text;
 }
 
@@ -4251,21 +4322,15 @@ canvas.is-frozen {
   font-family: var(--mono);
 }
 
-/* Two squares, which is the whole ramp a two-number key needs: the gradient
-   between them was never information a reader takes out of the legend rather
-   than out of the picture. Set apart rather than butted together — touching,
-   the pair reads as one two-toned block and the eye has to find the seam before
-   it can tell which end is which. */
+/* The ramp, short and between the two numbers it runs from and to: the two
+   squares it was for a while said which colour each end is and nothing about
+   the four a default map passes through on the way. `KEY_METRICS` in
+   `render/legend.ts` holds the same 48 × 10, which the export draws. */
 .map-key-ramp {
-  display: flex;
-  gap: 3px;
-  flex: 0 0 auto;
-}
-
-.map-key-swatch {
   display: block;
-  width: 12px;
-  height: 12px;
+  flex: 0 0 auto;
+  width: 48px;
+  height: 10px;
   border: 1px solid var(--border);
 }
 
@@ -8057,6 +8122,19 @@ body.is-carrying-card * {
   min-height: 0;
 }
 
+/* The Analysis column's box over its task list (§18.1): the width of the
+   column, as the Sequences card's is. */
+.analysis-filter {
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+
+/* Taken away by that box: a class of its own rather than `.hidden`, which the
+   list's ten-hertz paint already toggles on the same nodes for another reason. */
+.analysis-tasks .is-filtered-out {
+  display: none;
+}
+
 .seq-filter {
   width: 100%;
 }
@@ -10370,6 +10448,32 @@ span.deck-name {
 
 .deck-entry:hover,
 .deck-entry:focus-visible {
+  border-color: var(--border-strong);
+  background: var(--bg-raised);
+  color: var(--text);
+}
+
+/* The sequence a cell's map is on (§16.3), and the road to another one for that
+   cell alone. Quiet like the rung beside it until it is approached, and in the
+   heading's own face rather than the rung's mono: it is a sequence's name, not
+   a piece of an address. It keeps its width while the name gives way. */
+.deck-seq {
+  flex: 0 0 auto;
+  max-width: 9rem;
+  /* As wide as the sequence it says, where the engine can size a select to
+     its value: else the widest name in the file, which on yeast is `2-micron`
+     beside an `IV`. */
+  field-sizing: content;
+  padding: 0.05rem 0.15rem;
+  border-color: transparent;
+  background: none;
+  color: var(--text-dim);
+  font-size: var(--step--2);
+  cursor: pointer;
+}
+
+.deck-seq:hover,
+.deck-seq:focus-visible {
   border-color: var(--border-strong);
   background: var(--bg-raised);
   color: var(--text);
@@ -14125,4 +14229,21 @@ span.deck-name {
 .cpick-chip.is-current {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+
+/* The folder a file a session is waiting on was in (§20.6): the sentence that
+   names it and the button that connects it, between the note above the picker
+   and the picker — the one thing on the page that finds the file without the
+   reader looking for it. */
+.folders-asked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin: 0 1rem 0.75rem;
+}
+
+.folders-asked .hint {
+  flex: 1 1 20rem;
+  margin: 0;
 }

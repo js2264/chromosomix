@@ -28,12 +28,13 @@
 
 import type { ECharts } from 'echarts/core'
 
+import { figurePaper } from '../ui/canvasPalette'
 import { el } from '../ui/dom'
 import { plotTheme, type PlotFigure } from '../ui/analysisPlots'
 import { subscribeTextScale } from '../ui/textScale'
 import { paintSvgString } from './svgPaint'
 import { attachMarquee, windowOf, type Marquee, type MarqueeAxes, type MarqueeBox } from './marquee'
-import { optionOf, paperOption, type ChartOption, type FigureTheme } from './option'
+import { axisReach, optionOf, paperOption, ZOOM_X, ZOOM_Y, type ChartOption, type FigureTheme } from './option'
 import { matrixOptionOf } from './matrixOption'
 import type { MatrixFigureSpec, XyFigureSpec } from './spec'
 import type { FigureStyle } from './style'
@@ -75,7 +76,33 @@ export function themeOf(host: HTMLElement): FigureTheme {
     background: theme.background,
     series: theme.series,
     fontFamily: family,
+    measure: (text, size) => {
+      const ctx = ruler()
+      if (ctx === null) return text.length * size * 0.6
+      ctx.font = `${size}px ${family}`
+      return ctx.measureText(text).width
+    },
   }
+}
+
+/**
+ * The ids of the zooms a `dataZoom` event moved, or `null` where it does not
+ * say: the library reports a gesture as a batch of `{ dataZoomId }`, and an
+ * action dispatched for one zoom as that zoom's id alone.
+ */
+function movedZooms(event: unknown): Set<string> | null {
+  const one = (event ?? {}) as { dataZoomId?: unknown; batch?: Array<{ dataZoomId?: unknown }> }
+  const ids = [one, ...(one.batch ?? [])]
+    .map((entry) => entry.dataZoomId)
+    .filter((id): id is string => typeof id === 'string')
+  return ids.length === 0 ? null : new Set(ids)
+}
+
+/** One context to measure text on, for every figure: made when first asked. */
+let measuring: CanvasRenderingContext2D | null | undefined
+function ruler(): CanvasRenderingContext2D | null {
+  if (measuring === undefined) measuring = document.createElement('canvas').getContext('2d')
+  return measuring
 }
 
 /**
@@ -172,17 +199,18 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
   /**
    * The option, for a box of a stated size.
    *
-   * The size matters to a matrix and not to a curve: a heatmap's grid is given
-   * a width and a height in pixels so the cells can be square (see
-   * {@link matrixOptionOf}), where an xy chart's is four insets and stretches
-   * to whatever it is put in. It is a parameter rather than the figure's own
-   * `width`/`height` because an export is drawn at the page's size, not the
-   * screen's.
+   * The size matters to a matrix and to a legend down the right: a heatmap's
+   * grid is given a width and a height in pixels so the cells can be square
+   * (see {@link matrixOptionOf}), and a legend's names wrap where they would
+   * take more than their share of the width (`option.sideLegend`); an xy
+   * chart's grid is otherwise four insets and stretches to whatever it is put
+   * in. It is a parameter rather than the figure's own `width`/`height`
+   * because an export is drawn at the page's size, not the screen's.
    */
-  const build = (box: { width: number; height: number }): ChartOption =>
+  const build = (box: { width: number; height: number }, on: HTMLElement = host): ChartOption =>
     options.spec.kind === 'matrix'
-      ? matrixOptionOf(options.spec.output, style, themeOf(host), box)
-      : optionOf(options.spec, style, themeOf(host))
+      ? matrixOptionOf(options.spec.output, style, themeOf(on), box)
+      : optionOf(options.spec, style, themeOf(on), box)
 
   /** How tall the picture is: the box's height, or one chosen from the width. */
   const tall = (): number => (fill ? host.clientHeight : chartHeight(width))
@@ -206,7 +234,7 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
     // The zoom is a *style* change, not a view transform, so it is written back
     // the moment it happens: the export then draws the window the reader is
     // looking at, and the sidebar's own number boxes agree with the picture.
-    chart.on('dataZoom', () => {
+    chart.on('dataZoom', (event: unknown) => {
       if (settling || chart === null) return
       const zooms = (chart.getOption() as { dataZoom?: Array<Record<string, unknown>> }).dataZoom
       if (zooms === undefined) return
@@ -218,10 +246,50 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
         if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo >= hi) return null
         return [lo, hi]
       }
+      // Only the zoom the gesture moved: the library reports both windows as
+      // numbers afterwards, and taking the other one too froze an ordinate on
+      // auto at whatever it showed the moment the abscissa was wheeled.
+      const moved = movedZooms(event)
+      const x = moved === null || moved.has(ZOOM_X)
+      const y = moved === null || moved.has(ZOOM_Y)
+      const before = style.x.domain
       style = {
         ...style,
-        x: { ...style.x, domain: domainOf(zooms[0]) ?? style.x.domain },
-        y: { ...style.y, domain: domainOf(zooms[1]) ?? style.y.domain },
+        x: x ? { ...style.x, domain: domainOf(zooms[0]) ?? style.x.domain } : style.x,
+        y: y ? { ...style.y, domain: domainOf(zooms[1]) ?? style.y.domain } : style.y,
+      }
+      const spec = options.spec
+      if (spec.kind !== 'matrix') {
+        // The ends of a window are labelled only where they are round (§18.13),
+        // which a gesture changes as much as a typed number does; and an
+        // ordinate on auto fits what is drawn in the abscissa's window, so a
+        // wheel or a drag along the abscissa refits it as it goes. Through the
+        // axes alone, a merge that leaves the zoom being dragged where it is,
+        // where a rebuild would drop it mid-gesture — and what an export then
+        // draws from the style is what the screen shows.
+        const labels = (reach: ReturnType<typeof axisReach>): ChartOption => ({
+          showMinLabel: reach.labels['showMinLabel'] ?? null,
+          showMaxLabel: reach.labels['showMaxLabel'] ?? null,
+          customValues: reach.ticks ?? null,
+        })
+        const xReach = axisReach(spec, style, 'x')
+        const yReach = axisReach(spec, style, 'y')
+        const refit = style.y.domain === null && style.x.domain !== before
+        settling = true
+        chart.setOption({
+          xAxis: { axisLabel: labels(xReach), axisTick: { customValues: xReach.ticks ?? null } },
+          yAxis: {
+            ...(refit
+              ? {
+                  min: yReach.bounds['min'] ?? null,
+                  max: yReach.bounds['max'] ?? null,
+                }
+              : {}),
+            axisLabel: labels(yReach),
+            axisTick: { customValues: yReach.ticks ?? null },
+          },
+        })
+        settling = false
       }
       options.onStyle?.(style)
     })
@@ -284,8 +352,9 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
     chart.resize({ width, height })
     // A matrix's grid is stated in pixels, so a new box is a new layout — the
     // alternative is a square pileup that stops being square the moment the
-    // drawer is dragged. A curve's grid is insets and needs nothing.
-    if (options.spec.kind === 'matrix') apply()
+    // drawer is dragged. So is a legend down the right, whose names wrap to
+    // the width; a curve's grid is otherwise insets and needs nothing.
+    if (options.spec.kind === 'matrix' || style.legend === 'right') apply()
   }
 
   const observer =
@@ -379,7 +448,8 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
         height: box.height,
       })
       try {
-        off.setOption(paperOption(build(box)), true)
+        // On paper, whatever the theme where the chart is mounted (§7.2).
+        off.setOption(paperOption(build(box, figurePaper())), true)
         paintSvgString(off.renderToSVGString(), ctx, box)
       } finally {
         off.dispose()

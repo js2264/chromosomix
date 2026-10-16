@@ -1053,6 +1053,11 @@ export function scaleOf(style: { scale?: TrackScale }): TrackScale {
   return style.scale === 'log2' ? 'log2' : 'linear'
 }
 
+/** What this lane's values are measured in, where it is a length. */
+export function unitOf(style: { unit?: unknown }): 'bp' | undefined {
+  return style.unit === 'bp' ? 'bp' : undefined
+}
+
 /**
  * A value as the axis draws it.
  *
@@ -1142,6 +1147,13 @@ export interface AnnotationStyle {
    * an older build restores unchanged — {@link scaleOf} is the one reader.
    */
   scale?: TrackScale
+  /**
+   * What the values are measured in, where the lane should spell it: `bp` on
+   * a scalogram's lane, whose `log2` axis is then ruled at 1 kb, 10 kb, 100 kb
+   * and labelled in distances rather than in the logarithm (§18.12). Absent is
+   * a plain number. {@link unitOf} is the one reader.
+   */
+  unit?: 'bp'
   /**
    * The colormap a `heatmap` lane is drawn with.
    *

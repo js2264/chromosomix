@@ -241,6 +241,9 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
     // read, and one a shell has no picture to take it from. The seed is the
     // shell's default as it is the session's, so the same pixels are drawn.
     if (framing.contacts !== undefined) args.push('--contacts', String(framing.contacts))
+    // The resolution the reader added (§3.4), which the shell sums as the session
+    // does: the file named is the rung underneath it.
+    if (framing.coarsen !== undefined) args.push('--coarsen', String(framing.coarsen))
     // The edit the map was drawn through (§27.7) is an input as surely as the
     // total, and one the shell cannot yet be given: said, rather than a line
     // that measures the file as it is under a record that says otherwise.

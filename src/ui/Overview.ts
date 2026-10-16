@@ -43,7 +43,7 @@ import type { AxisGroup, MatrixResult, OverviewResult } from '../worker/protocol
 import type { Cancellable, ReaderClient } from '../worker/client'
 import { isCancellation } from '../worker/client'
 import { button, el, fmt, titleWhenCut } from './dom'
-import type { ScaleState } from './GenomeView'
+import type { PanelSeed, ScaleState } from './GenomeView'
 import { MatrixPanel, type AnnotationContext, type FigureSubject} from './MatrixPanel'
 import { blockSummary } from './mapSummary'
 import { SearchBox, locusPlaceholder } from './SearchBox'
@@ -136,7 +136,7 @@ export interface OverviewProps {
    */
   level: 'genome' | 'contig'
   /** The colour scale from the view state; the panel starts there. */
-  scale: ScaleState
+  scale: PanelSeed
   onScaleChange(scale: ScaleState): void
   onOpenPair(rowGenome: string, colGenome: string): void
   /**

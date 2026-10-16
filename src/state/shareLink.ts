@@ -275,6 +275,9 @@ export function forSharing(config: SessionConfig): SessionConfig {
   const lanes = (config.lanes ?? []).filter((lane) => openableElsewhere(lane.uri))
   if (lanes.length === 0) delete shared.lanes
   else shared.lanes = lanes
+  // Where the sender's local files are on the sender's disk (§20.6): a fact
+  // about one machine, and nothing a recipient can open.
+  delete shared.folders
   // Deleted rather than set to `undefined`: a key holding nothing is a third
   // state, it survives `JSON.stringify` as an absence anyway, and every reader
   // downstream treats absence as the answer.

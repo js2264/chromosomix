@@ -288,6 +288,8 @@ export function syntheticEntry(
       ...(output.group === undefined ? {} : { group: groupNameOn(output.group, on) }),
       ...(output.mode === undefined ? {} : { mode: output.mode }),
       ...(output.scale === undefined ? {} : { scale: output.scale }),
+      // A length, so a log axis is ruled and labelled in distances (§18.12).
+      ...(output.unit === 'bp' ? { unit: 'bp' as const } : {}),
     },
     // The same seed a bigWig's header gives a loaded row: it is what the limits
     // boxes start at when the reader leaves autoscale, and without it an

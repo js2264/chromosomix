@@ -41,6 +41,21 @@ export interface FigureTheme {
   /** The categorical palette, in order. */
   series: string[]
   fontFamily: string
+  /**
+   * How wide a run of text is, in pixels, at a size in the figure's type —
+   * what the room a legend takes is measured with. Absent where there is no
+   * page to measure on, and then estimated (see {@link widthOf}).
+   */
+  measure?(text: string, size: number): number
+}
+
+/**
+ * The width of a run of text in the figure's type: measured where the theme can
+ * measure, and otherwise six tenths of the size a character, which is about
+ * what a proportional sans-serif averages over a file name.
+ */
+function widthOf(theme: FigureTheme, text: string, size: number): number {
+  return theme.measure?.(text, size) ?? text.length * size * 0.6
 }
 
 /** What an option object is, without dragging the library's types in. */
@@ -275,14 +290,281 @@ function tooltipOf(
   }
 }
 
+/**
+ * An axis, in the frame's ink.
+ *
+ * **Every plot is drawn in a frame** (§18.13): a box in the ink, all four sides,
+ * which is the grid's own border ({@link frameOf}). The axes are two of its
+ * sides, so their line and ticks are the same ink — a grey rule under a black
+ * one reads as a second line — and they stay on the frame whatever the other
+ * axis holds: the library's default puts an axis through the other's zero,
+ * which across a profile that changes sign is a line through the middle of
+ * the picture carrying the ticks with it. The gridlines are solid and thin —
+ * every line in a plot is solid — and stop short of the two ends of an axis,
+ * where the frame is: a dashed grey line drawn over it was the dotted grey
+ * border there was before the frame.
+ */
 function axisBase(theme: FigureTheme, style: FigureStyle, grid: boolean): ChartOption {
   return {
-    axisLine: { lineStyle: { color: theme.grid } },
-    axisTick: { lineStyle: { color: theme.grid } },
+    axisLine: { onZero: false, lineStyle: { color: theme.ink, width: FRAME_WIDTH } },
+    axisTick: { lineStyle: { color: theme.ink, width: FRAME_WIDTH } },
     axisLabel: { color: theme.muted, fontSize: style.fontSize, fontFamily: theme.fontFamily },
     nameTextStyle: { color: theme.ink, fontSize: style.fontSize, fontFamily: theme.fontFamily },
-    splitLine: { show: grid, lineStyle: { color: theme.grid, type: 'dashed' } },
+    splitLine: {
+      show: grid,
+      showMinLine: false,
+      showMaxLine: false,
+      lineStyle: { color: theme.grid, type: 'solid', width: GRID_WIDTH },
+    },
   }
+}
+
+/** The frame's line, in CSS pixels: the painter's (`analysisPlots.FRAME_WIDTH`). */
+const FRAME_WIDTH = 1
+
+/**
+ * A gridline, in CSS pixels: half the frame's, a guide for the eye rather than
+ * a mark of anything — and the painter's (`analysisPlots.GRID_WIDTH`).
+ */
+const GRID_WIDTH = 0.5
+
+/**
+ * The frame round the plot: the grid's border, in the ink, over the data.
+ *
+ * Over rather than under, as the painter draws its own last: it closes over the
+ * ends of a curve that starts on it rather than being painted through by them.
+ * The grid's rectangle ignores the pointer, so nothing under it stops
+ * answering; and its fill is clear, so over is only ever the line.
+ */
+export function frameOf(theme: FigureTheme): ChartOption {
+  return {
+    show: true,
+    backgroundColor: 'transparent',
+    borderColor: theme.ink,
+    borderWidth: FRAME_WIDTH,
+    // Above the series, which sit at the library's 2.
+    z: 3,
+  }
+}
+
+/**
+ * The room an axis fitted to its data keeps at each end, as a share of the
+ * span, in the axis's own terms — decades on a log axis.
+ *
+ * A twentieth, which is what matplotlib and ggplot2 both keep: a maximum drawn
+ * on the frame is a maximum nobody can see. It used to be the library's *nice*
+ * extent, which on a log axis is a whole decade at each end — a P(s) from 5 kb
+ * to 2 Mb drawn from 1 kb to 10 Mb, with most of a decade empty on either side.
+ */
+const FIT_ROOM = 0.05
+
+/**
+ * The extent an axis fits its data to: the values' own, with `room` of the span
+ * at each end (in decades on a log axis). Non-finite values are skipped, and on
+ * a log axis anything at or below zero, which it has no place for.
+ *
+ * `null` where there is nothing to fit — no value, or one — and the library's
+ * own fit then stands.
+ */
+export function fitOf(values: Iterable<number>, log: boolean, room: number): [number, number] | null {
+  let low = Number.POSITIVE_INFINITY
+  let high = Number.NEGATIVE_INFINITY
+  for (const value of values) {
+    if (!Number.isFinite(value) || (log && value <= 0)) continue
+    if (value < low) low = value
+    if (value > high) high = value
+  }
+  if (!(low < high)) return null
+  // Exact where there is no room: `10 ** Math.log10(5000)` is a hair under
+  // 5000, which would put the first point a hair outside the axis.
+  if (!(room > 0)) return [low, high]
+  if (log) {
+    const from = Math.log10(low)
+    const to = Math.log10(high)
+    const pad = (to - from) * room
+    return [10 ** (from - pad), 10 ** (to + pad)]
+  }
+  const pad = (high - low) * room
+  return [low - pad, high + pad]
+}
+
+/**
+ * The extent an xy figure's axis fits its data to, over the series that are
+ * drawn — `null` where the library's own fit stands.
+ *
+ * - **Along a curve, the abscissa runs from the first sample to the last**, with
+ *   no room: a P(s) runs from its first separation to its last, and those ends
+ *   are the data's (the painter's curve is drawn the same way, `padSpan`).
+ *   **Points** keep the room on it, because a marker centred on the frame is
+ *   half a marker.
+ * - **The ordinate keeps the room**, and takes in a band where one is drawn —
+ *   and under a box or a violin, everything they draw: the whiskers and the
+ *   outliers, a violin's whole support, the points beside them.
+ * - **A histogram's abscissa runs from its first bin's edge to its last**, with
+ *   the room; its ordinate is a count from zero, the library's.
+ * - **Bars keep the library's fit**: a bar's ordinate starts at zero, and its
+ *   abscissa has to hold the bars' widths, which the library measures and this
+ *   does not. So does a box's or a violin's abscissa, which is the series'
+ *   names.
+ */
+export function figureFit(spec: XyFigureSpec, style: FigureStyle, which: 'x' | 'y'): [number, number] | null {
+  const drawn = spec.series.filter((series) => !style.hidden.includes(series.id))
+  if (style.mark === 'histogram') {
+    if (which === 'y') return null
+    // The bins `histogramSeries` draws, from the same call.
+    const edges = drawn.flatMap((series) => histogram(series.y, style.bins).edges)
+    return fitOf(edges, style.x.scale === 'log', FIT_ROOM)
+  }
+  if (isCategorical(style.mark)) {
+    return which === 'x' ? null : fitOf(distributionOrdinates(drawn, style), style.y.scale === 'log', FIT_ROOM)
+  }
+  const marks = drawn.map((series) => markOf(series, style))
+  if (marks.includes('bars') || (which === 'y' && style.mark === 'bars')) return null
+  const xLog = style.x.scale === 'log'
+  const yLog = style.y.scale === 'log'
+  if (which === 'x') {
+    // The points that are drawn, as `pairs` and `bandSeries` draw them: a value
+    // a log axis has no place for is a gap on both axes.
+    const xs: number[] = []
+    for (const series of drawn) {
+      const banded = style.bands && series.low !== undefined && series.high !== undefined
+      for (let i = 0; i < series.y.length; i++) {
+        const x = forAxis(series.x[i] ?? i, xLog)
+        if (x === null) continue
+        const drawnHere =
+          forAxis(series.y[i], yLog) !== null ||
+          (banded && forAxis((series.low as number[])[i], yLog) !== null && forAxis((series.high as number[])[i], yLog) !== null)
+        if (drawnHere) xs.push(x)
+      }
+    }
+    return fitOf(xs, xLog, marks.includes('points') ? FIT_ROOM : 0)
+  }
+  // The ordinate fits **what is drawn in the abscissa's window**: a P(s) a
+  // task opens from 4 kb would otherwise keep room above it for the first
+  // separations, which are off the picture to its left. A line crossing an
+  // edge of the window is drawn up to the frame, so it counts at the frame.
+  const window = style.x.domain
+  const ys: number[] = []
+  for (const series of drawn) {
+    const lines = markOf(series, style) !== 'points'
+    const runs: Array<readonly number[]> = [series.y]
+    if (style.bands && series.low !== undefined && series.high !== undefined) runs.push(series.low, series.high)
+    for (const run of runs) seen(series, run, window, lines, xLog, yLog, ys)
+  }
+  return fitOf(ys, yLog, FIT_ROOM)
+}
+
+/**
+ * The ordinates one run of a series puts inside a window of the abscissa —
+ * every value whose abscissa is in it, and where `lines` joins the samples,
+ * the value at the frame of each segment that crosses one of its edges,
+ * interpolated as the axes draw it (in decades on a log axis). A value a log
+ * axis has no place for breaks the line there, as it does on the picture.
+ */
+function seen(
+  series: FigureSeries,
+  run: readonly number[],
+  window: [number, number] | null,
+  lines: boolean,
+  xLog: boolean,
+  yLog: boolean,
+  out: number[],
+): void {
+  const space = (value: number, log: boolean): number => (log ? Math.log10(value) : value)
+  let before: { x: number; y: number } | null = null
+  for (let i = 0; i < run.length; i++) {
+    const x = forAxis(series.x[i] ?? i, xLog)
+    const y = forAxis(run[i], yLog)
+    if (x === null || y === null) {
+      before = null
+      continue
+    }
+    if (window === null || (x >= window[0] && x <= window[1])) out.push(y)
+    if (window !== null && lines && before !== null) {
+      for (const edge of window) {
+        if ((before.x - edge) * (x - edge) >= 0) continue
+        const at = (space(edge, xLog) - space(before.x, xLog)) / (space(x, xLog) - space(before.x, xLog))
+        const value = space(before.y, yLog) + at * (space(y, yLog) - space(before.y, yLog))
+        out.push(yLog ? 10 ** value : value)
+      }
+    }
+    before = { x, y }
+  }
+}
+
+/**
+ * The ticks of a log axis spanning `[low, high]`, where the library's own are
+ * wrong — `null` where they stand: one a decade, from three decades inside up
+ * to ten.
+ *
+ * - **Ten decades or more**: the library labels every tenth one, which on an
+ *   axis of twelve is one label; and handed a step, it counts it from the
+ *   axis's end, which on a fitted axis is no decade at all (`1.2e-10`,
+ *   `1.2e-8`). So every few decades, about six to the axis, each a whole power
+ *   of ten and a multiple of the step.
+ * - **Fewer than three decades inside**: the library labels only decades, so a
+ *   window zoomed to 221 kb – 783 kb had no label at all. So 1, 2 and 5 of
+ *   each decade, then every digit, then — inside a single step of those — an
+ *   ordinary linear ladder, whichever first puts three ticks in the window.
+ */
+export function logTicks(low: number, high: number): number[] | null {
+  if (!(low > 0) || !(high > low)) return null
+  const from = Math.log10(low)
+  const to = Math.log10(high)
+  if (to - from >= 10) {
+    const step = Math.ceil((to - from) / 6)
+    const out: number[] = []
+    for (let power = Math.ceil(from / step) * step; power <= to + 1e-9; power += step) out.push(10 ** power)
+    return out
+  }
+  if (Math.floor(to + 1e-9) - Math.ceil(from - 1e-9) + 1 >= 3) return null
+  const inside = (value: number): boolean => value >= low * (1 - 1e-9) && value <= high * (1 + 1e-9)
+  for (const digits of [[1, 2, 5], [1, 2, 3, 4, 5, 6, 7, 8, 9]]) {
+    const out: number[] = []
+    for (let power = Math.floor(from); power <= Math.ceil(to); power++) {
+      for (const digit of digits) {
+        // A digit times a power of ten, written so: `3 * 1e-5` is a hair off.
+        const value = Number(`${digit}e${power}`)
+        if (inside(value)) out.push(value)
+      }
+    }
+    if (out.length >= 3) return out
+  }
+  const raw = (high - low) / 4
+  const magnitude = 10 ** Math.floor(Math.log10(raw))
+  const unit = raw / magnitude
+  const step = (unit <= 1 ? 1 : unit <= 2 ? 2 : unit <= 5 ? 5 : 10) * magnitude
+  const out: number[] = []
+  for (let k = Math.ceil(low / step); k * step <= high * (1 + 1e-12); k++) out.push(Number((k * step).toPrecision(12)))
+  return out
+}
+
+/**
+ * An xy figure's axis as drawn: its bounds and which of its end labels print
+ * ({@link reachOf}), from the window the style holds or the fit. What the chart
+ * rebuilds an axis from, and what it sets the ordinate to alone when a wheel or
+ * a drag moves the abscissa's window under an ordinate on auto.
+ */
+export function axisReach(
+  spec: XyFigureSpec,
+  style: FigureStyle,
+  which: 'x' | 'y',
+): { bounds: ChartOption; labels: ChartOption; ticks?: number[] } {
+  const histo = style.mark === 'histogram'
+  // A histogram's count is the library's, from zero, and its window the zoom's.
+  if (histo && which === 'y') return { bounds: {}, labels: {} }
+  const log = style[which].scale === 'log'
+  const drawn = spec.series.filter((series) => !style.hidden.includes(series.id))
+  const values = drawn.flatMap((series) =>
+    histo ? histogram(series.y, style.bins).edges : which === 'x' ? series.x : series.y,
+  )
+  const reach = reachOf(style[which].domain, figureFit(spec, style, which), values, log)
+  if (!log) return reach
+  // The ticks are the shown window's: the window where there is one, else the
+  // axis.
+  const [low, high] = style[which].domain ?? [reach.bounds['min'], reach.bounds['max']]
+  const ticks = typeof low === 'number' && typeof high === 'number' ? logTicks(low, high) : null
+  return ticks === null ? reach : { ...reach, ticks }
 }
 
 // ---------------------------------------------------------------------------
@@ -318,14 +600,116 @@ export function paperOption(option: ChartOption): ChartOption {
   }
 }
 
-/** How much room a legend down one side or along an edge takes, in pixels. */
-const LEGEND_WIDTH = 132
+/** How much room a legend along an edge takes, in pixels. */
 const LEGEND_HEIGHT = 28
+
+/**
+ * A legend down the right, as the library lays one out, in pixels: its distance
+ * from the edge, its padding, a swatch, and the gap the library leaves between
+ * a swatch and its name. Stated, so that the room kept for it is the room it
+ * takes.
+ */
+const SIDE_LEGEND = { right: 8, padding: 5, icon: 25, iconGap: 5 } as const
+
+/**
+ * The most of a figure's width a legend down its right may take, the plot's
+ * room and the names' together; a name too long for its share goes onto a
+ * second line rather than over the plot.
+ */
+const SIDE_LEGEND_SHARE = 0.35
+
+/** The narrowest a legend's names are wrapped to, however narrow the figure. */
+const SIDE_LEGEND_MIN_TEXT = 72
+
+/**
+ * A name over as many lines as `width` allows, broken **after** the characters a
+ * file's or a sample's name is built from — `.`, `-`, `_`, `:`, `/`, `,`, a
+ * space — so `T4dNDD-infection.10min.mcool::5000` goes onto two lines as
+ * `T4dNDD-infection.10min.` and `mcool::5000`. The library's own wrap breaks
+ * only at a space or a few marks of punctuation, and a name with none of them
+ * it cuts at whichever letter fills the line. A run with no break in it longer
+ * than a line is cut by the letter, as a last resort.
+ */
+export function wrapName(name: string, width: number, measure: (text: string) => number): string[] {
+  if (measure(name) <= width) return [name]
+  const parts: string[] = []
+  let part = ''
+  for (const ch of name) {
+    part += ch
+    if ('.-_:/, '.includes(ch)) {
+      parts.push(part)
+      part = ''
+    }
+  }
+  if (part !== '') parts.push(part)
+  const lines: string[] = []
+  let line = ''
+  const flush = (): void => {
+    const trimmed = line.trimEnd()
+    if (trimmed !== '') lines.push(trimmed)
+    line = ''
+  }
+  for (const piece of parts) {
+    if (line !== '' && measure(line + piece) > width) flush()
+    if (measure(piece) <= width) {
+      line += piece
+      continue
+    }
+    for (const ch of piece) {
+      if (line !== '' && measure(line + ch) > width) flush()
+      line += ch
+    }
+  }
+  flush()
+  return lines
+}
+
+/**
+ * The legend down the right of a figure, and the room the plot leaves it.
+ *
+ * **Beside the plot, never over it.** The room used to be a fixed 132 pixels,
+ * and a name longer than that — a file name with its resolution on, which is
+ * what a series is called — ran the legend out over the curves. So the names
+ * are measured, the room is what the longest takes plus the swatch, the
+ * padding and a gap, and the plot is drawn in what is left. Past
+ * {@link SIDE_LEGEND_SHARE} of the figure's width a name goes onto more lines
+ * ({@link wrapName}) rather than taking the plot's room: in a folded drawer a
+ * legend that kept every name on one line would leave the curves a sliver.
+ * Without a box to share — a caller that does not say how big the figure is —
+ * no name is wrapped.
+ */
+function sideLegend(
+  names: readonly string[],
+  style: FigureStyle,
+  theme: FigureTheme,
+  plot: { width: number; height: number } | undefined,
+): { room: number; formatter: (name: string) => string } {
+  const measure = (text: string): number => widthOf(theme, text, style.fontSize)
+  const frame = SIDE_LEGEND.right + 2 * SIDE_LEGEND.padding + SIDE_LEGEND.icon + SIDE_LEGEND.iconGap
+  const gap = style.fontSize
+  const cap =
+    plot === undefined
+      ? Number.POSITIVE_INFINITY
+      : Math.max(SIDE_LEGEND_MIN_TEXT, plot.width * SIDE_LEGEND_SHARE - frame - gap)
+  const wrapped = new Map(names.map((name) => [name, wrapName(name, cap, measure)]))
+  let widest = 0
+  for (const lines of wrapped.values()) for (const line of lines) widest = Math.max(widest, measure(line))
+  return {
+    room: Math.ceil(frame + widest + gap),
+    formatter: (name: string) => (wrapped.get(name) ?? [name]).join('\n'),
+  }
+}
 
 export function optionOf(
   spec: XyFigureSpec,
   style: FigureStyle,
   theme: FigureTheme,
+  /**
+   * How big the figure is drawn, where the caller knows: what a legend down
+   * the right may take of it ({@link sideLegend}). The plot is otherwise four
+   * insets and stretches to whatever it is put in.
+   */
+  plot?: { width: number; height: number },
 ): ChartOption {
   const shown = spec.series.map((series, index) => ({
     series,
@@ -338,6 +722,12 @@ export function optionOf(
   // is switched off still carries one: without it every hidden series is drawn.
   const names = shown.map((entry) => entry.series.name)
   const selected = Object.fromEntries(shown.map((entry) => [entry.series.name, !entry.hidden]))
+  const categorical = isCategorical(style.mark)
+  // A box or a violin has no legend (`distributionOption`), so it keeps no room
+  // for one either: a strip kept for a list that is never drawn is an empty
+  // band down one side of the figure.
+  const edge = categorical ? 'none' : style.legend
+  const side = edge === 'right' ? sideLegend(names, style, theme, plot) : null
   const legend =
     style.legend === 'none'
       ? { show: false, data: names, selected }
@@ -348,20 +738,23 @@ export function optionOf(
           selected,
           textStyle: { color: theme.ink, fontSize: style.fontSize, fontFamily: theme.fontFamily },
           ...(style.legend === 'right'
-            ? { orient: 'vertical', right: 8, top: 'middle' }
+            ? {
+                orient: 'vertical',
+                right: SIDE_LEGEND.right,
+                top: 'middle',
+                padding: SIDE_LEGEND.padding,
+                itemWidth: SIDE_LEGEND.icon,
+                ...(side === null ? {} : { formatter: side.formatter }),
+              }
             : style.legend === 'top'
               ? { orient: 'horizontal', top: 4, left: 'center' }
               : { orient: 'horizontal', bottom: 4, left: 'center' }),
         }
 
-  const categorical = isCategorical(style.mark)
-  // A box or a violin has no legend (`distributionOption`), so it keeps no room
-  // for one either: a strip kept for a list that is never drawn is an empty
-  // band down one side of the figure.
-  const edge = categorical ? 'none' : style.legend
   const grid = {
+    ...frameOf(theme),
     left: 8,
-    right: edge === 'right' ? LEGEND_WIDTH : 16,
+    right: side === null ? 16 : side.room,
     top: edge === 'top' ? LEGEND_HEIGHT + 8 : 16,
     bottom: edge === 'bottom' ? LEGEND_HEIGHT + 8 : 8,
     // The modern spelling of `containLabel`, and stricter than it was: `'all'`
@@ -404,7 +797,12 @@ export function optionOf(
             categorical || style.mark === 'points' || style.mark === 'histogram'
               ? 'item'
               : 'axis',
-          axisPointer: { type: 'cross', lineStyle: { color: theme.muted } },
+          // Solid, as every line in a plot is: the library draws a cross dashed.
+          axisPointer: {
+            type: 'cross',
+            lineStyle: { color: theme.muted, type: 'solid' },
+            crossStyle: { color: theme.muted, type: 'solid' },
+          },
           backgroundColor: theme.background,
           borderColor: theme.grid,
           textStyle: { color: theme.ink, fontSize: style.fontSize },
@@ -425,23 +823,47 @@ interface Entry {
 }
 
 /**
- * The bounds an axis needs so that its window can reach past the data.
+ * The bounds an axis is drawn between, and which of its two end labels print.
  *
- * The window is the zoom's, and a zoom lives inside the axis: ECharts clamps a
- * window to the extent of what is drawn, so a window wider than the data — one
- * a task opens two figures on so that they share an ordinate, or a range typed
- * to match another figure — came out as the data's own. Where the window does
- * reach past the data, the axis is stretched to it on that side and no
- * further; where it does not, nothing is set and the axis fits the data as it
- * always has, so the zoom still answers for every window inside it. The labels
- * are the window's ends', printed where they are round and left off where not.
+ * **Fitted, the axis is the fit** ({@link figureFit}): the data's extent and
+ * the room kept round it, set as the axis's bounds — where it used to be the
+ * library's *nice* extent, a whole decade past the data at each end of a log
+ * axis. Its ends are rarely round, and an end is a tick of the axis labelled
+ * with the end itself, so an end that is not round is left bare and the ticks
+ * inside it carry the axis.
+ *
+ * **Under a window, the axis still holds the fit**, so the zoom answers for
+ * every window inside it, and is stretched past it where the window reaches
+ * further — a window a task opens two figures on so that they share an
+ * ordinate, or a range typed to match another figure: the zoom lives inside the
+ * axis, and ECharts clamps a window to the axis's extent. The labels are then
+ * the window's ends', printed where they are round and left off where not.
+ *
+ * Where there is no fit — a histogram, bars — the axis is the library's, and
+ * stretched to a window only where the window reaches past the data.
  */
 function reachOf(
   domain: [number, number] | null,
+  fit: [number, number] | null,
   values: number[],
   log: boolean,
 ): { bounds: ChartOption; labels: ChartOption } {
-  if (domain === null) return { bounds: {}, labels: {} }
+  const ends = (pair: [number, number]): ChartOption => {
+    const span = pair[1] - pair[0]
+    return {
+      ...(roundEnd(pair[0], span, log) ? {} : { showMinLabel: false }),
+      ...(roundEnd(pair[1], span, log) ? {} : { showMaxLabel: false }),
+    }
+  }
+  if (domain === null) {
+    return fit === null ? { bounds: {}, labels: {} } : { bounds: { min: fit[0], max: fit[1] }, labels: ends(fit) }
+  }
+  if (fit !== null) {
+    return {
+      bounds: { min: Math.min(fit[0], domain[0]), max: Math.max(fit[1], domain[1]) },
+      labels: ends(domain),
+    }
+  }
   let low = Number.POSITIVE_INFINITY
   let high = Number.NEGATIVE_INFINITY
   for (const value of values) {
@@ -456,14 +878,9 @@ function reachOf(
   // printed over the `10` beside it. So an end is labelled only when it is a
   // number a reader would write, inside the data or past it, and otherwise the
   // ticks inside it are.
-  const span = domain[1] - domain[0]
-  const bare = (end: number): boolean => !roundEnd(end, span, log)
   return {
     bounds: { ...(below ? { min: domain[0] } : {}), ...(above ? { max: domain[1] } : {}) },
-    labels: {
-      ...(bare(domain[0]) ? { showMinLabel: false } : {}),
-      ...(bare(domain[1]) ? { showMaxLabel: false } : {}),
-    },
+    labels: ends(domain),
   }
 }
 
@@ -532,10 +949,8 @@ function xyOption(
   const ySpelling = histo ? undefined : yFormatter(spec)
   // A histogram's axes are a quantity and a count, neither of them a series' x
   // or y, so its windows stay the zoom's alone.
-  const drawn = shown.filter((entry) => !entry.hidden).map((entry) => entry.series)
-  const none = { bounds: {}, labels: {} }
-  const xReach = histo ? none : reachOf(style.x.domain, drawn.flatMap((line) => line.x), style.x.scale === 'log')
-  const yReach = histo ? none : reachOf(style.y.domain, drawn.flatMap((line) => line.y), style.y.scale === 'log')
+  const xReach = axisReach(spec, style, 'x')
+  const yReach = axisReach(spec, style, 'y')
 
   return {
     xAxis: {
@@ -548,10 +963,17 @@ function xyOption(
       // numbers, and as many of them as fit without one name printing over the
       // next.
       ...(spec.xTicks !== undefined && !histo ? { minInterval: 1 } : {}),
+      // A histogram's fit already holds its bars, edge to edge (`figureFit`),
+      // and the library would widen it again by most of a bar each side.
+      ...(histo ? { containShape: false } : {}),
       ...xReach.bounds,
       ...axisBase(theme, style, style.x.grid),
+      ...(xReach.ticks === undefined
+        ? {}
+        : { axisTick: { ...(axisBase(theme, style, style.x.grid).axisTick as object), customValues: xReach.ticks } }),
       axisLabel: {
         ...(axisBase(theme, style, style.x.grid).axisLabel as object),
+        ...(xReach.ticks === undefined ? {} : { customValues: xReach.ticks }),
         // Labels that would print over each other are thinned rather than
         // overprinted: a list too long to name, and as much a distance spelled
         // `300.0 kb` once the type is raised for print.
@@ -560,6 +982,9 @@ function xyOption(
         formatter:
           xSpelling ?? ((value: number) => axisNumber(value, style.x.scale === 'log' ? 'log' : 'linear')),
       },
+      // The crosshair's number on the axis, spelled as the axis spells it: the
+      // library's own printed `387,269.00` along a P(s) whose ticks say kb.
+      axisPointer: { label: { formatter: pointerLabel(xSpelling, style.x.scale) } },
     },
     yAxis: {
       type: style.y.scale === 'log' ? 'log' : 'value',
@@ -573,13 +998,19 @@ function xyOption(
       scale: style.mark !== 'histogram' && style.mark !== 'bars',
       ...yReach.bounds,
       ...axisBase(theme, style, style.y.grid),
+      ...(yReach.ticks === undefined
+        ? {}
+        : { axisTick: { ...(axisBase(theme, style, style.y.grid).axisTick as object), customValues: yReach.ticks } }),
       axisLabel: {
         ...(axisBase(theme, style, style.y.grid).axisLabel as object),
+        ...(yReach.ticks === undefined ? {} : { customValues: yReach.ticks }),
         ...(!histo ? { hideOverlap: true } : {}),
         ...yReach.labels,
         formatter:
           ySpelling ?? ((value: number) => axisNumber(value, style.y.scale === 'log' ? 'log' : 'linear')),
       },
+      // …and `0.00` on an ordinate whose ticks are `1e-8`.
+      axisPointer: { label: { formatter: pointerLabel(ySpelling, style.y.scale) } },
     },
     // Wheel zooms the abscissa and drags pan it, which is the gesture a curve
     // is read with; the ordinate takes the same wheel with shift held, so a
@@ -589,8 +1020,10 @@ function xyOption(
     // the single-source rule this whole module is built on: a wheel gesture and
     // a number typed into the sidebar are then the same change to the same
     // place, and the export draws whichever of them happened last.
+    // Named, so a gesture says which of the two it moved (`echartsFigure`).
     dataZoom: [
       {
+        id: ZOOM_X,
         type: 'inside',
         xAxisIndex: 0,
         zoomOnMouseWheel: true,
@@ -599,6 +1032,7 @@ function xyOption(
         ...zoomWindow(style.x.domain),
       },
       {
+        id: ZOOM_Y,
         type: 'inside',
         yAxisIndex: 0,
         zoomOnMouseWheel: 'shift',
@@ -608,6 +1042,26 @@ function xyOption(
       },
     ],
     series,
+  }
+}
+
+/** The two zooms' ids, for a gesture to say which it moved. */
+export const ZOOM_X = 'zoom-x'
+export const ZOOM_Y = 'zoom-y'
+
+/**
+ * What the crosshair prints on an axis: the axis's own spelling where it has
+ * one and it names the value — a list names only its members — and the
+ * magnitude spelling on its scale otherwise.
+ */
+function pointerLabel(
+  spelling: ((value: number) => string) | undefined,
+  scale: FigureStyle['x']['scale'],
+): (params: { value?: unknown }) => string {
+  return ({ value }) => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return ''
+    const spelled = spelling?.(value) ?? ''
+    return spelled !== '' ? spelled : axisNumber(value, scale === 'log' ? 'log' : 'linear')
   }
 }
 
@@ -775,6 +1229,11 @@ function distributionOption(
     })
   }
 
+  // The window a reader set, or the fit (§18.13).
+  const log = style.y.scale === 'log'
+  const window = style.y.domain ?? figureFit(spec, style, 'y')
+  const ticks = log && window !== null ? logTicks(window[0], window[1]) : null
+
   return {
     // No legend: the categories are named on the abscissa, and a second list of
     // the same names — whose swatches would have to agree with shapes the
@@ -792,15 +1251,40 @@ function distributionOption(
       nameLocation: 'middle',
       nameGap: style.fontSize * 4,
       scale: true,
-      ...(style.y.domain === null ? {} : { min: style.y.domain[0], max: style.y.domain[1] }),
+      ...(window === null ? {} : { min: window[0], max: window[1] }),
       ...axisBase(theme, style, style.y.grid),
+      ...(ticks === null ? {} : { axisTick: { ...(axisBase(theme, style, style.y.grid).axisTick as object), customValues: ticks } }),
       axisLabel: {
         ...(axisBase(theme, style, style.y.grid).axisLabel as object),
-        formatter: (value: number) => axisNumber(value, style.y.scale === 'log' ? 'log' : 'linear'),
+        ...(window === null ? {} : reachOf(window, null, [], log).labels),
+        ...(ticks === null ? {} : { customValues: ticks }),
+        formatter: (value: number) => axisNumber(value, log ? 'log' : 'linear'),
       },
     },
     series,
   }
+}
+
+/**
+ * Every ordinate a box or a violin puts on the axis, as {@link boxSeries} and
+ * {@link violinSeries} draw them: a box's whiskers and its outliers, a violin's
+ * whole support — and a violin that has no shape to draw is drawn as a box —
+ * and the points beside either.
+ */
+function distributionOrdinates(drawn: readonly FigureSeries[], style: FigureStyle): number[] {
+  const shapes = style.mark === 'violin' ? drawn.map((series) => violinShape(series.y, style.y.scale === 'log')) : []
+  const violins = shapes.some((shape) => shape.y.some((value) => value > 0))
+  const out: number[] = []
+  drawn.forEach((series, at) => {
+    if (violins) {
+      for (const value of shapes[at].at) out.push(value)
+    } else {
+      const box = boxSummary(series.y)
+      out.push(box.low, box.high, ...box.outliers)
+    }
+    if (style.jitter) for (const value of series.y) out.push(value)
+  })
+  return out
 }
 
 function boxSeries(visible: Entry[], style: FigureStyle, theme: FigureTheme): ChartOption[] {

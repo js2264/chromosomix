@@ -58,7 +58,7 @@ import {
   type JunctionReader,
 } from '../analysis/circularity'
 import { ResolutionStore } from '../state/resolutions'
-import { ladderWith, type DerivedRung, type Rung } from '../metacooler/coarsen'
+import { CoarseGrid, ladderWith, offsetsOf, type DerivedGrid, type DerivedRung, type Rung } from '../metacooler/coarsen'
 import { openResolutionDialog } from '../ui/ResolutionDialog'
 import { ViewerError } from '../errors'
 import {
@@ -126,6 +126,8 @@ import type { WireSource } from '../annotations/worker/protocol'
 import type { PickedFile } from '../browse/folder'
 import { routeFor, routeOf, type FileRoute } from '../browse/route'
 import { driveFileName } from '../browse/driveName'
+import { connectDirectory, subscribeFolders } from '../browse/connected'
+import { adoptFolders, hasLocation, missingFolderOf } from '../state/locations'
 import type { AssemblyResult } from '../annotations/worker/protocol'
 import { isHicProMatrix, splitBinsFragment, splitIndexFragment } from '../annotations/sidecar'
 import { readFileDrag } from '../ui/fileDrag'
@@ -161,7 +163,7 @@ import { metadataIndexFrom, type MetadataIndex } from '../annotations/metaIndex'
 import { summaryOf, type MetaLevel } from '../annotations/metadata'
 import { BookmarkStore, formatRegion, type Bookmark } from '../annotations/bookmarks'
 import { BookmarksCard } from '../ui/BookmarksCard'
-import type { AnnotationContext, FigureSubject, MatrixPanel } from '../ui/MatrixPanel'
+import type { AnnotationContext, BorrowedScale, FigureSubject, MatrixPanel } from '../ui/MatrixPanel'
 import { ContigsTable, type CircularColumn, type OriginColumn } from '../ui/ContigsTable'
 import { ErrorView } from '../ui/ErrorView'
 import { FilePicker, firstEntry } from '../ui/FilePicker'
@@ -170,7 +172,7 @@ import { embedded } from '../embed'
 import { openPairsDialog } from '../ui/PairsDialog'
 import { progressToast } from '../ui/toast'
 import { askLoadCost, isLoadGate } from '../ui/LoadGate'
-import { GenomeView, type ScaleState } from '../ui/GenomeView'
+import { GenomeView, type PanelSeed, type ScaleState } from '../ui/GenomeView'
 import { CellsTable, type MeasuredCells } from '../ui/CellsTable'
 import { GenomesTable } from '../ui/GenomesTable'
 import { InfoPanel } from '../ui/InfoPanel'
@@ -750,6 +752,17 @@ export class Session {
    */
   mounted: ViewState | null = null
   /**
+   * The scale a derivation on the outgoing map had taken over, for the map
+   * {@link remount} builds in its place (§7.5).
+   *
+   * Not in the hash, which holds what the derivation drew with: a ratio's
+   * `log2` and diverging ramp. A change of comparison is a rebuild, and the
+   * panel that would have given the scale back is the one torn down — so the
+   * split after a ratio was drawn on the ratio's scale. Spent by the next view
+   * built for the same file.
+   */
+  private carriedScale: { uri: string; restore: BorrowedScale } | null = null
+  /**
    * The render in progress, as something the next one calls off (§5.5).
    *
    * Every change to the store starts a `render` that nobody awaits, and a render
@@ -930,6 +943,8 @@ export class Session {
    * the note and opens something else entirely gets that file plain.
    */
   private pendingConfig: SessionConfig | null = null
+  /** Lets go of the connected folders' announcements; see {@link foldersChanged}. */
+  private readonly stopFolders: () => void
   /**
    * The config being applied, for the length of one open.
    *
@@ -1019,6 +1034,34 @@ export class Session {
       this.host.stateChanged(this, change)
       void this.render(state)
     })
+    this.stopFolders = subscribeFolders(() => this.foldersChanged())
+  }
+
+  /**
+   * A folder was connected or let go (§20.6). A workspace's files the
+   * installed app knows the places of may be in it: its tracks are tried
+   * again, and so is the file this session is of while it is still asking for
+   * it — without a gesture, since connecting the folder was the gesture.
+   */
+  private foldersChanged(): void {
+    if (this.destroyed) return
+    this.annotations?.loader.refind()
+    if (this.file !== null) return
+    const config = this.pendingConfig
+    if (config !== null) {
+      if (!hasLocation(config.state.uri)) return
+      void (async () => {
+        const source = await resolveSource(config.state.uri)
+        if (source === null || this.destroyed || this.pendingConfig !== config || this.file !== null) return
+        await this.openWithConfig(config.state.uri, source)
+      })()
+      return
+    }
+    // A view state naming a local file — a restored tab, a workspace's — that
+    // was waiting on its picker: rendered again, it asks for the file again,
+    // and finds it in the folder now.
+    const state = this.store.state
+    if (state !== null && hasLocation(state.uri)) void this.render(state)
   }
 
   // -------------------------------------------------------------------------
@@ -1320,6 +1363,7 @@ export class Session {
 
   destroy(): void {
     this.destroyed = true
+    this.stopFolders()
     // What it said goes with the tab.
     this.unsay()
     // The stage goes with the tab; the edit it made is kept with the file.
@@ -1657,6 +1701,9 @@ export class Session {
   async openConfig(config: SessionConfig): Promise<void> {
     setPlotOptions(config.plot)
     this.host.applyPanelLayout(config.panels)
+    // Where its files are, in the installed app's kept folders (§20.6), before
+    // the first of them is asked for.
+    adoptFolders(config.folders)
     const source = await resolveSource(config.state.uri, { prompt: true })
     if (this.destroyed) return
     if (source === null) {
@@ -4217,6 +4264,23 @@ export class Session {
         if (source.kind === 'local') this.dropped(source.file)
         else void this.openWithConfig(source.url, { kind: 'remote', url: splitUri(source.url).path })
       },
+      // A row out of the Files panel (§20.5): the same two seats. The second
+      // file keeps the source the folder handed over — a bucket's credential, a
+      // Drive file's name — where a dropped `File` has only its own.
+      onPickDropped: (event) => {
+        void readFileDrag(event).then((picked) => {
+          if (picked === null || this.destroyed) return
+          if (this.file === null) {
+            void this.addPicked(picked)
+            return
+          }
+          const name = picked.name !== undefined && picked.name.trim() !== '' ? picked.name : undefined
+          void this.compare.open(picked.uri, picked.source).then(() => {
+            const second = this.compare.second
+            if (name !== undefined && second !== null) this.renameMap(second.uri, name)
+          })
+        })
+      },
       // With one map open the × is the way out of the matrix altogether — the
       // door `closeMap` opens, which the File card used to carry. With two it
       // means what it has always meant: put this one down and keep the other.
@@ -5628,6 +5692,31 @@ export class Session {
   }
 
   /**
+   * The resolution the reader added that the session's map is drawn at, with
+   * the grid its stored rung's bins are summed on — what an analysis of the map
+   * is framed, priced and run at (§3.4, §18.4) — or `null` at a stored rung,
+   * and before the sequence table the grid is laid out from has been read.
+   *
+   * From the table rather than from offsets, which the page does not hold: a
+   * cooler lays each sequence out as `ceil(length / binsize)` bins, and the
+   * check against the file's bin count is what says this one does.
+   *
+   * @internal SessionAnalysis frames every task on the lead through it.
+   */
+  analysisGrid(): DerivedGrid | null {
+    const state = this.store.state
+    const file = this.file
+    if (state === null || file === null) return null
+    const rung = this.derivedRung(state)
+    if (rung === null) return null
+    const lengths = file.contigs?.table.data['length']
+    if (lengths === undefined || Array.isArray(lengths)) return null
+    const fine = offsetsOf(lengths as ArrayLike<number>, rung.from.binsize)
+    if (fine[fine.length - 1] !== file.info.nBins) return null
+    return { rung, grid: CoarseGrid.of(fine, rung.factor) }
+  }
+
+  /**
    * `{ binsPerCell }` for a view of a declared resolution, else nothing.
    *
    * The factor rather than the bin size, because that is what a `matrix` request
@@ -6011,6 +6100,8 @@ export class Session {
   remount(): void {
     const state = this.store.state
     if (state === null) return
+    const restore = this.current?.panel?.borrowedFrom() ?? null
+    this.carriedScale = restore === null ? null : { uri: state.uri, restore }
     this.mounted = null
     this.wholeFile?.view.destroy()
     this.wholeFile = null
@@ -6602,6 +6693,24 @@ export class Session {
   }
 
   /**
+   * The scale a view's map is built on: the state's, the file's own defaults,
+   * and what a derivation on the map {@link remount} took down had taken over
+   * — spent here, by the one view built next for the same file (§7.5).
+   */
+  private seedOf(state: ViewState): PanelSeed {
+    const carried = this.carriedScale
+    this.carriedScale = null
+    return {
+      ...this.scaleOf(state),
+      defaults: {
+        transform: this.balancedByDefault() ? 'log10' : 'log1p',
+        colormap: DEFAULT_UI_COLORMAP,
+      },
+      ...(carried === null || carried.uri !== state.uri ? {} : { restore: carried.restore }),
+    }
+  }
+
+  /**
    * Filter/sort memory for one table, scoped to the open file.
    *
    * Deliberately *not* in the URL: a shared link that silently carried "only
@@ -7189,6 +7298,9 @@ export class Session {
       // first" is exactly as expensive a detour as it is at the top level.
       onOpenRegion: (region: string) =>
         this.navigate({ uri: state.uri, view: 'region', region, genome: state.genome }),
+      // Two windows typed in the box are the block between them (§5.4).
+      onOpenPair: (region: string, region2: string) =>
+        this.navigate({ uri: state.uri, view: 'region', region, region2, genome: state.genome }),
       // Neither while this table is one genome's contigs: "the whole file" is
       // not the question someone reading a MAG's contigs is asking, and the map
       // of *those* contigs is the genome view one crumb up.
@@ -7261,7 +7373,7 @@ export class Session {
           // a guess; the same number is in the File card, from the same place.
           nnz: file.info.cellNnz ?? numberOr(file.info.info['nnz']),
           level,
-          scale: this.scaleOf(state),
+          scale: this.seedOf(state),
           balance,
           ...this.scoreProps(state),
           noun: file.info.hasGenomes ? 'contig' : 'chromosome',
@@ -7341,7 +7453,7 @@ export class Session {
       displayExtent: file.info.displayExtent,
       nnz: file.info.cellNnz ?? numberOr(file.info.info['nnz']),
       level: 'bin',
-      scale: this.scaleOf(state),
+      scale: this.seedOf(state),
       balance: this.balanceOf(state),
       value: this.valueOf(state),
       ...this.scoreProps(state),
@@ -7463,7 +7575,7 @@ export class Session {
       neighbours: { prev: this.stepTarget(-1), next: this.stepTarget(1) },
       onStep: (delta) => this.step(delta),
       level: matrixLevel(state),
-      scale: this.scaleOf(state),
+      scale: this.seedOf(state),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
       onOpenRegion: (region) =>
         this.navigate({ uri: state.uri, view: 'region', region, genome: state.genome }),
@@ -7499,7 +7611,7 @@ export class Session {
       rowGenome: state.genome,
       colGenome: state.genome2,
       level: matrixLevel(state),
-      scale: this.scaleOf(state),
+      scale: this.seedOf(state),
       onChangeGenomes: (genome, genome2) => this.navigate({ ...state, genome, genome2 }),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
       onOpenGenome: (genome) => this.navigate({ uri: state.uri, view: 'genome', genome }),
@@ -7555,7 +7667,7 @@ export class Session {
       onStep: (delta) => this.step(delta),
       ...(state.region2 === undefined ? {} : { region2: state.region2 }),
       ...(state.focus === undefined ? {} : { focus: state.focus }),
-      scale: this.scaleOf(state),
+      scale: this.seedOf(state),
       // Typing a new region replaces the whole selection, so the second axis
       // goes with it: `contig_A × contig_B` then `contig_C` means contig_C, not
       // contig_C against a column the user can no longer see named anywhere.
@@ -7635,7 +7747,7 @@ export class Session {
           noun: file.info.hasGenomes ? 'contig' : 'chromosome',
           ...(edgeListUrl === undefined ? {} : { edgeListUrl }),
           level,
-          scale: this.scaleOf(state),
+          scale: this.seedOf(state),
           genomeNames: file.displayNames,
           onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
           onOpenPair: (a, b) =>
@@ -7752,6 +7864,9 @@ export class Session {
   navigate(next: ViewState | null, options: { replace?: boolean } = {}): boolean {
     const carried = next === null ? null : this.withCompanions(next)
     const moved = !viewStateEquals(carried, this.store.state)
+    // Another picture, on the scale it names: what a rebuild of this one
+    // carried is not its to give back.
+    if (moved) this.carriedScale = null
     this.store.set(carried, options)
     return moved
   }
@@ -7923,7 +8038,42 @@ export class Session {
           'page can re-open one by name. Drop it below and everything else comes back with it' +
           (tracks === 0 ? '.' : `: the view, and ${fmt.int(tracks)} tracks with their settings.`),
       }),
+      this.folderAsked(config.state.uri),
       this.picker.el,
+    )
+  }
+
+  /**
+   * The folder a waiting file is known to be in, where the installed app has
+   * no grant for it (§20.6): a sentence naming it, and a button that connects
+   * it — after which the session finds the file there on its own
+   * ({@link foldersChanged}). Nothing where the file has no known place, and
+   * nothing outside the installed app, which keeps no folder to find one in.
+   */
+  private folderAsked(uri: string): HTMLElement | null {
+    const wanted = missingFolderOf(uri)
+    if (wanted === null) return null
+    const button = el('button', {
+      class: 'btn',
+      type: 'button',
+      text: `Connect ${wanted.name}…`,
+      title: `Choose the folder called ${wanted.name} on this machine; ${fileLabel(uri)} is at ${wanted.path} in it`,
+    })
+    button.addEventListener('click', () => {
+      void connectDirectory().then((id) => {
+        if (id !== null) this.host.folderConnected(id)
+      })
+    })
+    return el(
+      'div',
+      { class: 'folders-asked' },
+      el('p', {
+        class: 'hint',
+        text:
+          `It was in a folder called ${wanted.name}, at ${wanted.path}. Connect that folder and it is ` +
+          'found there, with every other file of this session that was in it.',
+      }),
+      button,
     )
   }
 
@@ -7941,6 +8091,7 @@ export class Session {
           (devFeature('metacool') ? '(genome, region, colour scale)' : '(region, colour scale)') +
           ' will be restored.',
       }),
+      this.folderAsked(uri),
       this.picker.el,
     )
   }

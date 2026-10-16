@@ -18,7 +18,7 @@
 import type { MatrixResult } from '../worker/protocol'
 import type { ReaderClient } from '../worker/client'
 import { button, el, field, titleWhenCut } from './dom'
-import type { ScaleState } from './GenomeView'
+import type { PanelSeed, ScaleState } from './GenomeView'
 import { cardTitle } from './icons'
 import { MatrixPanel,
   type AnnotationContext,
@@ -56,7 +56,7 @@ export interface PairViewProps {
   rowGenome: string
   colGenome: string
   level: 'bin' | 'contig'
-  scale: ScaleState
+  scale: PanelSeed
   balance: boolean
   hasWeights: boolean
   /**

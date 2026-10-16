@@ -23,9 +23,11 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { all, setUpDom, textsOf, type DomTeardown } from '../support/dom'
+import { useMemoryStores } from '@/state/idb'
+import { all, openedAs, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown
+let asTab: () => void
 
 vi.mock('@/auth/google', async () => {
   const actual = await vi.importActual<typeof import('@/auth/google')>('@/auth/google')
@@ -55,12 +57,18 @@ beforeEach(() => {
   site.googleClientId = 'test.apps.googleusercontent.com'
   site.dropboxAppKey = 'a1b2c3d4e5f6g7h'
   window.localStorage.clear()
-  // A browser that can hold a directory, so the local place is worded the way
-  // Chromium and the desktop build word it on both screens.
+  // A browser that can hold a directory — a picker, and a database to keep the
+  // grant in, here a memory one — opened as the installed app, so the local
+  // place is worded the way the installed app and the desktop build word it on
+  // both screens (§20.6).
   vi.stubGlobal('showDirectoryPicker', async () => null)
+  vi.stubGlobal('indexedDB', {})
+  useMemoryStores()
+  asTab = openedAs('app')
 })
 
 afterEach(() => {
+  asTab()
   teardown()
   vi.unstubAllGlobals()
   document.querySelectorAll('.modal-backdrop').forEach((node) => node.remove())

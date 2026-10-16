@@ -66,7 +66,7 @@ import {
 } from '../ui/MatrixPanel'
 import { axisRegion, type SelectedRegion } from '../ui/mapSelection'
 import { zoomedRegion } from '../ui/RegionView'
-import { regionLabel } from '../genome/assembly'
+import { pairLabel, regionLabel } from '../genome/assembly'
 import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor } from '../ui/scores'
 import { parseSmooth } from '../render/smooth'
 import type { ScaleState } from '../ui/GenomeView'
@@ -83,12 +83,14 @@ import {
   readMapRow,
   type MapRow,
 } from '../ui/dom'
+import { tabAmong } from '../ui/tabWalk'
 import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
 import type { PickedFile } from '../browse/folder'
 import { resolutionLabel } from '../units'
 import { firstEntry } from '../ui/FilePicker'
 import { attachRefine, rungsOf, type BlockLadder } from '../ui/refine'
 import { icon, iconButton } from '../ui/icons'
+import { paintSequencePicker, sequencePicker, shownSequence } from './sequencePicker'
 import { entryLabel, fileBaseLabel, fileLabel, splitUri } from '../ui/labels'
 
 /**
@@ -376,6 +378,12 @@ export interface MapPanelProps {
    * deck's cue to re-ask the lock and the echoes, which read it.
    */
   onOwnPlace?(): void
+  /**
+   * A sequence picked on this map's heading (§16.3): the deck takes the map off
+   * the chain, where it is on it, and has it read that sequence for itself
+   * ({@link MapPanel.readSequence}). Absent, the heading offers no picker.
+   */
+  onPickSequence?(name: string): void
 }
 
 /**
@@ -678,6 +686,18 @@ export class MapPanel {
   private entryGroup = ''
   /** The `::1000` in the heading: a picker, where there is more than one rung. */
   private readonly entryPicker: HTMLSelectElement
+  /**
+   * The sequence this map is on, in the heading: a picker of this file's own
+   * sequences, and the road to another one for this map alone (§16.3).
+   */
+  private readonly sequencePicker: HTMLSelectElement
+  /**
+   * This file's sequences, in its order, once asked — `null` before then and
+   * where the file would not say. Asked once per address: the rungs of a
+   * collection are one genome's.
+   */
+  private sequenceNames: string[] | null = null
+  private sequencesAsked: string | null = null
 
   constructor(private readonly props: MapPanelProps) {
     // The *file's* name only, until a reader says otherwise. The entry beside it
@@ -694,6 +714,7 @@ export class MapPanel {
     this.entryPicker.addEventListener('change', () => {
       void this.openEntry(this.entryPicker.value)
     })
+    this.sequencePicker = sequencePicker((name) => props.onPickSequence?.(name))
     this.starButton = iconButton('star', '', () => props.onStar(), {
       class: 'btn btn-icon deck-star',
       size: 13,
@@ -735,6 +756,7 @@ export class MapPanel {
         this.grip(),
         this.nameEl,
         this.entryPicker,
+        this.sequencePicker,
         this.placeEl,
         this.starButton,
         this.lockButton,
@@ -787,6 +809,11 @@ export class MapPanel {
       revert()
     })
     input.addEventListener('keydown', (event) => {
+      // Enter that goes on to the next cell's heading, in reading order (§26.8).
+      if (tabAmong(event, input, '.deck-grid', 'input.deck-name')) {
+        event.stopPropagation()
+        return
+      }
       if (event.key === 'Enter') {
         event.preventDefault()
         input.blur()
@@ -1216,9 +1243,61 @@ export class MapPanel {
     this.setOwnPlace(null)
   }
 
+  /**
+   * Read a whole sequence **for this map alone** — the heading's picker (§16.3).
+   * A window of its own like a box's, so the pill names it, `×` gives the map
+   * back to the deck's window, and it is remembered with the map's looks.
+   */
+  readSequence(name: string): void {
+    this.setOwnPlace({ rows: name })
+  }
+
+  /** Ask this file for its sequences, once per address, and put them on the picker. */
+  private async askSequences(): Promise<void> {
+    if (this.sequencesAsked === this.uri) return
+    const asked = this.uri
+    this.sequencesAsked = asked
+    try {
+      const contigs = await this.client.request<'contigs'>({ kind: 'contigs' })
+      if (this.disposed || this.uri !== asked) return
+      const column = contigs.table.data['name']
+      this.sequenceNames = Array.isArray(column) ? (column as string[]) : null
+    } catch {
+      // A file that will not list its sequences offers no picker; its map is
+      // what the reader came for, and a box drawn on it still reads a window.
+      this.sequenceNames = null
+    }
+    this.paintSequences()
+  }
+
+  /** Say on the picker which sequence the block on screen is of, and what a pick would do. */
+  private paintSequences(): void {
+    const names = this.sequenceNames
+    const block = this.panel?.blockSequences() ?? null
+    const wasHidden = this.sequencePicker.classList.contains('hidden')
+    if (names === null || block === null || this.props.onPickSequence === undefined) {
+      this.sequencePicker.classList.add('hidden')
+    } else {
+      paintSequencePicker(
+        this.sequencePicker,
+        names,
+        shownSequence(block.rows, block.cols),
+        this.ownPlace === null
+          ? 'The sequence this map shows. Pick another to read it in this map alone — the map stops ' +
+              'following the others, which stay where they are.'
+          : 'This map is reading a window of its own. Pick a sequence to read that one instead; the ' +
+              '× on the window beside this gives the map back to the others’ window.',
+      )
+    }
+    // The pill leaves a whole sequence's name to the picker, so it follows the
+    // picker coming and going.
+    if (wasHidden !== this.sequencePicker.classList.contains('hidden')) this.paintPlace()
+  }
+
   private setOwnPlace(place: OwnPlace | null): void {
     if (this.placeKey === (place === null ? '' : JSON.stringify(place))) return
     this.ownPlace = place
+    this.paintSequences()
     this.paintPlace()
     this.reportLook()
     this.props.onOwnPlace?.()
@@ -1254,7 +1333,14 @@ export class MapPanel {
       return
     }
     const label =
-      own.cols === undefined ? regionLabel(own.rows) : `${regionLabel(own.rows)} × ${regionLabel(own.cols)}`
+      own.cols === undefined ? regionLabel(own.rows) : pairLabel(own.rows, own.cols)
+    // A whole sequence is named by the picker beside the pill, which says it
+    // whatever the window (§16.3); the pill then says only that it is this
+    // map's own, and keeps its two buttons.
+    const named =
+      own.cols === undefined &&
+      this.sequenceNames?.includes(own.rows) === true &&
+      !this.sequencePicker.classList.contains('hidden')
     this.placeEl.title =
       `This map is reading ${label} for itself, at its own resolution, and not the window the ` +
       'others are showing. Draw another box on it to narrow it again.'
@@ -1266,7 +1352,7 @@ export class MapPanel {
     widen.disabled = own.cols !== undefined
     this.placeEl.replaceChildren(
       icon('scan', { size: 12 }),
-      el('span', { class: 'deck-place-label', text: label }),
+      ...(named ? [] : [el('span', { class: 'deck-place-label', text: label })]),
       widen,
       iconButton('x', 'Back to the deck’s window: read the region the other maps are showing', () => this.clearOwnPlace(), {
         class: 'btn btn-icon deck-place-clear',
@@ -1569,6 +1655,7 @@ export class MapPanel {
       this.opened = info
       this.countContacts(info)
       this.paintEntries(info)
+      void this.askSequences()
       // The ladder is known now, so a press this panel was too early to answer
       // can be answered honestly: either this *is* the rung it asked for and
       // there was never anything to say, or it is one this file has — in which
@@ -1604,6 +1691,7 @@ export class MapPanel {
       // must not leave its lap behind for the ladder of a block it is not.
       this.wrap = wrap
       this.show(result, info, state)
+      this.paintSequences()
       this.props.onSettled()
     } catch (err) {
       if (this.disposed) return

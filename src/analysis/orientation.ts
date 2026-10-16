@@ -98,14 +98,13 @@ export const MIN_RECORDS = 16
  */
 export function orientationFigure(
   source: OrientationCounts,
-  options: { factor?: number; minSeparation?: number } = {},
+  options: { factor?: number } = {},
 ): OrientationFigure | null {
   const factor = Math.max(1.01, options.factor ?? 1.1)
-  const minSeparation = Math.max(0, options.minSeparation ?? 0)
   const fineEdges = source.edges
   if (fineEdges.length < 3) return null
 
-  const cuts = drawnEdges(fineEdges, Math.max(1, minSeparation), factor)
+  const cuts = drawnEdges(fineEdges, 1, factor)
   if (cuts === null || cuts.length < 3) return null
   const edges = cuts.map((at) => fineEdges[at])
   const bins = cuts.length - 1

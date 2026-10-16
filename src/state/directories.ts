@@ -1,5 +1,6 @@
 /**
- * Permission to read a directory, kept across a reload.
+ * Permission to read a directory, kept across a reload — in the installed app,
+ * and for the visit in a browser tab ({@link directoriesKept}, §20.6).
  *
  * The same arrangement `state/handles.ts` makes for a single file, one level up,
  * and worth restating because the grant is genuinely wider. A
@@ -32,6 +33,7 @@
 
 import { STORES, store } from './idb'
 import { crossOriginFrame } from '../embed'
+import { installedApp } from '../installed'
 
 /** One connected directory, and what it was called when it was connected. */
 export interface DirectoryRow {
@@ -70,14 +72,31 @@ export function directoriesSupported(): boolean {
 }
 
 /**
- * Read the stored grants into memory. Called once, early.
+ * `true` where a connected directory is **kept** — across a restart, and in
+ * the workspaces exported from here — which is the installed app only (§20.6).
+ *
+ * In a browser tab a directory is connected for the visit: held in memory and
+ * listed in the Files column like any other, and gone with the page. A tab is
+ * a page on whatever machine opened it, and a page that kept a grant to a
+ * directory of unpublished data would be keeping it for the next person at that
+ * browser (`installed.ts`). Rows a tab stored before this rule are left where
+ * they are, for the installed app on the same origin to find, and are still
+ * listed — and forgettable — in the stored-data screen.
+ */
+export function directoriesKept(): boolean {
+  return directoriesSupported() && installedApp()
+}
+
+/**
+ * Read the stored grants into memory. Called once, early, and only where they
+ * are kept ({@link directoriesKept}).
  *
  * Failures are silent and total: a browser that cannot answer holds no grants,
  * which is the state every browser was in before this existed.
  */
 export function hydrateDirectories(): Promise<void> {
   hydration ??= (async () => {
-    if (!directoriesSupported()) return
+    if (!directoriesKept()) return
     try {
       for (const key of await directoryStore.keys()) {
         const row = await directoryStore.get<DirectoryRow>(key)
@@ -93,6 +112,26 @@ export function hydrateDirectories(): Promise<void> {
 /** Every remembered directory, in the order they were connected. */
 export function directoryRows(): DirectoryRow[] {
   return [...rows.values()]
+}
+
+/**
+ * The names of the directories **stored** on this browser, whether or not this
+ * page holds them — for the stored-data screen, which owes the reader the
+ * whole account: a tab keeps none of its own, and still shares its storage
+ * with the installed app on the same origin, whose folders are kept there.
+ */
+export async function storedDirectoryNames(): Promise<string[]> {
+  if (!directoriesSupported()) return []
+  try {
+    const names: string[] = []
+    for (const key of await directoryStore.keys()) {
+      const row = await directoryStore.get<DirectoryRow>(key)
+      if (row !== null && typeof row.name === 'string') names.push(row.name)
+    }
+    return names
+  } catch {
+    return []
+  }
 }
 
 /** An id no stored row is using. Mirrors `ui/bucketForm.ts`'s reasoning. */
@@ -114,7 +153,8 @@ export async function rememberDirectory(
   // IndexedDB still has the folder connected for this session — which is the
   // snapshot backend's behaviour, arrived at from the other direction.
   rows.set(id, row)
-  if (!directoriesSupported()) return
+  // Written down only where a folder is kept: in a tab it lasts the visit.
+  if (!directoriesKept()) return
   await directoryStore.set(id, row)
 }
 

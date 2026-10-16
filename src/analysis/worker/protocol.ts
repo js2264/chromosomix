@@ -102,6 +102,12 @@ export interface PeerMap {
   binning?: PairsBinning
   /** The total this map is drawn to, as the reader draws it (§6.5). */
   resample?: ResampleTarget
+  /**
+   * The resolution the map it is compared with is read at (§3.4), in base
+   * pairs, where that is one the reader added: this one is summed to it too
+   * where it can be, so that a stratum is one separation in both.
+   */
+  coarsen?: number
 }
 
 /**
@@ -254,6 +260,13 @@ export type AnalysisRequest =
        * reads the edited assembly, as the view shows it, or is refused by name.
        */
       edit?: ReferenceEdit
+      /**
+       * The resolution the reader added that the map is drawn at (§3.4), in
+       * base pairs: a whole number of this map's bins, summed — after the edit
+       * and the total, as the reader's map sums them. Absent at the rung the file
+       * stores. Every task then reads the map at it, as the framing says.
+       */
+      coarsen?: number
     }
   | {
       id: number

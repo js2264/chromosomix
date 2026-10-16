@@ -32,7 +32,8 @@ import { button, el, trimNumber } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
 import { settingsField } from '../ui/laneSettings'
 import { COLORMAP_NAMES } from '../render/colormaps'
-import { seriesColour, type FigureTheme } from './option'
+import { drawnAsChart } from './matrixOption'
+import { figureFit, seriesColour, type FigureTheme } from './option'
 import { histogram } from './stats'
 import {
   DISTRIBUTION_MARKS,
@@ -90,9 +91,12 @@ export function figureSettings(props: FigureSettingsProps): FigureSettings {
           ? // A dot plot's figure is its streaks, red and blue whatever a
             // colormap says (§28.2): a Colour card beside it changed nothing on
             // screen, and the rebuild its every pick asked for threw the zoom away.
+            // A matrix the painter draws — a list's heatmap, a picture past
+            // the chart's ceiling — has no readout under the pointer, so it
+            // is offered no switch for one (§8.5).
             props.spec.output.streaks !== undefined
-            ? [textCard(style, set)]
-            : [colourCard(style, set), textCard(style, set)]
+            ? [textCard(style, set, drawnAsChart(props.spec.output))]
+            : [colourCard(style, set), textCard(style, set, drawnAsChart(props.spec.output))]
           : [rowsCard(props.spec, style, set), ...scatterAxes(props.spec, style, set), textCard(style, set)]
 
     host.replaceChildren(
@@ -283,10 +287,15 @@ function chartCard(spec: XyFigureSpec, style: FigureStyle, set: Apply): HTMLElem
 /**
  * The data's own end of an axis, over the series that are drawn.
  *
- * Read off the axes as drawn: a histogram's abscissa is the series' values,
- * from its first bin's edge to its last, and its ordinate the counts.
+ * Read off the axes as drawn: where the axis is fitted (`option.figureFit`),
+ * the end of the fit — the end the picture had on that side, room and all, so
+ * typing the other end moves only that one; and where the library fits it, a
+ * histogram's abscissa is the series' values, from its first bin's edge to its
+ * last, and its ordinate the counts.
  */
 function dataEnd(spec: XyFigureSpec, style: FigureStyle, which: 'x' | 'y', at: 0 | 1): number | null {
+  const fit = figureFit(spec, style, which)
+  if (fit !== null) return fit[at]
   const log = style[which].scale === 'log'
   const histo = style.mark === 'histogram'
   let low = Number.POSITIVE_INFINITY
@@ -459,7 +468,7 @@ function seriesCard(
 
 const PLACES: readonly LegendPlace[] = ['right', 'top', 'bottom', 'none']
 
-function textCard(style: FigureStyle, set: Apply): HTMLElement {
+function textCard(style: FigureStyle, set: Apply, readout = true): HTMLElement {
   return group(
     'text',
     settingsField(
@@ -471,7 +480,9 @@ function textCard(style: FigureStyle, set: Apply): HTMLElement {
       numberBox(style.fontSize, (value) => set({ fontSize: value ?? 11 }), 'In CSS pixels, for every word on the figure', 1),
     ),
     settingsField('legend', choice(PLACES, style.legend, (legend) => set({ legend }))),
-    toggle('tooltip', style.tooltip, (tooltip) => set({ tooltip }), 'The readout that follows the pointer'),
+    ...(readout
+      ? [toggle('tooltip', style.tooltip, (tooltip) => set({ tooltip }), 'The readout that follows the pointer')]
+      : []),
   )
 }
 

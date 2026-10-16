@@ -142,6 +142,11 @@ export function handleFolder(
   id: string,
   label: string,
   handle: FileSystemDirectoryHandle,
+  /**
+   * Whether the grant outlives the page: in the installed app, and not in a
+   * browser tab, which holds a directory for the visit (§20.6).
+   */
+  durable = true,
 ): ConnectedFolder {
   const walk = async (path: string): Promise<FileSystemDirectoryHandle> => {
     let at = handle
@@ -157,7 +162,8 @@ export function handleFolder(
     label,
     kind: 'local',
     root: '',
-    durable: true,
+    durable,
+    ...(durable ? {} : { transient: 'visit' as const }),
 
     async list(path: string): Promise<FolderListing> {
       const directory = await walk(path)
@@ -220,8 +226,34 @@ export function handleFolder(
         uri: file.name,
         source: { kind: 'local', file },
         ...(index === undefined ? {} : { index }),
+        // Where it came from, for a workspace to find it in this folder again
+        // (§20.6) — read only where folders are kept.
+        folder: { id, name: label, path: entry.path },
       }
     },
+  }
+}
+
+/**
+ * A file at `path` inside a granted directory, or `null` where there is none.
+ *
+ * The road a workspace's files take back (§20.6): a session that named a file
+ * by the folder it was in and the path inside it finds it there again, through
+ * the folder's grant, without the reader being asked to find it.
+ */
+export async function fileInDirectory(
+  handle: FileSystemDirectoryHandle,
+  path: string,
+): Promise<FileSystemFileHandle | null> {
+  const parts = path.split('/').filter((part) => part !== '')
+  const name = parts.pop()
+  if (name === undefined) return null
+  try {
+    let at = handle
+    for (const part of parts) at = await at.getDirectoryHandle(part)
+    return await at.getFileHandle(name)
+  } catch {
+    return null
   }
 }
 
@@ -249,6 +281,7 @@ export function snapshotFolder(id: string, label: string, files: readonly File[]
     root: '',
     // The half of "connected" this shape cannot keep. See the module header.
     durable: false,
+    transient: 'snapshot',
 
     async list(path: string): Promise<FolderListing> {
       const folders = new Set<string>()

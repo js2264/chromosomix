@@ -17,6 +17,11 @@
  * row, the stop button is on the row, and the drawer is only where the numbers
  * are.
  *
+ * Above the cards, a box that narrows them to the tasks a reader names — by
+ * title, by what the task is for, or by another name for it (*TAD*, *pileup*,
+ * *A/B*: the descriptor's `keywords`) — because thirty tasks in four cards is a
+ * list read top to bottom by someone who already knows the one they want.
+ *
  * Rows are built once per task list and thereafter *updated* rather than
  * rebuilt. The runner reports progress at ten hertz, and replacing this
  * column's DOM at that rate would take the focus off whichever row a keyboard
@@ -212,8 +217,21 @@ export class AnalysisPanelCard {
   private readonly blockedEl = el('p', { class: 'inline-error analysis-blocked hidden', attrs: { role: 'status' } })
   /** The cards, under {@link blockedEl}. */
   private readonly cardsEl = el('div', { class: 'analysis-cards' })
+  /**
+   * The box that narrows the list (§18.1), between the sentence and the cards;
+   * built once, so a rebuild of the cards under it keeps the caret.
+   */
+  private readonly filterEl = el('input', {
+    class: 'input input-tiny analysis-filter',
+    type: 'search',
+    attrs: { 'aria-label': 'filter the tasks', spellcheck: 'false', autocomplete: 'off' },
+  })
+  /** Said where the box has narrowed the list to nothing. */
+  private readonly noMatchEl = el('p', { class: 'analysis-empty analysis-no-match hidden', attrs: { role: 'status' } })
   private readonly rows: Row[] = []
   private readonly groupNotes: Group[] = []
+  /** Each group's card, so the filter can take away a card with nothing left in it. */
+  private readonly cards: Array<{ group: TaskGroup; el: HTMLElement }> = []
   /**
    * The task list the rows were built from, joined; `null` before the first one.
    *
@@ -232,7 +250,24 @@ export class AnalysisPanelCard {
     // they are cards — the same frame, mark and fold every other card in every
     // other column has, so *2D tasks* folds away exactly as *Tracks* does. The
     // panel's own name is not repeated on any of them.
-    this.el = el('div', { class: 'analysis-tasks' }, this.blockedEl, this.cardsEl)
+    this.el = el('div', { class: 'analysis-tasks' }, this.blockedEl, this.filterEl, this.noMatchEl, this.cardsEl)
+    this.filterEl.addEventListener('input', () => this.applyFilter())
+    this.filterEl.addEventListener('keydown', (event) => {
+      // Escape empties the box before it does anything else, as a search box
+      // does; Enter opens the first task left that can run.
+      if (event.key === 'Escape' && this.filterEl.value !== '') {
+        event.preventDefault()
+        event.stopPropagation()
+        this.filterEl.value = ''
+        this.applyFilter()
+      } else if (event.key === 'Enter') {
+        event.preventDefault()
+        const first = this.rows.find(
+          (row) => !row.el.classList.contains('is-filtered-out') && !row.el.classList.contains('is-waiting'),
+        )
+        if (first !== undefined) this.options.onOpen(first.task)
+      }
+    })
     this.unsubscribe = options.runner.subscribe(() => this.refresh())
     this.refresh()
   }
@@ -284,7 +319,11 @@ export class AnalysisPanelCard {
   private rebuild(tasks: readonly AnalysisTask[]): void {
     this.rows.length = 0
     this.groupNotes.length = 0
+    this.cards.length = 0
+    this.filterEl.placeholder = `filter ${fmt.int(tasks.length)} task${tasks.length === 1 ? '' : 's'}…`
+    this.filterEl.classList.toggle('hidden', tasks.length === 0)
     if (tasks.length === 0) {
+      this.noMatchEl.classList.add('hidden')
       this.cardsEl.replaceChildren(
         el('p', {
           class: 'analysis-empty',
@@ -316,16 +355,42 @@ export class AnalysisPanelCard {
         // border, which is what the reader is clicking.
         nodes.push(row.el, row.needs)
       }
-      cards.push(
-        el(
-          'section',
-          { class: 'card analysis-card' },
-          cardTitle(TASK_GROUP_LABELS[group], TASK_GROUP_ICONS[group]),
-          ...nodes,
-        ),
+      const card = el(
+        'section',
+        { class: 'card analysis-card' },
+        cardTitle(TASK_GROUP_LABELS[group], TASK_GROUP_ICONS[group]),
+        ...nodes,
       )
+      this.cards.push({ group, el: card })
+      cards.push(card)
     }
     this.cardsEl.replaceChildren(...cards)
+    this.applyFilter()
+  }
+
+  /**
+   * Narrow the list to the tasks the box names: every word typed must be found
+   * in the task's title, its blurb, its other names or its card's heading.
+   * The rows are hidden rather than rebuilt, so a running task's chip keeps
+   * counting under a filter that has taken it away, and comes back as it is.
+   */
+  private applyFilter(): void {
+    const words = this.filterEl.value.toLowerCase().split(/\s+/).filter((word) => word !== '')
+    let shown = 0
+    for (const row of this.rows) {
+      const text = searchableText(row.task)
+      const keep = words.every((word) => text.includes(word))
+      row.el.classList.toggle('is-filtered-out', !keep)
+      row.needs.classList.toggle('is-filtered-out', !keep)
+      if (keep) shown++
+    }
+    for (const card of this.cards) {
+      const any = this.rows.some((row) => row.group === card.group && !row.el.classList.contains('is-filtered-out'))
+      card.el.classList.toggle('is-filtered-out', !any)
+    }
+    const none = words.length > 0 && shown === 0 && this.rows.length > 0
+    this.noMatchEl.textContent = none ? `No task matches “${this.filterEl.value.trim()}”.` : ''
+    this.noMatchEl.classList.toggle('hidden', !none)
   }
 
   /**
@@ -501,4 +566,11 @@ export class AnalysisPanelCard {
       else row.el.removeAttribute('aria-current')
     }
   }
+}
+
+/** Everything the list's filter reads a task by, lowercased once per call. */
+function searchableText(task: AnalysisTask): string {
+  return [task.title, task.blurb, ...(task.keywords ?? []), TASK_GROUP_LABELS[task.group], task.id]
+    .join(' \n ')
+    .toLowerCase()
 }

@@ -13,7 +13,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { markOf, optionOf, paperOption, seriesColour, type FigureTheme } from '@/figures/option'
+import { figureFit, fitOf, logTicks, markOf, optionOf, paperOption, seriesColour, wrapName, type FigureTheme } from '@/figures/option'
 import { boxSummary, density, histogram, quantile, sorted } from '@/figures/stats'
 import { specOf, type XyFigureSpec } from '@/figures/spec'
 import { defaultStyle, type FigureStyle } from '@/figures/style'
@@ -136,7 +136,10 @@ describe('optionOf', () => {
     const zooms = option['dataZoom'] as Array<Record<string, unknown>>
     expect(zooms[0]['startValue']).toBe(1.5)
     expect(zooms[0]['endValue']).toBe(2.5)
-    expect((option['xAxis'] as Record<string, unknown>)['min']).toBeUndefined()
+    // The axis still holds the whole fit, so the zoom answers for every window
+    // inside it: along a curve, the first sample to the last.
+    expect((option['xAxis'] as Record<string, unknown>)['min']).toBe(1)
+    expect((option['xAxis'] as Record<string, unknown>)['max']).toBe(3)
     // The ordinate, untouched, is the whole of the data.
     expect(zooms[1]['start']).toBe(0)
     expect(zooms[1]['end']).toBe(100)
@@ -150,8 +153,9 @@ describe('optionOf', () => {
     })
     const axis = option['yAxis'] as Record<string, unknown>
     expect(axis['min']).toBe(-10)
-    // The data reach past 2 on the top, so that side is the data's own.
-    expect(axis['max']).toBeUndefined()
+    // The data reach past 2 on the top, so that side is the fit's own: the
+    // highest value drawn, 6, and a twentieth of the span (0 to 6) above it.
+    expect(axis['max']).toBeCloseTo(6.3, 12)
     // Both ends are numbers a reader would write, and are labelled.
     const labels = axis['axisLabel'] as Record<string, unknown>
     expect(labels['showMinLabel']).toBeUndefined()
@@ -180,7 +184,8 @@ describe('optionOf', () => {
       style.x.domain = [1.0372, 3.4518]
     })
     const axis = option['xAxis'] as Record<string, unknown>
-    expect(axis['min']).toBeUndefined()
+    // The fit's own on the left, where the window does not reach past it.
+    expect(axis['min']).toBe(1)
     expect(axis['max']).toBe(3.4518)
     const labels = axis['axisLabel'] as Record<string, unknown>
     expect(labels['showMinLabel']).toBe(false)
@@ -310,7 +315,179 @@ describe('optionOf', () => {
       }).option['grid'] as Record<string, unknown>)['right']
     expect(right('violin')).toBe(16)
     expect(right('box')).toBe(16)
-    expect(right('line')).toBeGreaterThan(100)
+    expect(right('line')).toBeGreaterThan(16)
+  })
+
+  it('frames the plot in the ink, its two axes on the frame and no gridline over it', () => {
+    const { option } = build(curve({ series: [{ name: 'a', x: new Float64Array([-2, 0, 2]), y: new Float64Array([-1, 0, 1]) }] }))
+    const grid = option['grid'] as Record<string, unknown>
+    expect(grid['show']).toBe(true)
+    expect(grid['borderColor']).toBe(THEME.ink)
+    // Over the series, which sit at the library's 2, so the frame closes over
+    // the ends of a curve that starts on it.
+    expect(grid['z']).toBeGreaterThan(2)
+    for (const name of ['xAxis', 'yAxis']) {
+      const axis = option[name] as Record<string, Record<string, unknown>>
+      // On the frame, not through the other axis's zero — which this profile
+      // has in the middle of both.
+      expect(axis['axisLine']['onZero']).toBe(false)
+      expect((axis['axisLine']['lineStyle'] as Record<string, unknown>)['color']).toBe(THEME.ink)
+      // The dashed grey at the two ends was the old border.
+      expect(axis['splitLine']['showMinLine']).toBe(false)
+      expect(axis['splitLine']['showMaxLine']).toBe(false)
+      // Solid, as every line in a plot is, and thinner than the frame.
+      expect(axis['splitLine']['lineStyle']).toMatchObject({ type: 'solid', width: 0.5 })
+    }
+  })
+
+  it('fits a curve from its first sample to its last, with room above and below', () => {
+    // A P(s): 5 kb to 2.1 Mb, used to be drawn from 1 kb to 10 Mb.
+    const ps = curve({
+      xScale: 'log',
+      yScale: 'log',
+      series: [
+        { name: 'a', x: new Float64Array([0, 5000, 50_000, 2_100_000]), y: new Float64Array([1, 7.3e-6, 1e-6, 7e-8]) },
+      ],
+    })
+    const { option } = build(ps)
+    const x = option['xAxis'] as Record<string, unknown>
+    // The zero separation is a gap on a log axis, and its value is no end.
+    expect(x['min']).toBe(5000)
+    expect(x['max']).toBe(2_100_000)
+    // Neither end is a decade, so neither is labelled: the ticks inside are.
+    expect((x['axisLabel'] as Record<string, unknown>)['showMinLabel']).toBe(false)
+    expect((x['axisLabel'] as Record<string, unknown>)['showMaxLabel']).toBe(false)
+    const y = option['yAxis'] as Record<string, unknown>
+    const span = Math.log10(7.3e-6) - Math.log10(7e-8)
+    expect(Math.log10(y['min'] as number)).toBeCloseTo(Math.log10(7e-8) - span * 0.05, 12)
+    expect(Math.log10(y['max'] as number)).toBeCloseTo(Math.log10(7.3e-6) + span * 0.05, 12)
+  })
+
+  it('fits the ordinate to what is drawn in the abscissa’s window', () => {
+    // A P(s) a task opens from x = 2.5: the 100 at x = 1 is off the picture to
+    // the left, and the line from x = 2 to 3 enters the window at 7.5.
+    const decay = curve({ series: [{ name: 'a', x: new Float64Array([1, 2, 3, 4, 5]), y: new Float64Array([100, 10, 5, 4, 3]) }] })
+    const { option } = build(decay, (style) => {
+      style.x.domain = [2.5, 5]
+    })
+    const y = option['yAxis'] as Record<string, unknown>
+    expect(y['min']).toBeCloseTo(3 - 4.5 * 0.05, 12)
+    expect(y['max']).toBeCloseTo(7.5 + 4.5 * 0.05, 12)
+    // Points are not joined, so only the ones inside count.
+    const points = build(decay, (style) => {
+      style.mark = 'points'
+      style.x.domain = [2.5, 5]
+    }).option['yAxis'] as Record<string, unknown>
+    expect(points['max']).toBeCloseTo(5 + 2 * 0.05, 12)
+  })
+
+  it('labels a log axis of a dozen decades every few, on whole decades', () => {
+    const wide = curve({
+      yScale: 'log',
+      series: [{ name: 'a', x: new Float64Array([1, 2, 3]), y: new Float64Array([1e-12, 1e-6, 1]) }],
+    })
+    const y = build(wide).option['yAxis'] as Record<string, Record<string, unknown>>
+    // Thirteen decades and a bit with the room: every third, from a multiple
+    // of three — never counted from the axis's own end, which is no decade.
+    const ticks = y['axisLabel']['customValues'] as number[]
+    expect(ticks.map((tick) => Math.round(Math.log10(tick)))).toEqual([-12, -9, -6, -3, 0])
+    expect(y['axisTick']['customValues']).toEqual(ticks)
+    // Under ten decades the library's own, one a decade, stands.
+    const narrow = build(curve({ yScale: 'log', series: [{ name: 'a', x: new Float64Array([1, 2]), y: new Float64Array([1e-6, 1e-3]) }] }))
+    expect(((narrow.option['yAxis'] as Record<string, Record<string, unknown>>)['axisLabel'])['customValues']).toBeUndefined()
+    expect(logTicks(1e-6, 1e-3)).toBeNull()
+  })
+
+  it('labels a log window narrower than a few decades between the decades too', () => {
+    // A P(s) zoomed to 221 kb – 783 kb: no decade inside, so no label at all.
+    expect(logTicks(221_000, 783_300)).toEqual([300_000, 400_000, 500_000, 600_000, 700_000])
+    // Two decades inside: 1, 2 and 5 of each; three are the library's own.
+    expect(logTicks(2000, 150_000)).toEqual([2000, 5000, 10_000, 20_000, 50_000, 100_000])
+    expect(logTicks(800, 150_000)).toBeNull()
+    // Inside a single digit's step, an ordinary ladder.
+    expect(logTicks(310_000, 340_000)).toEqual([310_000, 320_000, 330_000, 340_000])
+  })
+
+  it('spells the crosshair’s numbers as the axes do', () => {
+    const ps = curve({ xLabel: 'Genomic separation (bp)', xScale: 'log', yScale: 'log' })
+    const { option } = build(ps)
+    const x = (option['xAxis'] as Record<string, Record<string, Record<string, (p: { value: number }) => string>>>)['axisPointer']['label']['formatter']
+    const y = (option['yAxis'] as Record<string, Record<string, Record<string, (p: { value: number }) => string>>>)['axisPointer']['label']['formatter']
+    expect(x({ value: 387_269 })).toBe('387.3 kb')
+    expect(y({ value: 2.24e-8 })).toBe('2.24e-8')
+  })
+
+  it('draws the crosshair solid, as every line in a plot is', () => {
+    const tooltip = build().option['tooltip'] as Record<string, Record<string, Record<string, unknown>>>
+    expect(tooltip['axisPointer']['lineStyle']['type']).toBe('solid')
+    expect(tooltip['axisPointer']['crossStyle']['type']).toBe('solid')
+  })
+
+  it('names its two zooms, so a gesture can say which it moved', () => {
+    const zooms = build().option['dataZoom'] as Array<Record<string, unknown>>
+    expect(zooms.map((zoom) => zoom['id'])).toEqual(['zoom-x', 'zoom-y'])
+  })
+
+  it('keeps room along the abscissa for points, and leaves bars to the library', () => {
+    const points = build(curve(), (style) => (style.mark = 'points')).option['xAxis'] as Record<string, unknown>
+    expect(points['min']).toBeCloseTo(0.9, 12)
+    expect(points['max']).toBeCloseTo(3.1, 12)
+    const bars = build(curve(), (style) => (style.mark = 'bars')).option
+    expect((bars['xAxis'] as Record<string, unknown>)['min']).toBeUndefined()
+    expect((bars['yAxis'] as Record<string, unknown>)['min']).toBeUndefined()
+    // A histogram's abscissa runs over its bins, with the room; its count is
+    // the library's, from zero.
+    const histo = build(curve(), (style) => (style.mark = 'histogram'))
+    const edges = histogram([4, 5, 6, 1, 0, 2], histo.style.bins).edges
+    const span = edges[edges.length - 1] - edges[0]
+    expect((histo.option['xAxis'] as Record<string, unknown>)['min']).toBeCloseTo(edges[0] - span * 0.05, 12)
+    // …and the library does not widen it again to hold the bars it already holds.
+    expect((histo.option['xAxis'] as Record<string, unknown>)['containShape']).toBe(false)
+    expect((histo.option['yAxis'] as Record<string, unknown>)['min']).toBeUndefined()
+  })
+
+  it('fits a violin to its whole support and a box to its whiskers and outliers', () => {
+    const { spec, style } = build(curve(), (style) => (style.mark = 'violin'))
+    const fit = figureFit(spec, style, 'y')
+    // Past the sample at both ends, as the violin's tails are.
+    expect(fit?.[0]).toBeLessThan(0)
+    expect(fit?.[1]).toBeGreaterThan(6)
+    const option = optionOf(spec, style, THEME)
+    expect((option['yAxis'] as Record<string, unknown>)['min']).toBe(fit?.[0])
+    const box = figureFit(spec, { ...style, mark: 'box' }, 'y')
+    expect(box?.[0]).toBeCloseTo(0 - 0.3, 12)
+    expect(box?.[1]).toBeCloseTo(6 + 0.3, 12)
+    expect(figureFit(spec, style, 'x')).toBeNull()
+  })
+
+  it('keeps the room a legend down the right takes, so it is never over the plot', () => {
+    const long = curve({
+      series: [
+        { name: 'T4-infection.0min.mcool::5000', x: new Float64Array([1, 2]), y: new Float64Array([1, 2]) },
+        { name: 'T4dNDD-infection.10min.mcool::5000', x: new Float64Array([1, 2]), y: new Float64Array([2, 1]) },
+      ],
+    })
+    // Seven pixels a character, so the widths can be checked by hand.
+    const measured: FigureTheme = { ...THEME, measure: (text) => text.length * 7 }
+    const spec = specOf(long) as XyFigureSpec
+    const style = { ...defaultStyle(spec), legend: 'right' as const }
+    const wide = optionOf(spec, style, measured, { width: 2000, height: 800 })
+    // The edge's 8, the padding's 5 a side, the swatch's 25 and its 5, the
+    // longest name's 34 characters, and a gap of the type size.
+    expect((wide['grid'] as Record<string, unknown>)['right']).toBe(8 + 10 + 25 + 5 + 34 * 7 + style.fontSize)
+    const legend = wide['legend'] as Record<string, unknown>
+    expect(legend['itemWidth']).toBe(25)
+    expect(legend['padding']).toBe(5)
+    expect((legend['formatter'] as (name: string) => string)('T4dNDD-infection.10min.mcool::5000')).toBe(
+      'T4dNDD-infection.10min.mcool::5000',
+    )
+    // In a narrow figure the names wrap, rather than the legend taking the plot.
+    const narrow = optionOf(spec, style, measured, { width: 500, height: 400 })
+    const room = (narrow['grid'] as Record<string, unknown>)['right'] as number
+    expect(room).toBeLessThanOrEqual(500 * 0.35)
+    const wrapped = (narrow['legend'] as Record<string, (name: string) => string>)['formatter']('T4dNDD-infection.10min.mcool::5000')
+    expect(wrapped.split('\n').length).toBeGreaterThan(1)
+    expect(wrapped.replaceAll('\n', '')).toBe('T4dNDD-infection.10min.mcool::5000')
   })
 
   it('gives a violin the series colour, so its swatch is not the library’s', () => {
@@ -408,6 +585,50 @@ describe('optionOf', () => {
     expect(markOf(spec.series[1], style)).toBe('line')
     // Unless the figure-wide mark is a summary, which has no per-series form.
     expect(markOf(spec.series[0], { ...style, mark: 'box' })).toBe('box')
+  })
+})
+
+describe('wrapName', () => {
+  const measure = (text: string): number => text.length * 7
+
+  it('keeps a name that fits on one line', () => {
+    expect(wrapName('P(s)', 100, measure)).toEqual(['P(s)'])
+  })
+
+  it('breaks a file name after its own separators, not mid-word', () => {
+    expect(wrapName('T4dNDD-infection.10min.mcool::5000', 23 * 7, measure)).toEqual([
+      'T4dNDD-infection.10min.',
+      'mcool::5000',
+    ])
+  })
+
+  it('cuts a run with no separator by the letter, as a last resort', () => {
+    expect(wrapName('abcdefghij', 4 * 7, measure)).toEqual(['abcd', 'efgh', 'ij'])
+  })
+
+  it('leaves no space at the end of a line it broke after one', () => {
+    expect(wrapName('micro C replicate', 9 * 7, measure)).toEqual(['micro C', 'replicate'])
+  })
+})
+
+describe('fitOf', () => {
+  it('fits a linear span with a twentieth of it at each end', () => {
+    expect(fitOf([0, 10], false, 0.05)).toEqual([-0.5, 10.5])
+  })
+
+  it('fits a log span in decades, and leaves out what a log axis cannot hold', () => {
+    const fit = fitOf([0, -1, 10, 1000], true, 0.05)
+    expect(Math.log10(fit?.[0] ?? Number.NaN)).toBeCloseTo(0.9, 12)
+    expect(Math.log10(fit?.[1] ?? Number.NaN)).toBeCloseTo(3.1, 12)
+  })
+
+  it('is exact with no room, so a first sample is not a hair off the axis', () => {
+    expect(fitOf([5000, 2_100_000], true, 0)).toEqual([5000, 2_100_000])
+  })
+
+  it('has no fit for one value or none', () => {
+    expect(fitOf([3, 3], false, 0.05)).toBeNull()
+    expect(fitOf([Number.NaN], false, 0.05)).toBeNull()
   })
 })
 

@@ -136,6 +136,7 @@ export const COMPOSITION_TASK: AnalysisTask = {
   id: 'composition',
   title: 'Base composition',
   blurb: 'GC content, GC skew and AT skew per bin, as tracks.',
+  keywords: ['GC', 'GC skew', 'AT skew'],
   group: '1d',
   // The residues are in the annotations worker and are never shipped out whole
   // (`analysis/job.ts`'s `SequenceReader`), so the counting goes to them.

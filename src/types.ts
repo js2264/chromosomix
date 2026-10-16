@@ -312,6 +312,14 @@ export interface ColorScale {
    * vanish at fit zoom — the half of the picture a difference map exists for.
    */
   neutral?: number
+  /**
+   * What a cell with no value (`NaN`) is drawn as: `paper` — transparent, the
+   * page showing through, matplotlib's *bad* colour — unless said otherwise,
+   * or `middle`, the colormap's own middle, which is what a ratio of two maps
+   * draws a cell where either map has no contacts (§6): a ratio map is read as
+   * departures from its middle, and a missing ratio is not one.
+   */
+  missing?: 'paper' | 'middle'
 }
 
 /** A boundary line drawn across the heatmap, with the label it separates. */

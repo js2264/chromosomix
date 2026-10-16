@@ -175,6 +175,7 @@ export const ORITER_TASK: AnalysisTask = {
   id: 'oriter',
   title: 'Origin and terminus',
   blurb: 'Where replication starts and ends, from the GC skew, parS, matS and coverage.',
+  keywords: ['ori', 'ter', 'replication', 'GC skew', 'dif'],
   group: '1d',
   // The residues are there and nowhere else; the coverage is a track, which is
   // there too.

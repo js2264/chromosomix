@@ -289,3 +289,76 @@ describe('every map the session holds, each with a grip (§16.9)', () => {
     expect(eye?.disabled).toBe(true)
   })
 })
+
+/**
+ * A row out of the Files panel, dropped on a slot (§20.5).
+ *
+ * The slot took nothing but a `File`: a row dragged out of a connected folder
+ * lit it and fell in for nothing, because what a row carries is a folder and a
+ * path, not bytes. It is now handed on as the event, read where the payload is
+ * still readable — and the slot no longer lights for drags it cannot take.
+ */
+describe('a Files row dropped on a slot', () => {
+  /** A drag in the air carrying these types, as a browser lets a target see one. */
+  function dragOf(kind: 'dragover' | 'drop', types: string[]): DragEvent {
+    const event = new window.Event(kind, { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperty(event, 'dataTransfer', {
+      value: { types, effectAllowed: 'copy', dropEffect: 'none', files: [], getData: () => '' },
+    })
+    return event
+  }
+
+  function slotOf(onPickDropped?: (event: DragEvent) => void): { zone: HTMLElement; opened: unknown[] } {
+    const opened: unknown[] = []
+    const card = new CompareCard({
+      onOpen: (source) => opened.push(source),
+      onToggleShown: () => undefined,
+      isShown: () => true,
+      onClose: () => undefined,
+      onSwap: () => undefined,
+      primaryLabel: () => 'rep1.mcool::1000',
+      hasPrimary: () => true,
+      ...(onPickDropped === undefined ? {} : { onPickDropped }),
+    })
+    card.set({ kind: 'empty' })
+    document.body.append(card.el)
+    const zone = card.el.querySelector<HTMLElement>('.ann-drop')
+    if (zone === null) throw new Error('no slot')
+    return { zone, opened }
+  }
+
+  it('takes the row, lit while it is over the slot, and hands the drop on', () => {
+    const dropped: DragEvent[] = []
+    const { zone, opened } = slotOf((event) => dropped.push(event))
+    const over = dragOf('dragover', ['application/x-chromosomix-file', 'text/plain'])
+    zone.dispatchEvent(over)
+    expect(over.defaultPrevented).toBe(true)
+    expect(zone.classList.contains('over')).toBe(true)
+    const drop = dragOf('drop', ['application/x-chromosomix-file', 'text/plain'])
+    zone.dispatchEvent(drop)
+    expect(dropped).toEqual([drop])
+    expect(opened).toEqual([])
+    expect(zone.classList.contains('over')).toBe(false)
+  })
+
+  it('still takes a file from the desktop', () => {
+    const { zone } = slotOf(() => undefined)
+    const over = dragOf('dragover', ['Files'])
+    zone.dispatchEvent(over)
+    expect(over.defaultPrevented).toBe(true)
+  })
+
+  it('is not offered a map row’s grip, a word of text, or a row with nobody to open it', () => {
+    const { zone } = slotOf(() => undefined)
+    for (const types of [['application/x-chromosomix-map'], ['text/plain']]) {
+      const over = dragOf('dragover', types)
+      zone.dispatchEvent(over)
+      expect(over.defaultPrevented).toBe(false)
+    }
+    expect(zone.classList.contains('over')).toBe(false)
+    const bare = slotOf().zone
+    const over = dragOf('dragover', ['application/x-chromosomix-file'])
+    bare.dispatchEvent(over)
+    expect(over.defaultPrevented).toBe(false)
+  })
+})

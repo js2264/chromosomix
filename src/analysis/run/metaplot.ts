@@ -185,7 +185,14 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
   const series: CurveSeries[] = []
   const outputs: TaskOutput[] = []
   const layout: Layout | null = plans.length === 0 ? null : plans[0].layout
-  let firstRows: { rows: Float64Array; count: number; name: string } | null = null
+  const heatmap = boolParam(job.params, 'heatmap', true)
+  // Every curve's rows, for its heatmap, and each group's features' strength
+  // summed over every track: the heatmaps share one order (`orderOf`).
+  const held: HeldRows[] = []
+  const strength = plans.map((plan) => ({
+    total: new Float64Array(plan.windows.length),
+    seen: new Float64Array(plan.windows.length),
+  }))
 
   const total = entries.length * groups.length
   let done = 0
@@ -200,10 +207,10 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
     //
     // The cost is that one track's group rows are held at once rather than one
     // at a time. They partition a single feature set between them, so that is
-    // one feature set's worth of rows for one track — the same thing the heatmap
-    // keeps hold of for the whole run — and the tracks are still read one after
-    // another rather than all together.
-    const built: Array<{ group: string; rows: Float64Array; count: number; layout: Layout }> = []
+    // one feature set's worth of rows for one track — the same thing each
+    // heatmap keeps, in single precision, for the rest of the run — and the
+    // tracks are still read one after another rather than all together.
+    const built: Array<{ group: number; rows: Float64Array; count: number; layout: Layout }> = []
     for (const [index, group] of groups.entries()) {
       job.throwIfCancelled()
       job.progress(done, total, `${job.inputs.labels?.[entry] ?? entry} · ${group.name}`)
@@ -213,19 +220,18 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
       if (plan.windows.length === 0) continue
 
       built.push({
-        group: group.name,
+        group: index,
         rows: await rowsFor(job, entry, plan.windows, plan.layout, step),
         count: plan.windows.length,
         layout: plan.layout,
       })
     }
 
-    // In place, and on purpose. `firstRows` below keeps the very array handed to
-    // `aggregate`, and that array is what `heatmapOf` draws — so standardising a
-    // copy would put a heatmap of raw values under a curve of z-scores, two
-    // pictures of one run disagreeing about what was measured. The heatmap shows
-    // what the curve shows. With the option off nothing here runs at all, and no
-    // copy is made either way.
+    // In place, and on purpose. The heatmap below is copied from the very array
+    // handed to `aggregate`, after this — so standardising a copy would put a
+    // heatmap of raw values under a curve of z-scores, two pictures of one run
+    // disagreeing about what was measured. The heatmap shows what the curve
+    // shows. With the option off nothing here runs at all.
     //
     // Before `aggregate`, which is also before the bootstrap it draws from: the
     // band has to be an interval on the standardised values, not a raw interval
@@ -245,15 +251,21 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
       // The reader's name for the file, not the store's id — a legend reading
       // `a1, a2` is a legend that has to be decoded against a panel.
       const track = job.inputs.labels?.[entry] ?? entry
+      const name = groups.length === 1 ? track : `${track} · ${groups[one.group].name}`
       series.push({
-        name: groups.length === 1 ? track : `${track} · ${one.group}`,
+        name,
         x: axisFor(one.layout).x,
         y: summary.mean,
         low: summary.low,
         high: summary.high,
         n: summary.n,
       })
-      firstRows ??= { rows: one.rows, count: one.count, name: series[series.length - 1].name }
+      if (heatmap) {
+        addStrength(strength[one.group], one.rows, one.count, one.layout.slots)
+        // Single precision, which is what the heatmap is drawn and written in,
+        // and half of what holding every track's rows to the end would cost.
+        held.push({ group: one.group, rows: Float32Array.from(one.rows), count: one.count, name })
+      }
     }
   }
   job.progress(total, total, 'done')
@@ -286,9 +298,11 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
     yScale: 'linear',
   })
 
-  if (boolParam(job.params, 'heatmap', true) && firstRows !== null) {
-    outputs.push(heatmapOf(firstRows, layout, axis.label, zscore))
-  }
+  const orders = held.length === 0 ? [] : strength.map(orderOf)
+  const run = { zscore, tracks: entries.length }
+  held.forEach((one, index) => {
+    outputs.push(heatmapOf(one, orders[one.group], index, layout, axis.label, run))
+  })
   return outputs
 }
 
@@ -339,15 +353,6 @@ async function rowsFor(
   return rows
 }
 
-/**
- * The per-feature heatmap, sorted by its own mean.
- *
- * One track's worth — the first — rather than all of them, because a heatmap per
- * track is a wall of pictures and the reader can run the task again for another.
- * Sorted, because an unsorted heatmap of five thousand rows is a texture and a
- * sorted one is a shape: it is the picture that says whether the line above it
- * is a summary or an artefact of averaging two populations.
- */
 /**
  * The colour range the per-feature heatmap is drawn between.
  *
@@ -423,51 +428,102 @@ function heatmapTicks(layout: Layout): string[] {
   })
 }
 
-function heatmapOf(
-  held: { rows: Float64Array; count: number; name: string },
-  layout: Layout,
-  xLabel: string,
-  zscore: boolean,
-): MatrixOutput {
-  const { rows, count } = held
-  const order = Array.from({ length: count }, (_, i) => i)
-  const strength = new Float64Array(count)
+/** One curve's rows, kept for its heatmap: its group's features, one row each. */
+interface HeldRows {
+  /** Which group of the run, by index — the heatmaps of one group share an order. */
+  group: number
+  rows: Float32Array
+  count: number
+  /** The curve's name in the legend. */
+  name: string
+}
+
+/** One track's rows added into its group's per-feature sums of what it covers. */
+function addStrength(
+  into: { total: Float64Array; seen: Float64Array },
+  rows: Float64Array,
+  count: number,
+  slots: number,
+): void {
   for (let row = 0; row < count; row++) {
     let total = 0
     let seen = 0
-    for (let slot = 0; slot < layout.slots; slot++) {
-      const value = rows[row * layout.slots + slot]
+    for (let slot = 0; slot < slots; slot++) {
+      const value = rows[row * slots + slot]
       if (!Number.isFinite(value)) continue
       total += value
       seen++
     }
-    strength[row] = seen === 0 ? Number.NaN : total / seen
+    into.total[row] += total
+    into.seen[row] += seen
   }
-  order.sort((a, b) => {
-    if (Number.isNaN(strength[a])) return Number.isNaN(strength[b]) ? 0 : 1
-    if (Number.isNaN(strength[b])) return -1
-    return strength[b] - strength[a]
-  })
+}
 
+/**
+ * A group's features, strongest first: by the mean of every value the tracks
+ * have for it, every track's columns together, and a feature none of them
+ * covers last.
+ *
+ * **One order for every track's heatmap**, which is deepTools' (`plotHeatmap`
+ * sorts by the mean over every sample, descending, by default): a row is the
+ * same feature in each picture, so the features strong in one track can be
+ * read off in the others — two heatmaps each sorted by its own track would put
+ * two different features side by side on every row and invite exactly that
+ * comparison. Over one track it is that track's own mean, as it always was.
+ */
+function orderOf(strength: { total: Float64Array; seen: Float64Array }): number[] {
+  const count = strength.total.length
+  const mean = new Float64Array(count)
+  for (let row = 0; row < count; row++) {
+    mean[row] = strength.seen[row] === 0 ? Number.NaN : strength.total[row] / strength.seen[row]
+  }
+  return Array.from({ length: count }, (_, i) => i).sort((a, b) => {
+    if (Number.isNaN(mean[a])) return Number.isNaN(mean[b]) ? 0 : 1
+    if (Number.isNaN(mean[b])) return -1
+    return mean[b] - mean[a]
+  })
+}
+
+/**
+ * One curve's per-feature heatmap, in its group's order (`orderOf`).
+ *
+ * **One for every curve**, every track's and every group's: it was the first
+ * curve's alone, which over two tracks left the second's rows unseen however
+ * the line above them looked. Sorted, because an unsorted heatmap of five
+ * thousand rows is a texture and a sorted one is a shape: it is the picture that
+ * says whether the line above it is a summary or an artefact of averaging two
+ * populations. The first keeps the id it has always had, which is the name of
+ * the file the command line writes it to.
+ */
+function heatmapOf(
+  held: HeldRows,
+  order: number[],
+  index: number,
+  layout: Layout,
+  xLabel: string,
+  run: { zscore: boolean; tracks: number },
+): MatrixOutput {
+  const { rows, count } = held
   const values = new Float32Array(count * layout.slots)
   for (let row = 0; row < count; row++) {
-    for (let slot = 0; slot < layout.slots; slot++) {
-      values[row * layout.slots + slot] = rows[order[row] * layout.slots + slot]
-    }
+    values.set(rows.subarray(order[row] * layout.slots, (order[row] + 1) * layout.slots), row * layout.slots)
   }
   const clip = clipOf(values)
   return {
     kind: 'matrix',
-    id: 'metaplot-heatmap',
+    id: index === 0 ? 'metaplot-heatmap' : `metaplot-heatmap-${index + 1}`,
     // The colour scale carries no unit of its own, so the label is the only
     // place this picture can say that its cells are standard deviations from the
     // track's mean rather than the track's own values.
-    label: `${held.name} · per feature${zscore ? ', z-scored' : ''}`,
+    label: `${held.name} · per feature${run.zscore ? ', z-scored' : ''}`,
     nrows: count,
     ncols: layout.slots,
     values,
     xLabel,
-    yLabel: `Features, strongest first (${count.toLocaleString()})`,
+    yLabel:
+      run.tracks === 1
+        ? `Features, strongest first (${count.toLocaleString()})`
+        : `Features, strongest first across ${run.tracks} tracks (${count.toLocaleString()})`,
     xTicks: heatmapTicks(layout),
     yTicks: [],
     colormap: 'viridis',

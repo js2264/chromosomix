@@ -47,7 +47,7 @@
 import { colormapCss, DEFAULT_COLORMAP, isColormap } from '../render/colormaps'
 import { trimNumber } from '../ui/dom'
 import type { MatrixOutput } from '../analysis/types'
-import type { ChartOption, FigureTheme } from './option'
+import { frameOf, ZOOM_X, ZOOM_Y, type ChartOption, type FigureTheme } from './option'
 import type { FigureStyle } from './style'
 import { escapeHtml } from './tooltip'
 
@@ -73,10 +73,15 @@ export const MATRIX_CHART_CELLS = 20_000
  * Whether this matrix is one the chart draws. Never a picture read like a map
  * (`MatrixOutput.large`), however few its cells: a dot plot's axes are its
  * sequences end to end, which the painter marks and a category axis cannot.
+ * Never a **list** either (`aspect: 'fill'`), the metaplot's per-feature
+ * heatmap: its rows are features, read as a density rather than one by one, so
+ * a rectangle per cell to point at — a seam at every edge, a border on the one
+ * under the pointer, a tooltip naming it — made a grid of squares of what is
+ * one picture, which the painter draws as one image (§18.8).
  */
 export function drawnAsChart(output: MatrixOutput): boolean {
   const cells = output.nrows * output.ncols
-  return cells > 0 && cells <= MATRIX_CHART_CELLS && output.large !== true
+  return cells > 0 && cells <= MATRIX_CHART_CELLS && output.large !== true && output.aspect !== 'fill'
 }
 
 /** How many stops the ramp is sampled at for `visualMap`. */
@@ -375,6 +380,9 @@ export function matrixOptionOf(
     width: cell.width * across,
     height: cell.height * down,
     containLabel: false,
+    // Framed like every plot (§18.13), over the cells: the bands along the
+    // edges are the picture's margins, not plots of their own, and are not.
+    ...frameOf(theme),
   }
   const grids: ChartOption[] = [main]
   const xAxes: ChartOption[] = []
@@ -393,8 +401,9 @@ export function matrixOptionOf(
    * saddle from writing a wall of numbers along its foot.
    */
   const axisInk = (labels: readonly string[], cells: number): ChartOption => ({
-    axisLine: { lineStyle: { color: theme.grid } },
-    axisTick: { lineStyle: { color: theme.grid } },
+    // Two sides of the frame, so in its ink (`option.axisBase`).
+    axisLine: { lineStyle: { color: theme.ink } },
+    axisTick: { lineStyle: { color: theme.ink } },
     axisLabel: {
       color: theme.muted,
       fontSize: size,
@@ -598,6 +607,7 @@ export function matrixOptionOf(
         }),
     dataZoom: [
       {
+        id: ZOOM_X,
         type: 'inside',
         xAxisIndex: xGrids,
         zoomOnMouseWheel: true,
@@ -606,6 +616,7 @@ export function matrixOptionOf(
         ...cellWindow(style.x.domain, output.ncols),
       },
       {
+        id: ZOOM_Y,
         type: 'inside',
         yAxisIndex: yGrids,
         zoomOnMouseWheel: 'shift',

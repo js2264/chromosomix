@@ -168,7 +168,7 @@ chromosomix tasks
 ##       --sequences  sequences
 ##       --quantity (default "density")  quantity
 ##       --factor (default 1.1)  log bins per step
-##       --minSeparation (default 0)  minimum separation
+##       --minSeparation (default 2)  minimum separation
 ##       --derivative (default true)  log-log slope
 ##       --stranded (default false)  four orientations
 ##       --pairsUri  .pairs file
@@ -530,6 +530,11 @@ chromosomix insulation rep1.cool --contacts 10M --out results/
 # The map that oversample draws each chromosome's new contacts from, written as
 # Boost-HiC's own main.py writes it: one square TSV per sequence.
 chromosomix boost rep1.mcool::/resolutions/100000 --sequences chr19 --out results/
+
+# A resolution the file does not store, as the app reads one you added (3 kb*):
+# the 1 kb bins summed three at a time, counts exactly, weights by their
+# harmonic mean.
+chromosomix insulation sample.mcool::resolutions/1000 --coarsen 3000 --out results/
 
 # A bacterial chromosome: which sequences join their own ends (the test the app
 # runs on a first open), then the alignment of its two arms about its origin.

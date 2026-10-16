@@ -245,9 +245,9 @@ show(per[['section', 'analysis', 'tool', 'variant', 'CPU s', 'wall s', 'peak MB'
 For each analysis, the `chromosomix` commands against the reference commands they are paired with — the
 same variant, or the analysis's one reference — as a fold: the reference's seconds over the app's,
 summed where a side is several commands, which the table names. deepTools' metaplot is
-`computeMatrix` and then `plotProfile`, against one `chromosomix metaplot`; its track correlation is
-`multiBigwigSummary` and then `plotCorrelation` once a method, against `chromosomix trackcorr` once a
-method.
+`computeMatrix` and then `plotProfile` — and `plotHeatmap`, over two tracks — against one
+`chromosomix metaplot`; its track correlation is `multiBigwigSummary` and then `plotCorrelation` once
+a method, against `chromosomix trackcorr` once a method.
 
 ```{python}
 #| column: page

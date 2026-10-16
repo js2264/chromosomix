@@ -428,6 +428,32 @@ describe('running a task', () => {
     expect(complained()).not.toMatch(/subsampled/)
   })
 
+  it('reads the map at --coarsen, its bins summed, and names the outputs and the framing for it (§3.4)', async () => {
+    reset()
+    const code = await main(['insulation', sample, '--out', out, '--quiet', '--coarsen', '3000', '--no-balance'])
+    expect(code, complained()).toBe(0)
+    const track = await readFile(join(out, 'sample_coarsen3000.insulation.insulation-w10.bedGraph'), 'utf8')
+    expect(track).toMatch(/^# framing: whole file at 3000 bp \(1000 bp bins summed\), count$/m)
+    // Every interval one summed bin: three of the file's, or what is left at a
+    // sequence's end.
+    const rows = track
+      .split('\n')
+      .filter((line) => /^chrI{1,2}\t/.test(line))
+      .map((line) => line.split('\t'))
+    expect(rows.length).toBeGreaterThan(0)
+    for (const [name, start, end] of rows) {
+      const length = name === 'chrI' ? 120_000 : 60_000
+      expect(Number(start) % 3000).toBe(0)
+      expect(Number(end) - Number(start) === 3000 || Number(end) === length).toBe(true)
+    }
+  })
+
+  it('refuses a --coarsen that is not a whole number of the file’s bins', async () => {
+    reset()
+    expect(await main(['expected', sample, '--out', out, '--quiet', '--coarsen', '2500'])).not.toBe(0)
+    expect(complained()).toMatch(/--coarsen 2500: sample\.hic is at 1,000 bp, and 2,500 bp is not a whole number of its bins/)
+  })
+
   it('refuses a --contacts that is not a number of contacts', async () => {
     reset()
     expect(await main(['expected', sample, '--out', out, '--quiet', '--contacts', 'lots'])).not.toBe(0)
@@ -844,6 +870,23 @@ describe('the annotations venue', () => {
     expect(files).toContain('sample.metaplot.metaplot-heatmap.tsv')
     const text = await readFile(join(where, 'sample.metaplot.metaplot.tsv'), 'utf8')
     expect(text).toMatch(/^# task: metaplot/m)
+    expect(complained()).not.toMatch(/failed:/)
+  })
+
+  it('writes a metaplot’s heatmap for each of its tracks', async () => {
+    reset()
+    const where = join(directory, 'metaplot-two')
+    expect(
+      await main([
+        'metaplot', sample, '--tracks', `${bigwig},${doubled}`, '--features', aBed,
+        '--band', 'none', '--out', where, '--quiet',
+      ]),
+    ).toBe(0)
+    const files = (await readdir(where)).filter((name) => name.includes('heatmap'))
+    expect(files.sort()).toEqual([
+      'sample.metaplot.metaplot-heatmap-2.tsv',
+      'sample.metaplot.metaplot-heatmap.tsv',
+    ])
     expect(complained()).not.toMatch(/failed:/)
   })
 

@@ -310,6 +310,29 @@ also why a stored rung always wins: a derived resolution that duplicates one is 
 quietly shadowing it, and `chooseRung` still prefers a real rung for every read that is not held to
 a declared grid (§9).
 
+**Every task measures it too** (§18.4). A task run while the map is drawn at a derived rung reads the
+map at that rung, not at the stored one underneath — it used to read the stored one, so a reader
+looking at 3 kb\* got an insulation track at 1 kb under a picture at 3. The analysis worker's mount
+is the stored rung summed on the same grid (`metacooler/coarseMap.ts`), behind the two seams an
+ordinary map is read through — its pixels and its handle — so every task, whatever it reads (a
+window, a pass over every pixel, the weights, a bin column), sees an ordinary map one bin size up,
+and its result is on that grid: an insulation track one value per 3 kb bin, a P(s) whose first
+separation is one summed bin. Counts sum exactly, so a rung the file stores and the same rung derived
+give the same raw numbers to the last bit, window for window and pixel for pixel. Balanced values are
+the caveat above met another way: a coarse bin's weight is the **harmonic mean** of the fine weights
+the balancer kept, `n / Σ 1/wᵢ` — the weight a bin has under the model balancing assumes, where a
+count is a bias times a bias times the signal and a coarse bin's bias is the sum of its bins' — so
+the coarse count times two such weights is the sum of the fine balanced values wherever the signal is
+level across a block, and differs from the map's sum by how unevenly signal and bias vary inside one
+bin. A coarse bin none of whose bins the balancer kept is dropped, as a fine one is; any other bin
+column is its first bin's start and sequence, its last bin's end, and the mean of anything else. The
+block on screen, being the other sum, is never handed to a task at a derived rung. The framing names
+the resolution with its `*` (`3 kb* bins`), a result goes out of date when the reader steps off it,
+and the command the console writes carries `--coarsen 3000`, which `chromosomix` sums the same way
+(§23.1). A single-cell container is refused by name. In a deck the star decides, as it does for
+everything else a task reads (§18.2): on the lead at a derived rung, a batch sums every map to it,
+and refuses by name a map whose bins do not divide it.
+
 ### 3.5 URI addressing
 
 `file::group`, exactly as `metacooler.uri.parse_uri`:
@@ -880,6 +903,19 @@ sequence this view is of where its region has coordinates — `IV:1,000-20,000` 
 own noun where it has none — `contig:1,000-20,000` — because a coordinate suffix on a genome name is
 an error here and a name with no coordinates on it may be a genome's.
 
+**Two windows typed in one box are the block between them** — rows, then columns, the `contig ×
+contig` picture an off-diagonal click or a box drawn off the diagonal has always opened (`region` and
+`region2`). `chr1:1,000-2,000 chr2:3,000-4,000`, the same with ` x ` or `|` between, and `×`, which is
+what the title over such a block writes: `typedLociToRegions` divides them and reads each half as a
+single window is read. Everything after the first window used to be dropped without a word, because
+the tokenizer stops at the end coordinate, and on a block already open the box showed its rows alone,
+so Enter on it threw the columns away; it shows `pairLabel` of the two now, and Enter on that opens
+the block it is showing. Two bare names need a mark between them, since a space alone would split a
+name with one in it; a `|` counts only after a window with coordinates, since NCBI's older names
+carry pipes of their own; and an `x` only standing alone, since `chrX` is a name. The whole genome's
+box and the Chromosomes table's take a pair too; the 1D browser's, which has no such picture, opens
+the first window.
+
 **Beside a gene model the box takes a feature's name too** — or its accession — from the starred
 set, and a band's from any karyotype loaded (§8.22), listing up to ten matches under it as it is
 typed (`annotations/search.ts`, shared with the browser's box, §5.8). A hit is written with the
@@ -999,7 +1035,23 @@ entries every navigation here writes — a crumb, a typed locus, a zoom or pan s
 stepped — and nothing that does not write one, such as a wheel or a drag on the map. Where the
 browser says whether there is anywhere to go (Chromium's Navigation API) a button greys when there
 is not; elsewhere both stay live, and a press with nowhere to go does nothing, as the browser's own
-does. After them in the same group, in this order, are the three that take the work out of the
+does.
+
+**Back has its list of steps**, a chevron butted against it as the second half of one control, the
+shape every browser gives its own back button: pressed, it lists every step behind the one on
+screen, the nearest first and twenty at most, each named as the breadcrumb or the heading would name
+it — `IV:1,000,001-1,400,000`, `I × II`, *Whole genome*, *Chromosomes* — with what the step set
+beside it, quietly: the resolution, the O/E, a comparison, and the file where it is not the one on
+screen. A row goes straight there, through the browser's own `history.go`, so the steps ahead of it
+are the browser's forward stack exactly as if back had been pressed that many times. The browser
+keeps its stack to itself — Chromium's Navigation API lists it and nothing else does — so the app
+keeps a record of every entry it writes, the hash and nothing more (`state/historyJournal.ts`), and
+each entry carries its number in that record in `history.state`, which is how a Back, a jump or a
+reload says where the record stands; the record is the window's, in `sessionStorage`, two hundred
+steps at most. An entry it did not write — an address typed into the bar — is a new step after the
+one on screen, as the browser takes it. The chevron greys while there is no step behind.
+
+After them in the same group, in this order, are the three that take the work out of the
 window: *Share this tab as a link*, *Save every tab as a file* and the console (§23). They used to
 sit on the far side of the command bar, away from the controls a reader's hand is already among; the
 far right is now only about the window itself — theme, shortcuts, source, about. Where the header
@@ -1144,7 +1196,8 @@ thing. No key closes one: ⌘W is the browser's chord for closing the window, an
 right about what it does and wrong about what it closes costs a workspace. `o` opens one and
 Control with `<` or `>` steps between them — Control on a Mac too, where ⌘< walks a French Mac's
 windows and ⌘, is every program's settings — from a box being typed into as well. A tab is renamed in place, by a double-click on it or `F2`: Enter commits, an
-emptied box hands the tab back to its file's name, and Escape abandons. A middle-click closes one,
+emptied box hands the tab back to its file's name, Escape abandons, and Tab commits and goes on to
+the next tab's name (§26.8). A middle-click closes one,
 and the last is emptied rather than closed, since a window with no tab has nothing to drop a file on.
 
 Four things are per *window* rather than per session, because they are preferences about this window
@@ -1190,6 +1243,12 @@ Three refusals, each because the merged picture would otherwise be a lie rather 
 lower triangle* — not *a second map*, which is what §16's companion cell is called — and it is
 absent until a map is open, because a triangle of nothing is a promise with nothing to keep it
 (§8.5). A session with no map has one drop zone on that card, asking for a contact map.
+
+The zone takes a file from the desktop and a **row out of the Files column** (§20.5) alike — the
+file behind the row read at the drop, through the folder it names, with the credential that folder
+lists with and the name a Drive or a Dropbox gives it — and nothing else: it no longer lights for
+the card's own grips, nor for a word of text dragged across it. On a session with no map the row is
+the first map, through the door every pick takes.
 
 Either file can be closed. Closing the second returns to one map; closing the first promotes the
 second, so the map that remains is an ordinary one. *swap sides* puts the other file above the
@@ -1408,7 +1467,9 @@ axis on screen rather than from whatever was last stored, because the axis on sc
 was being read. (The side panel's own boxes seed from the file's whole-genome extent instead: a
 panel is not a view, and a number in it must not change when the view is panned.) The track's
 **name** is edited the same way, where it is drawn, and commits to the one track it names rather
-than to the lane, since an overlaid lane draws a name for each of its tracks.
+than to the lane, since an overlaid lane draws a name for each of its tracks. Tab takes either and
+goes on (§26.8): a bottom to its top, a top to the next track's bottom, a name to the next track's
+name — down the browser's lanes, and beside a map through every stack round it.
 
 Four things the edit refuses, all for one reason — a limit nobody typed must never be stored.
 Opening a bound and leaving it alone, or emptying the box, closes it and changes nothing; an
@@ -1867,7 +1928,12 @@ diverges from what a reader reproduces locally.
 - the **cell size** is named in the key, on its own line under the scale's name, and in the exported
   key as well — it is the one fact about a refining map that cannot be recovered from the pixels, and
   a figure that carries it needs no caption to say it
-- separators at genome or contig boundaries, thin grey
+- separators at genome or contig boundaries, in `metacooler show`'s two greys — and **heavier than its
+  0.5 and 1**: 1.5 CSS pixels between sequences and 2 between genomes or selection blocks, in every
+  picture, since drawn at the larger of the CLI's width and one device pixel a line between two
+  chromosomes was half a pixel on a 2× screen and a hairline in a PNG, and the reader lost it on a
+  dense map. A line is centred on the device grid by its width, so its whole pixels are solid and only
+  a fraction is shared with a neighbour; the PDF carries the widths as they are, 1.125 and 1.5 pt
 - ticks in base pairs on any axis that stays inside one contig, and the contig names on any axis that
   does not — `_bin_axis`'s rule, because a bin index is not a position and does not restart at zero
   where the block does. An axis of **several** contigs is then ruled one contig at a time on top of
@@ -1883,9 +1949,19 @@ diverges from what a reader reproduces locally.
 Both bounds are overridable, as one clip range: two typed numbers and one control back to auto. The
 URL carries `vmin` and `vmax` independently, in transformed units, and their absence means auto.
 The key in the map's top-right corner prints the same two numbers, the boxes' own, under the score's
-name with the transform on it, and each is a button: pressed, it takes a typed bound in place, and
-emptied it hands that bound back to auto. A change of transform hands both back, since a bound is a
-number in the old transform's units.
+name with the transform on it, and each is a button: pressed, it takes a typed bound in place,
+emptied it hands that bound back to auto, and left as it was it changes nothing — a bound on auto is
+not fixed at the number the key happened to show. The box opens on **that number**, rounded as the
+key prints it and as the clip boxes are (`trimNumber`): it opened on the float the scale holds,
+`-1.0543182366`, which overflowed the box and left its last digits in view and its sign and first
+digits out. Tab goes from the low end to the high one, and on a deck on to the next map's key
+(§26.8). A change of transform hands both back, since a bound is a
+number in the old transform's units. **Between the two numbers is the ramp they run between**, short
+— 48 by 10 pixels — and drawn through the colormap's own colours: on screen a gradient, in a figure
+one band a pixel, since a PDF page here has no linear gradient. For a while it was two squares, the
+ramp's ends, on the argument that the colours between them were the picture's to show rather than
+the legend's; on a ramp that is not a line they are not — the default runs white, yellow, red, black,
+and which of the four a cell halfway up is was the one thing two squares could not say.
 
 **Both unit systems on that row are named**, because both are on screen at once: the boxes are in
 transformed units, so the row is labelled `clip (log10)` from the transform in force, and the line
@@ -2039,6 +2115,17 @@ looked at, not whether the reader likes shading). The app opens on its own overl
 renderer's, which are `metacooler show`'s: the crosshair and `outline` on, the dividers and the
 block labels off (`ui/plotOptions.ts`).
 
+**Everything that leaves the app is on white, in either theme.** A map's PNG and PDF, a deck's, the
+1D browser's, a task's figure, a model's and every *Copy this* are laid on white and written in the
+light palette's ink, whatever the reader is looking at the app in: the dark theme is a way of
+looking at the app, not at the figure. The centre column already wears the light palette in either
+theme; what did not was the ground, which was the page's own colour read off the root — so in the
+dark theme a map's PNG came out on near-black under ink chosen for white, its exported key a dark
+box of near-black text — and a task's figure enlarged into the stage dialog, which follows the theme,
+and exported from there. The ground is one white (`FIGURE_BACKGROUND`), and a figure is redrawn for
+its export from a hidden node pinned to the light palette (`figurePaper`) rather than from wherever
+it is mounted.
+
 **The figure saves as PNG at a chosen DPI, or as PDF.** It is re-rendered through the same drawing
 code rather than screen-grabbed — the PNG at that resolution — so the labels and hairlines are drawn
 rather than enlarged, and the framing — pan and zoom included — is what is on screen. The PDF is one
@@ -2111,8 +2198,8 @@ pointer; the **lane** alone, the strip of its stack or of the browser it is draw
 or range, no handle, no name column, no hairline and no mark carried off the map — a gene's name
 under its body is the track's own and stays, as the overlays switch has it; the **model** as the
 renderer draws it, its names on it as the overlays have them, with no centre of rotation, key,
-buttons or frame. The page's colour goes under the ink, so a cell or a stretch the data leaves clear
-pastes as the page rather than as a hole. The Export card's copy is a *figure* — labelled,
+buttons or frame. White goes under the ink, so a cell or a stretch the data leaves clear pastes as
+paper rather than as a hole — white in the dark theme too, as every export is. The Export card's copy is a *figure* — labelled,
 captioned, at the card's resolution — and this is the object, for a reader assembling a figure of
 their own in another program. Each is drawn by the same pass the screen is, stopped before
 everything round the data, rather than cut out of the screen's canvas, which carries all of that
@@ -2296,6 +2383,15 @@ It **overrides** the toggle rather than composing with it — O/E of the baselin
 anything — so the toggle greys and says why, and it is drawn on a sequential ramp with no neutral,
 because a mean of counts is count-like and a diverging scale centred at 1 would be centred where
 nothing in the picture lives.
+
+**A ratio of two maps is not divided by the expected either.** The ratio is itself a comparison
+against a baseline — the second map — and the decay with distance the two share divides out with
+it; the O/E of each map first would divide out each library's own decay as well, which is another
+figure from the one asked for. So while the comparison is a ratio the O/E toggle greys, unlit, and
+says why, and `arms`, which says which decay the O/E divides by, greys with it; `e` and the
+palette's entry stand down with the button. The setting is the reader's and is left as it was: `oe`
+stays in the address, and a split or a difference built with it on draws it. It used to be applied
+to each map before the division, so a ratio drawn with the toggle on was the ratio of two O/E maps.
 
 **On a bacterial chromosome the baseline can be taken along both arms.** Where the
 two arms are held side by side the map has two diagonals, and the decay curve
@@ -2545,10 +2641,33 @@ all three back when it is switched off, because none of them means the same thin
 about a count — a `vmax` of 8 is a sensible ceiling on `log1p` counts and nonsense on `log2` of a
 ratio.
 
+**The give-back outlives the panel that took them.** A change of comparison — split, ratio,
+difference — and the second map's eye rebuild the map rather than repaint it, and the hash a rebuilt
+map is seeded from holds what the derivation drew with, so the split after a ratio stayed on the
+ratio's `log2` and diverging ramp. What the derivation took over is carried to the map built in its
+place, which gives it back if it derives nothing and keeps it to give back later if it still does —
+so ratio → difference → split ends on the count map's own scale, and a diverging ramp the reader
+chose under the ratio stays through the difference. A derivation that arrived already drawn — a link,
+a reload or Back landing on a ratio — never saw the scale before it, and gives back the file's
+defaults (§7.1). Closing the first file of a comparison, and *swap sides*, reopen rather than rebuild,
+and carry the scale from before the derivation to the file that takes the first triangle.
+
 **Pooling changes too.** A contact map is pooled by its brightest cell, because its signal *is* the
 bright cell. A ratio pooled that way shows only the arm above neutral, so every region where the
 second file is the stronger one vanishes at fit zoom — half of what a difference map exists for.
 A diverging field is pooled by departure from neutral instead.
+
+**A ratio of two maps is made only where both have contacts.** A cell that is zero in either map
+is no ratio, and is missing — `NaN`, as two zeros and an unbalanced bin always were
+(`render/compare.ts`). `4 / 0` was `Infinity`, the top of the scale, and `0 / 4` zero, the bottom:
+on a sparse pair, where a cell empty in one library is a matter of depth far more than of biology,
+the two saturated colours covered most of the picture and said the loudest thing the scale can say
+about the cells that held the least. **A missing cell on a ratio of two maps is drawn in the
+colormap's middle** — white on `RdBu_r`, the colour a ratio of exactly one is — rather than as
+paper (`ColorScale.missing`): the map is read as departures from its middle, and a cell with no
+ratio departs from nothing. The readout under the pointer says there is no value there. A
+difference keeps its zeros, which it can subtract, and an O/E keeps paper for a cell where nothing
+was observed (above).
 
 **Tracks get the same two operations**, ratio and difference (`annotations/derived.ts`), combined on
 the **common refinement** of the two interval lists rather than on a grid: two bigWigs' intervals do
@@ -2697,7 +2816,9 @@ marks they write in the card's own words — *lines (BED)* and *arrowheads & rec
 a rectangle's sides, and a side of no width as the one base its BEDPE row is written as — and a
 press on it turns that text into the boxes the adding forms use — one for a line, with its axis
 select beside it; rows and columns for an arrowhead or a rectangle, the second left empty meaning the
-same place on both — taking what those forms take. Enter, or a click away, moves the mark **in place**:
+same place on both — taking what those forms take. Enter, or a click away, or a Tab past the row's
+last box — which opens the next mark's row, as Shift+Tab past its first opens the one before (§26.8)
+— moves the mark **in place**:
 its id, its colour and its position in the list are kept, so everything that names it — a map, the
 3D key, a chord — follows. Escape leaves it where it was, and a box that does not read stays open with
 a red edge rather than dropping what was typed. It used to be removed and drawn again, which lost its
@@ -2751,6 +2872,17 @@ marks the map had — the buttons read *pick on track* and *draw on track*: a tr
 what they place lands on the diagonal — a line as a crosshair, an arrowhead on the diagonal, a
 rectangle as the square on it — which is the mark a map opened afterwards already shows.
 
+**On the tracks a mark is drawn the same beside a map as in the browser.** A track has one axis,
+so what it shows of a mark is the places the mark names along it: a **line** a rule across every
+lane — beside a map, on the stacks that measure its axis, or every stack under a turned map — an
+**arrowhead** a small triangle at each of its two ends, pointing into the picture past the last
+lane, and a **rectangle** its extent **washed over every lane** at a tenth of its colour: one wash
+for a box on the diagonal, and both of its stretches where they differ, since a box off the diagonal
+is two stretches of a sequence. Beside a map a box used to be two triangles at its edges, past the
+last lane, so a stretch boxed in the browser came back from opening the map as two small arrowheads
+under the tracks; it is the browser's wash on both surfaces now, on every stack whose axis carries
+the stretch, and in every figure saved from either.
+
 **A box drawn on a turned map is a box of the square underneath it.** Both ends of the drag are taken
 back to the square they were rotated out of, exactly as a click is, so pressing over one contact and
 releasing over another names the rectangle those two contacts span — which may be off the diagonal,
@@ -2799,8 +2931,9 @@ its key. On the map what the pointer is on is measured **on the ink**: each mark
 alone, into a context that keeps the path rather than painting it, so a rule within six pixels, an
 arrowhead's glyph and the cell it names, a box's outline — and its inside, after any mark whose line
 the pointer is on, the smaller of two boxes first — are found on a turned map exactly as on a square
-one, on the V, the triangle and the leaning lobes the turn draws them as. Beside the map it is a
-hairline or an anchor along the stack; in the browser the rule, the anchor or the wash; on the model
+one, on the V, the triangle and the leaning lobes the turn draws them as. Beside the map and in
+the browser alike it is the rule, the anchor or the wash along the stack — a box found anywhere
+inside its wash, after a rule or an anchor within reach and the narrower of two boxes first; on the model
 a line at the bead's place, an arrowhead with an end there or a box over it. A hidden mark is under
 no pointer, so the rows only hide. Off the browser's lanes — on the ruler, or in the room under the
 last track the marks run down to — the group is the whole menu where there are marks, and the page's
@@ -3021,9 +3154,30 @@ and its text nine; a lane in the browser is ninety and its name is what identifi
 under it are the contents: at one size and one weight, `genes` read as the first item in a row of
 gene names.
 
-**Written over the data, the block sits on a plate.** In the browser it has a column of its own; the
-margin beside a map belongs to the heatmap's own labels and a bottom canvas cannot grow backwards to
-make one, so there the block is drawn over the lane and a halo around each glyph was the whole of the
+**Beside a map, the names are in its corners.** Each stack's names stand in the corner of the map that
+follows the stack clockwise — left of the bottom stack, above the left one, right of the top one, below
+the right one — so each corner holds one stack's whichever edges have lanes, and no name is written
+over a track. The column is the stack's own margin running on into that corner, and the block is set
+flush with the end beside the data: ending against the handle a bottom lane hangs before it, starting
+past the group bars beyond a top one, and on the two vertical stacks, whose text reads up the page,
+ending under the right stack's handles and starting over the left stack's bars. The name is on the
+first line and the range on the next, in reading order on all four sides; on a lane too thin to stack
+them the range goes beside the name and inside the column all the same. A short name stands in the
+margin the heatmap's own labels leave; a longer one runs out over the corner, which opens as wide as the
+widest block wants past that margin — measured off the names the paint wrote and applied a frame later,
+as the browser's column is, which cannot oscillate because a block reports its text's natural width —
+up to 150 pixels at the default text size, past which a name wraps onto a second line or is cut in the
+middle. The corner widens its side of the map in the panel's grid, in a deck's alignment of its maps
+and in every figure saved from the map, which writes the names where the screen does. They are pointed
+at as they were on the lane: a press on a name or an end of the range opens its caret there, a right
+click opens the lane's menu, the chip is the lane's colour. With *track text* off there are no names and
+no corners. They used to be written over the lane — a canvas under the map cannot grow backwards into
+the margin before it — which is what the next paragraph was about; the corners are the room that was
+there all along, and a canvas of their own each reaches it.
+
+**Written over the data, the block sits on a plate** — on the one surface that still writes it there,
+the assembly editor's stage, whose stacks have no corners. In the browser it has a column of its own;
+beside a map the block was drawn over the lane and a halo around each glyph was the whole of the
 protection. On a sixteen-pixel peak lane the label *is* the lane: `ATAC peaks` came out with orange
 bars through every letter and `230 features in view` lay across a density block. A plate in the halo
 colour at 0.85 keeps the argued placement and makes the words readable — the lane under it stays
@@ -3042,11 +3196,11 @@ block, and it runs a few pixels past the lane. Between two lanes that is the
 gap before the next. Past the last lane it was the edge of the stack's canvas, which cut the chip and
 the descenders off the name on screen and in every figure saved from the map, the PNG and the PDF
 alike. So the stack leaves room past its last lane for whatever its block reaches beyond it
-(`labelReach`, `AnnotationLanes.thicknessOf`), and a loop's or a box's anchors are drawn past that
+(`labelReach`, `AnnotationLanes.thicknessOf`), and a loop's anchors are drawn past that
 room rather than into the name; the lane keeps its height and the writing its size. A stack whose
 last lane holds its block is the size it was, and so is one with *track text* off, which writes no
-names to make room for. On screen the room comes out of the map's share of its cell, as a lane's own
-height does.
+names to make room for — and so is every stack beside a map, whose names are in a corner. On screen
+the room comes out of the map's share of its cell, as a lane's own height does.
 
 **Where the pointer is, is written one way on both surfaces and in the browser's status line**: the
 base, 1-based and grouped, while one pixel is worth less than a kilobase, and a unit form above that.
@@ -5882,6 +6036,20 @@ selection (§16.2), resolved through the map's own reader, and remembered with i
 (`deck:looks`); relinking the chain drops it, since a chained map shows the lead's window by
 definition.
 
+**Every map cell's heading names the sequence its map is on**, and is the road to another one. A
+quiet picker beside the name — the rung's own idiom (`::1000`) — lists the cell's **own** file's
+sequences in its order and in its names, and stands on the one the block it read is of; a block between
+two says `IV × V`, one over several says how many, neither of which is a place to go. On a companion a
+pick is a window of its own, the **whole** of that sequence: the map leaves the chain where it was on
+it (a chained map shows the lead's window by definition), reads it at its own rung, and the others stay
+where they are — so micro-C can stay on IV while Hi-C beside it shows V. It is the box's window in
+every other respect: the pill says the map reads its own window (without repeating the name the picker
+beside it says), its `×` gives it back to the deck's, and it is remembered with the map's looks. On the
+first map a pick is the session's own navigation — the locus box's, the view as it is on another
+sequence — so every map on the deck's window goes with it. A file of one sequence has nothing to pick
+from, and one of more than a thousand has a table rather than a menu (a metagenome's contigs): there
+the picker is not offered, and the box drawn on the cell is the road.
+
 On a companion **still on the lead**, the same box navigates the deck — it is forwarded to the first
 map's own marquee, so every chained map moves to it, which is what drawing a box on one of several
 maps locked together can only mean. The pointer's echo between two maps that are not showing the
@@ -5998,8 +6166,8 @@ paths and text; the tracks, the browser as lead and a model paths and text throu
 composition lays both out (`panels/deckFigure.ts`) — every cell the size of the largest, the same
 air between — so the two files cannot disagree about where a cell stands; the PNG rasterises each
 cell and places it, the page places each cell's own drawing. The deck adds nothing of its own but the
-page under them: each cell carries its own caption, key and frame, as on screen, and an empty cell
-stays empty. The PDF used to be the PNG on a page, so six panels' axes and track names left as
+page under them, which is white in either theme (§7.2): each cell carries its own caption, key and
+frame, as on screen, and an empty cell stays empty. The PDF used to be the PNG on a page, so six panels' axes and track names left as
 pixels in the one file meant to be a drawing. A PDF's file name carries no resolution; a PNG's
 does.
 
@@ -6404,7 +6572,9 @@ thing anybody reads. So **any map a session is holding can be called something**
 the one it is compared against (§5.7), and every companion of a deck. The control is the Tracks
 card's own, in both places it appears: an `<input>` that looks like text until it has the caret, on
 the **Contact maps** card and on a deck cell's heading. Enter commits, Escape abandons, and an empty
-box hands the map back to its file name, which is what makes a rename undoable.
+box hands the map back to its file name, which is what makes a rename undoable. Tab commits and puts
+the caret in the next name — the next row's on the card, the next cell's heading on a deck, which is
+four replicates named in one go (§26.8).
 
 The name is used **everywhere the map is named**, through one function: the card that lists it, the
 heading over its cell, the two bands of a turned comparison (§17.2), the readout and the tooltip
@@ -6874,6 +7044,16 @@ run, queued, running, done, failed, cancelled. It carries no controls — bar a 
 is queued or running — because a panel that both lists twenty tasks and configures them is a panel
 that does neither.
 
+**Over the cards, a box narrows the list** — `filter 25 tasks…` — because thirty tasks in four cards
+is a list read top to bottom by somebody who already knows the one they want. It is a filter over the
+list rather than a control over any task: every word typed must be found in a task's title, its
+blurb, its card's heading or its other names — a descriptor's `keywords`, the words a reader looks
+for a task by that neither of the first two says: *TAD* for insulation and the directionality index,
+*pileup* for APA, *A/B* and *eigenvector* for the compartments, *decay* for P(s). A card with nothing
+left in it goes, a list narrowed to nothing says *No task matches “…”*, Escape gives the list back
+and Enter opens the first task left that can run. The rows are hidden rather than rebuilt, so a job
+running under a filter that has taken its row away keeps counting and comes back as it is.
+
 **A task that could never mean anything here is absent; one that is waiting for a file is listed and
 greyed.** The first half is §8.5's doctrine and it stands: a disabled row is a promise the file cannot
 keep, and a `.cool` has no genomes, so it offers no MAG tasks — nothing the reader does next produces
@@ -7185,7 +7365,8 @@ which would neuter the array the heatmap is drawing from.
 **What a task runs on is the map's current framing**, captured at the instant **Run** is pressed: the
 row and column bin extents, the bin size, any pooling in force, the score column, whether balancing
 is on, the total the map is drawn to (§6.5), the sequences declared circular and their origins
-(§8.15), and the edit of the reference it is drawn through (§27.7).
+(§8.15), the edit of the reference it is drawn through (§27.7), and the resolution the reader added
+that it is drawn at (§3.4) — which is then the bin size, its bins the ones the extents count.
 
 **The framing line is one string in one grammar.** The window it names is the display form (§26.1),
 written by `formatLocus` — so the drawer's *will run on*, the figure's caption and the cell's
@@ -7682,6 +7863,14 @@ longer, indistinguishable over everything anybody fits. The second is also what 
 expected, the compartment chain, inter-arm alignment and the pileups **divide by**, and they reach it
 through `expectedAt` rather than through the panel: the plotted curve is a figure and the denominator
 is a denominator, and changing what is on screen must not change what an O/E is taken against.
+**The first two diagonals are left out unless the reader asks for them** — *minimum separation*, in
+bins, is 2 by default. The diagonal and the one beside it hold what ligation could not separate,
+self-ligation and unligated fragments, and say nothing about the polymer, which is why cooltools'
+`expected_cis` leaves them out by default (`ignore_diags=2`). Under the density the floor is also the
+floor of the total every point is a share of, so 0 puts the diagonal back in the first break, where
+`distanceLaw` has it. It was 0: the density's first break held the diagonal and the one beside it — on
+a 1 kb map, two thirds of every cis contact — and every other point was a share of a total they
+dominated.
 
 **And the four orientations beside it, wherever there are records to count them from.** Not a
 property of the matrix at all: it is counted from the records, in log-spaced base-pair bins, because
@@ -7702,7 +7891,9 @@ on a log axis and broke the line, and a filtered library has runs of them at sho
 sparse bins is pooled into points of at least sixteen records — a counting error of a quarter, which is
 the tenth of a decade the convergence is read at — each over the whole stretch it spans, while a bin
 holding sixteen on its own is never widened, so a real spike is not averaged into the sparse bins beside
-it. The line runs from the first record to the last.
+it. The line runs from the first record to the last, whatever the minimum separation says: that trims
+the matrix's near-diagonal, a fact about its grid, and the separation the four converge at is usually
+shorter than one bin of it.
 **Where the records are.** A map **binned from a `.pairs`** had them counted in the import's own pass
 (§3.7), and the form asks for no file: *four orientations* is the only question, and the price beside
 **Run** says where the curves come from. On a map opened as a matrix, or binned from a file with no
@@ -8276,8 +8467,12 @@ then not a statement about reproducibility.
 **Over tracks and feature sets.** *Metaplot over a feature set*, in both **reference-point** (a
 point ± a flank) and
 **scaled-region** (flank, body resampled to a fixed width, flank) modes, strand-aware, over any number
-of bigWig or synthetic tracks, with a bootstrap band and a companion per-feature heatmap — because the
-mean of a bimodal set is a line that describes nothing. *Aggregate peak analysis*, likewise in both
+of bigWig or synthetic tracks, with a bootstrap band and a per-feature heatmap for every curve — because
+the mean of a bimodal set is a line that describes nothing. The heatmaps of one run list the features in
+one order, by each one's mean over every bin of every track and strongest first, which is how deepTools'
+`plotHeatmap` orders several samples: a row is the same feature in each of them, and each has colours of
+its own. Only the first curve had one, so over two tracks the second's rows were never seen; the first
+keeps its name, and the others are numbered after it. *Aggregate peak analysis*, likewise in both
 **fixed** (centre ± W bins) and **scaled-region** (the domain, or the rectangle between two anchors,
 resampled to a fixed grid) modes; on-diagonal from a feature set, off-diagonal from a pair set, and
 off-diagonal from **every pair of one feature set** inside a separation range;
@@ -8872,7 +9067,7 @@ yapc 0.1; loops against chromosight 1.6.3, and the pileup's chromosight score ag
 quantify`; pileups — raw, over the expected and over distance-matched controls, off the diagonal and
 on it — against coolpuppy; reproducibility against `hicrep` 0.2.6; the 3D model against pastis;
 Boost-HiC against its own Python, through `chromosomix boost` (§6.5); the metaplot against
-deepTools; interval overlap and its shuffled null against bedtools; base composition against
+deepTools, over one track and over two, its heatmaps in `plotHeatmap`'s order; interval overlap and its shuffled null against bedtools; base composition against
 bioframe and Biopython; the motif search against seqkit; and the track correlation, on two ATAC-seq
 replicates and a Hi-C insulation score cut to chr19, against pyBigWig's exact window means with
 SciPy, a window any track lacks left out of every pair as deepTools leaves it, and against
@@ -8886,7 +9081,8 @@ APA raw and over controls but not over the expected, where coolpuppy is handed a
 beforehand. Every run is one line of the tidy table `notebooks/work/validation/timings.tsv` — CPU
 and wall-clock seconds and peak memory, with the machine and every version — and each `chromosomix`
 command's speed is a fold over the reference commands it is paired with, a side's commands summed
-where there are several (deepTools' `computeMatrix` and then `plotProfile` against one metaplot).
+where there are several (deepTools' `computeMatrix` and then `plotProfile` against one metaplot, and
+`plotHeatmap` as well against one over two tracks).
 They are documents, not tests: they need the data (about 6 GB), the reference packages and yapc's
 own environment, and nothing in the suite runs them.
 
@@ -9001,6 +9197,23 @@ by whichever bin reached furthest. A suggestion like the group and the style, wr
 style on the way in and the reader's from that moment, and a display scale and nothing else — the
 numbers behind the lane and every number that leaves it as a file stay as they were computed.
 
+**A `log2` lane is read in what it measures.** Its values are logarithms, so its label wrote exponents
+— `0 – 16.7` on a scalogram's lane, which is a range nobody reads a distance from — and its autoscale
+anchored it at zero as a linear lane is, which on a logarithm is *one*: one base pair, a bin below the
+nearest band, so the lower half of every lane was a stretch no value could reach. An output says what
+its values measure as well as how they are drawn, and the scalogram's are **base pairs** (`unit: 'bp'`,
+written into the row's style beside the scale, and carried by the output into a workspace). On such a
+lane the autoscaled floor is the **power of ten below the data** — `1 kb` under a 1 kb run — and on a
+`log2` lane with no unit the power of two below it; a limit the reader typed is theirs, as everywhere.
+The ends of the range are written as the quantity: `1 kb – 104 kb`. And the lane carries **its own
+axis**: a faint dashed rule at every power of ten inside it — the 1–2–5 steps, or every whole step,
+where the lane spans less than two of them; the powers of two on a lane with no unit — none on the
+lane's own edges, which are the edges, and each rule's distance written at the end of the lane its name
+is not at, set in from the edge by half its height rather than cut by it, with the label's halo behind
+it. The words are written **after** the label and left out where they would land on its block —
+on a scalogram's lane five names can run its length, and the range in the block already says where the
+lane ends. The axis is drawn wherever the lane is — beside a map, in the browser, in a saved figure.
+
 ### 18.13 A figure is a spec, a style and a renderer
 
 Every picture a task produces is now **restylable**, and the whole of how is one separation: what a
@@ -9042,7 +9255,16 @@ one opposite it, so the aspect of such a picture must not be decided by how wide
 dragged. The exception is a picture whose rows are a **list** — the metaplot's per-feature heatmap,
 three thousand features down against distance across — which has no diagonal, nothing to compare
 across one, and which square cells turn into a ribbon a fifth of the card wide. It takes the whole
-width, under the profile it shares an abscissa with, which is the figure every metaplot tool draws.
+box, under the profile it shares an abscissa with, which is the figure every metaplot tool draws.
+**And it is one picture, not a grid of squares.** Its rows are features read as a density — where the
+signal sits across thousands of them — and drawn as a chart's rectangles, one per cell, below twenty
+thousand cells, it was a grid with a seam at every edge, a border lit on the cell under the pointer
+and a card naming it, none of which a reader of a metaplot asks for. So a list is never charted: the
+painter colours it once, onto a canvas of its own, averaging neighbouring rows where there are more
+than two thousand, and places that image across the plot with smoothing at high quality — a bilinear
+stretch on screen and in the PNG, and in the PDF one image marked `/Interpolate true`, which every
+viewer smooths. Nothing answers the pointer over it, so the figure's settings offer no switch for a
+readout it does not have; and it has the frame every plot has (below).
 **A picture read like a map** — a dot plot's two assemblies end to end (§28), `MatrixOutput.large` —
 is square and as large as the drawer lets it be, its cells a fraction of a pixel wider than whole where
 that is what fills it, each cell's edges on whole pixels; and it is always painted, however few its
@@ -9108,17 +9330,68 @@ That shell is `ui/StageDialog.ts` and the two are callers of it rather than two 
 it. The figure's element is **moved** into the dialog and moved back, never copied, so the window a
 reader zoomed to is the window the export draws.
 
+**Every plot is drawn in a frame, in the ink.** A chart's plot is boxed on all four sides by the
+grid's own border in the text colour — black on paper — drawn over the data, as the painter has
+always drawn its own last, so it closes over the end of a curve that starts on it. The two axes are
+two of its sides, in the same ink, and they stay on it whatever the other axis holds: the library
+puts an axis through the other's zero by default, which across a profile that changes sign is a
+line through the middle of the picture carrying the ticks with it. **Every line in a plot is solid**
+— the gridlines, the crosshair — and a gridline is half the frame's width, a guide for the eye
+rather than a mark of anything; the gridlines stop short of the two ends of an axis, where the frame
+is — a dashed grey line along each edge was the whole of a plot's border before, and read as no
+border at all. A matrix chart is framed the same
+way, over its cells, and so is everything the painter draws: a curve, a matrix too large to chart,
+the metaplot's per-feature heatmap, the colour bar beside a painted matrix, and a dot plot. A
+pileup's two marginal bands are its margins rather than plots of their own, and are not.
+
+**An axis on auto fits what is drawn**, not the library's *nice* extent, which on a log axis is a
+whole decade past the data at each end: a P(s) from 5 kb to 2 Mb was drawn from 1 kb to 10 Mb, most
+of a decade empty on either side. **Along a curve the abscissa runs from the first sample to the
+last** — those ends are the data's, and the painter's curve has always been drawn that way
+(`padSpan`). **Every other fitted axis keeps a twentieth of its span past the data at each end**, in
+decades on a log axis, which is what matplotlib and ggplot2 keep, because a maximum drawn on the
+frame is a maximum nobody can see: the ordinate, the abscissa under points (a marker centred on the
+frame is half a marker), a histogram's abscissa past its outer bins, and a box's or a violin's
+ordinate past its whiskers, its outliers or its whole support (`option.figureFit`). A bar's
+ordinate still starts at zero, and a bar chart's abscissa is still the library's, which measures the
+bars' widths. **The ordinate fits what is drawn in the abscissa's window**: a P(s) a task opens
+from 4 kb kept room above it for the first separations, off the picture to its left; a line that
+crosses an edge of the window counts where it meets the frame, interpolated as the axes draw it. A
+wheel or a drag along the abscissa refits the ordinate as it goes — its bounds alone, so the gesture
+under way is not dropped — and an export, drawn from the style, draws the same. The ends of a
+fitted axis are rarely round, and are left bare (below). **A log axis is labelled where the
+library's labels fail it** (`option.logTicks`): at ten decades or more on whole decades every few
+of them, about six to the axis — the library's own step there is ten decades, one label on a P(s)
+drawn as violins, and a step handed to it is counted from the axis's end, which on a fitted axis
+is no decade (`1.2e-10`, `1.2e-8`); and with fewer than three decades inside, where the library
+labels only decades, at 1, 2 and 5 of each, then at every digit, then on a linear ladder — a P(s)
+zoomed to 221 kb – 783 kb had no label at all.
+
+**A legend down the right is beside the plot, never over it.** Its room was a fixed 132 pixels, and
+a series named after its file — `T4dNDD-infection.10min.mcool::5000`, as a map in a deck is — ran
+the legend out over the curves. The names are measured in the figure's type, the room is the
+longest one plus the swatch, the padding and a gap, and the plot is drawn in what is left. Past
+about a third of the figure's width a name goes onto more lines rather than taking the plot's room
+(`option.wrapName`), broken after its own dots, dashes, underscores and colons: the library breaks
+only at a space and a few marks, and cut a file name, which has none, at whichever letter filled the
+line. A figure whose legend is on the right is laid out again when it is resized, since what fits
+on one line is a question of its width.
+
 **The window lives in the style, not in a zoom transform.** A wheel gesture and a number typed into
 the sidebar are the same change to the same place, and the export draws whichever happened last —
 which is what §18.7's *what you export is what you see* means once a figure can be panned. The wheel
-zooms the abscissa and a drag pans it; with shift held, the wheel zooms the ordinate. **A window
+zooms the abscissa and a drag pans it; with shift held, the wheel zooms the ordinate — each gesture
+the window of the axis it moved and of no other: both used to be taken as the library reported
+them, so a wheel along the abscissa stored the ordinate's whole extent as two typed numbers and an
+ordinate on auto stopped fitting anything. **A window
 wider than the data is honoured**: the chart's zoom lives inside its axis and clamps a window to what
 is drawn, so where a window reaches past the data — a range typed to match another figure, or two
 figures a task opens on one ordinate (§18.8's inter-arm control) — the axis is stretched to it on
 that side, and nowhere else. **One end typed is a window**: on an axis still fitting the data, the end
-not typed is the data's own on that side — the lowest or highest value drawn, a log axis's lowest
-above zero, a histogram's outer bin edge or its count — where it used to wait for the other, the number kept in its box over a picture that
-had not moved. **An end of a window is labelled only when it is round** — a whole
+not typed is the one the axis had on that side — its fit, room and all (above), and on a histogram's
+ordinate the count, from zero — so typing one end moves that end alone; it used to wait for the
+other, the number kept in its box over a picture that had not moved. **An end of a window is
+labelled only when it is round** — a whole
 tenth of the decade its span is in on a linear axis (`10`, `-2`, `0.15`), a power of ten on a log
 one: an end is a tick of the axis, printed as the end itself, which after a box drawn by hand is
 `8.00215` over the `10` beside it, inside the data or past it. Where an end is not round it is left
@@ -9151,7 +9424,9 @@ of bare text with its swatches gone. The formatters' markup carries classes inst
 swatch is an SVG `fill`. **Each coordinate is spelled as its axis spells it** — a sequence's name
 over its bar and `84.3 kb` along a P(s), where the library printed the raw number under the pointer,
 `6.00` and `84,281.00`; per cent where the axis is; and `2.24e-7` under ticks of `1e-7` rather than a
-run of zeros. Over a point, a histogram's bar, a box or a violin the series comes first, then the
+run of zeros. The crosshair's two numbers on the axes are spelled the same way, where the library
+printed `387,269.00` along a P(s) in kb and `0.00` up its ordinate. Over a point, a histogram's
+bar, a box or a violin the series comes first, then the
 pair, the count, the five numbers the box is drawn from, or, for a violin, nothing more: the shape is
 the answer. Tick labels, legends and titles are not markup — the SVG draws them as text — and are not
 escaped.
@@ -9422,12 +9697,14 @@ actionable.
 **A grant**, where `showDirectoryPicker` exists — Chromium and the desktop build. The page holds a
 `FileSystemDirectoryHandle`: a capability, not a path and not a copy. Listings are read through it
 when they are asked for, so the folder is live — a file a pipeline writes into it five minutes later
-is simply there — and the handle is structured-cloneable, so it survives in IndexedDB and the folder
-is still connected after a reload. A grant can lapse — browsers hand a directory back for a while
-and then ask once more — and the folder then stays in the column with a *reconnect* button rather
-than vanishing, since a folder that vanished reads as one never connected and the fix is one click
-only the reader can make; a grant the reader *denied* is forgotten instead of asked for on every
-reload.
+is simply there — and the handle is structured-cloneable, so it can survive in IndexedDB and the
+folder be still connected after a reload. **It is kept only by the installed app** (§20.6): the
+desktop build, the single-file build, and the site installed as an app. In a browser tab a granted
+folder is connected for the visit, as a snapshot is, and the row says so in the same two words. A
+grant can lapse — browsers hand a directory back for a while and then ask once more — and the folder
+then stays in the column with a *reconnect* button rather than vanishing, since a folder that
+vanished reads as one never connected and the fix is one click only the reader can make; a grant the
+reader *denied* is forgotten instead of asked for on every reload.
 
 **A snapshot**, everywhere else. Firefox and Safari have no picker; `<input webkitdirectory>` hands
 back a flat `File[]` carrying `webkitRelativePath`, from which the tree is rebuilt once. It does not
@@ -9522,8 +9799,9 @@ name is the first verb.
 Dragging a file lets the reader say *where*: onto the map's edge rectangles for a lane in a named
 stack (§8.9), onto the rectangle in the middle of a map for that map alone — an overlay's one target
 (§8.1) — onto a companion for a track on that map (§16), onto the Tracks card, onto a deck's edge or
-an empty cell for a cell of its own (§16.9), onto a 3D cell for the model it draws (§25.3), onto an
-analysis form's file box as the run's input rather than as anything opened (§18.8), onto the content
+an empty cell for a cell of its own (§16.9), onto a 3D cell for the model it draws (§25.3), onto the
+Contact maps card's *Load a map into the lower triangle* for the second file in the square (§5.7),
+onto an analysis form's file box as the run's input rather than as anything opened (§18.8), onto the content
 area, onto the landing page's drop zone — which replaces, because that is what the landing page has
 always meant.
 
@@ -9582,13 +9860,43 @@ Wider than a chosen file, and worth being exact about how. The page can see the 
 everything under the directory and read any of them without a further gesture — that is what makes
 browsing possible — and, for the durable shape, it can do so again after a restart.
 
+**Kept by the installed app, and by nothing else.** An app the reader installed on their own machine
+— the desktop build, the single-file build they saved and open from their disk, or the site installed
+as an app, which a browser opens in a window of its own (`installed.ts`: the `standalone`,
+`minimal-ui` and `window-controls-overlay` display modes, or Safari's home-screen flag; never
+`fullscreen`, which a tab answers too) — is a place they have chosen to keep things. A browser tab is a
+page on whatever machine opened it — a shared one, somebody else's, one reached from a link — and a
+page that kept a grant to a directory of unpublished data would be keeping it for the next person at
+that browser. So in a tab a folder is connected for the visit: held in memory, listed and browsed
+like any other, and gone with the page; nothing about it is written down, and the connect button and
+the row both say *this visit*. Grants a tab stored before this rule are left in storage for the
+installed app on the same origin, which shares it, and are listed — and forgettable — in the
+stored-data screen like everything else.
+
+**And it finds a workspace's files there again.** A file opened from a kept folder is remembered by
+the folder it was in and its path from that folder's root (`state/locations.ts`), and a workspace
+saved by the installed app carries the same (`folders`: each folder by its id and name, and its files
+by name with their paths). A session that comes back — after a restart, from the workspace file,
+in another window — asks for `rep1.cool` and finds it at `run2/hic/rep1.cool` through the grant on
+`run2`, its tracks too, and nobody is asked to find anything. A workspace opened by another
+installation knows the folder by a different id or none: there the folder's **name** is what is left,
+and then any kept folder the path is found in, and a file found must carry the name asked for, as a
+file grant's must (`state/handles.ts`). Where no such folder is connected, the note over the picker
+names it and its path, with a button that connects it, after which the session's files are found
+there on their own. None of this is written outside the installed app; a share link carries no
+`folders`, and a workspace published at a URL has them dropped, since both reach people whose disks
+those paths are not about. The desktop build lets its own page re-read what the user chose — a
+`fileSystem` permission, read access, its own origin only — and refuses every other permission as
+before.
+
 What has not changed is where the bytes go: **nowhere**. §11 holds exactly as it held for a dropped
 file. A local folder is read in place, a slice at a time, by code on the reader's own machine; a
 bucket is read by the browser from the bucket. There is no server in between because there is no
 server. Every connected folder this browser keeps is accounted for in the stored-data screen — *What
-this browser is remembering* — beside the file grants, and is revocable one at a time by its × in
-the Files column or all at once by that screen's *forget everything* — which is the same bargain
-`state/handles.ts` already struck for a single file, made visible at the wider grant.
+this browser is remembering* — beside the file grants and the places of the files opened from them,
+and is revocable one at a time by its × in the Files column or all at once by that screen's *forget
+everything* — which is the same bargain `state/handles.ts` already struck for a single file, made
+visible at the wider grant.
 
 In the standalone build (§19) the bucket half is absent — the origin is opaque, so every remote read
 fails before a byte moves — and the local half has no shape of its own: a `file://` page is a secure
@@ -9898,14 +10206,16 @@ is no refusal left for `cliCommandFor` to write. What the record does not hold a
 above the line rather than as a silent omission — the maps `hicrep` ran against are the deck's and not
 the result's, so they are read off the session and, with no session to ask, the note says to add them.
 
-**The framing is written, not only the parameters.** Five facts a session sets from the picture are
+**The framing is written, not only the parameters.** Six facts a session sets from the picture are
 inputs to the arithmetic and parameters of no task: the score column the map is drawn from (§3.5),
 the sequences declared circular and the origins declared on them (§8.15), the ticked cells of an
-`.scool` (§3.8), and the number of contacts the map is drawn to (§6.5). A line without them repeats
-a different run, so each is a reserved flag of the command's own — `--value`, `--circular`,
-`--origin NAME:POS` (1-based, as the table prints it, digits grouped or not), `--cell`,
-`--contacts N` — written whenever it differs from the shell's default and refused before the run
-when the file cannot answer it.
+`.scool` (§3.8), the number of contacts the map is drawn to (§6.5), and the resolution the reader
+added that it is drawn at (§3.4). A line without them repeats a different run, so each is a reserved
+flag of the command's own — `--value`, `--circular`, `--origin NAME:POS` (1-based, as the table
+prints it, digits grouped or not), `--cell`, `--contacts N`, `--coarsen BP` — written whenever it
+differs from the shell's default and refused before the run when the file cannot answer it. A run
+summed to `--coarsen` names its outputs for it, `sample_1000_coarsen3000.…`, so that beside a run on
+the file's own rung in one `--out` the two are two sets of numbers.
 
 **Balanced is the shell's default, as it is the form's.** *Use balancing weights* is answered from
 the file and never shown in a form (`paramDerived`), and a shell answers it the same way: a map is
@@ -11678,6 +11988,7 @@ lane is drawn in, so a model coloured by H3K27ac is drawn in its lane's orange (
 
 **And under a track the key's two ends are numbers to type into**, as the lane's own range is
 (§8): a click on either puts a caret in it, Enter or a click away commits, Escape leaves it alone,
+Tab goes from the bottom to the top and Shift+Tab back (§26.8),
 and a number that is not one or an end past the other is refused in place. What is typed is
 written to **the lane's limits**, the one pair the lane and the beads are drawn against, so the
 lane beside the map changes with it; once fixed, an arrow after the range puts the track back on
@@ -12006,7 +12317,9 @@ for a number that is printed as given, groups as en-US too, whatever the reader'
 formats a coordinate itself is a view that will drift.
 
 The typed form takes what other browsers write, because a reader arrives by pasting: commas, `kb`
-and `Mb`, an en dash, and Ensembl's `..`. A bare sequence name, a genome name, a gene name, a band's
+and `Mb`, an en dash, and Ensembl's `..`. Two windows in one map's box are a block between them
+(§5.4), shown as `pairLabel` writes them — `IV:1,000,001-1,400,000 × V:1-200,000` — and read back by
+`typedLociToRegions`, which keeps the round trip below for the pair as for one window. A bare sequence name, a genome name, a gene name, a band's
 ISCN name (§8.22) and `*` have no coordinates and pass through untouched — as does anything the
 tokenizer refuses, so that a
 refusal is about what the reader typed rather than about what a helper made of it.
@@ -12298,6 +12611,45 @@ word of progress, **running**, **done**, **failed**, **cancelled**, or **reading
 still watching (§23.5). No surface invents another: a console row's mark said *finished* where
 everything else says *done*, and *the window closed while this was running* where one word does.
 
+### 26.8 Tab walks the fields of one kind
+
+A field edited in place — a lane's name or an end of its range, in the browser and beside a map
+(§5.8); an end of a map's colour key (§7.1) or of a 3D model's (§25.5); a tab's name (§5.6); a
+deck cell's heading and a name on the Tracks, Metadata, Structures or Contact maps card (§16.10); a
+mark's place on the Manual annotations card (§8.1); a sequence's name on the editing stage (§27.3)
+— is one of a run of fields of its kind, and the run is what a reader working through a figure goes
+down: naming four replicates, setting six tracks to one ceiling. So **Tab takes what was typed, as
+Enter does, and puts the caret in the next field of the same kind; Shift+Tab in the one before.**
+Past either end of the run the caret is let go, as Enter lets it go: Tab is Enter that goes on
+(`ui/tabWalk.ts`). The browser's own Tab took the next focusable thing in the document, which
+beside a box laid over a canvas is a button nobody meant, and from a box the next frame repaints,
+nothing; on the stage it threw the typed name away, since a click away leaves a name there.
+
+- **The next of the same kind.** A name goes to the next name; a range's bottom to its top, and its
+  top to the next track's bottom; a colour key's low end to its high end; a tab's name to the next
+  tab that can be named; a mark's last box to the next mark's first, in the card's order — between
+  one mark's own boxes, and its axis select, Tab is the browser's, since those are one row's fields.
+  A field with no caret to give is no stop: a lane too short for one keeps its resize border instead
+  (§5.8), and its name is passed over as a press passes it.
+- **A run goes where the eye does.** Beside a map, through the stack under it — where a track goes
+  first — and then on round the map clockwise: the stack on its left, the one above it, the one on
+  its right, each in the order its lanes are drawn; in the browser, its lanes top to bottom. On a
+  deck, from one cell to the next as the cells are on the page: a heading to the next cell's
+  heading, a colour key's high end to the next map's low end. A card's names run down its list; the
+  3D key's two ends are a run of two.
+- **A value refused keeps the caret**, wherever Enter would keep it: a number a lane's range or the
+  3D key cannot take, a place a mark cannot be at, a name the stage already has. Nothing moves on
+  from a value that was not taken. And the run is asked for again after the commit, by position,
+  since a commit may rebuild the very rows it is walking — a rename repaints a card's list.
+- **An end walked through is not an end set.** A box opens on the number it was laid over, and an
+  end of a colour key opened by a Tab and left as it was changes nothing — the bound stays on auto —
+  just as an end of a lane's range left alone changes nothing (§5.8); taken back, that number would
+  have fixed the bound at whatever the key happened to show.
+- **Only a bare Tab.** With Ctrl it is the browser's — the next browser tab — with Alt or ⌘ the
+  system's, and in the middle of an input method's composition it is the method's. A dialog, which
+  keeps Tab among its own controls (`ui/Modal.ts`), leaves a field that walks Tab itself alone — the
+  field carries `data-tab-walk` — so one key is answered once.
+
 ## 27. Editing the reference
 
 A stage where the reader edits the reference a contact map was built against — cut, invert, move,
@@ -12513,7 +12865,8 @@ What is on it:
   sequences card, a **grip** before each row that drags the sequence to another place in the order —
   a line across the list where it would go, one `place` step on the drop, nothing joined — and takes
   ↑ ↓ when it has the keys; a **rename** — its pencil, shown on the row's hover, or a double click,
-  Enter making it a step and Escape or a click away leaving the name — which a later edit keeps even
+  Enter making it a step and Escape or a click away leaving the name, and Tab making it a step and
+  opening the next sequence's name (§26.8) — which a later edit keeps even
   where the sequence is an original whole again, and which refuses two words, another sequence's
   name, and a name of the file's own for any stretch but that sequence whole — asking the step's own
   rule (`wholeOriginal`), so that sequence whole, renamed, takes its own name back, which the box

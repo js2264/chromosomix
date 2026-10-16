@@ -321,7 +321,8 @@ One level of a resolution ladder, as a bin size (`src/ui/refine.ts`). A sibling 
 [bin space](#bin-space) entirely, which is why moving between them is a reopen rather than a
 navigation. A rung the reader adds — a whole number of a stored rung's bins, summed as it is read —
 is a **derived rung**, marked `*` (`3 kb*`) and never preferred over a stored one
-(`src/metacooler/coarsen.ts`, §3.4).
+(`src/metacooler/coarsen.ts`, §3.4). A task run while the map is drawn at one reads the map summed to
+it (`src/metacooler/coarseMap.ts`; `--coarsen` in the shell).
 
 ### `__unbinned__`
 

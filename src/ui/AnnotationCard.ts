@@ -33,6 +33,7 @@ import type { AnnotationStore } from '../annotations/store'
 import { hasTrackControls, isIntervalSet, readsAlignments, readsOf, searchesByName } from '../annotations/types'
 import type { AnnotationEntry, ColourBy, ContigOverlap } from '../annotations/types'
 import { OVERLAY_DRAG_TYPE, TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt } from './dom'
+import { tabAmong } from './tabWalk'
 import { dragHasFileRow } from './fileDrag'
 import { chooseFiles, filesFrom } from './chooseFiles'
 import { pairIndexes } from '../annotations/loader'
@@ -1038,6 +1039,8 @@ export class AnnotationCard {
       this.props.store.update(entry.id, { label })
     })
     input.addEventListener('keydown', (event) => {
+      // Enter that goes on to the next row's name, Shift+Tab the one before (§26.8).
+      if (tabAmong(event, input, '.ann-list', 'input.ann-name')) return
       if (event.key === 'Enter') {
         event.preventDefault()
         input.blur()

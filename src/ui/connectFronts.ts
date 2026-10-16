@@ -45,7 +45,7 @@
 
 import { DROPBOX_SIGN_IN_AVAILABLE, readAppKey } from '../auth/dropbox'
 import { GOOGLE_SIGN_IN_AVAILABLE, readClientId } from '../auth/google'
-import { directoryPickerSupported } from '../browse/local'
+import { directoriesKept } from '../state/directories'
 import { IS_STANDALONE } from '../version'
 import type { IconName } from './icons'
 
@@ -95,7 +95,9 @@ export const CONNECT_PLACES = IS_STANDALONE
  * the front.
  */
 export function localVerb(): string {
-  return directoryPickerSupported() ? 'choose a folder…' : 'choose a folder (this visit)…'
+  // Kept only by the installed app (§20.6): a browser tab holds a directory
+  // for the visit, as a browser with no picker holds its snapshot.
+  return directoriesKept() ? 'choose a folder…' : 'choose a folder (this visit)…'
 }
 
 /**

@@ -41,6 +41,7 @@ import { FolderBrowseView } from './folderBrowse'
 import { button, el } from './dom'
 import { icon, iconButton, type IconName } from './icons'
 import {
+  announce,
   connectedFolders,
   disconnectFolder,
   folderUsable,
@@ -49,6 +50,7 @@ import {
 import { writeFileDrag } from './fileDrag'
 import { CONNECT_FOLDER, CONNECT_PLACES } from './connectFronts'
 import type { ConnectedFolder, FolderEntry, PickedFile } from '../browse/folder'
+import { noteLocation } from '../state/locations'
 import { routeOf } from '../browse/route'
 import { rowVerbs } from './rowVerbs'
 
@@ -114,6 +116,8 @@ export class FilesCard {
   private readonly foldersEl = el('div', { class: 'files-folders' })
   /** Where a folder whose grant has lapsed says so, and offers the one fix. */
   private readonly lapsedEl = el('div', { class: 'files-lapsed hidden' })
+  /** The folders found lapsed, until a press reads them again — see {@link show}. */
+  private readonly lapsed = new Set<string>()
   private readonly view: FolderBrowseView
   private readonly unsubscribe: () => void
   /** The folder on screen, so a repaint of the list can keep it marked. */
@@ -210,9 +214,13 @@ export class FilesCard {
     this.lapsedEl.classList.add('hidden')
     this.paintFolders()
     if (!(await folderUsable(folder, { prompt: options.prompt ?? true }))) {
+      this.lapsed.add(folder.id)
       this.showLapsed(folder)
       return
     }
+    // A directory read again after its grant had lapsed: the sessions waiting
+    // on files in it are told, and find them there now (§20.6).
+    if (this.lapsed.delete(folder.id)) announce()
     await this.view.browse(folder, folder.root)
   }
 
@@ -277,7 +285,11 @@ export class FilesCard {
     deliver: (picked: PickedFile) => void,
   ): Promise<void> {
     try {
-      deliver(await folder.pick(entry))
+      const picked = await folder.pick(entry)
+      // Where it came from, for the session and the workspaces written from it
+      // to find it in this folder again — kept in the installed app (§20.6).
+      noteLocation(picked)
+      deliver(picked)
     } catch (err) {
       // A local file moved or deleted since the folder was listed, or a bucket
       // that answered the listing and refuses the object. Said where the reader
@@ -324,8 +336,12 @@ export class FilesCard {
             type: 'button',
             title: folder.durable
               ? folder.label
-              : `${folder.label} — a snapshot, taken when you connected it. This browser cannot ` +
-                'hold a directory, so it does not update and it is gone after a reload.',
+              : folder.transient === 'visit'
+                ? `${folder.label} — connected for this visit. A browser tab keeps no folder after it ` +
+                  'is closed, so nobody else at this browser finds it; the installed app keeps folders, ' +
+                  'and finds a workspace’s files in them again.'
+                : `${folder.label} — a snapshot, taken when you connected it. This browser cannot ` +
+                  'hold a directory, so it does not update and it is gone after a reload.',
           },
           icon(folderMark(folder.kind), { size: 13 }),
           el('span', { class: 'files-folder-label', text: folder.label }),

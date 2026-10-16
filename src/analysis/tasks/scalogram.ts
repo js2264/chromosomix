@@ -233,6 +233,7 @@ export const SCALOGRAM_TASK: AnalysisTask = {
   id: 'scalogram',
   title: 'Scalogram',
   blurb: 'How far each bin’s contacts reach, as nested quantile bands.',
+  keywords: ['reach', 'distance', 'quantiles'],
   group: '2d',
   venue: 'analysis',
   version: 1,

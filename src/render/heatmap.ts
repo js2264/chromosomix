@@ -16,7 +16,7 @@
 
 import { MAX_CATEGORICAL_TICKS } from '../constants'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
-import { applyColormap } from './colormaps'
+import { applyColormap, colormapIndex } from './colormaps'
 import {
   anchorRays,
   cellAt as squareOf,
@@ -437,12 +437,16 @@ export function colorize(
   const colours = new Uint32Array(lut.buffer, lut.byteOffset, lut.length / 4)
   const size = colours.length
   const last = size - 1
+  // A cell with no value: the paper, or on a ratio of two maps the ramp's own
+  // middle, where a cell either map has no contacts in is drawn (§6) — the
+  // colour a ratio of exactly one is, `t = 0.5`.
+  const missing = scale.missing === 'middle' ? colours[colormapIndex(0.5)] : 0
   for (let i = 0; i < values.length; i++) {
     const best = values[i]
     if (Number.isNaN(best)) {
       // Every pixel is written on every path, including this one: the buffer
       // may be a reused one that still holds the previous colouring.
-      pixels[i] = 0
+      pixels[i] = missing
       continue
     }
     // matplotlib's `Normalize` collapses a degenerate range to 0 rather than
@@ -451,14 +455,12 @@ export function colorize(
     // below every bound there is, which is that same low end.
     //
     // `+Infinity` is the *other* end, and sending it to the low one as well was
-    // a real misreading on every ratio map: `4 / 0` is "present in the first
-    // file and absent in the second", which is the strongest possible statement
-    // in the numerator's favour, and it was drawn in the colour that means the
-    // opposite. On a sparse pair the two arms are the same size — 7.7% of cells
-    // each on an E. coli pair at 5 kb — so half the saturated cells of the map
-    // carried the wrong sign. The normalised position carries the distinction
-    // for free: `(Infinity - vmin) / span` is `Infinity` and its negative
-    // counterpart is `-Infinity`, so only the sign has to be read off.
+    // a real misreading on every ratio map while a ratio of two maps still made
+    // one of `4 / 0` (it makes none now, §6): the strongest statement in the
+    // numerator's favour was drawn in the colour that means the opposite. The
+    // normalised position carries the distinction for free: `(Infinity - vmin)
+    // / span` is `Infinity` and its negative counterpart is `-Infinity`, so only
+    // the sign has to be read off.
     //
     // The table index is `colormapIndex`'s — `t × N` truncated, clamped onto
     // the end colours — with the clamp taken first, so the truncation is an
@@ -1919,13 +1921,15 @@ export class HeatmapView {
 
     this.opts = {
       margin: { ...DEFAULT_MARGIN, ...(options.margin ?? {}) },
-      // #666666 / 0.5pt and #222222 / 1.0pt are _SEP_COLOR, _SEP_WIDTH,
-      // _GROUP_SEP_COLOR and _GROUP_SEP_WIDTH in ops/show.py. Kept identical so
-      // a browser screenshot and a CLI figure are the same image.
+      // #666666 and #222222 are _SEP_COLOR and _GROUP_SEP_COLOR in
+      // ops/show.py, kept so the lines read as the CLI's. The widths are not
+      // its 0.5 and 1: drawn at the larger of that and one device pixel, a line
+      // between two chromosomes was a hairline on a dense map on a fine screen
+      // — half a pixel of a 2× display — and the reader could lose it (§7.1).
       separatorColor: options.separatorColor ?? '#666666',
-      separatorWidth: options.separatorWidth ?? 0.5,
+      separatorWidth: options.separatorWidth ?? 1.5,
       groupSeparatorColor: options.groupSeparatorColor ?? '#222222',
-      groupSeparatorWidth: options.groupSeparatorWidth ?? 1,
+      groupSeparatorWidth: options.groupSeparatorWidth ?? 2,
       labelColor: options.labelColor ?? '#333333',
       labelHaloColor: options.labelHaloColor ?? 'rgba(255, 255, 255, 0.85)',
       labelFont: options.labelFont ?? DEFAULT_LABEL_FONT,
@@ -4350,7 +4354,9 @@ export class HeatmapView {
   private strokeBoundary(
     seps: readonly Separator[],
     axis: 'rows' | 'cols',
-    n: number
+    n: number,
+    /** The stroke's width in CSS pixels, which decides where it is centred. */
+    width: number,
   ): void {
     const ctx = this.ctx
     const plot = this.plotRect
@@ -4391,7 +4397,7 @@ export class HeatmapView {
       if (sep.at > hi) break
       // Snap to the device-pixel grid: a hairline on a fractional coordinate is
       // antialiased into a two-pixel smudge that reads as a real feature.
-      const p = this.snap(base + scale.toPixel(sep.at))
+      const p = this.snapFor(base + scale.toPixel(sep.at), width)
       if (p === previous || p < near || p > far) continue
       previous = p
       drawn++
@@ -4409,6 +4415,18 @@ export class HeatmapView {
   /** Put a hairline on the device-pixel grid, so it stays one pixel wide. */
   private snap(raw: number): number {
     return (Math.round(raw * this.dpr - 0.5) + 0.5) / this.dpr
+  }
+
+  /**
+   * {@link snap} for a stroke of any width: centred on a pixel where its
+   * whole-pixel part is odd and between two where it is even, so that part is
+   * solid on the device grid and only a fraction is shared with a neighbour.
+   * A divider of two device pixels centred as a hairline was one solid pixel
+   * and two half ones — a smudge as wide as three.
+   */
+  private snapFor(raw: number, width: number): number {
+    const whole = Math.floor(width * this.dpr + 1e-6)
+    return whole % 2 === 1 ? this.snap(raw) : Math.round(raw * this.dpr) / this.dpr
   }
 
   /**
@@ -4785,20 +4803,22 @@ export class HeatmapView {
     // coordinates. Where the two are literally the same array there is nothing
     // for the fine pass to add, and skipping it halves the stroking.
     ctx.strokeStyle = this.opts.separatorColor
-    ctx.lineWidth = Math.max(this.opts.separatorWidth, 1 / this.dpr)
+    const fine = Math.max(this.opts.separatorWidth, 1 / this.dpr)
+    ctx.lineWidth = fine
     if (this.separators.groupCols !== this.separators.cols) {
-      this.strokeBoundary(this.separators.cols, 'cols', ncols)
+      this.strokeBoundary(this.separators.cols, 'cols', ncols, fine)
     }
     if (this.separators.groupRows !== this.separators.rows) {
-      this.strokeBoundary(this.separators.rows, 'rows', nrows)
+      this.strokeBoundary(this.separators.rows, 'rows', nrows, fine)
     }
 
     // The coarser set on top, heavier: genomes over contigs in a whole-genome
     // view, and selection-block edges everywhere else.
     ctx.strokeStyle = this.opts.groupSeparatorColor
-    ctx.lineWidth = Math.max(this.opts.groupSeparatorWidth, 1 / this.dpr)
-    this.strokeBoundary(this.separators.groupCols ?? [], 'cols', ncols)
-    this.strokeBoundary(this.separators.groupRows ?? [], 'rows', nrows)
+    const group = Math.max(this.opts.groupSeparatorWidth, 1 / this.dpr)
+    ctx.lineWidth = group
+    this.strokeBoundary(this.separators.groupCols ?? [], 'cols', ncols, group)
+    this.strokeBoundary(this.separators.groupRows ?? [], 'rows', nrows, group)
     ctx.restore()
   }
 

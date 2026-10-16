@@ -68,6 +68,7 @@ import {
 } from '../render/overlays'
 import {
   AnnotationLanes,
+  CORNER_SIDE,
   LANE_GAP,
   type LaneEdge,
   type LaneGeometry,
@@ -139,6 +140,7 @@ import { diagonalLocked, subscribeDiagonalLock, toggleDiagonalLock } from './dia
 import { inverseTransform, type Scale } from '../render/scale'
 import type { ColorScale, DenseMatrix, Extent, Transform } from '../types'
 import type { AnalysisFraming } from '../analysis/types'
+import type { DerivedGrid } from '../metacooler/coarsen'
 import { BLOCK_COPY_LIMIT_BYTES, type BlockInput } from '../analysis/worker/protocol'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { DEFAULT_ARM_WINDOW, armsInForce, armsKey, originInMiddle } from './armFrame'
@@ -153,7 +155,7 @@ import {
   spanOnAxis,
   toDense,
 } from './blockAxes'
-import { readCanvasPalette, readPageText } from './canvasPalette'
+import { FIGURE_BACKGROUND, readCanvasPalette, readPageText } from './canvasPalette'
 import { ClipRange } from './ClipRange'
 import { GroupsCard } from './GroupsCard'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
@@ -169,7 +171,7 @@ import {
 import { bandRegion, onDiagonal, spanText, type SelectedAxis, type SelectedRegion } from './mapSelection'
 import { framedPhrase, resolutionNote } from './mapSummary'
 import { LaneControls } from './LaneControls'
-import { LaneEditor } from './LaneEditor'
+import { LaneEditor, tabAlong, type EditorAt, type TabStop } from './LaneEditor'
 import { LaneGestures } from './LaneGestures'
 import { MapBox } from './MapBox'
 import { MAP_CORRELATION_BINS, MapDerivation } from './MapDerivation'
@@ -191,7 +193,6 @@ import {
   captionStamp,
   copyPicture,
   copyTextToClipboard,
-  readPageBackground,
 } from './export'
 import { openMenu, type MenuItem } from './Menu'
 import { marksMenu } from './marksMenu'
@@ -301,6 +302,11 @@ const OE_ON_BASELINE_HINT =
   'The cells already are the expected values, so there is nothing left to divide by them. ' +
   'Choose another score to get the toggle back.'
 
+const OE_ON_RATIO_HINT =
+  'A ratio of two maps divides one by the other, and the decay with distance the two share ' +
+  'goes with it: each cell is already a change against a baseline, the second map. Set the ' +
+  'comparison back to split or difference to get the toggle back.'
+
 const BASELINE_HINT =
   'The baseline O/E divides by, drawn instead of applied: every cell replaced by the mean of ' +
   'this block at that bin separation. Worth a look because an O/E is only as trustworthy as ' +
@@ -313,6 +319,25 @@ const ARM_BASELINE_HINT =
 
 const ARMS_ON_ARM_BASELINE_HINT =
   'The cells already are the expected along both arms. Choose another score to get the toggle back.'
+
+const ARMS_ON_RATIO_HINT =
+  'The arms are which decay the O/E divides by, and a ratio of two maps is not divided by one. ' +
+  'Set the comparison back to split or difference to get the toggle back.'
+
+/** A colour scale a derivation took over, to be given back when it is switched off (§7.5). */
+export interface BorrowedScale {
+  transform: Transform
+  colormap: string
+  vmin?: number
+  vmax?: number
+}
+
+/**
+ * The stacks in the order a Tab walks their boxes (§26.8): under the map,
+ * which is where most tracks are, then on round it clockwise — left of the
+ * map, above it, right of it.
+ */
+const LANE_TAB_ORDER: readonly LaneEdge[] = ['bottom', 'left', 'top', 'right']
 
 export interface MatrixPanelOptions {
   /** Bin size in bp, for the coordinate readout. */
@@ -332,6 +357,20 @@ export interface MatrixPanelOptions {
     vmin?: number
     vmax?: number
     level?: 'bin' | 'contig'
+    /**
+     * The scale a derivation on the panel this one replaces had taken over, and
+     * would have given back (§7.5): carried across a rebuild of the same map,
+     * which is what a change of comparison and the second map's eye both are.
+     * The seed above is then the borrowed scale, and this is what a map that
+     * no longer derives anything goes back to.
+     */
+    restore?: BorrowedScale
+    /**
+     * What this map is drawn on with nothing set (§7.1), given back by a
+     * derivation that arrived already drawn — a link, a reload, Back — whose
+     * seed is the borrowed scale and never saw the one it replaced.
+     */
+    defaults?: { transform: Transform; colormap: string }
   }
   /** Whether counts are currently multiplied by their bin weights (§6.4). */
   balance?: boolean
@@ -1117,6 +1156,11 @@ export class MatrixPanel {
   /** The neutral value of what is currently drawn, or `null` for a count field. */
   private neutral: number | null = null
   /**
+   * Whether what is drawn is a ratio of two maps, whose missing cells — a zero
+   * in either map — are drawn in the colormap's middle rather than as paper (§6).
+   */
+  private ratioOfTwo = false
+  /**
    * The presentation to give back when the derivation is switched off, and the
    * transform the derived one is currently holding.
    *
@@ -1133,6 +1177,12 @@ export class MatrixPanel {
     vmax: number | undefined
   } | null = null
   private divergingApplied: Transform | null = null
+  /**
+   * Whether the scale on this panel is still the seed it was built with, and
+   * nobody said what that seed was borrowed from — true until the first
+   * derivation is weighed, or the reader touches the scale.
+   */
+  private freshSeed: boolean
   private transform: Transform
   /** `clip`, or `clip (log10)` under a transform; see {@link paintClipUnits}. */
   private readonly clipLabel: HTMLElement
@@ -1183,6 +1233,8 @@ export class MatrixPanel {
   private readonly laneLayers = new Map<LaneEdge, HTMLElement>()
   private readonly laneControls = new Map<LaneEdge, LaneControls>()
   private laneEditor: LaneEditor | null = null
+  /** A Tab out of a lane's box, waiting for the paint of what it committed (§26.8). */
+  private laneTabbing: { from: EditorAt; step: 1 | -1 } | null = null
   /**
    * The two axes as annotations see them, rebuilt with every block.
    *
@@ -1249,6 +1301,12 @@ export class MatrixPanel {
   /** The stack thicknesses the stylesheet was last told about, per edge. */
   private laneBudget: Record<LaneEdge, number> = { top: -1, right: -1, bottom: -1, left: -1 }
   /**
+   * How far the stacks' names run out into the map's corners, by the *side*
+   * of the map each corner widens (§8.8) — the left of the map for the bottom
+   * stack's names, and so on round.
+   */
+  private cornerBudget: Record<LaneEdge, number> = { top: 0, right: 0, bottom: 0, left: 0 }
+  /**
    * Room to leave on each edge whether or not this panel has a stack there.
    *
    * Zero on its own, and set by a deck to the largest any of its panels needs
@@ -1265,6 +1323,20 @@ export class MatrixPanel {
     this.colormap = options.initial?.colormap ?? DEFAULT_UI_COLORMAP
     this.manualVmin = options.initial?.vmin
     this.manualVmax = options.initial?.vmax
+    // A scale carried from the panel this one replaces, while a derivation had
+    // it: the seed is what that derivation drew with, so it is held as applied,
+    // and the next weighing either keeps it or gives back what it took.
+    const carried = options.initial?.restore
+    if (carried !== undefined) {
+      this.divergingRestore = {
+        transform: carried.transform,
+        colormap: carried.colormap,
+        vmin: carried.vmin,
+        vmax: carried.vmax,
+      }
+      this.divergingApplied = this.transform
+    }
+    this.freshSeed = carried === undefined
     this.level = options.initial?.level ?? 'bin'
     this.derivation = new MapDerivation({
       options,
@@ -1306,6 +1378,9 @@ export class MatrixPanel {
       ...(options.annotations?.metadata === undefined
         ? {}
         : { metadata: options.annotations.metadata }),
+      // Each stack's names beside the map, in the corner that follows it
+      // clockwise, rather than over its data (§8.8).
+      corners: true,
       onChange: () => this.schedule(),
     })
 
@@ -1863,8 +1938,8 @@ export class MatrixPanel {
         onExpectedChange(this.options.derive?.expected !== true)
       })
       this.expectedButton = button
-      this.paintExpected(derive.expected)
-      this.gateExpected(derive.baseline)
+      this.paintExpected(this.expectedInForce())
+      this.gateExpected()
       picture.push(button)
 
       // Beside the O/E it modifies, and only where there is one sequence for it
@@ -2053,6 +2128,7 @@ export class MatrixPanel {
       { class: 'panel-grid' },
       wrap,
       ...LANE_EDGES.map((edge) => this.lanes.canvasFor(edge)),
+      ...LANE_EDGES.map((edge) => this.lanes.labelCanvases[edge]),
       ...this.laneLayers.values(),
       this.readout.tooltip,
     )
@@ -2061,8 +2137,16 @@ export class MatrixPanel {
       store: this.laneStore,
       shownLimits: (id) => this.lanes.shownLimits(id),
       onChange: () => this.schedule(),
+      // Walked once the commit is painted: the next box is measured by that
+      // paint, and a range's other end is read off it (§26.8).
+      onTab: (from, step) => {
+        this.laneTabbing = { from, step }
+        this.schedule()
+      },
     })
-    for (const edge of LANE_EDGES) this.laneGestures.watchLane(edge, this.lanes.canvasFor(edge))
+    for (const edge of LANE_EDGES) {
+      this.laneGestures.watchLane(edge, this.lanes.canvasFor(edge), this.lanes.labelCanvases[edge])
+    }
     this.laneGestures.watchEdgeDrops()
     this.laneListeners.push(offerLanding(this.laneGestures.laneSurface))
     // A restyle, a rename or a move of any lane is a different picture. Taken
@@ -2482,14 +2566,22 @@ export class MatrixPanel {
     button.classList.toggle('hidden', arms?.onChange === undefined)
     // Greyed under `arm decay`, as the O/E is under any baseline: that one is
     // read along the arms whatever the toggle says, so a press would change
-    // nothing on screen (§8.15).
+    // nothing on screen (§8.15). And under a ratio of two maps, with the O/E it
+    // shapes: there is none for it to take along the arms (§7.5).
     const alongArms = this.options.derive?.baseline === true && this.options.derive.alongArms === true
-    const on = arms?.window !== undefined && arms.refusal === null && !alongArms
+    const ratio = this.ratioOfMaps()
+    const on = arms?.window !== undefined && arms.refusal === null && !alongArms && !ratio
     button.setAttribute('aria-pressed', String(on))
     button.classList.toggle('is-on', on)
     const refused = arms === undefined || arms.refusal !== null
-    button.disabled = refused || alongArms
-    const hint = refused ? (arms?.refusal ?? ARMS_HINT) : alongArms ? ARMS_ON_ARM_BASELINE_HINT : ARMS_HINT
+    button.disabled = refused || alongArms || ratio
+    const hint = refused
+      ? (arms?.refusal ?? ARMS_HINT)
+      : alongArms
+        ? ARMS_ON_ARM_BASELINE_HINT
+        : ratio
+          ? ARMS_ON_RATIO_HINT
+          : ARMS_HINT
     button.title = hint
     button.setAttribute('aria-label', hint)
   }
@@ -2544,20 +2636,58 @@ export class MatrixPanel {
   }
 
   /**
-   * Grey the O/E toggle while the score picker is showing the baseline itself.
+   * Grey the O/E toggle where it cannot act: while the score picker is showing
+   * the baseline itself, and while two maps are compared as a ratio.
    *
    * Disabled rather than hidden, and with the reason in the tooltip: a control
    * that vanishes when a *different* control moves reads as a bug, while one
    * that greys and says "you are looking at the denominator" reads as an
    * explanation of the picture on screen.
    */
-  private gateExpected(baseline: boolean): void {
+  private gateExpected(): void {
     const button = this.expectedButton
     if (button === null) return
-    const hint = baseline ? OE_ON_BASELINE_HINT : OE_HINT
-    button.toggleAttribute('disabled', baseline)
+    const refusal = this.expectedRefusal()
+    const hint = refusal ?? OE_HINT
+    button.toggleAttribute('disabled', refusal !== null)
     button.title = hint
     button.setAttribute('aria-label', hint)
+  }
+
+  /**
+   * Why the O/E cannot act on this map, or `null` where it can.
+   *
+   * **A ratio of two maps is not divided by the expected**, either map's (§7.5).
+   * The ratio is itself the comparison against a baseline — the second map —
+   * and the decay with distance the two share divides out with it; what the
+   * O/E would add is each library's own decay divided out first, which is a
+   * different figure from the one the reader asked for. `oe` stays in the
+   * address as it was, and the toggle comes back lit with it on a split or a
+   * difference — the baseline's rule, for the same reason: what greys is the
+   * control, and the setting is the reader's.
+   */
+  private expectedRefusal(): string | null {
+    if (this.options.derive?.baseline === true) return OE_ON_BASELINE_HINT
+    if (this.ratioOfMaps()) return OE_ON_RATIO_HINT
+    return null
+  }
+
+  /**
+   * Whether the O/E is in force: asked for, or forced on by the correlation,
+   * and not refused. What the toggle lights for, and what is drawn.
+   */
+  private expectedInForce(): boolean {
+    const derive = this.options.derive
+    return this.expectedRefusal() === null && (derive?.expected === true || derive?.correlate === true)
+  }
+
+  /**
+   * Whether this map is built for a ratio of two maps. The panel is built for
+   * one comparison at construction — a change of it, or of the second map's
+   * eye, rebuilds the map (§7.5) — so this is a fact about the panel.
+   */
+  private ratioOfMaps(): boolean {
+    return this.options.compare?.op === 'ratio'
   }
 
   /**
@@ -2843,6 +2973,39 @@ export class MatrixPanel {
   }
 
   /**
+   * Put the caret in the next lane box of the kind a Tab left (§26.8): the
+   * next track's name, or the next end of a range — on this stack, then on
+   * the next round the map: the stack under it first, where a track goes
+   * first, then on clockwise — left, above, right. None past the last, where
+   * the caret is let go.
+   */
+  private laneTabOn(from: EditorAt, step: 1 | -1): void {
+    const editor = this.laneEditor
+    if (editor === null) return
+    const stops: TabStop[] = []
+    for (const edge of LANE_TAB_ORDER) {
+      const canvas = this.lanes.canvasFor(edge)
+      const offset = { left: canvas.offsetLeft, top: canvas.offsetTop }
+      if (from.kind === 'name') {
+        for (const target of this.lanes.namesOn(edge)) {
+          stops.push({
+            at: { kind: 'name', id: target.entry.id, place: edge },
+            open: () => editor.openName(target, offset, edge),
+          })
+        }
+      } else {
+        for (const target of this.lanes.rangesOn(edge)) {
+          stops.push({
+            at: { kind: 'limit', id: target.entries[0]?.id ?? '', part: target.hit.part, place: edge },
+            open: () => editor.openLimit(target, offset, edge),
+          })
+        }
+      }
+    }
+    tabAlong(stops, from, step)
+  }
+
+  /**
    * The framing an analysis would run on, taken **now** (§18.4).
    *
    * A snapshot and not a live view, which is the whole discipline: a finished
@@ -2854,11 +3017,18 @@ export class MatrixPanel {
    * at the file's native resolution and ignores it; a task that borrows the
    * block below must not pretend the block is finer than it is. Recording it is
    * what lets each of them be right.
+   *
+   * **At a resolution the reader added** (§3.4), `derived`, the picture is the
+   * file's bins summed, and every task reads the map summed the same way — so
+   * the framing is in *those* bins: the window carried onto the coarse grid, the
+   * bin size the one with the `*`, and the cells summed past it on a zoomed-out
+   * picture counted in coarse bins.
    */
-  analysisFraming(uri: string): AnalysisFraming | null {
+  analysisFraming(uri: string, derived: DerivedGrid | null = null): AnalysisFraming | null {
     const data = this.data
     if (data === null) return null
-    const binsPerCell = data.binsPerCell ?? 1
+    const binsPerCell = Math.max(1, Math.round((data.binsPerCell ?? 1) / (derived?.rung.factor ?? 1)))
+    const binsize = derived?.rung.binsize ?? this.options.binsize
 
     // The score picker's `current` is an **id**, and an id is not a column.
     // `balanced` is counts times two weights and `ICE` is computed here from
@@ -2882,8 +3052,10 @@ export class MatrixPanel {
     // reads the file at its own resolution. The pooling is a fact about the
     // picture rather than about the numbers, so it is said as one, and only
     // where there is any.
-    if (this.options.binsize > 0) {
-      parts.push(`${resolutionLabel(this.options.binsize)} bins`)
+    if (binsize > 0) {
+      // With the `*` the picker gives a resolution the reader added (§3.4): the
+      // number somebody quotes, and not one the file contains.
+      parts.push(`${resolutionLabel(binsize)}${derived === null ? '' : '*'} bins`)
       if (binsPerCell > 1) parts.push(`${fmt.int(binsPerCell)} per drawn cell`)
     }
     if (this.level === 'contig') parts.push('contig level')
@@ -2905,9 +3077,9 @@ export class MatrixPanel {
     if (depth !== null && depth.mode !== 'none') parts.push(depthPhrase(depth))
     return {
       uri,
-      rows: [data.rowExtent[0], data.rowExtent[1]],
-      cols: [data.colExtent[0], data.colExtent[1]],
-      binsize: this.options.binsize,
+      rows: derived === null ? [data.rowExtent[0], data.rowExtent[1]] : derived.grid.toCoarse(data.rowExtent),
+      cols: derived === null ? [data.colExtent[0], data.colExtent[1]] : derived.grid.toCoarse(data.colExtent),
+      binsize,
       binsPerCell,
       balance,
       value,
@@ -2915,6 +3087,7 @@ export class MatrixPanel {
       level: data.level,
       label: parts.join(' · '),
       ...(depth === null ? {} : { contacts: depth.contacts }),
+      ...(derived === null ? {} : { coarsen: derived.rung.binsize }),
     }
   }
 
@@ -3114,7 +3287,7 @@ export class MatrixPanel {
           title:
             'The map as it is drawn here — the cells alone, with no axis, key, frame or pointer — ' +
             'onto the clipboard as a PNG, at the screen’s resolution',
-          run: () => copyPicture('map', this.heatmap.dataImage(readPageBackground())),
+          run: () => copyPicture('map', this.heatmap.dataImage(FIGURE_BACKGROUND)),
         },
       ]
       const context = this.options.annotations
@@ -4103,6 +4276,7 @@ export class MatrixPanel {
             { op },
           )
     this.neutral = merged === undefined || op === 'split' ? mine.neutral : merged.neutral
+    this.ratioOfTwo = merged !== undefined && op === 'ratio'
     const presentationMoved = this.syncDivergingScale()
     const dense: DenseMatrix =
       merged === undefined
@@ -4580,7 +4754,7 @@ export class MatrixPanel {
     const style = {
       font: 'system-ui, sans-serif',
       textColor: readPageText(this.canvas),
-      background: readPageBackground(),
+      background: FIGURE_BACKGROUND,
       borderColor: palette.labelColor,
     }
     const right = origin.x + plot.x + plot.width - KEY_INSET
@@ -4627,6 +4801,22 @@ export class MatrixPanel {
   }
 
   /**
+   * The scale a derivation on this panel has taken over, or `null` where none
+   * has: what a rebuild of the same map carries to its replacement
+   * (`initial.restore`), so the give-back outlives this panel.
+   */
+  borrowedFrom(): BorrowedScale | null {
+    const back = this.divergingRestore
+    if (this.divergingApplied === null || back === null) return null
+    return {
+      transform: back.transform,
+      colormap: back.colormap,
+      ...(back.vmin === undefined ? {} : { vmin: back.vmin }),
+      ...(back.vmax === undefined ? {} : { vmax: back.vmax }),
+    }
+  }
+
+  /**
    * Record which derivation this panel is drawing, without recomputing.
    *
    * Separate from {@link rederive} because a panel that is *about* to be handed
@@ -4653,10 +4843,9 @@ export class MatrixPanel {
     // click — so it is repainted from whatever arrives, exactly as the turn's is.
     // The O/E light follows the correlation, which forces it on: a lit map with
     // an unlit toggle is the picture disagreeing with the control that made it.
-    this.paintExpected(
-      derive?.baseline !== true && (derive?.expected === true || derive?.correlate === true),
-    )
-    this.gateExpected(derive?.baseline === true)
+    // And it goes out where the O/E is refused, for the same reason.
+    this.paintExpected(this.expectedInForce())
+    this.gateExpected()
     this.paintSmooth(derive?.smooth ?? '0')
     return same
   }
@@ -4707,9 +4896,10 @@ export class MatrixPanel {
     compare?: ComparePresentation,
     turn?: TurnPresentation,
   ): void {
+    // The comparison first: the O/E and `arms` are painted from it.
+    if (compare !== undefined) this.options.compare = compare
     const turnMoved = !this.setTurn(turn)
     const unchanged = this.setDerive(derive) && !turnMoved
-    if (compare !== undefined) this.options.compare = compare
     const data = this.data
     // Nothing to recompute, but the setting is recorded either way: the session
     // builds a fresh presentation object on every render and hands it over
@@ -4801,6 +4991,7 @@ export class MatrixPanel {
       colormap: this.colormap,
       balanced: this.options.balance === true,
       ...(this.neutral === null ? {} : { neutral: this.neutral }),
+      ...(this.ratioOfTwo ? { missing: 'middle' as const } : {}),
     }
   }
 
@@ -4814,6 +5005,8 @@ export class MatrixPanel {
    */
   private syncDivergingScale(): boolean {
     const wanted = preferredTransform(this.neutral)
+    const fresh = this.freshSeed
+    this.freshSeed = false
     if (wanted === this.divergingApplied) return false
     if (wanted === null) {
       const back = this.divergingRestore
@@ -4827,12 +5020,14 @@ export class MatrixPanel {
       this.syncScaleControls()
       return true
     }
-    this.divergingRestore ??= {
-      transform: this.transform,
-      colormap: this.colormap,
-      vmin: this.manualVmin,
-      vmax: this.manualVmax,
-    }
+    // A seed that already is the borrowed scale — a link, a reload or Back
+    // landing on a ratio carries what the derivation drew with, and not what it
+    // took over — has nothing of its own to give back but the map's defaults.
+    const defaults = this.options.initial?.defaults
+    this.divergingRestore ??=
+      fresh && defaults !== undefined && this.transform === wanted && isDivergingColormap(this.colormap)
+        ? { transform: defaults.transform, colormap: defaults.colormap, vmin: undefined, vmax: undefined }
+        : { transform: this.transform, colormap: this.colormap, vmin: this.manualVmin, vmax: this.manualVmax }
     this.transform = wanted
     // Only where the reader has not already chosen a diverging ramp: somebody
     // who picked one deliberately keeps it across a change of operation.
@@ -4996,6 +5191,8 @@ export class MatrixPanel {
   }
 
   private rescale(): void {
+    // The reader's own scale, whatever the seed was.
+    this.freshSeed = false
     this.paintClipUnits()
     this.heatmap.setScale(this.scale())
     this.options.onScaleChange?.({
@@ -5054,6 +5251,12 @@ export class MatrixPanel {
       // the heatmap has just written, so drawing them anywhere else would show
       // the previous frame's pan for one frame on every drag.
       this.lanes.draw(this.laneGeometry())
+      // A Tab out of a lane's box, now that the boxes are the ones on screen.
+      const tabbing = this.laneTabbing
+      if (tabbing !== null) {
+        this.laneTabbing = null
+        this.laneTabOn(tabbing.from, tabbing.step)
+      }
       // …and for the same reason: the scales the heatmap has just written are
       // what this reads, and writing it before the draw would show the previous
       // frame's window for one frame of every drag.
@@ -5872,6 +6075,18 @@ export class MatrixPanel {
   }
 
   /**
+   * The sequences the block read runs over along each axis, in axis order —
+   * what a deck cell's heading says its map is on (§16.3). Off the block's own
+   * runs, so in this map's own names and whatever the window on screen.
+   */
+  blockSequences(): { rows: string[]; cols: string[] } {
+    const names = (groups: MatrixResult['rowGroups'] | undefined): string[] => [
+      ...new Set((groups ?? []).map((group) => group.label)),
+    ]
+    return { rows: names(this.data?.rowGroups), cols: names(this.data?.colGroups) }
+  }
+
+  /**
    * Tell the stylesheet how much vertical budget the horizontal stacks take, and
    * re-measure whenever any stack changes thickness.
    *
@@ -5893,8 +6108,16 @@ export class MatrixPanel {
       bottom: this.lanes.thicknessOf('bottom'),
       left: this.lanes.thicknessOf('left'),
     }
-    if (LANE_EDGES.every((edge) => next[edge] === this.laneBudget[edge])) return
+    const corners = { top: 0, right: 0, bottom: 0, left: 0 }
+    for (const edge of LANE_EDGES) corners[CORNER_SIDE[edge]] = this.lanes.cornerOf(edge)
+    if (
+      LANE_EDGES.every((edge) => next[edge] === this.laneBudget[edge]) &&
+      LANE_EDGES.every((side) => corners[side] === this.cornerBudget[side])
+    ) {
+      return
+    }
     this.laneBudget = next
+    this.cornerBudget = corners
     this.writeLaneMetrics()
     // …and to whoever is laying this panel out beside others. A deck exists so
     // that N pictures of one place can be compared, and a picture inset by a
@@ -5943,7 +6166,10 @@ export class MatrixPanel {
    */
   private roomOn(edge: LaneEdge): number {
     const thickness = this.laneBudget[edge]
-    return thickness <= 0 ? 0 : thickness + LANE_GAP
+    const stack = thickness <= 0 ? 0 : thickness + LANE_GAP
+    // …or the corner on that side, where a stack's names run out wider than
+    // the stack beside it (§8.8): the grid's track is the wider of the two.
+    return Math.max(stack, this.cornerBudget[edge])
   }
 
   /**

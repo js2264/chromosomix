@@ -176,6 +176,7 @@ export const PEAKS_TASK: AnalysisTask = {
   id: 'peaks',
   title: 'Peak calling',
   blurb: 'Narrow peaks from a coverage track, where its smoothed signal curves down (yapc).',
+  keywords: ['peaks', 'yapc', 'narrowPeak', 'ChIP', 'ATAC'],
   group: '1d',
   // The bigWig handles are in the annotations worker, and a peak caller reads
   // every base of one: shipping a genome's coverage to another thread to find

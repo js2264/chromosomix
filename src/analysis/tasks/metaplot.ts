@@ -239,6 +239,7 @@ export const METAPLOT_TASK: AnalysisTask = {
   id: 'metaplot',
   title: 'Metaplot over a feature set',
   blurb: 'Average track signal at a set of places, with a band and a heatmap.',
+  keywords: ['profile', 'aggregate', 'average', 'TSS', 'deeptools'],
   group: '1d',
   venue: 'annotations',
   version: 1,

@@ -69,6 +69,7 @@ import {
   subscribeGoogle,
 } from '../auth/google'
 import { connectDirectory } from '../browse/connected'
+import { directoriesKept } from '../state/directories'
 import { bucketFolderId } from '../browse/bucket'
 import { directoryPickerSupported } from '../browse/local'
 import { localVerb, providerFronts, type ProviderFront, type ProviderId } from './connectFronts'
@@ -175,6 +176,7 @@ function connectBody(props: ConnectProps, close: () => void): HTMLElement {
  */
 function localSection(done: (id: string) => void): HTMLElement {
   const granted = directoryPickerSupported()
+  const kept = directoriesKept()
   const error = el('p', { class: 'hint bucket-error' })
 
   // `browse/connected.ts` runs both shapes of picker and registers whatever
@@ -191,7 +193,7 @@ function localSection(done: (id: string) => void): HTMLElement {
   return el(
     'div',
     { class: 'connect-section' },
-    connectHead('This machine', 'hard-drive', localHelp(granted)),
+    connectHead('This machine', 'hard-drive', localHelp(granted, kept)),
     // The one large button the two sign-in panes have, because this pane is
     // the same shape as theirs: one thing to press, and everything worth
     // knowing before pressing it behind the `?`. The label is the front's, and
@@ -208,16 +210,21 @@ function localSection(done: (id: string) => void): HTMLElement {
 }
 
 /** Behind the local pane's `?`: what "read in place" means, and how long it lasts. */
-function localHelp(granted: boolean): string[] {
+function localHelp(granted: boolean, kept: boolean): string[] {
   return [
     'Read in place, never uploaded. The folder is listed one level at a time in the Files panel, ' +
       'and no byte of it is sent anywhere.',
-    granted
-      ? 'The browser keeps permission to list the folder across reloads; take it back any time ' +
-        'under What this browser is remembering (Ctrl+P → Help).'
-      : 'This browser cannot keep that permission, so what you get is a snapshot of the file list ' +
-        'for this visit only — it does not update and it does not survive a reload. Chrome, Edge ' +
-        'and the desktop app keep the connection.',
+    kept
+      ? 'The app keeps permission to list the folder across restarts, and the workspaces you save ' +
+        'say which of your files are in it, so reopening one finds them there. Take it back any ' +
+        'time under What this browser is remembering (Ctrl+P → Help).'
+      : granted
+        ? 'In a browser tab the folder is connected for this visit and kept nowhere, so nobody else ' +
+          'at this browser finds it. Installed as an app — or in the desktop app — the folder is kept ' +
+          'across restarts, and saved workspaces find their files in it again.'
+        : 'This browser cannot keep that permission, so what you get is a snapshot of the file list ' +
+          'for this visit only — it does not update and it does not survive a reload. Chrome, Edge ' +
+          'and the desktop app keep the connection when installed as an app.',
   ]
 }
 

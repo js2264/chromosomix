@@ -74,6 +74,14 @@ interface State {
   lineCap: CanvasLineCap
   /** The dash pattern, in CSS pixels; empty is a solid line. */
   lineDash: number[]
+  /**
+   * Whether a raster is smoothed where it is drawn larger than it is, and how
+   * well: drawing state on a canvas, so saved and restored with the rest.
+   * `true` and `'high'` together are what an image placed after them asks a
+   * viewer to interpolate (see `image`).
+   */
+  imageSmoothingEnabled: boolean
+  imageSmoothingQuality: ImageSmoothingQuality
 }
 
 /**
@@ -159,6 +167,7 @@ export type VectorTarget = Pick<
   | 'strokeRect'
   | 'drawImage'
   | 'imageSmoothingEnabled'
+  | 'imageSmoothingQuality'
   | 'fillStyle'
   | 'strokeStyle'
   | 'lineWidth'
@@ -278,7 +287,7 @@ export class VectorPage {
    * legend around it as paths and text. That hybrid is what a journal wants and
    * what neither a pure raster nor a pure vector page can be.
    */
-  private readonly images: Array<{ width: number; height: number; rgb: Uint8Array }> = []
+  private readonly images: Array<{ width: number; height: number; rgb: Uint8Array; interpolate: boolean }> = []
   private readonly ruler: CanvasRenderingContext2D | null
 
   constructor(
@@ -298,6 +307,8 @@ export class VectorPage {
       lineJoin: 'miter',
       lineCap: 'butt',
       lineDash: [],
+      imageSmoothingEnabled: true,
+      imageSmoothingQuality: 'low',
     }
     // Measured against a real canvas, because the *layout* above this — which
     // name fits, where a label is centred — was decided with the screen's font.
@@ -798,10 +809,22 @@ export class VectorPage {
         self.strokePath(self.rectangle(x, y, w, h).segments)
       },
       // Nearest-neighbour or bilinear is a question about *pixels*, and the
-      // answer on paper is whatever the reader's viewer does with the image.
-      set imageSmoothingEnabled(_value: boolean) {},
+      // answer on paper is whatever the reader's viewer does with the image —
+      // except where a figure asks for smoothing at high quality, which is the
+      // one painter that wants its image read as a continuous picture (a
+      // list's heatmap, `analysisPlots.drawListImage`): that image carries
+      // `/Interpolate true`, and every other is left to the viewer as before.
+      set imageSmoothingEnabled(value: boolean) {
+        self.state.imageSmoothingEnabled = value
+      },
       get imageSmoothingEnabled(): boolean {
-        return true
+        return self.state.imageSmoothingEnabled
+      },
+      set imageSmoothingQuality(value: ImageSmoothingQuality) {
+        self.state.imageSmoothingQuality = value
+      },
+      get imageSmoothingQuality(): ImageSmoothingQuality {
+        return self.state.imageSmoothingQuality
       },
       drawImage: ((
         source: CanvasImageSource,
@@ -857,7 +880,12 @@ export class VectorPage {
     const height = Math.abs(last[1] - first[1])
     if (!(width > 0) || !(height > 0)) return
 
-    this.images.push({ width: crop.width, height: crop.height, rgb })
+    this.images.push({
+      width: crop.width,
+      height: crop.height,
+      rgb,
+      interpolate: this.state.imageSmoothingEnabled && this.state.imageSmoothingQuality === 'high',
+    })
     const name = `Im${this.images.length - 1}`
     this.alpha()
     this.emit('q')
@@ -1005,6 +1033,7 @@ export class VectorPage {
         `${8 + index} 0 obj\n<< /Type /XObject /Subtype /Image ` +
           `/Width ${image.width} /Height ${image.height} ` +
           `/ColorSpace /DeviceRGB /BitsPerComponent 8 ` +
+          `${image.interpolate ? '/Interpolate true ' : ''}` +
           `${imageFilter === null ? '' : `/Filter ${imageFilter} `}` +
           `/Length ${data.length} >>\nstream\n`,
       )

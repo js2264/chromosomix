@@ -15,7 +15,8 @@
  * locus box and the zoom steps' tooltips print `regionLabel` — 1-based
  * inclusive, digits grouped, as IGV, UCSC and samtools print a locus — and what
  * is typed is read back through `typedLocusToRegion` before it becomes that
- * region string. Both lines used to print the region string itself, so the
+ * region string — two of them, `typedLociToRegions`, for a block of two windows
+ * typed as one. Both lines used to print the region string itself, so the
  * heading and the summary immediately under it named one window at two starts a
  * base apart, and copying a coordinate out of one and into the box moved the
  * picture by a base. The conversion sits at the box rather than on the reader:
@@ -36,11 +37,11 @@ import type { ParsedRange } from '../types'
 import { devFeature } from '../state/devFeatures'
 import type { MatrixResult } from '../worker/protocol'
 import { parseRegion } from '../annotations/bookmarks'
-import { regionLabel, typedLocusToRegion } from '../genome/assembly'
+import { pairLabel, regionLabel, typedLociToRegions } from '../genome/assembly'
 import { ViewerError } from '../errors'
 import type { ReaderClient } from '../worker/client'
 import { button, el, titleWhenCut } from './dom'
-import type { ScaleState } from './GenomeView'
+import type { PanelSeed, ScaleState } from './GenomeView'
 import {
   MatrixPanel,
   type AnnotationContext,
@@ -108,7 +109,7 @@ export interface RegionViewProps {
    * which picture the whole view is of.
    */
   boxControl?: HTMLElement
-  scale: ScaleState
+  scale: PanelSeed
   balance: boolean
   /** Whether the file carries a weight column at all. */
   hasWeights: boolean
@@ -450,7 +451,9 @@ export class RegionView {
       // a coordinate copied out of the summary and into the box moved the
       // picture by a base — which is the failure a genomics reader is quickest
       // to see and slowest to forgive.
-      value: regionLabel(props.region),
+      // A block of two windows shows both, as its title does, so Enter on it
+      // opens the block it is showing rather than the rows alone (§5.4).
+      value: props.region2 === undefined ? regionLabel(props.region) : pairLabel(props.region, props.region2),
       // **The sequence this view is of, where that is what it is of.** A
       // coordinate suffix on a *genome* name is an error here (§5.4) and the
       // name this view is handed may be a genome's — so the example is taken
@@ -467,14 +470,20 @@ export class RegionView {
       title:
         store === undefined
           ? 'What this view is of. Type a name or a locus — the first base is 1, as the ' +
-            'summary reads — and press Enter.'
+            'summary reads — or two loci with × between them for the block where they meet, and ' +
+            'press Enter.'
           : 'What this view is of. Type a name, a locus (the first base is 1, as the summary ' +
-            'reads) or a gene from the starred model, and press Enter.',
+            'reads), two loci with × between them for the block where they meet, or a gene from ' +
+            'the starred model, and press Enter.',
       // The box draws its own `go`, as the browser's does: one shape for one
       // job (§26.6), and Enter and the button are one road through `submit`
       // rather than two that can come to disagree about what the box holds.
       go: true,
-      onSubmit: (text) => props.onChangeRegion(typedLocusToRegion(text)),
+      // One window, or two — rows, then columns — for a block between them.
+      onSubmit: (text) => {
+        const typed = typedLociToRegions(text)
+        props.onChangeRegion(typed.region, typed.region2)
+      },
       // Only where there is something to search. A map with no gene model
       // loaded would grow a list that never has anything in it.
       //
@@ -1069,14 +1078,14 @@ export class RegionView {
       )
       if (this.disposed) return
       this.title.textContent =
-        `${regionLabel(this.props.region)} × ${regionLabel(this.props.region2)}`
+        pairLabel(this.props.region, this.props.region2)
       this.describePair(result)
       // The reader may have planned a coarser grid than the file's bins — a
       // whole chromosome at 10 kb is more cells than any picture holds — and
       // every coordinate on screen is the bin size times a cell offset, so the
       // panel is told before it is given the block.
       this.panel.setResolution((result.binsize ?? this.props.binsize) * (result.binsPerCell ?? 1))
-      this.panel.setData(result, `${regionLabel(this.props.region)} × ${regionLabel(this.props.region2)}`, second)
+      this.panel.setData(result, pairLabel(this.props.region, this.props.region2), second)
       await this.armRefine(parsed, result, other)
     } catch (err) {
       // A view that has been torn down must not navigate the shell. Closing the

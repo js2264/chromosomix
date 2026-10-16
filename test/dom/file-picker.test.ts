@@ -22,7 +22,8 @@ import { LoadBox } from '@/ui/LoadBox'
 import type { ProviderId } from '@/ui/connectFronts'
 import { connectedFolders, disconnectFolder } from '@/browse/connected'
 import { icon } from '@/ui/icons'
-import { all, buttonNamed, setUpDom, textsOf, type DomTeardown } from '../support/dom'
+import { useMemoryStores } from '@/state/idb'
+import { all, buttonNamed, openedAs, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
 // A site built with both registrations, which is what a published site is and
 // what the row of four is a row of: a sign-in the site cannot make loses its
@@ -37,16 +38,23 @@ vi.mock('@/config/siteDefaults', () => ({
 }))
 
 let teardown: DomTeardown
+let asTab: () => void
 
 beforeEach(() => {
   teardown = setUpDom()
   window.localStorage.clear()
-  // A browser that can hold a directory, which is what decides the first
-  // button's wording; the test below takes it away again to check the other.
+  // A browser that can hold a directory — a picker, and a database to keep the
+  // grant in, here a memory one — opened as the installed app: what decides the
+  // first button's wording (§20.6). The tests below take each away again to
+  // check the other.
   vi.stubGlobal('showDirectoryPicker', async () => null)
+  vi.stubGlobal('indexedDB', {})
+  useMemoryStores()
+  asTab = openedAs('app')
 })
 
 afterEach(() => {
+  asTab()
   teardown()
   vi.unstubAllGlobals()
 })
@@ -213,8 +221,15 @@ describe('the landing page', () => {
     // file list that does not survive a reload, and the label is the only
     // place a reader is told so before pressing (§20).
     vi.unstubAllGlobals()
-    const { el } = build()
-    expect(textsOf(el, '.picker-provider')[0]).toBe('choose a folder (this visit)…')
+    expect(textsOf(build().el, '.picker-provider')[0]).toBe('choose a folder (this visit)…')
+  })
+
+  it('says *this visit* in a browser tab too, which keeps no folder past it (§20.6)', () => {
+    // The picker is there, and the grant is held for the visit: only the
+    // installed app keeps a folder across a reload.
+    asTab()
+    asTab = openedAs('tab')
+    expect(textsOf(build().el, '.picker-provider')[0]).toBe('choose a folder (this visit)…')
   })
 
   it('offers the six shipped stores as tiles, then the two doors', () => {

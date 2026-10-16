@@ -268,7 +268,9 @@ export class SessionAnalysis {
           ? null
           : this.session.withEditOf(
               withCircularNames(
-                panel.analysisFraming(file.uri),
+                // At the resolution the reader added, where the map is drawn at
+                // one (§3.4): the framing every task on it is run at.
+                panel.analysisFraming(file.uri, this.session.analysisGrid()),
                 this.session.circularStore()?.list() ?? [],
                 this.session.originStore()?.record() ?? {},
               ),
@@ -277,6 +279,9 @@ export class SessionAnalysis {
       block: () => {
         const starred = this.session.deck.grid?.starredPanel ?? null
         if (starred !== null) return starred.map?.analysisBlock() ?? null
+        // None at a resolution the reader added: the runner reads the map summed
+        // (§3.4), and the block drawn is another sum of it.
+        if (this.session.analysisGrid() !== null) return null
         return this.session.current?.panel?.analysisBlock() ?? null
       },
       store: () => this.session.annotations?.store ?? null,
@@ -561,26 +566,32 @@ export class SessionAnalysis {
     const starredPanel = this.session.deck.grid?.starredPanel ?? null
     const info = starred?.info ?? file.info
     const uri = starred?.uri ?? file.uri
-    const binsize = info.binsize
-    if (binsize === null || binsize <= 0) return null
     const panel = starred === null ? this.session.current?.panel : (starredPanel?.map ?? undefined)
+    // **At the resolution the reader added**, where the lead's map is drawn at
+    // one (§3.4): every task on it reads the map summed to it, so it is priced,
+    // and its bins counted, at that resolution rather than at the rung
+    // underneath. Only with the map on screen — a link's `coarsen=` carried into
+    // the browser draws no map at it, and the tracks there are binned as before.
+    const derived = starred === null && panel !== undefined && panel !== null ? this.session.analysisGrid() : null
+    const binsize = derived?.rung.binsize ?? info.binsize
+    if (binsize === null || binsize <= 0) return null
     const declared = this.declarations()
     // The framing a task is **run** on, and so the one that has to carry the
     // declarations: the drawer's header was given them and the run was not, so
     // a circle ticked on the table was still measured as a line (§8.15).
     const framing = this.session.withEditOf(
       withCircularNames(
-        panel === undefined || panel === null ? null : panel.analysisFraming(uri),
+        panel === undefined || panel === null ? null : panel.analysisFraming(uri, derived),
         declared.circular,
         declared.origins,
       ),
     )
-    const block = panel === undefined || panel === null ? null : panel.analysisBlock()
+    const block = panel === undefined || panel === null || derived !== null ? null : panel.analysisBlock()
     return buildAnalysisContext({
       uri,
       layout: info.layout.kind,
       binsize,
-      nBins: info.nBins,
+      nBins: derived?.grid.nBins ?? info.nBins,
       hasGenomes: info.hasGenomes,
       hasWeights: info.hasWeights,
       scoreColumns: info.scoreColumns,
@@ -603,7 +614,13 @@ export class SessionAnalysis {
         ? { selectedCells: info.activeCells }
         : {}),
       resolutions: rungsOf(info.entries).map((rung) => rung.binsize),
-      peers: this.peersOf(uri),
+      // Each at the resolution a run reads it at: on the lead at a resolution the
+      // reader added, every map whose bins divide it is summed to it too (§3.4).
+      peers: this.peersOf(uri).map((peer) =>
+        derived !== null && peer.binsize > 0 && derived.rung.binsize % peer.binsize === 0
+          ? { ...peer, binsize: derived.rung.binsize }
+          : peer,
+      ),
       // The starred map's import, where it was binned from a `.pairs`: P(s)
       // then has its four orientations already, and asks for no file (§18.8).
       ...(info.pairs === undefined

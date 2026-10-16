@@ -176,6 +176,7 @@ export const HICREP_TASK: AnalysisTask = {
   id: 'hicrep',
   title: 'Reproducibility',
   blurb: 'How much the maps on screen agree, stratum by stratum and pooled.',
+  keywords: ['HiCRep', 'SCC', 'replicates', 'similarity', 'correlation'],
   group: '2d',
   venue: 'analysis',
   // 2: the strata pooled by HiCRep's variance-stabilised weights, `(n + 1) / 12`,

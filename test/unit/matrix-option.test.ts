@@ -89,6 +89,14 @@ describe('which matrices the chart draws', () => {
     expect(drawnAsChart(matrix({ nrows: 1, ncols: MATRIX_CHART_CELLS }))).toBe(true)
   })
 
+  it('leaves a list to the painter, however few its cells — one picture, not a grid to point at', () => {
+    // The metaplot's per-feature heatmap: its rows are features read as a
+    // density, so a rect per cell with a seam, a hover border and a tooltip made
+    // a grid of squares of it (§18.8).
+    expect(drawnAsChart(matrix({ nrows: 40, ncols: 8, aspect: 'fill' }))).toBe(false)
+    expect(drawnAsChart(matrix({ nrows: 40, ncols: 8 }))).toBe(true)
+  })
+
   it('leaves a picture read like a map to the painter, however few its cells', () => {
     // A dot plot's axes are its sequences end to end, which the painter marks
     // and a category axis cannot (§28).
@@ -265,6 +273,17 @@ describe('the marginal profiles', () => {
     expect((option['grid'] as unknown[]).length).toBe(3)
     const series = option['series'] as Array<Record<string, unknown>>
     expect(series.filter((one) => one['type'] === 'line')).toHaveLength(2)
+  })
+
+  it('leave the frame to the picture, being its margins rather than plots of their own', () => {
+    const grids = matrixOptionOf(withMargins, STYLE, THEME, BOX)['grid'] as Array<Record<string, unknown>>
+    // The picture framed in the ink, over its cells (§18.13)…
+    expect(grids[0]['show']).toBe(true)
+    expect(grids[0]['borderColor']).toBe(THEME.ink)
+    expect(grids[0]['z']).toBeGreaterThan(2)
+    // …and the two bands not.
+    expect(grids[1]['show']).toBeUndefined()
+    expect(grids[2]['show']).toBeUndefined()
   })
 
   it('zoom with the picture, since a marginal that stayed put is of somewhere else', () => {

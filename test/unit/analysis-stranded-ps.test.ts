@@ -15,7 +15,8 @@ import { describe, expect, it } from 'vitest'
 
 import type { JobContext } from '@/analysis/job'
 import { runExpected } from '@/analysis/run/expected'
-import type { AnalysisFraming, CurveOutput, Params, TaskOutput } from '@/analysis/types'
+import { EXPECTED_TASK } from '@/analysis/tasks/ps'
+import { defaultParams, type AnalysisFraming, type CurveOutput, type Params, type TaskOutput } from '@/analysis/types'
 import type { TaskInputs } from '@/analysis/worker/protocol'
 import { MetaCooler } from '@/metacooler/MetaCooler'
 import { importPairs, probePairs } from '@/pairs/import'
@@ -199,5 +200,68 @@ describe('P(s) by pair orientation', () => {
     const { job: bare, notes } = job(mc, '', {})
     expect(orientationOf(await runExpected(bare))).toBeUndefined()
     expect(notes.join(' ')).toMatch(/Drop a \.pairs on the form/)
+  })
+})
+
+/**
+ * The near-diagonal the curve leaves out, and the figure it does not (§18.8).
+ *
+ * Two bins by default — the diagonal and the one beside it, cooltools'
+ * `ignore_diags=2` — which trims the matrix's curve; the four orientations are
+ * counted from records below any grid and are drawn from the first one.
+ */
+describe('P(s)’s minimum separation', () => {
+  const run = async (inputs: TaskInputs, mc: MetaCooler, extra: Params): Promise<TaskOutput[]> => {
+    const { job: base } = job(mc, '', inputs)
+    return runExpected({ ...base, params: { ...base.params, ...extra } })
+  }
+  const curveOf = (outputs: TaskOutput[]): CurveOutput => {
+    const found = outputs.find((output): output is CurveOutput => output.id === 'ps')
+    if (found === undefined) throw new Error('no P(s) curve')
+    return found
+  }
+
+  it('leaves out two bins unless asked otherwise', () => {
+    const spec = EXPECTED_TASK.params.find((param) => param.key === 'minSeparation')
+    expect(spec?.kind === 'number' && spec.default).toBe(2)
+    expect(defaultParams(EXPECTED_TASK.params).minSeparation).toBe(2)
+  })
+
+  it('starts the expected at the second diagonal, and keeps the first at 0', async () => {
+    const { mc, inputs } = await imported()
+    const at = async (minSeparation: number): Promise<number> =>
+      curveOf(await run(inputs, mc, { quantity: 'expected', minSeparation })).series[0].x[0]
+    // A point's abscissa is the mean separation of the cells behind it: two
+    // bins and up, or one bin and up — never the diagonal, which is no contact.
+    expect(await at(2)).toBeGreaterThanOrEqual(2 * BASE)
+    expect(await at(0)).toBe(BASE)
+  })
+
+  it('takes the density’s total over what it keeps', async () => {
+    const { mc, inputs } = await imported()
+    const kept = curveOf(await run(inputs, mc, { minSeparation: 2 })).series[0]
+    const all = curveOf(await run(inputs, mc, { minSeparation: 0 })).series[0]
+    // Past the breaks the near-diagonal fell in, every point is the same
+    // contacts over a smaller total: higher, and by one factor throughout.
+    const factors: number[] = []
+    kept.x.forEach((x, i) => {
+      const at = Array.from(all.x).indexOf(x)
+      if (x >= 10 * BASE && at >= 0 && all.y[at] > 0) factors.push(kept.y[i] / all.y[at])
+    })
+    expect(factors.length).toBeGreaterThan(5)
+    expect(factors[0]).toBeGreaterThan(1)
+    for (const factor of factors) expect(factor).toBeCloseTo(factors[0], 9)
+  })
+
+  it('draws the four orientations from the first record, whatever it says', async () => {
+    const { mc, inputs } = await imported()
+    const floored = orientationOf(await run(inputs, mc, { minSeparation: 5 }))
+    const whole = orientationOf(await run(inputs, mc, { minSeparation: 0 }))
+    expect(floored?.series.map((series) => Array.from(series.x))).toEqual(
+      whole?.series.map((series) => Array.from(series.x)),
+    )
+    // The inward excess this library carries sits below 2 kb, and so does the
+    // first point of every curve.
+    for (const series of floored?.series ?? []) expect(series.x[0]).toBeLessThan(2 * BASE)
   })
 })

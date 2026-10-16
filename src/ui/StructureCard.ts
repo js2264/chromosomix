@@ -31,6 +31,7 @@ import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationEntry } from '../annotations/types'
 import { chooseFiles, filesFrom } from './chooseFiles'
 import { STRUCTURE_DRAG_TYPE, button, dragHasFiles, el } from './dom'
+import { tabAmong } from './tabWalk'
 import { downloadBlob, exportBaseName, fileStamp } from './export'
 import { cardTitle, icon, iconButton } from './icons'
 
@@ -301,6 +302,8 @@ export class StructureCard {
       this.options.store.update(entry.id, { label })
     })
     input.addEventListener('keydown', (event) => {
+      // Enter that goes on to the next row's name, Shift+Tab the one before (§26.8).
+      if (tabAmong(event, input, '.ann-list', 'input.ann-name')) return
       if (event.key === 'Enter') {
         event.preventDefault()
         input.blur()

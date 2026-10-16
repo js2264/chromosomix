@@ -45,6 +45,7 @@ import {
 } from '../annotations/metadata'
 import { CATEGORY_PALETTE, categoryColour } from '../render/meta'
 import { button, el } from './dom'
+import { tabAmong } from './tabWalk'
 import { cardTitle, iconButton, startFolded } from './icons'
 import { mapsOrLead, placementField } from './lanePlacement'
 import { flipButton, heightField, limitsField, styleFields } from './laneSettings'
@@ -433,6 +434,8 @@ export class MetadataCard {
       this.options.store.update(entry.id, { label })
     })
     input.addEventListener('keydown', (event) => {
+      // Enter that goes on to the next row's name, Shift+Tab the one before (§26.8).
+      if (tabAmong(event, input, '.ann-list', 'input.ann-name')) return
       if (event.key === 'Enter') {
         event.preventDefault()
         input.blur()

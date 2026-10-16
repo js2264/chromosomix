@@ -28,10 +28,13 @@
  * exactly what the boxes say, and the title carries the transform so the two
  * together are still a complete statement of what a colour means.
  *
- * The strip itself is gone with the ticks. Two squares — the ends of the ramp —
- * are what a two-number key needs; the gradient between them was never carrying
- * information a reader of a *contact map* takes out of the legend rather than
- * out of the picture.
+ * The strip itself is gone with the ticks, and the ramp stays: **short, and
+ * between the two numbers it runs between** — `-4.18 ▬ -1.05`. For a while it
+ * was two squares, the ramp's two ends, on the argument that the colours
+ * between them were information a reader takes out of the picture rather than
+ * out of the legend. They are not, on a ramp that is not a straight line: the
+ * default runs white, yellow, red, black, and which of the four a cell halfway
+ * up is was the one thing the two ends could not say.
  */
 
 import type { ColorScale, Transform } from '../types'
@@ -99,6 +102,13 @@ export interface KeyContent {
   /** The two ends of the ramp, as CSS colours. */
   loColor: string
   hiColor: string
+  /**
+   * The ramp from the lower end to the upper, as CSS colours evenly spaced
+   * along it — {@link KEY_METRICS}`.ramp` of them, one per CSS pixel of the bar,
+   * so the export can draw it band by band and the screen as a gradient
+   * through the same stops.
+   */
+  ramp: readonly string[]
 }
 
 /**
@@ -158,14 +168,18 @@ export function keyContent(
     hiLabel: format(hi),
     loColor: colormapCss(scale.colormap, 0),
     hiColor: colormapCss(scale.colormap, 1),
+    ramp: Array.from({ length: KEY_METRICS.ramp }, (_, i) =>
+      colormapCss(scale.colormap, i / (KEY_METRICS.ramp - 1)),
+    ),
   }
 }
 
 /** How the key is drawn, in CSS pixels, so screen and export agree. */
 export const KEY_METRICS = {
-  swatch: 12,
-  /** Between the two squares. Touching, the pair reads as one two-toned block. */
-  swatchGap: 3,
+  /** The bar's length, in CSS pixels: short, because the numbers carry the scale. */
+  ramp: 48,
+  /** Its thickness, which is the row's height beside the two numbers. */
+  rampHeight: 10,
   gap: 4,
   padding: 5,
   titleSize: 10,
@@ -215,11 +229,11 @@ export function drawKey(
   ctx.font = `${m.valueSize}px ${options.font}`
   const loWidth = ctx.measureText(content.loLabel).width
   const hiWidth = ctx.measureText(content.hiLabel).width
-  const rampWidth = m.swatch * 2 + m.swatchGap
+  const rampWidth = m.ramp
   const rowWidth = loWidth + m.gap + rampWidth + m.gap + hiWidth
   const width = Math.max(titleWidth, noteWidth, rowWidth) + m.padding * 2
   const height =
-    m.titleSize + noteBlock + m.lineGap + Math.max(m.swatch, m.valueSize) + m.padding * 2
+    m.titleSize + noteBlock + m.lineGap + Math.max(m.rampHeight, m.valueSize) + m.padding * 2
   const x = right - width
   const y = top
 
@@ -240,21 +254,24 @@ export function drawKey(
   }
 
   const rowY = y + m.padding + m.titleSize + noteBlock + m.lineGap
-  const mid = rowY + Math.max(m.swatch, m.valueSize) / 2
+  const mid = rowY + Math.max(m.rampHeight, m.valueSize) / 2
   let cursor = x + m.padding + Math.max(0, (width - m.padding * 2 - rowWidth) / 2)
   ctx.font = `${m.valueSize}px ${options.font}`
   ctx.textBaseline = 'middle'
   ctx.fillText(content.loLabel, cursor, mid)
   cursor += loWidth + m.gap
-  const swatchY = mid - m.swatch / 2
-  for (const [offset, colour] of [
-    [0, content.loColor],
-    [m.swatch + m.swatchGap, content.hiColor],
-  ] as const) {
+  // The bar band by band, one per stop: a PDF page has no linear gradient
+  // (`ui/vector.ts`), and the same bands in a PNG are the same picture. Each but
+  // the last runs a quarter pixel into the next, so no seam of the box's colour
+  // shows between two of them at any scale.
+  const rampY = mid - m.rampHeight / 2
+  const stops = content.ramp.length > 0 ? content.ramp : [content.loColor, content.hiColor]
+  const band = rampWidth / stops.length
+  stops.forEach((colour, i) => {
     ctx.fillStyle = colour
-    ctx.fillRect(cursor + offset, swatchY, m.swatch, m.swatch)
-    ctx.strokeRect(cursor + offset + 0.5, swatchY + 0.5, m.swatch - 1, m.swatch - 1)
-  }
+    ctx.fillRect(cursor + i * band, rampY, band + (i < stops.length - 1 ? 0.25 : 0), m.rampHeight)
+  })
+  ctx.strokeRect(cursor + 0.5, rampY + 0.5, rampWidth - 1, m.rampHeight - 1)
   cursor += rampWidth + m.gap
   ctx.fillStyle = options.textColor
   ctx.fillText(content.hiLabel, cursor, mid)

@@ -245,3 +245,27 @@ export async function drawingOf(
   const blob = await page.toBlob({ title: 'test', created: new Date(0) })
   return await blob.text()
 }
+
+/**
+ * Open this page as the installed app (`'app'`) or as a browser tab (`'tab'`):
+ * the display mode a browser opens each in, which is what `installedApp` reads
+ * and so what decides whether a connected folder is kept (§20.6). jsdom has no
+ * `matchMedia` at all — a tab, as far as the app can tell. Returns the undo.
+ */
+export function openedAs(mode: 'app' | 'tab'): () => void {
+  const had = Object.getOwnPropertyDescriptor(window, 'matchMedia')
+  window.matchMedia = ((query: string) => ({
+    matches: mode === 'app' && query === '(display-mode: standalone)',
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia
+  return () => {
+    if (had === undefined) delete (window as { matchMedia?: unknown }).matchMedia
+    else Object.defineProperty(window, 'matchMedia', had)
+  }
+}

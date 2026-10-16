@@ -61,6 +61,7 @@ import {
   laneRect,
   laneX,
   laneY,
+  MARK_WASH,
   withinGrip,
   type LaneFrame,
   laneBands,
@@ -70,6 +71,9 @@ import {
   labelEndFor,
   labelReach,
   positionLabel,
+  type LabelBox,
+  type LaneLabelBoxes,
+  type LaneLabelColumn,
   type LaneLabelSpec,
   type LaneLabelStyle,
   type LimitBox,
@@ -77,7 +81,7 @@ import {
   progressDetail,
 } from '../render/laneLabel'
 import { formatLocus } from '../genome/assembly'
-import type { LocusAxis } from '../render/locus'
+import { stretchOf, unitSpan, type LocusAxis } from '../render/locus'
 import { barLimitsOf } from '../render/barchart'
 import { drawSashimi, junctionsOfSamples } from '../render/sashimi'
 import { featureColouring } from '../render/featureInk'
@@ -86,15 +90,19 @@ import type { OverlayAxes } from '../render/overlays'
 import type { Rect } from '../render/heatmap'
 import type { Scale } from '../render/scale'
 import {
+  drawLogRules,
+  drawLogWords,
   drawTrack,
   drawTrackScaling,
+  logAxisTicks,
+  type LogTick,
   profileOf,
   resolveLimits,
   scaledTo,
   type PixelProfile,
   laneNote,
 } from '../render/tracks'
-import type { ManualMark, ManualPoint, ManualStore } from '../annotations/manual'
+import { rectSpans, type ManualMark, type ManualPoint, type ManualSpan, type ManualStore } from '../annotations/manual'
 import type { AnnotationStore } from '../annotations/store'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
 import {
@@ -102,6 +110,7 @@ import {
   nestsAsRibbons,
   stacksAsHeatmaps,
   scaleOf,
+  unitOf,
   LANE_EDGES,
   drawnFromSamples,
   drawsAProfile,
@@ -355,6 +364,15 @@ interface EdgeState {
   names: Array<{ entry: AnnotationEntry; hit: NameBox }>
   /** The colour chips and autoscale buttons this edge wants over it. */
   marks: LaneMark[]
+  /**
+   * Every name block this edge wrote in its column, as a redraw — what the
+   * corner beside the stack is painted from, the same blocks in the same
+   * places, so a name that starts in the stack's margin and runs out over the
+   * corner is one name (§8.8).
+   */
+  labels: Array<(ctx: CanvasRenderingContext2D) => void>
+  /** The widest block of names written in the column, as `drawLaneLabel` wants it. */
+  wanted: number
 }
 
 function emptyEdgeState(): EdgeState {
@@ -364,8 +382,47 @@ function emptyEdgeState(): EdgeState {
     ranges: [],
     names: [],
     marks: [],
+    labels: [],
+    wanted: 0,
   }
 }
+
+/**
+ * Where a stack's names go beside a map (§8.8): into the corner that follows
+ * it clockwise, which leaves one corner to each stack whichever of the four
+ * have lanes — left of the bottom stack, above the left one, right of the top
+ * one, below the right one.
+ */
+export const CORNER_OF: Record<LaneEdge, 'bottom-left' | 'top-left' | 'top-right' | 'bottom-right'> = {
+  bottom: 'bottom-left',
+  left: 'top-left',
+  top: 'top-right',
+  right: 'bottom-right',
+}
+
+/**
+ * The side of the map a stack's corner widens: the left of the map for the
+ * bottom stack's names, and so on round — what the panel adds to that side's
+ * room, and a figure to its margin.
+ */
+export const CORNER_SIDE: Record<LaneEdge, LaneEdge> = {
+  bottom: 'left',
+  left: 'top',
+  top: 'right',
+  right: 'bottom',
+}
+
+/** Air between a corner's names and the panel's edge beyond them. */
+const CORNER_PAD = 4
+/** Air between a corner's names and the handle or group bar they stand beside. */
+const CORNER_GAP = 4
+/**
+ * The longest a corner's names may run before they wrap onto a second line, or
+ * are cut in the middle on a lane too thin for one (§8.8). A corner the width
+ * of the longest name a session ever loads would take the map's room for one
+ * track; this is the browser's own default column.
+ */
+const CORNER_MAX = 150
 
 /**
  * How close to a lane's far border counts as being on it.
@@ -392,26 +449,36 @@ type LaneMarks = Pick<ManualStore, 'lines' | 'arrowheads' | 'rects'>
 const EMPTY_MARKS = { lines: [], arrowheads: [], rects: [] } as LaneMarks
 
 /**
- * Every coordinate the marks ask a lane to point at, mark by mark.
+ * Every coordinate the marks ask a lane to point at, mark by mark: the two ends
+ * of each arrowhead. A box is not pointed at but washed over the tracks — see
+ * {@link spanUnits} and the paint.
  *
  * Grouped by mark rather than flattened, because the "same place twice" rule is
- * per mark: two boxes that happen to share an edge are two marks about it, and
+ * per mark: two loops that happen to share an end are two marks about it, and
  * collapsing them would take a triangle away from one of them.
  */
 function anchorsOf(manual: LaneMarks): Array<{ mark: ManualMark; colour: string; at: ManualPoint[] }> {
-  return [
-    ...manual.arrowheads.map((mark) => ({ mark, colour: mark.colour, at: [mark.a, mark.b] })),
-    ...manual.rects.map((mark) => ({
-      mark,
-      colour: mark.colour,
-      at: [
-        { contig: mark.a.contig, bp: mark.a.from },
-        { contig: mark.a.contig, bp: mark.a.to },
-        { contig: mark.b.contig, bp: mark.b.from },
-        { contig: mark.b.contig, bp: mark.b.to },
-      ],
-    })),
-  ]
+  return manual.arrowheads.map((mark) => ({ mark, colour: mark.colour, at: [mark.a, mark.b] }))
+}
+
+/**
+ * Where one stretch of a sequence lands on an axis, as unit pairs, lowest
+ * first: once on most axes, once per lap of a circular sequence panned across
+ * its junction (§8.15), and once per piece of an edited one that holds part of
+ * it (§27.2) — each stretch of the axis drawing only its own part, as a track's
+ * intervals are placed (`render/tracks.ts`).
+ */
+function spanUnits(axis: LocusAxis, span: ManualSpan): Array<[number, number]> {
+  const out: Array<[number, number]> = []
+  for (const segment of axis.segmentsOf(span.contig)) {
+    if (!(segment.bpPerUnit > 0)) continue
+    const [low, high] = stretchOf(segment)
+    const from = Math.max(span.from, low)
+    const to = Math.min(span.to, high)
+    if (!(to > from)) continue
+    out.push(unitSpan(segment, from, to))
+  }
+  return out
 }
 
 /**
@@ -446,6 +513,19 @@ function alongOf(
 export class AnnotationLanes {
   /** The four canvases, mounted by the panel. Hidden when their stack is empty. */
   readonly canvases: Record<LaneEdge, HTMLCanvasElement>
+  /**
+   * The four corners' canvases, one per stack, that its names run out onto
+   * past its own canvas (§8.8) — mounted by a panel that asked for
+   * `corners`, and hidden while a stack's names fit its own margin.
+   */
+  readonly labelCanvases: Record<LaneEdge, HTMLCanvasElement>
+  /**
+   * How far each stack's names run past its own canvas into its corner, as
+   * the last screen paint measured them. A frame behind, as the browser's name
+   * column is, and for its reason: the width is the text's, and the text is
+   * measured by writing it.
+   */
+  private corners: Record<LaneEdge, number> = { top: 0, right: 0, bottom: 0, left: 0 }
 
   private axes: OverlayAxes = { rows: null, cols: null }
   /**
@@ -522,6 +602,14 @@ export class AnnotationLanes {
        * being read.
        */
       metadata?: MetaSource
+      /**
+       * Write each stack's names beside the map, in the corner that follows
+       * the stack clockwise, rather than over its data (§8.8) — on
+       * {@link labelCanvases}, which the caller mounts in those corners.
+       * Absent where nobody does: the assembly editor's stage, whose stacks
+       * keep their names on their lanes.
+       */
+      corners?: boolean
       /** Ask for a repaint; the panel coalesces it into its own frame. */
       onChange(): void
     },
@@ -531,6 +619,12 @@ export class AnnotationLanes {
       right: el('canvas', { class: 'lane-canvas lane-right' }),
       bottom: el('canvas', { class: 'lane-canvas lane-bottom' }),
       left: el('canvas', { class: 'lane-canvas lane-left' }),
+    }
+    this.labelCanvases = {
+      top: el('canvas', { class: 'lane-labels lane-labels-top hidden' }),
+      right: el('canvas', { class: 'lane-labels lane-labels-right hidden' }),
+      bottom: el('canvas', { class: 'lane-labels lane-labels-bottom hidden' }),
+      left: el('canvas', { class: 'lane-labels lane-labels-left hidden' }),
     }
     this.cache =
       options.client === undefined
@@ -761,7 +855,7 @@ export class AnnotationLanes {
   }
 
   /**
-   * Room past the last lane for the loop and box anchors, when there are any.
+   * Room past the last lane for the loop anchors, when there are any.
    *
    * The triangles used to be drawn *in* that lane, over the last seven pixels of
    * whatever it is a picture of — which on a coverage track is the busiest part
@@ -774,8 +868,7 @@ export class AnnotationLanes {
    * arrives with the mark that needs it.
    */
   private anchorBand(): number {
-    const marks = this.manual.arrowheads.length + this.manual.rects.length
-    return marks > 0 ? ANCHOR_GAP + ANCHOR_LENGTH : 0
+    return this.manual.arrowheads.length > 0 ? ANCHOR_GAP + ANCHOR_LENGTH : 0
   }
 
   /**
@@ -859,7 +952,8 @@ export class AnnotationLanes {
     overlaid: readonly AnnotationEntry[]
     thickness: number
   }): number {
-    if (!getPlotOptions().text) return 0
+    // Beside the map the names are in a corner, and nothing hangs off a lane.
+    if (!getPlotOptions().text || this.options.corners === true) return 0
     const members = [lane.entry, ...lane.overlaid]
     const row = stacksAsHeatmaps(members) ? lane.thickness / members.length : lane.thickness
     return Math.ceil(labelReach(row, laneLabelStyle()) - row)
@@ -938,6 +1032,7 @@ export class AnnotationLanes {
       if (lanes.length === 0) continue
       this.state[edge] = this.paintEdge(ctx, edge, geometry, lanes, built.groups, this.dpr)
     }
+    if (this.options.corners === true) this.paintCorners(geometry)
   }
 
   /** The colour chips and autoscale buttons one stack wants laid over it. */
@@ -965,6 +1060,21 @@ export class AnnotationLanes {
   }
 
   /**
+   * Every track name the last paint wrote on a stack, and every end of every
+   * range, in the order it wrote them — lanes nearest the map first, a lane's
+   * names in its own order, and each range's bottom before its top: the runs a
+   * Tab walks (§26.8), with the boxes a caret is laid over.
+   */
+  namesOn(edge: LaneEdge): ReadonlyArray<{ entry: AnnotationEntry; hit: NameBox }> {
+    return this.state[edge].names
+  }
+
+  /** See {@link namesOn}. */
+  rangesOn(edge: LaneEdge): ReadonlyArray<{ entries: AnnotationEntry[]; hit: LimitBox }> {
+    return this.state[edge].ranges
+  }
+
+  /**
    * The track name under a point in a stack's canvas, if any.
    *
    * The twin of {@link limitAt}, from the same paint and with the same slack:
@@ -984,24 +1094,27 @@ export class AnnotationLanes {
    *
    * Measured along the stack only, because that is how {@link paintEdge} puts
    * them there: a line's hairline crosses every lane of an edge that measures
-   * it, and an arrowhead's or a box's anchors stand at their coordinates on the
-   * stack's outer edge. The place along it is the whole of where each one is,
-   * and the same rules decide which lines an edge carries — the ones it
-   * measures, or every one under a turned map.
+   * it, an arrowhead's anchors stand at their coordinates on the stack's outer
+   * edge, and a box's wash covers its stretches across every lane. The place
+   * along it is the whole of where each one is, and the same rules decide which
+   * lines an edge carries — the ones it measures, or every one under a turned
+   * map. A wash is found wherever the pointer is inside it, after the marks
+   * whose rule or triangle is within reach and the narrower of two boxes first,
+   * as the 1D browser finds one: an area is not aimed at the way a rule is.
    */
   marksAt(edge: LaneEdge, x: number, y: number, geometry: LaneGeometry, reach: number): ManualMark[] {
     const axis = this.axisFor(edge)
     if (axis === null) return []
     const frame = alongOf(edge, geometry)
     const along = laneIsHorizontal(edge) ? x : y
-    const nearest = new Map<ManualMark, number>()
+    const nearest = new Map<ManualMark, { distance: number; width: number }>()
+    const held = (mark: ManualMark, distance: number, width: number): void => {
+      if (distance > reach) return
+      const before = nearest.get(mark)
+      if (before === undefined || distance < before.distance) nearest.set(mark, { distance, width })
+    }
     const consider = (mark: ManualMark, at: ManualPoint): void => {
-      for (const unit of axis.locusToUnits(at.contig, at.bp)) {
-        const distance = Math.abs(frame.toPixel(unit) - along)
-        if (distance <= reach && distance < (nearest.get(mark) ?? Number.POSITIVE_INFINITY)) {
-          nearest.set(mark, distance)
-        }
-      }
+      for (const unit of axis.locusToUnits(at.contig, at.bp)) held(mark, Math.abs(frame.toPixel(unit) - along), 0)
     }
     const measures = laneIsHorizontal(edge) ? 'vertical' : 'horizontal'
     const everyLine = this.turned && laneIsHorizontal(edge)
@@ -1011,7 +1124,20 @@ export class AnnotationLanes {
     for (const { mark, at } of anchorsOf(this.manual)) {
       for (const anchor of at) consider(mark, anchor)
     }
-    return [...nearest.entries()].sort((one, two) => one[1] - two[1]).map(([mark]) => mark)
+    for (const rect of this.manual.rects) {
+      for (const span of rectSpans(rect)) {
+        for (const [from, to] of spanUnits(axis, span)) {
+          const low = Math.min(frame.toPixel(from), frame.toPixel(to))
+          const high = Math.max(frame.toPixel(from), frame.toPixel(to))
+          const edgeDistance = Math.min(Math.abs(along - low), Math.abs(along - high))
+          const inside = along >= low && along <= high
+          held(rect, inside ? Math.min(edgeDistance, reach * 0.9) : edgeDistance, high - low)
+        }
+      }
+    }
+    return [...nearest.entries()]
+      .sort((one, two) => one[1].distance - two[1].distance || one[1].width - two[1].width)
+      .map(([mark]) => mark)
   }
 
   /**
@@ -1322,6 +1448,9 @@ export class AnnotationLanes {
       // The bands a stack of heatmaps was divided into, kept for the label: a
       // name per row rather than four names in a line across the third of them.
       let labelBands: LaneFrame[] | null = null
+      // A `log2` lane's axis words, written after the label so they can keep
+      // clear of it (§18.12).
+      let logWords: { ticks: LogTick[]; paint: Parameters<typeof drawLogWords>[3] } | null = null
       clipLane(ctx, frame)
       if (profiles.length > 0) {
         // While a ceiling is being dragged this lane is drawn twice: once as it
@@ -1347,6 +1476,8 @@ export class AnnotationLanes {
           const limits = resolveLimits(
             member.style.limits,
             extentFor(member, profile.extent, groups),
+            scaleOf(member.style),
+            unitOf(member.style),
           )
           const paint = {
             colour: member.style.colour,
@@ -1404,7 +1535,25 @@ export class AnnotationLanes {
         const limits = resolveLimits(
           first.entry.style.limits,
           extentFor(first.entry, first.profile.extent, groups),
+          scaleOf(first.entry.style),
+          unitOf(first.entry.style),
         )
+        // A `log2` lane's own axis — a scalogram's 1 kb, 10 kb, 100 kb — its
+        // rules over the bands and under the label's plate, its words once the
+        // label is down and can be kept clear of (§18.12).
+        if (scaleOf(first.entry.style) === 'log2') {
+          const axisLimits = dragged === null ? limits : scaledTo(limits, dragged)
+          const axisPaint = {
+            limits: axisLimits,
+            flip: first.entry.style.flip,
+            guideColour: geometry.palette.guide,
+            haloColour: geometry.palette.halo,
+            font: scaleFont(LANE_FONT),
+          }
+          const ticks = logAxisTicks(axisLimits, unitOf(first.entry.style))
+          drawLogRules(ctx, frame, ticks, axisPaint)
+          if (text) logWords = { ticks, paint: axisPaint }
+        }
         // Every member's axis is the lane's, so one entry per member: the
         // ceiling gesture and the limit editor both act on the lane. The
         // *committed* pair, never the one under a drag — this is what the next
@@ -1430,7 +1579,12 @@ export class AnnotationLanes {
             detail:
               lane.pending !== null
                 ? progressDetail(lane.pending)
-                : (laneNote(profiles) ?? { kind: 'limits', ...shown }),
+                : (laneNote(profiles) ?? {
+                    kind: 'limits',
+                    ...shown,
+                    scale: scaleOf(first.entry.style),
+                    ...(unitOf(first.entry.style) === undefined ? {} : { unit: unitOf(first.entry.style) }),
+                  }),
             at: labelEndFor(frame, shown, first.entry.style.flip),
             // A GC trace lives in the middle of its lane — yeast sits at 0.4 of
             // a 0–1 axis, which on the 46-pixel default is within a pixel of
@@ -1574,7 +1728,8 @@ export class AnnotationLanes {
       }
       ctx.restore()
       if (bare) continue
-      if (label !== null) this.labelLane(ctx, lane, geometry, label, state, labelBands)
+      const plates = label === null ? [] : this.labelLane(ctx, lane, geometry, label, state, labelBands)
+      if (logWords !== null) drawLogWords(ctx, frame, logWords.ticks, logWords.paint, plates)
 
       // The handle, outside the clip because it hangs outside the lane: in the
       // plot's own margin, just before the column of the map this track is drawn
@@ -1692,6 +1847,29 @@ export class AnnotationLanes {
       }
     }
 
+    // The reader's boxes, washed over every lane of the stack along each
+    // stretch they cover — the picture the 1D browser draws of a box (§8.1).
+    // They were two triangles at a box's edges, past the last lane, so a
+    // stretch boxed in the browser came back from opening the map as two small
+    // arrowheads under the tracks: the same mark, drawn on the same tracks, as
+    // something else. Over the data, after every lane, as the browser lays its
+    // wash over its tracks; a tenth of the ink, so the tracks under it — the
+    // reason it was drawn — read through it. **Both** stretches of an
+    // off-diagonal box on **every** stack, for the reason a loop's two ends are
+    // anchored on both axes below: a coordinate is a coordinate, and a reader
+    // under one side of a box is asking what is at the other.
+    if (axis !== null && !bare && lanes.length > 0) {
+      const frame = lanes[0].frame
+      const across = stackAcross(lanes)
+      for (const rect of this.manual.rects) {
+        for (const span of rectSpans(rect)) {
+          for (const [from, to] of spanUnits(axis, span)) {
+            washStack(ctx, frame, frame.toPixel(from), frame.toPixel(to), across, rect.colour)
+          }
+        }
+      }
+    }
+
     // Loop anchors, once per stack rather than once per lane: a triangle on the
     // axis says "this coordinate", and one per track would say it four times.
     // Drawn on the stack's outer edge, pointing back at the map, so it reads as
@@ -1703,12 +1881,6 @@ export class AnnotationLanes {
     // anchor only under it would answer half of that on each edge, and neither
     // half where the comparison is made. A coordinate is a coordinate: each end
     // is drawn wherever the axis in front of it has room for it.
-    //
-    // A **box** is the same statement four times over — where it starts and
-    // stops on each axis — so its edges are anchored the same way. Two triangles
-    // under a domain drawn on the diagonal is what a reader comparing it against
-    // the tracks is actually asking for: the boundaries, in the coordinate the
-    // tracks are drawn in.
     const last = lanes[lanes.length - 1]
     if (last !== undefined && !bare) {
       // Past the room the last lane's own name takes ({@link overhangOf}), so
@@ -1720,8 +1892,8 @@ export class AnnotationLanes {
         const drawn = new Set<number>()
         for (const anchor of mark.at) {
           for (const unit of axis?.locusToUnits(anchor.contig, anchor.bp) ?? []) {
-            // An on-diagonal loop names one place twice, and an on-diagonal box
-            // names two places twice; drawing a triangle again only darkens it.
+            // An on-diagonal loop names one place twice; drawing a triangle
+            // again only darkens it.
             if (drawn.has(unit)) continue
             drawn.add(unit)
             anchorMark(ctx, last.frame, last.frame.toPixel(unit), mark.colour, past)
@@ -1745,6 +1917,176 @@ export class AnnotationLanes {
       })
     }
     return state
+  }
+
+  /**
+   * How far one stack's names run past its own canvas into the corner beside
+   * it (§8.8), in CSS pixels — `0` where they fit its own margin, or are not
+   * written at all.
+   */
+  cornerOf(edge: LaneEdge): number {
+    return this.options.corners === true ? this.corners[edge] : 0
+  }
+
+  /**
+   * How far past the map's own canvas the corners' names reach, by side of the
+   * map: the room a figure leaves round the plot for them, beside the room it
+   * already leaves for the stacks (`MapFigure.laneStacks`).
+   */
+  cornerReach(geometry: LaneGeometry): Record<LaneEdge, number> {
+    const below = this.cornerOf('right')
+    return {
+      left: this.cornerOf('bottom'),
+      top: this.cornerOf('left'),
+      right: this.cornerOf('top'),
+      // Past the right stack's own tail, which its canvas runs on into.
+      bottom: below === 0 ? 0 : this.tailFor('right', geometry) + below,
+    }
+  }
+
+  /** How long one stack's canvas is along the map: the plot, and any tail its handles need. */
+  private cssAlongOf(edge: LaneEdge, geometry: LaneGeometry): number {
+    return (laneIsHorizontal(edge) ? geometry.cssWidth : geometry.cssHeight) + this.tailFor(edge, geometry)
+  }
+
+  /**
+   * The end of a stack's name column nearest its data, in the stack's own
+   * canvas coordinates — clear of the handle a horizontal lane hangs before
+   * its data and a vertical one after it, and of the group bars at each
+   * stack's other end (§8.8, §8.9).
+   */
+  private columnInner(edge: LaneEdge, geometry: LaneGeometry): number {
+    const { data } = geometry
+    switch (edge) {
+      case 'bottom':
+        return Math.max(0, data.x - GRIP_ROOM) - CORNER_GAP
+      case 'left':
+        return data.y - GROUP_GAP - GROUP_BAR - CORNER_GAP
+      case 'top':
+        return data.x + data.width + GROUP_GAP + GROUP_BAR + CORNER_GAP
+      case 'right':
+        return data.y + data.height + GRIP_ROOM + CORNER_GAP
+    }
+  }
+
+  /** How much of a stack's name column is inside its own canvas — its margin there — which can be none. */
+  private columnInside(edge: LaneEdge, geometry: LaneGeometry): number {
+    const inner = this.columnInner(edge, geometry)
+    return edge === 'bottom' || edge === 'left' ? inner : this.cssAlongOf(edge, geometry) - inner
+  }
+
+  /**
+   * The column one stack's names are written in beside the map (§8.8), in its
+   * own canvas's coordinates: from the corner's outer edge to the end nearest
+   * the data, flush with that end — so a short name stands in the stack's own
+   * margin and a long one runs out over the corner. `null` over the data, on
+   * a surface with no corners.
+   */
+  private labelColumn(edge: LaneEdge, geometry: LaneGeometry): LaneLabelColumn | null {
+    if (this.options.corners !== true) return null
+    const corner = this.corners[edge]
+    const pad = scaleLength(CORNER_PAD)
+    const inner = this.columnInner(edge, geometry)
+    const along = this.cssAlongOf(edge, geometry)
+    const shared = { pad, nameLines: 2, besideToo: true }
+    switch (edge) {
+      case 'bottom':
+        return { ...shared, start: Math.min(inner, -corner + pad), end: inner, align: 'end' }
+      case 'left':
+        return { ...shared, start: Math.min(inner, -corner + pad), end: inner, align: 'start', flip: true }
+      case 'top':
+        return { ...shared, start: inner, end: Math.max(inner, along + corner - pad), align: 'start', flip: true }
+      case 'right':
+        return { ...shared, start: inner, end: Math.max(inner, along + corner - pad), align: 'end' }
+    }
+  }
+
+  /**
+   * Draw inside a stack's name column and nowhere else: never over the handle
+   * or the data beside it, which a block measured for a corner not yet laid
+   * out — the first frame of a stack — would otherwise run out over.
+   */
+  private withinColumn<T>(
+    ctx: CanvasRenderingContext2D,
+    edge: LaneEdge,
+    geometry: LaneGeometry,
+    column: LaneLabelColumn | null,
+    draw: () => T,
+  ): T {
+    if (column === null) return draw()
+    const inner = this.columnInner(edge, geometry)
+    const far = 1e5
+    ctx.save()
+    ctx.beginPath()
+    if (edge === 'bottom') ctx.rect(-far, -far, far + inner + 1, 2 * far)
+    else if (edge === 'left') ctx.rect(-far, -far, 2 * far, far + inner + 1)
+    else if (edge === 'top') ctx.rect(inner - 1, -far, far, 2 * far)
+    else ctx.rect(-far, inner - 1, 2 * far, far)
+    ctx.clip()
+    try {
+      return draw()
+    } finally {
+      ctx.restore()
+    }
+  }
+
+  /**
+   * Paint each stack's corner from the blocks its own paint wrote, and measure
+   * the corners for the next frame (§8.8).
+   *
+   * Painted at the size this frame's blocks were laid out for, and re-measured
+   * after: a corner is as wide as its widest block wants, less the stack's own
+   * margin, and a frame behind — the browser's name column's rule, safe for
+   * its reason, since what a block wants is its text's natural width and not
+   * the column it was given.
+   */
+  private paintCorners(geometry: LaneGeometry): void {
+    const cap = scaleLength(CORNER_MAX) + scaleLength(CORNER_PAD)
+    const next = { ...this.corners }
+    for (const edge of EDGES) {
+      const state = this.state[edge]
+      this.paintCorner(edge, geometry, state)
+      const wanted = this.thicknessOf(edge) > 0 ? Math.min(state.wanted, cap) : 0
+      next[edge] = wanted <= 0 ? 0 : Math.max(0, Math.ceil(wanted - this.columnInside(edge, geometry)))
+    }
+    if (EDGES.some((edge) => next[edge] !== this.corners[edge])) {
+      this.corners = next
+      this.options.onChange()
+    }
+  }
+
+  /** One corner's canvas: sized to the corner, and the stack's blocks redrawn into it. */
+  private paintCorner(edge: LaneEdge, geometry: LaneGeometry, state: EdgeState): void {
+    const canvas = this.labelCanvases[edge]
+    const corner = this.corners[edge]
+    const total = this.thicknessOf(edge)
+    if (corner <= 0 || total <= 0 || state.labels.length === 0) {
+      canvas.classList.add('hidden')
+      return
+    }
+    canvas.classList.remove('hidden')
+    const horizontal = laneIsHorizontal(edge)
+    const cssWidth = horizontal ? corner : total
+    const cssHeight = horizontal ? total : corner
+    canvas.style.width = `${cssWidth}px`
+    canvas.style.height = `${cssHeight}px`
+    const wantWidth = Math.max(1, Math.round(cssWidth * this.dpr))
+    const wantHeight = Math.max(1, Math.round(cssHeight * this.dpr))
+    if (canvas.width !== wantWidth) canvas.width = wantWidth
+    if (canvas.height !== wantHeight) canvas.height = wantHeight
+    const ctx = canvas.getContext('2d')
+    if (ctx === null) return
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
+    ctx.clearRect(0, 0, cssWidth, cssHeight)
+    // From the stack's canvas to its corner's: the corner stands before the
+    // stack's own origin left of the bottom stack and above the left one, and
+    // past its far end right of the top stack and below the right one.
+    const along = this.cssAlongOf(edge, geometry)
+    if (edge === 'bottom') ctx.translate(corner, 0)
+    else if (edge === 'left') ctx.translate(0, corner)
+    else if (edge === 'top') ctx.translate(-along, 0)
+    else ctx.translate(0, -along)
+    for (const replay of state.labels) replay(ctx)
   }
 
   /**
@@ -1789,46 +2131,59 @@ export class AnnotationLanes {
      * once: it is the *lane's* axis and every row shares it.
      */
     bands: LaneFrame[] | null = null,
-  ): void {
+  ): LabelBox[] {
     const stacked = bands !== null && bands.length === label.entries.length
     const frames = stacked && bands !== null ? bands : [lane.frame]
     const runs = stacked
       ? label.entries.map((entry) => [entry])
       : [label.entries]
-    const boxes = drawLaneLabel(ctx, frames[0], {
-      names: runs[0].map((entry) => ({
-        id: entry.id,
-        text: entry.label,
-        colour: entry.style.colour,
-      })),
-      detail: label.detail,
-      labelAt: label.at,
-      column: null,
-      ...(label.beside === true ? { detailBeside: true } : {}),
-      style: laneLabelStyle(),
-      palette: { text: geometry.palette.guide, halo: geometry.palette.halo },
-    })
-    for (let at = 1; at < frames.length; at++) {
-      const more = drawLaneLabel(ctx, frames[at], {
+    const edge = lane.frame.orientation
+    // Beside the map, the corner's column; over the data where there is none.
+    const column = this.labelColumn(edge, geometry)
+    const specs = frames.map((frame, at) => ({
+      frame,
+      spec: {
         names: runs[at].map((entry) => ({
           id: entry.id,
           text: entry.label,
           colour: entry.style.colour,
         })),
         // The range is the lane's and is written once, on the first band.
-        detail: null,
+        detail: at === 0 ? label.detail : null,
         labelAt: label.at,
-        column: null,
+        column,
+        ...(at === 0 && label.beside === true ? { detailBeside: true } : {}),
         style: laneLabelStyle(),
         palette: { text: geometry.palette.guide, halo: geometry.palette.halo },
-      })
+      } satisfies LaneLabelSpec,
+    }))
+    const paint = (target: CanvasRenderingContext2D): LaneLabelBoxes[] =>
+      this.withinColumn(target, edge, geometry, column, () =>
+        specs.map(({ frame, spec }) => drawLaneLabel(target, frame, spec)),
+      )
+    const drawn = paint(ctx)
+    const boxes = drawn[0]
+    // What the block covers over the data, for anything else written on the
+    // lane to keep out of.
+    const plates: LabelBox[] = boxes.plate === null ? [] : [boxes.plate]
+    for (const more of drawn.slice(1)) {
       boxes.names.push(...more.names)
       boxes.swatches.push(...more.swatches)
+      if (more.plate !== null) plates.push(more.plate)
+    }
+    // The same blocks again on the corner beside the stack, where the part of
+    // them past its own canvas is seen (§8.8); and how wide they were, which
+    // is how wide the corner is made.
+    if (column !== null) {
+      state.labels.push((target) => {
+        paint(target)
+      })
+      for (const one of drawn) state.wanted = Math.max(state.wanted, one.wanted)
     }
     state.gripRows.set(lane.entry.id, boxes.nameAcross)
     // Chrome, not picture: the export asks for no handles, and it must get no
     // hit boxes either — a saved figure has nothing to be pointed at.
-    if (!geometry.handles) return
+    if (!geometry.handles) return plates
     for (const hit of boxes.limits) state.ranges.push({ entries: label.entries, hit })
     // One name, one track: a lane drawn as an overlay carries a name each, and
     // the id the paint recorded is what keeps a rename on the one pointed at.
@@ -1843,6 +2198,7 @@ export class AnnotationLanes {
     if (boxes.auto !== null && label.entries.some((entry) => hasAMovableAxis(entry.kind))) {
       state.marks.push({ kind: 'auto', entries: label.entries, at: boxes.auto })
     }
+    return plates
   }
 
   // -------------------------------------------------------------------------
@@ -2182,6 +2538,51 @@ function anchorMark(
 const ANCHOR_LENGTH = 7
 const ANCHOR_HALF = 4
 const ANCHOR_GAP = 2
+
+/**
+ * Where a stack's lanes stand across, in canvas pixels: from the near edge of
+ * the lane nearest the map to the far edge of the farthest — the lanes and the
+ * gaps between them, which a wash crosses as the browser's crosses its tracks,
+ * and not the band past the last lane that the loops' anchors stand in.
+ */
+function stackAcross(lanes: readonly { frame: LaneFrame }[]): [number, number] {
+  let low = Number.POSITIVE_INFINITY
+  let high = Number.NEGATIVE_INFINITY
+  for (const { frame } of lanes) {
+    for (const across of [0, frame.thickness]) {
+      const at = laneIsHorizontal(frame.orientation) ? laneY(frame, 0, across) : laneX(frame, 0, across)
+      low = Math.min(low, at)
+      high = Math.max(high, at)
+    }
+  }
+  return [low, high]
+}
+
+/**
+ * A box's stretch washed over a whole stack (§8.1): between two places along
+ * it, clipped to the data's extent, across `across` — a tenth of the mark's
+ * colour ({@link MARK_WASH}), the browser's wash.
+ */
+function washStack(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  one: number,
+  two: number,
+  across: readonly [number, number],
+  colour: string,
+): void {
+  const from = Math.max(Math.min(one, two), frame.alongFrom)
+  const to = Math.min(Math.max(one, two), frame.alongTo)
+  if (!(to > from) || !(across[1] > across[0])) return
+  ctx.save()
+  ctx.globalAlpha = MARK_WASH
+  ctx.fillStyle = colour
+  // At least a pixel along, so a box narrower than one at this zoom is still there.
+  const length = Math.max(1, to - from)
+  if (laneIsHorizontal(frame.orientation)) ctx.fillRect(from, across[0], length, across[1] - across[0])
+  else ctx.fillRect(across[0], from, across[1] - across[0], length)
+  ctx.restore()
+}
 
 /**
  * One hairline across a lane, at a position along its axis.

@@ -79,6 +79,7 @@ export const DOTPLOT_TASK: AnalysisTask = {
   id: 'dotplot',
   title: 'Two sequences against each other',
   blurb: 'A dot plot of two assemblies: where they share sequence, as lines that jump, turn or leave.',
+  keywords: ['dot plot', 'synteny', 'alignment', 'assembly'],
   group: '1d',
   venue: 'annotations',
   version: 1,

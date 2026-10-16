@@ -142,6 +142,7 @@ export const CELL_QC_TASK: AnalysisTask = {
   id: 'cellqc',
   title: 'Per-cell contact QC',
   blurb: 'What each cell’s contacts look like, and where in the cycle that puts it.',
+  keywords: ['single cell', 'scool', 'cell cycle', 'quality'],
   group: '2d',
   venue: 'analysis',
   version: 1,

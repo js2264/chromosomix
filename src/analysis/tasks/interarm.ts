@@ -105,6 +105,7 @@ export const INTERARM_TASK: AnalysisTask = {
   id: 'interarm',
   title: 'Inter-arm alignment',
   blurb: 'How strongly the two arms of a bacterial chromosome touch, from origin to terminus.',
+  keywords: ['arms', 'secondary diagonal', 'bacteria', 'SMC', 'ParB'],
   group: '2d',
   venue: 'analysis',
   // 2: a second row per sequence, over the O/E along both arms; and the score is

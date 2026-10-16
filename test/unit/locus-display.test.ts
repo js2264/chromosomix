@@ -22,7 +22,9 @@ import {
   baseLabel,
   formatLocus,
   formatPosition,
+  pairLabel,
   regionLabel,
+  typedLociToRegions,
   typedLocusToRegion,
   typedPosition,
   windowLabel,
@@ -159,6 +161,53 @@ describe('the round trip', () => {
 
   it('agrees with formatLocus, which is where the display form was first written', () => {
     expect(regionLabel('IV:1000000-1400000')).toBe(formatLocus({ contig: 'IV', start: 1_000_000, end: 1_400_000 }))
+  })
+})
+
+/**
+ * Two windows typed as one (§5.4): rows, then columns, for the block between
+ * them. Everything after the first window used to be dropped without a word,
+ * because the tokenizer stops at the end coordinate.
+ */
+describe('a block of two windows, typed', () => {
+  it('reads the three spellings a reader writes, and the box’s own ×', () => {
+    for (const typed of [
+      'chr1:1000-2000 chr2:3000-4000',
+      'chr1:1000-2000 x chr2:3000-4000',
+      'chr1:1000-2000 X chr2:3000-4000',
+      'chr1:1000-2000|chr2:3000-4000',
+      'chr1:1000-2000 | chr2:3000-4000',
+      'chr1:1,000-2,000 × chr2:3,000-4,000',
+    ]) {
+      expect(typedLociToRegions(typed)).toEqual({ region: 'chr1:999-2000', region2: 'chr2:2999-4000' })
+    }
+  })
+
+  it('reads each window as a single one is read: units, en dashes, a bare name', () => {
+    expect(typedLociToRegions('IV:1kb–2kb x V')).toEqual({ region: 'IV:999-2000', region2: 'V' })
+    expect(typedLociToRegions('IV V:1-100')).toEqual({ region: 'IV', region2: 'V:0-100' })
+    expect(typedLociToRegions('X x Y')).toEqual({ region: 'X', region2: 'Y' })
+  })
+
+  it('leaves one window one, a space or an x inside it included', () => {
+    expect(typedLociToRegions('IV:1,000 - 20,000')).toEqual({ region: 'IV:999-20000' })
+    expect(typedLociToRegions('chrX:1-100')).toEqual({ region: 'chrX:0-100' })
+    // Two bare names need a mark: a space alone would split a name holding one.
+    expect(typedLociToRegions('I II')).toEqual({ region: 'I II' })
+    // A pipe inside a name, as NCBI's older names have, is the name's.
+    expect(typedLociToRegions('gi|1|ref|NC_000913.2|:1-100')).toEqual({ region: 'gi|1|ref|NC_000913.2|:0-100' })
+    // A mark with nothing after it is not a pair.
+    expect(typedLociToRegions('IV:1-100 |').region2).toBeUndefined()
+  })
+
+  it('gets back the block it was shown — the round trip, for two windows', () => {
+    for (const [region, region2] of [
+      ['IV:1000000-1400000', 'V:0-200000'],
+      ['chr1:0-1000', 'chr1:5000-6000'],
+      ['chrX:0-155270560', 'chrY'],
+    ] as const) {
+      expect(typedLociToRegions(pairLabel(region, region2))).toEqual({ region, region2 })
+    }
   })
 })
 

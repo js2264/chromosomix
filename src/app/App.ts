@@ -20,6 +20,9 @@
 
 import { ViewerError } from '../errors'
 import { parseViewState, serialiseViewState, viewStateEquals } from '../state/ViewState'
+import { HistoryJournal } from '../state/historyJournal'
+import { historyItems } from '../ui/historyMenu'
+import { openMenu } from '../ui/Menu'
 import type { ViewState } from '../types'
 import type { SourceSpec } from '../worker/protocol'
 import { openCommandPalette } from '../ui/CommandPalette'
@@ -334,6 +337,28 @@ export class App implements SessionHost {
     window.history.forward(),
   )
   /**
+   * Every step back, as a list: the chevron beside **back** (§5.5).
+   *
+   * Back walks one step at a time, and a reader four windows into a chromosome
+   * who wants the whole genome they started from presses it four times, reading
+   * each picture on the way to find out whether this one is it. The list names
+   * each step — the window, the table, the picture — and goes straight to one.
+   */
+  private readonly historyButton: HTMLButtonElement = iconButton(
+    'chevron-down',
+    'Every step back, to go straight to one',
+    () => this.openHistory(),
+    { class: 'btn btn-icon head-history-list', size: 14 },
+  )
+  /**
+   * The record of what this window's history holds, which the browser keeps
+   * to itself (`state/historyJournal.ts`). `null` in an embed, which writes
+   * no history of its own and has no header to list it in.
+   */
+  private readonly journal: HistoryJournal | null = this.embed
+    ? null
+    : new HistoryJournal(sessionStorageOrNull(), { hash: window.location.hash, state: window.history.state })
+  /**
    * The header's link button, held so that {@link syncShare} can withdraw it.
    *
    * There is nothing to put in a link until something is open, and §8.5's rule
@@ -557,6 +582,7 @@ export class App implements SessionHost {
           'div',
           { class: 'head-history' },
           this.backButton,
+          this.historyButton,
           this.forwardButton,
           // Share one tab as a link, save the whole window as a file. A
           // deliberate pair that says different things: a link is *what is
@@ -734,7 +760,18 @@ export class App implements SessionHost {
     // (`ui/keyboardLayout.ts`): asked of the browser once, where it will say,
     // and read off every keystroke from here on.
     void readLayout()
-    window.addEventListener('popstate', () => this.readHash())
+    // The entry the window is on carries its place in the record from the
+    // start, so a reload and a Back both find it.
+    if (this.journal !== null) {
+      window.history.replaceState(this.journal.currentState(), '', window.location.href)
+      this.syncHistory()
+    }
+    window.addEventListener('popstate', (event) => {
+      const fresh = this.journal?.arrived(event.state, window.location.hash) ?? null
+      if (fresh !== null) window.history.replaceState(fresh, '', window.location.href)
+      this.syncHistory()
+      this.readHash()
+    })
     window.addEventListener('hashchange', () => this.readHash())
     // Where the browser will say whether there is a way back and a way forward,
     // the header's two buttons are greyed when there is not (Chromium's
@@ -2011,9 +2048,15 @@ export class App implements SessionHost {
     // The bar is still written, and that is not a contradiction. It is what a
     // reload reads, what "copy this link" copies, and what makes an embed's
     // current view addressable at all — only the *stack* is left alone.
-    if (options.replace || this.embed) window.history.replaceState(null, '', url)
-    else window.history.pushState(null, '', url)
+    // Each entry carries its place in the record of this window's history, so
+    // the list beside back can name it (`state/historyJournal.ts`).
+    if (options.replace || this.embed) {
+      window.history.replaceState(this.journal?.replace(hash) ?? null, '', url)
+    } else {
+      window.history.pushState(this.journal?.push(hash) ?? null, '', url)
+    }
     this.writingHash = false
+    this.syncHistory()
     if (this.brandLink !== null) this.brandLink.href = this.fullViewerUrl()
   }
 
@@ -2040,6 +2083,23 @@ export class App implements SessionHost {
    * active tab is the one it is a picture of; opening a new tab for every step
    * of a back-button walk would turn a history into a pile of windows.
    */
+  /** The list of steps back, under its chevron; each row goes straight to its step. */
+  private openHistory(): void {
+    const journal = this.journal
+    if (journal === null) return
+    const rect = this.historyButton.getBoundingClientRect()
+    openMenu(
+      rect.left,
+      rect.bottom + 4,
+      historyItems(journal.back(), (delta) => window.history.go(delta), this.current?.state?.uri),
+    )
+  }
+
+  /** Grey the list's chevron where there is no step behind this one to list. */
+  private syncHistory(): void {
+    this.historyButton.disabled = this.journal === null || this.journal.back(1).length === 0
+  }
+
   private readHash(): void {
     if (this.writingHash) return
     // Asked before the view state, because the two live in the same fragment
@@ -2536,3 +2596,12 @@ export class App implements SessionHost {
 
 /** Re-exported so the bootstrap can name the one error type it may see. */
 export { ViewerError }
+
+/** This window's `sessionStorage`, or `null` where the browser refuses it. */
+function sessionStorageOrNull(): Storage | null {
+  try {
+    return window.sessionStorage
+  } catch {
+    return null
+  }
+}

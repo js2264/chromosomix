@@ -27,6 +27,17 @@ import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationEntry } from '../annotations/types'
 import type { LabelBox, LimitBox, NameBox } from '../render/laneLabel'
 import { el } from './dom'
+import { TAB_WALKS, tabStep } from './tabWalk'
+
+/**
+ * Which box is open, as a Tab finds the next one of its kind from it (§26.8):
+ * a track's name by the track, an end of a range by its lane's first track
+ * and the end — each on the stack the caller says it is drawn on, since one
+ * track can be drawn beside a map and under it.
+ */
+export type EditorAt =
+  | { kind: 'name'; id: string; place: string }
+  | { kind: 'limit'; id: string; part: 'min' | 'max'; place: string }
 
 /** One end of one lane's axis, ready to be typed into. */
 export interface LimitTarget {
@@ -73,6 +84,14 @@ export interface LaneEditorOptions {
   shownLimits(id: string): { min: number; max: number } | null
   /** Ask for a repaint — the canvas hides the text the box is standing on. */
   onChange(): void
+  /**
+   * Tab or Shift+Tab in a box whose text has been taken (§26.8): open the
+   * next box of the same kind, `step` along, or none past the last, where the
+   * caret is let go as Enter lets it go. Asked once the commit has been
+   * painted is the caller's business: the boxes it opens are measured by a
+   * paint, and a range's other end is read off one. Absent, Tab is Enter.
+   */
+  onTab?(from: EditorAt, step: 1 | -1): void
 }
 
 /**
@@ -98,6 +117,8 @@ interface EditorSpec {
   value: string
   class: string
   title: string
+  /** Which box this is, for a Tab to walk on from. */
+  at: EditorAt
   /**
    * Take the typed text, or refuse it.
    *
@@ -106,6 +127,32 @@ interface EditorSpec {
    * they have already moved on from is not a correction.
    */
   apply(text: string): boolean
+}
+
+/** One box a Tab can land in: which box it is, and how to put a caret in it. */
+export interface TabStop {
+  at: EditorAt
+  open(): void
+}
+
+function sameAt(one: EditorAt, two: EditorAt): boolean {
+  return (
+    one.kind === two.kind &&
+    one.id === two.id &&
+    one.place === two.place &&
+    (one.kind !== 'limit' || two.kind !== 'limit' || one.part === two.part)
+  )
+}
+
+/**
+ * Open the box `step` along a run from the one a Tab left (§26.8), or none
+ * past either end — the caret is let go there, as Enter lets it go. The run is
+ * the caller's, built from the paint that drew the commit.
+ */
+export function tabAlong(stops: readonly TabStop[], from: EditorAt, step: 1 | -1): void {
+  const at = stops.findIndex((stop) => sameAt(stop.at, from))
+  if (at < 0) return
+  stops[at + step]?.open()
 }
 
 export class LaneEditor {
@@ -128,11 +175,12 @@ export class LaneEditor {
    * amend, and the one the reader was looking at when they typed is the one they
    * meant.
    */
-  openLimit(target: LimitTarget, offset: { left: number; top: number }): void {
+  openLimit(target: LimitTarget, offset: { left: number; top: number }, place = ''): void {
     const { entries, hit } = target
     const named = entries.map((entry) => entry.label).join(', ')
     this.mount(
       {
+        at: { kind: 'limit', id: entries[0]?.id ?? '', part: hit.part, place },
         box: hit.box,
         along: hit.along,
         // Left to the stylesheet: the range is written at the surface's own
@@ -142,7 +190,7 @@ export class LaneEditor {
         class: 'input lane-edit',
         title:
           `${hit.part === 'min' ? 'Bottom' : 'Top'} of ${named}’s value axis. ` +
-          'Enter commits, Escape leaves it alone.',
+          'Enter commits, Tab goes on to the next end, Escape leaves it alone.',
         apply: (text) => {
           const typed = Number(text)
           const first = this.options.store.byId(entries[0]?.id ?? '')?.style.limits
@@ -183,10 +231,11 @@ export class LaneEditor {
    * The entry is re-read rather than trusted, because a box can stay open across
    * a frame in which the track it names was removed.
    */
-  openName(target: NameTarget, offset: { left: number; top: number }): void {
+  openName(target: NameTarget, offset: { left: number; top: number }, place = ''): void {
     const { entry, hit } = target
     this.mount(
       {
+        at: { kind: 'name', id: entry.id, place },
         box: hit.box,
         along: hit.along,
         font: hit.font,
@@ -194,7 +243,7 @@ export class LaneEditor {
         class: 'input lane-edit lane-edit-name',
         title:
           'What this track is called, here and in an exported figure. ' +
-          'Enter commits, Escape leaves it alone.',
+          'Enter commits, Tab goes on to the next track’s name, Escape leaves it alone.',
         apply: (text) => {
           if (this.options.store.byId(entry.id) === undefined) return false
           this.options.store.update(entry.id, { label: text })
@@ -229,6 +278,7 @@ export class LaneEditor {
       type: 'text',
       value: spec.value,
       title: spec.title,
+      attrs: { [TAB_WALKS]: '' },
     })
     input.style.left = `${Math.max(0, offset.left + x - 3)}px`
     input.style.top = `${offset.top + y - 2}px`
@@ -253,11 +303,12 @@ export class LaneEditor {
       input.focus()
       input.select()
     }
-    const commit = (typing: boolean): void => {
+    /** `false` where the box refused what was typed and is still open. */
+    const commit = (typing: boolean): boolean => {
       // Escape closes by removing the node, and removing a focused node is a
       // blur — so without this guard the blur handler would commit the value the
       // reader had just cancelled, which is the opposite of what Escape is.
-      if (closed) return
+      if (closed) return true
       const text = input.value.trim()
       // Opening a box and not changing it is not a decision, and must not be
       // recorded as one. Without this, clicking a limit on an autoscaled track
@@ -270,17 +321,27 @@ export class LaneEditor {
       // no name on it at all.
       if (text === spec.value || text === '') {
         close()
-        return
+        return true
       }
       if (!spec.apply(text)) {
-        if (typing) refuse()
-        else close()
-        return
+        if (typing) {
+          refuse()
+          return false
+        }
+        close()
+        return true
       }
       close()
+      return true
     }
     input.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') {
+      const step = tabStep(event)
+      if (step !== null) {
+        // Enter that goes on (§26.8): taken, or refused in place as Enter
+        // refuses it — nothing moves on from a number that was not taken.
+        event.preventDefault()
+        if (commit(true)) this.options.onTab?.(spec.at, step)
+      } else if (event.key === 'Enter') {
         event.preventDefault()
         commit(true)
       } else if (event.key === 'Escape') {

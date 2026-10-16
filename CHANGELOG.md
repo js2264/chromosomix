@@ -14,6 +14,77 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Tab goes on to the next field of its kind (§26.8).** In any field edited in place, Tab now takes
+  what was typed, as Enter does, and puts the caret in the next field of the same kind — Shift+Tab
+  the one before — and past the last lets it go: a track's name to the next track's, down the
+  browser's lanes and through every stack round a map; a range's bottom to its top and on to the next
+  track's bottom; a colour key's low end to its high end, and on a deck to the next map's key; a deck
+  cell's heading to the next cell's; a row's name on the Tracks, Metadata, Structures or Contact maps
+  card to the next row's; a tab's name to the next tab's; a mark's last box to the next mark's row;
+  a sequence's name on the editing stage to the next sequence's; the 3D key's bottom to its top. A
+  value a field refuses keeps the caret, as Enter does. Tab used to jump to whatever button came next
+  in the page — and on the editing stage it threw the typed name away. On the way, a colour key's
+  end opened and left as it was no longer fixes the bound at the number it showed, and its box opens
+  on that number as the key prints it, `-1.054`, rather than on the float behind it,
+  `-1.0543182366`, whose end was all the box had room for.
+
+- **The installed app keeps its folders, and a saved workspace finds its files in them again
+  (§20.6).** In the desktop app — or the site installed as an app — a connected folder is kept
+  across restarts, and a workspace saved there records which folder each of its local files was in
+  and where: reopened, it opens the map and its tracks from the folder with nobody asked for a file,
+  and on another machine its note names the folder to connect, with a button that does. The desktop
+  app now lets its own page re-read what the user chose, and nothing else.
+
+- **The tracks' names beside the map, in its corners (§8.8).** Each stack's names now stand in the
+  corner that follows it clockwise — left of the tracks under the map, below the ones on its right,
+  above the ones on its left, right of the ones above it — instead of over the start of each track,
+  where a name and its range covered the first stretch of the signal. A short name sits in the margin
+  beside the map's own labels and a long one runs out over the corner, which grows to fit (wrapping a
+  name past 150 px); the range sits under its name, and a press on either still opens its caret, a
+  right click the lane's menu. Figures saved from the map carry them where the screen does.
+
+- **Each cell of the deck can be on a sequence of its own (§16.3).** Every map's heading now says
+  which sequence it shows, as a quiet picker beside its name: pick `V` on one cell and that map
+  leaves the chain and reads the whole of V at its own resolution while the others stay on IV — its
+  window is remembered with the map, and the `×` on it puts the map back on the others' window. On
+  the first map the picker goes where the locus box would, and every map following it goes along.
+
+- **A scalogram's lane reads in distances (§18.12).** Its range said `0 – 16.7`, the logarithms of
+  the reach, and its floor sat at one base pair, so the lower half of the lane was a band no value
+  could reach. It now says `1 kb – 104 kb`, starts at the power of ten below its data, and carries an
+  axis of its own: a faint dashed rule at 10 kb, 100 kb, 1 Mb… with the distance written at the
+  lane's far end, stepping round the names rather than through them — beside a map, in the browser
+  and in a saved figure. Any `log2` lane gets the rules and the floor; one whose values are lengths
+  gets them in kb and Mb.
+
+- **A box over the Analysis column narrows the task list (§18.1).** `filter 25 tasks…`: every word
+  typed must be in a task's title, its blurb, its card's heading or its other names — each task now
+  carries the words a reader looks for it by, *TAD* for insulation and the directionality index,
+  *pileup* for APA, *A/B* and *eigenvector* for the compartments, *decay* for P(s). A card with
+  nothing left goes, nothing left at all is said, Escape gives the list back and Enter opens the
+  first task left that can run.
+
+- **Every step back, as a list, from a chevron beside the header's back button (§5.5).** It names
+  each step behind the one on screen — the window, a block of two, the whole genome, a table — with
+  the resolution, the O/E or the comparison it set beside it and the file where that is another one,
+  and a row goes straight there, as that many presses of back would. The app keeps a record of the
+  entries it writes, which the browser does not list, in the window's own storage, so the list
+  survives a reload.
+
+- **Two windows typed in a locus box open the block between them (§5.4, §26.1).**
+  `chr1:1,000-2,000 chr2:3,000-4,000`, or the same with ` x `, `|` or `×` between, opens chr1 against
+  chr2 — rows, then columns — in the region view's box, the whole genome's and the Chromosomes
+  table's; everything after the first window used to be dropped without a word. On a block of two
+  windows the box shows both, `IV:1,000,001-1,200,000 × V:1-200,000`, where it showed the rows alone
+  and Enter on it threw the columns away.
+
+- **A row of the Files column dropped on *Load a map into the lower triangle* is the second map in
+  the square (§5.7, §20.5).** The Contact maps card's slot took only a file from the desktop: a row
+  dragged out of a connected folder lit it and fell in for nothing. The row's file is read at the
+  drop, through its folder, with the credential the folder lists with and the name a Drive or a
+  Dropbox gives it; on a session with no map it is the first map. The slot no longer lights for the
+  card's own grips or for text dragged across it.
+
 - **The validation and the timings are published with every release, at
   <https://chromosomix.app/validation/> and <https://chromosomix.app/timings/> (§18.10).** A new
   workflow, `.github/workflows/notebooks.yml`, installs every reference on a fresh runner at the
@@ -986,6 +1057,77 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   as a sequence of its own, last, as the file reads it, selected and framed to be moved into place.
 
 ### Changed
+
+- **A ratio of two maps greys the O/E (§7.5).** While the comparison is a ratio, the O/E toggle —
+  and `arms` with it — is greyed and unlit and says why in its tooltip, and `e` and the palette's
+  entry stand down: the ratio is taken of the two maps as they are, where it was taken of each map's
+  O/E. A ratio is already a comparison against a baseline, the second map, and the decay with
+  distance the two share divides out with it. The O/E setting is kept, and a split or a difference
+  built with it on draws it again.
+
+- **P(s) leaves out the first two diagonals by default (§18.8).** *Minimum separation* is now 2 bins
+  rather than 0: the diagonal and the one beside it hold self-ligation and unligated fragments rather
+  than contacts between loci, and cooltools' `expected_cis` leaves them out by default
+  (`ignore_diags=2`). The density is a share of a total taken over what it keeps, so its points rise by
+  one factor; 0 brings the diagonal back, as a stored session without the setting does. The four
+  orientations are drawn from the first record whatever the box says: they followed it, and at two
+  bins the separation they converge at, usually shorter than one bin, would have been cut off.
+
+- **The metaplot draws a per-feature heatmap for every curve, its rows in one order (§18.8).** Over
+  several tracks — or several groups of a ranked set — it drew the first curve's heatmap alone, so
+  the second track's rows were never seen. Every curve now has one, and every heatmap of a run lists
+  the features in one order: by each one's mean over every track, strongest first, as deepTools'
+  `plotHeatmap` orders several samples, so a row is the same feature in each and a feature strong in
+  one track can be read off the others. Each keeps colours of its own. Over one track nothing
+  changes. The command line writes them as `metaplot-heatmap`, `metaplot-heatmap-2` and on, and the
+  validation notebook holds two tracks' heatmaps to `computeMatrix` and to `plotHeatmap`'s order.
+
+- **A ratio of two maps has no value where either map has no contacts (§6).** A cell that is zero
+  in either map is now missing, and is drawn in the colormap's middle colour — white on `RdBu_r`,
+  the colour of a ratio of one — where `4 / 0` was drawn at the top of the scale and `0 / 4` at the
+  bottom, which on a sparse pair saturated most of the picture. A difference keeps its zeros.
+
+- **Every plot is drawn in a black frame, fitted to its data, with its legend beside it (§18.13).**
+  A chart's plot is boxed in the ink on all four sides, its axes on the frame rather than through
+  the other's zero, where a dashed grey gridline along each edge was the only border; every line in
+  a plot is solid, the gridlines half the frame's width and the crosshair too; matrices,
+  pileups, the metaplot's per-feature heatmap and dot plots are framed the same way. An axis on
+  auto now fits what is drawn instead of rounding out to the library's whole decades — a P(s) from
+  5 kb to 2 Mb was drawn from 1 kb to 10 Mb: a curve's abscissa runs from its first sample to its
+  last, and every other fitted axis keeps a twentieth of its span at each end, its ends left
+  unlabelled where they are not round. The ordinate fits what is in the abscissa's window, as the
+  window is typed, set by a task or moved with the wheel, so a P(s) opened from 4 kb no longer
+  keeps two empty decades above itself — and a wheel along the abscissa no longer stores the
+  ordinate's whole extent as two typed numbers. A log axis with fewer than three decades in view is
+  labelled between them (a P(s) zoomed inside one decade had no label at all), one of ten decades
+  or more on whole decades every few (it had one label), and the crosshair's numbers are spelled as
+  the axes are — `387.3 kb`, not `387,269.00`. A legend down the right takes the room its names need, so
+  it is never drawn over the plot, and a name too long for a third of the figure goes onto a second
+  line, broken at its dots and colons. Typing one end of a window keeps the other where the fit had
+  it.
+
+- **A browser tab keeps a connected folder for the visit only (§20.6).** It was kept across
+  reloads in Chromium tabs too; a tab is a page on whatever machine opened it, so only the installed
+  app keeps folders now, and the connect button and the Files row say *this visit* in a tab.
+
+- **The metaplot's per-feature heatmap is one smooth picture (§18.13).** It was a chart of one
+  rectangle per cell below twenty thousand cells — seams between them, a border lit under the
+  pointer, a card naming the cell — and a grid of filled rectangles above. It is now coloured once and
+  drawn as one image across the whole box, neighbouring rows averaged where there are more than two
+  thousand, smoothed as it is stretched, with no frame and nothing answering the pointer; its PDF holds
+  it as one image the viewer interpolates, and its settings offer no tooltip switch.
+
+- **The key has its ramp back, short, between its two numbers (§7.1).** `-4.18 ▬ -1.05`: a bar 48
+  pixels long drawn through the colormap, as a gradient on screen and band by band in a PNG and a
+  PDF, where the key had two squares for the ramp's two ends. On the default ramp, which runs white,
+  yellow, red and black, the two ends could not say which of the four a cell halfway up is.
+
+- **The lines between chromosomes are a little heavier (§7.1).** The dividers (`d`) were drawn at
+  `metacooler show`'s 0.5 and 1 or one device pixel, whichever was larger — half a pixel on a 2×
+  screen, a hairline in a 300 dpi PNG and, inconsistently, a whole one in the PDF. They are now 1.5
+  CSS pixels between sequences and 2 between genomes or selection blocks, on screen, in a PNG and in
+  the PDF alike, in the CLI's two greys, and each is centred on the pixel grid by its own width so it
+  stays crisp rather than smudged across three pixels.
 
 - **An aggregate peak analysis over a loop set leaves out the loops nearest the diagonal (§18.8).**
   *Nearest loop*, a new setting under Separation, is coolpuppy's `mindist`: a loop whose two
@@ -2260,6 +2402,39 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that collides never reaches that refusal.
 
 ### Fixed
+
+- **A box is washed over the tracks beside a map, as it is in the 1D browser (§8.1).** A stretch
+  highlighted in the browser — a rectangle drawn on the tracks — showed there as a wash over every
+  track and on the map as the square on its diagonal, but beside the map it turned into two small
+  arrowheads under the tracks. The tracks beside a map now carry the same wash, over every lane of
+  every stack, both stretches of a box off the diagonal, and in the saved figure; the arrowheads under
+  the tracks are a loop's alone, and a right-click anywhere inside a wash offers to hide its box.
+
+- **Every task measures a resolution you added, as the map draws it (§3.4, §18.4).** With the map at
+  `3 kb*` — the file's 1 kb bins summed three at a time — a task still read the 1 kb rung underneath,
+  so an insulation track or a P(s) came out at 1 kb under a picture at 3. The analysis worker now
+  reads the map summed to the resolution on screen: counts exactly, as the rung the file would store
+  (a 1 kb rung summed to 4 kb reads as the file's own 4 kb, pixel for pixel), and weights by the
+  harmonic mean of the bins' weights. The drawer says `3 kb* bins`, a result goes out of date when you
+  step off the resolution, and the console's command carries `--coarsen 3000`, which `chromosomix`
+  now takes too.
+
+- **Every export is on white in the dark theme too (§7.2, §16.5).** A map's PNG and PDF, a deck's,
+  a copied map, lane or track, and the box behind an exported key were laid on the page's own colour,
+  so in the dark theme they came out on near-black under ink chosen for white; and a task's figure
+  enlarged into the stage dialog, which follows the theme, exported dark from there. Every picture
+  that leaves the app is now laid on white and redrawn in the light palette's ink, wherever the figure
+  was mounted when the button was pressed.
+
+- **Split after a ratio is drawn on the counts' own scale again (§7.5).** A ratio takes the
+  transform, the ramp and the clip — `log2` and the diverging ramp — and was to give them back when
+  switched off, but a change of comparison rebuilds the map, and the panel that would have given them
+  back was the one torn down: the split after a ratio stayed on `log2` and blue to red, and so did a
+  map whose second triangle was hidden under a ratio. What a derivation took over is now carried to
+  the map built in its place, so ratio → split and ratio → difference → split end on the scale before
+  the ratio, `log10` and the default ramp on a balanced cooler; a ratio reached by a link, a reload or
+  Back gives back the file's defaults. Closing the first file of a comparison and *swap sides* carry
+  the scale from before the ratio too.
 
 - **APA's track aggregates stay unticked once unticked (§18.2, §18.8).** With every track unticked,
   the next run ticked the starred one back on: the drawer hands the form its context around a run, and

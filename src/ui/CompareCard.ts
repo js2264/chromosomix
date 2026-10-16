@@ -20,7 +20,9 @@
 
 import { alignNames, type Alignment, type NamedSequence } from '../genome/naming'
 
-import { MAP_ROW_DRAG_TYPE, button, dropEffectFor, el, fmt, type MapRow } from './dom'
+import { MAP_ROW_DRAG_TYPE, button, dragHasFiles, dropEffectFor, el, fmt, type MapRow } from './dom'
+import { tabAmong } from './tabWalk'
+import { dragHasFileRow } from './fileDrag'
 import { cardTitle, icon, iconButton } from './icons'
 import type { OpenResult } from '../worker/protocol'
 import { fileLabel } from './labels'
@@ -48,6 +50,15 @@ export interface DeckMapRow {
 export interface CompareCardProps {
   /** A file was dropped or a URL typed. */
   onOpen(source: { kind: 'local'; file: File } | { kind: 'remote'; url: string }): void
+  /**
+   * A row out of the Files panel, dropped on a slot — the lower triangle's, or
+   * the first map's where there is none (§20.5).
+   *
+   * The *event* rather than a file, as on the Tracks card: the bytes behind
+   * the row have not been fetched, and a drop handler cannot await. Absent,
+   * such a drop is not offered.
+   */
+  onPickDropped?(event: DragEvent): void
   /**
    * Take the matrix out of the picture, or put it back — the eye on a row.
    *
@@ -572,6 +583,8 @@ export class CompareCard {
       onRename(typed === '' ? null : typed)
     })
     input.addEventListener('keydown', (event) => {
+      // Enter that goes on to the next row's name, Shift+Tab the one before (§26.8).
+      if (tabAmong(event, input, '.ann-list', 'input.ann-name')) return
       if (event.key === 'Enter') {
         event.preventDefault()
         input.blur()
@@ -620,14 +633,27 @@ export class CompareCard {
     zone.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' || event.key === ' ') fileInput.click()
     })
+    // A file, or a row out of the Files panel, which is the same gesture with
+    // the bytes still in the folder. Nothing else is offered the slot: it lit
+    // for this card's own grips, and let a dragged row fall into it for nothing.
+    const takesRow = (event: DragEvent): boolean =>
+      this.props.onPickDropped !== undefined && dragHasFileRow(event)
     zone.addEventListener('dragover', (event) => {
+      if (!dragHasFiles(event) && !takesRow(event)) return
       event.preventDefault()
+      if (event.dataTransfer !== null) event.dataTransfer.dropEffect = dropEffectFor(event.dataTransfer, 'copy')
       zone.classList.add('over')
     })
     zone.addEventListener('dragleave', () => zone.classList.remove('over'))
     zone.addEventListener('drop', (event) => {
       event.preventDefault()
       zone.classList.remove('over')
+      if (takesRow(event)) {
+        // Read in this handler, where the payload is still readable, and opened
+        // by the session once the folder has handed the file over.
+        this.props.onPickDropped?.(event)
+        return
+      }
       const file = event.dataTransfer?.files?.[0]
       if (file) this.props.onOpen({ kind: 'local', file })
     })

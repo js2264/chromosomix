@@ -24,6 +24,7 @@
 
 import { el } from './dom'
 import { iconButton } from './icons'
+import { TAB_WALKS } from './tabWalk'
 
 export interface ModalProps {
   title: string
@@ -109,6 +110,11 @@ export class Modal {
         return
       }
       if (event.key !== 'Tab') return
+      // Not from a field that walks Tab itself (§26.8): it takes what was typed
+      // and puts the caret in the next field of its kind, and a wrap from here
+      // would move the caret first — a blur, which some of those fields take
+      // as a cancel.
+      if (event.target instanceof Element && event.target.closest(`[${TAB_WALKS}]`) !== null) return
       // Only the dialog on top answers for the caret. Two can be up at once — a
       // load gate raised over the palette, a bucket browser over Connect — and
       // every one of them is listening on the window, so without this each

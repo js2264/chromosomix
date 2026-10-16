@@ -14,7 +14,7 @@
  */
 
 import type { AnnotationStore } from '../annotations/store'
-import { baseLabel, typedLocusToRegion, type Assembly } from '../genome/assembly'
+import { baseLabel, typedLociToRegions, type Assembly } from '../genome/assembly'
 import { payloadColumnIsText, type ContigsResult } from '../worker/protocol'
 import { button, el, fmt } from './dom'
 import { KEYS, keyedButton, withKey } from './commands'
@@ -68,6 +68,12 @@ export interface ContigsTableOptions {
    * asks — the whole of what was missing is somewhere to ask from.
    */
   onOpenRegion?(region: string): void
+  /**
+   * Two windows typed in the box — rows, then columns — for the block between
+   * them (§5.4). Absent where there is no such picture, which is the 1D
+   * browser's list: a pair typed there opens its first window.
+   */
+  onOpenPair?(region: string, region2: string): void
   /**
    * The assembly this table's rows are of, where it is one — and then the plain
    * locus box above becomes the **1D browser's bar** ({@link SequenceBar}).
@@ -414,6 +420,7 @@ export class ContigsTable {
         ...(options.store === undefined ? {} : { store: options.store }),
         onOpenContig: (name) => options.onOpenContig(name),
         onOpenRegion: (region) => go(region),
+        ...(options.onOpenPair === undefined ? {} : { onOpenPair: options.onOpenPair }),
         ...(whole === undefined ? {} : { onOpenWhole: whole }),
       })
       this.locus = null
@@ -442,7 +449,12 @@ export class ContigsTable {
               // 1-based inclusive in, the machine form out (§26.1) — see the
               // genomes table's twin, which had the same two bases on it.
               onSubmit: (text) => {
-                if (text !== '') go(typedLocusToRegion(text))
+                if (text === '') return
+                // One window, or two for the block between them (§5.4).
+                const typed = typedLociToRegions(text)
+                const pair = options.onOpenPair
+                if (typed.region2 !== undefined && pair !== undefined) pair(typed.region, typed.region2)
+                else go(typed.region)
               },
             })
     }
