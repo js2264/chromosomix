@@ -3,10 +3,15 @@
  *
  * Every track sampled over the same units, then correlated pairwise. The only
  * decision with a consequence is what happens to a unit one track can answer for
- * and another cannot: it is dropped from *that pair* and not from the whole run.
- * Dropping it everywhere would make the correlation between two well-covered
- * tracks depend on a third one's gaps, which is the sort of coupling nobody
- * would look for on finding a surprising number.
+ * and another cannot: it is left out of **every** pair, as deepTools'
+ * `plotCorrelation` leaves out a row of its matrix with a missing value. It was
+ * left out of that pair alone, and two mouse ATAC-seq replicates beside an
+ * insulation score — which has no value where the map is too sparse — then read
+ * ρ = 0.59 at 100 bp where deepTools reads 0.54 from the same windows. Every
+ * coefficient is now over the same units, so the matrix is one sample's
+ * correlations rather than each pair's own. The price is that two well-covered
+ * tracks' coefficient moves with a third one's gaps, which nobody would look for
+ * on finding a surprising number: so the run says how many units it left out.
  */
 
 import type { Region } from '../../annotations/types'
@@ -19,7 +24,7 @@ import {
   strParam,
   type TrackTaskRunner,
 } from '../job'
-import { pearson, spearman } from '../stats'
+import { MIN_PAIRS, pearson, spearman } from '../stats'
 import type { MatrixOutput, TableOutput, TaskOutput } from '../types'
 
 export const runTrackCorrelation: TrackTaskRunner = async (job) => {
@@ -54,6 +59,24 @@ export const runTrackCorrelation: TrackTaskRunner = async (job) => {
   }
   job.progress(entries.length, entries.length, 'correlating')
 
+  const compared = keepComplete(columns)
+  const noun = units.kind === 'bins' ? 'windows' : 'features'
+  if (compared < MIN_PAIRS) {
+    job.note(
+      `Fewer than ${MIN_PAIRS} of the ${units.count.toLocaleString()} ${noun} have a value in every ` +
+        'track, so no pair has a coefficient. Check that the tracks cover the same sequences.',
+    )
+  } else if (compared < units.count) {
+    const left = units.count - compared
+    const one = left === 1
+    job.note(
+      `${left.toLocaleString()} of the ${units.count.toLocaleString()} ${noun} ` +
+        `${one ? 'has' : 'have'} no value in at least one track, and ${one ? 'is' : 'are'} left out ` +
+        `of every pair, as deepTools leaves ${one ? 'it' : 'them'} out: every coefficient is over ` +
+        `the other ${compared.toLocaleString()}.`,
+    )
+  }
+
   const method = strParam(job.params, 'method', 'spearman')
   const n = entries.length
   const values = new Float32Array(n * n)
@@ -85,7 +108,15 @@ export const runTrackCorrelation: TrackTaskRunner = async (job) => {
     // and a scale centred on whatever the data happened to average would move
     // the white point between runs.
     centre: 0,
-    stats: [{ label: 'units', value: units.count, digits: 0 }],
+    stats: [
+      { label: 'units', value: units.count, digits: 0 },
+      {
+        label: 'compared',
+        value: compared,
+        digits: 0,
+        hint: 'Units every track has a value for: the ones every pair is correlated over.',
+      },
+    ],
   }
   const table: TableOutput = {
     kind: 'table',
@@ -252,4 +283,24 @@ async function valuesFor(
   // it per track is what a run that holds several of them can least afford.
   for (let i = 0; i < total.length; i++) total[i] = covered[i] > 0 ? total[i] / covered[i] : Number.NaN
   return total
+}
+
+/**
+ * Leaves each unit any track lacks out of every track, in place, and says how
+ * many units are left.
+ *
+ * deepTools' `plotCorrelation` reads its matrix and drops every row with a
+ * missing value before it computes anything (`np.ma.compress_rows`), so all its
+ * coefficients are over the rows every sample has. A unit missing from one
+ * column is made missing in all of them here, and the pairwise measures, which
+ * skip a pair either side of which is missing, are then over the same units.
+ */
+function keepComplete(columns: readonly Float64Array[]): number {
+  const count = columns.length === 0 ? 0 : columns[0].length
+  let kept = 0
+  for (let i = 0; i < count; i++) {
+    if (columns.every((column) => !Number.isNaN(column[i]))) kept++
+    else for (const column of columns) column[i] = Number.NaN
+  }
+  return kept
 }

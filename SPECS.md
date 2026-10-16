@@ -8418,8 +8418,12 @@ is the **exact mean over the bases a track has a value for**, each record weight
 window it covers — pyBigWig's `stats(…, exact=True)` — so every track is read at its own resolution,
 never from a zoom level, a megabase at a time: a zoom record is a mean over a span of its own, and one
 17 kb record weighted whole into a 10 kb window took a mouse genome's correlation from 0.88 to 0.81.
-Windows are whole windows, kept as a tiling per sequence rather than as an object each, and a window
-one track lacks is left out of that pair alone.
+Windows are whole windows, kept as a tiling per sequence rather than as an object each. A window any
+of the tracks lacks is left out of **every** pair, as deepTools' `plotCorrelation` leaves out a row
+with a missing value, so every coefficient is over the same windows: left out of each pair alone,
+two mouse ATAC-seq replicates beside an insulation score with gaps read ρ = 0.59 at 100 bp where
+deepTools reads 0.54 from the same windows. The run says how many windows it left out, and
+*compared*, beside *units* under the matrix, how many are left.
 *Fraction of signal in features* — ChIP-seq's FRiP, over whatever is loaded: of everything a track
 carries, the share of it inside a chosen interval set, against the share of the assembly that set
 covers. The ratio of the two is the column to read, and it is the reason the covered fraction is

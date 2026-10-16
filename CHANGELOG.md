@@ -989,6 +989,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   a loop set or every pair — where *N* and *groups* used to stay on screen for having been chosen on a
   feature set. In every task's form, a card none of whose controls apply is not drawn.
 
+- **Track correlation leaves a window any of its tracks lacks out of every pair, as deepTools does
+  (§18.8).** It was left out of that pair alone, so each coefficient was over windows of its own: on
+  chr19, two mouse ATAC-seq replicates beside a Hi-C insulation score — which has no value where the
+  map is too sparse to give one — read ρ = 0.59 at 100 bp where deepTools' `plotCorrelation` reads
+  0.54 from the same windows. Every coefficient is now over the windows every track has a value for,
+  the replicates read 0.54 as deepTools does, and the run says how many windows it left out;
+  *compared*, beside *units* under the matrix, says how many are left.
+
 - **Electron 43.2.0 → 43.7.9 (§15).** Past GHSA-gr2m-v5gq-v685, GHSA-j84w-jfhq-vhvj,
   GHSA-qmv3-fv6v-rmhq and GHSA-9qh4-3jw8-366w, four high advisories against the version 0.13.0
   shipped on. Still pinned exactly, for the reason `package.json` gives.
