@@ -460,6 +460,11 @@ chromosomix tasks
 ##       --flagBelow (default 0.1)  flag below this cross-block ratio
 ```
 
+Each analysis is held to the package it reproduces — cooltools, coolpuppy, chromosight, deepTools,
+bedtools and a dozen others — on public data, command for command, in a notebook rendered with every
+release: <https://chromosomix.app/validation/>, and how long each command takes beside its
+reference, <https://chromosomix.app/timings/>.
+
 Every task writes its results where `--out` points, each named after the file it came from up to
 its first dot — `sample.coverage.coverage-total.tsv`. Two files of one command that would share a
 name keep more of theirs (`HCT116.rep1`, `HCT116.rep2`), then their directories (`dirA_sample`,
