@@ -496,10 +496,11 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
 
   const balance = params.balance === true
   // **The correlation's cost is the correlation's.** cooltools' road skips it and
-  // pays for the eigenvectors alone, each a few hundred passes over the square:
-  // eight seconds for three of them over the 4,642 bins of *E. coli* at 1 kb,
-  // where the correlation adds its own cube. So the warning about a resolution
-  // too fine, which is a warning about that cube, is the correlation's to give.
+  // pays for the eigenvectors alone, each a few dozen passes over the square
+  // (`linalg.ts`): under two seconds for three of them over the 4,642 bins of
+  // *E. coli* at 1 kb, where the correlation adds its own cube. So the warning
+  // about a resolution too fine, which is a warning about that cube, is the
+  // correlation's to give.
   // Absent is the default, which is cooltools'.
   const cooltools = params.method !== 'correlation'
   // Cis-only is a different shape of run, not a narrower one — see `estimateCis`

@@ -43,8 +43,10 @@ import type { Hdf5Handle } from '../h5/api'
 import {
   DEFAULT_COUNT_COLUMN,
   PIXEL_BAND_GAP,
+  RowIndex,
   forEachPixelRangesAsync,
   forEachPixelSpanAsync,
+  readPixelWindow,
   scoreColumns as coolerScoreColumns,
   type ReadPlan,
   type SpanScanOptions,
@@ -61,6 +63,14 @@ export interface ScanAllOptions {
    * waiting for — the census of §6.5 — waits on while a view is reading (§12).
    */
   pause?(): Promise<void>
+  /**
+   * Each pixel's row as the file stores it in `pixels/bin1_id`, rather than as
+   * `bin1_offset` says it (`RowIndex`). On a valid cooler the two are the same
+   * numbers; the one walk that must not assume so is the check of a file against
+   * its own index (`MetaCooler.validateDeep`). A container whose rows have only
+   * one source ignores it.
+   */
+  storedRows?: boolean
 }
 
 /**
@@ -194,21 +204,21 @@ export class CoolerStore implements PixelStore {
     onChunk: (chunk: PixelChunk) => void,
     options: SpanScanOptions = {},
   ): Promise<boolean> {
-    return forEachPixelRangesAsync(this.handle, this.pixelBandsOf(bands), onChunk, options)
+    return forEachPixelRangesAsync(this.handle, this.pixelBandsOf(bands), onChunk, options, this.binOffsets())
   }
 
   async scanAll(options: ScanAllOptions): Promise<void> {
     const chunkSize = options.chunkSize ?? 1_000_000
     const total = this.nnz
+    // Each pixel's row from the index, which a walk of the whole table needs
+    // whole anyway, rather than from `pixels/bin1_id` — two-fifths of the bytes
+    // the walk would otherwise inflate (`RowIndex`).
+    const rows = options.storedRows === true ? null : new RowIndex(this.binOffsets(), 0)
     for (let lo = 0; lo < total; lo += chunkSize) {
       const hi = Math.min(lo + chunkSize, total)
-      // `readInt32` rather than `readNumeric` then a narrowing pass: the bin ids
-      // are int64 on disk and array indices in use, and the double in between
-      // was 8 B per pixel per column that existed only to be thrown away.
-      const bin1 = this.handle.readInt32('pixels/bin1_id', lo, hi)
-      const bin2 = this.handle.readInt32('pixels/bin2_id', lo, hi)
-      const count = this.handle.readNumeric(`pixels/${DEFAULT_COUNT_COLUMN}`, lo, hi)
-      const keepGoing = options.onChunk({ bin1, bin2, count, length: count.length })
+      // The window every span walk reads (`readPixelWindow`): bin ids straight
+      // into `Int32Array`, being int64 on disk and array indices in use.
+      const keepGoing = options.onChunk(readPixelWindow(this.handle, lo, hi, DEFAULT_COUNT_COLUMN, rows))
       options.onProgress?.(hi, total)
       if (keepGoing === false) return
       // A *real* yield, not `await Promise.resolve()`: the cancel arrives as a

@@ -113,7 +113,12 @@ describe('forEachPixelSpan', () => {
     const { handle, reads } = fakeHandle(20, table(20, 3))
     forEachPixelSpan(handle, 0, 20, () => {}, 1000)
     expect(reads.filter((r) => r.path === 'indexes/bin1_offset')).toHaveLength(1)
-    expect(reads.filter((r) => r.path.startsWith('pixels/'))).toHaveLength(3)
+    // bin2_id and the value: each pixel's row is the index's own answer
+    // (`RowIndex`), so bin1_id is never read, as cooler's range query never reads it.
+    expect(reads.filter((r) => r.path.startsWith('pixels/')).map((r) => r.path)).toEqual([
+      'pixels/bin2_id',
+      'pixels/count',
+    ])
     // And never `/bins` — the §3.3 rule, which windowing must not have broken.
     expect(reads.some((r) => r.path.startsWith('bins/'))).toBe(false)
   })

@@ -1058,6 +1058,66 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **Compartments finds its components by Lanczos iteration, in a third of the time (§18.8).** Each
+  component was found by power iteration, which converges at the ratio of the two largest
+  eigenvalues: five hundred products of the matrix a component, seven-tenths of the task's time on
+  the validation's mouse map at 100 kb — and where two eigenvalues are close in size not enough, so
+  chr14's third component came out a mixture of two eigenvectors. They are now found as ARPACK finds
+  them for cooltools, by Lanczos iteration, each vector orthogonalised against every one before it
+  and the matrix deflated by each pair found as before, to a residual within 10⁻¹² of the
+  eigenvalue: 18 to 72 products a component on that map; and a product reads the matrix's upper
+  triangle alone, four rows at a time. Three components of the mouse map take 11.0 s of CPU where
+  they took 34.8 — cooltools takes 23.0 on the same machine, each the mean of three runs of the
+  validation's command — and three of *E. coli* at 1 kb under two seconds, an eighth of what they
+  took. E1 moves by less than 3 × 10⁻⁴, where its values reach 2, and its eigenvalue not at all; E2
+  and E3 agree with cooltools' on 38 chromosome-components of 40 where they agreed on 37, chr14's E3
+  among them; and a component the phasing track cannot sign — chrY's E1, two E3s on that map, each
+  correlating with GC content under 0.1 — may come out the other way up, its sign being the
+  solver's.
+
+- **A contact map's rows come from its index, not from `pixels/bin1_id` (§6.2).** A read of a band
+  of rows decoded three pixel columns and now decodes two: each pixel's row is taken from
+  `indexes/bin1_offset`, which is that column run-length encoded — cooler's own range query never
+  reads it either. A 64-bit column is narrowed word by word rather than through a `BigInt` an
+  element, straight out of h5wasm's heap into the array handed on; and a block across the diagonal
+  is read to the lower of its two ends, where it was read to the higher and the rows past the lower
+  thrown away. Every task that walks a map is faster and writes the same bytes — on the validation's
+  mouse map, of CPU: the directionality index 7.6 → 3.9 s (domaincaller 5.8), insulation 13.0 → 7.9,
+  P(s) 15.7 → 11.1, virtual 4C 4.0 → 2.3, raw APA 3.0 → 2.1, chromosight's score 14.0 → 8.4, HiCRep
+  over three maps 13.4 → 6.4 (hicrep 10.1). The deep check (§6.3) still reads the column, since
+  checking it against the index is what it is for.
+
+- **The command line writes its tables, bedGraphs and bigWigs faster (§18.7).** A bigWig's blocks
+  are deflated by Node's zlib, synchronously — the library behind `CompressionStream`, at its
+  settings, so the same bytes — where each of a file's hundreds of blocks went through a stream, a
+  blob and a response; and the rows of a table or a bedGraph are joined four thousand at a time as
+  they are made, rather than each kept as a string to the end, which had the collector mark a
+  quarter of a million of them again and again for every track. With the reads above, coverage of
+  the mouse map at 10 kb — four tracks in three formats — takes 6.9 s of CPU where it took 13.1 (7.3
+  where it took 13.6 balanced; cooltools 15.1 and 18.5).
+
+- **The metaplot samples a bigWig in a little over half the time (§18.8, §23.1).** The command line
+  read a bigWig through `generic-filehandle2`'s `LocalFile`, which opens the file, reads and closes
+  it again at every read — sixteen thousand times for the validation's metaplot over the RefSeq TSS,
+  half of what sampling cost — and now holds one descriptor open and reads each block with one
+  synchronous `pread`; reads that walk forward through the file read ahead of themselves, so a disk
+  that has not cached the file serves them as 922 reads in order rather than sixteen thousand seeks.
+  A window several features share — a fifth of the RefSeq TSS — is asked of the track and made into
+  a row once. That metaplot takes 7.5 s of CPU where it took 14.1, against deepTools' 8.4 for
+  `computeMatrix` and `plotProfile`; over two tracks 13.6 where it took 24.3, against 21.1 with
+  `plotHeatmap`. Every number is the same.
+
+- **The timings take turns: every other round runs each pair's reference first, and there are four
+  rounds (§18.10).** `notebooks/timing.qmd` ran each analysis's `chromosomix` commands before its
+  references in every round, so the side that reads from the disk whatever the page cache let go
+  since the round before was always `chromosomix`, and the side after it found the same input in
+  memory: in the last published run the metaplot spent twelve seconds of its wall clock waiting on
+  its bigWig and `computeMatrix`, straight after, none, and base composition twenty-four on the
+  genome against none for bioframe. The even rounds now run each analysis's references first, each
+  side's commands still in their own order, so the wait falls on each side in half the rounds; and
+  there are four rounds by default rather than five, an even number, in the notebook and in the
+  workflow's *runs*.
+
 - **A ratio of two maps greys the O/E (§7.5).** While the comparison is a ratio, the O/E toggle —
   and `arms` with it — is greyed and unlit and says why in its tooltip, and `e` and the palette's
   entry stand down: the ratio is taken of the two maps as they are, where it was taken of each map's

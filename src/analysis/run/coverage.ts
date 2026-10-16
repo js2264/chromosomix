@@ -76,16 +76,11 @@ export const runCoverage: TaskRunner = async (job) => {
     await mc.scanPixels({
       onChunk: (chunk) => {
         job.throwIfCancelled()
-        for (let i = 0; i < chunk.length; i++) {
-          const bin1 = chunk.bin1[i]
-          const bin2 = chunk.bin2[i]
-          const raw = chunk.count[i]
-          // A balanced cell is `raw * w[i] * w[j]`, cooler's own definition
-          // (§6.4). A `NaN` weight marks a bin the balancer dropped and the
-          // product is `NaN`, which the accumulator skips — so a filtered bin
-          // reads as absent rather than as empty, which is the opposite claim.
-          accumulator.add(bin1, bin2, weights === null ? raw : raw * weights[bin1] * weights[bin2])
-        }
+        // A balanced cell is `raw * w[i] * w[j]`, cooler's own definition
+        // (§6.4). A `NaN` weight marks a bin the balancer dropped and the
+        // product is `NaN`, which the accumulator skips — so a filtered bin
+        // reads as absent rather than as empty, which is the opposite claim.
+        accumulator.addPixels(chunk.bin1, chunk.bin2, chunk.count, chunk.length, weights)
       },
       onProgress: (done, total) => job.progress(done, total, 'reading pixels'),
     })

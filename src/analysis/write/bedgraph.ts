@@ -28,7 +28,7 @@
  */
 
 import type { ProfileOutput, Provenance } from '../types'
-import { provenanceLines } from './tsv'
+import { RowBlocks, provenanceLines } from './tsv'
 
 /**
  * One sequence's intervals, for a track that is on no grid.
@@ -98,6 +98,8 @@ export function profileToBedGraph(
 ): string {
   const rows: string[] = provenanceLines(provenance)
   const { values, extent, binsize } = output
+  // A block of rows at a time, joined by the `\n` the whole is (`RowBlocks`).
+  const blocks = new RowBlocks(rows)
 
   for (const contig of contigs) {
     for (let local = 0; local < contig.bins; local++) {
@@ -108,9 +110,10 @@ export function profileToBedGraph(
       const start = local * binsize
       const end = Math.min(contig.length, start + binsize)
       if (!(end > start)) continue
-      rows.push(`${contig.name}\t${start}\t${end}\t${format(value)}`)
+      blocks.push(`${contig.name}\t${start}\t${end}\t${format(value)}`)
     }
   }
+  blocks.flush()
 
   rows.push('')
   return rows.join('\n')

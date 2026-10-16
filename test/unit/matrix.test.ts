@@ -159,7 +159,7 @@ describe('bounded reads', () => {
     }
   })
 
-  it('reads only the four datasets a bounded block needs', async () => {
+  it('reads only the three datasets a bounded block needs', async () => {
     const fixture = cases.find((c) => c.label === 'basic.metacool')!
     const mc = await openCase(fixture)
     const paths: string[] = []
@@ -178,9 +178,9 @@ describe('bounded reads', () => {
     }
     try {
       await mc.genomeMatrix('MAG_04')
+      // Not `pixels/bin1_id`: each pixel's row is the index's own answer (§6.2).
       expect(paths).toEqual([
         'indexes/bin1_offset',
-        'pixels/bin1_id',
         'pixels/bin2_id',
         'pixels/count',
       ])

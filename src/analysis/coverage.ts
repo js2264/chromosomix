@@ -83,6 +83,34 @@ export class CoverageAccumulator {
   }
 
   /**
+   * A chunk of stored pixels, each exactly as {@link add} takes it — balanced
+   * by `weights` where they are given, as `raw × w[i] × w[j]` in that order.
+   *
+   * One loop over the chunk's arrays rather than a call per pixel: a whole-file
+   * scan feeds tens of millions of them, and the same tests in the same order
+   * give the same sums to the last bit.
+   */
+  addPixels(
+    bin1: Int32Array,
+    bin2: Int32Array,
+    count: Float64Array,
+    length: number,
+    weights: Float64Array | null,
+  ): void {
+    const { cis, trans, contigOf, nBins } = this
+    for (let i = 0; i < length; i++) {
+      const b1 = bin1[i]
+      const b2 = bin2[i]
+      const value = weights === null ? count[i] : count[i] * weights[b1] * weights[b2]
+      if (!Number.isFinite(value)) continue
+      if (b1 < 0 || b1 >= nBins || b2 < 0 || b2 >= nBins) continue
+      const target = contigOf[b1] === contigOf[b2] ? cis : trans
+      target[b1] += value
+      if (b1 !== b2) target[b2] += value
+    }
+  }
+
+  /**
    * Add a dense block, which is only the whole answer for a whole-file block.
    *
    * A dense square that was mirrored out of an upper-triangular store holds each

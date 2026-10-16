@@ -1708,16 +1708,16 @@ interface ByteSource { readonly id: string; readonly size: number; readonly isRe
 `LocalFileSource` wraps a `File`. `RemoteRangeSource` wraps a URL. Identical downstream.
 
 **A remote read reads ahead where the reads before it say to.** Each miss of the 1 MiB chunk cache
-is a round trip, and HDF5 reads a cooler's pixels a dataset chunk at a time — `bin1_id`, `bin2_id`
-and `count` in turn, three streams through one region of the file — so a whole chromosome of a 5 GB
-`.mcool` was 63 round trips of a megabyte, one after another. A miss within 4 MiB of one of the last
-eight fetches is that region still being read, and from the third in a row the fetch runs ahead of
-it, doubling to at most 16 MiB; the count is kept per region, so a read of the weights between two
-pixel chunks does not start it again. A miss far from anything recent — an index, a header, another
-sequence — fetches what it asks for and nothing more, so opening a file costs what it did, and a
-source opened to read in small pieces (§3.8's `fine`) never reads ahead. The same chromosome is now 34
-requests. A walk across a `.hic`'s chromosome pairs reads the other way, exactly and not through
-the chunks at all (§3.6).
+is a round trip, and HDF5 reads a cooler's pixels a dataset chunk at a time — `bin2_id` and `count`
+in turn, and `bin1_id` where it is read at all (§6.2), streams through one region of the file — so a
+whole chromosome of a 5 GB `.mcool` was 63 round trips of a megabyte, one after another. A miss
+within 4 MiB of one of the last eight fetches is that region still being read, and from the third in
+a row the fetch runs ahead of it, doubling to at most 16 MiB; the count is kept per region, so a
+read of the weights between two pixel chunks does not start it again. A miss far from anything
+recent — an index, a header, another sequence — fetches what it asks for and nothing more, so
+opening a file costs what it did, and a source opened to read in small pieces (§3.8's `fine`) never
+reads ahead. The same chromosome is now 34 requests. A walk across a `.hic`'s chromosome pairs reads
+the other way, exactly and not through the chunks at all (§3.6).
 
 **The reader is started before it is asked for anything.** Its worker fetches and compiles h5wasm the
 moment it exists, and it used to exist only once a file was opened, so every first open waited for
@@ -1748,7 +1748,27 @@ rather than truncating them, and `CORE_COLUMN_KINDS` accordingly permits `i`, `u
 `pixels/count`. Three paths, resolved once at open. Unsigned integer columns are permitted throughout,
 so test dtype *kind*, not an exact dtype. Consequences in JavaScript: mixing `BigInt`
 with `Number` throws at runtime, not compile time; convert offsets to `Number` once on read (bin
-counts are far below 2^53); resolve `count`'s dtype once at open rather than per pixel.
+counts are far below 2^53); resolve `count`'s dtype once at open rather than per pixel. **The
+conversion is word by word, never a BigInt per element**: the high 32 bits times 2³² plus the low, or
+the low word alone into an `Int32Array` (`toNumberArray`, `lowWords`), which is `Number` to the last
+bit and was, through `Number(x[i])`, a third of what reading a pixel column cost. And a numeric column
+is read out of h5wasm's heap straight into the array handed on, not copied out first as the stored
+type and narrowed from that copy.
+
+**A row band never reads `pixels/bin1_id`.** Each pixel's row is `bin1_offset`'s own answer
+(`RowIndex`): the index *is* that column run-length encoded, a valid cooler is one on which the two
+agree, and cooler's own range query (`CSRReader`) has never read it either. It was eight of the
+twenty bytes a pixel of an int64/int64/int32 table inflates, for numbers already in hand. The one walk
+that reads it is the deep check (§6.3), which is checking the column against the index and so cannot
+take one from the other (`ScanAllOptions.storedRows`).
+
+**A rectangle across the diagonal reads to the lower of its two ends.** Under `symmetric-upper`,
+rows `[r0, r1)` against columns `[c0, c1)` that overlap need the pixels whose row is in
+`[min(r0, c0), min(r1, c1))` and no others: a stored pixel has `bin1 ≤ bin2`, so one whose row is at
+or past the lower end has both its bins past the end of one axis, and is in the block neither as
+stored nor mirrored. `planRead` used to read to the higher end and let the scatter throw those rows
+away, which a square on the diagonal never notices and a band of `hi` diagonals (rows `[a, b)` against
+columns `[a, b + hi)`) paid for on every strip.
 
 **Aggregation accumulates in `Float64Array`.** The format widens counts to int64 precisely because
 summation overflows int32; the same applies in the browser.
@@ -7549,8 +7569,8 @@ Three specific gates, each stated because each is a place the naive implementati
 
 1. **Whole-genome 4C is not a bounded read, and the read planner says so.** With rows set to the anchor
    band and columns to everything, the two ranges overlap, so `planRead` resolves to `symmetric` over
-   the whole pixel table — because an upper-triangular store keeps every column *before* the anchor in
-   other rows (§5.3, §6.2). Done properly it is one streaming pass over the pixels with
+   every pixel stored before the anchor's end — because an upper-triangular store keeps every column
+   *before* the anchor in other rows (§5.3, §6.2). It is one streaming pass over the pixels with
    `bin1 < anchor_end`, on average half the file — the whole of it where the profile is divided by
    coverage, a total over every bin — accumulating into a band of `|anchor|` rows and materialising
    nothing large. **On a cooler cis is the default** and is bounded, with trans as a
@@ -7732,7 +7752,10 @@ Three properties of that writer are contract rather than implementation detail:
   expressed exactly, at four extra bytes per value that nothing notices.
 - **Compression is zlib through the platform's own `CompressionStream`**, already used by the PDF
   writer; where it is unavailable the file is written uncompressed, which is a legal bigWig and beats
-  refusing to export.
+  refusing to export. A caller that has zlib itself hands the writer a synchronous deflate instead
+  (`BigWigWriting.deflate`): the command line passes Node's, which is the library behind Node's
+  `CompressionStream` at the same settings and so writes the same bytes, without a stream, a blob and
+  a response for every one of a file's hundreds of blocks.
 - **It round-trips through this app's own reader.** `@gmod/bbi` is already a dependency, so a written
   file is read back and compared value for value in the test suite, and cross-checked against pyBigWig
   in the goldens. A writer nobody reads back is a writer that is wrong.
@@ -8135,7 +8158,7 @@ by coverage. The arithmetic of both switches is
 untouched and still goldened (`run/fourc.ts`); what varies by file is which of it is *offered*, which
 is the same stated rule §18.2 already bends by for options that need a `/genomes` table.
 *Compartments* — expected → observed/expected, as cooltools prepares it or as the Pearson
-correlation of its rows (*method*, below) → eigenvectors by power iteration, behind the bin-count
+correlation of its rows (*method*, below) → eigenvectors by Lanczos iteration, behind the bin-count
 gate — with
 **phasing from a dropdown** over the loaded gene models, tracks and
 FASTAs, a gene model or a FASTA defaulting to the starred one, reporting the correlation it used and
@@ -8172,8 +8195,14 @@ content), where along the arms the first component carries 28% of the matrix, no
 origin (0.05) and follows GC content (r = 0.35; 22% of the variance and r = 0.33 by the
 correlation). **The
 components are ranked by their eigenvalues and by nothing else**: E1 is the component with the
-largest, E2 the next — up to three, one by default (*components*). The phasing signal *signs* each
-one — positive where it rises with the signal, once their correlation reaches `minR` — and never
+largest, E2 the next — up to three, one by default (*components*). They are found one at a time,
+the largest in size first, by Lanczos iteration with every vector orthogonalised against those before
+it and the matrix deflated by each pair found — the method ARPACK runs for cooltools — each to a
+residual within 10⁻¹² of its eigenvalue: power iteration, which found them before, converges at the
+ratio of the two largest, and where two were close in size its five hundred multiplications left them
+mixed (chr14's E3 on the validation's mouse map, §18.10) and took seven-tenths of the task's time.
+The phasing signal *signs* each one — positive where it rises with the signal, once their
+correlation reaches `minR`, the sign the solver gave it otherwise — and never
 chooses among them, because a component chosen for following GC content would make any later
 comparison of GC content between the compartments it calls a comparison of GC content with itself.
 A *components* table says what each one is: its eigenvalue, **how much of the contacts it accounts
@@ -8209,8 +8238,9 @@ eigenvalue over its rows — the table's *variance*, kept beside it — is a sha
 are rather than of the contacts, and cannot be set beside a cooltools run's. Orthogonal components'
 checkerboards are orthogonal, so the shares add up to what several carry together. cooltools' road
 skips the correlation, the cubic step, so its estimate prices a decomposition and gives no warning
-about the cube — three components of *E. coli* at 1 kb, 4,642 bins, take eight seconds, where the
-correlation of the same square is four more on one core (§7.5). A method the task does not have is
+about the cube — three components of *E. coli* at 1 kb, 4,642 bins, take under two seconds, an
+eighth of what power iteration took, where the correlation of the same square is four more on one
+core (§7.5). A method the task does not have is
 refused rather than read as the default.
 
 *Inter-arm alignment* — how strongly a bacterial chromosome's two arms are held together, as a number
@@ -8472,7 +8502,9 @@ the mean of a bimodal set is a line that describes nothing. The heatmaps of one 
 one order, by each one's mean over every bin of every track and strongest first, which is how deepTools'
 `plotHeatmap` orders several samples: a row is the same feature in each of them, and each has colours of
 its own. Only the first curve had one, so over two tracks the second's rows were never seen; the first
-keeps its name, and the others are numbered after it. *Aggregate peak analysis*, likewise in both
+keeps its name, and the others are numbered after it. A window several features share — the
+transcripts of a gene that start at one TSS, a fifth of the RefSeq set — is asked of each track once
+and its row made once, then given to each of them. *Aggregate peak analysis*, likewise in both
 **fixed** (centre ± W bins) and **scaled-region** (the domain, or the rectangle between two anchors,
 resampled to a fixed grid) modes; on-diagonal from a feature set, off-diagonal from a pair set, and
 off-diagonal from **every pair of one feature set** inside a separation range;
@@ -9074,15 +9106,18 @@ SciPy, a window any track lacks left out of every pair as deepTools leaves it, a
 deepTools, whose zoom-level means are measured apart. Where a reference draws at random — a pileup's
 controls, an overlap's shuffles, IDR's ties — two distributions are compared, the reference's own
 spread from seed to seed the yardstick. It writes every command it ran to
-`notebooks/work/validation/commands.json`, and `notebooks/timing.qmd` runs them again, five times
+`notebooks/work/validation/commands.json`, and `notebooks/timing.qmd` runs them again, four times
 round robin, each a fresh process — all but the ones that would time a job twice or two different
 jobs: one seed of the shifted controls, the *Sox2* viewpoint of virtual 4C, Boost-HiC on chr1, and
 APA raw and over controls but not over the expected, where coolpuppy is handed an expected computed
-beforehand. Every run is one line of the tidy table `notebooks/work/validation/timings.tsv` — CPU
-and wall-clock seconds and peak memory, with the machine and every version — and each `chromosomix`
-command's speed is a fold over the reference commands it is paired with, a side's commands summed
-where there are several (deepTools' `computeMatrix` and then `plotProfile` against one metaplot, and
-`plotHeatmap` as well against one over two tracks).
+beforehand. **The two sides of a pair take turns to go first**: the even rounds run each analysis's
+references before its `chromosomix` commands, because the side that goes first is the one that reads
+from the disk what the page cache let go since the round before, and in one order that wait was
+always `chromosomix`'s. Every run is one line of the tidy table
+`notebooks/work/validation/timings.tsv` — CPU and wall-clock seconds and peak memory, with the machine
+and every version — and each `chromosomix` command's speed is a fold over the reference commands it is
+paired with, a side's commands summed where there are several (deepTools' `computeMatrix` and then
+`plotProfile` against one metaplot, and `plotHeatmap` as well against one over two tracks).
 They are documents, not tests: they need the data (about 6 GB), the reference packages and yapc's
 own environment, and nothing in the suite runs them.
 
@@ -10190,7 +10225,11 @@ with **no contact map**, since `chromosomix` opened its first argument as one an
 refusal under it, which is a record with holes in it exactly where the reader is least likely to
 look. So the shell gained what it was said not to have, each as the code the worker already runs:
 `src/cli/tracks.ts` opens a bigWig, a bedGraph, a wig or a FASTA under `--tracks` and answers `sample`
-in the worker's own shape; a reference under `--sequence` is opened as the browser opens one
+in the worker's own shape — a bigWig, and a `.2bit`, through one descriptor held open and read
+synchronously, ahead of a walk forward (`src/cli/heldFile.ts`), where `generic-filehandle2`'s
+`LocalFile` opened and closed the file at every read: sixteen thousand times for a metaplot over the
+RefSeq TSS, half of the time it spent sampling, and on a disk that had not cached the file a seek for
+each; a reference under `--sequence` is opened as the browser opens one
 (`src/cli/reference.ts`) — a `.2bit`, or a FASTA with `samtools faidx`'s `.fai` beside it, by range,
 and anything else whole, where `readFile`'s 2 GiB ceiling used to refuse every mammalian FASTA before
 a byte of it was parsed and now refuses only one with no index, naming the command that makes one;

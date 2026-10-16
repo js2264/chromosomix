@@ -46,7 +46,6 @@
 import { open, readFile } from 'node:fs/promises'
 
 import { BigWig } from '@gmod/bbi'
-import { LocalFile } from 'generic-filehandle2'
 
 import { decodeAnnotationBytes, decodeAnnotationText } from '../annotations/parse'
 import { gcBins, looksLikeFasta, parseFasta } from '../annotations/fasta'
@@ -65,6 +64,7 @@ import { bbiMagic } from '../annotations/worker/protocol'
 import type { Contig } from '../genome/assembly'
 import { contigIndexOf } from '../genome/naming'
 import { heldReference, type Reference } from './reference'
+import { HeldFile } from './heldFile'
 import { fileNameOf } from './remote'
 
 /** One loaded track, sampled the way the annotations worker samples it. */
@@ -160,7 +160,7 @@ async function headOf(path: string, length: number): Promise<Uint8Array> {
 // ---------------------------------------------------------------------------
 
 async function openBigWig(path: string, name: string, at: string): Promise<LoadedTrack> {
-  const bigwig = new BigWig({ filehandle: new LocalFile(at) })
+  const bigwig = new BigWig({ filehandle: new HeldFile(at) })
   const header = await bigwig.getHeader()
   const contigs: Contig[] = Object.values(header.refsByNumber)
     .sort((a, b) => a.id - b.id)
@@ -204,8 +204,13 @@ async function openBigWig(path: string, name: string, at: string): Promise<Loade
       for (let i = 0; i < wanted.length; i++) {
         const from = packed.regionOffsets[i]
         const to = packed.regionOffsets[i + 1]
-        const values = packed.scores.slice(from, to)
-        for (const value of values) {
+        // Views into the one packed reply rather than copies of it: a metaplot
+        // over the RefSeq TSS is tens of millions of intervals, and nothing that
+        // samples a track writes into what it was handed — the worker posts its
+        // replies, and this has nothing to post them to.
+        const values = packed.scores.subarray(from, to)
+        for (let k = 0; k < values.length; k++) {
+          const value = values[k]
           if (!Number.isFinite(value)) continue
           if (value < min) min = value
           if (value > max) max = value
@@ -214,11 +219,11 @@ async function openBigWig(path: string, name: string, at: string): Promise<Loade
           contig: wanted[i].contig,
           start: wanted[i].start,
           end: wanted[i].end,
-          starts: packed.starts.slice(from, to),
-          ends: packed.ends.slice(from, to),
+          starts: packed.starts.subarray(from, to),
+          ends: packed.ends.subarray(from, to),
           values,
-          min: packed.isSummary ? packed.minScores.slice(from, to) : null,
-          max: packed.isSummary ? packed.maxScores.slice(from, to) : null,
+          min: packed.isSummary ? packed.minScores.subarray(from, to) : null,
+          max: packed.isSummary ? packed.maxScores.subarray(from, to) : null,
           variant: null,
           summary: packed.isSummary,
         })
@@ -339,7 +344,7 @@ export function gcTrack(path: string, name: string, store: Reference): LoadedTra
  * cache — and a cache sized for a genome-wide run is the memory this avoids.
  */
 async function twoBitTrack(path: string, name: string, at: string): Promise<LoadedTrack> {
-  const handle = new LocalFile(at)
+  const handle = new HeldFile(at)
   const file = await openTwoBit((length, position) => handle.read(length, position), (await handle.stat()).size)
   const recordOf = (contig: string): TwoBitRecord | undefined => {
     const direct = file.records.get(contig)

@@ -674,6 +674,7 @@ out of the comparison.
 | components | `--components 3` | `n_eigs=3` |
 | phasing | `--phaseTrack gc.bedGraph` | `phasing_track=gc` |
 | diagonals left out; clipping | 2; 99.9th percentile (defaults) | `ignore_diags=2`; `clip_percentile=99.9` |
+| eigensolver | Lanczos, a component at a time with deflation, to a residual within 10⁻¹² of each eigenvalue | ARPACK's restarted Lanczos (`scipy.sparse.linalg.eigsh`), largest in size |
 
 ```{python}
 CMP = WORK / 'compartments'
@@ -765,8 +766,10 @@ plt.show()
 
 On `{python} TEXT['cmp_subject']`, E1 correlates at r ≥ `{python} TEXT['cmp_min_r']`, eigenvalues
 agree within `{python} TEXT['cmp_eig']` and the A/B call on at least `{python} TEXT['cmp_ab']` of bins.
-E2 and E3 agree up to sign on `{python} TEXT['cmp_e23']` chromosome-components (|r| ≥ 0.98); the others
-lie beside an eigenvalue of nearly the same magnitude, where the eigenvector is not unique.
+E2 and E3 agree up to sign on `{python} TEXT['cmp_e23']` chromosome-components (|r| ≥ 0.98); each of
+the others is one of two eigenvalues of opposite sign and all but the same size, which the two tools —
+their matrices a few parts in a thousand apart — rank in opposite orders, so that one's third
+component is the other's fourth.
 
 ```{python}
 record('Compartments', 'mouse Hi-C, 100 kb, GC-phased', f"cooltools {VERSIONS['cooltools']}",

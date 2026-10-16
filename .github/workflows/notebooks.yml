@@ -36,9 +36,11 @@ name: Notebooks
 # buckets answer a runner at hundreds of megabytes a second. From nothing, the
 # validation renders in about an hour on a standard runner (4 cores, 16 GB —
 # the heaviest reference peaks at about 4 GB), every reference run for the
-# first time, and the timings in about twenty minutes a run, so five runs fit
-# the six hours a job may take with room to spare. Every runner is a different
-# machine, which is why the timings page says which one it ran on.
+# first time, and the timings in about twenty minutes a run, so four runs fit
+# the six hours a job may take with room to spare — four, an even number, so
+# that each side of a pair goes first in as many rounds as the other
+# (timing.qmd's `round_of`). Every runner is a different machine, which is why
+# the timings page says which one it ran on.
 #
 # **Where it is published, and why through a branch.** Pages replaces the
 # whole site on every deployment and only deploy.yml deploys it, so this
@@ -62,9 +64,9 @@ on:
   workflow_dispatch:
     inputs:
       runs:
-        description: 'Timed runs of each command (timing.qmd)'
+        description: 'Timed runs of each command (timing.qmd); even, so each side of a pair goes first equally often'
         type: number
-        default: 5
+        default: 4
       publish:
         description: 'Publish the pages at <site>/validation/ and <site>/timings/'
         type: boolean
@@ -93,7 +95,7 @@ jobs:
       # The deploy it asks for at the end.
       actions: write
     env:
-      TIMING_RUNS: ${{ inputs.runs || 5 }}
+      TIMING_RUNS: ${{ inputs.runs || 4 }}
       PUBLISH: ${{ github.event_name == 'release' || inputs.publish }}
     steps:
       # The data, their outputs and two Python environments need about 15 GB,
