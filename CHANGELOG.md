@@ -1058,6 +1058,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The metaplot draws a per-feature heatmap for every curve, its rows in one order (§18.8).** Over
+  several tracks — or several groups of a ranked set — it drew the first curve's heatmap alone, so
+  the second track's rows were never seen. Every curve now has one, and every heatmap of a run lists
+  the features in one order: by each one's mean over every track, strongest first, as deepTools'
+  `plotHeatmap` orders several samples, so a row is the same feature in each and a feature strong in
+  one track can be read off the others. Each keeps colours of its own. Over one track nothing
+  changes. The command line writes them as `metaplot-heatmap`, `metaplot-heatmap-2` and on, and the
+  validation notebook holds two tracks' heatmaps to `computeMatrix` and to `plotHeatmap`'s order.
+
 - **A ratio of two maps has no value where either map has no contacts (§6).** A cell that is zero
   in either map is now missing, and is drawn in the colormap's middle colour — white on `RdBu_r`,
   the colour of a ratio of one — where `4 / 0` was drawn at the top of the scale and `0 / 4` at the

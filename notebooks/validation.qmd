@@ -52,7 +52,7 @@ as it ran, from `notebooks/work/validation/`, and written to `commands.json` the
 | 11 | Aggregate peak analysis | mouse Hi-C, 10 kb | coolpuppy |
 | 12 | APA, chromosight's score | mouse Hi-C, 10 kb | `chromosight quantify` |
 | 13 | Boost-HiC | mouse Hi-C, 100 kb | Boost-HiC (GitHub `a615aff`) |
-| 14 | Metaplot | mouse ATAC-seq, RefSeq TSS | deepTools `computeMatrix`, `plotProfile` |
+| 14 | Metaplot | mouse ATAC-seq, one and two replicates, RefSeq TSS | deepTools `computeMatrix`, `plotProfile`, `plotHeatmap` |
 | 15 | Interval overlap | ATAC-seq peaks and promoters, chr19 | bedtools `jaccard`, `intersect`, `shuffle` |
 | 16 | Base composition | mm10, 10 kb | `bioframe.frac_gc`, Biopython `GC_skew` |
 | 17 | Motif search | mm10, chr19 | `seqkit locate` |
@@ -147,6 +147,7 @@ def tool(name):
 
 
 CHROMOSIGHT, COMPUTEMATRIX, PLOTPROFILE = tool('chromosight'), tool('computeMatrix'), tool('plotProfile')
+PLOTHEATMAP = tool('plotHeatmap')
 MULTIBIGWIGSUMMARY, PLOTCORRELATION = tool('multiBigwigSummary'), tool('plotCorrelation')
 BEDTOOLS, SEQKIT = tool('bedtools'), tool('seqkit')
 #: What a reference's command runs with besides this process's environment.
@@ -190,7 +191,8 @@ def typed(argv):
     """A command as a reader would type it: each tool by its installed name."""
     names = {PYTHON: 'python', str(YAPC_PYTHON): 'yapc-env/bin/python', CHROMOSIGHT: 'chromosight',
              COMPUTEMATRIX: 'computeMatrix', PLOTPROFILE: 'plotProfile', SEQKIT: 'seqkit',
-             MULTIBIGWIGSUMMARY: 'multiBigwigSummary', PLOTCORRELATION: 'plotCorrelation'}
+             MULTIBIGWIGSUMMARY: 'multiBigwigSummary', PLOTCORRELATION: 'plotCorrelation',
+             PLOTHEATMAP: 'plotHeatmap'}
     if argv[:2] == ['node', str(CLI)]:
         argv = ['chromosomix', *argv[2:]]
     return shlex.join([names.get(a, a) for a in argv])
@@ -1999,10 +2001,124 @@ The profiles agree within `{python} TEXT['mp_profile']`, the six digits written,
 `{python} TEXT['mp_rows']` `{python} TEXT['mp_n']` rows has its pair with every bin within the two
 tools' rounding (`{python} TEXT['mp_cells']` cells past it).
 
+**Over two tracks** the app draws a heatmap for each, and lists the transcripts in one order in all of
+them: by each one's mean over every bin of every track, strongest first. That is `plotHeatmap`'s order
+for a matrix of several samples, whose defaults (`--sortRegions descend --sortUsing mean`) sort by the
+mean over every sample. So both replicates at once, and the two tools' rows compared in that order: the
+app's two heatmaps side by side against `computeMatrix`'s rows, in the order of the regions
+`plotHeatmap` writes. A transcript neither track covers has no mean at all; the app puts it last and
+deepTools first, its descending order being NumPy's ascending one reversed, and those are compared apart.
+
+| | chromosomix | deepTools |
+|---|---|---|
+| tracks | `--tracks`, once for each replicate | `computeMatrix reference-point -S`, both replicates |
+| order | the heatmaps' own | `plotHeatmap --outFileSortedRegions` |
+
 ```{python}
-record('Metaplot', 'mouse ATAC-seq, whole genome, RefSeq TSS ±2 kb', f"deepTools {VERSIONS['deeptools']}",
-       f"profile within {TEXT['mp_profile']}; {TEXT['mp_n']} rows, paired one to one within the rounding",
-       'Identical' if METAPLOT_OK else 'Differs', apps=['metaplot'], refs=['computematrix', 'plotprofile'])
+mr('metaplot', '--tracks', ATAC[0], '--tracks', ATAC[1], '--features', TSS_BED, '--mode', 'reference', '--at',
+   'start', '--flank', 2000, '--step', 50, '--band', 'none', out=MP / 'app-two', name='metaplot-two',
+   analysis='Metaplot', group='TSS, two tracks')
+reference('computematrix-two', 'Metaplot', 'deepTools',
+          [COMPUTEMATRIX, 'reference-point', '-S', ATAC[0], ATAC[1], '-R', TSS_BED, '--referencePoint', 'TSS',
+           '-b', 2000, '-a', 2000, '--binSize', 50, '-p', THREADS, '-o', OUT],
+          out=MP / 'deeptools-two.mat.gz', label='computeMatrix', group='TSS, two tracks', threads=THREADS)
+reference('plotprofile-two', 'Metaplot', 'deepTools',
+          [PLOTPROFILE, '-m', MP / 'deeptools-two.mat.gz', '-out', f'{OUT}.png', '--outFileNameData', f'{OUT}.tab'],
+          out=MP / 'deeptools-two-profile', made=MP / 'deeptools-two-profile.tab', label='plotProfile',
+          group='TSS, two tracks')
+reference('plotheatmap-two', 'Metaplot', 'deepTools',
+          [PLOTHEATMAP, '-m', MP / 'deeptools-two.mat.gz', '-out', f'{OUT}.png', '--outFileSortedRegions',
+           f'{OUT}.bed'],
+          out=MP / 'deeptools-two-heatmap', made=MP / 'deeptools-two-heatmap.bed', label='plotHeatmap',
+          group='TSS, two tracks')
+
+curves = table(one(MP / 'app-two', '*.metaplot.tsv'))
+profiles_app = curves[[c for c in curves.columns[1:] if not c.endswith(('_low', '_high'))]].to_numpy(float).T
+profiles_ref = pd.read_csv(MP / 'deeptools-two-profile.tab', sep='\t', header=None,
+                           skiprows=2).iloc[:, 2:].to_numpy(float)
+# The two heatmaps side by side, as computeMatrix writes two samples: a row's bins of the first, then the second's.
+heatmaps = [table(one(MP / 'app-two', f'*.{name}.tsv')).iloc[:, 1:].to_numpy(float)
+            for name in ('metaplot-heatmap', 'metaplot-heatmap-2')]
+both_app = np.hstack(heatmaps)
+regions = pd.read_csv(MP / 'deeptools-two.mat.gz', sep='\t', header=None, skiprows=1)
+both_ref = regions.iloc[:, 6:].to_numpy(float)
+
+
+def place(frame):
+    """A region of a deepTools table by its coordinates, name and strand."""
+    return frame[0].astype(str) + ':' + frame[1].astype(str) + '-' + frame[2].astype(str) + ' ' + frame[3] + frame[5]
+
+
+# plotHeatmap's order: the regions it wrote, top to bottom, each found among computeMatrix's rows.
+listed = pd.read_csv(MP / 'deeptools-two-heatmap.bed', sep='\t', header=None, comment='#')
+order_ref = pd.Series(np.arange(len(regions)), index=place(regions))[place(listed)].to_numpy()
+with np.errstate(invalid='ignore'):
+    key_app, key_ref = np.nanmean(both_app, axis=1), np.nanmean(both_ref[order_ref], axis=1)
+none_app, none_ref = np.isnan(key_app), np.isnan(key_ref)
+uncovered = int(none_app.sum())
+# Each tool's covered rows in its own order, held position by position to the other's: the app's uncovered
+# rows are its last, deepTools' its first.
+order_same = bool(none_ref.sum() == uncovered and none_app[len(none_app) - uncovered:].all()
+                  and none_ref[:uncovered].all()
+                  and (np.abs(key_app[~none_app] - key_ref[~none_ref]) <= written(key_ref[~none_ref])).all())
+match_two = cached(MP / 'paired-two.npy', lambda: paired_rows(both_app, both_ref)).astype(int)
+two_excess = past(both_app, both_ref[match_two])
+profiles_rel = relative_difference(profiles_app, profiles_ref).max()
+measures({
+    'transcripts, chromosomix / deepTools': f'{len(both_app):,} / {len(both_ref):,}',
+    'profiles, max relative difference': f'{profiles_rel:.1e}',
+    'rows paired one to one': 'every one' if len(set(match_two)) == len(match_two) == len(both_ref) else 'not every one',
+    'cells of both heatmaps past both tools\' rounding': f'{int((two_excess > 0).sum()):,} of {two_excess.size:,}',
+    'order, against plotHeatmap\'s': 'the same' if order_same else 'not the same',
+    'transcripts neither track covers': f'{uncovered:,}',
+})
+```
+
+```{python}
+#| label: fig-metaplot-two
+#| fig-cap: "Both replicates about RefSeq TSS. a, each one's profile; b and c, chromosomix's two heatmaps, one row per transcript and the same transcript on a row in both; d, each row's mean over both tracks, top to bottom, in chromosomix's order and in plotHeatmap's."
+TEXT['mp2_profiles'] = f'{profiles_rel:.1e}'
+TEXT['mp2_cells'] = f'{int((two_excess > 0).sum()):,}'
+TEXT['mp2_uncovered'] = f'{uncovered:,}'
+TEXT['mp2_order'] = 'in the same order' if order_same else 'not in the same order'
+METAPLOT_TWO_OK = int((two_excess > 0).sum()) == 0 and len(set(match_two)) == len(both_ref) and order_same
+
+fig, axes = plt.subplots(1, 4, figsize=(12, 3.9), layout='constrained', width_ratios=[1.2, 0.6, 0.6, 1])
+ax = axes[0]
+for i, (mine, theirs) in enumerate(zip(profiles_app, profiles_ref)):
+    ax.plot(offsets, theirs, color=REF, lw=3, label='deepTools plotProfile' if i == 0 else None)
+    ax.plot(offsets, mine, color=APP_COLOUR, lw=1.2, label='chromosomix' if i == 0 else None)
+ax.set(xlabel='from the TSS (bp)', ylabel='mean ATAC signal', title='a  profiles')
+ax.legend(loc='upper left')
+for ax, rows, title in zip(axes[1:3], heatmaps, ('b  replicate 1', 'c  replicate 2')):
+    ax.imshow(rows, aspect='auto', cmap=DENSITY, norm=LogNorm(0.05, np.nanpercentile(rows, 99.5)),
+              interpolation='nearest', extent=[offsets[0] - 25, offsets[-1] + 25, len(rows), 0])
+    ax.set(xlabel='from the TSS (bp)', title=title)
+    ax.grid(False)
+axes[1].set_ylabel('transcripts, strongest over both first')
+axes[2].set_yticks([])
+ax = axes[3]
+ax.plot(key_ref[~none_ref], color=REF, lw=3, label="plotHeatmap's order")
+ax.plot(key_app[~none_app], color=APP_COLOUR, lw=1.2, label="chromosomix's")
+ax.set(yscale='log', xlabel='row, top to bottom', ylabel='mean over both tracks', title='d  the order')
+ax.legend(loc='upper right')
+plt.show()
+```
+
+Both profiles agree within `{python} TEXT['mp2_profiles']`; every row of the two heatmaps has its pair
+among `computeMatrix`'s, both tracks' bins within the two tools' rounding
+(`{python} TEXT['mp2_cells']` cells past it); and the rows are `{python} TEXT['mp2_order']` as
+`plotHeatmap`'s, each one's mean over both tracks within that rounding of the mean of the row
+deepTools puts there, with the `{python} TEXT['mp2_uncovered']` transcripts neither replicate covers
+at the other end.
+
+```{python}
+record('Metaplot', 'mouse ATAC-seq, one and two replicates, whole genome, RefSeq TSS ±2 kb',
+       f"deepTools {VERSIONS['deeptools']}",
+       f"profiles within {max(profile_rel, profiles_rel):.1e}; {TEXT['mp_n']} rows a track, paired one to one "
+       "within the rounding; over two tracks, plotHeatmap's order",
+       'Identical' if METAPLOT_OK and METAPLOT_TWO_OK else 'Differs', apps=['metaplot', 'metaplot-two'],
+       refs=['computematrix', 'plotprofile', 'computematrix-two', 'plotprofile-two', 'plotheatmap-two'])
 ```
 
 ## 15 · Interval overlap (bedtools)

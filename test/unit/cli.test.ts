@@ -873,6 +873,23 @@ describe('the annotations venue', () => {
     expect(complained()).not.toMatch(/failed:/)
   })
 
+  it('writes a metaplot’s heatmap for each of its tracks', async () => {
+    reset()
+    const where = join(directory, 'metaplot-two')
+    expect(
+      await main([
+        'metaplot', sample, '--tracks', `${bigwig},${doubled}`, '--features', aBed,
+        '--band', 'none', '--out', where, '--quiet',
+      ]),
+    ).toBe(0)
+    const files = (await readdir(where)).filter((name) => name.includes('heatmap'))
+    expect(files.sort()).toEqual([
+      'sample.metaplot.metaplot-heatmap-2.tsv',
+      'sample.metaplot.metaplot-heatmap.tsv',
+    ])
+    expect(complained()).not.toMatch(/failed:/)
+  })
+
   it('runs FRiP, and reads the track twice through the same reader', async () => {
     reset()
     const where = join(directory, 'frip')

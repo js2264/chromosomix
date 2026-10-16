@@ -8448,8 +8448,12 @@ then not a statement about reproducibility.
 **Over tracks and feature sets.** *Metaplot over a feature set*, in both **reference-point** (a
 point ± a flank) and
 **scaled-region** (flank, body resampled to a fixed width, flank) modes, strand-aware, over any number
-of bigWig or synthetic tracks, with a bootstrap band and a companion per-feature heatmap — because the
-mean of a bimodal set is a line that describes nothing. *Aggregate peak analysis*, likewise in both
+of bigWig or synthetic tracks, with a bootstrap band and a per-feature heatmap for every curve — because
+the mean of a bimodal set is a line that describes nothing. The heatmaps of one run list the features in
+one order, by each one's mean over every bin of every track and strongest first, which is how deepTools'
+`plotHeatmap` orders several samples: a row is the same feature in each of them, and each has colours of
+its own. Only the first curve had one, so over two tracks the second's rows were never seen; the first
+keeps its name, and the others are numbered after it. *Aggregate peak analysis*, likewise in both
 **fixed** (centre ± W bins) and **scaled-region** (the domain, or the rectangle between two anchors,
 resampled to a fixed grid) modes; on-diagonal from a feature set, off-diagonal from a pair set, and
 off-diagonal from **every pair of one feature set** inside a separation range;
@@ -9044,7 +9048,7 @@ yapc 0.1; loops against chromosight 1.6.3, and the pileup's chromosight score ag
 quantify`; pileups — raw, over the expected and over distance-matched controls, off the diagonal and
 on it — against coolpuppy; reproducibility against `hicrep` 0.2.6; the 3D model against pastis;
 Boost-HiC against its own Python, through `chromosomix boost` (§6.5); the metaplot against
-deepTools; interval overlap and its shuffled null against bedtools; base composition against
+deepTools, over one track and over two, its heatmaps in `plotHeatmap`'s order; interval overlap and its shuffled null against bedtools; base composition against
 bioframe and Biopython; the motif search against seqkit; and the track correlation, on two ATAC-seq
 replicates and a Hi-C insulation score cut to chr19, against pyBigWig's exact window means with
 SciPy, a window any track lacks left out of every pair as deepTools leaves it, and against
@@ -9058,7 +9062,8 @@ APA raw and over controls but not over the expected, where coolpuppy is handed a
 beforehand. Every run is one line of the tidy table `notebooks/work/validation/timings.tsv` — CPU
 and wall-clock seconds and peak memory, with the machine and every version — and each `chromosomix`
 command's speed is a fold over the reference commands it is paired with, a side's commands summed
-where there are several (deepTools' `computeMatrix` and then `plotProfile` against one metaplot).
+where there are several (deepTools' `computeMatrix` and then `plotProfile` against one metaplot, and
+`plotHeatmap` as well against one over two tracks).
 They are documents, not tests: they need the data (about 6 GB), the reference packages and yapc's
 own environment, and nothing in the suite runs them.
 

@@ -249,3 +249,84 @@ describe('the metaplot runner, standardising', () => {
     expect(curve.yLabel).toBe('Mean signal')
   })
 })
+
+describe('the metaplot runner, a heatmap for every curve', () => {
+  /**
+   * Two tracks over the same four features, which disagree about which feature
+   * is strongest: the first puts the second feature on top, the second the
+   * third. Flat across each window, so a heatmap's row is one number.
+   */
+  const OTHER: Record<number, number> = { 900: 1, 1900: 0, 2900: 30, 3900: 3 }
+  const twoTracks = (params: Params): TrackJobContext => {
+    const base = job(params)
+    return {
+      ...base,
+      inputs: { ...base.inputs, labels: { t1: 'signal', t2: 'other' } },
+      sample: async (entry, regions, step) => {
+        const set = await base.sample(entry, regions, step)
+        if (entry !== 't2') return set
+        return {
+          ...set,
+          regions: set.regions.map((region) => ({
+            ...region,
+            values: Float32Array.from([OTHER[region.start] ?? Number.NaN]),
+          })),
+        }
+      },
+    }
+  }
+  const ONE_SET: Params = { ...PARAMS(false), tracks: ['t1', 't2'], rankBy: null, subset: 'all' }
+  const matrices = (outputs: Awaited<ReturnType<typeof runMetaplot>>): MatrixOutput[] =>
+    outputs.filter((output): output is MatrixOutput => output.kind === 'matrix')
+  /** Each row's value — every row is flat — top to bottom. */
+  const rowsOf = (matrix: MatrixOutput): number[] =>
+    Array.from({ length: matrix.nrows }, (_, row) => matrix.values[row * matrix.ncols])
+
+  it('draws one for each track over one set, not the first track’s alone', async () => {
+    const outputs = await runMetaplot(twoTracks(ONE_SET))
+    expect(curveOf(outputs).series.map((series) => series.name)).toEqual(['signal', 'other'])
+    const drawn = matrices(outputs)
+    expect(drawn.map((matrix) => matrix.label)).toEqual(['signal · per feature', 'other · per feature'])
+    // The first keeps the id the command line names its file by.
+    expect(drawn.map((matrix) => matrix.id)).toEqual(['metaplot-heatmap', 'metaplot-heatmap-2'])
+    for (const matrix of drawn) expect(matrix.nrows).toBe(4)
+  })
+
+  it('puts the same feature on the same row of every track’s heatmap', async () => {
+    // By the mean over both tracks, as deepTools' plotHeatmap sorts several
+    // samples: the third feature (0 and 30), the second (12 and 0), the first
+    // (10 and 1), the fourth (2 and 3). Each sorted by its own track, the rows
+    // would read 12, 10, 2, 0 and 30, 3, 1, 0 — four pairs of different features.
+    const [first, second] = matrices(await runMetaplot(twoTracks(ONE_SET)))
+    expect(rowsOf(first)).toEqual([0, 12, 10, 2])
+    expect(rowsOf(second)).toEqual([30, 0, 1, 3])
+    expect(first.yLabel).toBe('Features, strongest first across 2 tracks (4)')
+    // Each in its own colours: the two tracks need not share a unit.
+    expect(first.range).toEqual([0, 12])
+    expect(second.range).toEqual([0, 30])
+  })
+
+  it('keeps one track’s heatmap in that track’s own order', async () => {
+    const [only, ...rest] = matrices(await runMetaplot(twoTracks({ ...ONE_SET, tracks: ['t2'] })))
+    expect(rest).toEqual([])
+    expect(only.id).toBe('metaplot-heatmap')
+    expect(rowsOf(only)).toEqual([30, 3, 1, 0])
+    expect(only.yLabel).toBe('Features, strongest first (4)')
+  })
+
+  it('draws one for each group of a ranked set, each of the group’s rows', async () => {
+    const drawn = matrices(await runMetaplot(job(PARAMS(false))))
+    expect(drawn.map((matrix) => matrix.label)).toEqual([
+      'signal · group 1 · per feature',
+      'signal · group 2 · per feature',
+    ])
+    expect(drawn.map(rowsOf)).toEqual([
+      [12, 10],
+      [2, 0],
+    ])
+  })
+
+  it('draws none when the reader turned it off', async () => {
+    expect(matrices(await runMetaplot(twoTracks({ ...ONE_SET, heatmap: false })))).toEqual([])
+  })
+})
