@@ -21,7 +21,7 @@
 import type { Column, Table } from '../types'
 import { MetaCoolerFormatError } from '../errors'
 import type { H5Module, H5wasmDataset, H5wasmFile, H5wasmGroup, Metadata } from './bootstrap'
-import { toNumberArray } from './typed'
+import { lowWords, toNumberArray } from './typed'
 
 const UTF8 = new TextDecoder('utf-8')
 
@@ -149,15 +149,132 @@ export function readStringSlice(
   }
 }
 
+/** Where a numeric slice can be read straight out of the wasm heap from. */
+export interface HeapAccess {
+  h5: H5Module
+  file: H5wasmFile
+}
+
+/** The numeric layouts {@link heapSlice} reads directly: little-endian, four or eight bytes. */
+type HeapKind = 'i64' | 'u64' | 'i32' | 'u32' | 'f64' | 'f32'
+
+function heapKind(h5: H5Module, md: Metadata): HeapKind | null {
+  if (md.littleEndian === false || md.vlen) return null
+  const cls = h5.Module.H5T_class_t
+  if (md.type === cls.H5T_INTEGER.value) {
+    if (md.size === 8) return md.signed ? 'i64' : 'u64'
+    if (md.size === 4) return md.signed ? 'i32' : 'u32'
+    return null
+  }
+  if (md.type === cls.H5T_FLOAT.value) {
+    if (md.size === 8) return 'f64'
+    if (md.size === 4) return 'f32'
+  }
+  return null
+}
+
+/**
+ * `[lo, hi)` of a 1-D numeric dataset, read into the wasm heap and narrowed
+ * from there by `narrow`, or `null` where it is not one of the layouts this
+ * reads (every other goes through h5wasm's own `slice()`).
+ *
+ * What `Dataset.slice()` does, short of its last step: the same hyperslab
+ * through `get_dataset_data`, but where `slice()` then copies the bytes out
+ * into a fresh array of the stored type — a `BigInt64Array` for an int64
+ * column — the narrowing here reads them in place, so a window of a pixel
+ * column is copied once, into the array handed back, and not twice. On a scan
+ * of a whole table that was a few gigabytes of garbage. The values are the
+ * ones `slice()` would have produced: the same bytes, through views of the type
+ * h5wasm itself would have chosen for them.
+ */
+function heapSlice<T>(
+  access: HeapAccess,
+  ds: H5wasmDataset,
+  lo: number,
+  hi: number,
+  narrow: (heap: ArrayBuffer, at: number, n: number, kind: HeapKind) => T,
+): T | null {
+  const md = ds.metadata
+  const kind = heapKind(access.h5, md)
+  if (kind === null) return null
+  const n = hi - lo
+  const { Module } = access.h5
+  const ptr = malloc(access.h5, md.size * n)
+  try {
+    Module.get_dataset_data(access.file.file_id, ds.path, [BigInt(n)], [BigInt(lo)], [1n], BigInt(ptr))
+    // The heap's buffer as it is *after* the read, which may have grown it.
+    return narrow(Module.HEAPU8.buffer as ArrayBuffer, ptr, n, kind)
+  } finally {
+    Module._free(ptr)
+  }
+}
+
+/** A heap slice as `Float64Array`: what {@link readNumericSlice} returns for it. */
+function heapToFloat64(heap: ArrayBuffer, at: number, n: number, kind: HeapKind): Float64Array {
+  switch (kind) {
+    case 'f64':
+      return new Float64Array(heap, at, n).slice()
+    case 'i64':
+    case 'u64':
+      return toNumberArray(kind === 'i64' ? new BigInt64Array(heap, at, n) : new BigUint64Array(heap, at, n))
+    default: {
+      const out = new Float64Array(n)
+      out.set(
+        kind === 'i32'
+          ? new Int32Array(heap, at, n)
+          : kind === 'u32'
+            ? new Uint32Array(heap, at, n)
+            : new Float32Array(heap, at, n),
+      )
+      return out
+    }
+  }
+}
+
+/** A heap slice as `Int32Array`: what {@link readInt32Slice} returns for it. */
+function heapToInt32(heap: ArrayBuffer, at: number, n: number, kind: HeapKind): Int32Array {
+  switch (kind) {
+    case 'i32':
+      return new Int32Array(heap, at, n).slice()
+    case 'i64':
+    case 'u64':
+      return lowWords(kind === 'i64' ? new BigInt64Array(heap, at, n) : new BigUint64Array(heap, at, n))
+    default: {
+      // `set` on an integer target applies ToInt32, as the slice path does.
+      const out = new Int32Array(n)
+      out.set(
+        kind === 'u32'
+          ? new Uint32Array(heap, at, n)
+          : kind === 'f64'
+            ? new Float64Array(heap, at, n)
+            : new Float32Array(heap, at, n),
+      )
+      return out
+    }
+  }
+}
+
 /**
  * Read a half-open row range of a numeric dataset, narrowed to `Float64Array`.
  *
  * Enum datasets (h5py booleans) are read through their base integer type, so
  * `false`/`true` arrive as `0`/`1`.
+ *
+ * With `access`, a little-endian integer or float column is read straight out
+ * of the wasm heap ({@link heapSlice}); the values are the same either way.
  */
-export function readNumericSlice(ds: H5wasmDataset, lo: number, hi: number): Float64Array {
+export function readNumericSlice(
+  ds: H5wasmDataset,
+  lo: number,
+  hi: number,
+  access?: HeapAccess,
+): Float64Array {
   const n = hi - lo
   if (n <= 0) return new Float64Array(0)
+  if (access !== undefined) {
+    const direct = heapSlice(access, ds, lo, hi, heapToFloat64)
+    if (direct !== null) return direct
+  }
   const raw = ds.slice([[lo, hi]])
   // Already the target type, and already a buffer h5wasm minted for this call
   // and will not touch again — so it is ours to hand on. Copying it into an
@@ -186,18 +303,26 @@ export function readNumericSlice(ds: H5wasmDataset, lo: number, hi: number): Flo
  * directly: 8 B per pixel of live memory that no longer exists, per column.
  *
  * Bin ids are bounded by the file's bin count, which every guard here keeps far
- * below 2^31, so the narrowing is exact.
+ * below 2^31, so the narrowing is exact — and it is made word by word
+ * (`lowWords`), never through a BigInt per element, which was a third of what
+ * reading the column cost. With `access`, straight out of the wasm heap
+ * ({@link heapSlice}).
  */
-export function readInt32Slice(ds: H5wasmDataset, lo: number, hi: number): Int32Array {
+export function readInt32Slice(
+  ds: H5wasmDataset,
+  lo: number,
+  hi: number,
+  access?: HeapAccess,
+): Int32Array {
   const n = hi - lo
   if (n <= 0) return new Int32Array(0)
+  if (access !== undefined) {
+    const direct = heapSlice(access, ds, lo, hi, heapToInt32)
+    if (direct !== null) return direct
+  }
   const raw = ds.slice([[lo, hi]])
   if (raw instanceof Int32Array) return raw
-  if (raw instanceof BigInt64Array || raw instanceof BigUint64Array) {
-    const out = new Int32Array(n)
-    for (let i = 0; i < n; i++) out[i] = Number(raw[i])
-    return out
-  }
+  if (raw instanceof BigInt64Array || raw instanceof BigUint64Array) return lowWords(raw)
   if (ArrayBuffer.isView(raw) && !(raw instanceof DataView)) {
     const out = new Int32Array(n)
     // `set` on an integer target applies ToInt32, which is exact for the
@@ -321,7 +446,7 @@ export function readTableGroup(
         break
       case 'number':
         names.push(name)
-        data[name] = readNumericSlice(ds, start, stop)
+        data[name] = readNumericSlice(ds, start, stop, { h5, file })
         break
       case 'other':
         break

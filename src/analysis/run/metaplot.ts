@@ -332,21 +332,44 @@ async function rowsFor(
 
   for (const [, indices] of byContig) {
     job.throwIfCancelled()
-    const regions: Region[] = indices.map((i) => ({
-      contig: windows[i].contig,
-      start: windows[i].start,
-      end: windows[i].end,
-    }))
+    // **Each stretch asked for once.** Features that share an anchor share a
+    // window — the transcripts of a gene that start at one TSS, a fifth of the
+    // RefSeq set — and a stretch asked for twice is read, parsed and handed back
+    // twice for the same numbers. The reply is matched by coordinates below, so
+    // every feature finds its stretch whichever of them asked.
+    const asked = new Set<string>()
+    const regions: Region[] = []
+    for (const i of indices) {
+      const window = windows[i]
+      const key = `${window.start}-${window.end}`
+      if (asked.has(key)) continue
+      asked.add(key)
+      regions.push({ contig: window.contig, start: window.start, end: window.end })
+    }
     const set = await job.sample(entry, regions, step)
     // `sample` answers in the order it was asked, having dropped what it could
     // not answer — so the reply is matched by its echoed coordinates rather than
     // by position, which would silently shift every row after the first drop.
     const byKey = new Map<string, (typeof set.regions)[number]>()
     for (const region of set.regions) byKey.set(`${region.contig}:${region.start}-${region.end}`, region)
+    // And each row made once: a window the same as one already done — same
+    // stretch, strand and columns, and same body where it has one — is that
+    // row again, copied.
+    const done = new Map<string, number>()
     for (const i of indices) {
       const window = windows[i]
       const samples = byKey.get(`${window.contig}:${window.start}-${window.end}`)
       if (samples === undefined) continue
+      const { body } = window
+      const key =
+        `${window.start}-${window.end}:${window.strand}:${window.slotFrom}-${window.slotTo}` +
+        (body === undefined ? '' : `:${body.start}-${body.end}:${body.slotFrom}-${body.slotTo}`)
+      const same = done.get(key)
+      if (same !== undefined) {
+        rows.copyWithin(i * layout.slots, same * layout.slots, (same + 1) * layout.slots)
+        continue
+      }
+      done.set(key, i)
       rows.set(windowRow(samples, window, layout.slots), i * layout.slots)
     }
   }

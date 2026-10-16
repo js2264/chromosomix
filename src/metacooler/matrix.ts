@@ -309,9 +309,9 @@ export function resolveCountKind(dtype: string): 'i' | 'u' | 'f' {
 /**
  * Read every pixel whose **row** bin falls in `[lo, hi)`.
  *
- * One `bin1_offset` slice gives the pixel range; the three pixel columns are
- * then one contiguous span each. Four reads total, independent of how many
- * pixels come back.
+ * One `bin1_offset` slice gives the pixel range and each pixel's row; the two
+ * other columns, `bin2_id` and the value, are then one contiguous span each.
+ * Three reads total, independent of how many pixels come back.
  */
 export function readPixelSpan(h: Hdf5Handle, lo: number, hi: number): PixelChunk {
   const parts: PixelChunk[] = []
@@ -373,9 +373,9 @@ export const PIXEL_CHUNK_BYTES = PIXEL_CHUNK * 36
 /**
  * Read the pixels whose **row** bin falls in `[lo, hi)`, in bounded windows.
  *
- * One `bin1_offset` slice gives the pixel range; the three pixel columns are
- * then read a window at a time and handed to `onChunk` before the next window
- * is fetched.
+ * One `bin1_offset` slice gives the pixel range; `bin2_id` and the value column
+ * are then read a window at a time and handed to `onChunk` before the next
+ * window is fetched, each pixel's row taken from the slice ({@link RowIndex}).
  *
  * **The windowing is not an optimisation, it is the correctness fix.** The span
  * of a whole-genome block is the whole file, and reading it in one shot put
@@ -397,33 +397,112 @@ export function forEachPixelSpan(
   chunkSize: number = PIXEL_CHUNK,
   value: string = DEFAULT_COUNT_COLUMN,
 ): void {
-  const range = pixelSpanRange(h, lo, hi)
-  if (range === null) return
+  const span = pixelSpanOf(h, lo, hi)
+  if (span === null) return
   const width = Math.max(1, Math.trunc(chunkSize))
-  for (let at = range[0]; at < range[1]; at += width) {
-    onChunk(readPixelWindow(h, at, Math.min(at + width, range[1]), value))
+  for (let at = span.p0; at < span.p1; at += width) {
+    onChunk(readPixelWindow(h, at, Math.min(at + width, span.p1), value, span.rows))
   }
 }
 
-/** What a span asks for: the pixel range, or `null` when it holds none. */
-function pixelSpanRange(h: Hdf5Handle, lo: number, hi: number): [number, number] | null {
+/**
+ * Which row each stored pixel is in, answered from `bin1_offset` rather than
+ * read from `pixels/bin1_id`.
+ *
+ * The index *is* that column, run-length encoded: row `r` holds the pixels
+ * `[offsets[r], offsets[r + 1])`, and a cooler is valid only where the two agree
+ * (`MetaCooler.validateDeep` checks exactly that). So the column is not read.
+ * It was two-fifths of the bytes every row band inflated — eight of the twenty
+ * a pixel takes in an int64/int64/int32 table — for numbers already in hand,
+ * and cooler's own range query (`CSRReader`) has never read it either: it fills
+ * each row's pixels with the row from the same index. What is handed on is the
+ * same `Int32Array` of the same values; only where it came from has changed.
+ *
+ * Built over a slice of the index — rows `[firstBin, firstBin + offsets.length −
+ * 1)` — and asked in pixel order, which is how every walk asks, so finding the
+ * row is a cursor that only moves forward; a jump back or ahead is a binary
+ * search ({@link seek}).
+ */
+export class RowIndex {
+  private row = 0
+
+  constructor(
+    /** `bin1_offset` for the rows covered, and one past the last: `rows + 1` long. */
+    private readonly offsets: ArrayLike<number>,
+    /** The bin of the first entry of `offsets`. */
+    private readonly firstBin: number,
+  ) {}
+
+  /** The row of every pixel in `[at, end)`, as `pixels/bin1_id` stores it. */
+  bin1(at: number, end: number): Int32Array {
+    const out = new Int32Array(Math.max(0, end - at))
+    const offsets = this.offsets
+    const lastRow = offsets.length - 2
+    if (lastRow < 0) return out
+    if (at < offsets[this.row]) this.seek(at)
+    let r = this.row
+    for (let k = at; k < end; ) {
+      // The row that holds pixel `k`: the first whose end is past it. Empty rows
+      // are stepped over here, which is all an empty row ever is.
+      while (r < lastRow && offsets[r + 1] <= k) r++
+      // Never short of `end` on an index that brackets the walk; where one does
+      // not, the remainder is given to the last row rather than looped on.
+      const stop = r < lastRow ? Math.min(end, offsets[r + 1]) : end
+      const to = stop > k ? stop : end
+      out.fill(this.firstBin + r, k - at, to - at)
+      k = to
+    }
+    this.row = r
+    return out
+  }
+
+  /** Put the cursor on the row that holds pixel `at`. */
+  seek(at: number): void {
+    const offsets = this.offsets
+    // The last row whose start is at or before `at`, empty rows before it skipped
+    // by the forward walk in {@link bin1}.
+    let lo = 0
+    let hi = Math.max(0, offsets.length - 2)
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1
+      if (offsets[mid] <= at) lo = mid
+      else hi = mid - 1
+    }
+    this.row = lo
+  }
+}
+
+/** What a span asks for: its pixel range and the rows over it, or `null` when it holds none. */
+function pixelSpanOf(
+  h: Hdf5Handle,
+  lo: number,
+  hi: number,
+): { p0: number; p1: number; rows: RowIndex } | null {
   if (hi <= lo) return null
   // hi + 1 is safe: bin1_offset has one entry per bin plus a terminator.
   const offsets = h.readNumeric('indexes/bin1_offset', lo, hi + 1)
   const p0 = offsets[0]
   const p1 = offsets[offsets.length - 1]
-  return p1 <= p0 ? null : [p0, p1]
+  return p1 <= p0 ? null : { p0, p1, rows: new RowIndex(offsets, lo) }
 }
 
-function readPixelWindow(
+/**
+ * One window of stored pixels, `[at, end)` of the table.
+ *
+ * `rows` answers each pixel's row from the index ({@link RowIndex}); without one
+ * `pixels/bin1_id` is read, which is what a check of the file against its own
+ * index has to do (`CoolerStore.scanAll`'s `storedRows`).
+ */
+export function readPixelWindow(
   h: Hdf5Handle,
   at: number,
   end: number,
   value: string = DEFAULT_COUNT_COLUMN,
+  rows: RowIndex | null = null,
 ): PixelChunk {
-  const bin1 = h.readInt32('pixels/bin1_id', at, end)
   const bin2 = h.readInt32('pixels/bin2_id', at, end)
   const count = h.readNumeric(`pixels/${value}`, at, end)
+  const bin1 = rows === null ? h.readInt32('pixels/bin1_id', at, end) : rows.bin1(at, at + count.length)
   return { bin1, bin2, count, length: count.length }
 }
 
@@ -472,16 +551,16 @@ export async function forEachPixelSpanAsync(
   onChunk: (chunk: PixelChunk) => void,
   options: SpanScanOptions = {},
 ): Promise<boolean> {
-  const range = pixelSpanRange(h, lo, hi)
-  if (range === null) return true
-  const [p0, p1] = range
+  const span = pixelSpanOf(h, lo, hi)
+  if (span === null) return true
+  const { p0, p1, rows } = span
   const width = Math.max(1, Math.trunc(options.chunkSize ?? PIXEL_CHUNK))
   const total = p1 - p0
   const value = options.value ?? DEFAULT_COUNT_COLUMN
   for (let at = p0; at < p1; at += width) {
     if (options.cancelled?.() === true) return false
     const end = Math.min(at + width, p1)
-    onChunk(readPixelWindow(h, at, end, value))
+    onChunk(readPixelWindow(h, at, end, value, rows))
     options.onProgress?.(end - p0, total)
     await yieldToEventLoop()
   }
@@ -511,22 +590,30 @@ export const PIXEL_BAND_GAP = 65_536
  * So the caller hands in the bands, already merged, and this walks them in
  * order with one progress count across the lot. Cancellation is checked between
  * windows exactly as it is for a single range, because it is the same loop.
+ *
+ * `offsets` is the whole of `bin1_offset`, where the caller holds it — a
+ * `CoolerStore` does, having built the bands from it — and is what each pixel's
+ * row is then taken from ({@link RowIndex}); without it `pixels/bin1_id` is
+ * read.
  */
 export async function forEachPixelRangesAsync(
   h: Hdf5Handle,
   ranges: ReadonlyArray<Extent>,
   onChunk: (chunk: PixelChunk) => void,
   options: SpanScanOptions = {},
+  offsets: ArrayLike<number> | null = null,
 ): Promise<boolean> {
   const width = Math.max(1, Math.trunc(options.chunkSize ?? PIXEL_CHUNK))
   const total = ranges.reduce((sum, [p0, p1]) => sum + Math.max(0, p1 - p0), 0)
   const value = options.value ?? DEFAULT_COUNT_COLUMN
+  const rows = offsets === null ? null : new RowIndex(offsets, 0)
   let done = 0
   for (const [p0, p1] of ranges) {
+    rows?.seek(p0)
     for (let at = p0; at < p1; at += width) {
       if (options.cancelled?.() === true) return false
       const end = Math.min(at + width, p1)
-      onChunk(readPixelWindow(h, at, end, value))
+      onChunk(readPixelWindow(h, at, end, value, rows))
       done += end - at
       options.onProgress?.(done, total)
       await yieldToEventLoop()
@@ -562,9 +649,18 @@ export interface ReadPlan {
  *   every pixel is placed transposed. This is the case §5.3 warns about.
  * - **row range strictly before the column range** — pixels are stored the way
  *   they will be displayed; read the row band and filter on `bin2`.
- * - **overlapping (including the on-diagonal case)** — read the union, which
- *   is at most `nRows + nCols` wide, place directly, and mirror across the
- *   diagonal without doubling the diagonal itself.
+ * - **overlapping (including the on-diagonal case)** — read from the lower of
+ *   the two starts to the lower of the two ends, place directly, and mirror
+ *   across the diagonal without doubling the diagonal itself.
+ *
+ * The overlapping read stops at the lower end, not the higher, because no row
+ * past it can hold a cell of the block: a stored pixel has `bin1 ≤ bin2`, and
+ * one with `bin1` at or past `min(r1, c1)` has both its bins past the end of
+ * one axis, so it is in the block neither as stored nor mirrored. Reading to the
+ * union's end fetched those rows and threw every pixel of them away, which a
+ * block on the diagonal never notices and a band (rows `[a, b)` against columns
+ * `[a, b + hi)`, `analysis/run/blocks.ts`) paid for on every strip: `hi` rows
+ * read twice.
  *
  * Under `square` both triangles are stored, so mirroring is skipped entirely
  * and the row band alone is always correct.
@@ -575,7 +671,7 @@ export function planRead(rows: Extent, cols: Extent, storageMode: StorageMode): 
   }
   if (cols[1] <= rows[0]) return { span: cols, mode: 'transpose' }
   if (rows[1] <= cols[0]) return { span: rows, mode: 'direct' }
-  return { span: [Math.min(rows[0], cols[0]), Math.max(rows[1], cols[1])], mode: 'symmetric' }
+  return { span: [Math.min(rows[0], cols[0]), Math.min(rows[1], cols[1])], mode: 'symmetric' }
 }
 
 /**

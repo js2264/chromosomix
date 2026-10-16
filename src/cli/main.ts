@@ -78,6 +78,7 @@
 
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { readFile, mkdir, writeFile } from 'node:fs/promises'
+import { deflateSync } from 'node:zlib'
 import { basename, dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -1798,12 +1799,18 @@ async function writeOutputs(
       // The same three arguments the drawer's own bigWig button passes, so the
       // two writers cannot drift: one implementation, one byte layout, one set
       // of round-trip tests behind it.
-      const blob = await writeBigWig({
-        contigs: grid.map((contig) => ({ name: contig.name, length: contig.length })),
-        values: output.values,
-        firstBin: output.extent[0],
-        binsize: output.binsize,
-      })
+      //
+      // Deflated by Node's own zlib, synchronously: the bytes `CompressionStream`
+      // makes, without a stream a block (`BigWigWriting`).
+      const blob = await writeBigWig(
+        {
+          contigs: grid.map((contig) => ({ name: contig.name, length: contig.length })),
+          values: output.values,
+          firstBin: output.extent[0],
+          binsize: output.binsize,
+        },
+        { deflate: (bytes) => deflateSync(bytes) },
+      )
       await put(`${stem}.bw`, new Uint8Array(await blob.arrayBuffer()))
     }
   }

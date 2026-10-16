@@ -506,7 +506,9 @@ async function runSquare(
   // fills with zeros, and the leading eigenvector of a zero matrix is a shape
   // with no data behind it. Named, rather than drawn.
   let finite = 0
-  for (const value of oe) if (Number.isFinite(value)) finite++
+  // Indexed rather than `for…of`, which over a typed array of a few million
+  // cells cost, with the sum of squares below, a second of the task.
+  for (let i = 0; i < oe.length; i++) if (Number.isFinite(oe[i])) finite++
   if (finite === 0) {
     job.note(
       `${label}: nothing was left to correlate — ${plan.ignoreDiags} ignored ` +
@@ -532,7 +534,7 @@ async function runSquare(
     job.progress(options.step.at, options.step.of, `decomposing ${label}`)
     decomposed = cooltoolsMatrix(oe, index.length)
     whole = 0
-    for (const value of decomposed) whole += value * value
+    for (let i = 0; i < decomposed.length; i++) whole += decomposed[i] * decomposed[i]
   } else {
     decomposed = await correlationMatrix(oe, index.length, async (row) => {
       // Every sixty-fourth row rather than every row: a `breathe` is a

@@ -831,6 +831,7 @@ function rTreeBytes(blocks: IndexedBlock[], treeOffset: number, itemsPerSlot: nu
  */
 async function packBlocks(
   groups: Uint8Array[][],
+  deflate?: (bytes: Uint8Array) => Uint8Array,
 ): Promise<{ packed: Uint8Array[][]; compressed: boolean; largest: number }> {
   const packed: Uint8Array[][] = []
   let compressed = true
@@ -839,6 +840,10 @@ async function packBlocks(
     const out: Uint8Array[] = []
     for (const bytes of group) {
       largest = Math.max(largest, bytes.length)
+      if (deflate !== undefined) {
+        out.push(deflate(bytes))
+        continue
+      }
       const { data, filter } = await deflateBytes(bytes)
       if (filter === null) compressed = false
       out.push(data)
@@ -846,6 +851,18 @@ async function packBlocks(
     packed.push(out)
   }
   return { packed, compressed, largest }
+}
+
+/** How {@link writeBigWig} may be told to compress. */
+export interface BigWigWriting {
+  /**
+   * zlib's RFC 1950 deflate, synchronous, where the caller has one — the command
+   * line has Node's. The platform's `CompressionStream` is the same zlib at the
+   * same settings, so the bytes are the same; what it costs is a stream, a blob
+   * and a response per block, and a file is hundreds of blocks. Absent, every
+   * block goes through `CompressionStream` (decision 2).
+   */
+  deflate?: (bytes: Uint8Array) => Uint8Array
 }
 
 // ---------------------------------------------------------------------------
@@ -861,7 +878,7 @@ async function packBlocks(
  * end against offsets that are known by then. A genome's worth of bins is
  * kilobytes, so there is nothing to stream and nothing to be clever about.
  */
-export async function writeBigWig(input: BigWigInput): Promise<Blob> {
+export async function writeBigWig(input: BigWigInput, writing: BigWigWriting = {}): Promise<Blob> {
   const contigs = planContigs(input)
   const perContig: Interval[][] = new Array<Interval[]>(contigs.length)
   for (const contig of contigs) perContig[contig.id] = intervalsFor(contig, input)
@@ -874,10 +891,10 @@ export async function writeBigWig(input: BigWigInput): Promise<Blob> {
     ...buildZoomBlocks(level.records),
   }))
 
-  const { packed, compressed, largest } = await packBlocks([
-    sections.raw,
-    ...zooms.map((zoom) => zoom.raw),
-  ])
+  const { packed, compressed, largest } = await packBlocks(
+    [sections.raw, ...zooms.map((zoom) => zoom.raw)],
+    writing.deflate,
+  )
   const sectionBlocks = packed[0]
   const zoomBlocks = packed.slice(1)
 

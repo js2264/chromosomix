@@ -256,26 +256,45 @@ export function windowRow(
 
   const totals = new Float64Array(covered)
   const weights = new Float64Array(covered)
+  const edges = slotEdges(covered)
 
-  for (let i = 0; i < samples.values.length; i++) {
-    const value = samples.values[i]
+  // Every interval of every feature passes through here — tens of millions
+  // over the RefSeq TSS at base resolution — so what does not change from one
+  // to the next is read once: the arrays, the window's ends, its direction. The
+  // arithmetic is `positionOf`'s and the slots' own, in the same order, so a
+  // row is the same to the last bit.
+  const { values, starts, ends } = samples
+  const lo = window.start
+  const hi = window.end
+  const back = window.strand < 0
+  const linear = window.body === undefined
+  for (let i = 0; i < values.length; i++) {
+    const value = values[i]
     if (!Number.isFinite(value)) continue
-    const from = Math.max(window.start, samples.starts[i])
-    const to = Math.min(window.end, samples.ends[i])
+    const from = Math.max(lo, starts[i])
+    const to = Math.min(hi, ends[i])
     if (!(to > from)) continue
     // Where the interval falls, as a fraction of the slots this window covers.
     // Already in reading order, so `a` is the low end of the row's span and `b`
     // the high one whichever way the feature points.
-    const one = positionOf(window, from)
-    const two = positionOf(window, to)
-    const a = window.strand < 0 ? two : one
-    const b = window.strand < 0 ? one : two
+    let a: number
+    let b: number
+    if (linear) {
+      // `positionOf` for a window with no body, written out.
+      const one = (from - lo) / (hi - lo)
+      const two = (to - lo) / (hi - lo)
+      a = back ? 1 - two : one
+      b = back ? 1 - one : two
+    } else {
+      const one = positionOf(window, from)
+      const two = positionOf(window, to)
+      a = back ? two : one
+      b = back ? one : two
+    }
     const first = Math.max(0, Math.floor(a * covered))
     const last = Math.min(covered - 1, Math.ceil(b * covered) - 1)
     for (let slot = first; slot <= last; slot++) {
-      const slotLo = slot / covered
-      const slotHi = (slot + 1) / covered
-      const overlap = Math.min(b, slotHi) - Math.max(a, slotLo)
+      const overlap = Math.min(b, edges[slot + 1]) - Math.max(a, edges[slot])
       if (!(overlap > 0)) continue
       totals[slot] += value * overlap
       weights[slot] += overlap
@@ -286,6 +305,20 @@ export function windowRow(
     if (weights[slot] > 0) row[window.slotFrom + slot] = totals[slot] / weights[slot]
   }
   return row
+}
+
+/** `slot / covered` for every slot edge, `0 … covered`, by the slot count. */
+const EDGES = new Map<number, Float64Array>()
+
+/** The slot edges of a window covering `covered` slots, as fractions of it. */
+function slotEdges(covered: number): Float64Array {
+  let edges = EDGES.get(covered)
+  if (edges === undefined) {
+    edges = new Float64Array(covered + 1)
+    for (let slot = 0; slot <= covered; slot++) edges[slot] = slot / covered
+    EDGES.set(covered, edges)
+  }
+  return edges
 }
 
 /**

@@ -238,11 +238,11 @@ describe.skipIf(!hasMetacool)('Hum53.metacool — the real 26 MB file', () => {
     // would mean the coordinate model quietly grew a dependency.
     expect(paths.length).toBeGreaterThan(0)
     expect(paths.filter((p) => /(^|\/)bins($|\/)/.test(p))).toEqual([])
-    // What it *did* read: bin1_offset, then the three pixel columns. Four
-    // reads, whatever the block's size (§4).
+    // What it *did* read: bin1_offset, then two of the pixel columns — each
+    // pixel's row is the index's own answer, not `pixels/bin1_id` (§6.2).
+    // Three reads, whatever the block's size (§4).
     expect(paths).toEqual([
       'indexes/bin1_offset',
-      'pixels/bin1_id',
       'pixels/bin2_id',
       'pixels/count',
     ])

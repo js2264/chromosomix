@@ -81,6 +81,14 @@ export function dtypeKind(dtype: string): DtypeKind {
 }
 
 /**
+ * Which of a 64-bit integer's two 32-bit words holds its low half: the first
+ * on a little-endian machine — every one this runs on — and the second
+ * otherwise. Asked of the machine once rather than assumed, because a typed
+ * array's byte order is the platform's.
+ */
+const LOW_WORD = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1 ? 0 : 1
+
+/**
  * Narrow any numeric array h5wasm can hand back to `Float64Array`.
  *
  * int64 columns — `bin1_id`, `bin2_id` and all three offset arrays — arrive as
@@ -88,16 +96,45 @@ export function dtypeKind(dtype: string): DtypeKind {
  * throws a TypeError at *runtime*, not at compile time. Narrowing once, here,
  * is what makes that class of bug unreachable downstream (spec §6.2). Bin and
  * pixel indices are far below 2^53, so the conversion is exact.
+ *
+ * **Read as two 32-bit words, never as a BigInt.** `Number(x[i])` makes a
+ * BigInt of every element before converting it, which on a column of tens of
+ * millions was a third of the cost of reading it, and a BigInt of garbage for
+ * every value. The high word times 2³² plus the low one is the same number:
+ * exact below 2^53, and above it one rounding of the exact sum, which is the
+ * rounding `Number` makes.
  */
 export function toNumberArray(
   x: ArrayLike<number> | BigInt64Array | BigUint64Array,
 ): Float64Array {
   const out = new Float64Array(x.length)
   if (x instanceof BigInt64Array || x instanceof BigUint64Array) {
-    for (let i = 0; i < x.length; i++) out[i] = Number(x[i])
+    const n = x.length
+    const low = new Uint32Array(x.buffer, x.byteOffset, n * 2)
+    const high = x instanceof BigInt64Array ? new Int32Array(x.buffer, x.byteOffset, n * 2) : low
+    const lo = LOW_WORD
+    const hi = 1 - LOW_WORD
+    for (let i = 0; i < n; i++) out[i] = high[2 * i + hi] * 4294967296 + low[2 * i + lo]
     return out
   }
   out.set(x as ArrayLike<number>)
+  return out
+}
+
+/**
+ * The low 32 bits of each element of a 64-bit integer array, as `Int32` —
+ * exactly what `ToInt32(Number(x))` gives, without making a BigInt per element.
+ *
+ * For index columns, `pixels/bin2_id` above all, which are int64 on disk and
+ * array indices in use: every guard here keeps a bin id far below 2^31, so the
+ * low word *is* the value.
+ */
+export function lowWords(x: BigInt64Array | BigUint64Array): Int32Array {
+  const n = x.length
+  const words = new Int32Array(x.buffer, x.byteOffset, n * 2)
+  const out = new Int32Array(n)
+  const lo = LOW_WORD
+  for (let i = 0; i < n; i++) out[i] = words[2 * i + lo]
   return out
 }
 

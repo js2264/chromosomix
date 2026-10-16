@@ -1844,6 +1844,9 @@ export class MetaCooler {
     // file against its own `attrs['sum']`.
     await this.pixelStore.scanAll({
       onProgress: options?.onProgress,
+      // The rows as `pixels/bin1_id` stores them: the index is what they are
+      // checked against below, so they cannot be taken from it.
+      storedRows: true,
       onChunk: (chunk) => {
         if (cancelled?.() === true) return false
         for (let i = 0; i < chunk.length; i++, row++) {

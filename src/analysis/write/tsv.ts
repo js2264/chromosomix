@@ -111,9 +111,20 @@ function withExponent(value: number): string {
   return `${trimZeros(mantissa)}e${exponent}`
 }
 
-/** `1.500000` is six digits of nothing; `1.5` is the same number. */
+/**
+ * `1.500000` is six digits of nothing; `1.5` is the same number.
+ *
+ * The trailing zeros, and the point if nothing is left after it — what
+ * `/\.?0+$/` removes, scanned for by hand: this runs on every number of every
+ * table, and a heatmap is millions of them.
+ */
 function trimZeros(text: string): string {
-  return text.includes('.') ? text.replace(/\.?0+$/, '') : text
+  if (text.indexOf('.') < 0) return text
+  let end = text.length
+  while (text.charCodeAt(end - 1) === 48) end--
+  if (end === text.length) return text
+  if (text.charCodeAt(end - 1) === 46) end--
+  return text.slice(0, end)
 }
 
 /**
@@ -131,6 +142,40 @@ function cell(text: string): string {
 
 function row(cells: readonly string[]): string {
   return cells.join('\t')
+}
+
+/** Rows a {@link RowBlocks} joins at a time. */
+const ROWS_PER_BLOCK = 4096
+
+/**
+ * Rows gathered into a list of lines a block at a time.
+ *
+ * A profile is a row per bin of the file — a quarter of a million at 10 kb on a
+ * mammal, for each of a task's tracks and in each of two formats — and held as
+ * rows to the end, every one of them lived long enough for the collector to
+ * move it out of its young space and then mark it again and again, which was a
+ * larger share of writing a coverage run than formatting its numbers. Joined a
+ * block at a time as they are made, the rows die young and the list holds one
+ * string for every four thousand rows. Each block is its rows joined by the `\n`
+ * the list is joined by in turn (`document`, or a bedGraph's own join), so the
+ * text is the same.
+ */
+export class RowBlocks {
+  private readonly block: string[] = []
+
+  constructor(private readonly into: string[]) {}
+
+  push(line: string): void {
+    this.block.push(line)
+    if (this.block.length === ROWS_PER_BLOCK) this.flush()
+  }
+
+  /** What is left, onto the list; call once the last row is pushed. */
+  flush(): void {
+    if (this.block.length === 0) return
+    this.into.push(this.block.join('\n'))
+    this.block.length = 0
+  }
 }
 
 /** Lines to a file: newline endings, exactly one at the end. */
@@ -198,18 +243,17 @@ function profileToTsv(output: ProfileOutput): string[] {
     `# binsize: ${tsvNumber(output.binsize)}`,
     row(['bin', 'start', 'end', 'value']),
   ]
-  for (let i = 0; i < output.values.length; i++) {
+  // One template a row rather than four cells joined: a profile is a row per
+  // bin of the file, a quarter of a million at 10 kb on a mammal, and the cells
+  // are the same strings either way.
+  const { binsize, values } = output
+  const rows = new RowBlocks(lines)
+  for (let i = 0; i < values.length; i++) {
     const bin = from + i
-    const start = bin * output.binsize
-    lines.push(
-      row([
-        String(bin),
-        String(start),
-        String(start + output.binsize),
-        tsvNumber(output.values[i]),
-      ]),
-    )
+    const start = bin * binsize
+    rows.push(`${bin}\t${start}\t${start + binsize}\t${tsvNumber(values[i])}`)
   }
+  rows.flush()
   return lines
 }
 

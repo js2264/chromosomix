@@ -223,6 +223,7 @@ export class ScoolStore implements PixelStore {
       const before = done
       await cell.store.scanAll({
         ...(options.chunkSize === undefined ? {} : { chunkSize: options.chunkSize }),
+        ...(options.storedRows === undefined ? {} : { storedRows: options.storedRows }),
         onChunk: (chunk) => {
           const keepGoing = options.onChunk(chunk)
           if (keepGoing === false) stopped = true

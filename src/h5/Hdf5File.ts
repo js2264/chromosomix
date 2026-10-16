@@ -15,7 +15,14 @@ import type { ByteSource, Table } from '../types'
 import { MetaCoolerFormatError, ViewerError, truncateNames } from '../errors'
 import type { H5Module, H5wasmDataset, H5wasmFile, Metadata } from './bootstrap'
 import { getH5 } from './bootstrap'
-import { classify, readInt32Slice, readNumericSlice, readStringSlice, readTableGroup } from './readTable'
+import {
+  classify,
+  readInt32Slice,
+  readNumericSlice,
+  readStringSlice,
+  readTableGroup,
+  type HeapAccess,
+} from './readTable'
 import { orderEntries } from '../metacooler/detect'
 
 const UTF8 = new TextDecoder('utf-8')
@@ -114,6 +121,8 @@ class Hdf5File implements Hdf5Handle {
 
   private readonly h5: H5Module
   private readonly file: H5wasmFile
+  /** What a numeric column is read straight out of the wasm heap with (`readTable.heapSlice`). */
+  private readonly heap: HeapAccess
   private readonly source: ByteSource
   private closed = false
   /** A view from {@link at}, which shares the mount and must not close it. */
@@ -136,6 +145,7 @@ class Hdf5File implements Hdf5Handle {
     this.borrowed = borrowed
     this.h5 = h5
     this.file = file
+    this.heap = { h5, file }
     this.source = source
   }
 
@@ -199,12 +209,12 @@ class Hdf5File implements Hdf5Handle {
 
   readNumeric(path: string, lo?: number, hi?: number): Float64Array {
     const [ds, start, stop] = this.numericRange(path, lo, hi)
-    return readNumericSlice(ds, start, stop)
+    return readNumericSlice(ds, start, stop, this.heap)
   }
 
   readInt32(path: string, lo?: number, hi?: number): Int32Array {
     const [ds, start, stop] = this.numericRange(path, lo, hi)
-    return readInt32Slice(ds, start, stop)
+    return readInt32Slice(ds, start, stop, this.heap)
   }
 
   /** The shared preamble of the two numeric reads: classify, then clamp. */
