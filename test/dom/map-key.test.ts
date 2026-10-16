@@ -133,13 +133,18 @@ describe('the clip boxes', () => {
   })
 })
 
+/**
+ * The ends as the scale holds them — floats off a colour scale, in the
+ * transform's units — and as the key prints them: the same numbers through the
+ * panel's trimmer (`keyContent`).
+ */
 const CONTENT = {
-  title: 'Balanced (log2)',
+  title: 'Balanced (log10)',
   note: '5 kb per square',
-  lo: -3,
-  hi: 4,
-  loLabel: '0.125',
-  hiLabel: '16',
+  lo: -4.182345678901,
+  hi: -1.0543182366,
+  loLabel: '-4.182',
+  hiLabel: '-1.054',
   loColor: '#000',
   hiColor: '#fff',
   ramp: ['#000', '#888', '#fff'],
@@ -150,11 +155,11 @@ describe('the key in the corner of the map', () => {
     const key = new MapKey()
     document.body.appendChild(key.el)
     key.set(CONTENT)
-    expect(key.el.querySelector('.map-key-title')?.textContent).toBe('Balanced (log2)')
+    expect(key.el.querySelector('.map-key-title')?.textContent).toBe('Balanced (log10)')
     expect(key.el.querySelector('.map-key-note')?.textContent).toBe('5 kb per square')
     expect(key.el.querySelector('.map-key-note')?.classList.contains('hidden')).toBe(false)
-    expect(key.el.querySelector('.is-lo')?.textContent).toBe('0.125')
-    expect(key.el.querySelector('.is-hi')?.textContent).toBe('16')
+    expect(key.el.querySelector('.is-lo')?.textContent).toBe('-4.182')
+    expect(key.el.querySelector('.is-hi')?.textContent).toBe('-1.054')
   })
 
   it('draws the ramp between the two numbers, through every stop', () => {
@@ -185,7 +190,7 @@ describe('the key in the corner of the map', () => {
     expect(lo.querySelector('input')).toBeNull()
   })
 
-  it('opens a box on the bound, seeded with the value in force', () => {
+  it('opens a box on the number the key shows, not the float behind it', () => {
     const changes: Array<[string, number | null]> = []
     const key = new MapKey({ onChange: (bound, value) => changes.push([bound, value]) })
     document.body.appendChild(key.el)
@@ -194,9 +199,23 @@ describe('the key in the corner of the map', () => {
     expect(hi.getAttribute('role')).toBe('button')
     hi.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     const input = hi.querySelector('input') as HTMLInputElement
-    // The transformed value, which is what the caller's `onChange` takes — not
-    // the label, which is printed in counts.
-    expect(input.value).toBe('4')
+    // Rounded, as the clip card's boxes are: `-1.0543182366` is wider than the
+    // box, which showed its last digits and none of its first.
+    expect(input.value).toBe('-1.054')
+    // And left as it was, it is no decision — the bound is not moved to the
+    // rounded number, nor fixed at it.
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(changes).toEqual([])
+    expect(hi.textContent).toBe('-1.054')
+  })
+
+  it('opens on the bound as held where the label is not a number', () => {
+    const key = new MapKey({ onChange: () => {} })
+    document.body.appendChild(key.el)
+    key.set({ ...CONTENT, lo: -3, loLabel: '0.125 counts' })
+    const lo = key.el.querySelector('.is-lo') as HTMLElement
+    lo.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    expect(lo.querySelector('input')?.value).toBe('-3')
   })
 
   it('commits on Enter, once, and puts the label back', () => {
@@ -213,7 +232,7 @@ describe('the key in the corner of the map', () => {
     // pass has to be a no-op or the label never goes back.
     expect(changes).toEqual([['hi', 6]])
     expect(hi.querySelector('input')).toBeNull()
-    expect(hi.textContent).toBe('16')
+    expect(hi.textContent).toBe('-1.054')
   })
 
   it('reads an emptied box as “back to auto”', () => {
@@ -240,7 +259,7 @@ describe('the key in the corner of the map', () => {
     input.value = '-9'
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     expect(changes).toEqual([])
-    expect(lo.textContent).toBe('0.125')
+    expect(lo.textContent).toBe('-4.182')
   })
 
   it('does not rewrite a bound the reader has a caret in', () => {
@@ -249,8 +268,8 @@ describe('the key in the corner of the map', () => {
     key.set(CONTENT)
     const hi = key.el.querySelector('.is-hi') as HTMLElement
     hi.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    key.set({ ...CONTENT, hiLabel: '32', hi: 5 })
-    expect(hi.querySelector('input')?.value).toBe('4')
+    key.set({ ...CONTENT, hiLabel: '-0.9', hi: -0.9 })
+    expect(hi.querySelector('input')?.value).toBe('-1.054')
   })
 
   it('keeps the map from reading a keystroke aimed at the box', () => {

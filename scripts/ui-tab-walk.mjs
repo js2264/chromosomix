@@ -170,8 +170,13 @@ try {
   await page.locator('.map-key-value.is-lo').first().click()
   await sleep(300)
   await tab()
-  const hi = await page.evaluate(() => document.activeElement?.closest('.map-key-value')?.className ?? null)
-  console.log('colour key, after Tab from the low end:', hi)
+  const hi = await page.evaluate(() => ({
+    end: document.activeElement?.closest('.map-key-value')?.className ?? null,
+    // The number the key prints, not the float behind it.
+    box: document.activeElement?.value ?? null,
+    shown: document.querySelector('.map-key-value.is-lo')?.textContent ?? null,
+  }))
+  console.log('colour key, after Tab from the low end:', JSON.stringify(hi))
   await shot('tw04-key-high')
   await tab()
   console.log('and past the high end, a caret in the key:', await page.evaluate(() => document.querySelector('.map-key-input') !== null))
@@ -298,6 +303,7 @@ try {
       cell,
       name: cells[cell]?.querySelector('.deck-name')?.value ?? null,
       end: active?.closest('.map-key-value')?.classList.contains('is-lo') ? 'lo' : 'hi',
+      box: active?.value ?? null,
     }
   })
   console.log('deck colour keys, after Tab from the first map’s high end:', JSON.stringify(keyAt))

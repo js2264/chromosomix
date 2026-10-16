@@ -24,7 +24,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   a sequence's name on the editing stage to the next sequence's; the 3D key's bottom to its top. A
   value a field refuses keeps the caret, as Enter does. Tab used to jump to whatever button came next
   in the page — and on the editing stage it threw the typed name away. On the way, a colour key's
-  end opened and left as it was no longer fixes the bound at the number it showed.
+  end opened and left as it was no longer fixes the bound at the number it showed, and its box opens
+  on that number as the key prints it, `-1.054`, rather than on the float behind it,
+  `-1.0543182366`, whose end was all the box had room for.
 
 - **The installed app keeps its folders, and a saved workspace finds its files in them again
   (§20.6).** In the desktop app — or the site installed as an app — a connected folder is kept

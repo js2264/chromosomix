@@ -1951,8 +1951,11 @@ URL carries `vmin` and `vmax` independently, in transformed units, and their abs
 The key in the map's top-right corner prints the same two numbers, the boxes' own, under the score's
 name with the transform on it, and each is a button: pressed, it takes a typed bound in place,
 emptied it hands that bound back to auto, and left as it was it changes nothing — a bound on auto is
-not fixed at the number the key happened to show. Tab goes from the low end to the high one, and on
-a deck on to the next map's key (§26.8). A change of transform hands both back, since a bound is a
+not fixed at the number the key happened to show. The box opens on **that number**, rounded as the
+key prints it and as the clip boxes are (`trimNumber`): it opened on the float the scale holds,
+`-1.0543182366`, which overflowed the box and left its last digits in view and its sign and first
+digits out. Tab goes from the low end to the high one, and on a deck on to the next map's key
+(§26.8). A change of transform hands both back, since a bound is a
 number in the old transform's units. **Between the two numbers is the ramp they run between**, short
 — 48 by 10 pixels — and drawn through the colormap's own colours: on screen a gradient, in a figure
 one band a pixel, since a PDF page here has no linear gradient. For a while it was two squares, the

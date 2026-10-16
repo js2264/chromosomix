@@ -107,6 +107,23 @@ export class MapKey {
     if (this.hiEl.querySelector('input') === null) this.hiEl.textContent = content.hiLabel
   }
 
+  /**
+   * What a box opens on: the number the key shows, which is the one being read
+   * and so the one to edit from — rounded, as the clip card's boxes are
+   * (`trimNumber`), rather than the float the scale holds, whose sixteen
+   * digits overflowed the box and left its end in view instead of its start.
+   * The label is the bound itself, formatted (`keyContent`), so nothing is
+   * lost by an end opened and left alone: an unchanged box is no decision. A
+   * label that does not read as a number falls back to the bound as held.
+   */
+  private seed(which: 'lo' | 'hi'): string {
+    const content = this.content
+    if (content === null) return ''
+    const label = which === 'lo' ? content.loLabel : content.hiLabel
+    if (label.trim() !== '' && Number.isFinite(Number(label))) return label
+    return String(which === 'lo' ? content.lo : content.hi)
+  }
+
   private bound(which: 'lo' | 'hi'): HTMLElement {
     const onChange = this.props.onChange
     const node = el('span', {
@@ -125,8 +142,7 @@ export class MapKey {
 
     const open = (): void => {
       if (node.querySelector('input') !== null) return
-      const held = which === 'lo' ? this.content?.lo : this.content?.hi
-      const seeded = held === undefined ? '' : String(held)
+      const seeded = this.seed(which)
       const input = el('input', {
         class: 'map-key-input',
         type: 'text',
