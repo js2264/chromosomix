@@ -302,6 +302,11 @@ const OE_ON_BASELINE_HINT =
   'The cells already are the expected values, so there is nothing left to divide by them. ' +
   'Choose another score to get the toggle back.'
 
+const OE_ON_RATIO_HINT =
+  'A ratio of two maps divides one by the other, and the decay with distance the two share ' +
+  'goes with it: each cell is already a change against a baseline, the second map. Set the ' +
+  'comparison back to split or difference to get the toggle back.'
+
 const BASELINE_HINT =
   'The baseline O/E divides by, drawn instead of applied: every cell replaced by the mean of ' +
   'this block at that bin separation. Worth a look because an O/E is only as trustworthy as ' +
@@ -314,6 +319,10 @@ const ARM_BASELINE_HINT =
 
 const ARMS_ON_ARM_BASELINE_HINT =
   'The cells already are the expected along both arms. Choose another score to get the toggle back.'
+
+const ARMS_ON_RATIO_HINT =
+  'The arms are which decay the O/E divides by, and a ratio of two maps is not divided by one. ' +
+  'Set the comparison back to split or difference to get the toggle back.'
 
 /** A colour scale a derivation took over, to be given back when it is switched off (§7.5). */
 export interface BorrowedScale {
@@ -1929,8 +1938,8 @@ export class MatrixPanel {
         onExpectedChange(this.options.derive?.expected !== true)
       })
       this.expectedButton = button
-      this.paintExpected(derive.expected)
-      this.gateExpected(derive.baseline)
+      this.paintExpected(this.expectedInForce())
+      this.gateExpected()
       picture.push(button)
 
       // Beside the O/E it modifies, and only where there is one sequence for it
@@ -2557,14 +2566,22 @@ export class MatrixPanel {
     button.classList.toggle('hidden', arms?.onChange === undefined)
     // Greyed under `arm decay`, as the O/E is under any baseline: that one is
     // read along the arms whatever the toggle says, so a press would change
-    // nothing on screen (§8.15).
+    // nothing on screen (§8.15). And under a ratio of two maps, with the O/E it
+    // shapes: there is none for it to take along the arms (§7.5).
     const alongArms = this.options.derive?.baseline === true && this.options.derive.alongArms === true
-    const on = arms?.window !== undefined && arms.refusal === null && !alongArms
+    const ratio = this.ratioOfMaps()
+    const on = arms?.window !== undefined && arms.refusal === null && !alongArms && !ratio
     button.setAttribute('aria-pressed', String(on))
     button.classList.toggle('is-on', on)
     const refused = arms === undefined || arms.refusal !== null
-    button.disabled = refused || alongArms
-    const hint = refused ? (arms?.refusal ?? ARMS_HINT) : alongArms ? ARMS_ON_ARM_BASELINE_HINT : ARMS_HINT
+    button.disabled = refused || alongArms || ratio
+    const hint = refused
+      ? (arms?.refusal ?? ARMS_HINT)
+      : alongArms
+        ? ARMS_ON_ARM_BASELINE_HINT
+        : ratio
+          ? ARMS_ON_RATIO_HINT
+          : ARMS_HINT
     button.title = hint
     button.setAttribute('aria-label', hint)
   }
@@ -2619,20 +2636,58 @@ export class MatrixPanel {
   }
 
   /**
-   * Grey the O/E toggle while the score picker is showing the baseline itself.
+   * Grey the O/E toggle where it cannot act: while the score picker is showing
+   * the baseline itself, and while two maps are compared as a ratio.
    *
    * Disabled rather than hidden, and with the reason in the tooltip: a control
    * that vanishes when a *different* control moves reads as a bug, while one
    * that greys and says "you are looking at the denominator" reads as an
    * explanation of the picture on screen.
    */
-  private gateExpected(baseline: boolean): void {
+  private gateExpected(): void {
     const button = this.expectedButton
     if (button === null) return
-    const hint = baseline ? OE_ON_BASELINE_HINT : OE_HINT
-    button.toggleAttribute('disabled', baseline)
+    const refusal = this.expectedRefusal()
+    const hint = refusal ?? OE_HINT
+    button.toggleAttribute('disabled', refusal !== null)
     button.title = hint
     button.setAttribute('aria-label', hint)
+  }
+
+  /**
+   * Why the O/E cannot act on this map, or `null` where it can.
+   *
+   * **A ratio of two maps is not divided by the expected**, either map's (§7.5).
+   * The ratio is itself the comparison against a baseline — the second map —
+   * and the decay with distance the two share divides out with it; what the
+   * O/E would add is each library's own decay divided out first, which is a
+   * different figure from the one the reader asked for. `oe` stays in the
+   * address as it was, and the toggle comes back lit with it on a split or a
+   * difference — the baseline's rule, for the same reason: what greys is the
+   * control, and the setting is the reader's.
+   */
+  private expectedRefusal(): string | null {
+    if (this.options.derive?.baseline === true) return OE_ON_BASELINE_HINT
+    if (this.ratioOfMaps()) return OE_ON_RATIO_HINT
+    return null
+  }
+
+  /**
+   * Whether the O/E is in force: asked for, or forced on by the correlation,
+   * and not refused. What the toggle lights for, and what is drawn.
+   */
+  private expectedInForce(): boolean {
+    const derive = this.options.derive
+    return this.expectedRefusal() === null && (derive?.expected === true || derive?.correlate === true)
+  }
+
+  /**
+   * Whether this map is built for a ratio of two maps. The panel is built for
+   * one comparison at construction — a change of it, or of the second map's
+   * eye, rebuilds the map (§7.5) — so this is a fact about the panel.
+   */
+  private ratioOfMaps(): boolean {
+    return this.options.compare?.op === 'ratio'
   }
 
   /**
@@ -4788,10 +4843,9 @@ export class MatrixPanel {
     // click — so it is repainted from whatever arrives, exactly as the turn's is.
     // The O/E light follows the correlation, which forces it on: a lit map with
     // an unlit toggle is the picture disagreeing with the control that made it.
-    this.paintExpected(
-      derive?.baseline !== true && (derive?.expected === true || derive?.correlate === true),
-    )
-    this.gateExpected(derive?.baseline === true)
+    // And it goes out where the O/E is refused, for the same reason.
+    this.paintExpected(this.expectedInForce())
+    this.gateExpected()
     this.paintSmooth(derive?.smooth ?? '0')
     return same
   }
@@ -4842,9 +4896,10 @@ export class MatrixPanel {
     compare?: ComparePresentation,
     turn?: TurnPresentation,
   ): void {
+    // The comparison first: the O/E and `arms` are painted from it.
+    if (compare !== undefined) this.options.compare = compare
     const turnMoved = !this.setTurn(turn)
     const unchanged = this.setDerive(derive) && !turnMoved
-    if (compare !== undefined) this.options.compare = compare
     const data = this.data
     // Nothing to recompute, but the setting is recorded either way: the session
     // builds a fresh presentation object on every render and hands it over

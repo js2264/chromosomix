@@ -212,7 +212,13 @@ export class MapDerivation {
       // draws the O/E underneath it. That is the nearest true picture to what
       // was asked for, and dropping back to plain counts would change the map
       // twice — once for the refusal and once for a baseline nobody withdrew.
-      expected: wantsCorrelation || this.options.derive?.expected === true,
+      //
+      // **Never under a ratio of two maps** (§7.5): the ratio is the comparison
+      // against a baseline, the second map, and the O/E toggle is greyed while
+      // it is drawn. The setting stays the reader's, for a split or a difference.
+      expected:
+        (this.options.compare?.op ?? 'split') !== 'ratio' &&
+        (wantsCorrelation || this.options.derive?.expected === true),
       // Last word, and `deriveBlock` gives it one: a reader who left the toggle
       // on and then asked to see the baseline gets the baseline, not a field of
       // ones. The toggle is greyed to say so rather than silently ignored.

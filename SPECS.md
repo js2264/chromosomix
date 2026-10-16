@@ -2384,6 +2384,15 @@ anything — so the toggle greys and says why, and it is drawn on a sequential r
 because a mean of counts is count-like and a diverging scale centred at 1 would be centred where
 nothing in the picture lives.
 
+**A ratio of two maps is not divided by the expected either.** The ratio is itself a comparison
+against a baseline — the second map — and the decay with distance the two share divides out with
+it; the O/E of each map first would divide out each library's own decay as well, which is another
+figure from the one asked for. So while the comparison is a ratio the O/E toggle greys, unlit, and
+says why, and `arms`, which says which decay the O/E divides by, greys with it; `e` and the
+palette's entry stand down with the button. The setting is the reader's and is left as it was: `oe`
+stays in the address, and a split or a difference built with it on draws it. It used to be applied
+to each map before the division, so a ratio drawn with the toggle on was the ratio of two O/E maps.
+
 **On a bacterial chromosome the baseline can be taken along both arms.** Where the
 two arms are held side by side the map has two diagonals, and the decay curve
 knows only one: it averages each diagonal of the map, every one of them crosses

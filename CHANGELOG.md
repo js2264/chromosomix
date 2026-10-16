@@ -1058,6 +1058,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **A ratio of two maps greys the O/E (§7.5).** While the comparison is a ratio, the O/E toggle —
+  and `arms` with it — is greyed and unlit and says why in its tooltip, and `e` and the palette's
+  entry stand down: the ratio is taken of the two maps as they are, where it was taken of each map's
+  O/E. A ratio is already a comparison against a baseline, the second map, and the decay with
+  distance the two share divides out with it. The O/E setting is kept, and a split or a difference
+  built with it on draws it again.
+
 - **P(s) leaves out the first two diagonals by default (§18.8).** *Minimum separation* is now 2 bins
   rather than 0: the diagonal and the one beside it hold self-ligation and unligated fragments rather
   than contacts between loci, and cooltools' `expected_cis` leaves them out by default
