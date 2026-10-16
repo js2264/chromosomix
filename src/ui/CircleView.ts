@@ -18,7 +18,7 @@
 
 import { el } from './dom'
 import { getPlotOptions, subscribePlotOptions } from './plotOptions'
-import { ringPlacement, subscribeRingPlacement } from './circlePrefs'
+import { registerCircle, ringColumn, ringPlacement, subscribeRingColumn, subscribeRingPlacement } from './circlePrefs'
 import { laneSize } from './trackControls'
 import { scaleFont, subscribeTextScale } from './textScale'
 import { fmt } from '../units'
@@ -46,7 +46,6 @@ import {
   CHORD_CAP,
   CIRCLE_MAX_ZOOM,
   COLUMN_MAX,
-  COLUMN_PAD,
   LIGHT_CIRCLE_PALETTE,
   NO_FOCUS,
   TOP,
@@ -65,6 +64,7 @@ import {
   fitText,
   fontPixels,
   fromTwelve,
+  ringNameAt,
   ringNamePx,
   circleModelOf,
   hitCircle,
@@ -399,8 +399,12 @@ export class CircleView {
         this.schedule()
       }),
       subscribeTextScale(() => this.schedule()),
-      // Inside the sections or outside them: the layout's, in its key.
+      // Inside the sections or outside them, and the names in a column or
+      // not: the layout's, in its key.
       subscribeRingPlacement(() => this.schedule()),
+      subscribeRingColumn(() => this.schedule()),
+      // Whether a circle is on screen, which is whose the name column's key is.
+      registerCircle(this.el),
     )
     if (options.groups !== undefined) this.unsubscribe.push(options.groups.subscribe(() => this.schedule()))
     this.watchPointer()
@@ -646,10 +650,9 @@ export class CircleView {
         : { width: box.width + 2 * KEY_INSET, height: box.height + 2 * KEY_INSET }
     const outside = ringPlacement() === 'outside'
     // The rings' names in a column before twelve, the arcs ending short of it
-    // — the 1D browser's `name column`, which as there needs the names on at
-    // all (§7.6).
-    const plot = getPlotOptions()
-    const columned = plot.gutter && plot.text && slots.length > 0
+    // — the circle's own `name column`, on unless the reader turned it off,
+    // which as the 1D browser's needs the names on at all (§7.6).
+    const columned = ringColumn() && getPlotOptions().text && slots.length > 0
     const ringNames = slots.map(ringLabel)
     const key =
       `${width}x${height}|${font}|${names}|${outside ? 'out' : 'in'}|${corner?.width ?? 0}x${corner?.height ?? 0}|` +
@@ -1367,12 +1370,12 @@ export class CircleView {
     // is drawn: off, the rings are ink alone.
     if (this.rings.length === 0 || !getPlotOptions().text) return
     ctx.save()
-    // Right-aligned on twelve o'clock, before it — where the tracks start, as
-    // the 1D browser's names end where its tracks begin — over the ends of the
-    // tracks; or in the column, where the arcs end short of the names and no
-    // track is drawn under one.
+    // In the column, right-aligned on twelve o'clock where the tracks start, as
+    // the 1D browser's names end where its tracks begin — the arcs ending short
+    // of the names, so no track is drawn under one; without it, centred over
+    // the opening just before twelve and the ends of the tracks either side.
     const column = geometry.column
-    ctx.textAlign = 'right'
+    ctx.textAlign = column ? 'right' : 'center'
     ctx.textBaseline = 'middle'
     ctx.lineJoin = 'round'
     const wanted = fontPixels(scaleFont(RING_NAME_FONT))
@@ -1384,9 +1387,7 @@ export class CircleView {
       const held = this.isHeld(ring.id)
       const lit = live && !held && this.drag === null && this.gripHover === ring.id
       ctx.font = `${held || lit ? '600 ' : ''}${px.toFixed(1)}px system-ui, sans-serif`
-      const r = (band.inner + band.outer) / 2
-      const x = geometry.cx + Math.cos(TOP) * r - COLUMN_PAD
-      const y = geometry.cy + Math.sin(TOP) * r
+      const { x, y } = ringNameAt(geometry, band)
       // A name longer than the column may be loses its middle, as a section's
       // name does — the column was measured to the same length.
       const text = column ? fitText(ctx, ring.label, geometry.outer * COLUMN_MAX) : ring.label
@@ -1399,7 +1400,8 @@ export class CircleView {
       ctx.fillText(text, x, y)
       if (live) {
         const width = ctx.measureText(text).width
-        this.nameBoxes.push({ id: ring.id, x0: x - width - 3, y0: y - px / 2 - 2, x1: x + 3, y1: y + px / 2 + 2 })
+        const left = column ? x - width : x - width / 2
+        this.nameBoxes.push({ id: ring.id, x0: left - 3, y0: y - px / 2 - 2, x1: left + width + 3, y1: y + px / 2 + 2 })
       }
     })
     ctx.restore()

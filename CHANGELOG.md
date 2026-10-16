@@ -29,10 +29,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   and every map's lanes follow; a ring's inner edge is dragged to make it thicker or thinner, as a
   lane's border is in the 1D browser, setting its track's height everywhere, and a ring is as thick
   as its lane wherever the room allows. The Map card's `tracks` row puts the rings **outside** the
-  arcs instead, the genomes then the inner circle the chords meet. The Tracks card's `name column`,
-  the 1D browser's, writes the rings' names right-aligned in a column before twelve o'clock with
-  no track under them: every arc starts on twelve, always, and with the column ends short of the
-  names, the circle open by as much as they take. Chords are raw contacts for now, the strongest 3,000 kept and the
+  arcs instead, the genomes then the inner circle the chords meet. The Tracks card's `name column`
+  writes the rings' names right-aligned in a column before twelve o'clock with no track under them,
+  **on by default in the circle**: it is the circle's own setting, so the 1D browser's is exactly as
+  the reader left it when the map goes back to square, and `u` is the circle's while one is on
+  screen. Off, the names are centred over the opening. Every arc starts on twelve, always, and with
+  the column ends short of the names, the circle open by as much as they take. Chords are raw contacts for now, the strongest 3,000 kept and the
   `chords` row thinning them to 1,000, 200 or 50; PNG, PDF and copy save the circle and its key.
   **It zooms as the map does**: the wheel or a pinch about the pointer, up to 200 times, a drag to
   pan, a sideways or ⌘ scroll to slide, the arrows and Page Up and Page Down, and a double click,

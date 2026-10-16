@@ -24,6 +24,7 @@ import {
   radialCursor,
   radialStops,
   ringEdgeAt,
+  ringNameAt,
   ringNamePx,
   ringScale,
   ringThickness,
@@ -274,6 +275,25 @@ describe('the rings’ names in a column before twelve', () => {
     const ring = columned.rings[0]
     const r = (ring.inner + ring.outer) / 2
     expect(reach).toBeCloseTo(Math.atan2(2 * COLUMN_PAD + columned.outer * COLUMN_MAX, r - 5), 12)
+  })
+
+  it('writes a name right-aligned on twelve in the column, and centred over the opening without one', () => {
+    const ring = columned.rings[1]
+    const r = (ring.inner + ring.outer) / 2
+    const inColumn = ringNameAt(columned, ring)
+    expect(inColumn.align).toBe('right')
+    expect(inColumn.x).toBeCloseTo(columned.cx - COLUMN_PAD, 9)
+    expect(inColumn.y).toBeCloseTo(columned.cy - r, 9)
+    // Without the column, at the middle of the opening just before twelve:
+    // left of it by half the opening, the ends of the tracks either side.
+    const band = fitted.rings[1]
+    const across = ringNameAt(fitted, band)
+    const radius = (band.inner + band.outer) / 2
+    expect(across.align).toBe('center')
+    expect(Math.hypot(across.x - fitted.cx, across.y - fitted.cy)).toBeCloseTo(radius, 9)
+    expect(fromTwelve(Math.atan2(across.y - fitted.cy, across.x - fitted.cx))).toBeCloseTo(-fitted.topGap / 2, 9)
+    expect(across.x).toBeLessThan(fitted.cx)
+    expect(fitted.arcs[0]).toBeCloseTo(TOP, 9)
   })
 
   it('names no ring too thin to hold a line', () => {

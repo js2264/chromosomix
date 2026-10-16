@@ -20,15 +20,17 @@
  * with one carried by its name, a double click back; a ring's foot hovered and
  * dragged thicker, and Escape mid-drag; the tracks outside the arcs from the Map
  * card, a genome hovered there and zoomed into; the rings' names right-aligned
- * in a column before twelve, the arcs ending short of them, one held by its
- * line, inside, outside and with the genomes named; the contigs of one genome
+ * in a column before twelve, the circle's default, the arcs ending short of
+ * them, one held by its line, inside, outside and with the genomes named, then
+ * off — each name centred over the opening — and `u` putting it back, the 1D
+ * browser's setting printed unmoved throughout; the contigs of one genome
  * zoomed into and named; the figure of a zoomed view.
  * Prints what it found at each step — the geometry the canvas publishes, the
  * tooltips, the toggles offered and lit, the rings' order and thickness — so a
  * picture that did not change is a line in the log as well.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-circle.mjs [out-dir]     # ci01 … ci44, ci-figure.png, ci-figure.pdf, ci-figure-page.png, ci-figure-zoomed.png
+ *   node scripts/ui-circle.mjs [out-dir]     # ci01 … ci45, ci-figure.png, ci-figure.pdf, ci-figure-page.png, ci-figure-zoomed.png
  */
 
 import { execFileSync } from 'node:child_process'
@@ -679,19 +681,27 @@ console.log('back inside:', ringsOf(G), '· outside', G.outside)
 await press('labels —')
 
 // ---------------------------------------------------------------------------
-// The rings' names in a column (§7.6): the Tracks card's `name column`, the
-// 1D browser's — every arc starting on twelve o'clock, as it always does, and
+// The rings' names in a column (§7.6): the circle's own `name column`, on from
+// the start — every arc starting on twelve o'clock, as it always does, and
 // ending short of the names, right-aligned in a column before twelve with no
 // track under them; one held by its line; the tracks outside; the names round
-// the rim on. Then off again, as the rest expects.
+// the rim on. Then off from the Tracks card, each name centred over the
+// opening; and `u`, which over a circle is its column's, putting it back. The
+// 1D browser's setting, kept apart, is printed at each step and never moves.
 // ---------------------------------------------------------------------------
 
+/** Both settings as this browser keeps them: the 1D browser's, and the circle's own. */
+const stored = () =>
+  page.evaluate(() => {
+    const overlays = JSON.parse(localStorage.getItem('chromosomix:overlays2') ?? '{}')
+    return `the browser's ${overlays.gutter === undefined ? 'unset (off)' : overlays.gutter ? 'on' : 'off'}, the circle's ${localStorage.getItem('chromosomix:circle-column') ?? 'unset (on)'}`
+  })
 console.log('labels off:', await press('labels —'))
-console.log('name column pressed:', await press('name column —'))
 G = await settledCircle()
 const opening = (G) =>
   `opening from ${G.gap[0]} to ${G.gap[1]} rad of twelve · names centred at ${G.grips.map((grip) => `${grip.x},${grip.y}`).join(' ')} · twelve at x ${G.cx}`
-console.log('the column:', opening(G), '· column', G.column)
+console.log('the column, as the circle starts:', opening(G), '· column', G.column, '·', await stored())
+console.log('the Tracks card:', await overlays())
 await away()
 await shot('ci30-name-column')
 const line = G.grips[Math.floor(G.grips.length / 2)]
@@ -710,9 +720,18 @@ console.log('the column, tracks outside, the genomes named:', opening(G))
 await away()
 await shot('ci33-name-column-named')
 await tracksRow.selectOption('inside')
+await press('labels —')
 console.log('name column off:', await press('name column —'))
 G = await settledCircle()
-console.log('off again:', `opening ${G.gap[0]} to ${G.gap[1]} · column ${G.column}`)
+console.log('the names centred over the opening:', opening(G), '· column', G.column, '·', await stored())
+await away()
+await shot('ci34-name-column-off')
+// `u`, over a circle, is the circle's column — the browser's stays put.
+await page.evaluate(() => (document.activeElement instanceof HTMLElement ? document.activeElement.blur() : undefined))
+await page.keyboard.press('u')
+G = await settledCircle()
+console.log('u pressed:', `opening ${G.gap[0]} to ${G.gap[1]} · column ${G.column} ·`, await stored())
+await press('labels —')
 
 // ---------------------------------------------------------------------------
 // The contig × contig circle, grouped by genome under a band.
@@ -725,12 +744,12 @@ await compute()
 G = await settledCircle(120_000)
 console.log('contig level:', describe(G), `· ${G.withinGenome} of the chords drawn within one genome · names ${G.names ? 'kept' : 'none'}`)
 await away()
-await shot('ci34-contig-level')
+await shot('ci35-contig-level')
 at = sectionOf(G, G.units[Math.floor(G.units.length * 0.12)].name)
 await page.mouse.move(at.x, at.y)
 await sleep(500)
 console.log('contig hovered:', await tip())
-await shot('ci35-contig-hover')
+await shot('ci36-contig-hover')
 
 // Zoomed into one genome's contigs: few enough in view to be named, under
 // their genome's name, and a named contig opened by its name.
@@ -739,7 +758,7 @@ await wheel(point(G, (G.band[0] + G.band[1]) / 2, bandOf.mid), 22)
 G = await settledCircle()
 console.log(`the contigs of ${bandOf.name}, zoomed:`, zoomState(G))
 await away()
-await shot('ci36-contig-zoom')
+await shot('ci37-contig-zoom')
 // Back from the Map card's refit, which undoes the circle's zoom as it does the square's.
 console.log('the refit pressed:', await press('Undo every pan and zoom'))
 G = await settledCircle()
@@ -767,14 +786,14 @@ G = await settledCircle(90_000)
 const selection = await where()
 console.log('selection:', describe(G), '·', selection)
 await away()
-await shot('ci37-selection')
+await shot('ci38-selection')
 
 const sections = page.locator('.controls-card.is-circle select').filter({ has: page.locator('option[value="contigs"]') }).first()
 await sections.selectOption('contigs')
 G = await settledCircle()
 console.log('cut into contigs:', describe(G), `· ${G.withinGenome} of the chords drawn within one genome ·`, await where())
 await away()
-await shot('ci38-selection-contigs')
+await shot('ci39-selection-contigs')
 
 // A genome's band hovered: the chords that leave it, and nothing else.
 const BAND = 'metator_00002_00003'
@@ -783,7 +802,7 @@ at = point(G, (G.band[0] + G.band[1]) / 2, group.mid)
 await page.mouse.move(at.x, at.y)
 await sleep(500)
 console.log(`band of ${group.name} hovered:`, await tip())
-await shot('ci39-band-hover')
+await shot('ci40-band-hover')
 
 // ---------------------------------------------------------------------------
 // Clicks that open: a band into its genome, a chord into its pair.
@@ -794,7 +813,7 @@ await sleep(2500)
 G = await settledCircle(90_000)
 console.log(`clicked the band of ${group.name}:`, (await page.locator('.breadcrumb').innerText()).replace(/\s+/g, ' '), '·', describe(G))
 await away()
-await shot('ci40-genome-opened')
+await shot('ci41-genome-opened')
 
 await page.evaluate((hash) => { location.hash = `${location.hash.match(/uri=[^&]*/)[0]}&${hash.replace(/^#/, '').replace(/&sections=contigs/, '')}` }, selection)
 await sleep(2500)
@@ -812,7 +831,7 @@ console.log(
     return button === undefined ? 'none' : { disabled: button.disabled, pressed: button.getAttribute('aria-pressed'), title: button.title }
   }),
 )
-await shot('ci41-chord-opened')
+await shot('ci42-chord-opened')
 
 // ---------------------------------------------------------------------------
 // The figure, saved: a PNG and a PDF of the whole metagenome's circle.
@@ -870,7 +889,7 @@ G = await settledCircle()
 at = sectionOf(G, RICH)
 await page.mouse.move(at.x, at.y)
 await sleep(500)
-await shot('ci42-dark')
+await shot('ci43-dark')
 await away()
 await page.evaluate(() => (document.activeElement instanceof HTMLElement ? document.activeElement.blur() : undefined))
 await page.keyboard.press('t')
@@ -884,7 +903,12 @@ await sleep(400)
 await page.keyboard.type('circle')
 await sleep(600)
 console.log('palette:', await page.evaluate(() => [...document.querySelectorAll('.palette-row')].map((node) => node.textContent?.replace(/\s+/g, ' ').trim()).slice(0, 5)))
-await shot('ci43-palette')
+await shot('ci44-palette')
+// The name column's row, over a circle: the circle's hint and state.
+await page.keyboard.press('Control+a')
+await page.keyboard.type('name column')
+await sleep(600)
+console.log('palette, name column:', await page.evaluate(() => [...document.querySelectorAll('.palette-row')].map((node) => node.textContent?.replace(/\s+/g, ' ').trim()).slice(0, 2)))
 await page.keyboard.press('Escape')
 await sleep(300)
 
@@ -902,6 +926,7 @@ console.log(
     said: (document.querySelector('.error, .error-page, .gate, main')?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 200),
   })),
 )
-await shot('ci44-dev-off')
+console.log('no circle left:', await stored())
+await shot('ci45-dev-off')
 
 await g.close()

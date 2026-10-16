@@ -813,6 +813,24 @@ export function columnReach(
   return reach
 }
 
+/**
+ * Where a ring's name is written (§7.6), at its ring's middle: in the column,
+ * right-aligned on twelve o'clock less the column's padding, as the 1D
+ * browser's names end where its tracks begin; without one, centred over the
+ * opening just before twelve, the ends of the tracks either side of it.
+ */
+export function ringNameAt(
+  geometry: Pick<CircleGeometry, 'cx' | 'cy' | 'gap' | 'column'>,
+  ring: { inner: number; outer: number },
+): { x: number; y: number; align: 'right' | 'center' } {
+  const r = (ring.inner + ring.outer) / 2
+  if (geometry.column) {
+    return { x: geometry.cx + Math.cos(TOP) * r - COLUMN_PAD, y: geometry.cy + Math.sin(TOP) * r, align: 'right' }
+  }
+  const angle = TOP + (geometry.gap.from + geometry.gap.to) / 2
+  return { x: geometry.cx + Math.cos(angle) * r, y: geometry.cy + Math.sin(angle) * r, align: 'center' }
+}
+
 /** An angle as how far clockwise of twelve o'clock it is, `[−π, π)`: negative before twelve. */
 export function fromTwelve(angle: number): number {
   return inTurn(angle + Math.PI) - TOP - Math.PI

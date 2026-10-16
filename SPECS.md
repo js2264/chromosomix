@@ -2863,8 +2863,8 @@ variants, a karyotype, bar charts) as wedges; a metadata column or a set of clas
 stretch of each section's contigs — in the store's order, the first nearest the chords, each as thick
 as its lane is tall where they all fit in the room above a chord disc kept to a third of the radius,
 in proportion where they do not (`ringThickness`), and never under six pixels; on a faint band of its
-own, named at twelve o'clock — right-aligned on it, before it, as the 1D browser's names end where
-its tracks begin — in a size its thickness can hold. **No ceiling of their own**: a ring is
+own, named at twelve o'clock in a size its thickness can hold — in a column of their own before it,
+or centred over the opening without one (below). **No ceiling of their own**: a ring is
 its lane bent round, and a ring once held under a sixth of the radius kept a default lane under its
 height on any circle smaller than the window, so a ring dragged thicker came out thinner.
 
@@ -2876,17 +2876,29 @@ density (`ui/circlePrefs.ts`), since it is how a reader likes the picture laid o
 shows. Every layer is laid from the names inwards, so the rim holds still and the chord disc gives
 way: a ring made thicker moves its inner edge, and everything inside it, towards the middle.
 
-**The rings' names in a column.** The 1D browser's `name column` (§8.8), the same preference, is
-offered on the Tracks card while the circle is drawn. Off, the names lie over the ends of the tracks,
-the opening before twelve only as wide as the gaps between sections need. On — with `track text`, as
-there — they get a **column of their own before twelve**: each name a line at its ring's middle,
-right-aligned on twelve, in the text's own ink. The arcs — every section, the band, every ring —
-still start on twelve, and **end short of the column's widest line**: the lower left corner of
-whichever line reaches furthest back round — the one nearest the middle, unless a name further out is
-much longer (`columnReach`) — and two section gaps more. Nothing is drawn under a name, the circle is open by as much as its names take, and a name
-longer than nine twentieths of the radius loses its middle (`COLUMN_MAX`) rather than opening the
-circle further. A ring is held by its line in the column as by its name without one, its foot is
-nowhere in it, and a zoom keeps its opening as it keeps every angle.
+**The rings' names in a column.** The Tracks card offers the 1D browser's `name column` (§8.8) while
+the circle is drawn — its mark, its word and its key, `u` — as **the circle's own setting, on until
+the reader turns it off** (`ringColumn`), a preference kept in this browser beside the chords'
+density. Not the browser's own, which it once followed, and that was two faults at once: a circle,
+which wants its names out of the rings' way, came up without its column wherever the browser had
+none; and turning it on turned the browser's on as well — in a deck's tracks cell beside the circle
+(§25.3), and for the map turned back to square, which found the browser no longer as the reader had
+set it. Kept apart, the browser's column is what the reader made it, every time. While a circle is
+on screen (`circleOnScreen`, asked of the page: a circle in a tab out of sight, or a map turned back
+to square, is not), `u` and the palette's *Name column* are the circle's, since that is the picture
+under the hand; while none is, they are the browser's, as they always were.
+
+On — with `track text`, as there — the names get a **column of their own before twelve**: each name
+a line at its ring's middle, right-aligned on twelve, in the text's own ink (`ringNameAt`). The arcs
+— every section, the band, every ring — still start on twelve, and **end short of the column's
+widest line**: the lower left corner of whichever line reaches furthest back round — the one nearest
+the middle, unless a name further out is much longer (`columnReach`) — and two section gaps more.
+Nothing is drawn under a name, the circle is open by as much as its names take, and a name longer
+than nine twentieths of the radius loses its middle (`COLUMN_MAX`) rather than opening the circle
+further. Off, each name is **centred over the opening** just before twelve, at its ring's middle in
+the dim ink, over the ends of the tracks either side, the opening only as wide as the gaps between
+sections need. A ring is held by its line in the column as by its name without one, its foot is
+nowhere in the opening, and a zoom keeps its opening as it keeps every angle.
 
 **A ring is resized by its foot** — its inner edge, the one a thicker ring moves, as a lane's far
 border is the one a taller lane moves in the 1D browser (§8.8). Within three pixels of it, anywhere
@@ -2900,7 +2912,8 @@ overlay group's host's, as in its lane — and Escape puts it back.
 
 **The Tracks card's switches are the rings'**, as they are every lane's (`RingInk`): `track text`
 writes the rings' names, and off leaves the ink alone; `name column`, offered only while the circle
-is drawn, writes them in a column of their own before twelve (above); `track fill` fills an area ring under its
+is drawn and the circle's own (above), writes them in a column of their own before twelve, and off
+centres them over the opening; `track fill` fills an area ring under its
 line, and off leaves the line; `track outline` draws an area's or a line's profile, and the tops of a
 bar ring's bars, as a dark hairline — a rule along the top, a step a bin, since a box round each of a
 thousand bars a pixel wide is the ring drawn black — and round every feature; `track floor` rules

@@ -107,6 +107,7 @@ import {
   togglePlotOption,
 } from '../ui/plotOptions'
 import { refineEnabled, toggleRefine } from '../ui/refine'
+import { RING_COLUMN_HINT, circleOnScreen, ringColumn, setRingColumn } from '../ui/circlePrefs'
 import { embedded, mounting } from '../embed'
 import { IS_STANDALONE } from '../version'
 import { Session, reserveSessionIds, type SessionHost } from './Session'
@@ -2307,16 +2308,25 @@ export class App implements SessionHost {
     // a reader looking for "the labels key" scans for two words and one looking
     // for *Show crosshair* does not find it at all. The noun is the same row
     // whichever way it is set, and `Command.state` says which way that is.
+    //
+    // **The name column is the circle's while one is on screen** (§7.6): the
+    // circle keeps its own, on unless turned off (`ui/circlePrefs.ts`), so that
+    // turning a map round leaves the 1D browser's as the reader set it — and
+    // `u` over a circle is about the names the reader is looking at, not a
+    // stack of lanes nowhere in sight. Asked of the page each time, as this
+    // list is built for every keystroke, menu command and palette.
+    const circled = circleOnScreen()
     for (const key of Object.keys(PLOT_OPTION_LABELS) as Array<keyof typeof PLOT_OPTION_LABELS>) {
       const { label } = PLOT_OPTION_LABELS[key]
+      const round = key === 'gutter' && circled
       list.push({
         id: `overlay-${key}`,
         group: 'View',
         title: label.charAt(0).toUpperCase() + label.slice(1),
-        hint: PLOT_OPTION_LABELS[key].hint,
-        state: chipOf(overlays[key]),
+        hint: round ? RING_COLUMN_HINT : PLOT_OPTION_LABELS[key].hint,
+        state: chipOf(round ? ringColumn() : overlays[key]),
         ...(PLOT_OPTION_KEYS[key] === undefined ? {} : { keys: PLOT_OPTION_KEYS[key] }),
-        run: () => void togglePlotOption(key),
+        run: () => void (round ? setRingColumn(!ringColumn()) : togglePlotOption(key)),
       })
     }
 

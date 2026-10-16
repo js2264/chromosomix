@@ -45,11 +45,15 @@ import { CircleView, type CirclePresentation } from './CircleView'
 import { circleCuts, circleUnitsOf } from '../render/circle'
 import {
   CHORD_LIMITS,
+  RING_COLUMN_HINT,
   chordLimit,
+  ringColumn,
   ringPlacement,
   setChordLimit,
+  setRingColumn,
   setRingPlacement,
   subscribeChordLimit,
+  subscribeRingColumn,
   subscribeRingPlacement,
 } from './circlePrefs'
 import { LANE_EDGES, hasAMovableAxis, overlayShapeOf, type AnnotationEntry } from '../annotations/types'
@@ -1158,6 +1162,9 @@ export class MatrixPanel {
   private readonly circleOnly: HTMLElement[] = []
   private unsubscribeChordLimit: () => void = () => {}
   private unsubscribeRingPlacement: () => void = () => {}
+  private unsubscribeRingColumn: () => void = () => {}
+  /** The Tracks card's `name column` while the circle is drawn, lit from the circle's own setting. */
+  private columnButton: HTMLElement | null = null
   private tracksSelect: HTMLSelectElement | null = null
   /** The `chords` select, kept so a change made on another circle shows here. */
   private chordSelect: HTMLSelectElement | null = null
@@ -1762,19 +1769,14 @@ export class MatrixPanel {
             'div',
             { class: 'plot-icon-row' },
             ...TRACK_ONLY_OPTIONS.map(optionToggle),
-            // The 1D browser's name column, while the circle is drawn: the
-            // rings' names in a column before twelve, the arcs ending short of
-            // it (§7.6). Beside the square the lanes are named in the map's
-            // margins and have no column to switch on, so it steps aside there.
-            ...(this.options.round === undefined
-              ? []
-              : [
-                  (() => {
-                    const toggle = optionToggle('gutter')
-                    toggle.classList.add('circle-only')
-                    return toggle
-                  })(),
-                ]),
+            // The name column, while the circle is drawn: the rings' names in
+            // a column before twelve, the arcs ending short of it (§7.6). The
+            // 1D browser's mark, key and word, but the circle's own setting —
+            // on until the reader turns it off — so turning the map round
+            // leaves the browser's column as the reader set it. Beside the
+            // square the lanes are named in the map's margins and have no
+            // column to switch on, so it steps aside there.
+            ...(this.options.round === undefined ? [] : [this.columnToggle()]),
           ),
         ),
         // The two legibility numbers on one line, because they are one question
@@ -2324,6 +2326,10 @@ export class MatrixPanel {
     this.unsubscribeChordLimit = subscribeChordLimit(() => this.syncCircle())
     // …and lays its rings out the same way, inside or out.
     this.unsubscribeRingPlacement = subscribeRingPlacement(() => this.syncCircle())
+    // …and names them the same way, in a column or across the opening.
+    this.unsubscribeRingColumn = subscribeRingColumn((on) =>
+      this.columnButton?.setAttribute('aria-pressed', String(on)),
+    )
 
     // The same card the 1D browser's column has, built from the same class:
     // beside a map a group could be *made* — from the row's own select, or the
@@ -2927,6 +2933,7 @@ export class MatrixPanel {
     this.unsubscribeDiagonalLock()
     this.unsubscribeChordLimit()
     this.unsubscribeRingPlacement()
+    this.unsubscribeRingColumn()
     this.circleView?.destroy()
     this.circleView = null
     this.themeWatchers()
@@ -5195,6 +5202,23 @@ export class MatrixPanel {
     )
     this.circleOnly.push(row)
     return row
+  }
+
+  /**
+   * The Tracks card's `name column` while the circle is drawn (§7.6): the 1D
+   * browser's mark, key and word, lit from and writing to the circle's own
+   * setting (`ui/circlePrefs.ts`) rather than the browser's `gutter`.
+   */
+  private columnToggle(): HTMLElement {
+    const node = iconButton(
+      PLOT_OPTION_ICONS.gutter,
+      withKey(`${PLOT_OPTION_LABELS.gutter.label} — ${RING_COLUMN_HINT}`, PLOT_OPTION_KEYS.gutter),
+      () => setRingColumn(!ringColumn()),
+      { class: 'btn btn-icon btn-toggle circle-only', size: 15 },
+    )
+    node.setAttribute('aria-pressed', String(ringColumn()))
+    this.columnButton = node
+    return node
   }
 
   /**
