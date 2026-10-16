@@ -215,10 +215,10 @@
   "pulls": [
     {
       "number": 109,
-      "commit": "d2e702f",
+      "commit": "fa86ea8",
       "title": "Validation and timing notebooks, published at /validation/ and /timings/ with every release",
       "branch": "ccr-bbb73609-u7oxgq-notebooks",
-      "date": "2026-10-16T06:53:38Z"
+      "date": "2026-10-16T06:58:49Z"
     },
     {
       "number": 107,
