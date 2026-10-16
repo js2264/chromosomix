@@ -8327,7 +8327,7 @@ file, **five by default**, measured as coolpuppy measures it, in base pairs betw
 coolpuppy's own default, `mindist='auto'`, is further out — twice the half-width and two, the
 separation at which a window stops reaching the two diagonals left out, so that at that floor no loop
 window has a gap cut in it — and leaves out 959 of the yeast demo's 1,506 loops at 1 kb; the
-evaluation types it to hold the two to each other (§18.10). The run says how many loops it left out
+validation types it to hold the two to each other (§18.10). The run says how many loops it left out
 and how near they were, and 0 piles up every loop; *every pair* of a feature set keeps its own
 separation range instead. It used to divide
 the finished pileup by an expected looked up at each cell's distance from the *pileup's* centre,
