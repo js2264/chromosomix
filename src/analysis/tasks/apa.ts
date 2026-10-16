@@ -98,7 +98,7 @@ export function minDiagOf(params: Params): number {
  * The nearest a loop may be to the diagonal and still be piled up, in bins, when
  * nobody has said. Five: a loop nearer than that is mostly the diagonal's own
  * contacts. coolpuppy's default is further out ({@link autoMinDist}), and the
- * evaluation, which holds the two to each other, passes that one (§18.10).
+ * validation, which holds the two to each other, passes that one (§18.10).
  */
 export const MIN_DIST_DEFAULT = 5
 
