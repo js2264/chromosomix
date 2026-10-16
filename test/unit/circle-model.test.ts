@@ -398,10 +398,11 @@ describe('the layout', () => {
     expect(first.outer).toBeLessThan(second.inner)
     expect(second.outer).toBeLessThan(geometry.sections.inner)
     expect(geometry.sections.outer).toBeLessThan(geometry.labelAt)
-    // As thick as its lane is tall where they fit, and never past a sixth of
-    // the radius.
+    // As thick as its lane is tall where they fit — past a sixth of the radius
+    // too, which no longer holds a lane under its height.
     expect(second.outer - second.inner).toBeCloseTo(20, 6)
-    expect(first.outer - first.inner).toBeCloseTo(Math.min(56, geometry.outer * 0.16), 6)
+    expect(first.outer - first.inner).toBeCloseTo(56, 6)
+    expect(56).toBeGreaterThan(geometry.outer * 0.16)
   })
 
   it('shares out the room in proportion to the lanes where they do not fit', () => {
@@ -416,13 +417,13 @@ describe('the layout', () => {
       measure,
       fontPx: 11,
     })
-    // Every lane's height times the share of it the room allows, held between
-    // six pixels and a sixth of the radius.
+    // Every lane's height times the share of it the room allows, and never
+    // under six pixels.
     const scale = geometry.ringRoom / 150
     expect(scale).toBeLessThan(1)
     ;[90, 30, 30].forEach((size, k) => {
       const ring = geometry.rings[k]
-      expect(ring.outer - ring.inner).toBeCloseTo(Math.min(Math.max(size * scale, 6), geometry.outer * 0.16), 6)
+      expect(ring.outer - ring.inner).toBeCloseTo(Math.max(size * scale, 6), 6)
     })
     const total = geometry.rings.reduce((sum, ring) => sum + (ring.outer - ring.inner), 0)
     expect(total).toBeLessThanOrEqual(geometry.ringRoom + 1e-9)

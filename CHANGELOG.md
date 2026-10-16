@@ -26,7 +26,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   by their contacts; a chord says what it carries and each end's share; an arc opens its genome or
   contig, a chord the pair. The rings — bigWigs, bedGraphs, BEDs, genome and contig metadata — are
   named at twelve o'clock and dragged in or out by their names to reorder them, and the Tracks card
-  and every map's lanes follow. Chords are raw contacts for now, the strongest 3,000 kept and the
+  and every map's lanes follow; a ring's inner edge is dragged to make it thicker or thinner, as a
+  lane's border is in the 1D browser, setting its track's height everywhere, and a ring is as thick
+  as its lane wherever the room allows. The Map card's `tracks` row puts the rings **outside** the
+  arcs instead, the genomes then the inner circle the chords meet. Chords are raw contacts for now, the strongest 3,000 kept and the
   `chords` row thinning them to 1,000, 200 or 50; PNG, PDF and copy save the circle and its key.
   **It zooms as the map does**: the wheel or a pinch about the pointer, up to 200 times, a drag to
   pan, a sideways or ⌘ scroll to slide, the arrows and Page Up and Page Down, and a double click,

@@ -18,6 +18,8 @@
 
 import { el } from './dom'
 import { getPlotOptions, subscribePlotOptions } from './plotOptions'
+import { ringPlacement, subscribeRingPlacement } from './circlePrefs'
+import { laneSize } from './trackControls'
 import { scaleFont, subscribeTextScale } from './textScale'
 import { fmt } from '../units'
 import { formatPosition } from '../genome/assembly'
@@ -51,7 +53,10 @@ import {
   carryRadius,
   inTurn,
   namesInView,
+  radialCursor,
   radialStops,
+  ringEdgeAt,
+  ringScale,
   unitsInView,
   chordBend,
   chordColour,
@@ -336,6 +341,28 @@ export class CircleView {
   private nameBoxes: Array<{ id: string; x0: number; y0: number; x1: number; y1: number }> = []
   /** The ring whose grip the pointer is over, drawn lit. */
   private gripHover: string | null = null
+  /**
+   * A ring made thicker or thinner by its foot — its inner edge, the one a
+   * thicker ring moves, as a lane's is its far border (§7.6). Held here while
+   * the hand is down, as a ring carried is, and written to the track's height
+   * once it lets go; Escape puts the height back.
+   */
+  private resize: {
+    id: string
+    pointer: number
+    x: number
+    y: number
+    /** How far from the middle the press was, which the drag is measured from. */
+    r0: number
+    /** How far the rings were squeezed into their room at the press (`ringScale`). */
+    scale: number
+    /** The track's height when the press began. */
+    from: number
+    size: number
+    moved: boolean
+  } | null = null
+  /** The ring whose foot the pointer is on, its edge ruled in the crosshair's blue. */
+  private edgeHover: string | null = null
   private size = { width: 0, height: 0 }
   private frame = 0
   private layoutKey = ''
@@ -368,6 +395,8 @@ export class CircleView {
         this.schedule()
       }),
       subscribeTextScale(() => this.schedule()),
+      // Inside the sections or outside them: the layout's, in its key.
+      subscribeRingPlacement(() => this.schedule()),
     )
     if (options.groups !== undefined) this.unsubscribe.push(options.groups.subscribe(() => this.schedule()))
     this.watchPointer()
@@ -438,7 +467,7 @@ export class CircleView {
     const geometry = this.fitGeometry
     const count = geometry?.rings.length ?? 0
     if (geometry === null || count === 0) return null
-    return Math.max(6, Math.floor(Math.min(geometry.ringRoom / count, geometry.outer * 0.16)))
+    return Math.max(6, Math.floor(geometry.ringRoom / count))
   }
 
   /**
@@ -559,6 +588,12 @@ export class CircleView {
     return drag.order.map((id) => byId.get(id)).filter((slot): slot is RingSlot => slot !== undefined)
   }
 
+  /** A ring's track's height: the store's, or the one its foot is being dragged to. */
+  private sizeOf(entry: AnnotationEntry): number {
+    const resize = this.resize
+    return resize !== null && resize.moved && resize.id === entry.id ? resize.size : entry.style.size
+  }
+
   private measure(): void {
     const box = this.el.getBoundingClientRect()
     const width = Math.max(0, Math.round(box.width))
@@ -605,9 +640,10 @@ export class CircleView {
       box === null || beside
         ? undefined
         : { width: box.width + 2 * KEY_INSET, height: box.height + 2 * KEY_INSET }
+    const outside = ringPlacement() === 'outside'
     const key =
-      `${width}x${height}|${font}|${names}|${corner?.width ?? 0}x${corner?.height ?? 0}|` +
-      slots.map((slot) => `${slot.host.id}:${slot.host.style.size}`).join(',')
+      `${width}x${height}|${font}|${names}|${outside ? 'out' : 'in'}|${corner?.width ?? 0}x${corner?.height ?? 0}|` +
+      slots.map((slot) => `${slot.host.id}:${this.sizeOf(slot.host)}`).join(',')
     // Under the key, or in its corner where there is no key to stand under.
     if (this.keyAt !== null && box !== null) this.placeHint(this.keyAt.x, this.keyAt.y + box.height, slots.length > 0)
     else this.placeHint(width - KEY_INSET, KEY_INSET - 6, slots.length > 0, true)
@@ -616,10 +652,11 @@ export class CircleView {
       this.layoutInputs = {
         width,
         height,
-        rings: slots.map((slot) => ({ id: slot.host.id, size: slot.host.style.size })),
+        rings: slots.map((slot) => ({ id: slot.host.id, size: this.sizeOf(slot.host) })),
         measure: (text) => measure.measureText(text).width,
         fontPx: fontPixels(font),
         names,
+        outside,
       }
       this.fitGeometry = circleGeometry(model, {
         ...this.layoutInputs,
@@ -1145,6 +1182,7 @@ export class CircleView {
       windows: this.viewWindows?.map(([a, b]) => [Math.round(a * 1e4) / 1e4, Math.round(b * 1e4) / 1e4]) ?? null,
       detail: detail === null ? null : { bins: detail.bins.count, tracks: detail.contents.size },
       outer: round(geometry.outer),
+      outside: geometry.outside,
       topGap: Math.round(geometry.topGap * 1e4) / 1e4,
       grips: this.nameBoxes.map((box) => ({
         id: box.id,
@@ -1245,6 +1283,7 @@ export class CircleView {
     paintSections(ctx, sections)
     paintLabels(ctx, { ...sections, font: scaleFont(LABEL_FONT), boldFont: scaleFont(LABEL_BOLD) })
     if (live && this.drag === null && this.gripHover !== null) this.paintGrip(ctx, geometry, palette)
+    if (live && this.drag === null) this.paintEdge(ctx, geometry)
     this.paintRingNames(ctx, geometry, palette, live)
     this.paintKey(ctx, chords, palette)
     if (live && this.drag?.moved === true) this.paintHeld(ctx, geometry, palette)
@@ -1346,6 +1385,27 @@ export class CircleView {
       arcCurve(ctx, geometry.cx, geometry.cy, r, TOP, TOP + Math.PI * 2)
       ctx.stroke()
     }
+    ctx.restore()
+  }
+
+  /**
+   * The foot of the ring under the pointer, or of the one being resized: a
+   * rule round the circle in the crosshair's blue, two pixels wide, in the gap
+   * just inside the ring — the 1D browser's rule under a lane's border, bent
+   * round. The cursor says the edge can be dragged; the rule says whose it is.
+   */
+  private paintEdge(ctx: CanvasRenderingContext2D, geometry: CircleGeometry): void {
+    const id = this.resize?.moved === true ? this.resize.id : this.edgeHover
+    const band = id === null ? undefined : geometry.rings.find((ring) => ring.id === id)
+    if (band === undefined) return
+    const r = Math.max(1, band.inner - 1)
+    ctx.save()
+    ctx.strokeStyle = CROSSHAIR_COLOR
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.moveTo(geometry.cx + Math.cos(TOP) * r, geometry.cy + Math.sin(TOP) * r)
+    arcCurve(ctx, geometry.cx, geometry.cy, r, TOP, TOP + Math.PI * 2)
+    ctx.stroke()
     ctx.restore()
   }
 
@@ -1541,13 +1601,20 @@ export class CircleView {
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     const geometry = this.geometry
-    if (at === null || geometry === null || this.drag !== null || !getPlotOptions().crosshair) return
+    const held = this.drag !== null || this.resize?.moved === true
+    if (at === null || geometry === null || held || !getPlotOptions().crosshair) return
     const dx = at.x - geometry.cx
     const dy = at.y - geometry.cy
     const r = Math.hypot(dx, dy)
     if (r < geometry.chord || r > geometry.outer) return
     const angle = Math.atan2(dy, dx)
-    const reach = geometry.band?.outer ?? geometry.sections.outer
+    // Through every layer to the outermost: the sections or their band, or
+    // the last ring where the rings are outside them.
+    const reach = Math.max(
+      geometry.band?.outer ?? 0,
+      geometry.sections.outer,
+      ...geometry.rings.map((ring) => ring.outer),
+    )
     const dpr = canvas.width / Math.max(1, this.size.width)
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.strokeStyle = CROSSHAIR_COLOR
@@ -1594,6 +1661,7 @@ export class CircleView {
         this.pending = null
         this.press = null
         if (this.drag !== null) this.endDrag(false)
+        if (this.resize !== null) this.endResize(false)
         this.cancelClick()
         this.pinch = this.pinchNow()
         return
@@ -1604,6 +1672,30 @@ export class CircleView {
         this.pending = { id: grip, x: at.x, y: at.y, pointer: event.pointerId }
         return
       }
+      // A ring's foot, before a pan: the edge is the ring's, as a lane's border
+      // is its own beside the map.
+      const edge = this.edgeAt(at)
+      const slots = this.ringSlots()
+      const host = edge === null ? undefined : slots.find((slot) => slot.host.id === edge)?.host
+      const geometry = this.geometry
+      if (host !== undefined && geometry !== null) {
+        const size = host.style.size
+        this.resize = {
+          id: host.id,
+          pointer: event.pointerId,
+          x: at.x,
+          y: at.y,
+          r0: Math.hypot(at.x - geometry.cx, at.y - geometry.cy),
+          scale: ringScale(
+            slots.map((slot) => slot.host.style.size),
+            geometry.ringRoom,
+          ),
+          from: size,
+          size,
+          moved: false,
+        }
+        return
+      }
       this.press = { pointer: event.pointerId, x: at.x, y: at.y, offset: { ...this.offset }, panning: false }
     })
     canvas.addEventListener('pointermove', (event) => {
@@ -1611,6 +1703,12 @@ export class CircleView {
       if (this.pointers.has(event.pointerId)) this.pointers.set(event.pointerId, at)
       if (this.pinch !== null) {
         this.movePinch()
+        return
+      }
+      const resize = this.resize
+      if (resize !== null && resize.pointer === event.pointerId) {
+        if (!resize.moved && Math.hypot(at.x - resize.x, at.y - resize.y) < DRAG_SLOP) return
+        this.moveResize(at)
         return
       }
       const pending = this.pending
@@ -1634,10 +1732,11 @@ export class CircleView {
       this.hover(at)
     })
     canvas.addEventListener('pointerleave', () => {
-      if (this.drag !== null || this.press?.panning === true || this.pinch !== null) return
+      if (this.drag !== null || this.press?.panning === true || this.pinch !== null || this.resize !== null) return
       this.drawGuide(null)
       this.setFocus(NO_FOCUS)
       this.setGripHover(null)
+      this.setEdgeHover(null)
       this.tip.classList.add('hidden')
       canvas.style.cursor = ''
     })
@@ -1648,6 +1747,18 @@ export class CircleView {
       if (this.pinch !== null) {
         // The first finger up ends the pinch, and the other's lift is no click.
         this.pinch = null
+        return
+      }
+      const resize = this.resize
+      if (resize !== null && resize.pointer === event.pointerId) {
+        if (resize.moved) {
+          this.endResize(true)
+          this.rehover = at
+          return
+        }
+        // A press on a foot that did not travel is a click, as anywhere else.
+        this.resize = null
+        this.released(at)
         return
       }
       const pending = this.pending
@@ -1670,6 +1781,7 @@ export class CircleView {
       this.pinch = null
       this.pending = null
       if (this.drag !== null) this.endDrag(false)
+      if (this.resize !== null) this.endResize(false)
       if (this.press?.panning === true) canvas.style.cursor = ''
       this.press = null
     }
@@ -1704,6 +1816,9 @@ export class CircleView {
       if (this.drag !== null) {
         event.preventDefault()
         this.endDrag(false)
+      } else if (this.resize?.moved === true) {
+        event.preventDefault()
+        this.endResize(false)
       } else if (this.press?.panning === true) {
         // The pan goes back to where it began, as a drag of a ring does.
         event.preventDefault()
@@ -1855,6 +1970,74 @@ export class CircleView {
     this.schedule()
   }
 
+  /** The ring whose foot is under the point (`ringEdgeAt`), or `null`. */
+  private edgeAt(at: { x: number; y: number }): string | null {
+    const geometry = this.geometry
+    if (geometry === null || this.rings.length === 0) return null
+    const k = ringEdgeAt(geometry, at.x, at.y)
+    return k < 0 ? null : (this.rings[k]?.id ?? null)
+  }
+
+  private setEdgeHover(id: string | null): void {
+    if (id === this.edgeHover) return
+    this.edgeHover = id
+    this.schedule()
+  }
+
+  /**
+   * The held foot at the pointer: the lane's height grown by how far in the
+   * hand has gone since the press — out, shrunk — a pixel of height a pixel
+   * where the rings fit, which keeps the foot under the hand as a lane's
+   * border is, and that divided by how far the rings were squeezed where they
+   * share their room (`ringScale`), so the ring still grows as the hand goes.
+   * Held to what a lane may be.
+   */
+  private moveResize(at: { x: number; y: number }): void {
+    const resize = this.resize
+    const geometry = this.geometry
+    if (resize === null || geometry === null) return
+    if (!resize.moved) {
+      resize.moved = true
+      this.cancelClick()
+      this.drawGuide(null)
+      this.setFocus(NO_FOCUS)
+      this.canvas.setPointerCapture(resize.pointer)
+    }
+    const r = Math.hypot(at.x - geometry.cx, at.y - geometry.cy)
+    resize.size = laneSize(resize.from + (resize.r0 - r) / Math.max(0.05, resize.scale))
+    this.schedule()
+    // The height being set, beside the hand: the ring is drawn as thick as its
+    // room allows, and the number is what the lane beside a map will be.
+    const ring = this.rings.find((entry) => entry.id === resize.id)
+    if (ring === undefined || !getPlotOptions().tooltip) {
+      this.tip.classList.add('hidden')
+      return
+    }
+    this.tip.replaceChildren(
+      el('div', { class: 'cell-tip-title', text: ring.label }),
+      el('div', { class: 'cell-tip-line', text: `${fmt.int(resize.size)} px high` }),
+    )
+    this.tip.classList.remove('hidden')
+    this.placeTip(at)
+  }
+
+  /**
+   * Let go of a foot: the track takes the height it was dragged to — the
+   * host's, which an overlay group's other tracks are drawn at, as in their
+   * lane — or, abandoned, keeps the one it had.
+   */
+  private endResize(commit: boolean): void {
+    const resize = this.resize
+    this.resize = null
+    if (resize === null) return
+    this.canvas.style.cursor = ''
+    this.tip.classList.add('hidden')
+    if (commit && resize.moved && resize.size !== resize.from) {
+      this.options.store.restyle(resize.id, { size: resize.size })
+    }
+    this.schedule()
+  }
+
   private hitAt(at: { x: number; y: number }): CircleHit | null {
     const geometry = this.geometry
     const model = this.model
@@ -1865,12 +2048,21 @@ export class CircleView {
   private hover(at: { x: number; y: number }): void {
     const hit = this.hitAt(at)
     const grip = this.gripAt(at)
+    const edge = grip === null ? this.edgeAt(at) : null
     // No crosshair over a ring's handle: the gap it is in has no data to line
     // up, and the line would run through the names the hand is reaching for.
     this.drawGuide(grip === null ? at : null)
     this.setGripHover(grip)
+    this.setEdgeHover(edge)
+    const geometry = this.geometry
     this.canvas.style.cursor =
-      grip !== null ? 'grab' : hit === null || hit.kind === 'ring' ? '' : 'pointer'
+      grip !== null
+        ? 'grab'
+        : edge !== null && geometry !== null
+          ? radialCursor(Math.atan2(at.y - geometry.cy, at.x - geometry.cx))
+          : hit === null || hit.kind === 'ring'
+            ? ''
+            : 'pointer'
     this.setFocus(
       hit === null
         ? NO_FOCUS

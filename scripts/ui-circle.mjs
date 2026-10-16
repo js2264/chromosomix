@@ -17,14 +17,16 @@
  * written out, the dark theme, the palette's command and the dev features off.
  * And the zoom: the wheel over a genome with its neighbours named, a ring
  * hovered there, a drag that pans, the keys, the rings' names at twelve o'clock
- * with one carried by its name, a double click back; the contigs of one genome
+ * with one carried by its name, a double click back; a ring's foot hovered and
+ * dragged thicker, and Escape mid-drag; the tracks outside the arcs from the Map
+ * card, a genome hovered there and zoomed into; the contigs of one genome
  * zoomed into and named; the figure of a zoomed view.
  * Prints what it found at each step — the geometry the canvas publishes, the
  * tooltips, the toggles offered and lit, the rings' order and thickness — so a
  * picture that did not change is a line in the log as well.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-circle.mjs [out-dir]     # ci01 … ci35, ci-figure.png, ci-figure.pdf, ci-figure-page.png, ci-figure-zoomed.png
+ *   node scripts/ui-circle.mjs [out-dir]     # ci01 … ci40, ci-figure.png, ci-figure.pdf, ci-figure-page.png, ci-figure-zoomed.png
  */
 
 import { execFileSync } from 'node:child_process'
@@ -92,6 +94,10 @@ const TOGGLE = 'button[title^="Draw the map as a circle"]'
 
 /** The geometry the canvas publishes, in page pixels; null while there is no circle. */
 async function geo() {
+  // A frame first: headless Chromium runs one only when something asks for it,
+  // so a picture changed by a key press — Escape putting a ring back — would
+  // otherwise be read as it was before the key.
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
   return page.evaluate(() => {
     const canvas = [...document.querySelectorAll('.circle-canvas')].find((node) => node.getBoundingClientRect().width > 0)
     if (canvas === undefined || canvas.dataset.geometry === undefined) return null
@@ -588,6 +594,86 @@ await away()
 await shot('ci24-fitted-again')
 
 // ---------------------------------------------------------------------------
+// A ring's foot, and the tracks outside (§7.6): the inner edge of a ring
+// under the pointer, ruled in blue under the double arrow along the radius; a
+// drag that makes the ring thicker, its track's height beside the hand;
+// Escape mid-drag; then the Map card's `tracks` row putting the rings outside
+// the arcs, the genomes the inner circle round the chords — hovered there, and
+// zoomed into — and back inside.
+// ---------------------------------------------------------------------------
+
+const ringsOf = (G) => G.rings.map((ring) => `${ring.name} ${Math.round(ring.outer - ring.inner)}px`).join(' | ')
+const cursorNow = () => page.evaluate(() => document.querySelector('.circle-canvas')?.style.cursor ?? null)
+// The names off, as the demo has them: on, they take two fifths of the radius
+// and six rings share what is left at a few pixels each.
+console.log('labels off for the rings:', await press('labels —'))
+G = await settledCircle()
+const footed = G.rings.find((ring) => ring.name === 'Completeness') ?? G.rings[Math.floor(G.rings.length / 2)]
+const footAngle = 0.62
+console.log('rings before:', ringsOf(G))
+at = point(G, footed.inner, footAngle)
+await page.mouse.move(at.x, at.y)
+await sleep(400)
+console.log(`on the foot of ${footed.name}: cursor ${await cursorNow()}`)
+await shot('ci25-ring-foot')
+await page.mouse.down()
+for (let k = 1; k <= 14; k++) {
+  const step = point(G, footed.inner - (36 * k) / 14, footAngle)
+  await page.mouse.move(step.x, step.y)
+  await sleep(30)
+}
+await sleep(300)
+console.log('held 36 px in:', await tip(), '·', ringsOf(await geo()))
+await shot('ci26-ring-foot-held')
+await page.mouse.up()
+G = await settledCircle()
+console.log('let go:', ringsOf(G))
+// Escape mid-drag puts the height back.
+const again = G.rings.find((ring) => ring.id === footed.id) ?? footed
+at = point(G, again.inner, footAngle + 1.4)
+await page.mouse.move(at.x, at.y)
+await page.mouse.down()
+for (let k = 1; k <= 8; k++) {
+  const step = point(G, again.inner + (24 * k) / 8, footAngle + 1.4)
+  await page.mouse.move(step.x, step.y)
+  await sleep(30)
+}
+await sleep(200)
+console.log('held 24 px out:', ringsOf(await geo()))
+await page.keyboard.press('Escape')
+G = await settledCircle()
+console.log('Escape:', ringsOf(G))
+await page.mouse.up()
+await away()
+
+// The tracks outside, from the Map card.
+const tracksRow = page.locator('.controls-card.is-circle select').filter({ has: page.locator('option[value="outside"]') }).first()
+await tracksRow.selectOption('outside')
+G = await settledCircle()
+console.log(
+  'tracks outside:',
+  `chords to ${G.chord}px · sections ${G.sections.join('–')}px · rings ${G.rings.map((ring) => `${ring.inner}–${ring.outer}`).join(', ')}px · names from ${G.labelAt}px · outside ${G.outside}`,
+)
+await away()
+await shot('ci27-tracks-outside')
+at = sectionOf(G, RICH)
+await page.mouse.move(at.x, at.y)
+await sleep(500)
+console.log(`outside, ${RICH} hovered:`, await tip())
+await shot('ci28-outside-hover')
+await wheel(at, 8)
+G = await finer()
+console.log('outside, zoomed:', zoomState(G), '·', ringsOf(G))
+await away()
+await shot('ci29-outside-zoomed')
+await page.mouse.dblclick(G.left + G.width * 0.3, G.top + G.height * 0.6)
+await settledCircle()
+await tracksRow.selectOption('inside')
+G = await settledCircle()
+console.log('back inside:', ringsOf(G), '· outside', G.outside)
+await press('labels —')
+
+// ---------------------------------------------------------------------------
 // The contig × contig circle, grouped by genome under a band.
 // ---------------------------------------------------------------------------
 
@@ -598,12 +684,12 @@ await compute()
 G = await settledCircle(120_000)
 console.log('contig level:', describe(G), `· ${G.withinGenome} of the chords drawn within one genome · names ${G.names ? 'kept' : 'none'}`)
 await away()
-await shot('ci25-contig-level')
+await shot('ci30-contig-level')
 at = sectionOf(G, G.units[Math.floor(G.units.length * 0.12)].name)
 await page.mouse.move(at.x, at.y)
 await sleep(500)
 console.log('contig hovered:', await tip())
-await shot('ci26-contig-hover')
+await shot('ci31-contig-hover')
 
 // Zoomed into one genome's contigs: few enough in view to be named, under
 // their genome's name, and a named contig opened by its name.
@@ -612,7 +698,7 @@ await wheel(point(G, (G.band[0] + G.band[1]) / 2, bandOf.mid), 22)
 G = await settledCircle()
 console.log(`the contigs of ${bandOf.name}, zoomed:`, zoomState(G))
 await away()
-await shot('ci27-contig-zoom')
+await shot('ci32-contig-zoom')
 // Back from the Map card's refit, which undoes the circle's zoom as it does the square's.
 console.log('the refit pressed:', await press('Undo every pan and zoom'))
 G = await settledCircle()
@@ -640,14 +726,14 @@ G = await settledCircle(90_000)
 const selection = await where()
 console.log('selection:', describe(G), '·', selection)
 await away()
-await shot('ci28-selection')
+await shot('ci33-selection')
 
 const sections = page.locator('.controls-card.is-circle select').filter({ has: page.locator('option[value="contigs"]') }).first()
 await sections.selectOption('contigs')
 G = await settledCircle()
 console.log('cut into contigs:', describe(G), `· ${G.withinGenome} of the chords drawn within one genome ·`, await where())
 await away()
-await shot('ci29-selection-contigs')
+await shot('ci34-selection-contigs')
 
 // A genome's band hovered: the chords that leave it, and nothing else.
 const BAND = 'metator_00002_00003'
@@ -656,7 +742,7 @@ at = point(G, (G.band[0] + G.band[1]) / 2, group.mid)
 await page.mouse.move(at.x, at.y)
 await sleep(500)
 console.log(`band of ${group.name} hovered:`, await tip())
-await shot('ci30-band-hover')
+await shot('ci35-band-hover')
 
 // ---------------------------------------------------------------------------
 // Clicks that open: a band into its genome, a chord into its pair.
@@ -667,7 +753,7 @@ await sleep(2500)
 G = await settledCircle(90_000)
 console.log(`clicked the band of ${group.name}:`, (await page.locator('.breadcrumb').innerText()).replace(/\s+/g, ' '), '·', describe(G))
 await away()
-await shot('ci31-genome-opened')
+await shot('ci36-genome-opened')
 
 await page.evaluate((hash) => { location.hash = `${location.hash.match(/uri=[^&]*/)[0]}&${hash.replace(/^#/, '').replace(/&sections=contigs/, '')}` }, selection)
 await sleep(2500)
@@ -685,7 +771,7 @@ console.log(
     return button === undefined ? 'none' : { disabled: button.disabled, pressed: button.getAttribute('aria-pressed'), title: button.title }
   }),
 )
-await shot('ci32-chord-opened')
+await shot('ci37-chord-opened')
 
 // ---------------------------------------------------------------------------
 // The figure, saved: a PNG and a PDF of the whole metagenome's circle.
@@ -743,7 +829,7 @@ G = await settledCircle()
 at = sectionOf(G, RICH)
 await page.mouse.move(at.x, at.y)
 await sleep(500)
-await shot('ci33-dark')
+await shot('ci38-dark')
 await away()
 await page.evaluate(() => (document.activeElement instanceof HTMLElement ? document.activeElement.blur() : undefined))
 await page.keyboard.press('t')
@@ -757,7 +843,7 @@ await sleep(400)
 await page.keyboard.type('circle')
 await sleep(600)
 console.log('palette:', await page.evaluate(() => [...document.querySelectorAll('.palette-row')].map((node) => node.textContent?.replace(/\s+/g, ' ').trim()).slice(0, 5)))
-await shot('ci34-palette')
+await shot('ci39-palette')
 await page.keyboard.press('Escape')
 await sleep(300)
 
@@ -775,6 +861,6 @@ console.log(
     said: (document.querySelector('.error, .error-page, .gate, main')?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 200),
   })),
 )
-await shot('ci35-dev-off')
+await shot('ci40-dev-off')
 
 await g.close()

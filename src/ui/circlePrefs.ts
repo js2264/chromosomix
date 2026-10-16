@@ -1,5 +1,6 @@
 /**
- * How many chords a circle draws (§7.6): a preference, not a fact about a file.
+ * How many chords a circle draws, and where its rings go (§7.6): preferences,
+ * not facts about a file.
  *
  * Every pair of sections that shares a contact has a chord, and on a circle of
  * contigs that is hundreds of thousands of them — a reader thins them to the
@@ -56,4 +57,46 @@ export function setChordLimit(limit: number): void {
 export function subscribeChordLimit(listener: (limit: number) => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
+}
+
+/**
+ * Where the rings go (§7.6): inside the sections, between them and the chords,
+ * or outside them, the sections then the inner circle round the chords — the
+ * `tracks` row. A preference on the chords' terms, and for their reason: it is
+ * how a reader likes the picture laid out, not what they are looking at.
+ */
+export type RingPlacement = 'inside' | 'outside'
+
+const PLACEMENT_KEY = 'chromosomix:circle-rings'
+
+let placement: RingPlacement | null = null
+const placementListeners = new Set<(placement: RingPlacement) => void>()
+
+/** Where the rings go: inside, unless the reader put them outside. */
+export function ringPlacement(): RingPlacement {
+  if (placement === null) {
+    try {
+      placement = window.localStorage.getItem(PLACEMENT_KEY) === 'outside' ? 'outside' : 'inside'
+    } catch {
+      placement = 'inside'
+    }
+  }
+  return placement
+}
+
+export function setRingPlacement(next: RingPlacement): void {
+  placement = next
+  try {
+    if (next === 'outside') window.localStorage.setItem(PLACEMENT_KEY, next)
+    else window.localStorage.removeItem(PLACEMENT_KEY)
+  } catch {
+    // A browser that refuses storage keeps the choice for this page only.
+  }
+  for (const listener of placementListeners) listener(next)
+}
+
+/** Every circle on screen follows a change made on any of them. */
+export function subscribeRingPlacement(listener: (placement: RingPlacement) => void): () => void {
+  placementListeners.add(listener)
+  return () => placementListeners.delete(listener)
 }

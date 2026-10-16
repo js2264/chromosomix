@@ -2734,8 +2734,8 @@ reason, as it is on a block of fewer than two sections.
 
 **Three doors, one setting.** The Map card's *picture* row carries the toggle — the orbit mark, after
 the refit, lit while the circle is drawn (§26.3) — and while it is lit the card says only what the
-circle answers to: the transform and the colours stay, because they colour the chords, and two rows
-of the circle's own appear, `sections` and `chords`, while the square's — its other picture toggles,
+circle answers to: the transform and the colours stay, because they colour the chords, and three rows
+of the circle's own appear, `sections`, `chords` and `tracks`, while the square's — its other picture toggles,
 the score, the despeckle, the clip, the comparison and the level — step aside and come back as they
 were. Its `overlays` row stays, with the four the circle reads (`CIRCLE_OPTIONS`): `labels` names the
 sections, `legend` is the key, `crosshair` the guide line through the rings and `tooltip` the card;
@@ -2860,9 +2860,29 @@ transform — keeps the zoom; other sections are another circle, drawn whole.
 alignment's coverage) in its lane's mode, heatmap, line, points, bar or area; features (BED, GTF,
 variants, a karyotype, bar charts) as wedges; a metadata column or a set of classes as one value per
 stretch of each section's contigs — in the store's order, the first nearest the chords, each as thick
-as its lane is tall where they all fit between the sections and a chord disc kept to a third of the
-radius, in proportion where they do not, and never past a sixth of the radius; on a faint band of
-its own, named at twelve o'clock in a size its thickness can hold.
+as its lane is tall where they all fit in the room above a chord disc kept to a third of the radius,
+in proportion where they do not (`ringThickness`), and never under six pixels; on a faint band of its
+own, named at twelve o'clock in a size its thickness can hold. **No ceiling of their own**: a ring is
+its lane bent round, and a ring once held under a sixth of the radius kept a default lane under its
+height on any circle smaller than the window, so a ring dragged thicker came out thinner.
+
+**Inside or outside.** The Map card's `tracks` row draws the rings between the sections and the
+chords, the default, or **outside the sections**, the sections then the inner circle the chords meet
+— the circos picture with the karyotype in the middle — with the genomes' band against their contigs
+and the names outside everything, either way. A preference kept in this browser beside the chords'
+density (`ui/circlePrefs.ts`), since it is how a reader likes the picture laid out and not what it
+shows. Every layer is laid from the names inwards, so the rim holds still and the chord disc gives
+way: a ring made thicker moves its inner edge, and everything inside it, towards the middle.
+
+**A ring is resized by its foot** — its inner edge, the one a thicker ring moves, as a lane's far
+border is the one a taller lane moves in the 1D browser (§8.8). Within three pixels of it, anywhere
+but the gap at twelve o'clock where the rings are held, the browser's own rule is drawn round it in
+the crosshair's blue, under the double arrow along the radius (`ringEdgeAt`, `radialCursor`); a drag
+in or out sets its track's height, a pixel of height a pixel where the rings fit — the foot under the
+hand — and that divided by how far they are squeezed where they share their room (`ringScale`), so a
+short drag never makes a lane jump, held to what a lane may be (12 to 400 px), with the height beside
+the hand. Let go, it is the track's height in the store, the lanes' beside every map as well — an
+overlay group's host's, as in its lane — and Escape puts it back.
 
 **The Tracks card's switches are the rings'**, as they are every lane's (`RingInk`): `track text`
 writes the rings' names, and off leaves the ink alone; `track fill` fills an area ring under its

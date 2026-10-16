@@ -43,7 +43,15 @@ import { KEYS, keyLabel, optionKey, shiftKey, withKey } from './commands'
 import { cardTitle, icon, iconButton } from './icons'
 import { CircleView, type CirclePresentation } from './CircleView'
 import { circleCuts, circleUnitsOf } from '../render/circle'
-import { CHORD_LIMITS, chordLimit, setChordLimit, subscribeChordLimit } from './circlePrefs'
+import {
+  CHORD_LIMITS,
+  chordLimit,
+  ringPlacement,
+  setChordLimit,
+  setRingPlacement,
+  subscribeChordLimit,
+  subscribeRingPlacement,
+} from './circlePrefs'
 import { LANE_EDGES, hasAMovableAxis, overlayShapeOf, type AnnotationEntry } from '../annotations/types'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { LABEL_MIN_SPAN_BP, MAX_CATEGORICAL_TICKS } from '../constants'
@@ -1149,6 +1157,8 @@ export class MatrixPanel {
   private readonly squareOnly: HTMLElement[] = []
   private readonly circleOnly: HTMLElement[] = []
   private unsubscribeChordLimit: () => void = () => {}
+  private unsubscribeRingPlacement: () => void = () => {}
+  private tracksSelect: HTMLSelectElement | null = null
   /** The `chords` select, kept so a change made on another circle shows here. */
   private chordSelect: HTMLSelectElement | null = null
   /** The `sections` row and its select: offered where the block can be cut two ways. */
@@ -1580,7 +1590,7 @@ export class MatrixPanel {
       // one kind of choice. `colormap` survives as the technical word in SPECS
       // and in the CLI, where it is a parameter rather than a label.
       field('colours', colormapSelect, 'The ramp; a ✓ marks a colour-vision-safe one. afmhot_r is what the CLI draws.'),
-      ...(options.round === undefined ? [] : [this.sectionsField(), this.chordsField()]),
+      ...(options.round === undefined ? [] : [this.sectionsField(), this.chordsField(), this.tracksField()]),
       clipRow,
     ]
 
@@ -2295,6 +2305,8 @@ export class MatrixPanel {
     // Every circle on screen thins its chords together, as every map shares its
     // overlays: how dense a reader likes the picture is how they read it.
     this.unsubscribeChordLimit = subscribeChordLimit(() => this.syncCircle())
+    // …and lays its rings out the same way, inside or out.
+    this.unsubscribeRingPlacement = subscribeRingPlacement(() => this.syncCircle())
 
     // The same card the 1D browser's column has, built from the same class:
     // beside a map a group could be *made* — from the row's own select, or the
@@ -2897,6 +2909,7 @@ export class MatrixPanel {
     this.box.destroy()
     this.unsubscribeDiagonalLock()
     this.unsubscribeChordLimit()
+    this.unsubscribeRingPlacement()
     this.circleView?.destroy()
     this.circleView = null
     this.themeWatchers()
@@ -5036,6 +5049,7 @@ export class MatrixPanel {
     const presentation = this.options.round
     const data = this.data
     if (this.chordSelect !== null) this.chordSelect.value = String(chordLimit())
+    if (this.tracksSelect !== null) this.tracksSelect.value = ringPlacement()
     // The cut the block offers that the reader asked for, else its own.
     const cuts = data === null ? [] : circleCuts(data)
     const cut = cuts.includes(presentation?.cut ?? 'genomes') ? (presentation?.cut ?? 'genomes') : (cuts[0] ?? 'genomes')
@@ -5134,6 +5148,31 @@ export class MatrixPanel {
       'chords',
       select,
       'Thin the circle to the pairs with the most contacts; the key says how many are drawn of how many there are.',
+    )
+    this.circleOnly.push(row)
+    return row
+  }
+
+  /**
+   * The `tracks` row: the rings inside the sections, between them and the
+   * chords, or outside them, the sections the inner circle round the chords.
+   * A preference kept in this browser (`ui/circlePrefs.ts`), as the chords'
+   * density is.
+   */
+  private tracksField(): HTMLElement {
+    const select = el(
+      'select',
+      { class: 'select' },
+      el('option', { value: 'inside', text: 'inside' }),
+      el('option', { value: 'outside', text: 'outside' }),
+    )
+    select.value = ringPlacement()
+    select.addEventListener('change', () => setRingPlacement(select.value === 'outside' ? 'outside' : 'inside'))
+    this.tracksSelect = select
+    const row = field(
+      'tracks',
+      select,
+      'Draw the tracks as rings inside the arcs, round the chords, or outside them, the arcs then the inner circle.',
     )
     this.circleOnly.push(row)
     return row

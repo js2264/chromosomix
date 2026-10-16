@@ -498,6 +498,12 @@ export interface CircleGeometry {
   groupLabelled: Uint8Array | null
   /** The label font's size in pixels, which the room for one label is measured in. */
   fontPx: number
+  /**
+   * Whether the rings are outside the sections, the sections the inner circle
+   * round the chords; otherwise they are inside, between the sections and the
+   * chords (§7.6).
+   */
+  outside: boolean
 }
 
 /** Twelve o'clock, in canvas radians. */
@@ -524,6 +530,12 @@ export interface CircleLayoutOptions {
    * kept for its names. The box's size and the key's corner then say nothing.
    */
   zoom?: { cx: number; cy: number; rim: number; labelRoom: number }
+  /**
+   * The rings outside the sections, the sections then the inner circle round
+   * the chords — the reader's `tracks` row (`ui/circlePrefs.ts`). Absent,
+   * inside.
+   */
+  outside?: boolean
 }
 
 /** Which names a circle writes at rest; see {@link namePolicy}. */
@@ -641,32 +653,47 @@ export function circleGeometry(model: CircleModel, options: CircleLayoutOptions)
 
   const sectionWidth = clamp(outer * 0.045, 7, 16)
   const bandWidth = groups === null ? 0 : clamp(outer * 0.03, 5, 10)
-  const band = groups === null ? null : { outer: labelAt - 2, inner: labelAt - 2 - bandWidth }
-  const sectionsOuter = band === null ? labelAt - 2 : band.inner - 2
-  const sections = { outer: sectionsOuter, inner: sectionsOuter - sectionWidth }
+  const outside = options.outside === true
+  const count = options.rings.length
 
-  // The rings share what is left between the sections and a chord disc kept to
-  // at least a third of the radius: each as thick as its lane is tall, where
-  // they all fit, and in proportion to it where they do not.
+  // The rings share what is left inside the names once the sections, their
+  // band and the gaps round them are taken, down to a chord disc kept to at
+  // least a third of the radius: each as thick as its lane is tall, where they
+  // all fit, and in proportion to it where they do not (`ringThickness`).
+  // Outside, two pixels more part the last ring from the band.
   const ringGap = 4
+  const fixed = 2 + (groups === null ? 0 : bandWidth + 2) + sectionWidth + 6 + (outside && count > 0 ? 2 : 0)
+  const ringRoom = Math.max(0, labelAt - fixed - outer * 0.34 - ringGap * count)
+  const thickness = ringThickness(
+    options.rings.map((ring) => ring.size),
+    ringRoom,
+  )
+  // Every layer is laid from the names inwards, so the rim holds still and the
+  // chord disc gives way: a ring made thicker moves its inner edge — and
+  // everything inside it — towards the middle. The *last* ring of the order is
+  // the outermost either way, so the first track is nearest the chords, as a
+  // lane's first track is nearest the map.
   const rings: CircleGeometry['rings'] = []
-  const ringRoom = Math.max(0, sections.inner - 6 - outer * 0.34 - ringGap * options.rings.length)
-  if (options.rings.length > 0) {
-    const room = ringRoom
-    const asked = options.rings.reduce((sum, ring) => sum + Math.max(1, ring.size), 0)
-    const scale = Math.min(1, room / Math.max(1, asked))
-    let at = sections.inner - 6
-    // Drawn from the sections inwards, so the *last* ring of the order is the
-    // outermost: the first track is nearest the chords, as a lane's first track
-    // is nearest the map.
-    const thickness = options.rings.map((ring) => clamp(Math.max(1, ring.size) * scale, 6, outer * 0.16))
-    for (let k = options.rings.length - 1; k >= 0; k--) {
+  const layRings = (from: number): number => {
+    let at = from
+    for (let k = count - 1; k >= 0; k--) {
       const inner = at - thickness[k]
       rings.unshift({ id: options.rings[k].id, inner, outer: at })
       at = inner - ringGap
     }
+    return at
   }
-  const chord = Math.max(8, (rings.length > 0 ? rings[0].inner : sections.inner) - 6)
+  let at = labelAt - 2
+  // Outside: the rings first under the names, then the band and the sections,
+  // the inner circle round the chords.
+  if (outside && count > 0) at = layRings(at) - 2
+  const band = groups === null ? null : { outer: at, inner: at - bandWidth }
+  if (band !== null) at = band.inner - 2
+  const sections = { outer: at, inner: at - sectionWidth }
+  at = sections.inner - 6
+  // Inside: the rings between the sections and the chords.
+  if (!outside && count > 0) layRings(at)
+  const chord = Math.max(8, (!outside && rings.length > 0 ? rings[0].inner : sections.inner) - 6)
 
   // Which labels fit, at the radius they are drawn at.
   const labelled = new Uint8Array(n)
@@ -695,7 +722,37 @@ export function circleGeometry(model: CircleModel, options: CircleLayoutOptions)
     labelled,
     groupLabelled,
     fontPx,
+    outside,
   }
+}
+
+/**
+ * How thick each ring is drawn, from the lanes' heights and the room the rings
+ * share: each as tall as its lane where they all fit, in proportion to it where
+ * they do not, and never under six pixels.
+ *
+ * No ceiling of its own: a ring is its lane bent round, and a lane is as tall
+ * as the reader made it. A ring once could not pass a sixth of the radius,
+ * which held a default lane under its height on any circle smaller than the
+ * window, and a ring dragged thicker by its foot then came out thinner (§7.6);
+ * the room the rings share, above a chord disc kept to a third of the radius,
+ * is what bounds them.
+ */
+export function ringThickness(sizes: readonly number[], room: number): number[] {
+  const scale = ringScale(sizes, room)
+  return sizes.map((size) => Math.max(6, Math.max(1, size) * scale))
+}
+
+/**
+ * How far the rings are squeezed into their room: 1 where every lane's height
+ * fits, the room's share of their sum where it does not. A ring's foot dragged
+ * a pixel moves its lane's height a pixel divided by this (§7.6), so a ring
+ * squeezed to a fifth of its lane grows under the hand as a lane would, and a
+ * lane's height never jumps for a short drag.
+ */
+export function ringScale(sizes: readonly number[], room: number): number {
+  const asked = sizes.reduce((sum, size) => sum + Math.max(1, size), 0)
+  return Math.min(1, room / Math.max(1, asked))
 }
 
 function isGroupStart(groups: readonly CircleGroup[] | null, unit: number): boolean {
@@ -1486,22 +1543,26 @@ export function hitCircle(
   const r = Math.hypot(dx, dy)
   const angle = Math.atan2(dy, dx)
   if (r > geometry.outer + 4) return null
-  if (geometry.band !== null && r >= geometry.band.inner - 1 && r <= geometry.labelAt + 1) {
-    const group = groupAtAngle(geometry, model, angle)
-    return group < 0 ? null : { kind: 'group', group }
+  const group = (): CircleHit | null => {
+    const g = groupAtAngle(geometry, model, angle)
+    return g < 0 ? null : { kind: 'group', group: g }
   }
-  if (r >= geometry.sections.inner - 1) {
-    if (r > geometry.labelAt && model.groups !== null) {
-      // Over the names: a contig's own where a zoom has named it, its genome's
-      // otherwise.
-      const unit = unitAtAngle(geometry, angle)
-      if (unit >= 0 && geometry.labelled[unit] === 1) return { kind: 'section', unit }
-      const group = groupAtAngle(geometry, model, angle)
-      return group < 0 ? null : { kind: 'group', group }
-    }
+  const section = (): CircleHit | null => {
     const unit = unitAtAngle(geometry, angle)
     return unit < 0 ? null : { kind: 'section', unit }
   }
+  // Over the names, outside everything: a section's, or a genome's over contig
+  // sections — but a contig's own where a zoom has named it.
+  if (r > geometry.labelAt) {
+    if (model.groups === null) return section()
+    const unit = unitAtAngle(geometry, angle)
+    return unit >= 0 && geometry.labelled[unit] === 1 ? { kind: 'section', unit } : group()
+  }
+  // The band and the sections, wherever the rings leave them, each with the
+  // gap outside it: inside the rings, that is up to the names.
+  const band = geometry.band
+  if (band !== null && r >= band.inner - 1 && r <= band.outer + 2) return group()
+  if (r >= geometry.sections.inner - 1 && r <= geometry.sections.outer + 2) return section()
   for (let k = 0; k < geometry.rings.length; k++) {
     const ring = geometry.rings[k]
     if (r >= ring.inner - 2 && r <= ring.outer + 2) {
@@ -1576,6 +1637,42 @@ export function insideRibbon(
 }
 
 // ---------------------------------------------------------------------------
+// A ring resized by its foot
+// ---------------------------------------------------------------------------
+
+/**
+ * Which ring's foot is under a point, or `-1`: its inner edge, the one a
+ * thicker ring moves (`circleGeometry` lays everything from the names
+ * inwards), within `slack` pixels either way — three, which the four-pixel gap
+ * between two rings holds. Never in the gap at twelve o'clock, which is where
+ * the rings are held by their names.
+ */
+export function ringEdgeAt(geometry: CircleGeometry, x: number, y: number, slack = 3): number {
+  const dx = x - geometry.cx
+  const dy = y - geometry.cy
+  // How far round from twelve o'clock, either way.
+  const off = Math.abs(inTurn(Math.atan2(dy, dx) + Math.PI) - TOP - Math.PI)
+  if (off <= geometry.topGap / 2) return -1
+  const r = Math.hypot(dx, dy)
+  return geometry.rings.findIndex((ring) => Math.abs(r - ring.inner) <= slack)
+}
+
+/**
+ * The double arrow along the radius at an angle: the system's resize cursor
+ * nearest the direction a ring's edge moves there — up and down at twelve and
+ * six, across at three and nine, and the two diagonals between.
+ */
+export function radialCursor(angle: number): 'ns-resize' | 'ew-resize' | 'nwse-resize' | 'nesw-resize' {
+  // The direction folded onto half a turn: a double arrow points both ways.
+  const d = ((angle % Math.PI) + Math.PI) % Math.PI
+  const eighth = Math.PI / 8
+  if (d < eighth || d >= 7 * eighth) return 'ew-resize'
+  if (d < 3 * eighth) return 'nwse-resize'
+  if (d < 5 * eighth) return 'ns-resize'
+  return 'nesw-resize'
+}
+
+// ---------------------------------------------------------------------------
 // Zoom
 // ---------------------------------------------------------------------------
 
@@ -1590,9 +1687,13 @@ export const CIRCLE_MAX_ZOOM = 200
  */
 export function radialStops(geometry: CircleGeometry): number[] {
   const stops = [0, geometry.chord]
-  for (const ring of geometry.rings) stops.push(ring.inner, ring.outer)
+  const rings = (): void => {
+    for (const ring of geometry.rings) stops.push(ring.inner, ring.outer)
+  }
+  if (!geometry.outside) rings()
   stops.push(geometry.sections.inner, geometry.sections.outer)
   if (geometry.band !== null) stops.push(geometry.band.inner, geometry.band.outer)
+  if (geometry.outside) rings()
   stops.push(geometry.labelAt)
   return stops
 }
