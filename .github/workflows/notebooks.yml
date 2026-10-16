@@ -50,9 +50,11 @@ name: Notebooks
 # commit and release, by which run, on what machine); `commands.json` and
 # `summary.tsv` beside the validation, every command it ran and every verdict;
 # `timings.tsv` beside the timings, every timed run, one row each. A release
-# also gets the two pages and the table as assets of its own, so a release's
-# numbers outlive the next release's pages, and every run keeps everything as
-# an artifact for 90 days.
+# also gets the two pages and both tables as assets of its own — every verdict
+# as `validation-<tag>.tsv` and every timed run as `timings-<tag>.tsv` — so a
+# release's numbers outlive the next release's pages. Every run keeps what it
+# rendered as an artifact for 90 days, even when it fails: the validation alone,
+# and the timing rounds it finished, when the timings are what failed.
 
 on:
   release:
@@ -213,20 +215,36 @@ jobs:
           NOTEBOOKS_SITE: ${{ steps.site.outputs.url }}
         run: quarto render notebooks/timing.qmd
 
+      # Whatever rendered, after a failure too: an hour of validation is worth
+      # keeping when the timings after it fail, and the benchmark writes its
+      # table after every round, so the rounds it finished are kept with it.
+      # `always()`, not `!cancelled()`, because the likeliest failure is the
+      # timings outrunning the job's limit, and GitHub cancels a job that does;
+      # copying files cannot hang. Publishing, below, still needs both pages.
       - name: Gather the pages and the files beside them
+        if: always()
         run: |
           set -euo pipefail
           work=notebooks/work/validation
-          mkdir -p pages/validation pages/timings
-          cp notebooks/validation.html pages/validation/index.html
-          cp "$work/rendered-validation.json" pages/validation/rendered.json
-          cp "$work/commands.json" "$work/summary.tsv" pages/validation/
-          cp notebooks/timing.html pages/timings/index.html
-          cp "$work/rendered-timing.json" pages/timings/rendered.json
-          cp "$work/timings.tsv" pages/timings/
-          du -ah pages
+          if [ -f notebooks/validation.html ]; then
+            mkdir -p pages/validation
+            cp notebooks/validation.html pages/validation/index.html
+            cp "$work/rendered-validation.json" pages/validation/rendered.json
+            cp "$work/commands.json" "$work/summary.tsv" pages/validation/
+          fi
+          if [ -f notebooks/timing.html ]; then
+            mkdir -p pages/timings
+            cp notebooks/timing.html pages/timings/index.html
+            cp "$work/rendered-timing.json" pages/timings/rendered.json
+          fi
+          if [ -f "$work/timings.tsv" ]; then
+            mkdir -p pages/timings
+            cp "$work/timings.tsv" pages/timings/
+          fi
+          if [ -d pages ]; then du -ah pages; else echo 'Neither notebook rendered.'; fi
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: notebooks-${{ steps.site.outputs.version }}-${{ steps.site.outputs.short }}
           path: pages/
@@ -264,6 +282,7 @@ jobs:
           mkdir assets
           cp pages/validation/index.html "assets/validation-${TAG}.html"
           cp pages/timings/index.html "assets/timings-${TAG}.html"
+          cp pages/validation/summary.tsv "assets/validation-${TAG}.tsv"
           cp pages/timings/timings.tsv "assets/timings-${TAG}.tsv"
           gh release upload "$TAG" assets/* --clobber --repo '${{ github.repository }}'
 

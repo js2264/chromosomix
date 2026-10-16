@@ -8895,14 +8895,16 @@ fresh runner — the reference environment pinned package by package in `noteboo
 yapc's in `requirements-yapc.txt` with IDR and yapc built at the commits the notebook cites,
 Boost-HiC's checkout, Ubuntu's bedtools and seqkit — renders both notebooks, and publishes them at
 `<site>/validation/` and `<site>/timings/`, each a self-contained page with its tables beside it
-(`commands.json` and `summary.tsv`, every command and every verdict; `timings.tsv`); a release
-keeps its own copies as assets. It runs when a release is published and on demand. Each page opens
-on a block saying when it was rendered, from which version, commit and release, by which run or by
-hand, and on what machine, and closes on how long it took; the two link to each other there and on
-a reader's disk alike. The pages are no build of the app, so the service worker leaves those two
-addresses to the network, as it does `v/` and `pr/`, and the app, from this version on, finding
-itself at either unregisters its worker and reloads once (`recoverPinnedNavigation`), as at `v/`;
-a worker from before answers there with its own app until its reader takes the update it offers.
+(`commands.json` and `summary.tsv`, every command and every verdict; `timings.tsv`); a release keeps
+its own copies of both pages and both tables as assets, and every run keeps what it rendered as an
+artifact for 90 days, the validation alone, with the timing rounds it finished, when the timings
+fail. It runs when a release is published and on demand. Each page opens on a block saying when it
+was rendered, from which version, commit and release, by which run or by hand, and on what machine,
+and closes on how long it took; the two link to each other there and on a reader's disk alike. The
+pages are no build of the app, so the service worker leaves those two addresses to the network, as
+it does `v/` and `pr/`, and the app, from this version on, finding itself at either unregisters its
+worker and reloads once (`recoverPinnedNavigation`), as at `v/`; a worker from before answers there
+with its own app until its reader takes the update it offers.
 
 ### 18.11 A set of scales is one picture
 
