@@ -1058,6 +1058,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **P(s) leaves out the first two diagonals by default (§18.8).** *Minimum separation* is now 2 bins
+  rather than 0: the diagonal and the one beside it hold self-ligation and unligated fragments rather
+  than contacts between loci, and cooltools' `expected_cis` leaves them out by default
+  (`ignore_diags=2`). The density is a share of a total taken over what it keeps, so its points rise by
+  one factor; 0 brings the diagonal back, as a stored session without the setting does. The four
+  orientations are drawn from the first record whatever the box says: they followed it, and at two
+  bins the separation they converge at, usually shorter than one bin, would have been cut off.
+
 - **The metaplot draws a per-feature heatmap for every curve, its rows in one order (§18.8).** Over
   several tracks — or several groups of a ranked set — it drew the first curve's heatmap alone, so
   the second track's rows were never seen. Every curve now has one, and every heatmap of a run lists

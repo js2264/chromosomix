@@ -187,13 +187,16 @@ const PARAMS: readonly ParamSpec[] = [
      */
     label: 'minimum separation',
     hint: 'Drops the near-diagonal, where unligated fragments dominate.',
-    // Under the density it also floors the *total* every point is a share of,
-    // since the curve is a share of the contacts it was built from, and its
-    // default of zero keeps the diagonal — which HiContacts puts in the first
-    // break rather than dropping. Under the expected the floor is one offset
-    // whatever this says: the diagonal is not a contact between two loci and has
-    // no place on a log axis.
-    default: 0,
+    // **Two by default**: the diagonal and the one beside it, which hold what
+    // ligation could not separate — self-ligation and unligated fragments — and
+    // which cooltools' `expected_cis` leaves out by default for that reason
+    // (`ignore_diags=2`). Under the density it also floors the *total* every
+    // point is a share of, since the curve is a share of the contacts it was
+    // built from, so 0 keeps the diagonal in the first break, where HiContacts
+    // puts it. Under the expected the floor is one offset whatever this says:
+    // the diagonal is not a contact between two loci and has no place on a log
+    // axis. The four orientations are not floored by it (`run/expected.ts`).
+    default: 2,
     min: 0,
     integer: true,
     unit: 'bins',

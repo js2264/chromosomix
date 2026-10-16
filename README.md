@@ -168,7 +168,7 @@ chromosomix tasks
 ##       --sequences  sequences
 ##       --quantity (default "density")  quantity
 ##       --factor (default 1.1)  log bins per step
-##       --minSeparation (default 0)  minimum separation
+##       --minSeparation (default 2)  minimum separation
 ##       --derivative (default true)  log-log slope
 ##       --stranded (default false)  four orientations
 ##       --pairsUri  .pairs file

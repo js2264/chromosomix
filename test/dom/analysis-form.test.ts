@@ -253,6 +253,8 @@ describe('P(s)', () => {
     expect(asks(view, 'Sequences to draw')).toBe(false)
     const spec = EXPECTED_TASK.params.find((param) => param.key === 'minSeparation')
     expect(spec?.kind === 'number' && spec.unit).toBe('bins')
+    // The diagonal and the one beside it, as cooltools leaves them out.
+    expect(spec?.kind === 'number' && spec.default).toBe(2)
     view.destroy()
   })
 })

@@ -7854,6 +7854,14 @@ longer, indistinguishable over everything anybody fits. The second is also what 
 expected, the compartment chain, inter-arm alignment and the pileups **divide by**, and they reach it
 through `expectedAt` rather than through the panel: the plotted curve is a figure and the denominator
 is a denominator, and changing what is on screen must not change what an O/E is taken against.
+**The first two diagonals are left out unless the reader asks for them** — *minimum separation*, in
+bins, is 2 by default. The diagonal and the one beside it hold what ligation could not separate,
+self-ligation and unligated fragments, and say nothing about the polymer, which is why cooltools'
+`expected_cis` leaves them out by default (`ignore_diags=2`). Under the density the floor is also the
+floor of the total every point is a share of, so 0 puts the diagonal back in the first break, where
+`distanceLaw` has it. It was 0: the density's first break held the diagonal and the one beside it — on
+a 1 kb map, two thirds of every cis contact — and every other point was a share of a total they
+dominated.
 
 **And the four orientations beside it, wherever there are records to count them from.** Not a
 property of the matrix at all: it is counted from the records, in log-spaced base-pair bins, because
@@ -7874,7 +7882,9 @@ on a log axis and broke the line, and a filtered library has runs of them at sho
 sparse bins is pooled into points of at least sixteen records — a counting error of a quarter, which is
 the tenth of a decade the convergence is read at — each over the whole stretch it spans, while a bin
 holding sixteen on its own is never widened, so a real spike is not averaged into the sparse bins beside
-it. The line runs from the first record to the last.
+it. The line runs from the first record to the last, whatever the minimum separation says: that trims
+the matrix's near-diagonal, a fact about its grid, and the separation the four converge at is usually
+shorter than one bin of it.
 **Where the records are.** A map **binned from a `.pairs`** had them counted in the import's own pass
 (§3.7), and the form asks for no file: *four orientations* is the only question, and the price beside
 **Run** says where the curves come from. On a map opened as a matrix, or binned from a file with no

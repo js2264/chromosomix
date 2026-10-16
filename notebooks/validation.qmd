@@ -779,9 +779,11 @@ record('Compartments', 'mouse Hi-C, 100 kb, GC-phased', f"cooltools {VERSIONS['c
 ## 4 · P(s)
 
 `--quantity expected --scope file`: per band of separations (factor 1.1), the balanced contacts of
-every chromosome over the bin pairs that could hold them, at the band's pair-weighted mean separation.
-cooltools' per-diagonal sums (`expected_cis`) are pooled over the same bands, each a run of consecutive
-diagonals whose weighted mean is the separation the app writes.
+every chromosome over the bin pairs that could hold them, at the band's pair-weighted mean separation,
+from the app's default minimum separation of two bins — the diagonal and the one beside it left out,
+as cooltools' own default leaves them out (`ignore_diags=2`). cooltools' per-diagonal sums
+(`expected_cis`, every diagonal) are pooled over the same bands, each a run of consecutive diagonals
+from the first the app kept, whose weighted mean is the separation the app writes.
 
 ```{python}
 PS = WORK / 'ps'
@@ -791,13 +793,14 @@ PS_CASES = {'yeast Micro-C, 800 bp': ('yeast', YEAST_800, f'{YEAST}::/resolution
 EXPECTED = script('cooltools_expected_cis')
 
 
-def bands(n_valid, separations, binsize):
-    """The run of consecutive diagonals behind each separation the app wrote: from where the last
-    ended, the longest run whose valid-pixel-weighted mean matches it to its six written digits."""
+def bands(n_valid, separations, binsize, first):
+    """The run of consecutive diagonals behind each separation the app wrote: from `first`, then from
+    where the last ended, the longest run whose valid-pixel-weighted mean matches it to its six written
+    digits."""
     k = np.arange(len(n_valid), dtype=float)
     cn = np.concatenate([[0.0], np.cumsum(n_valid)])
     ck = np.concatenate([[0.0], np.cumsum(n_valid * k)])
-    runs, lo = [], 1
+    runs, lo = [], first
     for x in separations:
         tolerance = max(0.5, abs(x) * 5e-6)
         match = None
@@ -817,23 +820,34 @@ def bands(n_valid, separations, binsize):
     return runs
 
 
+def kept_from(path):
+    """The first diagonal the app kept: its minimum separation, as the table's header records it, and
+    never the diagonal itself, which the expected leaves out whatever it says."""
+    for line in open(path):
+        if line.startswith('# param minSeparation:'):
+            return max(1, int(float(line.split(':', 1)[1])))
+    raise ValueError(f'{path} does not say its minimum separation')
+
+
 ps = {}
 for label, (slug, uri, local, short) in PS_CASES.items():
     mr('expected', uri, '--quantity', 'expected', '--scope', 'file', out=PS / slug, name=f'expected-{slug}',
        analysis='P(s)', label=short)
     reference(f'cooltools-expected-{slug}', 'P(s)', 'cooltools', [PYTHON, EXPECTED, uri, OUT, THREADS],
               out=PS / f'{slug}-cooltools.tsv', label=short, threads=THREADS)
-    app = table(one(PS / slug, '*.expected.ps.tsv'))
+    saved = one(PS / slug, '*.expected.ps.tsv')
+    app = table(saved)
     cvd = pd.read_csv(PS / f'{slug}-cooltools.tsv', sep='\t')
     cvd['balanced.sum'] = cvd['balanced.sum'].fillna(0)
     ref = cvd.groupby('dist')[['n_valid', 'balanced.sum']].sum()
     n = ref['n_valid'].reindex(range(int(ref.index.max()) + 1), fill_value=0).to_numpy(float)
     total = ref['balanced.sum'].reindex(range(len(n)), fill_value=0).to_numpy(float)
     x, y = app.iloc[:, 0].to_numpy(float), app.iloc[:, 1].to_numpy(float)
-    runs = bands(n, x, cooler.Cooler(local).binsize)
+    runs = bands(n, x, cooler.Cooler(local).binsize, kept_from(saved))
     pooled = np.array([total[a:b].sum() / n[a:b].sum() for a, b in runs])
-    ps[label] = dict(x=x, app=y, ref=pooled, rel=np.abs(y / pooled - 1), reach=x.max())
-show(pd.DataFrame([{'map': k, 'points': len(v['x']), 'furthest separation (Mb)': v['reach'] / 1e6,
+    ps[label] = dict(x=x, app=y, ref=pooled, rel=np.abs(y / pooled - 1), reach=x.max(), first=runs[0][0])
+show(pd.DataFrame([{'map': k, 'points': len(v['x']), 'first diagonal': v['first'],
+                    'furthest separation (Mb)': v['reach'] / 1e6,
                     'relative difference, max': v['rel'].max()} for k, v in ps.items()]),
      **{'furthest separation (Mb)': '{:.1f}', 'relative difference, max': '{:.1e}'})
 ```
@@ -858,7 +872,7 @@ for col, (label, v) in enumerate(ps.items()):
 plt.show()
 ```
 
-Over `{python} TEXT['ps_points']` points, from one bin to the longest chromosome, the relative
+Over `{python} TEXT['ps_points']` points, from two bins to the longest chromosome, the relative
 difference is at most `{python} TEXT['ps_max']` (float32).
 
 ```{python}
