@@ -1773,6 +1773,15 @@ the map is the file's own pixels. Each pair's share of the new contacts is
 binomial in its share of the old, so the total is again exactly `N`. An oversample is an
 **inference** where a subsample is not, and everything that names a drawn map says which it was.
 
+**The map an oversample draws from is a command of its own.** `chromosomix boost <map>` hands
+Boost-HiC each sequence's stored counts — the square an oversample hands it (`cisSquare`) — and
+writes what `main.py` writes, `boostedmat`: the boosted map over the bins the outlier filter kept, in
+SCN units, one square TSV a sequence, its rows and columns named by each kept bin's start
+(`--sequences` names some, `--alpha` another exponent). Nothing on screen shows that map, and a draw
+from it is a poor way to hold a port to its upstream; this is the map to hold it by, cell for cell
+over whole chromosomes, where the golden holds a hundred bins (§18.10). A sequence past the limit below is refused by name, as an oversample refuses it, and the
+others are still written.
+
 Floyd–Warshall is cubic in a sequence's bins. It runs as a WebAssembly SIMD kernel
 (`metacooler/wasm/floyd.c`, built by `npm run wasm:floyd` and committed as base64, bit-identical to
 the TypeScript loop it falls back to), which walks yeast's chromosome IV at 1 kb — 1,532 bins — in
@@ -5439,6 +5448,7 @@ satisfy and is therefore the one that is tested first:
 | 4C, with trans | one streaming pass over pixels with `bin1 < anchor_end`; progress, cancel, and a pre-flight estimate before it starts |
 | APA, k windows, local file | 0 network; ≤ k bounded reads after coalescing |
 | APA, k windows, remote | ≤ 2 range requests per *coalesced* window, with the estimate shown before **Run** |
+| APA over the expected | the windows, and one band per sequence the anchors sit on, read in tiles as deep as its farthest window reaches and never held whole; the estimate says so in words, since the depth is the loop set's |
 | Metaplot, k features | 0 matrix reads; ≤ 1 `sample` request per contig touched |
 | Correlation / eigenvectors | 0 range requests beyond the block; refused above the bin-count gate (§18.6) |
 | Adaptive smoothing of a block | 0 range requests; the arrays go over and back. Inline below 1 M cells (78 ms at 353²); on the analysis thread above it — 1.5 s at 4 M, 7.4 s at the 16 M cap. The map draws **unsmoothed** meanwhile, never blank and never captioned as smoothed |
@@ -7011,7 +7021,10 @@ the two loci an *Origin and terminus* run leaves behind phased every compartment
 chosen; it is never assumed. And an optional input that is a guess however it is filled — the track
 compartments are phased by, the coverage an origin call breaks a tie with — **starts on none**: the first
 bigWig loaded is a ChIP track as often as it is anything, and a ratio from the wrong one looks like any
-other.
+other. A list of several that may be empty — APA's track aggregates — opens on the star like the rest,
+and **every box unticked is an answer the form keeps**, as *None* is on a list of sequences: a required
+list is ticked back to the star, because nothing ticked there is a Run that cannot happen, and the two
+used to be one rule, so the drawer's round trip around a run ticked the reader's unticked track back on.
 
 Parameters are remembered per file and per task, and travel in an exported session, so that reproducing
 a figure is opening the session and pressing Run.
@@ -7084,7 +7097,11 @@ share a row: a single on/off button is not a group, and the full-width shape is 
 genuinely one — a checklist, a number with a slider beside it, four marks in a row — whose hint then
 goes *under* the group rather than beside the word above it. A hint never repeats what the control's
 own label, options or state already say: a column of tick boxes that opens with every box ticked does
-not need a line saying that every sequence is read unless you say otherwise.
+not need a line saying that every sequence is read unless you say otherwise. **A card none of whose
+controls the other answers leave is not drawn**, heading and all: APA's Control card belongs to the
+distance-matched control and is gone under observed / expected, and its Ranking card belongs to a
+feature set and is gone for a loop set. A heading over nothing is a question the form has decided not
+to ask, still taking a line to say so.
 
 **A file a task reads and does not open is dropped on the form.** One parameter is a file rather than a
 number or something loaded: P(s)'s `.pairs`, whose records are read for the four orientations and whose
@@ -8263,7 +8280,7 @@ mean of a bimodal set is a line that describes nothing. *Aggregate peak analysis
 **fixed** (centre ± W bins) and **scaled-region** (the domain, or the rectangle between two anchors,
 resampled to a fixed grid) modes; on-diagonal from a feature set, off-diagonal from a pair set, and
 off-diagonal from **every pair of one feature set** inside a separation range;
-normalised by **distance-matched controls by default**, by observed/expected, by **chromosight**, or
+normalised by **observed/expected by default**, by distance-matched controls, by **chromosight**, or
 not at all; with the P2LL enrichment reported under it and a per-feature score table that can leave
 the app.
 
@@ -8290,10 +8307,41 @@ axis label says which point it is; *bins from the centre* over a pileup of four 
 caption for a figure nobody drew. Hidden where there is no point to choose: a loaded loop set brings
 its own two anchors, and a domain pileup's window *is* the feature, start to end.
 
+**A pileup's window is cut as coolpuppy cuts one, and its observed/expected is coolpuppy's.**
+Nothing is taken from below the diagonal. The map is read whole, both triangles, and a loop window
+that crosses the diagonal holds the same contacts twice there — once above it and once mirrored
+below — so the cells below it are left out, as coolpuppy, which cuts its windows from the upper
+triangle, leaves them out. The main diagonal and the one beside it go too (*diagonals left out*,
+coolpuppy's `min_diag`, 2 by default), being mostly what ligation could not separate. A window on
+the diagonal is its own mirror and is kept whole but for those diagonals, either side of the main
+one, which is coolpuppy's local pileup folded onto its transpose; and a distance-matched control is
+cut by the same rule as the window it divides, or the ratio would carry a pattern that is in
+neither. Observed/expected divides **each window, cell by cell, by its own sequence's expected at
+that cell's own diagonal**, then averages the ratios: coolpuppy's `ooe`, with cooltools'
+`balanced.avg` — the mean of each diagonal over the whole sequence — read as a band as deep as the
+farthest window reaches. That is the pileup's normalisation and nothing else's: the map's own O/E
+(§7.5) divides by the curve it always has. **A loop set leaves out the loops nearest the diagonal**,
+as coolpuppy does: every loop whose two anchors' centres are nearer than *nearest loop* bins of the
+file, **five by default**, measured as coolpuppy measures it, in base pairs between the centres.
+coolpuppy's own default, `mindist='auto'`, is further out — twice the half-width and two, the
+separation at which a window stops reaching the two diagonals left out, so that at that floor no loop
+window has a gap cut in it — and leaves out 959 of the yeast demo's 1,506 loops at 1 kb; the
+validation types it to hold the two to each other (§18.10). The run says how many loops it left out
+and how near they were, and 0 piles up every loop; *every pair* of a feature set keeps its own
+separation range instead. It used to divide
+the finished pileup by an expected looked up at each cell's distance from the *pileup's* centre,
+which is a cell's diagonal only for a window on the diagonal, and to take that expected from the
+windows' own cells, which over a loop set are the places the set picked, enriched by construction.
+On a mouse loop set whose centre coolpuppy puts at 2.9 that said 0.2; read whole, the raw pileup of
+the same set was up to ten per cent from coolpuppy's in the cells nearest the diagonal, and more at
+coolpuppy's default `min_diag`. Cut this way, every cell agrees to 5e-6, gap for gap (§18.10).
+
 **Tracks aggregate along the pileup's two edges.** Any number of bigWigs or synthetic tracks may be
-chosen, each averaged over the **same windows** the pileup is taken from — the real ones, never the
-shifted controls, which are the denominator of the picture rather than the picture — and drawn as a
-profile above it and beside it (under every normalisation but chromosight's, which answers with its
+chosen, the starred one to begin with, and **none is an answer the form keeps**: every box unticked
+stays unticked through the next run, where it used to tick the starred track back on. Each is averaged
+over the **same windows** the pileup is taken from — the real ones, never the shifted controls,
+which are the denominator of the picture rather than the picture — and drawn as a profile above it
+and beside it (under every normalisation but chromosight's, which answers with its
 own outputs). That is the figure most papers using an APA actually print: the
 aggregate contact map with the aggregate signal on its edges, which turns *these places touch* into
 *these places touch, and this is what is bound where they do*. Until this a reader had to run the 1D
@@ -8348,7 +8396,9 @@ scaled pileup is fed by windows at a dozen different separations — that is wha
 has no one diagonal offset for a P(s) to be looked up at, and dividing by one anyway was a plausible
 picture of nothing. The distance-matched control is the answer there and is drawn at the same
 separations by construction. **Every anchor is piled up and every window is summed**: there is no cap on the anchors read
-and no minimum coverage a window must reach. Both existed and both were quietly a change of subject —
+and no minimum coverage a window must reach — the one floor being a loop set's nearest loop, which is
+about where a loop is rather than a sample of the set, is coolpuppy's, and is said in the run's notes.
+Both existed and both were quietly a change of subject —
 a cap makes the figure a pileup of whichever anchors sorted first, and a coverage floor drops exactly
 the windows in sparse regions, which are the ones a weak pileup is weak because of. The accumulator
 counts per cell, so a half-empty window contributes what it has and nothing more. The chromosight
@@ -8363,7 +8413,17 @@ set is detrended against a curve fitted to short ranges; and **every anchor come
 not, because quantification answers about the positions it was given. It reports the same score
 spectrum the detector does, over the same templates.
 *Track correlation* across any set of tracks, over fixed windows (100 bp by default) or over a
-feature set's intervals, by Spearman's rank correlation by default or by Pearson's.
+feature set's intervals, by Spearman's rank correlation by default or by Pearson's. A window's value
+is the **exact mean over the bases a track has a value for**, each record weighted by how much of the
+window it covers — pyBigWig's `stats(…, exact=True)` — so every track is read at its own resolution,
+never from a zoom level, a megabase at a time: a zoom record is a mean over a span of its own, and one
+17 kb record weighted whole into a 10 kb window took a mouse genome's correlation from 0.88 to 0.81.
+Windows are whole windows, kept as a tiling per sequence rather than as an object each. A window any
+of the tracks lacks is left out of **every** pair, as deepTools' `plotCorrelation` leaves out a row
+with a missing value, so every coefficient is over the same windows: left out of each pair alone,
+two mouse ATAC-seq replicates beside an insulation score with gaps read ρ = 0.59 at 100 bp where
+deepTools reads 0.54 from the same windows. The run says how many windows it left out, and
+*compared*, beside *units* under the matrix, how many are left.
 *Fraction of signal in features* — ChIP-seq's FRiP, over whatever is loaded: of everything a track
 carries, the share of it inside a chosen interval set, against the share of the assembly that set
 covers. The ratio of the two is the column to read, and it is the reason the covered fraction is
@@ -8473,9 +8533,10 @@ the reasons are worth recording where the descriptions are:
 
 - **Aggregate peak analysis is not a composite**, despite needing an expected curve for one of its
   four normalisations. `requires` is resolved before every run, so declaring it would compute a
-  whole-file P(s) on every pileup while observed/expected is not the default — and the expected a
-  pileup needs is narrower than the task that produces one: the diagonal offsets its own windows
-  span, which it accumulates from squares it is already reading. **The inter-MAG network is** a
+  whole-file P(s) on every pileup, under the three normalisations that never read it too — and the
+  expected a pileup needs is narrower than the task that produces one: the diagonals its own
+  windows reach, on the sequences its anchors sit on, read as one band per sequence and never
+  deeper than the farthest window. **The inter-MAG network is** a
   genuine composite, for the mirror-image reason: its upstream is the whole input, unconditionally.
 - **Multi-scale insulation is a doubling ladder from a settable base**, not a list of widths. A list
   needs a free-text control the parameter model does not have, and a parser with failure modes of its
@@ -8708,8 +8769,10 @@ only the second would force a choice between a tolerance loose enough to cover a
 definition and a test that fails on a difference that is correct. `direct` asks whether the code
 computes what it says; `reference` asks whether what it says is the quantity the field means by that
 name. Four of the relations are exact — P(s) against `expected_cis`, coverage against `coverage` up to
-the diagonal being counted once here and twice there, APA against coolpuppy once the diagonal-crossing
-windows are excluded, and **insulation against `cooltools.insulation`**, bin for bin: the score, the
+the diagonal being counted once here and twice there, APA against coolpuppy — raw, over the expected
+and on the diagonal, at coolpuppy's own floor on how near a loop may be and with every loop, the
+windows that cross the diagonal included, through the task's own runner — and
+**insulation against `cooltools.insulation`**, bin for bin: the score, the
 cells each diamond counted and the boundary strength, at three windows, with the calls at the threshold.
 It was once only correlated — the diamond here was a sum, half a bin along, over the contig's mean —
 and the golden recorded the correlation and asserted it had not degraded; the diamond is now cooltools'

@@ -3,10 +3,15 @@
  *
  * Every track sampled over the same units, then correlated pairwise. The only
  * decision with a consequence is what happens to a unit one track can answer for
- * and another cannot: it is dropped from *that pair* and not from the whole run.
- * Dropping it everywhere would make the correlation between two well-covered
- * tracks depend on a third one's gaps, which is the sort of coupling nobody
- * would look for on finding a surprising number.
+ * and another cannot: it is left out of **every** pair, as deepTools'
+ * `plotCorrelation` leaves out a row of its matrix with a missing value. It was
+ * left out of that pair alone, and two mouse ATAC-seq replicates beside an
+ * insulation score — which has no value where the map is too sparse — then read
+ * ρ = 0.59 at 100 bp where deepTools reads 0.54 from the same windows. Every
+ * coefficient is now over the same units, so the matrix is one sample's
+ * correlations rather than each pair's own. The price is that two well-covered
+ * tracks' coefficient moves with a third one's gaps, which nobody would look for
+ * on finding a surprising number: so the run says how many units it left out.
  */
 
 import type { Region } from '../../annotations/types'
@@ -19,7 +24,7 @@ import {
   strParam,
   type TrackTaskRunner,
 } from '../job'
-import { pearson, spearman } from '../stats'
+import { MIN_PAIRS, pearson, spearman } from '../stats'
 import type { MatrixOutput, TableOutput, TaskOutput } from '../types'
 
 export const runTrackCorrelation: TrackTaskRunner = async (job) => {
@@ -40,22 +45,36 @@ export const runTrackCorrelation: TrackTaskRunner = async (job) => {
   const nameOf = (id: string): string => job.inputs.labels?.[id] ?? id
   const names = entries.map(nameOf)
 
-  const regions = await unitsOf(job)
-  if (regions.length === 0) {
+  const units = await unitsOf(job)
+  if (units.count === 0) {
     job.note('No unit to compare over. Check that the tracks and the assembly share contig names.')
     return []
   }
 
-  const step = strParam(job.params, 'over', 'bins') === 'features'
-    ? 0
-    : Math.max(1, Math.round(numParam(job.params, 'binsize', 100)))
   const columns: Float64Array[] = []
   for (let i = 0; i < entries.length; i++) {
     job.throwIfCancelled()
     job.progress(i, entries.length, names[i])
-    columns.push(await valuesFor(job, entries[i], regions, step))
+    columns.push(await valuesFor(job, entries[i], units))
   }
   job.progress(entries.length, entries.length, 'correlating')
+
+  const compared = keepComplete(columns)
+  const noun = units.kind === 'bins' ? 'windows' : 'features'
+  if (compared < MIN_PAIRS) {
+    job.note(
+      `Fewer than ${MIN_PAIRS} of the ${units.count.toLocaleString()} ${noun} have a value in every ` +
+        'track, so no pair has a coefficient. Check that the tracks cover the same sequences.',
+    )
+  } else if (compared < units.count) {
+    const left = units.count - compared
+    const one = left === 1
+    job.note(
+      `${left.toLocaleString()} of the ${units.count.toLocaleString()} ${noun} ` +
+        `${one ? 'has' : 'have'} no value in at least one track, and ${one ? 'is' : 'are'} left out ` +
+        `of every pair: every coefficient is over the other ${compared.toLocaleString()}.`,
+    )
+  }
 
   const method = strParam(job.params, 'method', 'spearman')
   const n = entries.length
@@ -88,7 +107,15 @@ export const runTrackCorrelation: TrackTaskRunner = async (job) => {
     // and a scale centred on whatever the data happened to average would move
     // the white point between runs.
     centre: 0,
-    stats: [{ label: 'units', value: regions.length, digits: 0 }],
+    stats: [
+      { label: 'units', value: units.count, digits: 0 },
+      {
+        label: 'compared',
+        value: compared,
+        digits: 0,
+        hint: 'Units every track has a value for: the ones every pair is correlated over.',
+      },
+    ],
   }
   const table: TableOutput = {
     kind: 'table',
@@ -105,8 +132,25 @@ export const runTrackCorrelation: TrackTaskRunner = async (job) => {
   return outputs
 }
 
-/** The units to compare over: fixed windows across the assembly, or a feature set. */
-async function unitsOf(job: Parameters<TrackTaskRunner>[0]): Promise<Region[]> {
+/**
+ * The units to compare over: fixed windows across the assembly, or a feature set.
+ *
+ * Windows are kept as a **tiling per sequence** — a size and a count — and never
+ * as one object per window: at the default 100 bp a mouse genome is 27 million
+ * of them, and an object each was gigabytes before a single value was read.
+ */
+type Units =
+  | { kind: 'bins'; size: number; tilings: Tiling[]; count: number }
+  | { kind: 'features'; regions: Region[]; count: number }
+
+/** One sequence's windows: `count` of `size` bases from 0, units `offset …`. */
+interface Tiling {
+  contig: string
+  count: number
+  offset: number
+}
+
+async function unitsOf(job: Parameters<TrackTaskRunner>[0]): Promise<Units> {
   if (strParam(job.params, 'over', 'bins') === 'features') {
     // By the **parameter key**, `features` — see `chosenInput`.
     const found = chosenInput(job.inputs.features, job.params, 'features')
@@ -118,77 +162,144 @@ async function unitsOf(job: Parameters<TrackTaskRunner>[0]): Promise<Region[]> {
           gone: 'The feature set chosen is no longer loaded. Re-open the file, or pick another.',
         }) ?? '',
       )
-      return []
+      return { kind: 'features', regions: [], count: 0 }
     }
-    const out: Region[] = []
+    const regions: Region[] = []
     for (let i = 0; i < set.length; i++) {
-      out.push({ contig: set.contigs[set.contig[i]], start: set.start[i], end: set.end[i] })
+      regions.push({ contig: set.contigs[set.contig[i]], start: set.start[i], end: set.end[i] })
     }
-    return out
+    return { kind: 'features', regions, count: regions.length }
   }
   const size = Math.max(1, Math.round(numParam(job.params, 'binsize', 100)))
-  const out: Region[] = []
+  const tilings: Tiling[] = []
+  let count = 0
   for (const [contig, length] of Object.entries(job.inputs.contigLengths ?? {})) {
-    for (let start = 0; start + size <= length; start += size) {
-      out.push({ contig, start, end: start + size })
-    }
+    // Whole windows only: a last window shorter than the rest is a different
+    // quantity — a mean over fewer bases — ranked beside the others as if not.
+    const whole = Math.floor(length / size)
+    if (whole === 0) continue
+    tilings.push({ contig, count: whole, offset: count })
+    count += whole
   }
-  return out
+  return { kind: 'bins', size, tilings, count }
 }
 
 /**
- * One track's mean value over each unit.
+ * How many bases one request reads, at most.
  *
- * Sampled per contig for the reason the metaplot does it: the worker picks one
- * zoom level per request and coalesces adjacent blocks, so a chromosome's worth
- * of units is one call.
+ * Each track is read **at its own resolution** — a bigWig's base-level records,
+ * never a zoom level — because a unit's value is the mean over the bases it
+ * covers, and a zoom record is a mean over *its* span: one 17 kb record laid
+ * over a 10 kb window put the neighbouring windows' signal into it, and the
+ * correlation over a mouse genome came out at 0.81 where the windows' own means
+ * give 0.88. Reading at base resolution makes the read the whole file, which is
+ * what an exact mean costs; a megabase at a time keeps what is held to one
+ * megabase's records, so a 61 Mb chromosome at 100 bp is no longer the
+ * out-of-memory it was when all 614,000 of its windows were one request.
+ */
+const CHUNK_BASES = 1 << 20
+
+/** Requests per batch of features, for the same reason. */
+const CHUNK_FEATURES = 4096
+
+/**
+ * One track's mean value over each unit: the mean over the bases the track has
+ * a value for, each record weighted by **how much of the unit it covers** —
+ * pyBigWig's `stats(…, exact=True)`, and what deepTools reads where it reads
+ * base-level data.
  */
 async function valuesFor(
   job: Parameters<TrackTaskRunner>[0],
   entry: string,
-  regions: Region[],
-  step: number,
+  units: Units,
 ): Promise<Float64Array> {
-  const out = new Float64Array(regions.length).fill(Number.NaN)
-  const byContig = new Map<string, number[]>()
-  for (let i = 0; i < regions.length; i++) {
-    const held = byContig.get(regions[i].contig)
-    if (held === undefined) byContig.set(regions[i].contig, [i])
-    else held.push(i)
+  const total = new Float64Array(units.count)
+  const covered = new Float64Array(units.count)
+  // One record's share of the unit `[from, to)` it overlaps, folded in.
+  const fold = (at: number, from: number, to: number, start: number, end: number, value: number): void => {
+    const overlap = Math.min(end, to) - Math.max(start, from)
+    if (!(overlap > 0)) return
+    total[at] += value * overlap
+    covered[at] += overlap
   }
 
-  for (const [, indices] of byContig) {
-    job.throwIfCancelled()
-    const wanted = indices.map((i) => regions[i])
-    const resolution = step > 0 ? step : Math.max(1, Math.round(meanSpan(wanted)))
-    const set = await job.sample(entry, wanted, resolution)
-    const byKey = new Map<string, (typeof set.regions)[number]>()
-    for (const region of set.regions) {
-      byKey.set(`${region.contig}:${region.start}-${region.end}`, region)
-    }
-    for (const i of indices) {
-      const region = regions[i]
-      const samples = byKey.get(`${region.contig}:${region.start}-${region.end}`)
-      if (samples === undefined) continue
-      let total = 0
-      let span = 0
-      for (let k = 0; k < samples.values.length; k++) {
-        const value = samples.values[k]
-        if (!Number.isFinite(value)) continue
-        const width = samples.ends[k] - samples.starts[k]
-        total += value * width
-        span += width
+  if (units.kind === 'bins') {
+    const { size } = units
+    const span = Math.max(1, Math.floor(CHUNK_BASES / size)) * size
+    for (const tiling of units.tilings) {
+      const end = tiling.count * size
+      for (let from = 0; from < end; from += span) {
+        job.throwIfCancelled()
+        const to = Math.min(end, from + span)
+        const set = await job.sample(entry, [{ contig: tiling.contig, start: from, end: to }], 1)
+        for (const samples of set.regions) {
+          for (let k = 0; k < samples.values.length; k++) {
+            const value = samples.values[k]
+            if (!Number.isFinite(value)) continue
+            const start = Math.max(from, samples.starts[k])
+            const stop = Math.min(to, samples.ends[k])
+            // A record longer than a window — a run of one value in a coverage
+            // track — is shared out over every window it crosses.
+            for (let unit = Math.floor(start / size); unit * size < stop; unit++) {
+              fold(tiling.offset + unit, unit * size, (unit + 1) * size, start, stop, value)
+            }
+          }
+        }
       }
-      // Span-weighted, so a summary interval that covers half the unit counts
-      // for half of it rather than for one sample.
-      out[i] = span > 0 ? total / span : Number.NaN
+    }
+  } else {
+    // By sequence, and in batches, matched back by the coordinates the reply
+    // echoes: `sample` drops what its file cannot answer, so matching by
+    // position would shift every row after the first one dropped.
+    const byContig = new Map<string, number[]>()
+    units.regions.forEach((region, i) => {
+      const held = byContig.get(region.contig)
+      if (held === undefined) byContig.set(region.contig, [i])
+      else held.push(i)
+    })
+    for (const [, indices] of byContig) {
+      for (let first = 0; first < indices.length; first += CHUNK_FEATURES) {
+        job.throwIfCancelled()
+        const batch = indices.slice(first, first + CHUNK_FEATURES)
+        const set = await job.sample(entry, batch.map((i) => units.regions[i]), 1)
+        const byKey = new Map<string, (typeof set.regions)[number]>()
+        for (const region of set.regions) byKey.set(`${region.contig}:${region.start}-${region.end}`, region)
+        for (const i of batch) {
+          const region = units.regions[i]
+          const samples = byKey.get(`${region.contig}:${region.start}-${region.end}`)
+          if (samples === undefined) continue
+          for (let k = 0; k < samples.values.length; k++) {
+            const value = samples.values[k]
+            if (!Number.isFinite(value)) continue
+            fold(i, region.start, region.end, samples.starts[k], samples.ends[k], value)
+          }
+        }
+      }
     }
   }
-  return out
+
+  // In place: at 100 bp a mouse genome's column is 216 MB, and a third copy of
+  // it per track is what a run that holds several of them can least afford.
+  for (let i = 0; i < total.length; i++) total[i] = covered[i] > 0 ? total[i] / covered[i] : Number.NaN
+  return total
 }
 
-function meanSpan(regions: Region[]): number {
-  let total = 0
-  for (const region of regions) total += region.end - region.start
-  return regions.length === 0 ? 1 : total / regions.length
+/**
+ * Leaves each unit any track lacks out of every track, in place, and says how
+ * many units are left.
+ *
+ * deepTools' `plotCorrelation` reads its matrix and drops every row with a
+ * missing value before it computes anything (`np.ma.compress_rows`), so all its
+ * coefficients are over the rows every sample has. A unit missing from one
+ * column is made missing in all of them here, and the pairwise measures, which
+ * skip a pair either side of which is missing, are then over the same units.
+ */
+function keepComplete(columns: readonly Float64Array[]): number {
+  const count = columns.length === 0 ? 0 : columns[0].length
+  let kept = 0
+  for (let i = 0; i < count; i++) {
+    if (columns.every((column) => !Number.isNaN(column[i]))) kept++
+    else for (const column of columns) column[i] = Number.NaN
+  }
+  return kept
 }

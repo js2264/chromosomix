@@ -77,6 +77,46 @@ export function isChromosight(params: Params): boolean {
   return params.norm === 'chromosight'
 }
 
+/**
+ * How many diagonals, the main one and those beside it, a window leaves out.
+ *
+ * coolpuppy's `min_diag`, at its default, and the reason is that this task's
+ * pileups are held to coolpuppy's cell for cell (§18.10). The first two
+ * diagonals of a map are mostly what ligation could not separate — undigested
+ * fragments and self-circles — so a window that reaches the diagonal piles up
+ * the protocol as well as the contacts.
+ */
+export const MIN_DIAG_DEFAULT = 2
+
+/** The diagonals left out of every window; see {@link MIN_DIAG_DEFAULT}. */
+export function minDiagOf(params: Params): number {
+  const value = typeof params.minDiag === 'number' ? params.minDiag : MIN_DIAG_DEFAULT
+  return Number.isFinite(value) ? Math.max(0, Math.round(value)) : MIN_DIAG_DEFAULT
+}
+
+/**
+ * The nearest a loop may be to the diagonal and still be piled up, in bins, when
+ * nobody has said. Five: a loop nearer than that is mostly the diagonal's own
+ * contacts. coolpuppy's default is further out ({@link autoMinDist}), and the
+ * validation, which holds the two to each other, passes that one (§18.10).
+ */
+export const MIN_DIST_DEFAULT = 5
+
+/**
+ * coolpuppy's `mindist='auto'`, in bins: twice the flank and two, the separation
+ * at which a window stops reaching the two diagonals {@link MIN_DIAG_DEFAULT}
+ * leaves out — so at that floor no window of a loop set has a gap cut in it.
+ */
+export function autoMinDist(params: Params): number {
+  return 2 * windowBins(params) + 2
+}
+
+/** The nearest loop piled up, in bins: as typed, or {@link MIN_DIST_DEFAULT}. */
+export function minDistOf(params: Params): number {
+  const value = params.minDist
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.round(value)) : MIN_DIST_DEFAULT
+}
+
 /** The flank a scaled window carries each side, as a fraction of its body. */
 export function flankFractionOf(params: Params): number {
   const value = typeof params.flankFraction === 'number' ? params.flankFraction : 0.5
@@ -140,6 +180,11 @@ function hasTracks(params: Params): boolean {
   const value = params.tracks
   if (Array.isArray(value)) return value.length > 0
   return typeof value === 'string' && value !== ''
+}
+
+/** Whether a feature set is ranked by one of its columns — the Ranking card's question. */
+function ranked(params: Params): boolean {
+  return params.anchors === 'features' && typeof params.rankBy === 'string' && params.rankBy !== ''
 }
 
 /** Whether the input is a loaded pair set, rather than a feature set. */
@@ -308,10 +353,28 @@ const PARAMS: readonly ParamSpec[] = [
     when: (params) => isScaled(params),
   },
   {
+    kind: 'number',
+    key: 'minDiag',
+    label: 'diagonals left out',
+    // **And nothing is ever taken from below the diagonal**, which is not a
+    // setting because it is not a choice: a window that crosses the diagonal
+    // holds the same contacts twice there, once above it and once mirrored
+    // below, and coolpuppy cuts its windows from the upper triangle for that
+    // reason. On the diagonal the window is its own mirror and is drawn whole.
+    hint: 'The main diagonal and the ones beside it, left out of every window; 0 keeps every one.',
+    default: MIN_DIAG_DEFAULT,
+    min: 0,
+    max: 50,
+    integer: true,
+    // The chromosight pileup detrends the map first and keeps chromosight's own
+    // rule about the diagonal, which is part of the score it reports.
+    when: (params) => params.norm !== 'chromosight',
+  },
+  {
     kind: 'choice',
     key: 'norm',
     label: 'normalisation',
-    default: 'matched',
+    default: 'oe',
     options: [
       {
         value: 'matched',
@@ -321,7 +384,7 @@ const PARAMS: readonly ParamSpec[] = [
       {
         value: 'oe',
         label: 'observed / expected',
-        hint: 'Against the file’s own P(s). Controls for the distance decay only.',
+        hint: 'Each window over its sequence’s own P(s). Controls for the distance decay only.',
       },
       { value: 'none', label: 'none', hint: 'The raw pileup.' },
       {
@@ -428,6 +491,26 @@ const PARAMS: readonly ParamSpec[] = [
     when: (params) => params.norm === 'matched',
     section: 'Control',
   },
+  // **The nearest loop, coolpuppy's `mindist`**, five bins by default
+  // ({@link MIN_DIST_DEFAULT}). A loop set only, and the fixed mode only: *every
+  // pair* has a separation range of its own just below, and a scaled window is a
+  // fraction of its separation, which never reaches the diagonal. Measured
+  // between the two anchors' centres, in base pairs against this many bins of
+  // the file, which is how coolpuppy measures it.
+  {
+    kind: 'number',
+    key: 'minDist',
+    label: 'nearest loop',
+    hint:
+      'Loops nearer the diagonal than this are left out, 0 keeping every one; from twice the ' +
+      'half-width and two, no window reaches the first two diagonals.',
+    default: MIN_DIST_DEFAULT,
+    min: 0,
+    integer: true,
+    unit: 'bins',
+    when: (params) => usesPairSet(params) && !isScaled(params) && params.norm !== 'chromosight',
+    section: 'Separation',
+  },
   // **The range two features may be apart is a range of bin offsets**, which is
   // what the pileup itself is a picture of: a pair's separation is `col − row`,
   // the split-by-separation bands are bin offsets, and the near-diagonal a pair
@@ -492,8 +575,7 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'subset',
     label: 'then',
     default: 'all',
-    when: (params) =>
-      params.anchors === 'features' && typeof params.rankBy === 'string' && params.rankBy !== '',
+    when: ranked,
     options: [
       { value: 'all', label: 'one pileup' },
       { value: 'top', label: 'top N' },
@@ -508,7 +590,7 @@ const PARAMS: readonly ParamSpec[] = [
     default: 500,
     min: 1,
     integer: true,
-    when: (params) => params.subset === 'top',
+    when: (params) => ranked(params) && params.subset === 'top',
     section: 'Ranking',
   },
   {
@@ -520,7 +602,7 @@ const PARAMS: readonly ParamSpec[] = [
     max: 6,
     integer: true,
     slider: true,
-    when: (params) => params.subset === 'groups',
+    when: (params) => ranked(params) && params.subset === 'groups',
     section: 'Ranking',
   },
   {
@@ -528,6 +610,10 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'tracks',
     label: 'track aggregates',
     multiple: true,
+    // Optional, because a pileup with no profile on its edges is a pileup: the
+    // reader who unticks every track has answered, and a required list would
+    // tick the starred one back on the next run.
+    optional: true,
     hint:
       'Each is averaged over the same windows the pileup is taken from and drawn along its two ' +
       'edges — the aggregate signal above and beside the aggregate map.',
@@ -667,6 +753,28 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   // run that will happen rather than the one a removed setting used to bound.
   const windows = anchors === null ? null : anchors * (1 + controls)
 
+  // **Observed / expected reads more than its windows.** What a window is divided
+  // by is its own sequence's expected — the mean of each diagonal it reaches,
+  // over the whole sequence, which is the `expected_cis` coolpuppy is handed —
+  // so every sequence the anchors sit on is read as a band as deep as its
+  // farthest window. How deep that is depends on the set's longest pair, which
+  // the estimate does not hold, so it is said in words, as the chromosight
+  // pileup's band is.
+  if (params.norm === 'oe') {
+    return {
+      class: 'scan',
+      requests: null,
+      bytes: null,
+      note:
+        (windows === null
+          ? 'One small block per anchor, at the file’s own resolution'
+          : `${windows.toLocaleString()} windows of ${side}×${side} cells, at the file’s own ` +
+            'resolution') +
+        ', and each sequence the anchors sit on read as a band along its diagonal, as deep as ' +
+        'its farthest window reaches, for the expected every window is divided by.',
+    }
+  }
+
   if (context.blockLoaded && context.framing?.binsPerCell === 1) {
     return {
       class: 'free',
@@ -728,16 +836,19 @@ export const APA_TASK: AnalysisTask = {
   blurb: 'Pile up the matrix at a set of loops or features, against a control.',
   group: '2d',
   venue: 'analysis',
-  version: 2,
+  // 3: windows cut as coolpuppy cuts them, observed / expected divided window by
+  // window over the sequence's own expected, and the nearest loop (§18.8).
+  version: 3,
   // **Not** `requires: ['expected']`, though §18.8 describes the O/E path as
   // needing it. `requires` is static and the runner resolves it before every
   // run, so declaring it would compute a whole-file P(s) on every APA — while
   // O/E is not the default and most runs never look at it. And the expected an
-  // APA needs is a narrower question than the task's: the diagonal offsets its
-  // own windows span, on the contigs its own anchors sit on, which the runner
-  // accumulates from the squares it is already reading. A composite that
-  // recomputed a genome-wide curve to divide fifty offsets by would be paying a
-  // scan for arithmetic it already had in hand.
+  // APA needs is a narrower question than the task's: the diagonals its own
+  // windows reach, on the sequences its own anchors sit on, which the runner
+  // reads as one band per sequence and never deeper than the farthest window.
+  // It is *not* the windows' own cells, which is what it once was: an expected
+  // taken from squares about a loop set is the mean of the places the set
+  // picked, enriched by construction, and not the sequence's.
   // Two things, and the row says which is missing. It used to vanish when there
   // was no loop set, which taught a reader who had not met this app before that
   // it does not do aggregate peak analysis — rather than that they have not

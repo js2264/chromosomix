@@ -409,7 +409,7 @@ class PixelBuffer {
 }
 
 /** One block's pixels, in `(bin1, bin2)` order. */
-interface BlockPixels {
+export interface BlockPixels {
   bin1: Int32Array
   bin2: Int32Array
   count: Float64Array
@@ -494,6 +494,24 @@ export function oversampleTransBlock(pixels: BlockPixels, extra: number, rng: Rn
 }
 
 /**
+ * A sequence's own block as the dense square Boost-HiC reads: `n × n`, row-major,
+ * every stored count at its pair of bins and mirrored off the diagonal — the
+ * matrix `main.py` loads a HiC-Pro file into. Exported for `chromosomix boost`,
+ * which hands Boost-HiC the square an oversample hands it.
+ */
+export function cisSquare(pixels: BlockPixels, from: number, n: number): Float64Array {
+  const observed = new Float64Array(n * n)
+  const { bin1, bin2, count } = pixels
+  for (let i = 0; i < count.length; i++) {
+    const r = bin1[i] - from
+    const c = bin2[i] - from
+    observed[r * n + c] += count[i]
+    if (r !== c) observed[c * n + r] += count[i]
+  }
+  return observed
+}
+
+/**
  * A sequence's own block, oversampled through Boost-HiC.
  *
  * The weights are the boosted map in counts over every pair of bins the outlier
@@ -511,14 +529,7 @@ export function oversampleCisBlock(
   rng: Rng,
   out: PixelBuffer,
 ): void {
-  const observed = new Float64Array(n * n)
-  const { bin1, bin2, count } = pixels
-  for (let i = 0; i < count.length; i++) {
-    const r = bin1[i] - from
-    const c = bin2[i] - from
-    observed[r * n + c] += count[i]
-    if (r !== c) observed[c * n + r] += count[i]
-  }
+  const observed = cisSquare(pixels, from, n)
   const boosted = boostHiC(new Float64Array(observed), n, alpha)
   const cells = (n * (n + 1)) / 2
   const weights = new Float64Array(cells)

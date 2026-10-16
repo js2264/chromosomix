@@ -876,14 +876,14 @@ def read_loops(
     ``min_separation_bins`` keeps only the pairs whose window lies entirely clear
     of the main diagonal, and it is the single condition that makes this golden
     worth having. A window that straddles the diagonal contains cells from the
-    lower triangle, and the three implementations involved — this script,
-    coolpuppy, and the viewer — each mirror those cells at a slightly different
-    point in their pipeline. With the straddling pairs left in, the two pileups
+    lower triangle, which this script reads from the mirrored square and
+    coolpuppy leaves out. With the straddling pairs left in, the two pileups
     agree to about 1 per cent and every cell of the discrepancy sits below the
     diagonal; with them removed they agree to 1.3e-15 over all 441 cells, which
     is a real cross-implementation check rather than a correlation floor. The
     diagonal-crossing case is not thereby untested — it is what
-    `analysis-apa.test.ts` covers with a hand-built matrix.
+    ``apa_diagonal`` goldens, through the task's own runner, which cuts its
+    windows from the upper triangle as coolpuppy does.
     """
     out: list[tuple[str, int, int, int, int]] = []
     with LOOPS.open() as handle:
@@ -1022,6 +1022,111 @@ def apa_golden(chroms: list[str], flank_bins: int, limit: int) -> dict:
             "shape": list(matrix.shape),
             "pileup": rounded(matrix),
         }
+    except Exception as err:  # noqa: BLE001 - recorded, not raised
+        out["reference"] = {"unavailable": f"{type(err).__name__}: {err}"}
+    return out
+
+
+def apa_diagonal_golden(chroms: list[str], flank_bins: int, limit: int) -> dict:
+    """Pileups whose windows reach the diagonal, against coolpuppy at its defaults.
+
+    The ``apa`` golden above leaves out every loop whose window would touch the
+    diagonal, because the pileup it checks is hand-rolled from the map read
+    whole. This one keeps them, and its only oracle is coolpuppy, run as it runs
+    by default: each window cut from the upper triangle with the first two
+    diagonals left out (``min_diag=2``), observed / expected dividing every
+    window by cooltools' ``balanced.avg`` before the mean (``ooe=True``), and a
+    pileup on the diagonal coolpuppy's ``local`` one. Off the diagonal each is
+    run twice: at coolpuppy's own ``mindist='auto'``, which drops every loop
+    nearer than twice the flank and two bins, and with ``mindist=0``, which keeps
+    them — the loops whose windows reach the diagonal, which is what this golden
+    is for. The JS side runs the task's own runner over the same file, so what
+    is compared is the app's pileup and not a transcription of it.
+    """
+    import cooler
+
+    clr = cooler.Cooler(str(COOLER))
+    binsize = int(clr.binsize)
+    loops = read_loops(chroms, limit, 0, binsize)
+    width = 2 * flank_bins + 1
+    out: dict[str, Any] = {
+        "cooler": COOLER.name,
+        "binsize": binsize,
+        "chroms": chroms,
+        "flank_bins": flank_bins,
+        "width": width,
+        "min_diag": 2,
+        "pairs": [
+            {"chrom": c, "start1": s1, "end1": e1, "start2": s2, "end2": e2}
+            for c, s1, e1, s2, e2 in loops
+        ],
+        "crossing": sum(1 for _, s1, _, s2, _ in loops if (s2 - s1) // binsize < width + 1),
+    }
+    if not have("coolpuppy") or not have("cooltools"):
+        out["reference"] = {"unavailable": "coolpuppy and cooltools are needed"}
+        return out
+
+    try:
+        import cooltools
+        import pandas as pd
+        from coolpuppy import coolpup
+
+        frame = pd.DataFrame(
+            [
+                {"chrom1": c, "start1": s1, "end1": e1, "chrom2": c, "start2": s2, "end2": e2}
+                for c, s1, e1, s2, e2 in loops
+            ]
+        )
+        anchors = (
+            frame[["chrom1", "start1", "end1"]]
+            .drop_duplicates()
+            .rename(columns={"chrom1": "chrom", "start1": "start", "end1": "end"})
+            .reset_index(drop=True)
+        )
+        # Every diagonal, so a cell `min_diag` leaves in has its expected; the
+        # column read is the unsmoothed `balanced.avg`, coolpuppy's default.
+        expected = cooltools.expected_cis(
+            clr, ignore_diags=0, smooth=False, aggregate_smoothed=False, clr_weight_name="weight"
+        )
+        flank = flank_bins * binsize
+        runs = {
+            "raw_default": dict(features=frame, features_format="bedpe", ooe=False),
+            "oe_default": dict(
+                features=frame, features_format="bedpe", expected_df=expected, ooe=True
+            ),
+            "raw": dict(features=frame, features_format="bedpe", ooe=False, mindist=0),
+            "raw_min_diag_0": dict(
+                features=frame, features_format="bedpe", ooe=False, mindist=0, min_diag=0
+            ),
+            "oe": dict(
+                features=frame, features_format="bedpe", expected_df=expected, ooe=True, mindist=0
+            ),
+            "local_raw": dict(features=anchors, features_format="bed", local=True, ooe=False),
+            "local_oe": dict(
+                features=anchors, features_format="bed", local=True, expected_df=expected, ooe=True
+            ),
+        }
+        reference: dict[str, Any] = {
+            "tool": "coolpuppy.coolpup.pileup",
+            "relation": "equal",
+            # The app's dense reads are float32 and coolpuppy works in float64
+            # from the same pixels; the expected is a mean of float32 values here
+            # and of float64 ones there, which is where the last digit goes.
+            "tolerance": 1e-5,
+            "anchors": [
+                {"chrom": c, "start": int(s), "end": int(e)}
+                for c, s, e in anchors.itertuples(index=False)
+            ],
+        }
+        for name, kwargs in runs.items():
+            features = kwargs.pop("features")
+            pileup = coolpup.pileup(clr, features, flank=flank, nproc=1, **kwargs)
+            matrix = np.asarray(pileup["data"].iloc[0], dtype=float)
+            reference[name] = {
+                "n": int(pileup["n"].iloc[0]),
+                "pileup": rounded(matrix),
+            }
+        out["reference"] = reference
     except Exception as err:  # noqa: BLE001 - recorded, not raised
         out["reference"] = {"unavailable": f"{type(err).__name__}: {err}"}
     return out
@@ -1853,6 +1958,7 @@ COVERAGE = {
     "viewpoint": "a virtual 4C profile, against numpy — the diagonal counted once",
     "compartments": "O/E, correlation and the leading eigenvector, against numpy and cooltools.eigs_cis",
     "apa": "a raw loop pileup, against numpy and coolpuppy",
+    "apa_diagonal": "loop and local pileups reaching the diagonal, raw and O/E, against coolpuppy",
     "chromosight": "detection of loops and borders, against chromosight itself",
     "chromosight_quantify": "scores and the pileup for a given loop set, against chromosight quantify",
     "metaplot": "mean bigWig signal around a real peak set, against pyBigWig",
@@ -1994,6 +2100,12 @@ def main(argv: list[str] | None = None) -> int:
             "apa",
             apa_golden,
             (),
+            {"chroms": chroms, "flank_bins": args.apa_flank, "limit": args.apa_pairs},
+        ),
+        (
+            "apa_diagonal",
+            apa_diagonal_golden,
+            ("coolpuppy", "cooltools"),
             {"chroms": chroms, "flank_bins": args.apa_flank, "limit": args.apa_pairs},
         ),
         (

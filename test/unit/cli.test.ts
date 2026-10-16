@@ -36,6 +36,7 @@ import {
 } from '@/cli/main'
 import { typedLocusToRegion } from '@/genome/assembly'
 import { MetaCooler } from '@/metacooler/MetaCooler'
+import { BOOST_ALPHA, boostSteps } from '@/metacooler/boost'
 import { LocalFileSource } from '@/sources/LocalFileSource'
 import { writeHic, type HicRecord } from '../support/hicWriter'
 import { buildTwoBit } from '../support/twoBitWriter'
@@ -275,6 +276,83 @@ describe('the junction test', () => {
     reset()
     expect(await main(['circular'])).toBe(2)
     expect(complained()).toMatch(/circular needs at least one file/)
+  })
+})
+
+describe('Boost-HiC, on its own', () => {
+  /** The square `boost` wrote: each kept bin's start, and the map over them. */
+  async function square(file: string): Promise<{ starts: number[]; values: number[][]; head: string }> {
+    const text = await readFile(file, 'utf8')
+    const lines = text.split('\n').filter((line) => line !== '')
+    const rows = lines.filter((line) => !line.startsWith('#')).map((line) => line.split('\t'))
+    return {
+      starts: rows[0].slice(1).map(Number),
+      values: rows.slice(1).map((row) => row.slice(1).map(Number)),
+      head: lines.filter((line) => line.startsWith('#')).join('\n'),
+    }
+  }
+
+  it('writes the map boostSteps makes of the sequence’s own counts, over the bins it keeps', async () => {
+    const where = join(directory, 'boost')
+    reset()
+    expect(await main(['boost', sample, '--sequences', 'chrII', '--out', where, '--quiet'])).toBe(0)
+    expect(await readdir(where)).toEqual(['sample.boost-chrII.tsv'])
+    const written = await square(join(where, 'sample.boost-chrII.tsv'))
+    expect(written.head).toMatch(/^# alpha: 0\.2$/m)
+    expect(written.head).toMatch(/^# units: SCN$/m)
+
+    // The oracle reads the counts through the dense path, not the band the
+    // command reads, and hands them to the port directly.
+    const source = await LocalFileSource.fromPath(sample)
+    await source.mount()
+    const mc = await MetaCooler.open(sample, source)
+    try {
+      const [from, to] = mc.contigExtent('chrII')
+      const n = to - from
+      const dense = await mc.matrix({ rows: [from, to], cols: [from, to], balance: false })
+      const steps = boostSteps(Float64Array.from(dense.values), n, BOOST_ALPHA)!
+      expect(written.starts).toEqual(Array.from(steps.kept, (bin) => bin * mc.binsize))
+      const size = steps.kept.length
+      expect(written.values).toHaveLength(size)
+      for (let row = 0; row < size; row++) {
+        for (let col = 0; col < size; col++) {
+          const expected = steps.boosted[row * size + col]
+          expect(Math.abs(written.values[row][col] - expected)).toBeLessThanOrEqual(1e-9 * Math.abs(expected))
+        }
+      }
+    } finally {
+      mc.close()
+    }
+  })
+
+  it('boosts every sequence when none is named', async () => {
+    const where = join(directory, 'boost-all')
+    reset()
+    expect(await main(['boost', sample, '--out', where, '--quiet'])).toBe(0)
+    expect((await readdir(where)).sort()).toEqual(['sample.boost-chrI.tsv', 'sample.boost-chrII.tsv'])
+  })
+
+  it('refuses a sequence the file has not got, by name, and writes the others', async () => {
+    const where = join(directory, 'boost-named')
+    reset()
+    expect(await main(['boost', sample, '--sequences', 'chrII,chrIX', '--out', where, '--quiet'])).toBe(1)
+    expect(complained()).toMatch(/has no sequence chrIX/)
+    expect(await readdir(where)).toEqual(['sample.boost-chrII.tsv'])
+  })
+
+  it('refuses an exponent that is not a positive number, and a run with no file', async () => {
+    reset()
+    expect(await main(['boost', sample, '--alpha', '-1'])).toBe(2)
+    expect(complained()).toMatch(/--alpha needs a positive number/)
+    reset()
+    expect(await main(['boost'])).toBe(2)
+    expect(complained()).toMatch(/boost needs at least one file/)
+  })
+
+  it('is offered beside the tasks', async () => {
+    reset()
+    expect(await main([])).toBe(0)
+    expect(said()).toMatch(/chromosomix boost/)
   })
 })
 

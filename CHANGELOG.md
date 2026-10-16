@@ -14,6 +14,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **`chromosomix boost` writes Boost-HiC's map of each sequence (§6.5).** The map an oversample
+  draws a sequence's new contacts from, which nothing showed: each sequence's stored counts, the
+  square an oversample hands Boost-HiC, through the same port, written as Boost-HiC's `main.py`
+  writes its own — the bins its outlier filter keeps and the boosted map over them, in SCN units, one
+  square TSV a sequence. `--sequences` names some and `--alpha` another exponent; a sequence past
+  3,000 bins is refused by name, as an oversample refuses it. Over three mouse chromosomes at 100 kb
+  it keeps the same bins as Boost-HiC's Python and agrees with it within 5 × 10⁻¹⁰, ten times faster
+  on chr1.
+
 - **Copy beside PNG and PDF on every task's figure (§18.13).** It puts the figure's PNG — the same
   300 dpi redraw the PNG button saves — on the clipboard, to paste into a slide or a message without
   a file in between, and says in the corner what was copied and at what size.
@@ -962,6 +971,30 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   as a sequence of its own, last, as the file reads it, selected and framed to be moved into place.
 
 ### Changed
+
+- **An aggregate peak analysis over a loop set leaves out the loops nearest the diagonal (§18.8).**
+  *Nearest loop*, a new setting under Separation, is coolpuppy's `mindist`: a loop whose two
+  anchors' centres are nearer than that many bins is not piled up. It is five bins by default, and 0
+  piles up every loop, which is what it did before. coolpuppy's own default, `mindist='auto'`, is
+  twice the half-width and two, where a window stops reaching the two diagonals left out. On the
+  yeast demo's 1,506 loops at the default ±21 kb window, five bins leaves out none and coolpuppy's
+  floor 959. The run says how many loops it left out and how near they were; at coolpuppy's floor it
+  keeps the same 142 of the demo map's first 200 loops as coolpuppy, cell for cell.
+
+- **APA opens on observed / expected, and its form shows only the cards that apply (§18.2, §18.8).**
+  The normalisation starts on observed / expected rather than on distance-matched controls. The
+  Control card, whose every setting belongs to the distance-matched control, is not drawn under any
+  other normalisation, and the Ranking card, whose settings belong to a feature set, is not drawn for
+  a loop set or every pair — where *N* and *groups* used to stay on screen for having been chosen on a
+  feature set. In every task's form, a card none of whose controls apply is not drawn.
+
+- **Track correlation leaves a window any of its tracks lacks out of every pair, as deepTools does
+  (§18.8).** It was left out of that pair alone, so each coefficient was over windows of its own: on
+  chr19, two mouse ATAC-seq replicates beside a Hi-C insulation score — which has no value where the
+  map is too sparse to give one — read ρ = 0.59 at 100 bp where deepTools' `plotCorrelation` reads
+  0.54 from the same windows. Every coefficient is now over the windows every track has a value for,
+  the replicates read 0.54 as deepTools does, and the run says how many windows it left out;
+  *compared*, beside *units* under the matrix, says how many are left.
 
 - **Electron 43.2.0 → 43.7.9 (§15).** Past GHSA-gr2m-v5gq-v685, GHSA-j84w-jfhq-vhvj,
   GHSA-qmv3-fv6v-rmhq and GHSA-9qh4-3jw8-366w, four high advisories against the version 0.13.0
@@ -2194,6 +2227,48 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that collides never reaches that refusal.
 
 ### Fixed
+
+- **APA's track aggregates stay unticked once unticked (§18.2, §18.8).** With every track unticked,
+  the next run ticked the starred one back on: the drawer hands the form its context around a run, and
+  an empty list read as one nobody had answered. A list nobody has touched still opens on the starred
+  track; one the reader emptied is kept empty.
+
+- **Track correlation's windows are their exact means, and a mammalian genome at 100 bp fits in
+  memory (§18.8).** A window's value was taken from whatever zoom level its size selected for
+  drawing, and each record weighted by its whole width rather than by how much of the window it
+  covers: a 17 kb record laid whole over a 10 kb window. On 4DN's two mouse ATAC-seq replicates at
+  10 kb that gave r = 0.808 where the windows' own means give 0.884. Every track is now read at its
+  own resolution, a megabase at a time, and each record weighted by its overlap — pyBigWig's
+  `stats(…, exact=True)` — so the two replicates read 0.884, and on chr19 they and a Hi-C insulation
+  score agree with pyBigWig's exact means and SciPy to 5 × 10⁻⁷ at 100 bp, 1 kb and 10 kb, by both
+  methods. A window was also an object each and a sequence one request: a single 61 Mb chromosome
+  at 100 bp was killed for memory, and the whole mouse genome at 100 bp now takes three minutes and
+  2.3 GB.
+
+- **An aggregate peak analysis is now coolpuppy's pileup wherever a window reaches the diagonal,
+  and its observed / expected normalisation is coolpuppy's (§18.8).** A loop window that crossed the
+  diagonal took the cells below it from the map read whole — contacts it already held above,
+  mirrored — where coolpuppy cuts from the upper triangle and leaves them out: on 4DN's mouse Hi-C at
+  10 kb, with chromosight's 2,515 loops, the two pileups were up to ten per cent apart in the cells
+  nearest the diagonal. Those cells are left out now, and so are the main diagonal and the one beside
+  it, as coolpuppy leaves them out by default — *diagonals left out*, a new setting, 2 to begin with
+  and 0 for every diagonal. A pileup on the diagonal keeps its whole window but for those diagonals,
+  which is coolpuppy's local pileup, and its P2LL — whose centre there is mostly the diagonal — falls
+  with them: from 60 to 15 over the yeast demo's ATAC peaks. Observed / expected was wrong off the
+  diagonal: it divided the finished pileup by an expected looked up at each cell's distance from the
+  pileup's centre, taken from the windows' own cells, and put the centre of that loop set at 0.2
+  where coolpuppy puts it at 2.9. Each window is now divided, cell by cell, by its own sequence's
+  expected at the cell's own diagonal — cooltools' `balanced.avg`, read as a band as deep as the
+  farthest window — before the mean. That is the pileup's normalisation alone: the map's own O/E
+  (§7.5) is computed as it was. Raw, over the expected and on the diagonal, every cell agrees
+  with coolpuppy's to 5 × 10⁻⁶, the same cells left as gaps; a new golden, `apa_diagonal`, holds the
+  task's own runner to it on the demo map's loops, the 55 of 200 that reach the diagonal included.
+
+- **A track named to `chromosomix` is no longer read whole to learn what it is (§23.1).** Every file
+  under `--tracks` was read into memory to look at its first four bytes before a bigWig or a `.2bit`
+  was opened by range: a second a gigabyte before any run began, and a refusal for any file past
+  2 GiB, Node's ceiling for one read. Four bytes are read now. A metaplot over a 957 MB ATAC-seq
+  bigWig went from 15 s to 11, with the same numbers.
 
 - **Signing in to Dropbox opens the Files column on it (§24.9).** The folder list hears about a
   bucket from the form that saves it and about a Drive folder from the pane that adds it, and

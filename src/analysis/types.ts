@@ -267,7 +267,11 @@ export interface EntryParam extends ParamBase {
   kind: 'featureSet' | 'pairSet' | 'track' | 'sequence'
   /** Several may be chosen; the value is then a `string[]` of entry ids. */
   multiple?: boolean
-  /** The empty choice is offered, and the value may be `null`. */
+  /**
+   * The empty choice is offered, and the value may be `null`. On a `multiple`
+   * one, every box unticked is an answer (`[]`) the form keeps, where a required
+   * list is ticked back to the star.
+   */
   optional?: boolean
   /** Label for the empty choice. Only read when `optional`. */
   noneLabel?: string
@@ -522,10 +526,14 @@ export function defaultParams(specs: readonly ParamSpec[]): Params {
       case 'pairSet':
       case 'track':
       case 'sequence':
-        // `''` is the empty choice already answered, which the form keeps.
+        // `''` is the empty choice already answered, which the form keeps; an
+        // optional list is `null` until answered, and `[]` once every box is
+        // unticked, which the form keeps too.
         out[spec.key] =
           spec.multiple === true
-            ? []
+            ? spec.optional === true
+              ? null
+              : []
             : spec.optional === true && spec.startsEmpty === true
               ? ''
               : null

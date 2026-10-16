@@ -344,6 +344,84 @@ export async function bandFor(
 }
 
 /**
+ * The mean of each diagonal of one sequence, `0 … hi`, read as a band and never
+ * held.
+ *
+ * cooltools' `expected_cis` for one sequence, which is the expected coolpuppy
+ * divides a window by: a diagonal's contacts over the bin pairs on it whose two
+ * bins both survived the balancer. A filtered bin reads `NaN` and is skipped and
+ * an empty pair reads `0` and is counted, which is that function's
+ * `balanced.sum / n_valid` exactly, and `count.avg` on a map read raw.
+ *
+ * {@link bandFor}'s walk, tile for tile, but each tile is folded into a sum and
+ * a count per diagonal and let go. What a pileup divides by is a few hundred
+ * numbers per sequence; the band they come from is a gigabyte on a 1 kb
+ * mammalian chromosome read two megabases deep.
+ */
+export async function diagonalMeans(
+  job: JobContext,
+  span: Span,
+  options: {
+    /** Widest diagonal wanted, in bins. */
+    hi: number
+    block: BlockInput | null
+    balance: boolean
+    value: string
+    /** Called between tiles, so a chromosome-long read can be stopped. */
+    onTile?: (done: number, total: number) => Promise<void> | void
+  },
+): Promise<Float64Array> {
+  const n = span.to - span.from
+  const hi = Math.max(0, Math.min(options.hi, n - 1))
+  const sum = new Float64Array(hi + 1)
+  const count = new Float64Array(hi + 1)
+  // Rows `[rowFrom, rowTo)` of the sequence, out of a block whose cell `(r, c)`
+  // of the sequence is at `base + r * stride + c`.
+  const fold = (values: ArrayLike<number>, stride: number, base: number, rowFrom: number, rowTo: number): void => {
+    for (let r = rowFrom; r < rowTo; r++) {
+      const at = base + r * stride
+      const last = Math.min(n - 1, r + hi)
+      for (let c = r; c <= last; c++) {
+        const value = values[at + c]
+        if (Number.isNaN(value)) continue
+        sum[c - r] += value
+        count[c - r] += 1
+      }
+    }
+  }
+
+  const block = options.block
+  if (block !== null && blockCovers(block, span)) {
+    const rowSkip = span.from - block.rowExtent[0]
+    const colSkip = span.from - block.colExtent[0]
+    fold(block.values, block.ncols, rowSkip * block.ncols + colSkip, 0, n)
+  } else {
+    const tile = tileRows(hi, hi)
+    const tiles = Math.max(1, Math.ceil(n / tile))
+    for (let t = 0; t < tiles; t++) {
+      await options.onTile?.(t, tiles)
+      const rowFrom = t * tile
+      const rowTo = Math.min(n, rowFrom + tile)
+      if (rowTo <= rowFrom) break
+      const dense = await job.mc.matrix({
+        rows: [span.from + rowFrom, span.from + rowTo],
+        cols: [span.from + rowFrom, span.from + Math.min(n, rowTo + hi)],
+        balance: options.balance,
+        value: options.value,
+      })
+      // The tile's cell `(r, c)` of the sequence sits at
+      // `(r − rowFrom) * ncols + (c − rowFrom)`.
+      fold(dense.values, dense.ncols, -rowFrom * dense.ncols - rowFrom, rowFrom, rowTo)
+    }
+    await options.onTile?.(tiles, tiles)
+  }
+
+  const mean = new Float64Array(hi + 1)
+  for (let k = 0; k <= hi; k++) mean[k] = count[k] > 0 ? sum[k] / count[k] : Number.NaN
+  return mean
+}
+
+/**
  * One sequence walked as overlapping squares along its diagonal.
  *
  * For a kernel that wants a *square* — the insulation diamond does, and it is

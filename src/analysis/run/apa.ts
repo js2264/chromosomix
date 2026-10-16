@@ -31,6 +31,18 @@
  * control is shifted by a **multiple of the window** rather than by a length in
  * base pairs, because a control 100 kb from a megabase-wide window is mostly the
  * window.
+ *
+ * **A window is cut as coolpuppy cuts one**, because coolpuppy is what these
+ * pileups are held to (§18.10) and the two parted company wherever a window
+ * reached the diagonal. Nothing is taken from below it: the map read here is
+ * drawn whole, both triangles, so a loop window crossing the diagonal used to
+ * pile up the cells below it — contacts it already held above, mirrored — and
+ * coolpuppy's, cut from the upper triangle, left them out, which on a real loop
+ * set was ten per cent in the cells nearest the diagonal. The first
+ * {@link minDiagOf} diagonals are left out as well, at coolpuppy's default of
+ * two. And observed / expected divides **each window, cell by cell**, by its
+ * sequence's own expected at that cell's own diagonal, then averages — see
+ * {@link cut} for what it did before, which was not that.
  */
 
 import type { FeatureSet, PairSet } from '../../annotations/types'
@@ -52,7 +64,6 @@ import {
   type AnchorPair,
   type ScaledLayout,
 } from '../apa'
-import { ExpectedAccumulator, expectedAt } from '../expected'
 import {
   boolParam,
   chosenInput,
@@ -73,6 +84,8 @@ import {
   isChromosight,
   isDomainPileup,
   isScaled,
+  minDiagOf,
+  minDistOf,
   onDiagonal,
   poolsAnchors,
   usesPairSet,
@@ -83,7 +96,7 @@ import {
 } from '../tasks/apa'
 import type { MarginProfile, MatrixOutput, TableOutput, TaskOutput } from '../types'
 import { chromosightPileup } from './apaChromosight'
-import { usableBlock, type Span } from './blocks'
+import { diagonalMeans, usableBlock, type Span } from './blocks'
 import { offsetTicks } from './labels'
 
 /** A rectangle of the matrix, in absolute bins. */
@@ -117,6 +130,8 @@ interface Plan {
   separation: number
   control: boolean
   group: number
+  /** The sequence the window is on, in absolute bins: whose expected it takes. */
+  bounds: Span
   /** The scaled on-diagonal layout this window is resampled on; absent otherwise. */
   body?: Body
 }
@@ -205,6 +220,15 @@ export const runApa: TaskRunner = async (job) => {
     )
   }
 
+  // **The one floor a loop set has**: a loop nearer the diagonal than the
+  // nearest loop (`minDist`, five bins unless typed) is left out. coolpuppy's
+  // `mindist='auto'` is further out — twice the half-width and two bins, where a
+  // window stops reaching the diagonals it would have gaps cut in — and is what
+  // the validation types. It is a floor on *where* a loop is, not a sample of the
+  // set, and it is said: how many, how near, and how to have them all.
+  const piled = usingPairs && !isScaled(job.params) ? nearEnough(job, anchors) : anchors
+  if (piled.length === 0) return []
+
   // Every anchor of every group. There used to be a cap here, and it was not a
   // budget so much as a silent change of subject: a pileup of the first five
   // thousand anchors is a pileup of whichever ones sorted first, under a caption
@@ -217,8 +241,8 @@ export const runApa: TaskRunner = async (job) => {
   const bins = distanceBins(job.params)
   const kept =
     bins > 1
-      ? bySeparation(anchors, bins)
-      : groupAnchors(job, anchors, onDiagonal(job.params) ? (features as FeatureSet) : null)
+      ? bySeparation(piled, bins)
+      : groupAnchors(job, piled, onDiagonal(job.params) ? (features as FeatureSet) : null)
   const groupNames = bins > 1 ? separationNames(kept, (span) => job.toBp(span)) : null
 
   // The grid's own division into flank, body, flank — one layout for the whole
@@ -244,7 +268,14 @@ export const runApa: TaskRunner = async (job) => {
     for (const anchor of kept[g]) {
       const plan = planFor(job, anchor, side, layout)
       if (plan === null) continue
-      plans.push({ ...plan, label: anchor.label, separation: anchor.pair.separation, control: false, group: g })
+      plans.push({
+        ...plan,
+        label: anchor.label,
+        separation: anchor.pair.separation,
+        control: false,
+        group: g,
+        bounds: anchor.bounds,
+      })
       if (controlsPer === 0) continue
       // **The shift is a multiple of the window in the scaled mode and a count
       // of bins in the fixed one**, and the difference is not a convenience. A
@@ -265,7 +296,13 @@ export const runApa: TaskRunner = async (job) => {
       })) {
         const controlPlan = planFor(job, shiftAnchor(anchor, control), side, layout)
         if (controlPlan !== null) {
-          plans.push({ ...controlPlan, separation: control.separation, control: true, group: g })
+          plans.push({
+            ...controlPlan,
+            separation: control.separation,
+            control: true,
+            group: g,
+            bounds: anchor.bounds,
+          })
         }
       }
     }
@@ -301,10 +338,18 @@ export const runApa: TaskRunner = async (job) => {
   const alongRows = kept.map(() => tracks.map(() => new PileupAccumulator(1, side)))
   const alongCols = kept.map(() => tracks.map(() => new PileupAccumulator(1, side)))
   const pooled = poolsAnchors(job.params)
-  const expected = new ExpectedAccumulator(job.mc.nBins)
   const perAnchor: Array<{ label: string; separation: number; score: number }> = []
+  // How every window is cut, the same for the real ones and their controls,
+  // since a control masked differently from the window it divides would put a
+  // pattern in the ratio that is in neither.
+  const shape: CutOptions = {
+    minDiag: minDiagOf(job.params),
+    mirrored: onDiagonal(job.params),
+  }
 
   const block = usableBlock(job, plans.map(spanOf), balance)
+  const expected =
+    norm === 'oe' && !oeOnAScaledGrid ? await expectedBySequence(job, plans, { block, balance, value }) : null
   const batches = coalesce(plans)
   let done = 0
 
@@ -315,11 +360,6 @@ export const runApa: TaskRunner = async (job) => {
     await job.breathe()
     job.progress(done, plans.length, `${done.toLocaleString()} of ${plans.length.toLocaleString()} windows`)
     const dense = await readRect(job, batch.rect, { block, balance, value })
-    // Once per *read*, not once per window: a coalesced block covers several
-    // windows, and feeding it in per window would count every one of its cells
-    // as many times as the batch is large — which would leave the mean intact
-    // and the counts, and therefore nothing visible, wrong.
-    if (norm === 'oe' && !oeOnAScaledGrid) accumulateExpected(expected, dense, batch.rect)
     for (const plan of batch.plans) {
       done++
       // Every window that could be cut is summed, however little of it carries
@@ -328,7 +368,10 @@ export const runApa: TaskRunner = async (job) => {
       // pileup is weak because of, so removing them made every pileup look
       // better than the data. `PileupAccumulator` counts per cell, so a
       // half-empty window contributes what it has and nothing more.
-      const window = cut(dense, batch.rect, plan, side, layout)
+      const window = cut(dense, batch.rect, plan, side, layout, {
+        ...shape,
+        expected: expected?.get(plan.bounds.from),
+      })
       if (window === null) continue
       if (plan.control) {
         controls[plan.group].add(window)
@@ -373,7 +416,6 @@ export const runApa: TaskRunner = async (job) => {
   job.throwIfCancelled()
 
   const outputs: TaskOutput[] = []
-  const curve = norm === 'oe' && !oeOnAScaledGrid ? expected.finish() : null
 
   for (let g = 0; g < kept.length; g++) {
     const observed = real[g].finish()
@@ -397,8 +439,10 @@ export const runApa: TaskRunner = async (job) => {
       } else {
         job.note('No control window could be placed, so the raw pileup is shown.')
       }
-    } else if (norm === 'oe' && curve !== null) {
-      values = overExpected(observed.values, side, curve)
+    } else if (expected !== null) {
+      // Already divided, window by window, as each was cut — so the mean is
+      // the mean of the ratios, which is coolpuppy's `ooe`, and not a ratio of
+      // means, which is what dividing the finished pileup would give.
       centre = 1
       label = `${name} · observed / expected`
     }
@@ -646,6 +690,12 @@ interface Anchor {
   /** Bins the feature spans, for the scaled mode. */
   span: number
   /**
+   * For a loaded pair, how far apart its two anchors' centres are, in base
+   * pairs: what coolpuppy measures its `mindist` on, and so what the nearest
+   * loop is held to here. Absent for anything else.
+   */
+  centreDistance?: number
+  /**
    * The rows and columns a *scaled* window's body covers, half-open, in bins.
    *
    * The feature's own bins on both axes for an on-diagonal anchor — which is
@@ -682,10 +732,37 @@ function pairAnchors(job: JobContext, set: PairSet): Anchor[] {
       label: set.name[i] === '' ? formatPosition(set.contigs[set.contig1[i]], set.start1[i]) : set.name[i],
       rank: set.score[i],
       span: col - row,
+      centreDistance: Math.abs((set.start2[i] + set.end2[i]) / 2 - (set.start1[i] + set.end1[i]) / 2),
       rows: { from: row, to: row + 1 },
       cols: { from: col, to: col + 1 },
     })
   }
+  return out
+}
+
+/**
+ * The loops no nearer the diagonal than the nearest loop, and a note for the rest.
+ *
+ * coolpuppy's `mindist`, measured as coolpuppy measures it — between the two
+ * anchors' centres, in base pairs, a loop exactly at the floor kept — so that a
+ * BEDPE whose anchors are not bin-aligned is cut at the same loop in both. The
+ * floor is asked in bins, as every matrix parameter is (§18.2), and is base
+ * pairs here at this file's resolution.
+ */
+function nearEnough(job: JobContext, anchors: Anchor[]): Anchor[] {
+  const nearest = minDistOf(job.params)
+  const floor = nearest * job.mc.binsize
+  const out = anchors.filter((anchor) => (anchor.centreDistance ?? Number.POSITIVE_INFINITY) >= floor)
+  const left = anchors.length - out.length
+  if (left === 0) return out
+  const how = `nearer the diagonal than ${nearest.toLocaleString()} bins (${shortBp(floor)})`
+  job.note(
+    out.length === 0
+      ? `Every loop of this set is ${how} so there is nothing to pile up. Set the nearest loop lower, ` +
+          'or to 0 for every one.'
+      : `${left.toLocaleString()} of ${anchors.length.toLocaleString()} loops are ${how} and are left ` +
+          'out. Set the nearest loop to 0 to pile up every one.',
+  )
   return out
 }
 
@@ -1000,6 +1077,27 @@ async function readRect(
   return { values: dense.values, nrows: dense.nrows, ncols: dense.ncols }
 }
 
+/** How a window is cut out of the map before it is piled up. */
+interface CutOptions {
+  /** Diagonals, the main one first, whose cells are left out; see {@link minDiagOf}. */
+  minDiag: number
+  /**
+   * Whether the window sits on the diagonal and is its own mirror.
+   *
+   * There the cells below the diagonal are the cells above it, transposed, and
+   * the window is kept whole with only the near diagonals left out on both
+   * sides — which is coolpuppy's local pileup exactly, since coolpuppy cuts the
+   * upper triangle and then folds the finished picture onto its transpose. Off
+   * the diagonal nothing is taken from below it.
+   */
+  mirrored: boolean
+  /**
+   * The expected of the window's sequence, by diagonal, where every window is
+   * divided by it; `undefined` otherwise.
+   */
+  expected?: Float64Array
+}
+
 /**
  * One window out of a coalesced read, resampled to the pileup's shape.
  *
@@ -1010,6 +1108,17 @@ async function readRect(
  * particular). With one — a domain — the grid is flank, body, flank and the
  * body's two ends are pinned to their own grid lines, so every domain in the set
  * contributes its boundary to the same column.
+ *
+ * Before either, the window is cut as coolpuppy cuts one ({@link CutOptions}),
+ * and divided by its expected where the run asked for observed / expected:
+ * **each cell by the expected at its own diagonal**, `|col − row|` in the map,
+ * on its own sequence. That replaced a division of the *finished* pileup by an
+ * expected looked up at each cell's distance from the pileup's centre, which is
+ * a cell's diagonal only for a window on the diagonal. For a loop forty bins out
+ * it divided the loop's own pixel by the expected of the main diagonal, and the
+ * expected came from the windows' own cells, which were not read that close to
+ * the diagonal at all — so the centre of a loop pileup came out at 0.2 on a
+ * mouse loop set coolpuppy puts at 2.9.
  */
 function cut(
   dense: Dense,
@@ -1017,6 +1126,7 @@ function cut(
   plan: Plan,
   side: number,
   layout: ScaledLayout,
+  options: CutOptions,
 ): Float64Array | null {
   const want = plan.rect
   const rows = want.rowTo - want.rowFrom
@@ -1027,10 +1137,26 @@ function cut(
   if (rowSkip < 0 || colSkip < 0 || rowSkip + rows > dense.nrows || colSkip + cols > dense.ncols) {
     return null
   }
-  const cutOut = new Float32Array(rows * cols)
+  const cutOut = new Float64Array(rows * cols)
+  const { minDiag, mirrored, expected } = options
   for (let r = 0; r < rows; r++) {
     const at = (rowSkip + r) * dense.ncols + colSkip
-    cutOut.set(dense.values.subarray(at, at + cols), r * cols)
+    for (let c = 0; c < cols; c++) {
+      const diagonal = want.colFrom + c - (want.rowFrom + r)
+      if ((mirrored ? Math.abs(diagonal) : diagonal) < minDiag) {
+        cutOut[r * cols + c] = Number.NaN
+        continue
+      }
+      const observed = dense.values[at + c]
+      if (expected === undefined) {
+        cutOut[r * cols + c] = observed
+        continue
+      }
+      // A diagonal with nothing on it gives no ratio rather than an infinity,
+      // for the reason `ratioOf` gives.
+      const denominator = expected[Math.abs(diagonal)]
+      cutOut[r * cols + c] = denominator > 0 ? observed / denominator : Number.NaN
+    }
   }
   if (plan.body === undefined) return resampleWindow(cutOut, rows, cols, side, side)
   // In cells of this window rather than absolute bins, which is what the edges
@@ -1049,47 +1175,50 @@ function cut(
 // ---------------------------------------------------------------------------
 
 /**
- * Feed the read block into the expected curve.
+ * Each sequence's expected, by diagonal, as deep as its farthest window reaches.
  *
- * Only what was read, which is exactly the point: the offsets an APA needs are
- * the ones its own windows span, and those cells are already in hand. A
- * genome-wide P(s) would be a whole scan to divide fifty diagonals by.
+ * Keyed by the sequence's first bin, which is what a plan carries. **The whole
+ * sequence, and no more of it than the windows need**: cooltools' expected is a
+ * property of the sequence, so a window is divided by what that sequence does
+ * at the window's diagonals everywhere along it — not by what the windows
+ * themselves hold there, which over a loop set is the mean of the places the set
+ * picked and enriched by construction. The depth is the one economy, and it is
+ * an exact one: a diagonal no window reaches is a diagonal nothing is divided by.
  */
-function accumulateExpected(accumulator: ExpectedAccumulator, dense: Dense, rect: Rect): void {
-  accumulator.addBlock({
-    nrows: dense.nrows,
-    ncols: dense.ncols,
-    values: dense.values,
-    rowExtent: [rect.rowFrom, rect.rowTo],
-    colExtent: [rect.colFrom, rect.colTo],
-  })
-}
-
-/**
- * The pileup divided by the expected at each cell's own diagonal offset.
- *
- * The offset of a *pileup* cell is not the offset of the matrix cell it came
- * from — a pileup is many windows at many separations averaged together — so the
- * division is by the offset relative to the pileup's centre, which is the
- * convention every published APA uses and the only one that is the same for
- * every contributing window.
- */
-function overExpected(
-  values: Float32Array,
-  side: number,
-  curve: ReturnType<ExpectedAccumulator['finish']>,
-): Float32Array {
-  const out = new Float32Array(values.length)
-  for (let r = 0; r < side; r++) {
-    for (let c = 0; c < side; c++) {
-      const offset = Math.abs(c - r)
-      const denominator = expectedAt(curve, offset)
-      const observed = values[r * side + c]
-      out[r * side + c] =
-        Number.isFinite(observed) && Number.isFinite(denominator) && denominator !== 0
-          ? observed / denominator
-          : Number.NaN
-    }
+async function expectedBySequence(
+  job: JobContext,
+  plans: readonly Plan[],
+  options: { block: ReturnType<typeof usableBlock>; balance: boolean; value: string },
+): Promise<Map<number, Float64Array>> {
+  const deepest = new Map<number, { bounds: Span; hi: number }>()
+  for (const plan of plans) {
+    // The farthest a cell of this window is from the diagonal, either side of it.
+    const reach = Math.max(
+      Math.abs(plan.rect.colTo - 1 - plan.rect.rowFrom),
+      Math.abs(plan.rect.rowTo - 1 - plan.rect.colFrom),
+    )
+    const held = deepest.get(plan.bounds.from)
+    if (held === undefined) deepest.set(plan.bounds.from, { bounds: plan.bounds, hi: reach })
+    else if (reach > held.hi) held.hi = reach
+  }
+  const out = new Map<number, Float64Array>()
+  let done = 0
+  for (const [from, { bounds, hi }] of deepest) {
+    job.progress(done, deepest.size, `the expected, sequence ${done + 1} of ${deepest.size}`)
+    out.set(
+      from,
+      await diagonalMeans(job, bounds, {
+        hi,
+        block: options.block,
+        balance: options.balance,
+        value: options.value,
+        onTile: async () => {
+          await job.breathe()
+          job.throwIfCancelled()
+        },
+      }),
+    )
+    done++
   }
   return out
 }

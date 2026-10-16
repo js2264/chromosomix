@@ -282,7 +282,8 @@ chromosomix tasks
 ##       --window (default 21)  half-width
 ##       --grid (default 51)  grid
 ##       --flankFraction (default 0.5)  flank
-##       --norm (default "matched")  normalisation
+##       --minDiag (default 2)  diagonals left out
+##       --norm (default "oe")  normalisation
 ##       --csPattern (default "loops")  template
 ##       --controls (default 5)  controls per pair
 ##       --minShift (default 50)  smallest shift
@@ -290,6 +291,7 @@ chromosomix tasks
 ##       --minShiftScale (default 1)  smallest shift
 ##       --maxShiftScale (default 3)  largest shift
 ##       --seed (default 1)  seed
+##       --minDist (default 5)  nearest loop
 ##       --minSep (default 2)  nearest two features may be
 ##       --maxSep (default 200)  furthest two features may be
 ##       --byDistance (default 0)  split by separation into
@@ -326,6 +328,7 @@ chromosomix tasks
 ## motif
 ##     Find a motif
 ##       --sequence  reference
+##       --sequences  sequences
 ##       --pattern  motif
 ##       --bothStrands (default true)  both strands
 ##       --mismatches (default 0)  mismatches
@@ -485,10 +488,11 @@ chromosomix fourc sample.cool --anchor IV:1,200,001-1,210,000 --out results/
 
 # The domain pileup: a set of TADs — the span from one insulation boundary to
 # the next — every one of them stretched to the same width, with half a domain
-# of padding each side. The distance-matched control is shifted by a multiple of
-# the window, so it never overlaps the domain it is the denominator of.
+# of padding each side, over its distance-matched control rather than over the
+# expected. The control is shifted by a multiple of the window, so it never
+# overlaps the domain it is the denominator of.
 chromosomix apa sample.cool --features domains.bed --anchors features \
-  --mode scaled --grid 48 --flankFraction 0.5 --out results/
+  --mode scaled --grid 48 --flankFraction 0.5 --norm matched --out results/
 
 # Two of the tasks that run beside the tracks rather than on the map. A motif
 # search reads the reference `--sequence` names and writes both halves: the
@@ -518,6 +522,9 @@ chromosomix compartments sample.cool --sequence ref.fa.gz --phaseSequence ref.fa
 # Maps drawn to one number of contacts before the task reads them: an exact
 # subsample below the file's own total, Boost-HiC above it, with the app's seed.
 chromosomix insulation rep1.cool --contacts 10M --out results/
+# The map that oversample draws each chromosome's new contacts from, written as
+# Boost-HiC's own main.py writes it: one square TSV per sequence.
+chromosomix boost rep1.mcool::/resolutions/100000 --sequences chr19 --out results/
 
 # A bacterial chromosome: which sequences join their own ends (the test the app
 # runs on a first open), then the alignment of its two arms about its origin.
