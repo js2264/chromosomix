@@ -164,13 +164,14 @@ export interface Combined extends Blend {
  * *contacts* box draws both files to one total before either is read (§6.5).
  * Balanced values need neither, having already been put on one normalisation.
  *
- * The arithmetic is deliberately plain, because JavaScript's own division
- * already produces the three answers a reader needs and a guarded version would
- * have to reproduce them: `4 / 0` is `Infinity`, which the raster clamps to the
- * top of the scale and which is the truth — present in one file, absent in the
- * other; `0 / 0` is `NaN`, drawn transparent, which is also the truth, since two
- * empty cells have no ratio; and a `NaN` from either file, an unbalanced bin,
- * carries through to mean the comparison could not be made.
+ * **A ratio is made only where both files have contacts.** A zero on either
+ * side is no ratio at all, and is `NaN`, missing, as two zeros and a `NaN` from
+ * either file — an unbalanced bin — always were (§6). `4 / 0` used to be
+ * `Infinity`, the top of the scale, and `0 / 4` zero, the bottom: on a sparse
+ * map, where a cell empty in one library is a matter of depth far more than of
+ * biology, the two saturated colours were most of the picture, and they said
+ * the loudest thing the scale can say about the cells that held the least. A
+ * difference keeps its zeros, which it can subtract.
  */
 export function combine(
   primary: CompareBlock,
@@ -184,8 +185,9 @@ export function combine(
   const values = new Float32Array(cells)
   const ratio = options.op === 'ratio'
   for (let i = 0; i < cells; i++) {
+    const mine = primary.values[i]
     const other = second.values[i]
-    values[i] = ratio ? primary.values[i] / other : primary.values[i] - other
+    values[i] = ratio ? (mine === 0 || other === 0 ? Number.NaN : mine / other) : mine - other
   }
   // Both files are drawn over the whole square rather than a triangle each, so
   // neither count is a count of cells on screen any more. Reported as the whole

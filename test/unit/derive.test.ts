@@ -672,15 +672,17 @@ describe('two files reduced to one number', () => {
   const a = block(2, 2, (r, c) => [[4, 2], [8, 1]][r][c])
   const b = block(2, 2, (r, c) => [[2, 2], [2, 0]][r][c])
 
-  it('divides, and lets the three edge cases mean what they mean', () => {
+  it('divides where both files have contacts, and nowhere else', () => {
     const out = combine(a, b, { op: 'ratio' })
     expect(out.neutral).toBe(1)
     expect(out.values[0]).toBeCloseTo(2, 6)
     expect(out.values[1]).toBeCloseTo(1, 6)
     expect(out.values[2]).toBeCloseTo(4, 6)
-    // Present in one file and absent in the other: the top of the scale, not a
-    // fold to zero and not a NaN.
-    expect(out.values[3]).toBe(Number.POSITIVE_INFINITY)
+    // A zero in the second file: no ratio (§6), where it used to be `Infinity`
+    // at the top of the scale.
+    expect(Number.isNaN(out.values[3])).toBe(true)
+    // …and a zero in the first, where it used to be `0`, the bottom.
+    expect(Number.isNaN(combine(b, a, { op: 'ratio' }).values[3])).toBe(true)
   })
 
   it('has no ratio between two empty cells', () => {

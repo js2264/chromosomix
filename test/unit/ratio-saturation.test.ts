@@ -1,12 +1,13 @@
 /**
  * The two ends of a ratio map, and the numbers a reader checks them against.
  *
- * A ratio field has three answers no ordinary contact map produces, and every
- * one of them lands outside the colour scale: `x / 0` is `Infinity`, `0 / x` is
- * zero and therefore `-Infinity` once it is drawn on `log2`, and `0 / 0` is
- * `NaN`. Nothing in the raster complains about any of them, so getting one wrong
- * is silent — it draws a real cell in the wrong colour and the map still looks
- * like a map.
+ * A ratio field can hand the raster values no ordinary contact map produces,
+ * and every one of them lands outside the colour scale: `Infinity`, `-Infinity`
+ * once a zero is drawn on `log2`, and `NaN`. Nothing in the raster complains
+ * about any of them, so getting one wrong is silent — it draws a real cell in
+ * the wrong colour and the map still looks like a map. (A ratio of two maps no
+ * longer makes the first two — a zero on either side is no ratio (§6) — but the
+ * raster still has to draw them right wherever they come from.)
  *
  * That is what happened: `colorize` tested the pooled value with
  * `Number.isFinite` and sent *everything* that failed to the bottom of the ramp.
@@ -27,7 +28,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { colorize, poolDisplay } from '@/render/heatmap'
-import { applyColormap } from '@/render/colormaps'
+import { applyColormap, colormapIndex } from '@/render/colormaps'
 import { combine } from '@/render/compare'
 import { fmt } from '@/ui/dom'
 import type { ColorScale, DenseMatrix } from '@/types'
@@ -113,21 +114,52 @@ describe('a ratio at the ends of its scale', () => {
   })
 
   it('carries the sign through from the arithmetic that produced it', () => {
-    // What `derive` hands the raster: two blocks, one cell each way.
-    const nap5 = matrix([0.000591, 0.000401])
-    const wt = matrix([0, 0.000556])
+    // What `derive` hands the raster: two blocks, two cells each way.
+    const nap5 = matrix([0.000401, 0.000556])
+    const wt = matrix([0.000556, 0.000401])
     const { values } = combine(nap5, wt, { op: 'ratio' })
 
-    expect(values[0]).toBe(Number.POSITIVE_INFINITY)
-    expect(values[1]).toBeCloseTo(0.721, 3)
+    expect(values[0]).toBeCloseTo(0.721, 3)
+    expect(values[1]).toBeCloseTo(1.387, 3)
 
     const { data } = colorize(poolDisplay({ ...nap5, values }, RATIO), RATIO)
-    // Present in the first file and absent in the second is the strongest
-    // possible statement in the numerator's favour, and it is drawn as one.
-    // Before the fix both of these cells came out on the blue side, and the
-    // pair was indistinguishable on screen.
-    expect(warmth(data, 0)).toBeGreaterThan(0)
-    expect(warmth(data, 1)).toBeLessThan(0)
+    expect(warmth(data, 0)).toBeLessThan(0)
+    expect(warmth(data, 1)).toBeGreaterThan(0)
+  })
+})
+
+describe('a ratio of two maps where either has no contacts', () => {
+  // The scale a two-map ratio is drawn on: missing in the ramp's middle.
+  const TWO: ColorScale = { ...RATIO, missing: 'middle' }
+
+  it('is no ratio at all: a zero on either side is missing, as two zeros were', () => {
+    const nap5 = matrix([0.000591, 0, 0, 0.000401])
+    const wt = matrix([0, 0.000556, 0, 0.000556])
+    const { values } = combine(nap5, wt, { op: 'ratio' })
+    expect([...values].slice(0, 3).every((value) => Number.isNaN(value))).toBe(true)
+    expect(values[3]).toBeCloseTo(0.721, 3)
+  })
+
+  it('draws a missing cell in the colour of agreement, the ramp’s middle', () => {
+    const nap5 = matrix([0.000591, 0, 0.000401])
+    const wt = matrix([0, 0.000556, 0.000556])
+    const { values } = combine(nap5, wt, { op: 'ratio' })
+    const { data } = colorize(poolDisplay({ ...nap5, values }, TWO), TWO)
+    const lut = applyColormap(TWO.colormap)
+    const middle = colormapIndex(0.5)
+    const white = [lut[middle * 4], lut[middle * 4 + 1], lut[middle * 4 + 2], lut[middle * 4 + 3]]
+    // `RdBu_r`'s middle, opaque: white, not paper and not a colour off the ramp.
+    expect(pixel(data, 0)).toEqual(white)
+    expect(pixel(data, 1)).toEqual(white)
+    expect(white[3]).toBe(255)
+    expect(Math.abs(warmth(data, 0))).toBeLessThan(4)
+    // A measured ratio is still its colour.
+    expect(warmth(data, 2)).toBeLessThan(0)
+  })
+
+  it('leaves every other map’s missing cells to the paper', () => {
+    const { data } = colorize(poolDisplay(matrix([Number.NaN]), RATIO), RATIO)
+    expect(pixel(data, 0)).toEqual([0, 0, 0, 0])
   })
 })
 

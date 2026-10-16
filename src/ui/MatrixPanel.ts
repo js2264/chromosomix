@@ -1147,6 +1147,11 @@ export class MatrixPanel {
   /** The neutral value of what is currently drawn, or `null` for a count field. */
   private neutral: number | null = null
   /**
+   * Whether what is drawn is a ratio of two maps, whose missing cells — a zero
+   * in either map — are drawn in the colormap's middle rather than as paper (§6).
+   */
+  private ratioOfTwo = false
+  /**
    * The presentation to give back when the derivation is switched off, and the
    * transform the derived one is currently holding.
    *
@@ -4216,6 +4221,7 @@ export class MatrixPanel {
             { op },
           )
     this.neutral = merged === undefined || op === 'split' ? mine.neutral : merged.neutral
+    this.ratioOfTwo = merged !== undefined && op === 'ratio'
     const presentationMoved = this.syncDivergingScale()
     const dense: DenseMatrix =
       merged === undefined
@@ -4930,6 +4936,7 @@ export class MatrixPanel {
       colormap: this.colormap,
       balanced: this.options.balance === true,
       ...(this.neutral === null ? {} : { neutral: this.neutral }),
+      ...(this.ratioOfTwo ? { missing: 'middle' as const } : {}),
     }
   }
 

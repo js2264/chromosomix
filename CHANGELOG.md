@@ -1058,6 +1058,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **A ratio of two maps has no value where either map has no contacts (§6).** A cell that is zero
+  in either map is now missing, and is drawn in the colormap's middle colour — white on `RdBu_r`,
+  the colour of a ratio of one — where `4 / 0` was drawn at the top of the scale and `0 / 4` at the
+  bottom, which on a sparse pair saturated most of the picture. A difference keeps its zeros.
+
 - **Every plot is drawn in a black frame, fitted to its data, with its legend beside it (§18.13).**
   A chart's plot is boxed in the ink on all four sides, its axes on the frame rather than through
   the other's zero, where a dashed grey gridline along each edge was the only border; every line in

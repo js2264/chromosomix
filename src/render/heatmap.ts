@@ -16,7 +16,7 @@
 
 import { MAX_CATEGORICAL_TICKS } from '../constants'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
-import { applyColormap } from './colormaps'
+import { applyColormap, colormapIndex } from './colormaps'
 import {
   anchorRays,
   cellAt as squareOf,
@@ -437,12 +437,16 @@ export function colorize(
   const colours = new Uint32Array(lut.buffer, lut.byteOffset, lut.length / 4)
   const size = colours.length
   const last = size - 1
+  // A cell with no value: the paper, or on a ratio of two maps the ramp's own
+  // middle, where a cell either map has no contacts in is drawn (§6) — the
+  // colour a ratio of exactly one is, `t = 0.5`.
+  const missing = scale.missing === 'middle' ? colours[colormapIndex(0.5)] : 0
   for (let i = 0; i < values.length; i++) {
     const best = values[i]
     if (Number.isNaN(best)) {
       // Every pixel is written on every path, including this one: the buffer
       // may be a reused one that still holds the previous colouring.
-      pixels[i] = 0
+      pixels[i] = missing
       continue
     }
     // matplotlib's `Normalize` collapses a degenerate range to 0 rather than
@@ -451,14 +455,12 @@ export function colorize(
     // below every bound there is, which is that same low end.
     //
     // `+Infinity` is the *other* end, and sending it to the low one as well was
-    // a real misreading on every ratio map: `4 / 0` is "present in the first
-    // file and absent in the second", which is the strongest possible statement
-    // in the numerator's favour, and it was drawn in the colour that means the
-    // opposite. On a sparse pair the two arms are the same size — 7.7% of cells
-    // each on an E. coli pair at 5 kb — so half the saturated cells of the map
-    // carried the wrong sign. The normalised position carries the distinction
-    // for free: `(Infinity - vmin) / span` is `Infinity` and its negative
-    // counterpart is `-Infinity`, so only the sign has to be read off.
+    // a real misreading on every ratio map while a ratio of two maps still made
+    // one of `4 / 0` (it makes none now, §6): the strongest statement in the
+    // numerator's favour was drawn in the colour that means the opposite. The
+    // normalised position carries the distinction for free: `(Infinity - vmin)
+    // / span` is `Infinity` and its negative counterpart is `-Infinity`, so only
+    // the sign has to be read off.
     //
     // The table index is `colormapIndex`'s — `t × N` truncated, clamped onto
     // the end colours — with the clamp taken first, so the truncation is an

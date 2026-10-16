@@ -2648,6 +2648,18 @@ bright cell. A ratio pooled that way shows only the arm above neutral, so every 
 second file is the stronger one vanishes at fit zoom — half of what a difference map exists for.
 A diverging field is pooled by departure from neutral instead.
 
+**A ratio of two maps is made only where both have contacts.** A cell that is zero in either map
+is no ratio, and is missing — `NaN`, as two zeros and an unbalanced bin always were
+(`render/compare.ts`). `4 / 0` was `Infinity`, the top of the scale, and `0 / 4` zero, the bottom:
+on a sparse pair, where a cell empty in one library is a matter of depth far more than of biology,
+the two saturated colours covered most of the picture and said the loudest thing the scale can say
+about the cells that held the least. **A missing cell on a ratio of two maps is drawn in the
+colormap's middle** — white on `RdBu_r`, the colour a ratio of exactly one is — rather than as
+paper (`ColorScale.missing`): the map is read as departures from its middle, and a cell with no
+ratio departs from nothing. The readout under the pointer says there is no value there. A
+difference keeps its zeros, which it can subtract, and an O/E keeps paper for a cell where nothing
+was observed (above).
+
 **Tracks get the same two operations**, ratio and difference (`annotations/derived.ts`), combined on
 the **common refinement** of the two interval lists rather than on a grid: two bigWigs' intervals do
 not line up, and evaluating both onto a uniform grid smears every boundary that falls inside a cell,
