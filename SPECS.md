@@ -9106,15 +9106,18 @@ SciPy, a window any track lacks left out of every pair as deepTools leaves it, a
 deepTools, whose zoom-level means are measured apart. Where a reference draws at random — a pileup's
 controls, an overlap's shuffles, IDR's ties — two distributions are compared, the reference's own
 spread from seed to seed the yardstick. It writes every command it ran to
-`notebooks/work/validation/commands.json`, and `notebooks/timing.qmd` runs them again, five times
+`notebooks/work/validation/commands.json`, and `notebooks/timing.qmd` runs them again, four times
 round robin, each a fresh process — all but the ones that would time a job twice or two different
 jobs: one seed of the shifted controls, the *Sox2* viewpoint of virtual 4C, Boost-HiC on chr1, and
 APA raw and over controls but not over the expected, where coolpuppy is handed an expected computed
-beforehand. Every run is one line of the tidy table `notebooks/work/validation/timings.tsv` — CPU
-and wall-clock seconds and peak memory, with the machine and every version — and each `chromosomix`
-command's speed is a fold over the reference commands it is paired with, a side's commands summed
-where there are several (deepTools' `computeMatrix` and then `plotProfile` against one metaplot, and
-`plotHeatmap` as well against one over two tracks).
+beforehand. **The two sides of a pair take turns to go first**: the even rounds run each analysis's
+references before its `chromosomix` commands, because the side that goes first is the one that reads
+from the disk what the page cache let go since the round before, and in one order that wait was
+always `chromosomix`'s. Every run is one line of the tidy table
+`notebooks/work/validation/timings.tsv` — CPU and wall-clock seconds and peak memory, with the machine
+and every version — and each `chromosomix` command's speed is a fold over the reference commands it is
+paired with, a side's commands summed where there are several (deepTools' `computeMatrix` and then
+`plotProfile` against one metaplot, and `plotHeatmap` as well against one over two tracks).
 They are documents, not tests: they need the data (about 6 GB), the reference packages and yapc's
 own environment, and nothing in the suite runs them.
 

@@ -1107,6 +1107,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   `computeMatrix` and `plotProfile`; over two tracks 13.6 where it took 24.3, against 21.1 with
   `plotHeatmap`. Every number is the same.
 
+- **The timings take turns: every other round runs each pair's reference first, and there are four
+  rounds (§18.10).** `notebooks/timing.qmd` ran each analysis's `chromosomix` commands before its
+  references in every round, so the side that reads from the disk whatever the page cache let go
+  since the round before was always `chromosomix`, and the side after it found the same input in
+  memory: in the last published run the metaplot spent twelve seconds of its wall clock waiting on
+  its bigWig and `computeMatrix`, straight after, none, and base composition twenty-four on the
+  genome against none for bioframe. The even rounds now run each analysis's references first, each
+  side's commands still in their own order, so the wait falls on each side in half the rounds; and
+  there are four rounds by default rather than five, an even number, in the notebook and in the
+  workflow's *runs*.
+
 - **A ratio of two maps greys the O/E (§7.5).** While the comparison is a ratio, the O/E toggle —
   and `arms` with it — is greyed and unlit and says why in its tooltip, and `e` and the palette's
   entry stand down: the ratio is taken of the two maps as they are, where it was taken of each map's
