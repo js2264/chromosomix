@@ -8875,20 +8875,20 @@ Boost-HiC against its own Python, through `chromosomix boost` (§6.5); the metap
 deepTools; interval overlap and its shuffled null against bedtools; base composition against
 bioframe and Biopython; the motif search against seqkit; and the track correlation, on two ATAC-seq
 replicates and a Hi-C insulation score cut to chr19, against pyBigWig's exact window means with
-SciPy, and against deepTools, whose zoom-level means and rule for a missing window are measured
-apart. Where a reference draws at random — a pileup's controls, an overlap's shuffles, IDR's ties —
-two distributions are compared, the reference's own spread from seed to seed the yardstick. It
-writes every command it ran to `notebooks/work/validation/commands.json`, and `notebooks/timing.qmd`
-runs them again, five times round robin, each a fresh process — all but the ones that would time a
-job twice or two different jobs: one seed of the shifted controls, the *Sox2* viewpoint of virtual
-4C, Boost-HiC on chr1, and APA raw and over controls but not over the expected, where coolpuppy is
-handed an expected computed beforehand. Every run is one line of the tidy table
-`notebooks/work/validation/timings.tsv` — CPU and wall-clock seconds and peak memory, with the
-machine and every version — and each `chromosomix` command's speed is a fold over the reference
-commands it is paired with, a side's commands summed where there are several (deepTools'
-`computeMatrix` and then `plotProfile` against one metaplot). They are documents, not tests: they
-need the data (about 6 GB), the reference packages and yapc's own environment, and nothing in the
-suite runs them.
+SciPy, a window any track lacks left out of every pair as deepTools leaves it, and against
+deepTools, whose zoom-level means are measured apart. Where a reference draws at random — a pileup's
+controls, an overlap's shuffles, IDR's ties — two distributions are compared, the reference's own
+spread from seed to seed the yardstick. It writes every command it ran to
+`notebooks/work/validation/commands.json`, and `notebooks/timing.qmd` runs them again, five times
+round robin, each a fresh process — all but the ones that would time a job twice or two different
+jobs: one seed of the shifted controls, the *Sox2* viewpoint of virtual 4C, Boost-HiC on chr1, and
+APA raw and over controls but not over the expected, where coolpuppy is handed an expected computed
+beforehand. Every run is one line of the tidy table `notebooks/work/validation/timings.tsv` — CPU
+and wall-clock seconds and peak memory, with the machine and every version — and each `chromosomix`
+command's speed is a fold over the reference commands it is paired with, a side's commands summed
+where there are several (deepTools' `computeMatrix` and then `plotProfile` against one metaplot).
+They are documents, not tests: they need the data (about 6 GB), the reference packages and yapc's
+own environment, and nothing in the suite runs them.
 
 **They are published with every release.** `.github/workflows/notebooks.yml` installs all of it on a
 fresh runner — the reference environment pinned package by package in `notebooks/requirements.txt`,

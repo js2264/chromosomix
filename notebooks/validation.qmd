@@ -2253,18 +2253,19 @@ none where the map is too sparse to give one. All three are 4DN's, on mm10, and 
 them cut to chr19, interval for interval, as § 5 cuts them. Genome-wide, the two replicates are
 1.7 GB of bigWig, and one deepTools summary of them at 100 bp — 27 million windows — took 23 minutes
 and 4.8 GB here and wrote 1.5 GB of text: a cost the timings would pay at three window sizes, five
-times over. A window's value is the mean over the bases a track has a value for, and each pair is
-correlated over the windows where both have one. The reference for exactly that is pyBigWig's own exact mean, `stats(..., exact=True)`,
-correlated by SciPy (`notebooks/scripts/pybigwig_correlation.py`). Beside it is deepTools as it is
-usually run, `multiBigwigSummary bins` then `plotCorrelation`, which differs in two ways that are
-measured below: its window means are pyBigWig's default, read from a zoom level wherever the file
-has one fine enough, and it drops a window from every pair as soon as any one track lacks it.
+times over. A window's value is the mean over the bases a track has a value for, and a window any
+of the three lacks — here, where the insulation score has no value — is left out of every pair, as
+deepTools leaves it out. The reference for exactly that is pyBigWig's own exact mean,
+`stats(..., exact=True)`, correlated by SciPy over the windows every track has
+(`notebooks/scripts/pybigwig_correlation.py`). Beside it is deepTools as it is usually run,
+`multiBigwigSummary bins` then `plotCorrelation`, which differs in one way, measured below: its
+window means are pyBigWig's default, read from a zoom level wherever the file has one fine enough.
 
 | | chromosomix | pyBigWig and SciPy | deepTools |
 |---|---|---|---|
 | windows | `--binsize B`, whole windows | whole windows of B | `multiBigwigSummary bins --binSize B` |
 | a window's value | the mean over the bases with a value | `stats(..., exact=True)` | `stats(...)`, from a zoom level where one is fine enough |
-| a missing window | left out of that pair | left out of that pair | left out of every pair |
+| a missing window | left out of every pair | left out of every pair | left out of every pair |
 | correlation | `--method pearson`, `spearman` | `scipy.stats.pearsonr`, `spearmanr` | `plotCorrelation -c pearson`, `spearman` |
 
 ```{python}
@@ -2320,8 +2321,8 @@ def exact_windows(size):
     return cached(TC / f'exact-windows-{size}.npy', compute)
 
 
-def correlated(columns, method, together=False):
-    """Every pair's coefficient: over the pair's own windows, or over the windows every track has."""
+def correlated(columns, method, together=True):
+    """Every pair's coefficient: over the windows every track has, or over the pair's own windows."""
     measure = stats.pearsonr if method == 'pearson' else stats.spearmanr
     rows = np.isfinite(columns).all(axis=1) if together else None
     out = []
@@ -2342,12 +2343,13 @@ for size in SIZES:
         app = square_of(one(TC / f'app-{size}-{method}', '*.trackcorr.tsv'))[UPPER]
         exact = square_of(TC / f'exact-{size}-{method}.tsv')[UPPER]
         deep = square_of(TC / f'deeptools-{size}-{method}.tab')[UPPER]
-        tc[size, method] = dict(app=app, exact=exact, deep=deep)
+        own = correlated(exact_cols, method, together=False)
+        tc[size, method] = dict(app=app, exact=exact, deep=deep, own=own)
         tc_rows.append({'windows': f'{size:,} bp', 'method': method, 'pairs': len(app),
+                        'left out': f'{(~np.isfinite(exact_cols).all(axis=1)).sum():,} of {len(exact_cols):,}',
                         'chromosomix vs exact, max |Δ|': np.abs(app - exact).max(),
                         'deepTools vs exact, max |Δ|': np.abs(deep - exact).max(),
-                        '…its window means alone': np.abs(correlated(deep_cols, method) - exact).max(),
-                        '…its missing-window rule alone': np.abs(correlated(exact_cols, method, together=True) - exact).max()})
+                        'each pair over its own windows, max |Δ|': np.abs(own - exact).max()})
 TC_TABLE = pd.DataFrame(tc_rows)
 show(TC_TABLE, **{c: '{:.1e}' for c in TC_TABLE.columns if 'Δ' in c or '…' in c})
 ```
@@ -2358,8 +2360,14 @@ show(TC_TABLE, **{c: '{:.1e}' for c in TC_TABLE.columns if 'Δ' in c or '…' in
 TEXT['tc_n'] = f"{sum(len(v['app']) for v in tc.values())}"
 TEXT['tc_app'] = f"{TC_TABLE['chromosomix vs exact, max |Δ|'].max():.1e}"
 TEXT['tc_deep'] = f"{TC_TABLE['deepTools vs exact, max |Δ|'].max():.3f}"
-TEXT['tc_means'] = f"{TC_TABLE['…its window means alone'].max():.3f}"
-TEXT['tc_rule'] = f"{TC_TABLE['…its missing-window rule alone'].max():.3f}"
+TEXT['tc_deep_100'] = f"{TC_TABLE.loc[TC_TABLE['windows'] == '100 bp', 'deepTools vs exact, max |Δ|'].max():.1e}"
+TEXT['tc_rule'] = f"{TC_TABLE['each pair over its own windows, max |Δ|'].max():.3f}"
+TEXT['tc_left'] = TC_TABLE.loc[TC_TABLE['windows'] == '100 bp', 'left out'].iloc[0]
+# The two replicates, Spearman at 100 bp: the pair the rule moves, over every track's windows and
+# over their own.
+REPLICATES = list(combinations(range(len(TRACK_NAMES)), 2)).index((0, 1))
+TEXT['tc_reps'] = f"{tc[100, 'spearman']['exact'][REPLICATES]:.3f}"
+TEXT['tc_reps_own'] = f"{tc[100, 'spearman']['own'][REPLICATES]:.3f}"
 TC_EXACT = TC_TABLE['chromosomix vs exact, max |Δ|'].max() < 1e-5
 
 fig, axes = plt.subplots(1, 2, figsize=(11, 4.6), layout='constrained', width_ratios=[1.05, 1])
@@ -2384,16 +2392,21 @@ plt.show()
 ```
 
 All `{python} TEXT['tc_n']` coefficients from chromosomix agree with the exact reference within
-`{python} TEXT['tc_app']`, the six digits it writes. deepTools' differ by up to
-`{python} TEXT['tc_deep']`: taken alone, its window means — read from zoom levels — move a coefficient
-by up to `{python} TEXT['tc_means']`, and its rule of leaving a window out of every pair when any
-track lacks it by up to `{python} TEXT['tc_rule']`.
+`{python} TEXT['tc_app']`, the six digits it writes, over the same windows: at 100 bp,
+`{python} TEXT['tc_left']` windows lack a value in at least one track and are left out of every
+pair. deepTools' coefficients differ by up to `{python} TEXT['tc_deep']`, all of it its window means,
+read from a zoom level where a file has one fine enough; at 100 bp no file has, and deepTools is
+within `{python} TEXT['tc_deep_100']`, the four digits it writes. Had each pair kept its own
+windows, as chromosomix once did, a coefficient would have moved by up to `{python} TEXT['tc_rule']`:
+the two replicates' ρ at 100 bp would read `{python} TEXT['tc_reps_own']` rather than
+`{python} TEXT['tc_reps']`.
 
 ```{python}
 record('Track correlation', 'mouse ATAC-seq, two replicates, and insulation, chr19, 100 bp to 10 kb windows',
        f"pyBigWig {VERSIONS['pyBigWig']} and SciPy {VERSIONS['scipy']}; deepTools {VERSIONS['deeptools']}",
-       f"{TEXT['tc_n']} coefficients within {TEXT['tc_app']} of the exact means; deepTools within "
-       f"{TEXT['tc_deep']}, from its zoom-level means and its rule for a missing window",
+       f"{TEXT['tc_n']} coefficients within {TEXT['tc_app']} of the exact means, a window any track "
+       f"lacks left out of every pair as deepTools leaves it; deepTools within {TEXT['tc_deep']}, from "
+       f"its zoom-level means",
        'Identical to the exact means' if TC_EXACT else 'Differs from the exact means',
        apps=[f'trackcorr-{size}-{method}' for size in SIZES for method in METHODS],
        refs=[*[f'pybigwig-correlation-{size}-{method}' for size in SIZES for method in METHODS],

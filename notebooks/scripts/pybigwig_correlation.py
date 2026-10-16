@@ -2,7 +2,8 @@
 
 Every sequence the tracks share is cut into whole windows of BINSIZE bases from its start, each
 track's value in a window is pyBigWig's `stats(..., exact=True)` mean — the mean over the bases
-it has a value for — and every pair of tracks is correlated over the windows where both have one,
+it has a value for — and every pair of tracks is correlated over the windows where every track has
+one, as deepTools' plotCorrelation drops a row with a missing value before it correlates anything,
 by `scipy.stats.pearsonr` or `scipy.stats.spearmanr`. Writes the square matrix as a TSV, the
 tracks named by their file names.
 
@@ -27,12 +28,12 @@ for handle in handles:
             parts.append(np.array(handle.stats(name, 0, whole * size, nBins=whole, exact=True), dtype=float))
     columns.append(np.concatenate(parts))
 measure = {'pearson': stats.pearsonr, 'spearman': stats.spearmanr}[method]
+every = np.all([np.isfinite(column) for column in columns], axis=0)
 n = len(paths)
 matrix = np.eye(n)
 for a in range(n):
     for b in range(a + 1, n):
-        both = np.isfinite(columns[a]) & np.isfinite(columns[b])
-        matrix[a, b] = matrix[b, a] = measure(columns[a][both], columns[b][both])[0]
+        matrix[a, b] = matrix[b, a] = measure(columns[a][every], columns[b][every])[0]
 names = [os.path.basename(path) for path in paths]
 with open(out, 'w') as handle:
     handle.write('\t' + '\t'.join(names) + '\n')
