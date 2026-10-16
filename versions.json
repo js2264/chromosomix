@@ -215,10 +215,10 @@
   "pulls": [
     {
       "number": 107,
-      "commit": "d91a5ed",
+      "commit": "8a69794",
       "title": "Add circular visualization of metagenome contact maps (§7.6)",
       "branch": "claude/metagenome-circos-viz-dzev74",
-      "date": "2026-10-16T08:02:38Z"
+      "date": "2026-10-16T23:43:49Z"
     }
   ]
 }
