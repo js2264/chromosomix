@@ -58,7 +58,7 @@ import {
   type JunctionReader,
 } from '../analysis/circularity'
 import { ResolutionStore } from '../state/resolutions'
-import { ladderWith, type DerivedRung, type Rung } from '../metacooler/coarsen'
+import { CoarseGrid, ladderWith, offsetsOf, type DerivedGrid, type DerivedRung, type Rung } from '../metacooler/coarsen'
 import { openResolutionDialog } from '../ui/ResolutionDialog'
 import { ViewerError } from '../errors'
 import {
@@ -5689,6 +5689,31 @@ export class Session {
     if (asked === undefined || !(binsize > 0) || asked <= binsize) return null
     if (asked % binsize !== 0) return null
     return { binsize: asked, from: { name: String(binsize), binsize }, factor: asked / binsize }
+  }
+
+  /**
+   * The resolution the reader added that the session's map is drawn at, with
+   * the grid its stored rung's bins are summed on — what an analysis of the map
+   * is framed, priced and run at (§3.4, §18.4) — or `null` at a stored rung,
+   * and before the sequence table the grid is laid out from has been read.
+   *
+   * From the table rather than from offsets, which the page does not hold: a
+   * cooler lays each sequence out as `ceil(length / binsize)` bins, and the
+   * check against the file's bin count is what says this one does.
+   *
+   * @internal SessionAnalysis frames every task on the lead through it.
+   */
+  analysisGrid(): DerivedGrid | null {
+    const state = this.store.state
+    const file = this.file
+    if (state === null || file === null) return null
+    const rung = this.derivedRung(state)
+    if (rung === null) return null
+    const lengths = file.contigs?.table.data['length']
+    if (lengths === undefined || Array.isArray(lengths)) return null
+    const fine = offsetsOf(lengths as ArrayLike<number>, rung.from.binsize)
+    if (fine[fine.length - 1] !== file.info.nBins) return null
+    return { rung, grid: CoarseGrid.of(fine, rung.factor) }
   }
 
   /**

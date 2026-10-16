@@ -310,6 +310,29 @@ also why a stored rung always wins: a derived resolution that duplicates one is 
 quietly shadowing it, and `chooseRung` still prefers a real rung for every read that is not held to
 a declared grid (§9).
 
+**Every task measures it too** (§18.4). A task run while the map is drawn at a derived rung reads the
+map at that rung, not at the stored one underneath — it used to read the stored one, so a reader
+looking at 3 kb\* got an insulation track at 1 kb under a picture at 3. The analysis worker's mount
+is the stored rung summed on the same grid (`metacooler/coarseMap.ts`), behind the two seams an
+ordinary map is read through — its pixels and its handle — so every task, whatever it reads (a
+window, a pass over every pixel, the weights, a bin column), sees an ordinary map one bin size up,
+and its result is on that grid: an insulation track one value per 3 kb bin, a P(s) whose first
+separation is one summed bin. Counts sum exactly, so a rung the file stores and the same rung derived
+give the same raw numbers to the last bit, window for window and pixel for pixel. Balanced values are
+the caveat above met another way: a coarse bin's weight is the **harmonic mean** of the fine weights
+the balancer kept, `n / Σ 1/wᵢ` — the weight a bin has under the model balancing assumes, where a
+count is a bias times a bias times the signal and a coarse bin's bias is the sum of its bins' — so
+the coarse count times two such weights is the sum of the fine balanced values wherever the signal is
+level across a block, and differs from the map's sum by how unevenly signal and bias vary inside one
+bin. A coarse bin none of whose bins the balancer kept is dropped, as a fine one is; any other bin
+column is its first bin's start and sequence, its last bin's end, and the mean of anything else. The
+block on screen, being the other sum, is never handed to a task at a derived rung. The framing names
+the resolution with its `*` (`3 kb* bins`), a result goes out of date when the reader steps off it,
+and the command the console writes carries `--coarsen 3000`, which `chromosomix` sums the same way
+(§23.1). A single-cell container is refused by name. In a deck the star decides, as it does for
+everything else a task reads (§18.2): on the lead at a derived rung, a batch sums every map to it,
+and refuses by name a map whose bins do not divide it.
+
 ### 3.5 URI addressing
 
 `file::group`, exactly as `metacooler.uri.parse_uri`:
@@ -7297,7 +7320,8 @@ which would neuter the array the heatmap is drawing from.
 **What a task runs on is the map's current framing**, captured at the instant **Run** is pressed: the
 row and column bin extents, the bin size, any pooling in force, the score column, whether balancing
 is on, the total the map is drawn to (§6.5), the sequences declared circular and their origins
-(§8.15), and the edit of the reference it is drawn through (§27.7).
+(§8.15), the edit of the reference it is drawn through (§27.7), and the resolution the reader added
+that it is drawn at (§3.4) — which is then the bin size, its bins the ones the extents count.
 
 **The framing line is one string in one grammar.** The window it names is the display form (§26.1),
 written by `formatLocus` — so the drawer's *will run on*, the figure's caption and the cell's
@@ -10069,14 +10093,16 @@ is no refusal left for `cliCommandFor` to write. What the record does not hold a
 above the line rather than as a silent omission — the maps `hicrep` ran against are the deck's and not
 the result's, so they are read off the session and, with no session to ask, the note says to add them.
 
-**The framing is written, not only the parameters.** Five facts a session sets from the picture are
+**The framing is written, not only the parameters.** Six facts a session sets from the picture are
 inputs to the arithmetic and parameters of no task: the score column the map is drawn from (§3.5),
 the sequences declared circular and the origins declared on them (§8.15), the ticked cells of an
-`.scool` (§3.8), and the number of contacts the map is drawn to (§6.5). A line without them repeats
-a different run, so each is a reserved flag of the command's own — `--value`, `--circular`,
-`--origin NAME:POS` (1-based, as the table prints it, digits grouped or not), `--cell`,
-`--contacts N` — written whenever it differs from the shell's default and refused before the run
-when the file cannot answer it.
+`.scool` (§3.8), the number of contacts the map is drawn to (§6.5), and the resolution the reader
+added that it is drawn at (§3.4). A line without them repeats a different run, so each is a reserved
+flag of the command's own — `--value`, `--circular`, `--origin NAME:POS` (1-based, as the table
+prints it, digits grouped or not), `--cell`, `--contacts N`, `--coarsen BP` — written whenever it
+differs from the shell's default and refused before the run when the file cannot answer it. A run
+summed to `--coarsen` names its outputs for it, `sample_1000_coarsen3000.…`, so that beside a run on
+the file's own rung in one `--out` the two are two sets of numbers.
 
 **Balanced is the shell's default, as it is the form's.** *Use balancing weights* is answered from
 the file and never shown in a form (`paramDerived`), and a shell answers it the same way: a map is

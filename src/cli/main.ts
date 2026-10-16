@@ -452,16 +452,53 @@ function pairsBinningOf(args: Args, task?: AnalysisTask): PairsBinning | undefin
 function framingFlags(
   args: Args,
   task?: AnalysisTask,
-): Pick<RunOptions, 'value' | 'circular' | 'cells' | 'origins' | 'contacts'> {
+): Pick<RunOptions, 'value' | 'circular' | 'cells' | 'origins' | 'contacts' | 'coarsen'> {
   const value = one(args, 'value')
   const contacts = contactsOf(args, task)
+  const coarsen = coarsenOf(args)
   return {
     ...(value === undefined || value === '' ? {} : { value }),
     ...(contacts === undefined ? {} : { contacts }),
+    ...(coarsen === undefined ? {} : { coarsen }),
     circular: all(args, 'circular').flatMap((item) => item.split(',')).filter((item) => item !== ''),
     cells: all(args, 'cell').flatMap((item) => item.split(',')).filter((item) => item !== ''),
     origins: originsOf(all(args, 'origin')),
   }
+}
+
+/**
+ * `--coarsen BP`: the resolution to read the map at (§3.4), a whole number of
+ * the file's bins summed — what the app writes for a run on a resolution the
+ * reader added. Digits may be grouped, as the app prints them.
+ */
+function coarsenOf(args: Args): number | undefined {
+  const text = one(args, 'coarsen')
+  if (text === undefined) return undefined
+  const binsize = numberValue('coarsen', text.replace(/[,_]/g, ''))
+  if (!Number.isInteger(binsize) || binsize < 1) {
+    throw new UsageError(`--coarsen is a bin size in whole base pairs; got “${text}”.`)
+  }
+  return binsize
+}
+
+/**
+ * A map read at `binsize` (§3.4): its own bins summed, a whole number at a
+ * time, as the app reads a resolution the reader added — or the map itself,
+ * where its bins are that size already.
+ */
+function atResolution(mc: MetaCooler, binsize: number, path: string): MetaCooler {
+  if (binsize === mc.binsize) return mc
+  const factor = binsize / mc.binsize
+  if (!Number.isInteger(factor) || factor < 1) {
+    throw new Error(
+      `--coarsen ${binsize}: ${fileNameOf(path)} is at ${mc.binsize.toLocaleString('en-US')} bp, and ` +
+        `${binsize.toLocaleString('en-US')} bp is not a whole number of its bins: name a bin size ` +
+        'that is, or open the file at a resolution that divides this one.',
+    )
+  }
+  const seen = MetaCooler.coarsened(mc, factor)
+  if (seen.refusal !== null) throw new Error(`--coarsen ${binsize}: ${seen.refusal}`)
+  return seen.map
 }
 
 /**
@@ -779,6 +816,9 @@ const RESERVED = new Set([
   // below the file's own, an oversample through Boost-HiC above it. A property
   // of the input, like the binning, so every task reads the drawn map.
   'contacts',
+  // The resolution it is read at, where that is the file's bins summed (§3.4):
+  // a property of the input too, for the same reason.
+  'coarsen',
 ])
 
 /**
@@ -871,6 +911,8 @@ interface RunOptions {
   binning?: PairsBinning | undefined
   /** The total the map is drawn to before the task reads it (§6.5). */
   contacts?: number | undefined
+  /** The bin size the map is read at, its own bins summed (§3.4). */
+  coarsen?: number | undefined
 }
 
 /**
@@ -1090,7 +1132,7 @@ function decodeWhole(read: Buffer): Promise<Uint8Array> {
 async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedGraphContig[] }> {
   const { task, path } = options
   const opened = await openLocal(uriOf(path), options, options.local)
-  const { mc } = opened
+  let mc = opened.mc
   try {
     // The ticked cells, as the analysis worker selects them before any task
     // runs: an `.scool` sums whichever cells are chosen, and a task over "the
@@ -1104,6 +1146,11 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
     // Drawn to the total asked for before anything reads it, as the analysis
     // worker draws its mount (§6.5); the seed is the app's, so the pixels are.
     const depth = await drawnTo(mc, options.contacts, options.quiet)
+    // At the resolution asked for, the file's bins summed (§3.4) — last, as the
+    // analysis worker sums its mount, so the cells and the total are summed.
+    const fileBinsize = mc.binsize
+    if (options.coarsen !== undefined) mc = atResolution(mc, options.coarsen, path)
+    const coarsened = mc.binsize !== fileBinsize
     const value = options.value ?? DEFAULT_COUNT_COLUMN
     if (value !== DEFAULT_COUNT_COLUMN && !mc.scoreColumns.includes(value)) {
       throw new Error(
@@ -1151,6 +1198,7 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
       level: 'bin',
       label:
         `${region === undefined ? 'whole file' : regionLabel(region)} at ${mc.binsize} bp` +
+        `${coarsened ? ` (${fileBinsize} bp bins summed)` : ''}` +
         `${balance ? ', balanced' : ''}, ${value}` +
         `${options.circular.length === 0 ? '' : `, circular ${options.circular.join(',')}`}` +
         `${Object.keys(options.origins).length === 0 ? '' : `, origin ${originLabel(options.origins)}`}` +
@@ -1159,6 +1207,7 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
       ...(options.circular.length === 0 ? {} : { circular: [...options.circular] }),
       ...(Object.keys(options.origins).length === 0 ? {} : { origins: { ...options.origins } }),
       ...(options.contacts === undefined ? {} : { contacts: options.contacts }),
+      ...(coarsened ? { coarsen: mc.binsize } : {}),
     }
     // The assembly travels with the result rather than being fetched again: a
     // second open costs a second mount and a second metadata walk to learn
@@ -1244,10 +1293,20 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
           other.source.close()
           throw error
         }
+        // …and at the one resolution where its bins sum to it (§3.4); where they
+        // do not, as it is, and the task says the two are at different ones.
+        let read = other.mc
+        if (options.coarsen !== undefined) {
+          try {
+            read = atResolution(other.mc, options.coarsen, map.uri)
+          } catch {
+            read = other.mc
+          }
+        }
         return {
-          mc: other.mc,
+          mc: read,
           close: () => {
-            other.mc.close()
+            read.close()
             other.source.close()
           },
         }
@@ -2063,6 +2122,12 @@ const USAGE = `chromosomix — the Analysis panel, from a shell
                            it, an oversample through Boost-HiC. Takes 10M,
                            23,000,000 or 2.5e7; --against maps are drawn to it
                            too. The same seed as the app, so the same pixels
+      --coarsen <bp>       read the map at this bin size, a whole number of the
+                           file's own bins summed along each sequence — what
+                           the app does at a resolution you added (3 kb*).
+                           Counts sum exactly; a bin's weight is the harmonic
+                           mean of its bins' weights. --against maps are summed
+                           to it too
       --bin-size <bp>      required for a .pairs input, which states no
                            resolution of its own; ignored for every other format
       --rungs <n>          how many ladder resolutions to build from it
@@ -2262,7 +2327,12 @@ async function runCommand(args: Args, downloads: Downloads): Promise<number> {
         quiet,
       })
       for (const note of result.notes) process.stderr.write(`  note: ${note}\n`)
-      await writeOutputs(result, stems[index], directory, result.contigs, quiet, written)
+      // Named for the resolution it was measured at where that is the file's
+      // bins summed (§3.4): beside a run on the file's own rung in one `--out`,
+      // `sample_1000` and `sample_1000_coarsen4000` are two sets of numbers.
+      const coarsen = result.provenance.framing.coarsen
+      const stem = coarsen === undefined ? stems[index] : `${stems[index]}_coarsen${coarsen}`
+      await writeOutputs(result, stem, directory, result.contigs, quiet, written)
     } catch (error) {
       failures += 1
       // Named and carried on, rather than stopping: a batch of two hundred

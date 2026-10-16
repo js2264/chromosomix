@@ -404,6 +404,42 @@ describe('the file the analysis worker is asked to mount', () => {
     ])
   })
 
+  it('sums the map to the resolution the reader added, as the framing names it (§3.4)', async () => {
+    // The map at 3 kb* is the file's 1 kb bins summed three at a time, and every
+    // task reads that map: the mount is told so, re-made when the resolution
+    // moves, and handed nothing of the block on screen — which is the balanced
+    // values summed, a second estimate of the same picture.
+    let framing: AnalysisFraming = { ...FRAMING, rows: [0, 34], cols: [0, 34], binsize: 3000, coarsen: 3000 }
+    const block: BlockInput = {
+      nrows: 34,
+      ncols: 34,
+      values: new Float32Array(34 * 34),
+      rowExtent: [0, 34],
+      colExtent: [0, 34],
+      binsPerCell: 1,
+    }
+    const { runner, fake } = harness(FRAMING, null, [], { block, map: 'lead' }, {
+      context: () => context(framing),
+    })
+    runner.run(task('insulation'), {})
+    await settle()
+    expect((opens(fake)[0] as { coarsen?: number }).coarsen).toBe(3000)
+    const run = fake.seen.find((request) => request.kind === 'run')
+    expect(run?.kind === 'run' ? run.inputs.block : 'missing').toBeUndefined()
+    fake.finish()
+    await settle()
+
+    framing = { ...FRAMING, rows: [0, 20], cols: [0, 20], binsize: 5000, coarsen: 5000 }
+    runner.run(task('insulation'), {})
+    await settle()
+    fake.finish()
+    await settle()
+    framing = FRAMING
+    runner.run(task('insulation'), {})
+    await settle()
+    expect(opens(fake).map((m) => (m as { coarsen?: number }).coarsen)).toEqual([3000, 5000, undefined])
+  })
+
   it('mounts once when nothing about the target moved', async () => {
     const { runner, fake } = harness()
     runner.run(task('coverage'), {})
@@ -979,6 +1015,14 @@ describe('sameRecipe', () => {
     expect(sameRecipe(provenance, { params, framing: { ...FRAMING, circular: ['chrI'] } })).toBe(false)
     expect(sameRecipe(round, { params, framing: { ...FRAMING, circular: ['chrI'], origins: { chrI: 11 } } })).toBe(false)
     expect(sameRecipe(round, { params, framing: { ...FRAMING, circular: ['chrI'], origins: { chrI: 10 } } })).toBe(true)
+  })
+
+  it('rejects a result measured at another resolution the reader added, or at the file’s own (§3.4)', () => {
+    const params = provenance.params
+    const summed = { ...FRAMING, binsize: 3000, coarsen: 3000 }
+    expect(sameRecipe({ ...provenance, framing: summed }, { params, framing: FRAMING })).toBe(false)
+    expect(sameRecipe(provenance, { params, framing: summed })).toBe(false)
+    expect(sameRecipe({ ...provenance, framing: summed }, { params, framing: { ...summed } })).toBe(true)
   })
 
   it('rejects a result of another edit of the reference, though its window is the same bins (§27.7)', () => {

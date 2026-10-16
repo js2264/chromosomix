@@ -810,6 +810,21 @@ describe('the framing a session sets from the picture', () => {
     expect(commandOf(stored.text)).not.toContain('--contacts')
   })
 
+  it('names the resolution the reader added, which the shell sums as the session does (§3.4)', () => {
+    const summed = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation), { binsize: 3000, coarsen: 3000 }),
+      context: context(),
+    })
+    expect(commandOf(summed.text)).toContain('--coarsen 3000')
+    const stored = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation)),
+      context: context(),
+    })
+    expect(commandOf(stored.text)).not.toContain('--coarsen')
+  })
+
   it('says that the map was drawn through an edit, which the shell cannot yet apply (§27.7)', () => {
     const edited = cliCommandFor({
       task: insulation,

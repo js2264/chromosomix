@@ -693,6 +693,16 @@ export interface AnalysisFraming {
    * the edited assembly it was computed on, and the next edit makes it stale.
    */
   edit?: string
+  /**
+   * The resolution the reader added that the map was drawn at (§3.4), in base
+   * pairs, where it was drawn at one; absent at a rung the file stores. Then it
+   * is {@link binsize} too, and {@link rows} and {@link cols} count its bins:
+   * every task reads the map summed to it, as the picture is, and a result
+   * measured at the file's own rung under a header naming this one would be
+   * the wrong number with the right label. In the provenance, the staleness
+   * test and the command line (`--coarsen`) for the reason {@link contacts} is.
+   */
+  coarsen?: number
 }
 
 // ---------------------------------------------------------------------------

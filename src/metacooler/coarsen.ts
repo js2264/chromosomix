@@ -215,3 +215,120 @@ export function ladderWith(
   }
   return out.sort((a, b) => a.binsize - b.binsize)
 }
+
+/**
+ * The grid of a derived rung over a map's own bins: each sequence's bins summed
+ * `factor` at a time from its own first bin, its last cell holding whatever is
+ * left — `contigStart + m·k`, the grid the map is drawn on (`snapToGrid`) and
+ * the one `cooler coarsen` writes.
+ *
+ * What a task reading the map *at* a derived rung is framed by (§3.4, §18.4):
+ * the offsets the coarser map's sequences start at, and the two directions of
+ * the arithmetic — the fine bins a coarse extent holds, for the read, and the
+ * fewest coarse bins holding a fine extent, for the window a view drew. Pure,
+ * so the page that frames a task and the worker that runs it share one grid.
+ */
+export class CoarseGrid {
+  private constructor(
+    /** Fine bins to a coarse one. */
+    readonly factor: number,
+    /** The fine map's `chrom_offset`. */
+    readonly fineOffset: Float64Array,
+    /** The coarse map's `chrom_offset`: `ceil(n / factor)` bins for a sequence of `n`. */
+    readonly chromOffset: Float64Array,
+  ) {}
+
+  /** The grid over a map whose sequences start at these bins. */
+  static of(fineOffset: ArrayLike<number>, factor: number): CoarseGrid {
+    const fine = Float64Array.from(fineOffset)
+    const coarse = new Float64Array(fine.length)
+    for (let c = 0; c + 1 < fine.length; c++) {
+      coarse[c + 1] = coarse[c] + Math.ceil((fine[c + 1] - fine[c]) / factor)
+    }
+    return new CoarseGrid(factor, fine, coarse)
+  }
+
+  /** The coarse map's bins. */
+  get nBins(): number {
+    return this.chromOffset[this.chromOffset.length - 1] ?? 0
+  }
+
+  /** The fine map's bins. */
+  get fineBins(): number {
+    return this.fineOffset[this.fineOffset.length - 1] ?? 0
+  }
+
+  /** The coarse bin a fine bin is summed into; the coarse total past the last. */
+  coarseBin(bin: number): number {
+    if (bin >= this.fineBins) return this.nBins
+    const c = sequenceAt(this.fineOffset, bin)
+    return this.chromOffset[c] + Math.floor((bin - this.fineOffset[c]) / this.factor)
+  }
+
+  /** The first fine bin a coarse one sums; the fine total past the last. */
+  fineBin(bin: number): number {
+    if (bin >= this.nBins) return this.fineBins
+    const c = sequenceAt(this.chromOffset, bin)
+    return this.fineOffset[c] + (bin - this.chromOffset[c]) * this.factor
+  }
+
+  /** The fine bins a coarse extent sums. */
+  toFine(extent: readonly [number, number]): [number, number] {
+    return [this.fineBin(extent[0]), this.fineBin(extent[1])]
+  }
+
+  /** The fewest coarse bins holding every fine bin of an extent. */
+  toCoarse(extent: readonly [number, number]): [number, number] {
+    const lo = this.coarseBin(extent[0])
+    return extent[1] <= extent[0] ? [lo, lo] : [lo, this.coarseBin(extent[1] - 1) + 1]
+  }
+
+  /** Every fine bin's coarse bin, for a pass over pixels. */
+  coarseIndex(): Int32Array {
+    const out = new Int32Array(this.fineBins)
+    for (let c = 0; c + 1 < this.fineOffset.length; c++) {
+      const base = this.chromOffset[c]
+      const from = this.fineOffset[c]
+      for (let bin = from; bin < this.fineOffset[c + 1]; bin++) {
+        out[bin] = base + Math.floor((bin - from) / this.factor)
+      }
+    }
+    return out
+  }
+}
+
+/**
+ * A derived rung with the grid its stored rung's bins are summed on: what a task
+ * reading the map at it is framed by — the window a view drew, carried onto the
+ * coarse bins, and the bin size its results are measured at (§18.4).
+ */
+export interface DerivedGrid {
+  rung: DerivedRung
+  grid: CoarseGrid
+}
+
+/**
+ * The sequence a bin is in, by its offsets: the last whose first bin is at or
+ * before it — past every sequence of no bins, which start where the next does.
+ */
+function sequenceAt(offsets: Float64Array, bin: number): number {
+  let lo = 0
+  let hi = offsets.length - 1
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1
+    if (offsets[mid] <= bin) lo = mid + 1
+    else hi = mid
+  }
+  return Math.max(0, lo - 1)
+}
+
+/**
+ * The bins of each sequence at `binsize`, as a cooler lays them out: one more
+ * for whatever is left at the end. What a page that has a sequence table and no
+ * offsets frames a coarse grid from.
+ */
+export function offsetsOf(lengths: ArrayLike<number>, binsize: number): Float64Array {
+  const out = new Float64Array(lengths.length + 1)
+  for (let c = 0; c < lengths.length; c++) out[c + 1] = out[c] + Math.ceil(Number(lengths[c]) / binsize)
+  return out
+}

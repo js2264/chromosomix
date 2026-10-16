@@ -91,6 +91,7 @@ node scripts/ui-installed-folders.mjs gallery # folders kept by the installed ap
 node scripts/ui-lane-corners.mjs gallery      # the tracks' names in the map's corners (§8.8): the yeast map, its two corners close up, a caret opened on a name in a corner, the map's PNG and PDF under files/, a track on every edge (all four corners), the dark theme, and the yeast deck: lc01 … lc09
 node scripts/ui-deck-sequence.mjs gallery     # a sequence picked on one deck cell (§16.3): the yeast deck's headings, V on the Hi-C cell (off the chain, on V alone), XII on the first map, a reload, and the window's ×: ds01 … ds06
 node scripts/ui-scalogram-axis.mjs gallery    # the distance axis on a scalogram's lane (§18.12): the Scalogram run on the yeast demo, its lane beside the map and close up (range in kb, rules at the decades, words clear of the names), the map's PNG under files/, and the lane in the browser: sa01 … sa04
+node scripts/ui-derived-tasks.mjs gallery      # every task at a resolution the reader added (§3.4, §18.4): 3 kb added to the yeast demo's 1 kb, Diamond insulation run (the drawer's `3 kb* bins`, the lane one value per 3 kb, the console's `--coarsen 3000`), P(s) from one summed bin, and back at 1 kb the result out of date: dt01 … dt05
 ```
 
 The second script drives the part the first only passes through: the figures a task returns

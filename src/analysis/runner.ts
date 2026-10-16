@@ -232,6 +232,10 @@ function sameFraming(a: AnalysisFraming, b: AnalysisFraming): boolean {
     // And so does the edit it is drawn through (§27.7) — an inversion leaves a
     // whole-genome window's bins where they were and moves every contact in it.
     (a.edit ?? null) === (b.edit ?? null) &&
+    // And the resolution the reader added, which the bin size says already —
+    // and which is said here too, since a stored 4 kb rung and 1 kb summed to
+    // 4 kb are two reads of one file (§3.4).
+    (a.coarsen ?? null) === (b.coarsen ?? null) &&
     // What the molecules are declared to be changes the numbers as surely as
     // the window does (§8.15): a decay measured along a line is not the one a
     // circle has, and an arm read from another origin is another arm.
@@ -329,6 +333,7 @@ function mountKey(
   binning?: PairsBinning,
   resample?: ResampleTarget,
   edit?: ReferenceEdit,
+  coarsen?: number,
 ): string {
   const base =
     cells === undefined || cells.length === 0 ? uri : `${uri}\u0000${cells.join('\u0000')}`
@@ -344,7 +349,10 @@ function mountKey(
       : `${binned}\u0000contacts:${resample.contacts}:${resample.seed ?? ''}:${resample.alpha ?? ''}`
   // And the edit it is drawn through (§27.7), by the steps it applies: two
   // edits of one file are two assemblies, as two totals are two maps.
-  return edit === undefined ? drawn : `${drawn}\u0000edit:${editFingerprint(edit)}`
+  const edited = edit === undefined ? drawn : `${drawn}\u0000edit:${editFingerprint(edit)}`
+  // And the resolution it is summed to (§3.4): one file at 1 kb and at 3 kb is
+  // two maps, as one file at two totals is.
+  return coarsen === undefined ? edited : `${edited}\u0000coarsen:${coarsen}`
 }
 
 /**
@@ -1163,7 +1171,11 @@ export class AnalysisRunner {
     // Keyed on the cell set as well as the file: an scool re-ticked between two
     // runs is the same URI and a different map, and a mount kept for the name
     // alone would answer the second question with the first one's cells.
-    const key = mountKey(source.uri, source.cells, source.binning, source.resample, source.edit)
+    // At the resolution the framing names, where the reader added it (§3.4):
+    // the framing's rather than the target's, because a batch frames every map
+    // by the starred one's picture, and that picture is at this resolution.
+    const coarsen = job.framing.coarsen
+    const key = mountKey(source.uri, source.cells, source.binning, source.resample, source.edit, coarsen)
     if (this.mounted === key) return
     this.setState(job.task.id, {
       status: 'running',
@@ -1185,6 +1197,7 @@ export class AnalysisRunner {
       ...(source.binning === undefined ? {} : { binning: source.binning }),
       ...(source.resample === undefined ? {} : { resample: source.resample }),
       ...(source.edit === undefined ? {} : { edit: source.edit }),
+      ...(coarsen === undefined ? {} : { coarsen }),
     })
     this.mounted = key
   }
@@ -1477,6 +1490,10 @@ export class AnalysisRunner {
           // Each map at the depth it is drawn to: reproducibility between two
           // maps matched to one depth is the comparison §6.5 exists for.
           ...(target.resample === undefined ? {} : { resample: target.resample }),
+          // …and at the resolution this one is read at, where the reader added
+          // it: a stratum is a separation in bins, and two maps compared stratum
+          // by stratum have to be cut on one grid (§3.4).
+          ...(job.framing.coarsen === undefined ? {} : { coarsen: job.framing.coarsen }),
         })
       }
       if (peers.length > 0) inputs.peers = peers
@@ -1523,6 +1540,12 @@ export class AnalysisRunner {
    */
   private hostBlockFor(job: Job): BlockInput | null {
     const host = this.host.targetMap?.() ?? LEAD_MAP
+    // Never at a resolution the reader added (§3.4): the block on screen is the
+    // stored rung's balanced values summed, and the mount is the counts summed
+    // and balanced by the coarse bins' weights — two estimates of one picture,
+    // and a run that took one for some tasks and the other for the rest would
+    // disagree with itself.
+    if (job.framing.coarsen !== undefined) return null
     return job.target.map === host ? this.host.block() : null
   }
 

@@ -153,6 +153,17 @@ async function handleOpen(
   // Drawn as the reader drew it, before any task reads it (§6.5). Awaited here,
   // so a refusal fails the mount by name rather than every task after it.
   if (request.resample !== undefined) await drawnAs(mc, request.resample, request.id)
+  // At the resolution the reader added, where the map is drawn at one (§3.4):
+  // last, so it sums the map as drawn — through the edit, at the total — as the
+  // reader's own read does.
+  if (request.coarsen !== undefined) {
+    try {
+      mc = atResolution(mc, request.coarsen)
+    } catch (error) {
+      mc.close()
+      throw error
+    }
+  }
   session = { mc, source }
 
   // Two numbers and no table. Everything else about the file is already on the
@@ -161,6 +172,28 @@ async function handleOpen(
   // `toBins` below is defined in terms of one of them and the caller has a right
   // to check that the two mounts agree about the file.
   return { nBins: mc.nBins, binsize: mc.binsize }
+}
+
+/**
+ * A map read at `binsize` (§3.4): its own bins summed, a whole number at a time,
+ * or the map itself where they are already that size. Refused by name rather
+ * than read at the nearest resolution it has — a task measured at another
+ * resolution than the one its framing names is the wrong number with the right
+ * label.
+ */
+function atResolution(mc: MetaCooler, binsize: number): MetaCooler {
+  if (binsize === mc.binsize) return mc
+  const factor = binsize / mc.binsize
+  if (!Number.isInteger(factor) || factor < 1) {
+    throw new ViewerError(
+      'unsupported',
+      `This map's bins are ${mc.binsize.toLocaleString('en-US')} bp, and ` +
+        `${binsize.toLocaleString('en-US')} bp is not a whole number of them, so it is not measured at that resolution.`,
+    )
+  }
+  const seen = MetaCooler.coarsened(mc, factor)
+  if (seen.refusal !== null) throw new ViewerError('unsupported', seen.refusal)
+  return seen.map
 }
 
 /**
@@ -281,10 +314,21 @@ async function handleRun(
           throw error
         }
       }
+      // At the resolution the map it is compared with is read at, where its own
+      // bins sum to it; where they do not, as it is — and the task, which
+      // compares bin sizes before it compares anything, says so (§3.4).
+      let mc = opened.mc
+      if (map.coarsen !== undefined) {
+        try {
+          mc = atResolution(opened.mc, map.coarsen)
+        } catch {
+          mc = opened.mc
+        }
+      }
       return {
-        mc: opened.mc,
+        mc,
         close: () => {
-          opened.mc.close()
+          mc.close()
           opened.source.close()
         },
       }

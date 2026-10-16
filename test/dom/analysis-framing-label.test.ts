@@ -31,6 +31,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { CoarseGrid, type DerivedGrid } from '@/metacooler/coarsen'
 import { MatrixPanel } from '@/ui/MatrixPanel'
 import type { MatrixResult } from '@/worker/protocol'
 import { setUpDom, type DomTeardown } from '../support/dom'
@@ -144,5 +145,55 @@ describe('the region a framing names', () => {
       expect(to).toBeGreaterThan(from)
     }
     expect(subject).not.toContain('--')
+  })
+})
+
+describe('a view at a resolution the reader added (§3.4)', () => {
+  /** 3 kb*: a 1 kb file's sequence of 300 bins, summed three at a time. */
+  const derived: DerivedGrid = {
+    rung: { binsize: 3000, from: { name: '1000', binsize: 1000 }, factor: 3 },
+    grid: CoarseGrid.of([0, 300], 3),
+  }
+
+  it('is framed in its own bins, with the * the picker gives it', () => {
+    const panel = panelAt(1000)
+    panel.setData(block(300, 3), '16')
+    const framing = panel.analysisFraming('f.mcool', derived)!
+    // Every task reads the map summed to it, so the window is counted in its
+    // bins and the bin size is the one with the asterisk.
+    expect(framing.binsize).toBe(3000)
+    expect(framing.coarsen).toBe(3000)
+    expect(framing.rows).toEqual([0, 100])
+    expect(framing.cols).toEqual([0, 100])
+    expect(framing.binsPerCell).toBe(1)
+    const written = framing.label.split(' · ')
+    expect(written).toContain('3 kb* bins')
+    expect(written).not.toContain('1 kb bins')
+    expect(written.some((part) => part.includes('per drawn cell'))).toBe(false)
+  })
+
+  it('counts the cells a zoomed-out picture sums in those bins too', () => {
+    const panel = panelAt(1000)
+    panel.setData(block(300, 6), '16')
+    const framing = panel.analysisFraming('f.mcool', derived)!
+    expect(framing.binsPerCell).toBe(2)
+    expect(framing.label.split(' · ')).toContain('2 per drawn cell')
+  })
+
+  it('carries a window onto the coarse grid, covering every bin of it', () => {
+    const panel = panelAt(1000)
+    panel.setData({ ...block(300, 3), rowExtent: [30, 90], colExtent: [60, 151] } as MatrixResult, '16')
+    const framing = panel.analysisFraming('f.mcool', derived)!
+    expect(framing.rows).toEqual([10, 30])
+    expect(framing.cols).toEqual([20, 51])
+  })
+
+  it('is the file’s own, as it was, at a rung the file stores', () => {
+    const panel = panelAt(1000)
+    panel.setData(block(300, 3), '16')
+    const framing = panel.analysisFraming('f.mcool')!
+    expect(framing.binsize).toBe(1000)
+    expect(framing.coarsen).toBeUndefined()
+    expect(framing.rows).toEqual([0, 300])
   })
 })

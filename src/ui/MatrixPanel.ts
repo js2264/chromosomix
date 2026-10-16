@@ -140,6 +140,7 @@ import { diagonalLocked, subscribeDiagonalLock, toggleDiagonalLock } from './dia
 import { inverseTransform, type Scale } from '../render/scale'
 import type { ColorScale, DenseMatrix, Extent, Transform } from '../types'
 import type { AnalysisFraming } from '../analysis/types'
+import type { DerivedGrid } from '../metacooler/coarsen'
 import { BLOCK_COPY_LIMIT_BYTES, type BlockInput } from '../analysis/worker/protocol'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { DEFAULT_ARM_WINDOW, armsInForce, armsKey, originInMiddle } from './armFrame'
@@ -2908,11 +2909,18 @@ export class MatrixPanel {
    * at the file's native resolution and ignores it; a task that borrows the
    * block below must not pretend the block is finer than it is. Recording it is
    * what lets each of them be right.
+   *
+   * **At a resolution the reader added** (§3.4), `derived`, the picture is the
+   * file's bins summed, and every task reads the map summed the same way — so
+   * the framing is in *those* bins: the window carried onto the coarse grid, the
+   * bin size the one with the `*`, and the cells summed past it on a zoomed-out
+   * picture counted in coarse bins.
    */
-  analysisFraming(uri: string): AnalysisFraming | null {
+  analysisFraming(uri: string, derived: DerivedGrid | null = null): AnalysisFraming | null {
     const data = this.data
     if (data === null) return null
-    const binsPerCell = data.binsPerCell ?? 1
+    const binsPerCell = Math.max(1, Math.round((data.binsPerCell ?? 1) / (derived?.rung.factor ?? 1)))
+    const binsize = derived?.rung.binsize ?? this.options.binsize
 
     // The score picker's `current` is an **id**, and an id is not a column.
     // `balanced` is counts times two weights and `ICE` is computed here from
@@ -2936,8 +2944,10 @@ export class MatrixPanel {
     // reads the file at its own resolution. The pooling is a fact about the
     // picture rather than about the numbers, so it is said as one, and only
     // where there is any.
-    if (this.options.binsize > 0) {
-      parts.push(`${resolutionLabel(this.options.binsize)} bins`)
+    if (binsize > 0) {
+      // With the `*` the picker gives a resolution the reader added (§3.4): the
+      // number somebody quotes, and not one the file contains.
+      parts.push(`${resolutionLabel(binsize)}${derived === null ? '' : '*'} bins`)
       if (binsPerCell > 1) parts.push(`${fmt.int(binsPerCell)} per drawn cell`)
     }
     if (this.level === 'contig') parts.push('contig level')
@@ -2959,9 +2969,9 @@ export class MatrixPanel {
     if (depth !== null && depth.mode !== 'none') parts.push(depthPhrase(depth))
     return {
       uri,
-      rows: [data.rowExtent[0], data.rowExtent[1]],
-      cols: [data.colExtent[0], data.colExtent[1]],
-      binsize: this.options.binsize,
+      rows: derived === null ? [data.rowExtent[0], data.rowExtent[1]] : derived.grid.toCoarse(data.rowExtent),
+      cols: derived === null ? [data.colExtent[0], data.colExtent[1]] : derived.grid.toCoarse(data.colExtent),
+      binsize,
       binsPerCell,
       balance,
       value,
@@ -2969,6 +2979,7 @@ export class MatrixPanel {
       level: data.level,
       label: parts.join(' · '),
       ...(depth === null ? {} : { contacts: depth.contacts }),
+      ...(derived === null ? {} : { coarsen: derived.rung.binsize }),
     }
   }
 

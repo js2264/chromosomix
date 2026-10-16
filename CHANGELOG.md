@@ -2341,6 +2341,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **Every task measures a resolution you added, as the map draws it (§3.4, §18.4).** With the map at
+  `3 kb*` — the file's 1 kb bins summed three at a time — a task still read the 1 kb rung underneath,
+  so an insulation track or a P(s) came out at 1 kb under a picture at 3. The analysis worker now
+  reads the map summed to the resolution on screen: counts exactly, as the rung the file would store
+  (a 1 kb rung summed to 4 kb reads as the file's own 4 kb, pixel for pixel), and weights by the
+  harmonic mean of the bins' weights. The drawer says `3 kb* bins`, a result goes out of date when you
+  step off the resolution, and the console's command carries `--coarsen 3000`, which `chromosomix`
+  now takes too.
+
 - **Every export is on white in the dark theme too (§7.2, §16.5).** A map's PNG and PDF, a deck's,
   a copied map, lane or track, and the box behind an exported key were laid on the page's own colour,
   so in the dark theme they came out on near-black under ink chosen for white; and a task's figure
