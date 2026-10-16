@@ -314,26 +314,46 @@ No command's CPU time spreads by more than `{python} TEXT['sd']` of its mean acr
 
 ```{python}
 #| label: fig-time
-#| fig-cap: "CPU time of every timed command, each run a dot and the mean a bar, on a logarithmic axis; the rows of one analysis share a band."
-fig, ax = plt.subplots(figsize=(10, 0.36 * len(per) + 1.2), layout='constrained')
-y = np.arange(len(per))[::-1]
-for k, (_, members) in enumerate(per.groupby('analysis', sort=False)):
+#| fig-cap: "CPU time of every job, one row a side of a pair in the table above, its commands added up run by run (deepTools' computeMatrix and plotProfile on one line); each run a dot and the mean a bar, on a logarithmic axis; the rows of one analysis share a band."
+def jobs():
+    """One row a side of each pair: an analysis's chromosomix commands of one group, or its reference's, with
+    every run's CPU seconds added up across them, as the pairs above add them."""
+    side = np.where(per['tool'] == 'chromosomix', 'chromosomix', 'reference')
+    out = []
+    for (section, analysis, _, group), rows in per.groupby(['section', 'analysis', side, 'group'], sort=False):
+        # By their places in the list: an analysis may give its chromosomix command and its reference one name.
+        runs_ = times[times['order'].isin(rows['order'])].groupby('run')['cpu_s'].sum()
+        groups = per.loc[(per['section'] == section) & (per['analysis'] == analysis), 'group'].nunique()
+        if len(rows) == 1:
+            what = rows['variant'].iloc[0]
+        else:
+            what = (f'{group}: ' if groups > 1 and group else '') + summed(rows)
+        out.append({'section': section, 'analysis': analysis, 'tool': ', '.join(dict.fromkeys(rows['tool'])),
+                    'what': what, 'runs': runs_.to_numpy(), 'cpu': runs_.mean()})
+    return out
+
+
+JOB_ROWS = jobs()
+fig, ax = plt.subplots(figsize=(10, 0.36 * len(JOB_ROWS) + 1.2), layout='constrained')
+y = np.arange(len(JOB_ROWS))[::-1]
+BANDS = [row['analysis'] for row in JOB_ROWS]
+for k, analysis in enumerate(dict.fromkeys(BANDS)):
     if k % 2:
-        ax.axhspan(y[members.index].min() - 0.5, y[members.index].max() + 0.5, color=MISSING, lw=0, zorder=0)
-for yi, (_, row) in zip(y, per.iterrows()):
+        at = y[[i for i, one in enumerate(BANDS) if one == analysis]]
+        ax.axhspan(at.min() - 0.5, at.max() + 0.5, color=MISSING, lw=0, zorder=0)
+for yi, row in zip(y, JOB_ROWS):
     colour = APP_COLOUR if row['tool'] == 'chromosomix' else REF
-    # By its place in the list: an analysis may give its chromosomix command and its reference one name.
-    runs_ = times[times['order'] == row['order']]['cpu_s']
-    ax.scatter(runs_, np.full(len(runs_), yi), s=14, color=colour, alpha=0.55, lw=0, zorder=3)
+    ax.scatter(row['runs'], np.full(len(row['runs']), yi), s=14, color=colour, alpha=0.55, lw=0, zorder=3)
     ax.plot([row['cpu']] * 2, [yi - 0.3, yi + 0.3], color=colour, lw=2.5, zorder=4)
-labels = [f"{row['section']} · {row['analysis']} · {row['tool']}" + (f" ({row['variant']})" if row['variant'] else '')
-          for _, row in per.iterrows()]
+labels = [f"{row['section']} · {row['analysis']} · {row['tool']}" + (f" ({row['what']})" if row['what'] else '')
+          for row in JOB_ROWS]
 ax.set_yticks(y, labels, fontsize=8)
 ax.set_xscale('log')
-ax.set_xlim(times['cpu_s'].min() / 1.5, times['cpu_s'].max() * 1.5)
+EVERY = np.concatenate([row['runs'] for row in JOB_ROWS])
+ax.set_xlim(EVERY.min() / 1.5, EVERY.max() * 1.5)
 ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f'{v:g}'))
 ax.xaxis.set_minor_locator(NullLocator())
-ax.set(xlabel='CPU time (s)', ylim=(-0.5, len(per) - 0.5))
+ax.set(xlabel='CPU time (s)', ylim=(-0.5, len(JOB_ROWS) - 0.5))
 ax.grid(axis='y', visible=False)
 ax.scatter([], [], s=24, color=APP_COLOUR, label='chromosomix')
 ax.scatter([], [], s=24, color=REF, label='reference')
