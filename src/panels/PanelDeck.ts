@@ -70,6 +70,7 @@ import type {
 import type { SelectedRegion } from '../ui/mapSelection'
 import type { ScaleState } from '../ui/GenomeView'
 import { button, dragHasMapRow, el, fmt, readMapRow, type MapRow } from '../ui/dom'
+import { tabAmong } from '../ui/tabWalk'
 import { resolutionLabel } from '../units'
 import {
   canvasToPng,
@@ -235,6 +236,11 @@ function renameBox(
     input.value = name
   })
   input.addEventListener('keydown', (event) => {
+    // Enter that goes on to the next cell's heading, in reading order (§26.8).
+    if (tabAmong(event, input, '.deck-grid', 'input.deck-name')) {
+      event.stopPropagation()
+      return
+    }
     if (event.key === 'Enter') {
       event.preventDefault()
       input.blur()

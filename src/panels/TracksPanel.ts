@@ -31,6 +31,7 @@ import type { LocusWindow } from '../render/locus'
 import type { ViewState } from '../types'
 import { BrowserView } from '../ui/BrowserView'
 import { el } from '../ui/dom'
+import { tabAmong } from '../ui/tabWalk'
 import { icon, iconButton } from '../ui/icons'
 import { clampCellHeight, heightBar } from './cellHeight'
 import { DECK_DRAG_TYPE } from './deck'
@@ -352,6 +353,11 @@ export class TracksPanel implements DeckCell {
       this.props.onRename?.(next)
     })
     input.addEventListener('keydown', (event) => {
+      // Enter that goes on to the next cell's heading, in reading order (§26.8).
+      if (tabAmong(event, input, '.deck-grid', 'input.deck-name')) {
+        event.stopPropagation()
+        return
+      }
       if (event.key === 'Enter') {
         event.preventDefault()
         input.blur()

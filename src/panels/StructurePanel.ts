@@ -112,6 +112,7 @@ import {
 } from '../structure/scene'
 import type { RenderPalette, StructureRenderer } from '../structure/three'
 import { STRUCTURE_DRAG_TYPE, button, dragHasStructure, el, fmt, trimNumber } from '../ui/dom'
+import { TAB_WALKS, tabAmong, tabStep } from '../ui/tabWalk'
 import { cardTitle, icon, iconButton } from '../ui/icons'
 import { readCanvasPalette } from '../ui/canvasPalette'
 import type { Modal } from '../ui/Modal'
@@ -782,6 +783,11 @@ export class StructurePanel implements DeckCell {
       this.props.store()?.update(entry.id, { label: typed })
     })
     input.addEventListener('keydown', (event) => {
+      // Enter that goes on to the next cell's heading, in reading order (§26.8).
+      if (tabAmong(event, input, '.deck-grid', 'input.deck-name')) {
+        event.stopPropagation()
+        return
+      }
       if (event.key === 'Enter') {
         event.preventDefault()
         input.blur()
@@ -2646,6 +2652,8 @@ export class StructurePanel implements DeckCell {
    */
   private trackRange(track: AnnotationEntry, key: { min: number; max: number }): HTMLElement {
     const range = el('span', { class: 'structure-key-range structure-key-limits' })
+    // Each end's way of being put a caret in, for a Tab from the other (§26.8).
+    const opens = new Map<'min' | 'max', () => void>()
     const end = (part: 'min' | 'max'): HTMLElement => {
       const shown = fmt.num(key[part])
       const limit = el('button', {
@@ -2654,9 +2662,15 @@ export class StructurePanel implements DeckCell {
         text: shown,
         title: `${part === 'min' ? 'Bottom' : 'Top'} of ${track.label}’s scale, here and on its lane: click to type a number`,
       })
+      // What the button says now rather than what it was built with: an end
+      // written by a Tab from the other is put back saying its new number
+      // while the key waits for the other's caret to close before repainting.
+      const open = (): void =>
+        this.editLimit(track, key, part, limit, limit.textContent ?? shown, (to) => opens.get(to)?.())
+      opens.set(part, open)
       limit.addEventListener('click', (event) => {
         event.stopPropagation()
-        this.editLimit(track, key, part, limit, shown)
+        open()
       })
       return limit
     }
@@ -2681,7 +2695,8 @@ export class StructurePanel implements DeckCell {
    * A caret in one end of the key's range. The lane editor's rules: Enter or a
    * click away commits, Escape leaves it alone, an unchanged or emptied box is
    * no decision, and a number the scale cannot take — not a number, or an end
-   * past the other — is refused in place rather than swallowed.
+   * past the other — is refused in place rather than swallowed. Tab is Enter
+   * that goes on to the top, Shift+Tab to the bottom (§26.8), through `other`.
    */
   private editLimit(
     track: AnnotationEntry,
@@ -2689,39 +2704,71 @@ export class StructurePanel implements DeckCell {
     part: 'min' | 'max',
     limit: HTMLElement,
     shown: string,
+    other: (part: 'min' | 'max') => void,
   ): void {
     const input = el('input', {
       class: 'input structure-key-edit',
       type: 'text',
       value: shown,
-      title: `${part === 'min' ? 'Bottom' : 'Top'} of ${track.label}’s scale. Enter commits, Escape leaves it alone.`,
+      title: `${part === 'min' ? 'Bottom' : 'Top'} of ${track.label}’s scale. Enter commits, Tab goes to the other end, Escape leaves it alone.`,
+      attrs: { [TAB_WALKS]: '' },
     })
     input.style.width = `${Math.max(3, shown.length + 2)}ch`
     let done = false
-    const close = (): void => {
+    /**
+     * The box gone and the end's button back in its place, saying `now`: the
+     * key is not repainted while a caret is in it, so after a Tab the end
+     * just written is the button that says so until the other end closes.
+     */
+    const close = (now = shown): void => {
       if (done) return
       done = true
       this.keyEditing = false
+      limit.textContent = now
+      input.replaceWith(limit)
       this.schedule()
     }
-    const commit = (typing: boolean): void => {
-      if (done) return
+    /** `false` where the box refused what was typed and is still open. */
+    const commit = (typing: boolean): boolean => {
+      if (done) return true
       const text = input.value.trim()
-      if (text === '' || text === shown) return close()
+      if (text === '' || text === shown) {
+        close()
+        return true
+      }
       const typed = Number(text)
-      const next = part === 'min' ? { min: typed, max: key.max } : { min: key.min, max: typed }
+      // The other end as the track holds it now rather than as the key was
+      // painted with: a Tab from one end to the other has just written the
+      // first, and the paint-time pair would write it back.
+      const held = this.props.store()?.byId(track.id)?.style.limits
+      const now = held !== undefined && !held.auto ? held : key
+      const next = part === 'min' ? { min: typed, max: now.max } : { min: now.min, max: typed }
       if (!Number.isFinite(typed) || !(next.max > next.min)) {
-        if (!typing) return close()
+        if (!typing) {
+          close()
+          return true
+        }
         input.classList.add('is-bad')
         window.setTimeout(() => input.classList.remove('is-bad'), 700)
         input.select()
-        return
+        return false
       }
-      close()
+      close(fmt.num(typed))
       this.props.store()?.restyle(track.id, { limits: { auto: false, ...next } })
+      return true
     }
     input.addEventListener('keydown', (event) => {
       event.stopPropagation()
+      const step = tabStep(event)
+      if (step !== null) {
+        // Enter that goes on: the bottom to the top and back, and past either
+        // the caret is let go, as Enter lets it go.
+        event.preventDefault()
+        if (!commit(true)) return
+        if (part === 'min' && step === 1) other('max')
+        else if (part === 'max' && step === -1) other('min')
+        return
+      }
       if (event.key === 'Enter') commit(true)
       else if (event.key === 'Escape') close()
     })

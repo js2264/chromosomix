@@ -106,6 +106,36 @@ const rename = (name: string, to: string): void => {
   input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
 }
 
+describe('renaming the sequences in a run (§26.8)', () => {
+  it('names one and goes on to the next with Tab, back with Shift+Tab', async () => {
+    const { store } = await open()
+    ;(document.querySelector('.edit-sequence-rename[aria-label="Rename I"]') as HTMLButtonElement).click()
+    const first = document.querySelector('.edit-rename-input') as HTMLInputElement
+    first.value = 'chrI'
+    first.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }))
+    expect(store.edit.history.at(-1)?.step).toEqual({ op: 'rename', sequence: 'I', name: 'chrI' })
+    const second = document.querySelector('.edit-rename-input') as HTMLInputElement
+    expect(second.value).toBe('II')
+    expect(document.activeElement).toBe(second)
+    second.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }))
+    expect((document.querySelector('.edit-rename-input') as HTMLInputElement).value).toBe('chrI')
+  })
+
+  it('stops on a name refused, the note saying why, and past the last', async () => {
+    await open()
+    ;(document.querySelector('.edit-sequence-rename[aria-label="Rename I"]') as HTMLButtonElement).click()
+    const first = document.querySelector('.edit-rename-input') as HTMLInputElement
+    first.value = 'II'
+    first.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }))
+    expect(document.querySelector('.edit-rename-input')).toBeNull()
+    expect(document.body.textContent).toContain('II is the name of another sequence already.')
+    ;(document.querySelector('.edit-sequence-rename[aria-label="Rename II"]') as HTMLButtonElement).click()
+    const last = document.querySelector('.edit-rename-input') as HTMLInputElement
+    last.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }))
+    expect(document.querySelector('.edit-rename-input')).toBeNull()
+  })
+})
+
 describe('the stage', () => {
   it('opens on the file as it is, with its sequences listed', async () => {
     await open()

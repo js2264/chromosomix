@@ -171,7 +171,7 @@ import {
 import { bandRegion, onDiagonal, spanText, type SelectedAxis, type SelectedRegion } from './mapSelection'
 import { framedPhrase, resolutionNote } from './mapSummary'
 import { LaneControls } from './LaneControls'
-import { LaneEditor } from './LaneEditor'
+import { LaneEditor, tabAlong, type EditorAt, type TabStop } from './LaneEditor'
 import { LaneGestures } from './LaneGestures'
 import { MapBox } from './MapBox'
 import { MAP_CORRELATION_BINS, MapDerivation } from './MapDerivation'
@@ -322,6 +322,13 @@ export interface BorrowedScale {
   vmin?: number
   vmax?: number
 }
+
+/**
+ * The stacks in the order a Tab walks their boxes (§26.8): under the map,
+ * which is where most tracks are, then on round it clockwise — left of the
+ * map, above it, right of it.
+ */
+const LANE_TAB_ORDER: readonly LaneEdge[] = ['bottom', 'left', 'top', 'right']
 
 export interface MatrixPanelOptions {
   /** Bin size in bp, for the coordinate readout. */
@@ -1212,6 +1219,8 @@ export class MatrixPanel {
   private readonly laneLayers = new Map<LaneEdge, HTMLElement>()
   private readonly laneControls = new Map<LaneEdge, LaneControls>()
   private laneEditor: LaneEditor | null = null
+  /** A Tab out of a lane's box, waiting for the paint of what it committed (§26.8). */
+  private laneTabbing: { from: EditorAt; step: 1 | -1 } | null = null
   /**
    * The two axes as annotations see them, rebuilt with every block.
    *
@@ -2114,6 +2123,12 @@ export class MatrixPanel {
       store: this.laneStore,
       shownLimits: (id) => this.lanes.shownLimits(id),
       onChange: () => this.schedule(),
+      // Walked once the commit is painted: the next box is measured by that
+      // paint, and a range's other end is read off it (§26.8).
+      onTab: (from, step) => {
+        this.laneTabbing = { from, step }
+        this.schedule()
+      },
     })
     for (const edge of LANE_EDGES) {
       this.laneGestures.watchLane(edge, this.lanes.canvasFor(edge), this.lanes.labelCanvases[edge])
@@ -2895,6 +2910,39 @@ export class MatrixPanel {
     }
     parts.push(captionStamp(now))
     return { title, detail: parts.join(' · ') }
+  }
+
+  /**
+   * Put the caret in the next lane box of the kind a Tab left (§26.8): the
+   * next track's name, or the next end of a range — on this stack, then on
+   * the next round the map: the stack under it first, where a track goes
+   * first, then on clockwise — left, above, right. None past the last, where
+   * the caret is let go.
+   */
+  private laneTabOn(from: EditorAt, step: 1 | -1): void {
+    const editor = this.laneEditor
+    if (editor === null) return
+    const stops: TabStop[] = []
+    for (const edge of LANE_TAB_ORDER) {
+      const canvas = this.lanes.canvasFor(edge)
+      const offset = { left: canvas.offsetLeft, top: canvas.offsetTop }
+      if (from.kind === 'name') {
+        for (const target of this.lanes.namesOn(edge)) {
+          stops.push({
+            at: { kind: 'name', id: target.entry.id, place: edge },
+            open: () => editor.openName(target, offset, edge),
+          })
+        }
+      } else {
+        for (const target of this.lanes.rangesOn(edge)) {
+          stops.push({
+            at: { kind: 'limit', id: target.entries[0]?.id ?? '', part: target.hit.part, place: edge },
+            open: () => editor.openLimit(target, offset, edge),
+          })
+        }
+      }
+    }
+    tabAlong(stops, from, step)
   }
 
   /**
@@ -5141,6 +5189,12 @@ export class MatrixPanel {
       // the heatmap has just written, so drawing them anywhere else would show
       // the previous frame's pan for one frame on every drag.
       this.lanes.draw(this.laneGeometry())
+      // A Tab out of a lane's box, now that the boxes are the ones on screen.
+      const tabbing = this.laneTabbing
+      if (tabbing !== null) {
+        this.laneTabbing = null
+        this.laneTabOn(tabbing.from, tabbing.step)
+      }
       // …and for the same reason: the scales the heatmap has just written are
       // what this reads, and writing it before the draw would show the previous
       // frame's window for one frame of every drag.

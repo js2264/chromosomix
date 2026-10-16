@@ -32,6 +32,7 @@ import { formatMarks, marksFor, readMarks, type MarkFormat } from '../annotation
 import { filesFrom } from './chooseFiles'
 import { KEYS, withKey } from './commands'
 import { button, dragHasFiles, el, fmt } from './dom'
+import { TAB_WALKS, tabStep } from './tabWalk'
 import { downloadBlob, exportBaseName, fileStamp } from './export'
 import { exportRow, type ExportRow } from './exportRow'
 import { cardTitle, icon, iconButton, setPressed } from './icons'
@@ -118,6 +119,8 @@ export class ManualCard {
   private readonly allNote = el('span', { class: 'manual-list-note' })
   /** Each row's eye by its mark's id, for a change of visibility to repaint in place. */
   private readonly eyes = new Map<string, HTMLButtonElement>()
+  /** Each row's place, by mark, for a Tab to put the next mark's boxes over (§26.8). */
+  private readonly wheres = new Map<string, HTMLElement>()
   /**
    * What the rows were last built from: each mark's id, colour and place.
    *
@@ -653,6 +656,7 @@ export class ManualCard {
     if (marks.length === 0) {
       this.builtFrom = ''
       this.eyes.clear()
+      this.wheres.clear()
       this.list.replaceChildren()
       return
     }
@@ -660,6 +664,7 @@ export class ManualCard {
     if (shape !== this.builtFrom) {
       this.builtFrom = shape
       this.eyes.clear()
+      this.wheres.clear()
       this.list.replaceChildren(
         this.listHead(),
         ...marks.map((mark) => this.row(mark)),
@@ -776,6 +781,7 @@ export class ManualCard {
       title: `${describeMark(mark)} — click to edit`,
     })
     where.addEventListener('click', () => this.editRow(where, mark))
+    this.wheres.set(mark.id, where)
     head.append(
       colour,
       where,
@@ -799,7 +805,7 @@ export class ManualCard {
    * same place on both, as it does there. A line keeps its axis select, since
    * which rule is drawn is part of where it is.
    */
-  private editRow(where: HTMLElement, mark: ManualMark): void {
+  private editRow(where: HTMLElement, mark: ManualMark, from: 'first' | 'last' = 'first'): void {
     const boxes: HTMLInputElement[] = []
     let axis: HTMLSelectElement | null = null
     if (mark.kind === 'line') {
@@ -816,10 +822,12 @@ export class ManualCard {
       boxes.push(el('input', { class: 'input manual-edit-box', type: 'text', value: spanLabel(mark.a), attrs: { 'aria-label': 'rows' }, title: 'rows' }))
       boxes.push(el('input', { class: 'input manual-edit-box', type: 'text', value: spanLabel(mark.b), attrs: { 'aria-label': 'columns' }, title: 'columns' }))
     }
-    const editor = el('div', { class: 'manual-edit' }, ...(axis === null ? [] : [axis]), ...boxes)
+    const editor = el('div', { class: 'manual-edit', attrs: { [TAB_WALKS]: '' } }, ...(axis === null ? [] : [axis]), ...boxes)
     where.replaceWith(editor)
-    boxes[0]?.focus()
-    boxes[0]?.select()
+    // The last box where a Shift+Tab came back into this mark from the next.
+    const opened = from === 'last' ? boxes[boxes.length - 1] : boxes[0]
+    opened?.focus()
+    opened?.select()
 
     let done = false
     const close = (): void => {
@@ -840,6 +848,24 @@ export class ManualCard {
       if (editor.isConnected) editor.replaceWith(where)
     }
     editor.addEventListener('keydown', (event) => {
+      const step = tabStep(event)
+      if (step !== null) {
+        // Between this mark's own boxes Tab is the page's; off the last of them
+        // — Shift+Tab off the first — it is Enter that goes on to the next mark
+        // in the list, or the one before, and past either end nowhere (§26.8).
+        const stops: HTMLElement[] = [...(axis === null ? [] : [axis]), ...boxes]
+        const at = stops.indexOf(document.activeElement as HTMLElement)
+        if (at >= 0 && stops[at + step] !== undefined) return
+        event.preventDefault()
+        commit()
+        if (!done) return
+        const marks = this.props.store.marks
+        const next = marks[marks.findIndex((each) => each.id === mark.id) + step]
+        // Looked up after the commit, which repaints the list a moved mark is in.
+        const nextWhere = next === undefined ? undefined : this.wheres.get(next.id)
+        if (next !== undefined && nextWhere !== undefined) this.editRow(nextWhere, next, step === 1 ? 'first' : 'last')
+        return
+      }
       if (event.key === 'Enter') {
         event.preventDefault()
         commit()

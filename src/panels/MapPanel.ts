@@ -83,6 +83,7 @@ import {
   readMapRow,
   type MapRow,
 } from '../ui/dom'
+import { tabAmong } from '../ui/tabWalk'
 import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
 import type { PickedFile } from '../browse/folder'
 import { resolutionLabel } from '../units'
@@ -808,6 +809,11 @@ export class MapPanel {
       revert()
     })
     input.addEventListener('keydown', (event) => {
+      // Enter that goes on to the next cell's heading, in reading order (§26.8).
+      if (tabAmong(event, input, '.deck-grid', 'input.deck-name')) {
+        event.stopPropagation()
+        return
+      }
       if (event.key === 'Enter') {
         event.preventDefault()
         input.blur()

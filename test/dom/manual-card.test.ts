@@ -326,6 +326,51 @@ describe('editing a mark in its row (§8.1)', () => {
     expect(document.querySelector('.manual-where')?.textContent).toBe('▭ I:130,001-190,000')
   })
 
+  it('moves one mark and goes on to the next with Tab off its last box, back with Shift+Tab (§26.8)', () => {
+    const card = mount()
+    card.type('Rectangles', ['I:120001-180000'])
+    card.press('Rectangles', 'add')
+    card.type('Rectangles', ['I:500001-600000'])
+    card.press('Rectangles', 'add')
+    document.querySelector<HTMLButtonElement>('.manual-where')?.click()
+    const [rows, columns] = Array.from(document.querySelectorAll<HTMLInputElement>('.manual-edit-box'))
+    rows.value = 'I:130,001-190,000'
+    columns.value = ''
+    // Between the mark's own boxes, Tab is the page's.
+    rows.focus()
+    const inside = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    rows.dispatchEvent(inside)
+    expect(inside.defaultPrevented).toBe(false)
+    columns.focus()
+    columns.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }))
+    // The first mark moved, and the second's boxes are open with the caret in the first.
+    expect(card.store.rects[0].a).toEqual({ contig: 'I', from: 130000, to: 190000 })
+    const next = Array.from(document.querySelectorAll<HTMLInputElement>('.manual-edit-box'))
+    expect(next.map((box) => box.value)).toEqual(['I:500,001-600,000', 'I:500,001-600,000'])
+    expect(document.activeElement).toBe(next[0])
+    // Back to the first mark, its last box.
+    next[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }))
+    const back = Array.from(document.querySelectorAll<HTMLInputElement>('.manual-edit-box'))
+    expect(back.map((box) => box.value)).toEqual(['I:130,001-190,000', 'I:130,001-190,000'])
+    expect(document.activeElement).toBe(back[1])
+  })
+
+  it('keeps the boxes open on a place that does not read, Tab or no Tab', () => {
+    const card = mount()
+    card.type('Rectangles', ['I:120001-180000'])
+    card.press('Rectangles', 'add')
+    card.type('Rectangles', ['I:500001-600000'])
+    card.press('Rectangles', 'add')
+    document.querySelector<HTMLButtonElement>('.manual-where')?.click()
+    const [rows, columns] = Array.from(document.querySelectorAll<HTMLInputElement>('.manual-edit-box'))
+    rows.value = 'nowhere'
+    columns.focus()
+    columns.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }))
+    expect(rows.isConnected).toBe(true)
+    expect(rows.classList.contains('is-bad')).toBe(true)
+    expect(card.store.rects[0].a.from).toBe(120000)
+  })
+
   // THE LAW (§26.1): Enter on what the row's boxes already show moves nothing.
   it('leaves a mark exactly where it was when its own text is entered back', () => {
     const card = mount()

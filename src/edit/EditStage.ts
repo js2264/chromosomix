@@ -32,6 +32,7 @@ import { Scale } from '../render/scale'
 import type { EditStore } from '../state/referenceEdit'
 import { AnnotationLanes, type LaneGeometry } from '../ui/AnnotationLanes'
 import { el } from '../ui/dom'
+import { TAB_WALKS, tabStep } from '../ui/tabWalk'
 import { icon, iconButton } from '../ui/icons'
 import { closeMenu, openMenu, type MenuItem } from '../ui/Menu'
 import type { Modal } from '../ui/Modal'
@@ -3073,7 +3074,11 @@ export class EditStage {
     this.renaming = name
     this.sequencesNote = ''
     this.paintSequences()
-    this.sequencesCard.querySelector<HTMLInputElement>('.edit-rename-input')?.select()
+    // Focused as well as selected: `select` alone leaves the caret where the
+    // last repaint put it — on a row's grip, after a step a Tab has just taken.
+    const input = this.sequencesCard.querySelector<HTMLInputElement>('.edit-rename-input')
+    input?.focus()
+    input?.select()
   }
 
   /**
@@ -3087,9 +3092,10 @@ export class EditStage {
    * sequence renamed and wanting its own name back was refused it.
    */
   private renameBox(name: string): HTMLElement {
-    const input = el('input', { class: 'input edit-rename-input', attrs: { type: 'text', value: name, 'aria-label': `New name for ${name}`, spellcheck: 'false' } }) as HTMLInputElement
-    const done = (commit: boolean): void => {
-      if (this.renaming !== name) return
+    const input = el('input', { class: 'input edit-rename-input', attrs: { type: 'text', value: name, 'aria-label': `New name for ${name}`, spellcheck: 'false', [TAB_WALKS]: '' } }) as HTMLInputElement
+    /** `false` where the name typed was refused, the note saying why. */
+    const done = (commit: boolean): boolean => {
+      if (this.renaming !== name) return true
       this.renaming = null
       const wanted = input.value.trim()
       if (commit && wanted !== name) {
@@ -3103,12 +3109,30 @@ export class EditStage {
         else {
           this.sequencesNote = ''
           this.step({ op: 'rename', sequence: name, name: wanted })
-          return
+          return true
         }
+        this.paintSequences()
+        return false
       }
       this.paintSequences()
+      return true
     }
     input.addEventListener('keydown', (event) => {
+      const step = tabStep(event)
+      if (step !== null) {
+        // Enter that goes on to the next sequence's name, Shift+Tab to the one
+        // before (§26.8): a rename keeps a sequence's place in the list, so the
+        // next is found by where this one was. A refused name goes nowhere —
+        // the note says why, as it does after Enter.
+        event.preventDefault()
+        event.stopPropagation()
+        const names = this.props.store.assembly.sequences.map((sequence) => sequence.name)
+        const at = names.indexOf(name)
+        if (!done(true)) return
+        const next = this.props.store.assembly.sequences[at + step]?.name
+        if (at >= 0 && next !== undefined) this.startRename(next)
+        return
+      }
       if (event.key === 'Enter') {
         event.preventDefault()
         done(true)

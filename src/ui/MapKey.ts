@@ -15,6 +15,14 @@
 
 import type { KeyContent } from '../render/legend'
 import { el } from './dom'
+import { TAB_WALKS, tabStep } from './tabWalk'
+
+/**
+ * Every key whose numbers a reader may type, by its element: what a Tab past
+ * one key's ends finds the next key by, in the order a deck's cells are on the
+ * page (§26.8). Weak, so a key gone with its panel is gone from here too.
+ */
+const editable = new WeakMap<Element, MapKey>()
 
 export interface MapKeyProps {
   /**
@@ -35,6 +43,8 @@ export class MapKey {
   private readonly hiEl: HTMLElement
   private readonly rampEl = el('span', { class: 'map-key-ramp', attrs: { 'aria-hidden': 'true' } })
   private content: KeyContent | null = null
+  /** How each end is put a caret in, where the key is editable. */
+  private readonly opens = new Map<'lo' | 'hi', () => void>()
 
   constructor(private readonly props: MapKeyProps = {}) {
     this.loEl = this.bound('lo')
@@ -52,6 +62,30 @@ export class MapKey {
         this.hiEl,
       ),
     )
+    if (props.onChange !== undefined) editable.set(this.el, this)
+  }
+
+  /** Put a caret in one end, as a click on it does. Nothing on a key that is not the reader's. */
+  edit(which: 'lo' | 'hi'): void {
+    this.opens.get(which)?.()
+  }
+
+  /**
+   * Where a Tab goes from one end (§26.8): low to high, then on to the next
+   * map's low in a deck — the keys in the order the deck's cells are on the
+   * page — and Shift+Tab the other way. Past the last, nowhere: the caret is
+   * let go, as Enter lets it go.
+   */
+  private tab(which: 'lo' | 'hi', step: 1 | -1): void {
+    if (which === 'lo' && step === 1) return this.edit('hi')
+    if (which === 'hi' && step === -1) return this.edit('lo')
+    const deck = this.el.closest('.deck-grid')
+    if (deck === null) return
+    const keys = [...deck.querySelectorAll('.map-key')]
+      .filter((node) => node.closest('.hidden, [hidden]') === null)
+      .flatMap((node) => editable.get(node) ?? [])
+    const at = keys.indexOf(this)
+    keys[at + step]?.edit(step === 1 ? 'lo' : 'hi')
   }
 
   set(content: KeyContent): void {
@@ -92,10 +126,12 @@ export class MapKey {
     const open = (): void => {
       if (node.querySelector('input') !== null) return
       const held = which === 'lo' ? this.content?.lo : this.content?.hi
+      const seeded = held === undefined ? '' : String(held)
       const input = el('input', {
         class: 'map-key-input',
         type: 'text',
-        value: held === undefined ? '' : String(held),
+        value: seeded,
+        attrs: { [TAB_WALKS]: '' },
       })
       // A flag rather than a DOM test, because the two ways out of the box fire
       // *inside each other*: taking the input away on Enter blurs it, the blur
@@ -111,7 +147,10 @@ export class MapKey {
         if (this.content !== null) {
           node.textContent = which === 'lo' ? this.content.loLabel : this.content.hiLabel
         }
-        if (!apply) return
+        // Opening a box and not changing it is not a decision: taken as one, a
+        // Tab through an end on its way to the other would fix a bound on auto
+        // at the number the key happened to show.
+        if (!apply || raw === seeded) return
         // An empty box is "auto", the same thing the clip card's own button
         // means, so a reader can undo a bound where they set it rather than
         // having to find the control they were avoiding.
@@ -119,6 +158,13 @@ export class MapKey {
         if (value === null || Number.isFinite(value)) onChange(which, value)
       }
       input.addEventListener('keydown', (event) => {
+        const step = tabStep(event)
+        if (step !== null) {
+          // Enter that goes on (§26.8).
+          event.preventDefault()
+          commit(true)
+          this.tab(which, step)
+        }
         if (event.key === 'Enter') commit(true)
         if (event.key === 'Escape') commit(false)
         // The map beneath reads every key it is given — `f` fits, arrows pan —
@@ -132,6 +178,7 @@ export class MapKey {
       input.focus()
       input.select()
     }
+    this.opens.set(which, open)
 
     node.addEventListener('click', (event) => {
       event.stopPropagation()

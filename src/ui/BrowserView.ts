@@ -200,7 +200,7 @@ import {
   LaneControls,
   type LaneMark,
 } from './LaneControls'
-import { LaneEditor } from './LaneEditor'
+import { LaneEditor, tabAlong, type EditorAt, type TabStop } from './LaneEditor'
 import { Modal } from './Modal'
 import { openFeatureDialog } from './FeatureDialog'
 import { openReadDialog } from './ReadDialog'
@@ -652,6 +652,8 @@ export class BrowserView {
    * they point at has to be the box the text was measured into.
    */
   private nameHits: NameHit[] = []
+  /** A Tab out of a lane's box, waiting for the paint of what it committed (§26.8). */
+  private tabbing: { from: EditorAt; step: 1 | -1 } | null = null
   /** This frame's on-lane controls, in the order the layer holds them. */
   private marks: LaneMark[] = []
   /**
@@ -953,6 +955,11 @@ export class BrowserView {
       store: props.store,
       shownLimits: (id) => this.shownLimits(id),
       onChange: () => this.schedule(),
+      // Walked once the commit is painted, from that paint's boxes (§26.8).
+      onTab: (from, step) => {
+        this.tabbing = { from, step }
+        this.schedule()
+      },
     })
 
     this.cache = new SampleCache(props.client, () => this.schedule())
@@ -2137,7 +2144,33 @@ export class BrowserView {
     this.frameHandle = requestAnimationFrame(() => {
       this.frameHandle = 0
       this.draw()
+      // A Tab out of a lane's box, now that the boxes are the ones on screen.
+      const tabbing = this.tabbing
+      if (tabbing !== null) {
+        this.tabbing = null
+        this.tabOn(tabbing.from, tabbing.step)
+      }
     })
+  }
+
+  /**
+   * Put the caret in the next lane box of the kind a Tab left (§26.8): the
+   * next track's name down the stack, or the next end of a range — a lane's
+   * bottom, its top, then the next lane's. None past the last, where the
+   * caret is let go.
+   */
+  private tabOn(from: EditorAt, step: 1 | -1): void {
+    const stops: TabStop[] =
+      from.kind === 'name'
+        ? this.nameHits.map((target) => ({
+            at: { kind: 'name', id: target.entry.id, place: '' },
+            open: () => this.editor.openName(target, NO_OFFSET),
+          }))
+        : this.rangeHits.map((target) => ({
+            at: { kind: 'limit', id: target.entries[0]?.id ?? '', part: target.hit.part, place: '' },
+            open: () => this.editor.openLimit(target, NO_OFFSET),
+          }))
+    tabAlong(stops, from, step)
   }
 
   private draw(): void {

@@ -21,6 +21,7 @@
 import { alignNames, type Alignment, type NamedSequence } from '../genome/naming'
 
 import { MAP_ROW_DRAG_TYPE, button, dragHasFiles, dropEffectFor, el, fmt, type MapRow } from './dom'
+import { tabAmong } from './tabWalk'
 import { dragHasFileRow } from './fileDrag'
 import { cardTitle, icon, iconButton } from './icons'
 import type { OpenResult } from '../worker/protocol'
@@ -582,6 +583,8 @@ export class CompareCard {
       onRename(typed === '' ? null : typed)
     })
     input.addEventListener('keydown', (event) => {
+      // Enter that goes on to the next row's name, Shift+Tab the one before (§26.8).
+      if (tabAmong(event, input, '.ann-list', 'input.ann-name')) return
       if (event.key === 'Enter') {
         event.preventDefault()
         input.blur()

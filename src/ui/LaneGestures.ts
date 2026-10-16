@@ -849,7 +849,7 @@ export class LaneGestures {
       const limit = lanes.limitAt(edge, x, y)
       if (limit !== null && this.laneEditor !== null) {
         event.preventDefault()
-        this.laneEditor.openLimit(limit, { left: canvas.offsetLeft, top: canvas.offsetTop })
+        this.laneEditor.openLimit(limit, { left: canvas.offsetLeft, top: canvas.offsetTop }, edge)
         return
       }
       // The handle next: it sits inside the lane's own rectangle, so the lane
@@ -890,7 +890,7 @@ export class LaneGestures {
       const named = lanes.nameAt(edge, x, y)
       if (named !== null && this.laneEditor !== null) {
         event.preventDefault()
-        this.laneEditor.openName(named, { left: canvas.offsetLeft, top: canvas.offsetTop })
+        this.laneEditor.openName(named, { left: canvas.offsetLeft, top: canvas.offsetTop }, edge)
         return
       }
       const hit = lanes.laneAt(edge, x, y)
@@ -1234,13 +1234,13 @@ export class LaneGestures {
       const limit = lanes.limitAt(edge, x, y)
       if (limit !== null) {
         event.preventDefault()
-        this.laneEditor.openLimit(limit, offset)
+        this.laneEditor.openLimit(limit, offset, edge)
         return
       }
       const named = lanes.nameAt(edge, x, y)
       if (named !== null) {
         event.preventDefault()
-        this.laneEditor.openName(named, offset)
+        this.laneEditor.openName(named, offset, edge)
       }
     }
     const onMove = (event: PointerEvent): void => {

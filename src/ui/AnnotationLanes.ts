@@ -1060,6 +1060,21 @@ export class AnnotationLanes {
   }
 
   /**
+   * Every track name the last paint wrote on a stack, and every end of every
+   * range, in the order it wrote them — lanes nearest the map first, a lane's
+   * names in its own order, and each range's bottom before its top: the runs a
+   * Tab walks (§26.8), with the boxes a caret is laid over.
+   */
+  namesOn(edge: LaneEdge): ReadonlyArray<{ entry: AnnotationEntry; hit: NameBox }> {
+    return this.state[edge].names
+  }
+
+  /** See {@link namesOn}. */
+  rangesOn(edge: LaneEdge): ReadonlyArray<{ entries: AnnotationEntry[]; hit: LimitBox }> {
+    return this.state[edge].ranges
+  }
+
+  /**
    * The track name under a point in a stack's canvas, if any.
    *
    * The twin of {@link limitAt}, from the same paint and with the same slack:

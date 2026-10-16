@@ -15,6 +15,7 @@
 import { button, el } from '../ui/dom'
 import { KEYS, withKey } from '../ui/commands'
 import { icon } from '../ui/icons'
+import { tabStep } from '../ui/tabWalk'
 
 export interface TabSpec {
   id: string
@@ -273,6 +274,18 @@ export class TabStrip {
       if (this.editing !== null) this.editing.value = input.value
     })
     input.addEventListener('keydown', (event) => {
+      const step = tabStep(event)
+      if (step !== null) {
+        // Enter that goes on to the next tab's name (§26.8), Shift+Tab to the
+        // one before, past either end nowhere. Found by id after the commit,
+        // which repaints the strip a renamed tab is in.
+        event.preventDefault()
+        const named = [...this.rows.values()].filter((each) => each.tab.nameable).map((each) => each.tab.id)
+        const next = named[named.indexOf(tab.id) + step]
+        finish(true)
+        if (next !== undefined) this.beginRename(next)
+        return
+      }
       if (event.key === 'Enter') {
         event.preventDefault()
         finish(true)

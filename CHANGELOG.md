@@ -14,6 +14,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Tab goes on to the next field of its kind (§26.8).** In any field edited in place, Tab now takes
+  what was typed, as Enter does, and puts the caret in the next field of the same kind — Shift+Tab
+  the one before — and past the last lets it go: a track's name to the next track's, down the
+  browser's lanes and through every stack round a map; a range's bottom to its top and on to the next
+  track's bottom; a colour key's low end to its high end, and on a deck to the next map's key; a deck
+  cell's heading to the next cell's; a row's name on the Tracks, Metadata, Structures or Contact maps
+  card to the next row's; a tab's name to the next tab's; a mark's last box to the next mark's row;
+  a sequence's name on the editing stage to the next sequence's; the 3D key's bottom to its top. A
+  value a field refuses keeps the caret, as Enter does. Tab used to jump to whatever button came next
+  in the page — and on the editing stage it threw the typed name away. On the way, a colour key's
+  end opened and left as it was no longer fixes the bound at the number it showed.
+
 - **The installed app keeps its folders, and a saved workspace finds its files in them again
   (§20.6).** In the desktop app — or the site installed as an app — a connected folder is kept
   across restarts, and a workspace saved there records which folder each of its local files was in

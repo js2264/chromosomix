@@ -1196,7 +1196,8 @@ thing. No key closes one: ⌘W is the browser's chord for closing the window, an
 right about what it does and wrong about what it closes costs a workspace. `o` opens one and
 Control with `<` or `>` steps between them — Control on a Mac too, where ⌘< walks a French Mac's
 windows and ⌘, is every program's settings — from a box being typed into as well. A tab is renamed in place, by a double-click on it or `F2`: Enter commits, an
-emptied box hands the tab back to its file's name, and Escape abandons. A middle-click closes one,
+emptied box hands the tab back to its file's name, Escape abandons, and Tab commits and goes on to
+the next tab's name (§26.8). A middle-click closes one,
 and the last is emptied rather than closed, since a window with no tab has nothing to drop a file on.
 
 Four things are per *window* rather than per session, because they are preferences about this window
@@ -1466,7 +1467,9 @@ axis on screen rather than from whatever was last stored, because the axis on sc
 was being read. (The side panel's own boxes seed from the file's whole-genome extent instead: a
 panel is not a view, and a number in it must not change when the view is panned.) The track's
 **name** is edited the same way, where it is drawn, and commits to the one track it names rather
-than to the lane, since an overlaid lane draws a name for each of its tracks.
+than to the lane, since an overlaid lane draws a name for each of its tracks. Tab takes either and
+goes on (§26.8): a bottom to its top, a top to the next track's bottom, a name to the next track's
+name — down the browser's lanes, and beside a map through every stack round it.
 
 Four things the edit refuses, all for one reason — a limit nobody typed must never be stored.
 Opening a bound and leaving it alone, or emptying the box, closes it and changes nothing; an
@@ -1946,8 +1949,10 @@ diverges from what a reader reproduces locally.
 Both bounds are overridable, as one clip range: two typed numbers and one control back to auto. The
 URL carries `vmin` and `vmax` independently, in transformed units, and their absence means auto.
 The key in the map's top-right corner prints the same two numbers, the boxes' own, under the score's
-name with the transform on it, and each is a button: pressed, it takes a typed bound in place, and
-emptied it hands that bound back to auto. A change of transform hands both back, since a bound is a
+name with the transform on it, and each is a button: pressed, it takes a typed bound in place,
+emptied it hands that bound back to auto, and left as it was it changes nothing — a bound on auto is
+not fixed at the number the key happened to show. Tab goes from the low end to the high one, and on
+a deck on to the next map's key (§26.8). A change of transform hands both back, since a bound is a
 number in the old transform's units. **Between the two numbers is the ramp they run between**, short
 — 48 by 10 pixels — and drawn through the colormap's own colours: on screen a gradient, in a figure
 one band a pixel, since a PDF page here has no linear gradient. For a while it was two squares, the
@@ -2787,7 +2792,9 @@ marks they write in the card's own words — *lines (BED)* and *arrowheads & rec
 a rectangle's sides, and a side of no width as the one base its BEDPE row is written as — and a
 press on it turns that text into the boxes the adding forms use — one for a line, with its axis
 select beside it; rows and columns for an arrowhead or a rectangle, the second left empty meaning the
-same place on both — taking what those forms take. Enter, or a click away, moves the mark **in place**:
+same place on both — taking what those forms take. Enter, or a click away, or a Tab past the row's
+last box — which opens the next mark's row, as Shift+Tab past its first opens the one before (§26.8)
+— moves the mark **in place**:
 its id, its colour and its position in the list are kept, so everything that names it — a map, the
 3D key, a chord — follows. Escape leaves it where it was, and a box that does not read stays open with
 a red edge rather than dropping what was typed. It used to be removed and drawn again, which lost its
@@ -6541,7 +6548,9 @@ thing anybody reads. So **any map a session is holding can be called something**
 the one it is compared against (§5.7), and every companion of a deck. The control is the Tracks
 card's own, in both places it appears: an `<input>` that looks like text until it has the caret, on
 the **Contact maps** card and on a deck cell's heading. Enter commits, Escape abandons, and an empty
-box hands the map back to its file name, which is what makes a rename undoable.
+box hands the map back to its file name, which is what makes a rename undoable. Tab commits and puts
+the caret in the next name — the next row's on the card, the next cell's heading on a deck, which is
+four replicates named in one go (§26.8).
 
 The name is used **everywhere the map is named**, through one function: the card that lists it, the
 heading over its cell, the two bands of a turned comparison (§17.2), the readout and the tooltip
@@ -11887,6 +11896,7 @@ lane is drawn in, so a model coloured by H3K27ac is drawn in its lane's orange (
 
 **And under a track the key's two ends are numbers to type into**, as the lane's own range is
 (§8): a click on either puts a caret in it, Enter or a click away commits, Escape leaves it alone,
+Tab goes from the bottom to the top and Shift+Tab back (§26.8),
 and a number that is not one or an end past the other is refused in place. What is typed is
 written to **the lane's limits**, the one pair the lane and the beads are drawn against, so the
 lane beside the map changes with it; once fixed, an arrow after the range puts the track back on
@@ -12509,6 +12519,45 @@ word of progress, **running**, **done**, **failed**, **cancelled**, or **reading
 still watching (§23.5). No surface invents another: a console row's mark said *finished* where
 everything else says *done*, and *the window closed while this was running* where one word does.
 
+### 26.8 Tab walks the fields of one kind
+
+A field edited in place — a lane's name or an end of its range, in the browser and beside a map
+(§5.8); an end of a map's colour key (§7.1) or of a 3D model's (§25.5); a tab's name (§5.6); a
+deck cell's heading and a name on the Tracks, Metadata, Structures or Contact maps card (§16.10); a
+mark's place on the Manual annotations card (§8.1); a sequence's name on the editing stage (§27.3)
+— is one of a run of fields of its kind, and the run is what a reader working through a figure goes
+down: naming four replicates, setting six tracks to one ceiling. So **Tab takes what was typed, as
+Enter does, and puts the caret in the next field of the same kind; Shift+Tab in the one before.**
+Past either end of the run the caret is let go, as Enter lets it go: Tab is Enter that goes on
+(`ui/tabWalk.ts`). The browser's own Tab took the next focusable thing in the document, which
+beside a box laid over a canvas is a button nobody meant, and from a box the next frame repaints,
+nothing; on the stage it threw the typed name away, since a click away leaves a name there.
+
+- **The next of the same kind.** A name goes to the next name; a range's bottom to its top, and its
+  top to the next track's bottom; a colour key's low end to its high end; a tab's name to the next
+  tab that can be named; a mark's last box to the next mark's first, in the card's order — between
+  one mark's own boxes, and its axis select, Tab is the browser's, since those are one row's fields.
+  A field with no caret to give is no stop: a lane too short for one keeps its resize border instead
+  (§5.8), and its name is passed over as a press passes it.
+- **A run goes where the eye does.** Beside a map, through the stack under it — where a track goes
+  first — and then on round the map clockwise: the stack on its left, the one above it, the one on
+  its right, each in the order its lanes are drawn; in the browser, its lanes top to bottom. On a
+  deck, from one cell to the next as the cells are on the page: a heading to the next cell's
+  heading, a colour key's high end to the next map's low end. A card's names run down its list; the
+  3D key's two ends are a run of two.
+- **A value refused keeps the caret**, wherever Enter would keep it: a number a lane's range or the
+  3D key cannot take, a place a mark cannot be at, a name the stage already has. Nothing moves on
+  from a value that was not taken. And the run is asked for again after the commit, by position,
+  since a commit may rebuild the very rows it is walking — a rename repaints a card's list.
+- **An end walked through is not an end set.** A box opens on the number it was laid over, and an
+  end of a colour key opened by a Tab and left as it was changes nothing — the bound stays on auto —
+  just as an end of a lane's range left alone changes nothing (§5.8); taken back, that number would
+  have fixed the bound at whatever the key happened to show.
+- **Only a bare Tab.** With Ctrl it is the browser's — the next browser tab — with Alt or ⌘ the
+  system's, and in the middle of an input method's composition it is the method's. A dialog, which
+  keeps Tab among its own controls (`ui/Modal.ts`), leaves a field that walks Tab itself alone — the
+  field carries `data-tab-walk` — so one key is answered once.
+
 ## 27. Editing the reference
 
 A stage where the reader edits the reference a contact map was built against — cut, invert, move,
@@ -12724,7 +12773,8 @@ What is on it:
   sequences card, a **grip** before each row that drags the sequence to another place in the order —
   a line across the list where it would go, one `place` step on the drop, nothing joined — and takes
   ↑ ↓ when it has the keys; a **rename** — its pencil, shown on the row's hover, or a double click,
-  Enter making it a step and Escape or a click away leaving the name — which a later edit keeps even
+  Enter making it a step and Escape or a click away leaving the name, and Tab making it a step and
+  opening the next sequence's name (§26.8) — which a later edit keeps even
   where the sequence is an original whole again, and which refuses two words, another sequence's
   name, and a name of the file's own for any stretch but that sequence whole — asking the step's own
   rule (`wholeOriginal`), so that sequence whole, renamed, takes its own name back, which the box
