@@ -1,6 +1,13 @@
 {
-  "latest": "c9e4449",
+  "latest": "56a3e7e",
   "versions": [
+    {
+      "commit": "56a3e7e",
+      "version": "0.13.0",
+      "date": "2026-10-17T00:05:16+02:00",
+      "subject": "Faster DI, compartments, coverage and metaplot: Lanczos, rows from the index, held bigWig reads (#111)",
+      "tag": ""
+    },
     {
       "commit": "c9e4449",
       "version": "0.13.0",
@@ -132,13 +139,6 @@
       "version": "0.13.0",
       "date": "2026-10-02T16:52:08+02:00",
       "subject": "Validation notebook: use public data with accessions (#89)",
-      "tag": ""
-    },
-    {
-      "commit": "9654594",
-      "version": "0.13.0",
-      "date": "2026-10-01T18:38:16+02:00",
-      "subject": "Reading frames, BAM base modifications, called sets as lanes, 3D by BED names, a live corner dot plot (#88)",
       "tag": ""
     },
     {
