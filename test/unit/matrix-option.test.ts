@@ -275,6 +275,17 @@ describe('the marginal profiles', () => {
     expect(series.filter((one) => one['type'] === 'line')).toHaveLength(2)
   })
 
+  it('leave the frame to the picture, being its margins rather than plots of their own', () => {
+    const grids = matrixOptionOf(withMargins, STYLE, THEME, BOX)['grid'] as Array<Record<string, unknown>>
+    // The picture framed in the ink, over its cells (§18.13)…
+    expect(grids[0]['show']).toBe(true)
+    expect(grids[0]['borderColor']).toBe(THEME.ink)
+    expect(grids[0]['z']).toBeGreaterThan(2)
+    // …and the two bands not.
+    expect(grids[1]['show']).toBeUndefined()
+    expect(grids[2]['show']).toBeUndefined()
+  })
+
   it('zoom with the picture, since a marginal that stayed put is of somewhere else', () => {
     const option = matrixOptionOf(withMargins, STYLE, THEME, BOX)
     const zooms = option['dataZoom'] as Array<Record<string, unknown>>

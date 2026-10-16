@@ -47,7 +47,7 @@
 import { colormapCss, DEFAULT_COLORMAP, isColormap } from '../render/colormaps'
 import { trimNumber } from '../ui/dom'
 import type { MatrixOutput } from '../analysis/types'
-import type { ChartOption, FigureTheme } from './option'
+import { frameOf, ZOOM_X, ZOOM_Y, type ChartOption, type FigureTheme } from './option'
 import type { FigureStyle } from './style'
 import { escapeHtml } from './tooltip'
 
@@ -380,6 +380,9 @@ export function matrixOptionOf(
     width: cell.width * across,
     height: cell.height * down,
     containLabel: false,
+    // Framed like every plot (§18.13), over the cells: the bands along the
+    // edges are the picture's margins, not plots of their own, and are not.
+    ...frameOf(theme),
   }
   const grids: ChartOption[] = [main]
   const xAxes: ChartOption[] = []
@@ -398,8 +401,9 @@ export function matrixOptionOf(
    * saddle from writing a wall of numbers along its foot.
    */
   const axisInk = (labels: readonly string[], cells: number): ChartOption => ({
-    axisLine: { lineStyle: { color: theme.grid } },
-    axisTick: { lineStyle: { color: theme.grid } },
+    // Two sides of the frame, so in its ink (`option.axisBase`).
+    axisLine: { lineStyle: { color: theme.ink } },
+    axisTick: { lineStyle: { color: theme.ink } },
     axisLabel: {
       color: theme.muted,
       fontSize: size,
@@ -603,6 +607,7 @@ export function matrixOptionOf(
         }),
     dataZoom: [
       {
+        id: ZOOM_X,
         type: 'inside',
         xAxisIndex: xGrids,
         zoomOnMouseWheel: true,
@@ -611,6 +616,7 @@ export function matrixOptionOf(
         ...cellWindow(style.x.domain, output.ncols),
       },
       {
+        id: ZOOM_Y,
         type: 'inside',
         yAxisIndex: yGrids,
         zoomOnMouseWheel: 'shift',

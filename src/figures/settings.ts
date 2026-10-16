@@ -33,7 +33,7 @@ import { cardTitle, iconButton } from '../ui/icons'
 import { settingsField } from '../ui/laneSettings'
 import { COLORMAP_NAMES } from '../render/colormaps'
 import { drawnAsChart } from './matrixOption'
-import { seriesColour, type FigureTheme } from './option'
+import { figureFit, seriesColour, type FigureTheme } from './option'
 import { histogram } from './stats'
 import {
   DISTRIBUTION_MARKS,
@@ -287,10 +287,15 @@ function chartCard(spec: XyFigureSpec, style: FigureStyle, set: Apply): HTMLElem
 /**
  * The data's own end of an axis, over the series that are drawn.
  *
- * Read off the axes as drawn: a histogram's abscissa is the series' values,
- * from its first bin's edge to its last, and its ordinate the counts.
+ * Read off the axes as drawn: where the axis is fitted (`option.figureFit`),
+ * the end of the fit — the end the picture had on that side, room and all, so
+ * typing the other end moves only that one; and where the library fits it, a
+ * histogram's abscissa is the series' values, from its first bin's edge to its
+ * last, and its ordinate the counts.
  */
 function dataEnd(spec: XyFigureSpec, style: FigureStyle, which: 'x' | 'y', at: 0 | 1): number | null {
+  const fit = figureFit(spec, style, which)
+  if (fit !== null) return fit[at]
   const log = style[which].scale === 'log'
   const histo = style.mark === 'histogram'
   let low = Number.POSITIVE_INFINITY

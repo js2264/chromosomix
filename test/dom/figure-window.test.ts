@@ -2,15 +2,16 @@
 /**
  * A window typed into a figure's axes card while the axis is on *auto*.
  *
- * One end typed is a window: the end not typed is the data's own on that side.
- * It used to wait for the other end, so `x from 5000` sat in its box with the
- * picture still drawn over the whole of the data, and so did `to` after it.
+ * One end typed is a window: the end not typed is the fit's own on that side —
+ * the end the picture had there (§18.13). It used to wait for the other end, so
+ * `x from 5000` sat in its box with the picture still drawn over the whole of
+ * the data, and so did `to` after it.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { CurveOutput } from '@/analysis/types'
-import type { FigureTheme } from '@/figures/option'
+import { figureFit, type FigureTheme } from '@/figures/option'
 import { figureSettings } from '@/figures/settings'
 import { specOf, type XyFigureSpec } from '@/figures/spec'
 import { defaultStyle, type FigureStyle } from '@/figures/style'
@@ -78,10 +79,15 @@ describe('a window typed on an axis that fits the data', () => {
     expect(style().x.domain).toEqual([5000, 5_000_000])
   })
 
-  it('takes the high end alone, with the lowest positive value under it on a log axis', () => {
+  it('takes the high end alone, with the fit under it on a log axis', () => {
     const { el, style } = card()
     type(el, 'y', 1, '1e-3')
-    expect(style().y.domain).toEqual([2e-9, 1e-3])
+    // The lowest positive value drawn, 2e-9, and the room the fit keeps below
+    // it: a twentieth of the five decades the values span (2e-9 to 2e-4 — the
+    // 1 at a separation of zero is a gap on the log abscissa, not a point).
+    const domain = style().y.domain
+    expect(domain?.[1]).toBe(1e-3)
+    expect(Math.log10(domain?.[0] ?? Number.NaN)).toBeCloseTo(Math.log10(2e-9) - 0.25, 12)
   })
 
   it('leaves out the series that are hidden', () => {
@@ -95,8 +101,12 @@ describe('a window typed on a histogram', () => {
   it('reads the end not typed off the bins and the counts, the axes as drawn', () => {
     const { el, style } = card((style) => (style.mark = 'histogram'))
     type(el, 'x', 0, '1e-6')
-    // The abscissa is the values: the last bin's edge is the largest of them.
-    expect(style().x.domain?.[1]).toBeCloseTo(1, 9)
+    // The abscissa is the values, fitted as it is drawn: the last bin's edge —
+    // the largest of them, 1 — and the room past it, a twentieth of the span
+    // in decades on this log axis.
+    const fit = figureFit(ps(), { ...defaultStyle(ps()), mark: 'histogram' }, 'x')
+    expect(style().x.domain?.[1]).toBeCloseTo(fit?.[1] ?? Number.NaN, 9)
+    expect(style().x.domain?.[1]).toBeGreaterThan(1)
     type(el, 'y', 1, '20')
     // The ordinate is a count: from the lowest above zero on this log axis…
     expect(style().y.domain).toEqual([1, 20])

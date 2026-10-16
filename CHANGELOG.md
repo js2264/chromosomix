@@ -1058,6 +1058,25 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **Every plot is drawn in a black frame, fitted to its data, with its legend beside it (§18.13).**
+  A chart's plot is boxed in the ink on all four sides, its axes on the frame rather than through
+  the other's zero, where a dashed grey gridline along each edge was the only border; every line in
+  a plot is solid, the gridlines half the frame's width and the crosshair too; matrices,
+  pileups, the metaplot's per-feature heatmap and dot plots are framed the same way. An axis on
+  auto now fits what is drawn instead of rounding out to the library's whole decades — a P(s) from
+  5 kb to 2 Mb was drawn from 1 kb to 10 Mb: a curve's abscissa runs from its first sample to its
+  last, and every other fitted axis keeps a twentieth of its span at each end, its ends left
+  unlabelled where they are not round. The ordinate fits what is in the abscissa's window, as the
+  window is typed, set by a task or moved with the wheel, so a P(s) opened from 4 kb no longer
+  keeps two empty decades above itself — and a wheel along the abscissa no longer stores the
+  ordinate's whole extent as two typed numbers. A log axis with fewer than three decades in view is
+  labelled between them (a P(s) zoomed inside one decade had no label at all), one of ten decades
+  or more on whole decades every few (it had one label), and the crosshair's numbers are spelled as
+  the axes are — `387.3 kb`, not `387,269.00`. A legend down the right takes the room its names need, so
+  it is never drawn over the plot, and a name too long for a third of the figure goes onto a second
+  line, broken at its dots and colons. Typing one end of a window keeps the other where the fit had
+  it.
+
 - **A browser tab keeps a connected folder for the visit only (§20.6).** It was kept across
   reloads in Chromium tabs too; a tab is a page on whatever machine opened it, so only the installed
   app keeps folders now, and the connect button and the Files row say *this visit* in a tab.

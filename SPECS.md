@@ -9227,8 +9227,8 @@ and a card naming it, none of which a reader of a metaplot asks for. So a list i
 painter colours it once, onto a canvas of its own, averaging neighbouring rows where there are more
 than two thousand, and places that image across the plot with smoothing at high quality — a bilinear
 stretch on screen and in the PNG, and in the PDF one image marked `/Interpolate true`, which every
-viewer smooths. No frame is drawn round it and nothing answers the pointer over it, so the figure's
-settings offer no switch for a readout it does not have.
+viewer smooths. Nothing answers the pointer over it, so the figure's settings offer no switch for a
+readout it does not have; and it has the frame every plot has (below).
 **A picture read like a map** — a dot plot's two assemblies end to end (§28), `MatrixOutput.large` —
 is square and as large as the drawer lets it be, its cells a fraction of a pixel wider than whole where
 that is what fills it, each cell's edges on whole pixels; and it is always painted, however few its
@@ -9294,17 +9294,68 @@ That shell is `ui/StageDialog.ts` and the two are callers of it rather than two 
 it. The figure's element is **moved** into the dialog and moved back, never copied, so the window a
 reader zoomed to is the window the export draws.
 
+**Every plot is drawn in a frame, in the ink.** A chart's plot is boxed on all four sides by the
+grid's own border in the text colour — black on paper — drawn over the data, as the painter has
+always drawn its own last, so it closes over the end of a curve that starts on it. The two axes are
+two of its sides, in the same ink, and they stay on it whatever the other axis holds: the library
+puts an axis through the other's zero by default, which across a profile that changes sign is a
+line through the middle of the picture carrying the ticks with it. **Every line in a plot is solid**
+— the gridlines, the crosshair — and a gridline is half the frame's width, a guide for the eye
+rather than a mark of anything; the gridlines stop short of the two ends of an axis, where the frame
+is — a dashed grey line along each edge was the whole of a plot's border before, and read as no
+border at all. A matrix chart is framed the same
+way, over its cells, and so is everything the painter draws: a curve, a matrix too large to chart,
+the metaplot's per-feature heatmap, the colour bar beside a painted matrix, and a dot plot. A
+pileup's two marginal bands are its margins rather than plots of their own, and are not.
+
+**An axis on auto fits what is drawn**, not the library's *nice* extent, which on a log axis is a
+whole decade past the data at each end: a P(s) from 5 kb to 2 Mb was drawn from 1 kb to 10 Mb, most
+of a decade empty on either side. **Along a curve the abscissa runs from the first sample to the
+last** — those ends are the data's, and the painter's curve has always been drawn that way
+(`padSpan`). **Every other fitted axis keeps a twentieth of its span past the data at each end**, in
+decades on a log axis, which is what matplotlib and ggplot2 keep, because a maximum drawn on the
+frame is a maximum nobody can see: the ordinate, the abscissa under points (a marker centred on the
+frame is half a marker), a histogram's abscissa past its outer bins, and a box's or a violin's
+ordinate past its whiskers, its outliers or its whole support (`option.figureFit`). A bar's
+ordinate still starts at zero, and a bar chart's abscissa is still the library's, which measures the
+bars' widths. **The ordinate fits what is drawn in the abscissa's window**: a P(s) a task opens
+from 4 kb kept room above it for the first separations, off the picture to its left; a line that
+crosses an edge of the window counts where it meets the frame, interpolated as the axes draw it. A
+wheel or a drag along the abscissa refits the ordinate as it goes — its bounds alone, so the gesture
+under way is not dropped — and an export, drawn from the style, draws the same. The ends of a
+fitted axis are rarely round, and are left bare (below). **A log axis is labelled where the
+library's labels fail it** (`option.logTicks`): at ten decades or more on whole decades every few
+of them, about six to the axis — the library's own step there is ten decades, one label on a P(s)
+drawn as violins, and a step handed to it is counted from the axis's end, which on a fitted axis
+is no decade (`1.2e-10`, `1.2e-8`); and with fewer than three decades inside, where the library
+labels only decades, at 1, 2 and 5 of each, then at every digit, then on a linear ladder — a P(s)
+zoomed to 221 kb – 783 kb had no label at all.
+
+**A legend down the right is beside the plot, never over it.** Its room was a fixed 132 pixels, and
+a series named after its file — `T4dNDD-infection.10min.mcool::5000`, as a map in a deck is — ran
+the legend out over the curves. The names are measured in the figure's type, the room is the
+longest one plus the swatch, the padding and a gap, and the plot is drawn in what is left. Past
+about a third of the figure's width a name goes onto more lines rather than taking the plot's room
+(`option.wrapName`), broken after its own dots, dashes, underscores and colons: the library breaks
+only at a space and a few marks, and cut a file name, which has none, at whichever letter filled the
+line. A figure whose legend is on the right is laid out again when it is resized, since what fits
+on one line is a question of its width.
+
 **The window lives in the style, not in a zoom transform.** A wheel gesture and a number typed into
 the sidebar are the same change to the same place, and the export draws whichever happened last —
 which is what §18.7's *what you export is what you see* means once a figure can be panned. The wheel
-zooms the abscissa and a drag pans it; with shift held, the wheel zooms the ordinate. **A window
+zooms the abscissa and a drag pans it; with shift held, the wheel zooms the ordinate — each gesture
+the window of the axis it moved and of no other: both used to be taken as the library reported
+them, so a wheel along the abscissa stored the ordinate's whole extent as two typed numbers and an
+ordinate on auto stopped fitting anything. **A window
 wider than the data is honoured**: the chart's zoom lives inside its axis and clamps a window to what
 is drawn, so where a window reaches past the data — a range typed to match another figure, or two
 figures a task opens on one ordinate (§18.8's inter-arm control) — the axis is stretched to it on
 that side, and nowhere else. **One end typed is a window**: on an axis still fitting the data, the end
-not typed is the data's own on that side — the lowest or highest value drawn, a log axis's lowest
-above zero, a histogram's outer bin edge or its count — where it used to wait for the other, the number kept in its box over a picture that
-had not moved. **An end of a window is labelled only when it is round** — a whole
+not typed is the one the axis had on that side — its fit, room and all (above), and on a histogram's
+ordinate the count, from zero — so typing one end moves that end alone; it used to wait for the
+other, the number kept in its box over a picture that had not moved. **An end of a window is
+labelled only when it is round** — a whole
 tenth of the decade its span is in on a linear axis (`10`, `-2`, `0.15`), a power of ten on a log
 one: an end is a tick of the axis, printed as the end itself, which after a box drawn by hand is
 `8.00215` over the `10` beside it, inside the data or past it. Where an end is not round it is left
@@ -9337,7 +9388,9 @@ of bare text with its swatches gone. The formatters' markup carries classes inst
 swatch is an SVG `fill`. **Each coordinate is spelled as its axis spells it** — a sequence's name
 over its bar and `84.3 kb` along a P(s), where the library printed the raw number under the pointer,
 `6.00` and `84,281.00`; per cent where the axis is; and `2.24e-7` under ticks of `1e-7` rather than a
-run of zeros. Over a point, a histogram's bar, a box or a violin the series comes first, then the
+run of zeros. The crosshair's two numbers on the axes are spelled the same way, where the library
+printed `387,269.00` along a P(s) in kb and `0.00` up its ordinate. Over a point, a histogram's
+bar, a box or a violin the series comes first, then the
 pair, the count, the five numbers the box is drawn from, or, for a violin, nothing more: the shape is
 the answer. Tick labels, legends and titles are not markup — the SVG draws them as text — and are not
 escaped.

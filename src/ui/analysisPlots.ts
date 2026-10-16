@@ -154,6 +154,11 @@ interface Rect {
  */
 const RULE_WIDTH = 0.75
 const FRAME_WIDTH = 1
+/**
+ * A gridline: solid and thinner than any rule, being a guide for the eye rather
+ * than a mark of anything (§18.13) — the charts' own (`option.GRID_WIDTH`).
+ */
+const GRID_WIDTH = 0.5
 const SERIES_WIDTH = 1.6
 
 /** Tick marks, drawn outward from the frame. */
@@ -762,7 +767,7 @@ export function drawCurve(
 
   // Gridlines under everything, so a line crossing one is unambiguously on top.
   ctx.strokeStyle = theme.grid
-  ctx.lineWidth = RULE_WIDTH
+  ctx.lineWidth = GRID_WIDTH
   ctx.beginPath()
   for (const tick of yTicks.major) {
     const at = y.fraction(tick.value)
@@ -802,8 +807,8 @@ export function drawCurve(
   ctx.restore()
 
   // The frame last, so it closes over the ends of the data rather than being
-  // painted through by them.
-  ctx.strokeStyle = theme.grid
+  // painted through by them; in the ink, as every plot's is (§18.13).
+  ctx.strokeStyle = theme.ink
   ctx.lineWidth = FRAME_WIDTH
   // The series left a round join behind, which is right for a polyline and
   // wrong for a rectangle; PDF carries the join in the graphics state, so it has
@@ -1554,8 +1559,8 @@ export function drawMatrix(
 
   const scale = 1 / (range.vmax - range.vmin)
   // A list — the metaplot's per-feature heatmap — is a picture, not a grid of
-  // squares: one image, smoothed where it is drawn larger than it is, with no
-  // frame round it. A grid's frame and its cells are what a list does not need.
+  // squares: one image, smoothed where it is drawn larger than it is. Its
+  // frame is the picture's edge, as every plot's is (§18.13).
   const listed = output.aspect === 'fill' && drawListImage(ctx, output, plot, range)
   // A large picture's cells are a fraction of a pixel wider than whole: each
   // one's edges rounded, so neighbours meet without a seam of half-painted
@@ -1583,11 +1588,10 @@ export function drawMatrix(
     }
   }
 
-  if (!listed) {
-    ctx.strokeStyle = theme.grid
-    ctx.lineWidth = FRAME_WIDTH
-    ctx.strokeRect(plot.x, plot.y, plot.width, plot.height)
-  }
+  ctx.strokeStyle = theme.ink
+  ctx.lineWidth = FRAME_WIDTH
+  ctx.lineJoin = 'miter'
+  ctx.strokeRect(plot.x, plot.y, plot.width, plot.height)
   drawSegments(ctx, output, plot, { cellW, cellH, gap, line }, names, theme)
 
   // The marginals, against the two edges they run along, and the one line of key
@@ -1697,7 +1701,7 @@ export function drawMatrix(
     ctx.fillStyle = colours[i]
     ctx.fillRect(barX, y0, barWidth, y1 - y0)
   }
-  ctx.strokeStyle = theme.grid
+  ctx.strokeStyle = theme.ink
   ctx.lineWidth = FRAME_WIDTH
   ctx.strokeRect(barX, plot.y, barWidth, plot.height)
 
