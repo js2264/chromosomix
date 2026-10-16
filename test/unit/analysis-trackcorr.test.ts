@@ -9,6 +9,10 @@
  * neighbours' signal into it, and a mouse genome's correlation came out at 0.81
  * where the windows' own means give 0.88. The reference here is that mean taken
  * base by base, which shares nothing with the runner but the definition.
+ *
+ * A window any track lacks is left out of **every** pair, as deepTools'
+ * `plotCorrelation` drops a row of its matrix with a missing value: the
+ * reference for that is the same means with every incomplete row dropped first.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -103,8 +107,9 @@ async function run(
   tracks: Record<string, Record<string, Record3[]>>,
   lengths: Record<string, number>,
   extra: { features?: FeatureSet } = {},
-): Promise<{ outputs: TaskOutput[]; calls: Call[] }> {
+): Promise<{ outputs: TaskOutput[]; calls: Call[]; notes: string[] }> {
   const calls: Call[] = []
+  const notes: string[] = []
   const job: TrackJobContext = {
     params: { tracks: Object.keys(tracks), over: 'bins', binsize: 100, method: 'pearson', ...params },
     framing: FRAMING,
@@ -115,18 +120,34 @@ async function run(
     cancelled: () => false,
     throwIfCancelled: () => {},
     progress: () => {},
-    note: () => {},
+    note: (text) => {
+      notes.push(text)
+    },
     sample: async (entry, regions, basesPerPixel) => {
       calls.push({ entry, regions: regions.map((r) => ({ ...r })), basesPerPixel })
       return answer(tracks[entry], regions)
     },
     lengthOf: (contig) => lengths[contig],
   }
-  return { outputs: await runTrackCorrelation(job), calls }
+  return { outputs: await runTrackCorrelation(job), calls, notes }
 }
 
 const pairs = (outputs: TaskOutput[]): TableOutput =>
   outputs.find((one): one is TableOutput => one.kind === 'table') as TableOutput
+
+/** A pair's coefficient, whichever order the table wrote its two tracks in. */
+const coefficient = (outputs: TaskOutput[], a: string, b: string): number =>
+  Number(pairs(outputs).rows.find((row) => [row.a, row.b].sort().join() === [a, b].sort().join())?.r)
+
+/** A stat of the figure, by its label. */
+const stat = (outputs: TaskOutput[], label: string): number | undefined => {
+  const matrix = outputs.find((one) => one.kind === 'matrix')
+  return matrix?.kind === 'matrix' ? matrix.stats?.find((one) => one.label === label)?.value : undefined
+}
+
+/** One record a window, `values[k]` over window `k` of `size`, and none where it is `NaN`. */
+const perWindow = (values: number[], size = 100): Record3[] =>
+  values.flatMap((value, k) => (Number.isNaN(value) ? [] : [{ start: k * size, end: (k + 1) * size, value }]))
 
 describe('a window’s value', () => {
   it('is the mean over the bases it covers, each record weighted by its overlap', async () => {
@@ -213,8 +234,58 @@ describe('a window’s value', () => {
   it('takes whole windows only', async () => {
     const tracks = { x: { I: records(1_050, 1) }, y: { I: records(1_050, 2) } }
     const { outputs } = await run({}, tracks, { I: 1_050 })
-    const matrix = outputs.find((one) => one.kind === 'matrix')
-    expect(matrix?.kind === 'matrix' ? matrix.stats?.[0]?.value : undefined).toBe(10)
+    expect(stat(outputs, 'units')).toBe(10)
+  })
+})
+
+describe('a window a track lacks', () => {
+  // Ten windows of 100 bp. `a` and `b` have a value in all of them; `c`, as an
+  // insulation score has none where the map is too sparse, lacks the last three.
+  const a = [1, 4, 2, 8, 5, 7, 3, 9, 6, 10]
+  const b = [2, 3, 1, 7, 6, 8, 2, 1, 9, 3]
+  const c = [5, 1, 4, 2, 8, 3, 6, Number.NaN, Number.NaN, Number.NaN]
+  const tracks = { a: { I: perWindow(a) }, b: { I: perWindow(b) }, c: { I: perWindow(c) } }
+
+  it('is left out of every pair, as deepTools leaves out a row with a missing value', async () => {
+    for (const [method, measure] of [
+      ['pearson', pearson],
+      ['spearman', spearman],
+    ] as const) {
+      const { outputs } = await run({ method }, tracks, { I: 1_000 })
+      // deepTools: the rows every track has, and every coefficient over them.
+      const rows = [0, 1, 2, 3, 4, 5, 6]
+      const kept = (column: number[]): number[] => rows.map((k) => column[k])
+      expect(coefficient(outputs, 'a', 'b'), method).toBeCloseTo(measure(kept(a), kept(b)), 12)
+      expect(coefficient(outputs, 'a', 'c'), method).toBeCloseTo(measure(kept(a), kept(c)), 12)
+      expect(coefficient(outputs, 'b', 'c'), method).toBeCloseTo(measure(kept(b), kept(c)), 12)
+      // Over the pair's own ten windows, `a` and `b` read something else: the
+      // rule changes the answer here, so this test can tell the two apart.
+      expect(Math.abs(coefficient(outputs, 'a', 'b') - measure(a, b)), method).toBeGreaterThan(0.05)
+    }
+  })
+
+  it('is counted, and the run says how many it left out', async () => {
+    const { outputs, notes } = await run({}, tracks, { I: 1_000 })
+    expect(stat(outputs, 'units')).toBe(10)
+    expect(stat(outputs, 'compared')).toBe(7)
+    const said = /^3 of the 10 windows have no value in at least one track, and are left out of every pair/
+    expect(notes.some((note) => said.test(note))).toBe(true)
+  })
+
+  it('says nothing when every track has every window', async () => {
+    const { outputs, notes } = await run({}, { a: tracks.a, b: tracks.b }, { I: 1_000 })
+    expect(stat(outputs, 'compared')).toBe(10)
+    expect(notes).toEqual([])
+  })
+
+  it('says so when no three windows have a value in every track', async () => {
+    const left = { I: perWindow([1, 2, 3, 4, 5, Number.NaN, Number.NaN, Number.NaN, Number.NaN, Number.NaN]) }
+    const right = { I: perWindow([Number.NaN, Number.NaN, Number.NaN, 4, 5, 6, 7, 8, 9, 10]) }
+    const { outputs, notes } = await run({}, { left, right }, { I: 1_000 })
+    expect(stat(outputs, 'compared')).toBe(2)
+    expect(Number.isNaN(coefficient(outputs, 'left', 'right'))).toBe(true)
+    const said = /^Fewer than 3 of the 10 windows have a value in every track/
+    expect(notes.some((note) => said.test(note))).toBe(true)
   })
 })
 

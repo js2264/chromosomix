@@ -111,7 +111,8 @@ export const TRACK_CORRELATION_TASK: AnalysisTask = {
   group: '1d',
   venue: 'annotations',
   // 2: a window's value is the exact mean over the bases it covers, where it was
-  // a zoom level's records weighted by their whole width.
+  // a zoom level's records weighted by their whole width; and a window any track
+  // lacks is left out of every pair, where it was left out of that pair alone.
   version: 2,
   // No map required, for the reason `overlap.ts` gives.
   availability: (context) => {

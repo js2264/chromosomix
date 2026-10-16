@@ -1002,6 +1002,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   a loop set or every pair — where *N* and *groups* used to stay on screen for having been chosen on a
   feature set. In every task's form, a card none of whose controls apply is not drawn.
 
+- **Track correlation leaves a window any of its tracks lacks out of every pair, as deepTools does
+  (§18.8).** It was left out of that pair alone, so each coefficient was over windows of its own: on
+  chr19, two mouse ATAC-seq replicates beside a Hi-C insulation score — which has no value where the
+  map is too sparse to give one — read ρ = 0.59 at 100 bp where deepTools' `plotCorrelation` reads
+  0.54 from the same windows. Every coefficient is now over the windows every track has a value for,
+  the replicates read 0.54 as deepTools does, and the run says how many windows it left out;
+  *compared*, beside *units* under the matrix, says how many are left.
+
 - **The validation notebook holds ten more analyses to their references, and its timings are a
   notebook of their own (§18.10).** `notebooks/validation.qmd` adds coverage and virtual 4C against
   cooltools, pileups — raw, over the expected and over distance-matched controls, off the diagonal
