@@ -221,13 +221,6 @@
       "date": "2026-10-16T06:53:38Z"
     },
     {
-      "number": 108,
-      "commit": "2f5355a",
-      "title": "APA as coolpuppy computes it, with O/E and a five-bin nearest loop by default; track correlation over exact windows, a missing one left out of every pair; chromosomix boost",
-      "branch": "ccr-bbb73609-u7oxgq",
-      "date": "2026-10-16T06:38:25Z"
-    },
-    {
       "number": 107,
       "commit": "edb4008",
       "title": "Add circular visualization of metagenome contact maps (§7.6)",
