@@ -603,14 +603,14 @@ once, hence the test in the assembly step.
 
 ### So are the rendered notebooks
 
-`/evaluation/` and `/timings/` are `notebooks/validation.qmd` and `notebooks/timing.qmd` as
+`/validation/` and `/timings/` are `notebooks/validation.qmd` and `notebooks/timing.qmd` as
 `.github/workflows/notebooks.yml` last rendered them (SPECS §18.10). That workflow runs when a release
 is published — `release.yml` makes the release a draft and a person publishes it, which is the event
 that reaches it — and from **Actions → Notebooks → Run workflow** on any branch or tag, with the
 number of timed runs (five by default) and whether to publish. It installs everything on a fresh
 runner, renders both notebooks (about three hours, most of it the timings), force-pushes the two
 pages and the files beside them to the `notebooks` branch as one commit, attaches them to the
-release, and dispatches this deploy, which copies `evaluation/` and `timings/` from that branch on
+release, and dispatches this deploy, which copies `validation/` and `timings/` from that branch on
 every run after — the stores' arrangement exactly. Every run also keeps its pages as an artifact
 for 90 days, and its summary lists every verdict.
 

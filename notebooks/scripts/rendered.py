@@ -24,7 +24,7 @@ REPO = Path(__file__).resolve().parents[2]
 NOTEBOOKS = REPO / 'notebooks'
 WORK = NOTEBOOKS / 'work' / 'validation'
 #: Each notebook by its file's name: where it is published under the site, and what it is called.
-PAGES = {'validation': ('evaluation/', 'Evaluation'), 'timing': ('timings/', 'Timings')}
+PAGES = {'validation': ('validation/', 'Validation'), 'timing': ('timings/', 'Timings')}
 
 
 def _git(*args):

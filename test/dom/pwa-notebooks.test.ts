@@ -2,7 +2,7 @@
 /**
  * The app running at a rendered notebook's address, and getting out of it.
  *
- * `evaluation/` and `timings/` hold the two rendered notebooks
+ * `validation/` and `timings/` hold the two rendered notebooks
  * (`.github/workflows/notebooks.yml`), and a service worker from before they
  * existed answers a navigation there with this app's shell. The worker is
  * fixed (`src/sw.js`), but it updates only when a page it controls loads, and
@@ -55,7 +55,7 @@ beforeEach(() => {
 
 describe('the app at a notebook’s address', () => {
   it('drops the worker and reloads, with or without the slash', async () => {
-    for (const path of ['/evaluation/', '/evaluation', '/timings/', '/timings/index.html']) {
+    for (const path of ['/validation/', '/validation', '/timings/', '/timings/index.html']) {
       window.sessionStorage.clear()
       const before = reloads
       at(path)
@@ -67,7 +67,7 @@ describe('the app at a notebook’s address', () => {
   })
 
   it('tries once per tab', async () => {
-    at('/evaluation/')
+    at('/validation/')
     expect(recoverPinnedNavigation()).toBe(true)
     await settled()
     expect(recoverPinnedNavigation()).toBe(false)
@@ -76,7 +76,7 @@ describe('the app at a notebook’s address', () => {
   })
 
   it('stays where it is anywhere else', () => {
-    for (const path of ['/', '/evaluations/', '/timingsheet', '/index.html']) {
+    for (const path of ['/', '/validations/', '/timingsheet', '/index.html']) {
       at(path)
       expect(recoverPinnedNavigation(), path).toBe(false)
     }

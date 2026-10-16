@@ -14,8 +14,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
-- **The evaluation and the timings are published with every release, at
-  <https://chromosomix.app/evaluation/> and <https://chromosomix.app/timings/> (§18.10).** A new
+- **The validation and the timings are published with every release, at
+  <https://chromosomix.app/validation/> and <https://chromosomix.app/timings/> (§18.10).** A new
   workflow, `.github/workflows/notebooks.yml`, installs every reference on a fresh runner at the
   versions the notebooks were written against — `notebooks/requirements.txt` and
   `requirements-yapc.txt` pin them — renders both notebooks and publishes them beside the app, each

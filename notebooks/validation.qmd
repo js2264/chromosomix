@@ -78,7 +78,7 @@ QUARTO_PYTHON=refs/bin/python YAPC_PYTHON=yapc-env/bin/python quarto render note
 `notebooks/requirements.txt` is that environment at the versions this page was last rendered with,
 every package pinned, and `requirements-yapc.txt` yapc's. `.github/workflows/notebooks.yml` installs
 both and renders this page and the timings on every release, publishing them at
-<https://chromosomix.app/evaluation/> and <https://chromosomix.app/timings/>; the block under the
+<https://chromosomix.app/validation/> and <https://chromosomix.app/timings/>; the block under the
 title says which render this is.
 
 The data (6 GB) are fetched once into `notebooks/work/validation/data/`. Outputs are kept beside them,

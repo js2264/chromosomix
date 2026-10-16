@@ -462,7 +462,7 @@ chromosomix tasks
 
 Each analysis is held to the package it reproduces — cooltools, coolpuppy, chromosight, deepTools,
 bedtools and a dozen others — on public data, command for command, in a notebook rendered with every
-release: <https://chromosomix.app/evaluation/>, and how long each command takes beside its
+release: <https://chromosomix.app/validation/>, and how long each command takes beside its
 reference, <https://chromosomix.app/timings/>.
 
 Every task writes its results where `--out` points, each named after the file it came from up to

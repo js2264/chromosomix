@@ -8894,7 +8894,7 @@ own environment, and nothing in the suite runs them.
 fresh runner — the reference environment pinned package by package in `notebooks/requirements.txt`,
 yapc's in `requirements-yapc.txt` with IDR and yapc built at the commits the notebook cites,
 Boost-HiC's checkout, Ubuntu's bedtools and seqkit — renders both notebooks, and publishes them at
-`<site>/evaluation/` and `<site>/timings/`, each a self-contained page with its tables beside it
+`<site>/validation/` and `<site>/timings/`, each a self-contained page with its tables beside it
 (`commands.json` and `summary.tsv`, every command and every verdict; `timings.tsv`); a release
 keeps its own copies as assets. It runs when a release is published and on demand. Each page opens
 on a block saying when it was rendered, from which version, commit and release, by which run or by

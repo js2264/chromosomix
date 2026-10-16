@@ -26,7 +26,7 @@ sys.path.append(str((_here if _here.name == 'notebooks' else _here / 'notebooks'
 from rendered import Render
 
 R = Render('timing')
-print(R.head(also=f"The commands are {R.anchor('validation', 'the evaluation')}’s, as it ran them. "
+print(R.head(also=f"The commands are {R.anchor('validation', 'the validation')}’s, as it ran them. "
                   f"Beside this page: {R.download('timings.tsv')}, every timed run, one row each."))
 ```
 
