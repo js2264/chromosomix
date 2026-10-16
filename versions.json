@@ -1,6 +1,13 @@
 {
-  "latest": "bd905e8",
+  "latest": "015b766",
   "versions": [
+    {
+      "commit": "015b766",
+      "version": "0.13.0",
+      "date": "2026-10-16T08:57:45+02:00",
+      "subject": "APA as coolpuppy computes it, with O/E and a five-bin nearest loop by default; track correlation over exact windows, a missing one left out of every pair; chromosomix boost (#108)",
+      "tag": ""
+    },
     {
       "commit": "bd905e8",
       "version": "0.13.0",
@@ -132,13 +139,6 @@
       "version": "0.13.0",
       "date": "2026-10-01T16:46:59+02:00",
       "subject": "Vector PDF export and 3D model support improvements (#86)",
-      "tag": ""
-    },
-    {
-      "commit": "1156ed4",
-      "version": "0.13.0",
-      "date": "2026-09-30T23:39:50+02:00",
-      "subject": "Draw a chromosome clicked during the contact count in seconds (§6.5, §8.15, §9, §12) (#85)",
       "tag": ""
     },
     {
