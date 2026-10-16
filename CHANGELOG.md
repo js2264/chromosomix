@@ -2341,6 +2341,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A box is washed over the tracks beside a map, as it is in the 1D browser (§8.1).** A stretch
+  highlighted in the browser — a rectangle drawn on the tracks — showed there as a wash over every
+  track and on the map as the square on its diagonal, but beside the map it turned into two small
+  arrowheads under the tracks. The tracks beside a map now carry the same wash, over every lane of
+  every stack, both stretches of a box off the diagonal, and in the saved figure; the arrowheads under
+  the tracks are a loop's alone, and a right-click anywhere inside a wash offers to hide its box.
+
 - **Every task measures a resolution you added, as the map draws it (§3.4, §18.4).** With the map at
   `3 kb*` — the file's 1 kb bins summed three at a time — a task still read the 1 kb rung underneath,
   so an insulation track or a P(s) came out at 1 kb under a picture at 3. The analysis worker now

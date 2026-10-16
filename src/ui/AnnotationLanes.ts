@@ -61,6 +61,7 @@ import {
   laneRect,
   laneX,
   laneY,
+  MARK_WASH,
   withinGrip,
   type LaneFrame,
   laneBands,
@@ -80,7 +81,7 @@ import {
   progressDetail,
 } from '../render/laneLabel'
 import { formatLocus } from '../genome/assembly'
-import type { LocusAxis } from '../render/locus'
+import { stretchOf, unitSpan, type LocusAxis } from '../render/locus'
 import { barLimitsOf } from '../render/barchart'
 import { drawSashimi, junctionsOfSamples } from '../render/sashimi'
 import { featureColouring } from '../render/featureInk'
@@ -101,7 +102,7 @@ import {
   type PixelProfile,
   laneNote,
 } from '../render/tracks'
-import type { ManualMark, ManualPoint, ManualStore } from '../annotations/manual'
+import { rectSpans, type ManualMark, type ManualPoint, type ManualSpan, type ManualStore } from '../annotations/manual'
 import type { AnnotationStore } from '../annotations/store'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
 import {
@@ -448,26 +449,36 @@ type LaneMarks = Pick<ManualStore, 'lines' | 'arrowheads' | 'rects'>
 const EMPTY_MARKS = { lines: [], arrowheads: [], rects: [] } as LaneMarks
 
 /**
- * Every coordinate the marks ask a lane to point at, mark by mark.
+ * Every coordinate the marks ask a lane to point at, mark by mark: the two ends
+ * of each arrowhead. A box is not pointed at but washed over the tracks — see
+ * {@link spanUnits} and the paint.
  *
  * Grouped by mark rather than flattened, because the "same place twice" rule is
- * per mark: two boxes that happen to share an edge are two marks about it, and
+ * per mark: two loops that happen to share an end are two marks about it, and
  * collapsing them would take a triangle away from one of them.
  */
 function anchorsOf(manual: LaneMarks): Array<{ mark: ManualMark; colour: string; at: ManualPoint[] }> {
-  return [
-    ...manual.arrowheads.map((mark) => ({ mark, colour: mark.colour, at: [mark.a, mark.b] })),
-    ...manual.rects.map((mark) => ({
-      mark,
-      colour: mark.colour,
-      at: [
-        { contig: mark.a.contig, bp: mark.a.from },
-        { contig: mark.a.contig, bp: mark.a.to },
-        { contig: mark.b.contig, bp: mark.b.from },
-        { contig: mark.b.contig, bp: mark.b.to },
-      ],
-    })),
-  ]
+  return manual.arrowheads.map((mark) => ({ mark, colour: mark.colour, at: [mark.a, mark.b] }))
+}
+
+/**
+ * Where one stretch of a sequence lands on an axis, as unit pairs, lowest
+ * first: once on most axes, once per lap of a circular sequence panned across
+ * its junction (§8.15), and once per piece of an edited one that holds part of
+ * it (§27.2) — each stretch of the axis drawing only its own part, as a track's
+ * intervals are placed (`render/tracks.ts`).
+ */
+function spanUnits(axis: LocusAxis, span: ManualSpan): Array<[number, number]> {
+  const out: Array<[number, number]> = []
+  for (const segment of axis.segmentsOf(span.contig)) {
+    if (!(segment.bpPerUnit > 0)) continue
+    const [low, high] = stretchOf(segment)
+    const from = Math.max(span.from, low)
+    const to = Math.min(span.to, high)
+    if (!(to > from)) continue
+    out.push(unitSpan(segment, from, to))
+  }
+  return out
 }
 
 /**
@@ -844,7 +855,7 @@ export class AnnotationLanes {
   }
 
   /**
-   * Room past the last lane for the loop and box anchors, when there are any.
+   * Room past the last lane for the loop anchors, when there are any.
    *
    * The triangles used to be drawn *in* that lane, over the last seven pixels of
    * whatever it is a picture of — which on a coverage track is the busiest part
@@ -857,8 +868,7 @@ export class AnnotationLanes {
    * arrives with the mark that needs it.
    */
   private anchorBand(): number {
-    const marks = this.manual.arrowheads.length + this.manual.rects.length
-    return marks > 0 ? ANCHOR_GAP + ANCHOR_LENGTH : 0
+    return this.manual.arrowheads.length > 0 ? ANCHOR_GAP + ANCHOR_LENGTH : 0
   }
 
   /**
@@ -1069,24 +1079,27 @@ export class AnnotationLanes {
    *
    * Measured along the stack only, because that is how {@link paintEdge} puts
    * them there: a line's hairline crosses every lane of an edge that measures
-   * it, and an arrowhead's or a box's anchors stand at their coordinates on the
-   * stack's outer edge. The place along it is the whole of where each one is,
-   * and the same rules decide which lines an edge carries — the ones it
-   * measures, or every one under a turned map.
+   * it, an arrowhead's anchors stand at their coordinates on the stack's outer
+   * edge, and a box's wash covers its stretches across every lane. The place
+   * along it is the whole of where each one is, and the same rules decide which
+   * lines an edge carries — the ones it measures, or every one under a turned
+   * map. A wash is found wherever the pointer is inside it, after the marks
+   * whose rule or triangle is within reach and the narrower of two boxes first,
+   * as the 1D browser finds one: an area is not aimed at the way a rule is.
    */
   marksAt(edge: LaneEdge, x: number, y: number, geometry: LaneGeometry, reach: number): ManualMark[] {
     const axis = this.axisFor(edge)
     if (axis === null) return []
     const frame = alongOf(edge, geometry)
     const along = laneIsHorizontal(edge) ? x : y
-    const nearest = new Map<ManualMark, number>()
+    const nearest = new Map<ManualMark, { distance: number; width: number }>()
+    const held = (mark: ManualMark, distance: number, width: number): void => {
+      if (distance > reach) return
+      const before = nearest.get(mark)
+      if (before === undefined || distance < before.distance) nearest.set(mark, { distance, width })
+    }
     const consider = (mark: ManualMark, at: ManualPoint): void => {
-      for (const unit of axis.locusToUnits(at.contig, at.bp)) {
-        const distance = Math.abs(frame.toPixel(unit) - along)
-        if (distance <= reach && distance < (nearest.get(mark) ?? Number.POSITIVE_INFINITY)) {
-          nearest.set(mark, distance)
-        }
-      }
+      for (const unit of axis.locusToUnits(at.contig, at.bp)) held(mark, Math.abs(frame.toPixel(unit) - along), 0)
     }
     const measures = laneIsHorizontal(edge) ? 'vertical' : 'horizontal'
     const everyLine = this.turned && laneIsHorizontal(edge)
@@ -1096,7 +1109,20 @@ export class AnnotationLanes {
     for (const { mark, at } of anchorsOf(this.manual)) {
       for (const anchor of at) consider(mark, anchor)
     }
-    return [...nearest.entries()].sort((one, two) => one[1] - two[1]).map(([mark]) => mark)
+    for (const rect of this.manual.rects) {
+      for (const span of rectSpans(rect)) {
+        for (const [from, to] of spanUnits(axis, span)) {
+          const low = Math.min(frame.toPixel(from), frame.toPixel(to))
+          const high = Math.max(frame.toPixel(from), frame.toPixel(to))
+          const edgeDistance = Math.min(Math.abs(along - low), Math.abs(along - high))
+          const inside = along >= low && along <= high
+          held(rect, inside ? Math.min(edgeDistance, reach * 0.9) : edgeDistance, high - low)
+        }
+      }
+    }
+    return [...nearest.entries()]
+      .sort((one, two) => one[1].distance - two[1].distance || one[1].width - two[1].width)
+      .map(([mark]) => mark)
   }
 
   /**
@@ -1806,6 +1832,29 @@ export class AnnotationLanes {
       }
     }
 
+    // The reader's boxes, washed over every lane of the stack along each
+    // stretch they cover — the picture the 1D browser draws of a box (§8.1).
+    // They were two triangles at a box's edges, past the last lane, so a
+    // stretch boxed in the browser came back from opening the map as two small
+    // arrowheads under the tracks: the same mark, drawn on the same tracks, as
+    // something else. Over the data, after every lane, as the browser lays its
+    // wash over its tracks; a tenth of the ink, so the tracks under it — the
+    // reason it was drawn — read through it. **Both** stretches of an
+    // off-diagonal box on **every** stack, for the reason a loop's two ends are
+    // anchored on both axes below: a coordinate is a coordinate, and a reader
+    // under one side of a box is asking what is at the other.
+    if (axis !== null && !bare && lanes.length > 0) {
+      const frame = lanes[0].frame
+      const across = stackAcross(lanes)
+      for (const rect of this.manual.rects) {
+        for (const span of rectSpans(rect)) {
+          for (const [from, to] of spanUnits(axis, span)) {
+            washStack(ctx, frame, frame.toPixel(from), frame.toPixel(to), across, rect.colour)
+          }
+        }
+      }
+    }
+
     // Loop anchors, once per stack rather than once per lane: a triangle on the
     // axis says "this coordinate", and one per track would say it four times.
     // Drawn on the stack's outer edge, pointing back at the map, so it reads as
@@ -1817,12 +1866,6 @@ export class AnnotationLanes {
     // anchor only under it would answer half of that on each edge, and neither
     // half where the comparison is made. A coordinate is a coordinate: each end
     // is drawn wherever the axis in front of it has room for it.
-    //
-    // A **box** is the same statement four times over — where it starts and
-    // stops on each axis — so its edges are anchored the same way. Two triangles
-    // under a domain drawn on the diagonal is what a reader comparing it against
-    // the tracks is actually asking for: the boundaries, in the coordinate the
-    // tracks are drawn in.
     const last = lanes[lanes.length - 1]
     if (last !== undefined && !bare) {
       // Past the room the last lane's own name takes ({@link overhangOf}), so
@@ -1834,8 +1877,8 @@ export class AnnotationLanes {
         const drawn = new Set<number>()
         for (const anchor of mark.at) {
           for (const unit of axis?.locusToUnits(anchor.contig, anchor.bp) ?? []) {
-            // An on-diagonal loop names one place twice, and an on-diagonal box
-            // names two places twice; drawing a triangle again only darkens it.
+            // An on-diagonal loop names one place twice; drawing a triangle
+            // again only darkens it.
             if (drawn.has(unit)) continue
             drawn.add(unit)
             anchorMark(ctx, last.frame, last.frame.toPixel(unit), mark.colour, past)
@@ -2480,6 +2523,51 @@ function anchorMark(
 const ANCHOR_LENGTH = 7
 const ANCHOR_HALF = 4
 const ANCHOR_GAP = 2
+
+/**
+ * Where a stack's lanes stand across, in canvas pixels: from the near edge of
+ * the lane nearest the map to the far edge of the farthest — the lanes and the
+ * gaps between them, which a wash crosses as the browser's crosses its tracks,
+ * and not the band past the last lane that the loops' anchors stand in.
+ */
+function stackAcross(lanes: readonly { frame: LaneFrame }[]): [number, number] {
+  let low = Number.POSITIVE_INFINITY
+  let high = Number.NEGATIVE_INFINITY
+  for (const { frame } of lanes) {
+    for (const across of [0, frame.thickness]) {
+      const at = laneIsHorizontal(frame.orientation) ? laneY(frame, 0, across) : laneX(frame, 0, across)
+      low = Math.min(low, at)
+      high = Math.max(high, at)
+    }
+  }
+  return [low, high]
+}
+
+/**
+ * A box's stretch washed over a whole stack (§8.1): between two places along
+ * it, clipped to the data's extent, across `across` — a tenth of the mark's
+ * colour ({@link MARK_WASH}), the browser's wash.
+ */
+function washStack(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  one: number,
+  two: number,
+  across: readonly [number, number],
+  colour: string,
+): void {
+  const from = Math.max(Math.min(one, two), frame.alongFrom)
+  const to = Math.min(Math.max(one, two), frame.alongTo)
+  if (!(to > from) || !(across[1] > across[0])) return
+  ctx.save()
+  ctx.globalAlpha = MARK_WASH
+  ctx.fillStyle = colour
+  // At least a pixel along, so a box narrower than one at this zoom is still there.
+  const length = Math.max(1, to - from)
+  if (laneIsHorizontal(frame.orientation)) ctx.fillRect(from, across[0], length, across[1] - across[0])
+  else ctx.fillRect(across[0], from, across[1] - across[0], length)
+  ctx.restore()
+}
 
 /**
  * One hairline across a lane, at a position along its axis.

@@ -104,9 +104,9 @@ import {
 } from '../render/browser'
 import {
   orderedSpan,
+  rectSpans,
   type ManualMark,
   type ManualPoint,
-  type ManualSpan,
   type ManualStore,
 } from '../annotations/manual'
 import { MARK_REACH } from '../render/overlays'
@@ -130,6 +130,7 @@ import {
 import {
   laneBand,
   laneBands,
+  MARK_WASH,
   GRIP_ROOM,
   GROUP_BAR,
   GROUP_FONT,
@@ -332,16 +333,6 @@ const FRAME_FONT = '600 9.5px system-ui, sans-serif'
 const DOUBLE_CLICK_MS = 250
 /** Smallest window the browser will zoom to: forty bases fill a wide screen. */
 const MIN_SPAN = 40
-/**
- * How much ink a hand-drawn rectangle's wash is worth.
- *
- * A tenth, because the thing it is drawn over is the reason the reader put it
- * there: a band that made the tracks under it harder to read would be a mark
- * that hid its own subject. Enough to be seen against both themes' plot
- * backgrounds and not enough to change the colour of a track through it.
- */
-const MARK_WASH = 0.1
-
 export interface BrowserViewProps {
   assembly: Assembly
   store: AnnotationStore
@@ -2494,7 +2485,7 @@ export class BrowserView {
     // Washes first, so the rules and the triangles that name the same coordinate
     // are drawn over their own shading rather than under it.
     for (const rect of store.rects) {
-      for (const span of sameSpan(rect.a, rect.b) ? [rect.a] : [rect.a, rect.b]) {
+      for (const span of rectSpans(rect)) {
         const from = this.trackAxis.locusToUnit(span.contig, span.from)
         const to = this.trackAxis.locusToUnit(span.contig, span.to)
         if (from === null || to === null || to < low || from > high) continue
@@ -5052,18 +5043,6 @@ function scalableLane(lane: Lane | null): AnnotationEntry[] | null {
     hasAMovableAxis(entry.kind),
   )
   return tracks.length === 0 ? null : tracks
-}
-
-/**
- * Whether a rectangle's two sides are the same stretch — the on-diagonal box.
- *
- * By value and not by identity: a mark that has been round-tripped through
- * session storage is two equal objects rather than one shared one, and a
- * diagonal box that came back from a previous visit would otherwise be washed
- * over the tracks twice.
- */
-function sameSpan(one: ManualSpan, two: ManualSpan): boolean {
-  return one.contig === two.contig && one.from === two.from && one.to === two.to
 }
 
 

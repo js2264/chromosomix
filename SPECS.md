@@ -2841,6 +2841,17 @@ marks the map had — the buttons read *pick on track* and *draw on track*: a tr
 what they place lands on the diagonal — a line as a crosshair, an arrowhead on the diagonal, a
 rectangle as the square on it — which is the mark a map opened afterwards already shows.
 
+**On the tracks a mark is drawn the same beside a map as in the browser.** A track has one axis,
+so what it shows of a mark is the places the mark names along it: a **line** a rule across every
+lane — beside a map, on the stacks that measure its axis, or every stack under a turned map — an
+**arrowhead** a small triangle at each of its two ends, pointing into the picture past the last
+lane, and a **rectangle** its extent **washed over every lane** at a tenth of its colour: one wash
+for a box on the diagonal, and both of its stretches where they differ, since a box off the diagonal
+is two stretches of a sequence. Beside a map a box used to be two triangles at its edges, past the
+last lane, so a stretch boxed in the browser came back from opening the map as two small arrowheads
+under the tracks; it is the browser's wash on both surfaces now, on every stack whose axis carries
+the stretch, and in every figure saved from either.
+
 **A box drawn on a turned map is a box of the square underneath it.** Both ends of the drag are taken
 back to the square they were rotated out of, exactly as a click is, so pressing over one contact and
 releasing over another names the rectangle those two contacts span — which may be off the diagonal,
@@ -2889,8 +2900,9 @@ its key. On the map what the pointer is on is measured **on the ink**: each mark
 alone, into a context that keeps the path rather than painting it, so a rule within six pixels, an
 arrowhead's glyph and the cell it names, a box's outline — and its inside, after any mark whose line
 the pointer is on, the smaller of two boxes first — are found on a turned map exactly as on a square
-one, on the V, the triangle and the leaning lobes the turn draws them as. Beside the map it is a
-hairline or an anchor along the stack; in the browser the rule, the anchor or the wash; on the model
+one, on the V, the triangle and the leaning lobes the turn draws them as. Beside the map and in
+the browser alike it is the rule, the anchor or the wash along the stack — a box found anywhere
+inside its wash, after a rule or an anchor within reach and the narrower of two boxes first; on the model
 a line at the bead's place, an arrowhead with an end there or a box over it. A hidden mark is under
 no pointer, so the rows only hide. Off the browser's lanes — on the ruler, or in the room under the
 last track the marks run down to — the group is the whole menu where there are marks, and the page's
@@ -3153,7 +3165,7 @@ block, and it runs a few pixels past the lane. Between two lanes that is the
 gap before the next. Past the last lane it was the edge of the stack's canvas, which cut the chip and
 the descenders off the name on screen and in every figure saved from the map, the PNG and the PDF
 alike. So the stack leaves room past its last lane for whatever its block reaches beyond it
-(`labelReach`, `AnnotationLanes.thicknessOf`), and a loop's or a box's anchors are drawn past that
+(`labelReach`, `AnnotationLanes.thicknessOf`), and a loop's anchors are drawn past that
 room rather than into the name; the lane keeps its height and the writing its size. A stack whose
 last lane holds its block is the size it was, and so is one with *track text* off, which writes no
 names to make room for — and so is every stack beside a map, whose names are in a corner. On screen
