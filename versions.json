@@ -214,6 +214,13 @@
   ],
   "pulls": [
     {
+      "number": 110,
+      "commit": "02e9867",
+      "title": "Tab navigation, derived resolution tasks, and figure rendering",
+      "branch": "claude/bugs-and-features-batch-qngfme",
+      "date": "2026-10-16T15:07:57Z"
+    },
+    {
       "number": 107,
       "commit": "d91a5ed",
       "title": "Add circular visualization of metagenome contact maps (§7.6)",
