@@ -19,14 +19,16 @@
  * hovered there, a drag that pans, the keys, the rings' names at twelve o'clock
  * with one carried by its name, a double click back; a ring's foot hovered and
  * dragged thicker, and Escape mid-drag; the tracks outside the arcs from the Map
- * card, a genome hovered there and zoomed into; the contigs of one genome
+ * card, a genome hovered there and zoomed into; the rings' names right-aligned
+ * in a column before twelve, the arcs ending short of them, one held by its
+ * line, inside, outside and with the genomes named; the contigs of one genome
  * zoomed into and named; the figure of a zoomed view.
  * Prints what it found at each step — the geometry the canvas publishes, the
  * tooltips, the toggles offered and lit, the rings' order and thickness — so a
  * picture that did not change is a line in the log as well.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-circle.mjs [out-dir]     # ci01 … ci40, ci-figure.png, ci-figure.pdf, ci-figure-page.png, ci-figure-zoomed.png
+ *   node scripts/ui-circle.mjs [out-dir]     # ci01 … ci44, ci-figure.png, ci-figure.pdf, ci-figure-page.png, ci-figure-zoomed.png
  */
 
 import { execFileSync } from 'node:child_process'
@@ -365,7 +367,10 @@ const outer = G.rings[G.rings.length - 1]
 const target = G.rings[Math.max(0, G.rings.length - 4)]
 const handle = G.grips.find((grip) => grip.id === outer.id)
 console.log('the outer ring held by', handle === undefined ? 'its stretch of the gap at twelve' : 'its name')
-const from = handle === undefined ? point(G, (outer.inner + outer.outer) / 2, -Math.PI / 2) : { x: G.left + handle.x, y: G.top + handle.y }
+const from =
+  handle === undefined
+    ? point(G, (outer.inner + outer.outer) / 2, -Math.PI / 2 + (G.gap[0] + G.gap[1]) / 2)
+    : { x: G.left + handle.x, y: G.top + handle.y }
 const to = point(G, (target.inner + target.outer) / 2 - 1, -Math.PI / 2)
 await page.mouse.move(from.x, from.y)
 await page.mouse.down()
@@ -674,6 +679,42 @@ console.log('back inside:', ringsOf(G), '· outside', G.outside)
 await press('labels —')
 
 // ---------------------------------------------------------------------------
+// The rings' names in a column (§7.6): the Tracks card's `name column`, the
+// 1D browser's — every arc starting on twelve o'clock, as it always does, and
+// ending short of the names, right-aligned in a column before twelve with no
+// track under them; one held by its line; the tracks outside; the names round
+// the rim on. Then off again, as the rest expects.
+// ---------------------------------------------------------------------------
+
+console.log('labels off:', await press('labels —'))
+console.log('name column pressed:', await press('name column —'))
+G = await settledCircle()
+const opening = (G) =>
+  `opening from ${G.gap[0]} to ${G.gap[1]} rad of twelve · names centred at ${G.grips.map((grip) => `${grip.x},${grip.y}`).join(' ')} · twelve at x ${G.cx}`
+console.log('the column:', opening(G), '· column', G.column)
+await away()
+await shot('ci30-name-column')
+const line = G.grips[Math.floor(G.grips.length / 2)]
+await page.mouse.move(G.left + line.x, G.top + line.y)
+await sleep(400)
+console.log(`over the line of ${line.id}: cursor ${await cursorNow()}`)
+await shot('ci31-name-column-grip')
+await tracksRow.selectOption('outside')
+G = await settledCircle()
+console.log('the column, tracks outside:', opening(G))
+await away()
+await shot('ci32-name-column-outside')
+await press('labels —')
+G = await settledCircle()
+console.log('the column, tracks outside, the genomes named:', opening(G))
+await away()
+await shot('ci33-name-column-named')
+await tracksRow.selectOption('inside')
+console.log('name column off:', await press('name column —'))
+G = await settledCircle()
+console.log('off again:', `opening ${G.gap[0]} to ${G.gap[1]} · column ${G.column}`)
+
+// ---------------------------------------------------------------------------
 // The contig × contig circle, grouped by genome under a band.
 // ---------------------------------------------------------------------------
 
@@ -684,12 +725,12 @@ await compute()
 G = await settledCircle(120_000)
 console.log('contig level:', describe(G), `· ${G.withinGenome} of the chords drawn within one genome · names ${G.names ? 'kept' : 'none'}`)
 await away()
-await shot('ci30-contig-level')
+await shot('ci34-contig-level')
 at = sectionOf(G, G.units[Math.floor(G.units.length * 0.12)].name)
 await page.mouse.move(at.x, at.y)
 await sleep(500)
 console.log('contig hovered:', await tip())
-await shot('ci31-contig-hover')
+await shot('ci35-contig-hover')
 
 // Zoomed into one genome's contigs: few enough in view to be named, under
 // their genome's name, and a named contig opened by its name.
@@ -698,7 +739,7 @@ await wheel(point(G, (G.band[0] + G.band[1]) / 2, bandOf.mid), 22)
 G = await settledCircle()
 console.log(`the contigs of ${bandOf.name}, zoomed:`, zoomState(G))
 await away()
-await shot('ci32-contig-zoom')
+await shot('ci36-contig-zoom')
 // Back from the Map card's refit, which undoes the circle's zoom as it does the square's.
 console.log('the refit pressed:', await press('Undo every pan and zoom'))
 G = await settledCircle()
@@ -726,14 +767,14 @@ G = await settledCircle(90_000)
 const selection = await where()
 console.log('selection:', describe(G), '·', selection)
 await away()
-await shot('ci33-selection')
+await shot('ci37-selection')
 
 const sections = page.locator('.controls-card.is-circle select').filter({ has: page.locator('option[value="contigs"]') }).first()
 await sections.selectOption('contigs')
 G = await settledCircle()
 console.log('cut into contigs:', describe(G), `· ${G.withinGenome} of the chords drawn within one genome ·`, await where())
 await away()
-await shot('ci34-selection-contigs')
+await shot('ci38-selection-contigs')
 
 // A genome's band hovered: the chords that leave it, and nothing else.
 const BAND = 'metator_00002_00003'
@@ -742,7 +783,7 @@ at = point(G, (G.band[0] + G.band[1]) / 2, group.mid)
 await page.mouse.move(at.x, at.y)
 await sleep(500)
 console.log(`band of ${group.name} hovered:`, await tip())
-await shot('ci35-band-hover')
+await shot('ci39-band-hover')
 
 // ---------------------------------------------------------------------------
 // Clicks that open: a band into its genome, a chord into its pair.
@@ -753,7 +794,7 @@ await sleep(2500)
 G = await settledCircle(90_000)
 console.log(`clicked the band of ${group.name}:`, (await page.locator('.breadcrumb').innerText()).replace(/\s+/g, ' '), '·', describe(G))
 await away()
-await shot('ci36-genome-opened')
+await shot('ci40-genome-opened')
 
 await page.evaluate((hash) => { location.hash = `${location.hash.match(/uri=[^&]*/)[0]}&${hash.replace(/^#/, '').replace(/&sections=contigs/, '')}` }, selection)
 await sleep(2500)
@@ -771,7 +812,7 @@ console.log(
     return button === undefined ? 'none' : { disabled: button.disabled, pressed: button.getAttribute('aria-pressed'), title: button.title }
   }),
 )
-await shot('ci37-chord-opened')
+await shot('ci41-chord-opened')
 
 // ---------------------------------------------------------------------------
 // The figure, saved: a PNG and a PDF of the whole metagenome's circle.
@@ -829,7 +870,7 @@ G = await settledCircle()
 at = sectionOf(G, RICH)
 await page.mouse.move(at.x, at.y)
 await sleep(500)
-await shot('ci38-dark')
+await shot('ci42-dark')
 await away()
 await page.evaluate(() => (document.activeElement instanceof HTMLElement ? document.activeElement.blur() : undefined))
 await page.keyboard.press('t')
@@ -843,7 +884,7 @@ await sleep(400)
 await page.keyboard.type('circle')
 await sleep(600)
 console.log('palette:', await page.evaluate(() => [...document.querySelectorAll('.palette-row')].map((node) => node.textContent?.replace(/\s+/g, ' ').trim()).slice(0, 5)))
-await shot('ci39-palette')
+await shot('ci43-palette')
 await page.keyboard.press('Escape')
 await sleep(300)
 
@@ -861,6 +902,6 @@ console.log(
     said: (document.querySelector('.error, .error-page, .gate, main')?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 200),
   })),
 )
-await shot('ci40-dev-off')
+await shot('ci44-dev-off')
 
 await g.close()

@@ -483,8 +483,17 @@ export interface CircleGeometry {
   arcs: Float64Array
   /** The genome band's arcs, one per group, where there is a band. */
   groupArcs: Float64Array | null
-  /** The angle left open at twelve o'clock, where the rings are named. */
+  /** The angle left open at twelve o'clock, where the rings are named: the width of {@link gap}. */
   topGap: number
+  /**
+   * Where that opening is, as angles clockwise from twelve: always just before
+   * it, `−topGap` to 0, so every arc starts on twelve — and with the rings'
+   * names in a column (§7.6), wide enough that every arc ends before the
+   * widest of them.
+   */
+  gap: { from: number; to: number }
+  /** Whether the rings' names are written in a column before twelve, the arcs ending short of them. */
+  column: boolean
   /**
    * Whether the picture keeps room for names at all. Where it does not — the
    * names turned off, or none a name can be given at rest ({@link namePolicy}) —
@@ -529,7 +538,22 @@ export interface CircleLayoutOptions {
    * names starting `rim` from it, with the room past them the fitted picture
    * kept for its names. The box's size and the key's corner then say nothing.
    */
-  zoom?: { cx: number; cy: number; rim: number; labelRoom: number }
+  zoom?: {
+    cx: number
+    cy: number
+    rim: number
+    labelRoom: number
+    /** The fitted picture's opening at twelve, which a zoom keeps: the angles are the zoom's invariant. */
+    gap?: { from: number; to: number }
+  }
+  /**
+   * The rings' names in a column before twelve o'clock (§7.6, the `name
+   * column` overlay): each ring's name in their order, the size they are
+   * written at where a ring is thick enough ({@link ringNamePx}), and how wide
+   * that writes one. The arcs still start on twelve, and end short of the
+   * column's widest line.
+   */
+  column?: { names: readonly string[]; px: number; measure(text: string, px: number): number }
   /**
    * The rings outside the sections, the sections then the inner circle round
    * the chords — the reader's `tracks` row (`ui/circlePrefs.ts`). Absent,
@@ -602,25 +626,35 @@ export function circleGeometry(model: CircleModel, options: CircleLayoutOptions)
         : Math.min(0.0035, (0.03 * TAU) / n)
   const groupGap = groups === null ? 0 : Math.min(0.02, (0.12 * TAU) / groups.length)
   // Wider where there are rings, whose names are written across it.
-  const topGap = Math.max(options.rings.length > 0 ? 0.08 : 0.05, unitGap * 3, groupGap * 2)
-  let gaps = topGap
-  for (let i = 1; i < n; i++) gaps += isGroupStart(groups, i) ? groupGap : unitGap
-  const room = Math.max(0, TAU - gaps)
+  const opening = Math.max(options.rings.length > 0 ? 0.08 : 0.05, unitGap * 3, groupGap * 2)
   let total = 0
   for (const unit of model.units) total += Math.max(0, unit.bp)
-  const arcs = new Float64Array(n * 2)
-  let angle = TOP + topGap / 2
-  for (let i = 0; i < n; i++) {
-    if (i > 0) angle += isGroupStart(groups, i) ? groupGap : unitGap
-    const span = total > 0 ? (room * Math.max(0, model.units[i].bp)) / total : room / n
-    arcs[2 * i] = angle
-    arcs[2 * i + 1] = angle + span
-    angle += span
+  // The sections round the turn, clockwise from twelve — every arc starts on
+  // it — to the opening just before it: laid once with the opening as narrow
+  // as the gaps allow — or a zoom's, which keeps its picture's — and again
+  // below with the names' column where they are in one, which is only known
+  // once the rings are.
+  const layArcs = (gap: { from: number; to: number }): { arcs: Float64Array; groupArcs: Float64Array | null } => {
+    let gaps = gap.to - gap.from
+    for (let i = 1; i < n; i++) gaps += isGroupStart(groups, i) ? groupGap : unitGap
+    const room = Math.max(0, TAU - gaps)
+    const arcs = new Float64Array(n * 2)
+    let angle = TOP + gap.to
+    for (let i = 0; i < n; i++) {
+      if (i > 0) angle += isGroupStart(groups, i) ? groupGap : unitGap
+      const span = total > 0 ? (room * Math.max(0, model.units[i].bp)) / total : room / n
+      arcs[2 * i] = angle
+      arcs[2 * i + 1] = angle + span
+      angle += span
+    }
+    const groupArcs =
+      groups === null
+        ? null
+        : Float64Array.from(groups.flatMap((group) => [arcs[2 * group.from], arcs[2 * group.to - 1]]))
+    return { arcs, groupArcs }
   }
-  const groupArcs =
-    groups === null
-      ? null
-      : Float64Array.from(groups.flatMap((group) => [arcs[2 * group.from], arcs[2 * group.to - 1]]))
+  let gap = zoom?.gap ?? { from: -opening, to: 0 }
+  let { arcs, groupArcs } = layArcs(gap)
 
   // --- radii -------------------------------------------------------------
   // Labels first, because they decide how much circle there is: as long as the
@@ -628,12 +662,13 @@ export function circleGeometry(model: CircleModel, options: CircleLayoutOptions)
   // radius — past that a name is cut, rather than the circle shrunk for it.
   const labelCap = outer * 0.4
   const labels = groups === null ? model.units.map((unit) => unit.label) : groups.map((group) => group.name)
-  const labelArcs = groupArcs ?? arcs
   const policy: CircleNames = options.names === false ? 'none' : namePolicy(model)
   const named = (index: number): boolean =>
     policy === 'all' || (policy === 'long' && model.units[index].bp >= LABEL_MIN_SPAN_BP)
-  const fits = (at: number, index: number): boolean =>
-    named(index) && (labelArcs[2 * index + 1] - labelArcs[2 * index]) * at >= fontPx * 1.15
+  const fits = (at: number, index: number): boolean => {
+    const labelArcs = groupArcs ?? arcs
+    return named(index) && (labelArcs[2 * index + 1] - labelArcs[2 * index]) * at >= fontPx * 1.15
+  }
   // Room only for names that are written at rest. A circle with none — the
   // overlay off, a thousand genomes — keeps none, and is that much larger.
   let labelWidth = 0
@@ -695,6 +730,17 @@ export function circleGeometry(model: CircleModel, options: CircleLayoutOptions)
   if (!outside && count > 0) layRings(at)
   const chord = Math.max(8, (!outside && rings.length > 0 ? rings[0].inner : sections.inner) - 6)
 
+  // The rings' names in a column: the sections start on twelve and end short
+  // of the lower left corner of the line that reaches furthest back round,
+  // which is the one nearest the middle — a zoom keeping the column its
+  // picture had.
+  const column = options.column
+  if (column !== undefined && zoom?.gap === undefined) {
+    const reach = columnReach(rings, column, outer)
+    gap = { from: -Math.max(opening, reach + unitGap * 2), to: 0 }
+    ;({ arcs, groupArcs } = layArcs(gap))
+  }
+
   // Which labels fit, at the radius they are drawn at.
   const labelled = new Uint8Array(n)
   let groupLabelled: Uint8Array | null = null
@@ -717,13 +763,59 @@ export function circleGeometry(model: CircleModel, options: CircleLayoutOptions)
     chord,
     arcs,
     groupArcs,
-    topGap,
+    topGap: gap.to - gap.from,
+    gap,
+    column: column !== undefined,
     names: zoom !== undefined ? zoom.labelRoom > 0 : labelWidth > 0,
     labelled,
     groupLabelled,
     fontPx,
     outside,
   }
+}
+
+/** Pixels between twelve o'clock and a ring's name, and before it in the column. */
+export const COLUMN_PAD = 4
+/** The longest a name in the column may be, of the circle's radius; a longer one is cut in its middle. */
+export const COLUMN_MAX = 0.45
+
+/**
+ * The size a ring's name is written at: the label font's, and no larger than
+ * the ring is thick and the gap beside it, so a stack of thin rings is a stack
+ * of names rather than a smear — `null` where that is under seven pixels, and
+ * the ring goes unnamed.
+ */
+export function ringNamePx(wanted: number, ring: { inner: number; outer: number }): number | null {
+  const px = Math.min(wanted, ring.outer - ring.inner + 3)
+  return px < 7 ? null : px
+}
+
+/**
+ * How far back round from twelve o'clock the rings' names reach, written as
+ * lines in a column ending on twelve (§7.6): the angle, from the middle, of
+ * each line's lower left corner — at its ring's middle, as long as its name
+ * and the column's padding either side — and the furthest of them, which is
+ * the line nearest the middle unless a name further out is much longer.
+ */
+export function columnReach(
+  rings: CircleGeometry['rings'],
+  column: NonNullable<CircleLayoutOptions['column']>,
+  outer: number,
+): number {
+  let reach = 0
+  rings.forEach((ring, k) => {
+    const px = ringNamePx(column.px, ring)
+    if (px === null) return
+    const width = Math.min(column.measure(column.names[k] ?? '', px), outer * COLUMN_MAX)
+    const r = (ring.inner + ring.outer) / 2
+    reach = Math.max(reach, Math.atan2(2 * COLUMN_PAD + width, Math.max(1, r - px / 2)))
+  })
+  return reach
+}
+
+/** An angle as how far clockwise of twelve o'clock it is, `[−π, π)`: negative before twelve. */
+export function fromTwelve(angle: number): number {
+  return inTurn(angle + Math.PI) - TOP - Math.PI
 }
 
 /**
@@ -1644,15 +1736,14 @@ export function insideRibbon(
  * Which ring's foot is under a point, or `-1`: its inner edge, the one a
  * thicker ring moves (`circleGeometry` lays everything from the names
  * inwards), within `slack` pixels either way — three, which the four-pixel gap
- * between two rings holds. Never in the gap at twelve o'clock, which is where
- * the rings are held by their names.
+ * between two rings holds. Never in the opening at twelve o'clock, wherever
+ * it is, which is where the rings are held by their names.
  */
 export function ringEdgeAt(geometry: CircleGeometry, x: number, y: number, slack = 3): number {
   const dx = x - geometry.cx
   const dy = y - geometry.cy
-  // How far round from twelve o'clock, either way.
-  const off = Math.abs(inTurn(Math.atan2(dy, dx) + Math.PI) - TOP - Math.PI)
-  if (off <= geometry.topGap / 2) return -1
+  const off = fromTwelve(Math.atan2(dy, dx))
+  if (off >= geometry.gap.from && off <= geometry.gap.to) return -1
   const r = Math.hypot(dx, dy)
   return geometry.rings.findIndex((ring) => Math.abs(r - ring.inner) <= slack)
 }

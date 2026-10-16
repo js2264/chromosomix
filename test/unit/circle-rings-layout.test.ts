@@ -1,8 +1,9 @@
 /**
  * Where the circle's rings go and how a ring is resized (§7.6): inside the
  * sections or outside them, the sections then the inner circle round the
- * chords; what the pointer is over either way; and a ring's foot — its inner
- * edge — which a drag moves.
+ * chords; what the pointer is over either way; a ring's foot — its inner
+ * edge — which a drag moves; and the rings' names in a column before twelve
+ * o'clock, the arcs starting on it and ending short of them.
  *
  * Arithmetic over hand-built circles, as `circle-model.test.ts` is.
  */
@@ -11,14 +12,19 @@ import { describe, expect, it } from 'vitest'
 import type { AxisGroup, MatrixResult } from '../../src/worker/protocol'
 import {
   CHORD_CAP,
+  COLUMN_MAX,
+  COLUMN_PAD,
   TOP,
   carryRadius,
+  columnReach,
+  fromTwelve,
   circleGeometry,
   circleModelOf,
   hitCircle,
   radialCursor,
   radialStops,
   ringEdgeAt,
+  ringNamePx,
   ringScale,
   ringThickness,
   type CircleGeometry,
@@ -221,5 +227,84 @@ describe('the rings’ room', () => {
     expect(ringScale([100, 100], 100)).toBeCloseTo(0.5, 12)
     expect(ringThickness([100, 100], 100)).toEqual([50, 50])
     expect(ringThickness([200, 5], 102.5)).toEqual([100, 6])
+  })
+})
+
+describe('the rings’ names in a column before twelve', () => {
+  const model = threeGenomes()
+  const TAU = 2 * Math.PI
+  const names = ['hits_per_kb', 'GC', 'Completeness']
+  const column = { names, px: 10, measure: (text: string, px: number) => text.length * px * 0.6 }
+  const fitted = circleGeometry(model, { width: 700, height: 700, rings: RINGS, measure, fontPx: 11 })
+  const columned = circleGeometry(model, { width: 700, height: 700, rings: RINGS, measure, fontPx: 11, column })
+
+  it('starts every arc on twelve o’clock and ends them short of the widest line', () => {
+    // Without the column, too, the opening is just before twelve.
+    expect(fitted.column).toBe(false)
+    expect(fitted.gap).toEqual({ from: -fitted.topGap, to: 0 })
+    expect(fitted.arcs[0]).toBeCloseTo(TOP, 9)
+    expect(columned.column).toBe(true)
+    expect(columned.gap.to).toBe(0)
+    // The first arc starts on twelve exactly; the last ends where the opening starts.
+    expect(columned.arcs[0]).toBeCloseTo(TOP, 9)
+    expect(columned.arcs[5]).toBeCloseTo(TOP + TAU + columned.gap.from, 9)
+    expect(columned.topGap).toBeCloseTo(-columned.gap.from, 12)
+    expect(columned.topGap).toBeGreaterThan(fitted.topGap)
+  })
+
+  it('reaches as far back round as the lower left corner of the line nearest the middle', () => {
+    // Each line at its ring's middle, ending on twelve, its name and the
+    // padding either side; the first ring is the innermost and its line the lowest.
+    const corner = (k: number): number => {
+      const ring = columned.rings[k]
+      const r = (ring.inner + ring.outer) / 2
+      return Math.atan2(2 * COLUMN_PAD + names[k].length * 10 * 0.6, r - 10 / 2)
+    }
+    const reach = columnReach(columned.rings, column, columned.outer)
+    expect(reach).toBeCloseTo(Math.max(corner(0), corner(1), corner(2)), 12)
+    expect(reach).toBeCloseTo(corner(0), 12)
+    expect(-columned.gap.from).toBeGreaterThan(reach)
+    // Every line lies in the opening: no arc is drawn under a name.
+    for (let k = 0; k < 3; k++) expect(corner(k)).toBeLessThan(-columned.gap.from)
+  })
+
+  it('cuts a name past the column’s length rather than opening the circle for it', () => {
+    const long = { ...column, names: ['x'.repeat(400), 'GC', 'C'] }
+    const reach = columnReach(columned.rings, long, columned.outer)
+    const ring = columned.rings[0]
+    const r = (ring.inner + ring.outer) / 2
+    expect(reach).toBeCloseTo(Math.atan2(2 * COLUMN_PAD + columned.outer * COLUMN_MAX, r - 5), 12)
+  })
+
+  it('names no ring too thin to hold a line', () => {
+    expect(ringNamePx(10, { inner: 100, outer: 103 })).toBeNull()
+    expect(ringNamePx(10, { inner: 100, outer: 104 })).toBe(7)
+    expect(ringNamePx(10, { inner: 100, outer: 150 })).toBe(10)
+  })
+
+  it('puts no ring’s foot in the column, and reads angles either side of twelve', () => {
+    const ring = columned.rings[1]
+    const inColumn = TOP + columned.gap.from / 2
+    expect(ringEdgeAt(columned, ...at(columned, ring.inner, inColumn))).toBe(-1)
+    // Just past twelve, where the arcs start, the foot is the ring’s again.
+    expect(ringEdgeAt(columned, ...at(columned, ring.inner, TOP + 0.05))).toBe(1)
+    expect(fromTwelve(TOP + 0.1)).toBeCloseTo(0.1, 12)
+    expect(fromTwelve(TOP - 0.1)).toBeCloseTo(-0.1, 12)
+    expect(fromTwelve(TOP + Math.PI / 2)).toBeCloseTo(Math.PI / 2, 12)
+  })
+
+  it('keeps its opening through a zoom, which keeps every angle', () => {
+    const zoomed = circleGeometry(model, {
+      width: 700,
+      height: 700,
+      rings: RINGS,
+      measure,
+      fontPx: 11,
+      column,
+      zoom: { cx: 0, cy: 0, rim: columned.labelAt * 5, labelRoom: columned.outer - columned.labelAt, gap: columned.gap },
+    })
+    expect(zoomed.gap).toEqual(columned.gap)
+    expect([...zoomed.arcs]).toEqual([...columned.arcs])
+    expect(zoomed.column).toBe(true)
   })
 })

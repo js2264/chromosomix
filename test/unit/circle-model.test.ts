@@ -366,18 +366,19 @@ describe('the layout', () => {
     { genomeLength: (name) => ({ A: 1000, B: 2000, C: 1000 })[name] },
   ) as CircleModel
 
-  it('gives each section its share of the circle by length, from twelve o’clock, with gaps', () => {
+  it('gives each section its share of the circle by length, from twelve o’clock on, with gaps', () => {
     const geometry = circleGeometry(model, { width: 500, height: 400, rings: [], measure, fontPx: 11 })
     expect(geometry.cx).toBe(250)
     expect(geometry.cy).toBe(200)
     const spans = [0, 1, 2].map((u) => geometry.arcs[2 * u + 1] - geometry.arcs[2 * u])
     expect(spans[1] / spans[0]).toBeCloseTo(2, 6)
     expect(spans[2] / spans[0]).toBeCloseTo(1, 6)
-    expect(geometry.arcs[0]).toBeCloseTo(TOP + geometry.topGap / 2, 9)
+    // The first section starts on twelve, every time.
+    expect(geometry.arcs[0]).toBeCloseTo(TOP, 9)
     // Sections in order round the circle, never overlapping.
     for (let u = 1; u < 3; u++) expect(geometry.arcs[2 * u]).toBeGreaterThan(geometry.arcs[2 * u - 1])
-    // The last section stops short of the gap left open at twelve.
-    expect(geometry.arcs[5]).toBeCloseTo(TOP + 2 * Math.PI - geometry.topGap / 2, 9)
+    // The last stops short of the opening left just before twelve.
+    expect(geometry.arcs[5]).toBeCloseTo(TOP + 2 * Math.PI - geometry.topGap, 9)
   })
 
   it('stacks the rings between the sections and the chords, the first nearest the chords', () => {
@@ -720,8 +721,11 @@ describe('what the pointer is over', () => {
       kind: 'section',
       unit: 1,
     })
-    expect(unitAtAngle(geometry, TOP)).toBe(-1)
-    expect(hitCircle(geometry, model, chords, ...at(middle, TOP))).toBeNull()
+    // The opening just before twelve is nobody's; twelve itself is the first section's start.
+    const opening = TOP - geometry.topGap / 2
+    expect(unitAtAngle(geometry, opening)).toBe(-1)
+    expect(hitCircle(geometry, model, chords, ...at(middle, opening))).toBeNull()
+    expect(unitAtAngle(geometry, TOP + 1e-6)).toBe(0)
   })
 
   it('treats a label as its section, and a ring by its radius', () => {

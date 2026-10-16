@@ -1758,7 +1758,24 @@ export class MatrixPanel {
           'div',
           { class: 'field field-block' },
           el('span', { class: 'field-label', text: 'overlays' }),
-          el('div', { class: 'plot-icon-row' }, ...TRACK_ONLY_OPTIONS.map(optionToggle)),
+          el(
+            'div',
+            { class: 'plot-icon-row' },
+            ...TRACK_ONLY_OPTIONS.map(optionToggle),
+            // The 1D browser's name column, while the circle is drawn: the
+            // rings' names in a column before twelve, the arcs ending short of
+            // it (§7.6). Beside the square the lanes are named in the map's
+            // margins and have no column to switch on, so it steps aside there.
+            ...(this.options.round === undefined
+              ? []
+              : [
+                  (() => {
+                    const toggle = optionToggle('gutter')
+                    toggle.classList.add('circle-only')
+                    return toggle
+                  })(),
+                ]),
+          ),
         ),
         // The two legibility numbers on one line, because they are one question
         // asked twice — how easily can this picture be read — and the second is
@@ -5080,6 +5097,8 @@ export class MatrixPanel {
     this.el.classList.toggle('is-circle', active)
     if (was !== active) for (const watch of this.pictureWatchers) watch()
     this.controlsEl.classList.toggle('is-circle', active)
+    // …and the Tracks card, whose name column is the circle's alone.
+    this.plotEl.classList.toggle('is-circle', active)
     this.paintCircle(presentation, data === null || drawable)
     if (active) view.schedule()
   }

@@ -45,13 +45,14 @@ import type { Transform } from '../types'
 import {
   CHORD_CAP,
   CIRCLE_MAX_ZOOM,
+  COLUMN_MAX,
+  COLUMN_PAD,
   LIGHT_CIRCLE_PALETTE,
   NO_FOCUS,
   TOP,
   anglesInView,
   arcCurve,
   carryRadius,
-  inTurn,
   namesInView,
   radialCursor,
   radialStops,
@@ -61,7 +62,10 @@ import {
   chordBend,
   chordColour,
   circleGeometry,
+  fitText,
   fontPixels,
+  fromTwelve,
+  ringNamePx,
   circleModelOf,
   hitCircle,
   layoutChords,
@@ -641,8 +645,15 @@ export class CircleView {
         ? undefined
         : { width: box.width + 2 * KEY_INSET, height: box.height + 2 * KEY_INSET }
     const outside = ringPlacement() === 'outside'
+    // The rings' names in a column before twelve, the arcs ending short of it
+    // — the 1D browser's `name column`, which as there needs the names on at
+    // all (§7.6).
+    const plot = getPlotOptions()
+    const columned = plot.gutter && plot.text && slots.length > 0
+    const ringNames = slots.map(ringLabel)
     const key =
       `${width}x${height}|${font}|${names}|${outside ? 'out' : 'in'}|${corner?.width ?? 0}x${corner?.height ?? 0}|` +
+      `${columned ? `column:${ringNames.join('\u0001')}` : ''}|` +
       slots.map((slot) => `${slot.host.id}:${this.sizeOf(slot.host)}`).join(',')
     // Under the key, or in its corner where there is no key to stand under.
     if (this.keyAt !== null && box !== null) this.placeHint(this.keyAt.x, this.keyAt.y + box.height, slots.length > 0)
@@ -657,6 +668,23 @@ export class CircleView {
         fontPx: fontPixels(font),
         names,
         outside,
+        ...(columned
+          ? {
+              column: {
+                names: ringNames,
+                px: fontPixels(scaleFont(RING_NAME_FONT)),
+                // In the font the names are written in, and the font the
+                // sections' names are measured in put back after.
+                measure: (text: string, px: number): number => {
+                  const before = measure.font
+                  measure.font = `${px.toFixed(1)}px system-ui, sans-serif`
+                  const width = measure.measureText(text).width
+                  measure.font = before
+                  return width
+                },
+              },
+            }
+          : {}),
       }
       this.fitGeometry = circleGeometry(model, {
         ...this.layoutInputs,
@@ -726,7 +754,7 @@ export class CircleView {
     const room = fit.outer - fit.labelAt
     const laid = circleGeometry(model, {
       ...inputs,
-      zoom: { cx: width / 2 + offset.x, cy: height / 2 + offset.y, rim: fit.labelAt * zoom, labelRoom: room },
+      zoom: { cx: width / 2 + offset.x, cy: height / 2 + offset.y, rim: fit.labelAt * zoom, labelRoom: room, gap: fit.gap },
     })
     const windows = anglesInView(laid, { x0: 0, y0: 0, x1: width, y1: height })
     const named = namesInView(model, laid, unitsInView(laid, windows), inputs.names)
@@ -909,7 +937,7 @@ export class CircleView {
       id: slot.host.id,
       // An overlay group's ring is named by the group, as the reader named
       // it; the tooltip names each of its tracks beside its value.
-      label: slot.overlaid.length > 0 && slot.host.style.group !== '' ? slot.host.style.group : slot.host.label,
+      label: ringLabel(slot),
       members: members.map(({ entry, content, bins }) => ({
         id: entry.id,
         label: entry.label,
@@ -1184,6 +1212,8 @@ export class CircleView {
       outer: round(geometry.outer),
       outside: geometry.outside,
       topGap: Math.round(geometry.topGap * 1e4) / 1e4,
+      gap: [Math.round(geometry.gap.from * 1e4) / 1e4, Math.round(geometry.gap.to * 1e4) / 1e4],
+      column: geometry.column,
       grips: this.nameBoxes.map((box) => ({
         id: box.id,
         x: round((box.x0 + box.x1) / 2),
@@ -1337,31 +1367,39 @@ export class CircleView {
     // is drawn: off, the rings are ink alone.
     if (this.rings.length === 0 || !getPlotOptions().text) return
     ctx.save()
-    ctx.textAlign = 'center'
+    // Right-aligned on twelve o'clock, before it — where the tracks start, as
+    // the 1D browser's names end where its tracks begin — over the ends of the
+    // tracks; or in the column, where the arcs end short of the names and no
+    // track is drawn under one.
+    const column = geometry.column
+    ctx.textAlign = 'right'
     ctx.textBaseline = 'middle'
     ctx.lineJoin = 'round'
-    // As large as the label font, and no larger than the ring is thick plus its
-    // gap, so a stack of thin rings is a stack of names rather than a smear.
     const wanted = fontPixels(scaleFont(RING_NAME_FONT))
     this.rings.forEach((ring, k) => {
       const band = geometry.rings[k]
       if (band === undefined) return
-      const px = Math.min(wanted, band.outer - band.inner + 3)
-      if (px < 7) return
+      const px = ringNamePx(wanted, band)
+      if (px === null) return
       const held = this.isHeld(ring.id)
       const lit = live && !held && this.drag === null && this.gripHover === ring.id
       ctx.font = `${held || lit ? '600 ' : ''}${px.toFixed(1)}px system-ui, sans-serif`
       const r = (band.inner + band.outer) / 2
-      const x = geometry.cx + Math.cos(TOP) * r
+      const x = geometry.cx + Math.cos(TOP) * r - COLUMN_PAD
       const y = geometry.cy + Math.sin(TOP) * r
+      // A name longer than the column may be loses its middle, as a section's
+      // name does — the column was measured to the same length.
+      const text = column ? fitText(ctx, ring.label, geometry.outer * COLUMN_MAX) : ring.label
       ctx.lineWidth = 3
       ctx.strokeStyle = palette.halo
-      ctx.strokeText(ring.label, x, y)
-      ctx.fillStyle = held ? palette.accent : lit ? palette.text : palette.dim
-      ctx.fillText(ring.label, x, y)
+      ctx.strokeText(text, x, y)
+      // In the text's own ink in the column, where nothing is under a name; dim
+      // over the ends of the tracks without it.
+      ctx.fillStyle = held ? palette.accent : lit || column ? palette.text : palette.dim
+      ctx.fillText(text, x, y)
       if (live) {
-        const half = ctx.measureText(ring.label).width / 2 + 3
-        this.nameBoxes.push({ id: ring.id, x0: x - half, y0: y - px / 2 - 2, x1: x + half, y1: y + px / 2 + 2 })
+        const width = ctx.measureText(text).width
+        this.nameBoxes.push({ id: ring.id, x0: x - width - 3, y0: y - px / 2 - 2, x1: x + 3, y1: y + px / 2 + 2 })
       }
     })
     ctx.restore()
@@ -1957,9 +1995,9 @@ export class CircleView {
     const dx = at.x - geometry.cx
     const dy = at.y - geometry.cy
     const r = Math.hypot(dx, dy)
-    // How far round from twelve o'clock, either way.
-    const off = Math.abs(inTurn(Math.atan2(dy, dx) + Math.PI) - TOP - Math.PI)
-    if (off > geometry.topGap / 2) return null
+    // In the opening just before twelve o'clock, narrow or the column's.
+    const off = fromTwelve(Math.atan2(dy, dx))
+    if (off < geometry.gap.from || off > geometry.gap.to) return null
     const k = geometry.rings.findIndex((band) => r >= band.inner - 2 && r <= band.outer + 2)
     return k < 0 ? null : (this.rings[k]?.id ?? null)
   }
@@ -2287,6 +2325,14 @@ export class CircleView {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * What a ring is called: its track's name, or an overlay group's, as the reader
+ * named it — the tooltip names each of its tracks beside its value.
+ */
+function ringLabel(slot: RingSlot): string {
+  return slot.overlaid.length > 0 && slot.host.style.group !== '' ? slot.host.style.group : slot.host.label
+}
 
 /** What a ring holds at an angle of a section, as the card says it. */
 function ringValue(content: RingContent, bins: CircleBins, unit: number, angle: number): string {

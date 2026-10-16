@@ -2759,7 +2759,8 @@ under its genome's band, which is how a reader asks which contigs of one genome 
 `sections=contigs`, absent for genomes, derived and a reading as `circle` is; every other block has
 one cut, and the row is hidden there. An arc is as long as its section in base pairs — read from the
 file's genome and contig tables where the block does not carry them — with a small gap between two
-sections and a wider opening at twelve o'clock, which is where the rings are named.
+sections. **Every arc starts on twelve o'clock**, the first section's and every ring's, and runs
+clockwise to a wider opening just before twelve, which is where the rings are named.
 
 **The names are the square's labels** (`namePolicy`). They follow the Map card's `labels` overlay —
 block names, the square's in its gutters — so they are **off** where that is, which is its default
@@ -2862,7 +2863,8 @@ variants, a karyotype, bar charts) as wedges; a metadata column or a set of clas
 stretch of each section's contigs — in the store's order, the first nearest the chords, each as thick
 as its lane is tall where they all fit in the room above a chord disc kept to a third of the radius,
 in proportion where they do not (`ringThickness`), and never under six pixels; on a faint band of its
-own, named at twelve o'clock in a size its thickness can hold. **No ceiling of their own**: a ring is
+own, named at twelve o'clock — right-aligned on it, before it, as the 1D browser's names end where
+its tracks begin — in a size its thickness can hold. **No ceiling of their own**: a ring is
 its lane bent round, and a ring once held under a sixth of the radius kept a default lane under its
 height on any circle smaller than the window, so a ring dragged thicker came out thinner.
 
@@ -2874,9 +2876,21 @@ density (`ui/circlePrefs.ts`), since it is how a reader likes the picture laid o
 shows. Every layer is laid from the names inwards, so the rim holds still and the chord disc gives
 way: a ring made thicker moves its inner edge, and everything inside it, towards the middle.
 
+**The rings' names in a column.** The 1D browser's `name column` (§8.8), the same preference, is
+offered on the Tracks card while the circle is drawn. Off, the names lie over the ends of the tracks,
+the opening before twelve only as wide as the gaps between sections need. On — with `track text`, as
+there — they get a **column of their own before twelve**: each name a line at its ring's middle,
+right-aligned on twelve, in the text's own ink. The arcs — every section, the band, every ring —
+still start on twelve, and **end short of the column's widest line**: the lower left corner of
+whichever line reaches furthest back round — the one nearest the middle, unless a name further out is
+much longer (`columnReach`) — and two section gaps more. Nothing is drawn under a name, the circle is open by as much as its names take, and a name
+longer than nine twentieths of the radius loses its middle (`COLUMN_MAX`) rather than opening the
+circle further. A ring is held by its line in the column as by its name without one, its foot is
+nowhere in it, and a zoom keeps its opening as it keeps every angle.
+
 **A ring is resized by its foot** — its inner edge, the one a thicker ring moves, as a lane's far
 border is the one a taller lane moves in the 1D browser (§8.8). Within three pixels of it, anywhere
-but the gap at twelve o'clock where the rings are held, the browser's own rule is drawn round it in
+but the opening before twelve o'clock where the rings are held, the browser's own rule is drawn round it in
 the crosshair's blue, under the double arrow along the radius (`ringEdgeAt`, `radialCursor`); a drag
 in or out sets its track's height, a pixel of height a pixel where the rings fit — the foot under the
 hand — and that divided by how far they are squeezed where they share their room (`ringScale`), so a
@@ -2885,7 +2899,8 @@ the hand. Let go, it is the track's height in the store, the lanes' beside every
 overlay group's host's, as in its lane — and Escape puts it back.
 
 **The Tracks card's switches are the rings'**, as they are every lane's (`RingInk`): `track text`
-writes the rings' names, and off leaves the ink alone; `track fill` fills an area ring under its
+writes the rings' names, and off leaves the ink alone; `name column`, offered only while the circle
+is drawn, writes them in a column of their own before twelve (above); `track fill` fills an area ring under its
 line, and off leaves the line; `track outline` draws an area's or a line's profile, and the tops of a
 bar ring's bars, as a dark hairline — a rule along the top, a step a bin, since a box round each of a
 thousand bars a pixel wide is the ring drawn black — and round every feature; `track floor` rules
