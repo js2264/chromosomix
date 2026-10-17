@@ -42,6 +42,7 @@ import { everyTrackOpacityField } from './AnnotationCard'
 import { KEYS, keyLabel, optionKey, shiftKey, withKey } from './commands'
 import { cardTitle, icon, iconButton } from './icons'
 import { CircleView, type CirclePresentation } from './CircleView'
+import { LinesView, paintSplitSelect } from './LinesView'
 import { circleCuts, circleUnitsOf } from '../render/circle'
 import { orderBlock, type AxisGenomes } from '../render/blockOrder'
 import type { OrderRanks } from '../state/readerOrder'
@@ -295,6 +296,11 @@ const CIRCLE_HINT =
 
 /** Why a block with fewer than two sections is not drawn round. */
 const CIRCLE_TOO_FEW = 'A circle needs two or more genomes or contigs to join.'
+
+/** The two lines' toggle (§7.6), in the circle's two words. */
+const LINES_HINT =
+  'Draw the map as two lines — the genomes split in two by a column of the Genomes table, one value ' +
+  'on each line, joined by ribbons as wide as their contacts, the tracks as lanes — from the same cells.'
 
 /**
  * One stroke along the main diagonal: the line the view is put back on.
@@ -1187,6 +1193,21 @@ export class MatrixPanel {
   /** Where the circle is mounted: beside the grid, in the panel's body. */
   private readonly circleHost: HTMLElement = el('div', { class: 'circle-host' })
   /**
+   * The block drawn as two lines (§7.6), built the first time it is asked for
+   * and kept beside the circle's view, in the same host, drawn instead of it;
+   * and its toggle, beside the circle's.
+   */
+  private linesView: LinesView | null = null
+  private linesButton: HTMLButtonElement | null = null
+  /** The Map card's `split by` select, the two lines' own row. */
+  private splitSelect: HTMLSelectElement | null = null
+  /**
+   * The circle's rows the two lines do not answer to — where the rings go —
+   * and the two lines' own, each shown only beside its picture.
+   */
+  private readonly roundOnly: HTMLElement[] = []
+  private readonly linesOnly: HTMLElement[] = []
+  /**
    * The Map card's rows that are about the square and not the circle — the
    * score, the clip, the overlays, the other picture toggles — set aside while
    * the circle is drawn; and the one row that is only the circle's.
@@ -1633,6 +1654,7 @@ export class MatrixPanel {
       // and in the CLI, where it is a parameter rather than a label.
       field('colours', colormapSelect, 'The ramp; a ✓ marks a colour-vision-safe one. afmhot_r is what the CLI draws.'),
       ...(options.round === undefined ? [] : [this.sectionsField(), this.chordsField(), this.tracksField()]),
+      ...(options.round?.lines === undefined ? [] : [this.splitField()]),
       ...(options.order?.reset === undefined ? [] : [this.orderField()]),
       clipRow,
     ]
@@ -1699,7 +1721,7 @@ export class MatrixPanel {
       caption: (now) => this.figureCaption(now),
       exportName: () => this.exportName,
       round: () => {
-        const figure = this.circleActive() ? (this.circleView?.figure() ?? null) : null
+        const figure = this.roundView()?.figure() ?? null
         return figure === null ? null : { ...figure, caption: (now: Date) => this.circleCaption(now) }
       },
     })
@@ -1994,6 +2016,24 @@ export class MatrixPanel {
       this.circleButton = button
       picture.push(button)
     }
+    // The two lines (§7.6), beside the circle: the same block, its genomes split
+    // in two by a column of the Genomes table. A light, as the circle is; the
+    // two are one picture or the other.
+    const lines = options.round?.lines
+    if (lines !== undefined && lines.onChange !== undefined) {
+      const button = iconButton(
+        'align-vertical-space-between',
+        LINES_HINT,
+        () => {
+          const held = this.options.round?.lines
+          held?.onChange?.(held.on !== true)
+        },
+        { class: 'btn btn-icon btn-toggle', size: 15 },
+      )
+      button.setAttribute('aria-pressed', String(lines.on === true))
+      this.linesButton = button
+      picture.push(button)
+    }
 
     // Then the refine, because it decides what the two after it are *of*: the
     // turn changes the geometry and `O/E` changes the units, and both of those
@@ -2140,7 +2180,7 @@ export class MatrixPanel {
     }
 
     for (const control of picture) {
-      if (control !== this.circleButton && control !== refit) this.squareOnly.push(control)
+      if (control !== this.circleButton && control !== this.linesButton && control !== refit) this.squareOnly.push(control)
     }
     if (picture.length > 0) {
       controls.unshift(
@@ -2215,6 +2255,8 @@ export class MatrixPanel {
     controls.push(overlaysRow)
     for (const row of this.squareOnly) row.classList.add('square-only')
     for (const row of this.circleOnly) row.classList.add('circle-only')
+    for (const row of this.roundOnly) row.classList.add('round-only')
+    for (const row of this.linesOnly) row.classList.add('lines-only')
 
     this.controlsEl = el(
       'div',
@@ -2592,6 +2634,21 @@ export class MatrixPanel {
     if (this.canToggleCircle) this.circleButton?.click()
   }
 
+  /** Whether the two lines' toggle is offered here and can be pressed (§7.6). */
+  get canToggleLines(): boolean {
+    return this.linesButton !== null && !this.linesButton.disabled
+  }
+
+  /** Whether the two lines are drawn, for the palette's chip; `null` where they are not offered. */
+  get linesLit(): boolean | null {
+    return this.linesButton === null ? null : this.linesButton.getAttribute('aria-pressed') === 'true'
+  }
+
+  /** The palette's press on the two lines' toggle. */
+  toggleLines(): void {
+    if (this.canToggleLines) this.linesButton?.click()
+  }
+
   /** `e`: the O/E toggle's press (§7.5), whatever its button would do. */
   toggleExpected(): void {
     if (this.canToggleExpected) this.expectedButton?.click()
@@ -2614,8 +2671,9 @@ export class MatrixPanel {
   fitTracks(): void {
     // Drawn round, the rings are the lanes, and the room to fill is the depth
     // between the sections and the chords (§7.6) — the grid is put away.
-    if (this.circleActive()) {
-      const size = this.circleView?.fillingRingSize() ?? null
+    const round = this.roundView()
+    if (round !== null) {
+      const size = round.fillingRingSize()
       if (size !== null) this.setTrackHeight(size)
       return
     }
@@ -2666,7 +2724,8 @@ export class MatrixPanel {
    * lane to put it in.
    */
   private sizedLanes(): Array<{ members: readonly AnnotationEntry[] }> {
-    if (this.circleActive() && this.circleView !== null) return this.circleView.ringLanes()
+    const round = this.roundView()
+    if (round !== null) return round.ringLanes()
     return LANE_EDGES.flatMap((edge) => this.lanes.lanesOn(edge))
   }
 
@@ -2980,6 +3039,8 @@ export class MatrixPanel {
     this.unsubscribeRingColumn()
     this.circleView?.destroy()
     this.circleView = null
+    this.linesView?.destroy()
+    this.linesView = null
     this.themeWatchers()
     this.narrowWatcher()
     this.observer?.disconnect()
@@ -3050,8 +3111,9 @@ export class MatrixPanel {
 
   /** Refit the block to the canvas, undoing every pan and zoom — the circle's, while it is drawn. */
   fit(): void {
-    if (this.circleActive()) {
-      this.circleView?.resetZoom()
+    const round = this.roundView()
+    if (round !== null) {
+      round.resetZoom()
       return
     }
     this.heatmap.fit()
@@ -5123,18 +5185,25 @@ export class MatrixPanel {
     this.syncCircle()
   }
 
-  /** Whether the picture on screen is the circle. */
-  private circleActive(): boolean {
-    return this.circleView !== null && this.el.classList.contains('is-circle')
+  /** The circle or the two lines, whichever is drawn now; `null` while the square is. */
+  private roundView(): CircleView | LinesView | null {
+    // Neither built — which is also every call made while the panel itself is
+    // being built, before it has an element to ask.
+    if (this.circleView === null && this.linesView === null) return null
+    if (!this.el.classList.contains('is-circle')) return null
+    return this.el.classList.contains('is-lines') ? this.linesView : this.circleView
   }
 
   /**
-   * Draw the block round or square, as the presentation and the block say.
+   * Draw the block round, as two lines or square, as the presentation and the
+   * block say.
    *
-   * The circle is built the first time it is asked for, and from then on is
-   * handed every block and every scale the square is, so the two never
-   * disagree about what they show. Where the block cannot be drawn round — one
-   * section, a rectangle — the square stays and the toggle says why.
+   * Each picture is built the first time it is asked for, and from then on is
+   * handed every block and every scale the square is, so none disagrees with
+   * the others about what they show. Where the block cannot be drawn round — one
+   * section, a rectangle — the square stays and the toggle says why; the two
+   * lines, asked for, are drawn whatever the block, and say on the picture what
+   * they need — a column, or a second line.
    */
   private syncCircle(): void {
     const presentation = this.options.round
@@ -5146,52 +5215,90 @@ export class MatrixPanel {
     const cut = cuts.includes(presentation?.cut ?? 'genomes') ? (presentation?.cut ?? 'genomes') : (cuts[0] ?? 'genomes')
     this.sectionsRow?.classList.toggle('hidden', cuts.length < 2 || presentation?.onCut === undefined)
     if (this.sectionsSelect !== null) this.sectionsSelect.value = cut
-    const asked = presentation?.on === true && presentation.refusal === undefined
+    const lines = presentation?.lines
+    if (this.splitSelect !== null && lines !== undefined) {
+      paintSplitSelect(this.splitSelect, lines.choices, lines.split?.column ?? null)
+    }
+    const linesAsked = lines?.on === true && lines.refusal === undefined
+    const asked = !linesAsked && presentation?.on === true && presentation.refusal === undefined
     const drawable = data !== null && circleUnitsOf(data, {}, 1, cut) !== null
+    const annotations = this.options.annotations
+    const viewOptions = {
+      store: this.laneStore,
+      map: this.mapId,
+      ...(annotations?.client === undefined ? {} : { client: annotations.client }),
+      ...(annotations?.metadata === undefined ? {} : { metadata: annotations.metadata }),
+      ...(annotations?.groups === undefined ? {} : { groups: annotations.groups }),
+      presentation: () => this.options.round,
+      keyTitle: () => this.circleKeyTitle(),
+    }
     if (asked && drawable && this.circleView === null) {
-      const annotations = this.options.annotations
-      this.circleView = new CircleView({
-        store: this.laneStore,
-        map: this.mapId,
-        ...(annotations?.client === undefined ? {} : { client: annotations.client }),
-        ...(annotations?.metadata === undefined ? {} : { metadata: annotations.metadata }),
-        ...(annotations?.groups === undefined ? {} : { groups: annotations.groups }),
-        presentation: () => this.options.round,
-        keyTitle: () => this.circleKeyTitle(),
-      })
+      this.circleView = new CircleView(viewOptions)
       this.circleHost.appendChild(this.circleView.el)
     }
+    if (linesAsked && data !== null && this.linesView === null) {
+      this.linesView = new LinesView(viewOptions)
+      this.circleHost.appendChild(this.linesView.el)
+    }
+    const scale = { transform: this.transform, colormap: this.colormap, limit: chordLimit() }
     const view = this.circleView
     if (view !== null && data !== null) {
       view.setBlock(data, Math.max(1, this.options.binsize), cut)
-      view.setScale({ transform: this.transform, colormap: this.colormap, limit: chordLimit() })
+      view.setScale(scale)
     }
-    const active = asked && drawable && view !== null
+    const flat = this.linesView
+    if (flat !== null && data !== null && lines !== undefined) {
+      flat.setSplit(lines.split)
+      flat.setBlock(data, Math.max(1, this.options.binsize), cut)
+      flat.setScale(scale)
+    }
+    const round = asked && drawable && view !== null
+    const laid = linesAsked && flat !== null
+    const active = round || laid
     const was = this.el.classList.contains('is-circle')
+    const wasLines = this.el.classList.contains('is-lines')
     this.el.classList.toggle('is-circle', active)
-    if (was !== active) for (const watch of this.pictureWatchers) watch()
-    this.controlsEl.classList.toggle('is-circle', active)
-    // …and the Tracks card, whose name column is the circle's alone.
-    this.plotEl.classList.toggle('is-circle', active)
+    this.el.classList.toggle('is-lines', laid)
+    view?.el.classList.toggle('hidden', !round)
+    flat?.el.classList.toggle('hidden', !laid)
+    if (was !== active || wasLines !== laid) for (const watch of this.pictureWatchers) watch()
+    for (const card of [this.controlsEl, this.plotEl]) {
+      card.classList.toggle('is-circle', active)
+      // …and the Tracks card, whose name column is the circle's alone.
+      card.classList.toggle('is-lines', laid)
+    }
     this.paintCircle(presentation, data === null || drawable)
-    if (active) view.schedule()
+    if (round) view.schedule()
+    if (laid) flat.schedule()
   }
 
   /**
-   * Light the circle's toggle, or grey it with the reason.
+   * Light the circle's toggle and the two lines', or grey each with its reason.
    *
    * Greyed where the session refuses this view outright — a pair, a window of
-   * one sequence — and where the block in hand has fewer than two sections; lit
-   * where it is drawn.
+   * one sequence, and for the two lines one genome — and the circle where the
+   * block in hand has fewer than two sections; lit where it is drawn.
    */
   private paintCircle(presentation: CirclePresentation | undefined, drawable: boolean): void {
+    if (presentation === undefined) return
+    const linesOn = presentation.lines?.on === true && presentation.lines.refusal === undefined
     const button = this.circleButton
-    if (button === null || presentation === undefined) return
-    const refusal = presentation.refusal ?? (drawable ? null : CIRCLE_TOO_FEW)
-    button.disabled = refusal !== null
-    button.setAttribute('aria-pressed', String(presentation.on === true && refusal === null))
-    button.title = refusal ?? CIRCLE_HINT
-    button.setAttribute('aria-label', refusal ?? CIRCLE_HINT)
+    if (button !== null) {
+      const refusal = presentation.refusal ?? (drawable ? null : CIRCLE_TOO_FEW)
+      button.disabled = refusal !== null
+      button.setAttribute('aria-pressed', String(presentation.on === true && refusal === null && !linesOn))
+      button.title = refusal ?? CIRCLE_HINT
+      button.setAttribute('aria-label', refusal ?? CIRCLE_HINT)
+    }
+    const lines = presentation.lines
+    const linesButton = this.linesButton
+    if (linesButton !== null && lines !== undefined) {
+      const refusal = lines.refusal ?? null
+      linesButton.disabled = refusal !== null
+      linesButton.setAttribute('aria-pressed', String(linesOn))
+      linesButton.title = refusal ?? LINES_HINT
+      linesButton.setAttribute('aria-label', refusal ?? LINES_HINT)
+    }
   }
 
   /**
@@ -5268,6 +5375,43 @@ export class MatrixPanel {
       'Draw the tracks as rings inside the arcs, round the chords, or outside them, the arcs then the inner circle.',
     )
     this.circleOnly.push(row)
+    this.roundOnly.push(row)
+    return row
+  }
+
+  /**
+   * The `split by` row (§7.6): the column of the Genomes table the two lines
+   * split the genomes by — those that can, with their two values, and the rest
+   * greyed with why not — and beside it the swap of which value is on top. The
+   * session's, as the toggle is: a link names the column.
+   */
+  private splitField(): HTMLElement {
+    const select = el('select', { class: 'select', attrs: { 'aria-label': 'Split the genomes by' } })
+    select.addEventListener('change', () => {
+      // Through `this.options`, for the toggle's reason.
+      if (select.value !== '') this.options.round?.lines?.onColumn?.(select.value)
+    })
+    this.splitSelect = select
+    const swap = iconButton(
+      'arrow-up-down',
+      'Swap the two lines: the other value on top',
+      () => this.options.round?.lines?.onSwap?.(),
+      { class: 'btn btn-icon', size: 15 },
+    )
+    // Not a `field()`, whose `<label>` would press the swap for a click on its
+    // name; and the whole width of the card under its label, as the overlays
+    // are, since a column is read by its name and its two values both.
+    const row = el(
+      'div',
+      {
+        class: 'field field-block',
+        title: 'Split the genomes into two lines by a column of the Genomes table with two values; a genome with no value is left out.',
+      },
+      el('span', { class: 'field-label', text: 'split by' }),
+      el('div', { class: 'split-row' }, select, swap),
+    )
+    this.circleOnly.push(row)
+    this.linesOnly.push(row)
     return row
   }
 
@@ -5306,7 +5450,7 @@ export class MatrixPanel {
       PLOT_OPTION_ICONS.gutter,
       withKey(`${PLOT_OPTION_LABELS.gutter.label} — ${RING_COLUMN_HINT}`, PLOT_OPTION_KEYS.gutter),
       () => setRingColumn(!ringColumn()),
-      { class: 'btn btn-icon btn-toggle circle-only', size: 15 },
+      { class: 'btn btn-icon btn-toggle circle-only round-only', size: 15 },
     )
     node.setAttribute('aria-pressed', String(ringColumn()))
     this.columnButton = node
@@ -5344,23 +5488,40 @@ export class MatrixPanel {
     if (context?.file !== undefined && context.file !== '') parts.push(context.file)
     const depth = context?.depth?.() ?? null
     if (depth !== null && depth.mode !== 'none') parts.push(depthPhrase(depth))
-    const model = this.circleView?.circle ?? null
+    const round = this.roundView()
+    const flat = round instanceof LinesView ? round : null
+    const model = round?.circle ?? null
+    // Ribbons between two lines, chords round a circle: the caption says which.
+    const noun = flat === null ? 'chords' : 'ribbons'
     if (model !== null) {
-      // A zoomed figure is a detail of the circle, and says how much of it.
-      const noun = model.kind === 'genome' ? 'genomes' : 'contigs'
-      const view = this.circleView?.zoomInView() ?? null
-      parts.push(
-        view === null
-          ? `${fmt.int(model.units.length)} ${noun}`
-          : `${fmt.int(model.units.length)} ${noun}, ${fmt.int(view.sections)} in view at ×${
-              view.zoom < 10 ? view.zoom.toFixed(1) : fmt.int(Math.round(view.zoom))
-            }`,
-      )
-      const drawn = this.circleView?.chordsDrawn() ?? 0
+      const sections = model.kind === 'genome' ? 'genomes' : 'contigs'
+      const split = flat?.drawnSplit ?? null
+      const lines = flat?.drawnLines ?? null
+      if (split !== null && lines !== null) {
+        // Which column split them, which value is on which line and how many
+        // genomes each holds, and how many had no value and are not drawn.
+        const count = (line: 0 | 1): number => model.units.filter((_, u) => lines.side[u] === line).length
+        parts.push(
+          `${split.column}: ${split.levels[0]} on top (${fmt.int(count(0))} ${sections}), ` +
+            `${split.levels[1]} below (${fmt.int(count(1))})`,
+        )
+        if (lines.leftOut > 0) parts.push(`${fmt.int(lines.leftOut)} with no value left out`)
+      } else {
+        // A zoomed figure is a detail of the circle, and says how much of it.
+        const view = round?.zoomInView() ?? null
+        parts.push(
+          view === null
+            ? `${fmt.int(model.units.length)} ${sections}`
+            : `${fmt.int(model.units.length)} ${sections}, ${fmt.int(view.sections)} in view at ×${
+                view.zoom < 10 ? view.zoom.toFixed(1) : fmt.int(Math.round(view.zoom))
+              }`,
+        )
+      }
+      const drawn = round?.chordsDrawn() ?? 0
       parts.push(
         drawn >= model.pairs
-          ? `${fmt.int(drawn)} chords`
-          : `the strongest ${fmt.int(drawn)} of ${fmt.int(model.pairs)} chords`,
+          ? `${fmt.int(drawn)} ${noun}`
+          : `the strongest ${fmt.int(drawn)} of ${fmt.int(model.pairs)} ${noun}`,
       )
     }
     if (this.options.balance === true) parts.push('balanced')
@@ -5368,8 +5529,8 @@ export class MatrixPanel {
     // The two ends of the ramp, as the key states them and as the square's
     // caption states its colours: with the key turned off they are the figure's
     // only statement of what the chords' colours mean.
-    const range = this.circleView?.chordRange() ?? null
-    if (range !== null) parts.push(`chords ${formatCount(range.lo)} to ${formatCount(range.hi)}`)
+    const range = round?.chordRange() ?? null
+    if (range !== null) parts.push(`${noun} ${formatCount(range.lo)} to ${formatCount(range.hi)}`)
     parts.push(captionStamp(now))
     return { title, detail: parts.join(' · ') }
   }
@@ -5772,9 +5933,10 @@ export class MatrixPanel {
    */
   repaint(): void {
     this.schedule()
-    // And the circle's, whose rings read the same columns and whose sections
-    // wait on the contigs table the same way (§7.6).
+    // And the circle's and the two lines', whose rings and lanes read the same
+    // columns and whose sections wait on the contigs table the same way (§7.6).
     this.circleView?.schedule()
+    this.linesView?.schedule()
   }
 
   /**

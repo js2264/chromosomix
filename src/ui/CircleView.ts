@@ -27,17 +27,9 @@ import { SampleCache } from '../annotations/samples'
 import type { AnnotationClient } from '../annotations/worker/client'
 import type { AnnotationStore } from '../annotations/store'
 import type { MapId } from '../annotations/placement'
-import {
-  OVERLAY_DIM,
-  extentFor,
-  planStack,
-  resolveGroupExtents,
-  type GroupSettings,
-} from '../annotations/groups'
-import { colormapOf, type AnnotationEntry, type AnnotationKind, type TrackSampleSet } from '../annotations/types'
-import type { MetaBlock } from '../annotations/metadata'
-import { LocusAxis, type LocusSegment } from '../render/locus'
-import { resolveLimits } from '../render/tracks'
+import type { GroupSettings } from '../annotations/groups'
+import type { AnnotationEntry, TrackSampleSet } from '../annotations/types'
+import type { LocusAxis } from '../render/locus'
 import { formatCount } from '../render/legend'
 import { inverseTransform } from '../render/scale'
 import type { MatrixResult } from '../worker/protocol'
@@ -93,7 +85,6 @@ import {
   binSamples,
   bpAtAngle,
   circleBins,
-  featureArcs,
   paintRing,
   sequenceAt,
   sequenceIndex,
@@ -104,11 +95,25 @@ import {
   type FeatureArc,
   type RingContent,
   type RingInk,
-  type RingPaint,
   type SequenceIndex,
 } from '../render/circleRings'
 import type { MetaSource } from './AnnotationLanes'
 import { ringBlockOrder } from './ringOrder'
+import type { LineSplit, SplitChoice } from '../app/lineSplit'
+import {
+  META_KINDS,
+  SIGNAL_KINDS,
+  circleAxis,
+  drawRings,
+  ringContentOf,
+  ringLabel,
+  ringSlotsOf,
+  sequenceBlock,
+  valuesContent,
+  type HeldRing,
+  type RingDrawn,
+  type RingSlot,
+} from './ringContents'
 import { CROSSHAIR_COLOR } from '../render/heatmap'
 
 /**
@@ -153,6 +158,30 @@ export interface CirclePresentation {
   onMoveUnit?(moved: CircleUnit, anchor: CircleUnit, side: DropSide): void
   /** A genome of the band over contig sections carried beside another, by name. */
   onMoveGroup?(moved: string, anchor: string, side: DropSide): void
+  /**
+   * The other picture of the same block (§7.6): the genomes on two lines, split
+   * by a column of the Genomes table (`ui/LinesView.ts`). It shares the
+   * circle's sections, its clicks, its order and its rows on the Map card, and
+   * is drawn instead of it. Absent where the panel offers only the circle.
+   */
+  lines?: LinesPresentation
+}
+
+/** The two lines, as the session hands them to a view (§7.6). */
+export interface LinesPresentation {
+  /** Whether the reader has asked for them: drawn instead of the square, and of the circle. */
+  on: boolean
+  onChange?(on: boolean): void
+  /** Why this view cannot be drawn as two lines, where it cannot — one genome, a pair, a window. */
+  refusal?: string
+  /** The genomes split by the column chosen, or `null` before one is — the picture then asks for one. */
+  split: LineSplit | null
+  /** Every column of the Genomes table, each with its two levels or the reason it cannot split them. */
+  choices: readonly SplitChoice[]
+  /** A column chosen to split the genomes by. */
+  onColumn?(column: string): void
+  /** The other level on the top line. */
+  onSwap?(): void
 }
 
 export interface CircleViewOptions {
@@ -176,41 +205,6 @@ export interface CircleScale {
   limit: number
 }
 
-/** The kinds a ring can be drawn from, by what is drawn. */
-const SIGNAL_KINDS: ReadonlySet<AnnotationKind> = new Set<AnnotationKind>(['track', 'sequence', 'alignments'])
-const META_KINDS: ReadonlySet<AnnotationKind> = new Set<AnnotationKind>(['metadata', 'classes'])
-const FEATURE_KINDS: ReadonlySet<AnnotationKind> = new Set<AnnotationKind>([
-  'segments',
-  'gtf',
-  'variants',
-  'ideogram',
-  'barchart',
-])
-
-/** Whether a row can be a ring at all. */
-export function drawsAsRing(entry: AnnotationEntry): boolean {
-  return SIGNAL_KINDS.has(entry.kind) || META_KINDS.has(entry.kind) || FEATURE_KINDS.has(entry.kind)
-}
-
-/**
- * One ring's tracks, as one lane's: a track, or an overlay group's tracks
- * drawn into the band of the first of them (`planStack`, the lanes' own plan).
- */
-interface RingSlot {
-  host: AnnotationEntry
-  overlaid: AnnotationEntry[]
-}
-
-/** A ring as drawn: its slot's tracks, each with its numbers and its look resolved. */
-interface RingDrawn {
-  /** The first track's id, which the ring is held and moved by. */
-  id: string
-  /** What is written at twelve o'clock: the track's name, or an overlay group's. */
-  label: string
-  /** Each track, with the bins its numbers are in: the whole circle's, or the zoom's. */
-  members: Array<RingPaint & { bins: CircleBins }>
-}
-
 /**
  * A zoomed picture's own bins and numbers (`windowBins`): as fine as the screen
  * across what is in view, computed once the view holds still and drawn for as
@@ -225,10 +219,10 @@ interface Detail {
   contents: Map<string, { from: readonly unknown[]; content: RingContent }>
 }
 
-/** The label font, and its bold for the lit section. */
-const LABEL_FONT = '10px system-ui, sans-serif'
-const LABEL_BOLD = '600 10px system-ui, sans-serif'
-const RING_NAME_FONT = '10px system-ui, sans-serif'
+/** The label font, and its bold for the lit section — the two lines' too. */
+export const LABEL_FONT = '10px system-ui, sans-serif'
+export const LABEL_BOLD = '600 10px system-ui, sans-serif'
+export const RING_NAME_FONT = '10px system-ui, sans-serif'
 const KEY_TITLE_FONT = '600 11px system-ui, sans-serif'
 const KEY_FONT = '10px system-ui, sans-serif'
 
@@ -267,12 +261,12 @@ const DETAIL_PAD = 0.5
 const DETAIL_STRETCHES = 4
 
 /** The key's distance from the picture's corner, its ramp's height, and its gap beside the circle. */
-const KEY_INSET = 10
+export const KEY_INSET = 10
 const KEY_BAR = 8
 const KEY_GAP = 16
 
 /** Pixels the pointer travels before a press becomes a drag: a ring carried, or the view panned. */
-const DRAG_SLOP = 5
+export const DRAG_SLOP = 5
 
 /** A press that has not yet become a click or a pan. */
 interface Press {
@@ -314,12 +308,6 @@ interface Carry {
   moved: boolean
   /** Where it lands if let go now; `null` where it is, or beside itself. */
   drop: { index: number; side: DropSide; at: number } | null
-}
-
-/** A binned ring, kept until its inputs change. */
-interface HeldRing {
-  key: unknown
-  content: RingContent
 }
 
 export class CircleView {
@@ -618,15 +606,7 @@ export class CircleView {
    * share the first one's ring, as they share its lane beside the map.
    */
   private ringSlots(): RingSlot[] {
-    const rows = this.options.store.drawnAnywhereOn(this.options.map).filter(drawsAsRing)
-    const groups = this.options.groups
-    const slots: RingSlot[] = planStack(rows, {
-      groupOf: (entry) => entry.style.group,
-      modeOf: (group) => groups?.modeOf(group) ?? 'stacked',
-      sizeOf: (entry) => entry.style.size,
-      gap: 0,
-      minimum: 1,
-    }).map((slot) => ({ host: slot.host, overlaid: slot.overlaid }))
+    const slots = ringSlotsOf(this.options.store, this.options.map, this.options.groups)
     const drag = this.drag
     if (drag === null || !drag.moved) return slots
     const byId = new Map(slots.map((slot) => [slot.host.id, slot]))
@@ -956,42 +936,13 @@ export class CircleView {
     const whole = this.bins
     if (whole === null) return []
     const detail = this.detailCovers() ? this.detail : null
-    const built = slots.map((slot) => ({
-      slot,
-      members: [slot.host, ...slot.overlaid].map((entry) => {
-        // The zoom's own numbers where it has them, the whole circle's until then.
-        const fine = detail === null ? null : this.detailContentOf(entry, detail)
-        return fine !== null && detail !== null
-          ? { entry, content: fine, bins: detail.bins }
-          : { entry, content: this.contentOf(entry), bins: whole }
-      }),
-    }))
-    const groups = resolveGroupExtents(
-      built.flatMap(({ members }) => members).map(({ entry, content }) => ({
-        group: entry.style.group,
-        extent: content.kind === 'values' ? content.values.extent : null,
-      })),
-      (group) => this.options.groups?.scalingOf(group) ?? 'shared',
-    )
-    return built.map(({ slot, members }) => ({
-      id: slot.host.id,
-      // An overlay group's ring is named by the group, as the reader named
-      // it; the tooltip names each of its tracks beside its value.
-      label: ringLabel(slot),
-      members: members.map(({ entry, content, bins }) => ({
-        id: entry.id,
-        label: entry.label,
-        colour: entry.style.colour,
-        bins,
-        // Overlaid tracks are translucent by necessity, as in their lane: two
-        // opaque areas in one band hide each other.
-        opacity: members.length > 1 ? entry.style.opacity * OVERLAY_DIM : entry.style.opacity,
-        content:
-          content.kind === 'values'
-            ? this.valuesContent(entry, content.values, undefined, extentFor(entry, content.values.extent, groups))
-            : content,
-      })),
-    }))
+    return drawRings(slots, this.options.groups, (entry) => {
+      // The zoom's own numbers where it has them, the whole circle's until then.
+      const fine = detail === null ? null : this.detailContentOf(entry, detail)
+      return fine !== null && detail !== null
+        ? { content: fine, bins: detail.bins }
+        : { content: this.contentOf(entry), bins: whole }
+    })
   }
 
   /**
@@ -1034,7 +985,7 @@ export class CircleView {
       }
       if (held !== undefined && sameList(held.from, sets)) return held.content
       const samples = joinSamples(sets)
-      return keep(sets, this.valuesContent(entry, binSamples(samples, detail.bins, index), samples.note))
+      return keep(sets, valuesContent(entry, binSamples(samples, detail.bins, index), samples.note))
     }
     if (META_KINDS.has(entry.kind)) {
       const metadata = this.options.metadata
@@ -1048,7 +999,7 @@ export class CircleView {
         revision,
         binned.kind === 'qualitative'
           ? { kind: 'classes', classes: binned as BinnedClasses }
-          : this.valuesContent(entry, binned as BinnedValues),
+          : valuesContent(entry, binned as BinnedValues),
       )
     }
     return null
@@ -1107,88 +1058,17 @@ export class CircleView {
     if (model === null || bins === null || index === null || geometry === null) {
       return { kind: 'empty', note: '' }
     }
-    if (model.units.every((unit) => unit.sequences.length === 0)) {
-      return { kind: 'empty', note: 'The contigs of these genomes are still being read.' }
-    }
-    if (SIGNAL_KINDS.has(entry.kind)) {
-      const axis = this.axis
-      if (axis === null || this.samples === null) return { kind: 'empty', note: '' }
-      const samples = this.samples.samplesFor({
-        entry: entry.id,
-        scope: 'circle',
-        axis,
-        domain: [0, axis.unitEnd],
-        pixels: bins.count,
-        ...(entry.derivedFrom === undefined ? {} : { derived: entry.derivedFrom }),
-        ...(entry.style.reads === undefined ? {} : { reads: entry.style.reads }),
-      })
-      if (samples === null) return { kind: 'empty', note: 'reading…' }
-      const held = this.held.get(entry.id)
-      let values: BinnedValues
-      if (held !== undefined && held.key === samples && held.content.kind === 'values') {
-        values = held.content.values
-      } else {
-        values = binSamples(samples, bins, index)
-      }
-      const content = this.valuesContent(entry, values, samples.note)
-      this.held.set(entry.id, { key: samples, content })
-      return content
-    }
-    if (META_KINDS.has(entry.kind)) {
-      const metadata = this.options.metadata
-      if (metadata === undefined) return { kind: 'empty', note: '' }
-      const key = `${metadata.revision()}`
-      const held = this.held.get(entry.id)
-      if (held !== undefined && held.key === key && held.content.kind !== 'empty') {
-        return held.content.kind === 'values' ? this.valuesContent(entry, held.content.values) : held.content
-      }
-      const cells = metadata.cellsFor(entry, sequenceBlock(model))
-      if (cells === null) {
-        return {
-          kind: 'empty',
-          note:
-            entry.source.kind === 'metadata' && entry.source.table === 'bins'
-              ? 'A column of /bins is drawn beside a map, where a cell is a bin.'
-              : 'reading…',
-        }
-      }
-      const binned = binCells(cells, model, bins)
-      const content: RingContent =
-        binned.kind === 'qualitative'
-          ? { kind: 'classes', classes: binned as BinnedClasses }
-          : this.valuesContent(entry, binned as BinnedValues)
-      this.held.set(entry.id, { key, content })
-      return content
-    }
-    if (FEATURE_KINDS.has(entry.kind) && entry.payload?.kind === 'features') {
-      const set = entry.payload.data
-      const held = this.held.get(entry.id)
-      const key = { set, geometry }
-      if (held !== undefined && sameKey(held.key, key)) return held.content
-      const content: RingContent = { kind: 'features', arcs: featureArcs(set, model, geometry, index) }
-      this.held.set(entry.id, { key, content })
-      return content
-    }
-    return { kind: 'empty', note: '' }
-  }
-
-  /** A row's numbers with its limits and look resolved, against its own extent or its group's. */
-  private valuesContent(
-    entry: AnnotationEntry,
-    values: BinnedValues,
-    note?: string,
-    extent: BinnedValues['extent'] = values.extent,
-  ): RingContent {
-    const limits = resolveLimits(entry.style.limits, extent)
-    if (values.extent === null && note !== undefined && note !== '') return { kind: 'empty', note }
-    return {
-      kind: 'values',
-      values,
-      limits,
-      mode: entry.style.mode,
-      colormap: colormapOf(entry.style, limits),
-      flip: entry.style.flip === true,
-    }
+    return ringContentOf(entry, {
+      model,
+      bins,
+      index,
+      axis: this.axis,
+      geometry,
+      samples: this.samples,
+      metadata: this.options.metadata,
+      held: this.held,
+      scope: 'circle',
+    })
   }
 
   // -------------------------------------------------------------------------
@@ -1513,47 +1393,9 @@ export class CircleView {
     const key = this.keyLayout(ctx)
     const at = this.keyAt
     if (key === null || at === null) return
-    ctx.save()
-    const x = at.x
-    let y = at.y
-    if (this.zoom > 1) {
-      // Zoomed, the circle runs under the key: a card beneath it, so the ramp
-      // and its numbers are read against the page and not against the chords.
-      const pad = 6
-      ctx.globalAlpha = 0.92
-      ctx.fillStyle = palette.halo
-      ctx.beginPath()
-      roundedBox(ctx, x - pad, y - pad, key.width + 2 * pad, key.height + 2 * pad, 4)
-      ctx.fill()
-      ctx.globalAlpha = 0.3
-      ctx.strokeStyle = palette.dim
-      ctx.lineWidth = 0.75
-      ctx.stroke()
-      ctx.globalAlpha = 1
-    }
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'top'
-    ctx.fillStyle = palette.text
-    ctx.font = key.titleFont
-    ctx.fillText(key.title, x, y)
-    y += key.titlePx + 5
-    const steps = 48
-    for (let k = 0; k < steps; k++) {
-      ctx.fillStyle = chordColour(this.scale.colormap, k / (steps - 1))
-      ctx.fillRect(x + (key.barWidth * k) / steps, y, key.barWidth / steps + 0.5, KEY_BAR)
-    }
-    y += KEY_BAR + 3
-    ctx.font = key.font
-    ctx.fillStyle = palette.dim
-    const lo = inverseTransform(chords.range.lo, this.scale.transform)
-    const hi = inverseTransform(chords.range.hi, this.scale.transform)
-    ctx.fillText(formatCount(lo), x, y)
-    ctx.textAlign = 'right'
-    ctx.fillText(formatCount(hi), x + key.barWidth, y)
-    ctx.textAlign = 'left'
-    y += key.px + 4
-    ctx.fillText(key.count, x, y)
-    ctx.restore()
+    // Zoomed, the circle runs under the key: a card beneath it, so the ramp and
+    // its numbers are read against the page and not against the chords.
+    paintChordKey(ctx, key, at, { ...this.scale, range: chords.range }, palette, this.zoom > 1)
   }
 
   /**
@@ -1561,51 +1403,13 @@ export class CircleView {
    * circle is sized to leave the box clear, and the box depends only on the
    * words — what the numbers are, and how many chords of how many.
    */
-  private keyLayout(ctx: CanvasRenderingContext2D): {
-    title: string
-    count: string
-    titleFont: string
-    font: string
-    titlePx: number
-    px: number
-    barWidth: number
-    width: number
-    height: number
-  } | null {
+  private keyLayout(ctx: CanvasRenderingContext2D): ChordKey | null {
     const model = this.model
     const drawn = this.chordsDrawn()
     // The Map card's `legend`, which is the square's key: off, the circle has
     // none, on screen or in a figure, and the corner it kept is the circle's.
     if (model === null || drawn === 0 || !getPlotOptions().legend) return null
-    const titleFont = scaleFont(KEY_TITLE_FONT)
-    const font = scaleFont(KEY_FONT)
-    const title = this.options.keyTitle()
-    // How many of how many, and the select beside the card says which: the
-    // strongest.
-    const count =
-      drawn >= model.pairs
-        ? `${fmt.int(drawn)} ${drawn === 1 ? 'chord' : 'chords'}`
-        : `${fmt.int(drawn)} of ${fmt.int(model.pairs)} chords`
-    ctx.save()
-    ctx.font = titleFont
-    const titleWidth = ctx.measureText(title).width
-    ctx.font = font
-    const countWidth = ctx.measureText(count).width
-    ctx.restore()
-    const barWidth = Math.max(96, Math.min(150, titleWidth))
-    const titlePx = fontPixels(titleFont)
-    const px = fontPixels(font)
-    return {
-      title,
-      count,
-      titleFont,
-      font,
-      titlePx,
-      px,
-      barWidth,
-      width: Math.max(barWidth, titleWidth, countWidth),
-      height: titlePx + 5 + KEY_BAR + 3 + px + 4 + px,
-    }
+    return chordKeyLayout(ctx, this.options.keyTitle(), chordCount(drawn, model.pairs, 'chord'))
   }
 
   /**
@@ -2574,14 +2378,6 @@ export class CircleView {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * What a ring is called: its track's name, or an overlay group's, as the reader
- * named it — the tooltip names each of its tracks beside its value.
- */
-function ringLabel(slot: RingSlot): string {
-  return slot.overlaid.length > 0 && slot.host.style.group !== '' ? slot.host.style.group : slot.host.label
-}
-
 /** What a ring holds at an angle of a section, as the card says it. */
 function ringValue(content: RingContent, bins: CircleBins, unit: number, angle: number): string {
   if (content.kind === 'empty') return content.note === '' ? 'nothing here' : content.note
@@ -2610,46 +2406,6 @@ function samplesCover(samples: TrackSampleSet, axis: LocusAxis, domain: readonly
       (region) => region.contig === window.contig && region.start <= window.start && region.end >= window.end,
     ),
   )
-}
-
-/**
- * The circle's sequences as one axis, end to end, a base pair a unit — what
- * the sample cache asks the worker for, one region a sequence.
- */
-function circleAxis(model: CircleModel): LocusAxis {
-  const segments: LocusSegment[] = []
-  let at = 0
-  for (const unit of model.units) {
-    for (const sequence of unit.sequences) {
-      const length = Math.max(0, sequence.length)
-      if (length === 0) continue
-      segments.push({
-        contig: sequence.name,
-        unitStart: at,
-        unitEnd: at + length,
-        bpStart: 0,
-        bpPerUnit: 1,
-        contigLength: length,
-      })
-      at += length
-    }
-  }
-  return new LocusAxis(segments)
-}
-
-/**
- * The circle's sequences as a contig-level block, one cell a sequence — the
- * shape the metadata index resolves a `/genomes` or `/contigs` column onto, a
- * genome's value broadcast to each of its contigs (§8.12).
- */
-function sequenceBlock(model: CircleModel): MetaBlock {
-  const runs: Array<{ label: string; start: number; end: number }> = []
-  for (const unit of model.units) {
-    for (const sequence of unit.sequences) {
-      runs.push({ label: sequence.name, start: runs.length, end: runs.length + 1 })
-    }
-  }
-  return { level: 'contig', runs, cells: runs.length, blockStart: 0, binsPerCell: 1 }
 }
 
 /** Several reads of one track as one set, for one binning: their regions together. */
@@ -2704,13 +2460,102 @@ function sameSections(a: CircleModel, b: CircleModel): boolean {
   return lengths.size === a.units.length && b.units.every((unit) => lengths.get(key(unit)) === unit.bp)
 }
 
-function sameKey(a: unknown, b: { set: unknown; geometry: unknown }): boolean {
-  return (
-    typeof a === 'object' &&
-    a !== null &&
-    (a as { set?: unknown }).set === b.set &&
-    (a as { geometry?: unknown }).geometry === b.geometry
-  )
+/** A chord key's words and box (§7.6): the circle's, and the two lines'. */
+export interface ChordKey {
+  title: string
+  count: string
+  titleFont: string
+  font: string
+  titlePx: number
+  px: number
+  barWidth: number
+  width: number
+  height: number
+}
+
+/** How many of how many: `1,073 chords`, `the strongest` being what the `chords` select beside the card says. */
+export function chordCount(drawn: number, pairs: number, noun: 'chord' | 'ribbon'): string {
+  return drawn >= pairs
+    ? `${fmt.int(drawn)} ${drawn === 1 ? noun : `${noun}s`}`
+    : `${fmt.int(drawn)} of ${fmt.int(pairs)} ${noun}s`
+}
+
+/** The key's box, measured in the text size the reader set. */
+export function chordKeyLayout(ctx: CanvasRenderingContext2D, title: string, count: string): ChordKey {
+  const titleFont = scaleFont(KEY_TITLE_FONT)
+  const font = scaleFont(KEY_FONT)
+  ctx.save()
+  ctx.font = titleFont
+  const titleWidth = ctx.measureText(title).width
+  ctx.font = font
+  const countWidth = ctx.measureText(count).width
+  ctx.restore()
+  const barWidth = Math.max(96, Math.min(150, titleWidth))
+  const titlePx = fontPixels(titleFont)
+  const px = fontPixels(font)
+  return {
+    title,
+    count,
+    titleFont,
+    font,
+    titlePx,
+    px,
+    barWidth,
+    width: Math.max(barWidth, titleWidth, countWidth),
+    height: titlePx + 5 + KEY_BAR + 3 + px + 4 + px,
+  }
+}
+
+/**
+ * The key: its title, the ramp the chords or ribbons are coloured from, its two
+ * ends in the map's own units, and how many are drawn — on a card of the page's
+ * colour where the picture runs under it.
+ */
+export function paintChordKey(
+  ctx: CanvasRenderingContext2D,
+  key: ChordKey,
+  at: { x: number; y: number },
+  scale: { colormap: string; transform: Transform; range: { lo: number; hi: number } },
+  palette: CirclePalette,
+  card: boolean,
+): void {
+  ctx.save()
+  const x = at.x
+  let y = at.y
+  if (card) {
+    const pad = 6
+    ctx.globalAlpha = 0.92
+    ctx.fillStyle = palette.halo
+    ctx.beginPath()
+    roundedBox(ctx, x - pad, y - pad, key.width + 2 * pad, key.height + 2 * pad, 4)
+    ctx.fill()
+    ctx.globalAlpha = 0.3
+    ctx.strokeStyle = palette.dim
+    ctx.lineWidth = 0.75
+    ctx.stroke()
+    ctx.globalAlpha = 1
+  }
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'top'
+  ctx.fillStyle = palette.text
+  ctx.font = key.titleFont
+  ctx.fillText(key.title, x, y)
+  y += key.titlePx + 5
+  const steps = 48
+  for (let k = 0; k < steps; k++) {
+    ctx.fillStyle = chordColour(scale.colormap, k / (steps - 1))
+    ctx.fillRect(x + (key.barWidth * k) / steps, y, key.barWidth / steps + 0.5, KEY_BAR)
+  }
+  y += KEY_BAR + 3
+  ctx.font = key.font
+  ctx.fillStyle = palette.dim
+  ctx.fillText(formatCount(inverseTransform(scale.range.lo, scale.transform)), x, y)
+  ctx.textAlign = 'right'
+  ctx.fillText(formatCount(inverseTransform(scale.range.hi, scale.transform)), x + key.barWidth, y)
+  ctx.textAlign = 'left'
+  y += key.px + 4
+  ctx.fillText(key.count, x, y)
+  ctx.restore()
 }
 
 /**

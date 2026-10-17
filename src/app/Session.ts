@@ -107,7 +107,8 @@ import type {
   DerivePresentation,
   TurnPresentation,
 } from '../ui/MatrixPanel'
-import type { CirclePresentation } from '../ui/CircleView'
+import type { CirclePresentation, LinesPresentation } from '../ui/CircleView'
+import { lineSplit, splitChoices, type SplitChoice } from './lineSplit'
 import { slotCount, type CircleResolver, type CircleUnit } from '../render/circle'
 import type { AxisGenomes } from '../render/blockOrder'
 import {
@@ -807,6 +808,8 @@ export class Session {
   private orderHeld: { key: string; store: OrderStore; off: () => void } | null = null
   /** Every contig in the reader's order, kept until the table or the order moves. */
   private arrangedContigsMemo: { names: string[]; order: ReaderOrder; out: number[] } | null = null
+  /** The Genomes table's columns as the two lines' `split by` offers them (§7.6), kept per table. */
+  private splitChoicesMemo: { genomes: GenomesResult; choices: readonly SplitChoice[] } | null = null
   /**
    * The second file in the lower-left triangle, and everything it takes to
    * hold one: its reader, its gate, its eye, and its carry across a change of
@@ -1299,8 +1302,9 @@ export class Session {
     if (state === null || this.current?.panel === undefined) return null
     // The circle's rings follow each section's contigs, whatever the square
     // beside it is read at (§7.6): a genome × genome circle draws a contig's GC
-    // along its genome's arc, and no circle draws a bin's weight.
-    if (this.current.panel.circleLit === true) return 'contig'
+    // along its genome's arc, and no circle draws a bin's weight — nor do the
+    // two lines' lanes, which hold what the rings hold.
+    if (this.current.panel.circleLit === true || this.current.panel.linesLit === true) return 'contig'
     switch (state.view) {
       case 'overview':
         return overviewLevel(state)
@@ -6146,14 +6150,16 @@ export class Session {
     const uri = state.uri
     return {
       // Absent is the square, as for the turn: the circle is what gets written
-      // down, and only when the reader asks for it.
-      on: state.circle === true,
+      // down, and only when the reader asks for it — and drawing it puts the
+      // two lines away, which are the other picture of the same block.
+      on: state.circle === true && state.lines !== true,
       onChange: (on) => {
-        this.store.patch({ circle: on ? true : undefined })
+        this.store.patch({ circle: on ? true : undefined, lines: undefined })
         this.rederive()
         // What the Metadata card offers is what the picture on screen can draw.
         this.metadataCard?.refresh()
       },
+      lines: this.linesPresentation(state),
       // Its cut, where the block offers two: written down only when it is not
       // the genomes, as the circle itself is only when it is drawn.
       cut: state.sections === 'contigs' ? 'contigs' : 'genomes',
@@ -6200,6 +6206,63 @@ export class Session {
         })
       },
     }
+  }
+
+  /**
+   * The two lines (§7.6), as the view on screen is handed them: the genomes
+   * split by a column of the Genomes table, offered wherever the circle is and
+   * greyed, each with its reason, where they have no genomes to split — one
+   * genome's contigs, which all have its value; a pair, which is a rectangle; a
+   * window of one sequence — or where no column of the table holds two values.
+   */
+  private linesPresentation(state: ViewState): LinesPresentation {
+    const file = this.file
+    const choices = this.splitChoices()
+    const split =
+      file === null || state.split === undefined
+        ? null
+        : lineSplit(file.genomes.table, file.genomes.display, state.split, state.top)
+    const why =
+      state.view === 'genome'
+        ? 'One genome’s contigs all have its value; the two lines split genomes — tick some in the Genomes table, or open the whole metagenome.'
+        : state.view === 'pair'
+          ? 'A pair of genomes is a rectangle; tick both in the Genomes table, with others, to split them over two lines.'
+          : state.view === 'region'
+            ? 'A window of one sequence has no genomes to split; the two lines are drawn of genomes, or of their contigs.'
+            : choices.every((choice) => choice.levels === null)
+              ? 'No column of the Genomes table holds two values to split the genomes by.'
+              : undefined
+    return {
+      on: state.lines === true,
+      onChange: (on) => {
+        this.store.patch({ lines: on ? true : undefined, circle: undefined })
+        this.rederive()
+        this.metadataCard?.refresh()
+      },
+      ...(why === undefined ? {} : { refusal: why }),
+      split,
+      choices,
+      // A new column starts with its first value on top.
+      onColumn: (column) => {
+        this.store.patch({ split: column, top: undefined })
+        this.rederive()
+      },
+      onSwap: () => {
+        if (split === null) return
+        this.store.patch({ top: split.levels[1] })
+        this.rederive()
+      },
+    }
+  }
+
+  /** Every column of the Genomes table as the two lines' `split by` offers it, once per table. */
+  private splitChoices(): readonly SplitChoice[] {
+    const genomes = this.file?.genomes ?? null
+    if (genomes === null) return []
+    if (this.splitChoicesMemo?.genomes !== genomes) {
+      this.splitChoicesMemo = { genomes, choices: splitChoices(genomes.table, genomes.display) }
+    }
+    return this.splitChoicesMemo.choices
   }
 
   // -------------------------------------------------------------------------

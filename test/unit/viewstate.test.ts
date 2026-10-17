@@ -637,6 +637,21 @@ describe('the circle in the hash', () => {
     expect(READING_KEYS).toContain('circle')
     expect(READING_KEYS).toContain('sections')
   })
+
+  /**
+   * The two lines (§7.6) on the circle's terms, with the column they split the
+   * genomes by and which of its values is on top: any text, which the view
+   * checks against the file's own table.
+   */
+  it('carries the two lines, their column and their top line', () => {
+    const lines: ViewState = { ...base, lines: true, split: 'GC content', top: '1' }
+    expect(serialiseViewState(lines)).toContain('lines=true&split=GC%20content&top=1')
+    expect(parseViewState(serialiseViewState(lines))).toEqual(lines)
+    expect(parseViewState('uri=a.metacool&lines=1&split=')?.split).toBeUndefined()
+    expect(differsOnlyInPresentation(base, lines)).toBe(true)
+    expect(differsOnlyInPresentation(lines, { ...lines, top: '0' })).toBe(true)
+    for (const key of ['lines', 'split', 'top'] as const) expect(READING_KEYS).toContain(key)
+  })
 })
 
 /**

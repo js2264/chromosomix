@@ -443,6 +443,22 @@ export const GENERATED_ICONS = {
     ['circle', {"cx":"5","cy":"19","r":"2"}],
     ],
   },
+  'align-vertical-space-between': {
+    shapes: [
+    ['rect', {"width":"14","height":"6","x":"5","y":"15","rx":"2"}],
+    ['rect', {"width":"10","height":"6","x":"7","y":"3","rx":"2"}],
+    ['path', {"d":"M2 21h20"}],
+    ['path', {"d":"M2 3h20"}],
+    ],
+  },
+  'arrow-up-down': {
+    shapes: [
+    ['path', {"d":"m21 16-4 4-4-4"}],
+    ['path', {"d":"M17 20V4"}],
+    ['path', {"d":"m3 8 4-4 4 4"}],
+    ['path', {"d":"M7 4v16"}],
+    ],
+  },
   'square': {
     shapes: [
     ['rect', {"width":"18","height":"18","x":"3","y":"3","rx":"2"}],

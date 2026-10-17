@@ -4354,6 +4354,56 @@ p {
   display: none !important;
 }
 
+/* …and between the circle and the two lines, which share the rest (§7.6): where
+   the rings go is the circle's alone, and the column the genomes are split by
+   is the lines' alone. */
+.controls-card.is-lines .round-only,
+.controls-card:not(.is-lines) .lines-only {
+  display: none !important;
+}
+
+/* The two lines are wider than they are tall: two lines across the column, as
+   tall as their lanes and the ribbons between them need and no taller than
+   seven tenths of its width. */
+.circle-wrap.lines-wrap {
+  height: min(var(--circle-budget), 70cqi);
+}
+
+/* What the two lines say where they draw nothing (§7.6): pick a column, or why
+   the one picked leaves a line empty — in the middle of the picture, the
+   `split by` select under the words. */
+.lines-prompt {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 1rem;
+  text-align: center;
+}
+
+.lines-prompt-text {
+  max-width: 28rem;
+  margin: 0;
+  color: var(--text-dim);
+  font-size: var(--step--1);
+  line-height: 1.4;
+}
+
+.lines-prompt .select {
+  min-width: 14rem;
+}
+
+/* The `split by` select and its swap, on one line: the select takes the room. */
+.split-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.3rem;
+  align-items: center;
+}
+
 @media (hover: none) {
   .map-hint,
   .browser-hint {

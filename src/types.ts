@@ -613,6 +613,24 @@ export interface ViewState {
    */
   sections?: 'contigs'
   /**
+   * Whether a metagenome's map is drawn as **two lines** (§7.6): its genomes
+   * split in two by a column of the Genomes table ({@link split}), each value's
+   * genomes along a line, the contacts between the two lines as ribbons and the
+   * tracks as lanes. Absent is the square, as for the circle; the two are one
+   * picture or the other, and drawing either puts the other away. A reading,
+   * kept across a navigation as the circle is. A dev feature (§29).
+   */
+  lines?: boolean
+  /**
+   * The column of the Genomes table the two lines split the genomes by — one
+   * holding two values over the genomes on screen. Absent until the reader
+   * picks one; kept beside `lines` when they are put away, so the next two
+   * lines are drawn by it.
+   */
+  split?: string
+  /** Which of {@link split}'s two values is drawn on the top line; absent is the first in order. */
+  top?: string
+  /**
    * The window a `browser` view is open at: `chrI:1,001-20,000`, 1-based
    * inclusive, as every genome browser writes one and as the locus box accepts
    * one. Absent means the whole genome, which is where a browser opens.

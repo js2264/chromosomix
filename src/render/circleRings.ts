@@ -80,7 +80,7 @@ export function sequenceIndex(model: CircleModel): SequenceIndex {
  * value; and bins of one section are equal in base pairs, so a bin is a
  * stretch of genome and its value is what that stretch holds.
  */
-export function circleBins(model: CircleModel, geometry: CircleGeometry, count: number): CircleBins {
+export function circleBins(model: CircleModel, geometry: Pick<CircleGeometry, 'arcs'>, count: number): CircleBins {
   const n = model.units.length
   let total = 0
   for (let u = 0; u < n; u++) total += Math.max(0, geometry.arcs[2 * u + 1] - geometry.arcs[2 * u])
@@ -381,11 +381,12 @@ function meanOf(sum: Float64Array, weight: Float64Array): BinnedValues {
   return { kind: 'quantitative', values, extent: min > max ? null : { min, max } }
 }
 
-/** A feature as an arc: the angles it spans, and which feature it is. */
+/** A feature as an arc: the angles it spans, which feature it is, and the section it is in. */
 export interface FeatureArc {
   a0: number
   a1: number
   index: number
+  unit: number
 }
 
 /**
@@ -399,7 +400,7 @@ export interface FeatureArc {
 export function featureArcs(
   set: FeatureSet,
   model: CircleModel,
-  geometry: CircleGeometry,
+  geometry: Pick<CircleGeometry, 'arcs'>,
   index: SequenceIndex,
   cap = 200_000,
 ): FeatureArc[] {
@@ -415,7 +416,7 @@ export function featureArcs(
       const start = at.offset + Math.max(0, set.start[i])
       const end = at.offset + Math.min(at.length, set.end[i])
       if (!(end > start)) continue
-      out.push({ a0: a0 + start * per, a1: a0 + end * per, index: i })
+      out.push({ a0: a0 + start * per, a1: a0 + end * per, index: i, unit: at.unit })
     }
   }
   return out

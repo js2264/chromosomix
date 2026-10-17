@@ -50,6 +50,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the `<` `>` steps. An order rather than an edit: the file is read as it is stored, the order is kept
   per file by name, carried by a workspace and a share link, and the Map card's `order` row puts the
   file's order back.
+  **The same map can be drawn as two lines** (the toggle after the orbit, *Two lines* in the
+  palette, `lines=true&split=…` in the link): the genomes split in two by a column of the Genomes
+  table — `split by` lists every column, those with exactly two values with their values and the rest
+  greyed with why not, a genome with no value left out — one value's genomes along a line at the top
+  and the other's along the bottom, each line as wide as the picture, ribbons only between a genome of
+  one line and a genome of the other, the tracks as lanes above and below, the line titles, the lanes'
+  names and the key in a column to the left. A swap puts the other value on top; sections are dragged
+  along their line into the same reader's order; hovering, clicking, the contig level under genome
+  bands and the PNG and PDF figures are the circle's.
   The Aesthetics column drives it as it drives the square and the lanes: the names follow the Map
   card's `labels` (off by default, as for the square), with the square's rule — every name up to
   fifty, past that only contigs of 50 kb or more, and never a thousand genomes', whose room the
@@ -57,7 +66,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   pointer and `tooltip` its card; the Tracks card's track text, fill, outline, floor, opacity, text
   size, height, stretch and shrink act on the rings; and a track group shares one range across its
   rings, or one ring when it is drawn in one lane. `node scripts/ui-circle.mjs` drives it on the
-  mock community.
+  mock community, and `node scripts/ui-lines.mjs` the reader's order and the two lines.
 
 - **Tab goes on to the next field of its kind (§26.8).** In any field edited in place, Tab now takes
   what was typed, as Enter does, and puts the caret in the next field of the same kind — Shift+Tab

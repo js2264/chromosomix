@@ -82,6 +82,7 @@ export class SessionCommands {
     const chip = (on: boolean): 'on' | 'off' => (on ? 'on' : 'off')
     const expected = this.session.current?.panel?.expectedLit ?? null
     const drawnRound = this.session.current?.panel?.circleLit ?? null
+    const drawnLines = this.session.current?.panel?.linesLit ?? null
     if (this.session.assembly !== null) {
       return [
         {
@@ -374,6 +375,19 @@ export class SessionCommands {
               ...(drawnRound === null ? {} : { state: chip(drawnRound) }),
               enabled: this.session.current?.panel?.canToggleCircle === true,
               run: () => this.session.current?.panel?.toggleCircle(),
+            },
+            // The two lines beside it, on the same terms: the toggle after the
+            // orbit on the Map card.
+            {
+              id: 'map-lines',
+              group: 'View' as const,
+              title: 'Two lines',
+              hint:
+                'The map drawn as two lines — the genomes split in two by a column of the Genomes table, ' +
+                'ribbons between them as wide as their contacts, the tracks as lanes.',
+              ...(drawnLines === null ? {} : { state: chip(drawnLines) }),
+              enabled: this.session.current?.panel?.canToggleLines === true,
+              run: () => this.session.current?.panel?.toggleLines(),
             },
           ]
         : []),

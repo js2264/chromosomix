@@ -319,7 +319,7 @@ function genomeLookup(runs: readonly AxisGroup[] | undefined): (cell: number) =>
 }
 
 /** Consecutive contig sections of one genome, where there are several genomes. */
-function groupsOf(units: readonly CircleUnit[]): CircleGroup[] | null {
+export function groupsOf(units: readonly CircleUnit[]): CircleGroup[] | null {
   const groups: CircleGroup[] = []
   for (let i = 0; i < units.length; i++) {
     const genome = units[i].genome
@@ -348,7 +348,23 @@ export function circleModelOf(
   cut: CircleCut = 'genomes',
 ): CircleModel | null {
   const found = circleUnitsOf(data, resolver, bpPerCell, cut)
-  if (found === null) return null
+  return found === null ? null : modelOfUnits(data, found, cap)
+}
+
+/**
+ * The chords and the contacts of sections already cut — every one of the
+ * block's, or some of them: the two lines (`render/lines.ts`) leave out the
+ * genomes with no value, whose cells then add to nothing. `keep` says which
+ * pairs may have a chord, every pair where it is absent; a pair it refuses adds
+ * to neither section's contacts with the others, so a section's share is of
+ * the contacts the picture draws.
+ */
+export function modelOfUnits(
+  data: MatrixResult,
+  found: { units: CircleUnit[]; kind: CircleUnitKind; groups: CircleGroup[] | null },
+  cap = CHORD_CAP,
+  keep?: (a: number, b: number) => boolean,
+): CircleModel {
   const { units, kind, groups } = found
   const n = data.nrows
   const unitOf = new Int32Array(n).fill(-1)
@@ -370,7 +386,7 @@ export function circleModelOf(
     if (current < 0) return
     for (let other = current + 1; other < count; other++) {
       const weight = row[other]
-      if (weight > 0) {
+      if (weight > 0 && (keep === undefined || keep(current, other))) {
         pairs++
         heap.offer(current, other, weight)
         inter[current] += weight
@@ -947,24 +963,7 @@ export function layoutChords(model: CircleModel, geometry: CircleGeometry, style
   // contigs share contacts nearly pair by pair, and fifteen hundred ribbons in
   // ink are a red disc whatever their colours. Fewer than a hundred and every
   // chord is one the reader asked to see, from the weakest up.
-  const levels: number[] = []
-  for (const chord of chords) {
-    const t = transformValue(chord.weight, style.transform)
-    if (Number.isFinite(t)) levels.push(t)
-  }
-  levels.sort((x, y) => x - y)
-  const floorAt = Math.max(Math.floor(levels.length / 2), levels.length - CHORD_INKED)
-  let lo = levels.length === 0 ? 0 : levels.length > CHORD_FLOOR_AT ? levels[floorAt] : levels[0]
-  let hi = levels.length === 0 ? 1 : levels[levels.length - 1]
-  if (!(hi > lo)) {
-    lo = Math.min(lo, 0)
-    hi = lo + 1
-  }
-  const span = hi - lo || 1
-  const strengthOf = (weight: number): number => {
-    const t = (transformValue(weight, style.transform) - lo) / span
-    return Number.isFinite(t) ? clamp(t, 0, 1) : 0
-  }
+  const { lo, hi, strengthOf } = chordStrengths(chords, style.transform)
 
   const r = geometry.chord
   const widest = clamp(r * 0.09, 3, 22)
@@ -1038,6 +1037,41 @@ export function layoutChords(model: CircleModel, geometry: CircleGeometry, style
   const ordered = new Float32Array(drawn)
   for (let k = 0; k < drawn; k++) ordered[k] = strength[order[k]]
   return { order, ends, strength: ordered, range: { lo, hi }, drawn }
+}
+
+/**
+ * The range the drawn chords are coloured over, in transformed units, and each
+ * one's strength on it: from the median chord past {@link CHORD_FLOOR_AT} of
+ * them — or higher, where half would still be more than {@link CHORD_INKED} in
+ * ink — and from the weakest below that (see {@link layoutChords}). The two
+ * lines' ribbons are measured the same way.
+ */
+export function chordStrengths(
+  chords: readonly CircleChord[],
+  transform: Transform,
+): { lo: number; hi: number; strengthOf(weight: number): number } {
+  const levels: number[] = []
+  for (const chord of chords) {
+    const t = transformValue(chord.weight, transform)
+    if (Number.isFinite(t)) levels.push(t)
+  }
+  levels.sort((x, y) => x - y)
+  const floorAt = Math.max(Math.floor(levels.length / 2), levels.length - CHORD_INKED)
+  let lo = levels.length === 0 ? 0 : levels.length > CHORD_FLOOR_AT ? levels[floorAt] : levels[0]
+  let hi = levels.length === 0 ? 1 : levels[levels.length - 1]
+  if (!(hi > lo)) {
+    lo = Math.min(lo, 0)
+    hi = lo + 1
+  }
+  const span = hi - lo || 1
+  return {
+    lo,
+    hi,
+    strengthOf: (weight) => {
+      const t = (transformValue(weight, transform) - lo) / span
+      return Number.isFinite(t) ? clamp(t, 0, 1) : 0
+    },
+  }
 }
 
 // ---------------------------------------------------------------------------
