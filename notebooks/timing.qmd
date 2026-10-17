@@ -1,6 +1,6 @@
 ---
 title: "chromosomix against reference implementations: time"
-subtitle: "Every command of the validation, run again and timed"
+subtitle: "A map and a track from a file to a picture in three viewers, and every command of the validation, run again and timed"
 format:
   html:
     toc: true
@@ -27,33 +27,48 @@ from rendered import Render
 
 R = Render('timing')
 print(R.head(also=f"The commands are {R.anchor('validation', 'the validation')}’s, as it ran them. "
-                  f"Beside this page: {R.download('timings.tsv')}, every timed run, one row each."))
+                  f"Beside this page: {R.download('viewers.tsv')}, every picture timed in a viewer, and "
+                  f"{R.download('timings.tsv')}, every timed command, one row each."))
 ```
 
-`{python} R.link('validation')` runs each analysis twice, through `chromosomix` and through the
-package it reproduces, and writes every command it ran to `notebooks/work/validation/commands.json`.
-This notebook runs each of them again, exactly as written there but writing to a scratch folder, as a
-fresh process, `RUNS` times round robin (four, unless `TIMING_RUNS` in the environment says otherwise),
-the two sides of each pair taking turns to go first, and measures what each run costs: its **CPU
-time**, user and system, of the process and of every process it started and waited for; its
-**wall-clock time**; and its **peak memory**, the largest resident set of any one of those processes.
+The page is in two parts. The first, **[Time to a picture](#time-to-a-picture)**, times three viewers
+— chromosomix, juicebox.js and HiGlass — drawing the same contact map and one track beside it, at the
+same resolution, from files on this machine and from the bucket they are published in. The second,
+from **[The machine](#the-machine)** on, times the analyses: `{python} R.link('validation')` runs each
+analysis twice, through `chromosomix` and through the package it reproduces, and writes every command
+it ran to `notebooks/work/validation/commands.json`. This notebook runs each of them again, exactly
+as written there but writing to a scratch folder, as a fresh process, `RUNS` times round robin (four,
+unless `TIMING_RUNS` in the environment says otherwise), the two sides of each pair taking turns to go
+first, and measures what each run costs: its **CPU time**, user and system, of the process and of
+every process it started and waited for; its **wall-clock time**; and its **peak memory**, the largest
+resident set of any one of those processes.
 
-Every run is one line of **`notebooks/work/validation/timings.tsv`**, a tidy table — one row per
-command and run, one column per variable, the machine and the versions included — from which every
-table and figure below is drawn.
+Every run of a command is one line of **`notebooks/work/validation/timings.tsv`**, a tidy table — one
+row per command and run, one column per variable, the machine and the versions included — and every
+picture a viewer was timed on is one line of **`viewers.tsv`** beside it, in the same form; every table
+and figure below is drawn from those two.
 
 **To render.** Render `validation.qmd` first: it fetches the data, makes every input and writes the
-command list. Then, in the same environment and on a machine left otherwise idle:
+command list. The viewers need the app built, the two viewers and a browser for them, and
+higlass-python's environment (`notebooks/requirements-higlass.txt`, with libfuse 2 for its URLs).
+Then, in the same environment and on a machine left otherwise idle:
 
 ```bash
+npm run build                                       # the app, served from dist/
+npm ci --prefix notebooks/viewers                   # juicebox.js, HiGlass and Playwright, pinned
+npx --prefix notebooks/viewers playwright install chromium
+python -m venv higlass-env && higlass-env/bin/pip install -r notebooks/requirements-higlass.txt
 QUARTO_PYTHON=refs/bin/python quarto render notebooks/timing.qmd
 ```
 
-A second render reads the table rather than timing again (`REDO`), unless the command list, the number
-of runs or the `chromosomix` build has changed. `.github/workflows/notebooks.yml` renders both notebooks
-on every release, on a fresh GitHub runner each time, and publishes this page at
-<https://chromosomix.app/timings/> with the table beside it; the block under the title says which
-render, and which machine, this is.
+The viewers' files (about 15 GB, most of it the mouse map in its two formats) are fetched once into
+`notebooks/work/viewers/data/`.
+
+A second render reads the tables rather than timing again (`REDO`, `REDO_VIEWERS`), unless the
+command list, the pictures, the number of runs or the `chromosomix` build has changed.
+`.github/workflows/notebooks.yml` renders both notebooks on every release, on a fresh GitHub runner
+each time, and publishes this page at <https://chromosomix.app/timings/> with the two tables beside
+it; the block under the title says which render, and which machine, this is.
 
 ```{python}
 from pathlib import Path
@@ -70,9 +85,26 @@ WORK = REPO / 'notebooks' / 'work' / 'validation'
 MANIFEST = WORK / 'commands.json'
 TIMINGS = WORK / 'timings.tsv'
 SCRATCH = WORK / 'timing'
+
+#: Runs of each picture in each viewer (VIEWER_RUNS overrides it), and whether to time them again.
+#: Four, so that each of the four viewers goes first in one round of each picture (`viewer_plan.ordered`).
+VIEWER_RUNS = int(os.environ.get('VIEWER_RUNS', 4))
+REDO_VIEWERS = False
+#: The app's build (`npm run build`), served from loopback as the site serves it.
+APP_BUILD = REPO / 'dist'
+#: higlass-python's environment (notebooks/requirements-higlass.txt), relative to the repository or absolute.
+HIGLASS_PYTHON = Path(os.environ.get('HIGLASS_PYTHON', 'higlass-env/bin/python'))
+HIGLASS_PYTHON = HIGLASS_PYTHON if HIGLASS_PYTHON.is_absolute() else REPO / HIGLASS_PYTHON
+VWORK = REPO / 'notebooks' / 'work' / 'viewers'
+VDATA = VWORK / 'data'
+VIEWER_PLAN = VWORK / 'plan.json'
+VIEWER_RESULTS = VWORK / 'results.jsonl'
+VIEWER_SHOTS = VWORK / 'pictures'
+VIEWER_TABLE = WORK / 'viewers.tsv'
 ```
 
 ```{python}
+import hashlib
 import json
 import platform
 import shlex
@@ -81,6 +113,8 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.parse
+import urllib.request
 from collections import Counter
 from itertools import groupby
 
@@ -88,12 +122,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.ticker import FuncFormatter, NullLocator
-
-if not MANIFEST.exists():
-    raise FileNotFoundError(f'{MANIFEST} is not there: render validation.qmd first.')
-LISTED = json.loads(MANIFEST.read_text())
-OUT = LISTED['placeholder']
-JOBS = [job for job in LISTED['commands'] if job['bench']]
 
 APP_COLOUR, REF = '#2a78d6', '#eb6834'
 INK, INK2, GRID, SURFACE, MISSING = '#0b0b0b', '#52514e', '#e7e6e2', '#fcfcfb', '#efeeea'
@@ -115,11 +143,8 @@ def show(frame, precision=2, **formats):
 def measures(values):
     """Named numbers as a two-column table."""
     return pd.DataFrame(list(values.items()), columns=['measure', 'value']).style.hide(axis='index')
-```
 
-## The machine
 
-```{python}
 def machine():
     """What the times were measured on, as columns of the table."""
     cpu = platform.processor()
@@ -135,6 +160,505 @@ def machine():
 
 
 MACHINE = machine()
+```
+
+## Time to a picture
+
+How long a reader waits between handing a viewer a contact map with a track and seeing them drawn, in
+chromosomix and in the two viewers most used for the same thing:
+[juicebox.js](https://github.com/aidenlab/juicebox.js), the browser form of Juicebox, which reads a
+`.hic`, and [HiGlass](https://github.com/higlass/higlass), which reads an `.mcool` through a tile server
+— here the one higlass-python starts for a file it is given. chromosomix reads both formats and is timed
+on each; juicebox.js reads no `.mcool` and HiGlass no `.hic`. Every picture is **one map and one
+track**, the same files in every viewer, and it is timed from the moment the viewer is handed them, with
+the view, to the moment the viewer itself says the picture is finished:
+
+- **chromosomix**: its own report of a finished picture (`chromosomix:rendered`, SPECS §12), sent once
+  every map on screen has been painted from its data, at the resolution the report names, and every
+  track beside it drawn;
+- **juicebox.js**: no spinner, the map's last repaint covering the state it was asked for, and the
+  track holding a tile along each axis, nothing still updating;
+- **HiGlass**: every tile of both tracks that is in view fetched and drawn.
+
+**At one resolution, the plan's.** No viewer chooses the resolution. chromosomix is handed a workspace
+naming the map at its rung (`map.mcool::/resolutions/25000`); juicebox.js an explicit state, with the
+resolution's place in the file's list, the window's first bin and the pixels a bin is drawn at, which
+fit the window to its map; HiGlass the window, and the rung as its heatmap's `maxZoom`, its one control
+over the resolution, which keeps it from going finer. Each answers with the resolution it drew. A
+picture drawn at another resolution, or of part of the window, is kept as what it was, never as a time
+for the picture asked for. A view a viewer cannot draw at the plan's resolution is not run, and the
+tables say why: a rung the file does not store, or a whole genome, which juicebox.js draws only from the
+`.hic`'s own whole-genome matrix, at a resolution of its own.
+
+**From disk and from the bucket.** Each picture is timed from files on this machine and from the same
+files where they are published: 4DN's open-data bucket (Amazon S3, us-east-1) for the chicken and the
+mouse, the app's demo bucket (eu-west-3) for the yeast. From disk, chromosomix and juicebox.js are given
+the files as a reader's drop gives them, and HiGlass's server reads them; before each run from disk the
+kernel's page cache is emptied, where the machine lets the benchmark do so (the `page_cache` column), so
+that the files are read from the disk, as at a first opening. From the bucket, chromosomix and
+juicebox.js read them by range from the page, and HiGlass's server through higlass-python's FUSE mount,
+which is how it serves a file it does not hold.
+
+**Nothing carried over.** Every run is a fresh browser context — Chromium, driven by Playwright
+(`notebooks/scripts/viewers.mjs`) — with no cache and no storage, and every HiGlass run meets a server
+started for it alone, with an empty block cache when it reads from the bucket. The viewer's page is
+loaded empty first, with its code and its workers, and that time is kept apart (`app_seconds`): what is
+timed is the data's road to the screen. Each of `VIEWER_RUNS` rounds (four, unless `VIEWER_RUNS` in the
+environment says otherwise) draws every picture once, the viewers taking turns to go first, so that the
+one that reads a file first, from a disk or from a bucket that answers a second read faster, is a
+different one each round. The requests and bytes counted are those the page asked for between the two
+moments: of the bucket, for chromosomix and juicebox.js; of its server, for HiGlass, whose own reads go
+through FUSE, outside the page, and are not counted.
+
+```{python}
+#: Each genome's map, in both formats, and its track: where they are published and their MD5s, and the four
+#: views, each at one resolution, of a window of three to five hundred bins on a side.
+FOURDN_FILES = 'https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput'
+DEMO_STORE = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/store/yeast'
+GENOMES = {
+    'yeast': dict(
+        data='Micro-C of strain A364A (Costantino et al. 2020, GEO GSE151553) and ATAC-seq: the app’s demo store',
+        mcool=(f'{DEMO_STORE}/GSE151553_A364_merged.mcool', '319a04a8d7e41d9eb88e2378ea3ea373'),
+        hic=(f'{DEMO_STORE}/GSE151553_A364_merged.hic', 'ce2cf114ff78ab12e8c20b060c92f539'),
+        track=(f'{DEMO_STORE}/Yeast_ATAC.bw', '3e326d9b3df621d6d4973d42b81f18de'),
+        views=[dict(view='genome', resolution=25_600, label='whole genome'),
+               dict(view='chromosome', chrom='chrIV', start=0, end=1_531_933, resolution=3_200, label='chrIV'),
+               dict(view='region', chrom='chrIV', start=700_000, end=1_500_000, resolution=1_600,
+                    label='chrIV:0.7–1.5 Mb'),
+               dict(view='locus', chrom='chrIV', start=1_200_000, end=1_300_000, resolution=200,
+                    label='chrIV:1.2–1.3 Mb')]),
+    'chicken': dict(
+        data='Hi-C of DT40 cells held in G2 (Gibcus et al. 2018, 4DN set 4DNES9LEZXN7) and the compartment '
+             'track 4DN made of it',
+        mcool=(f'{FOURDN_FILES}/b829095a-28e6-49ec-bd18-2b4bc319d0eb/4DNFIT479GDR.mcool',
+               '25c539d76273d6099031360eede8bd56'),
+        hic=(f'{FOURDN_FILES}/16926af8-ac3b-4f32-97d5-6c0dc6f1596a/4DNFIRKUYKP4.hic',
+             '8915a355c9f0cc2d85aa613f6d308d18'),
+        track=(f'{FOURDN_FILES}/a1f0586f-2b91-49b3-93ea-2f1f53e28657/4DNFI1PRBI5L.bw',
+               'e931e21d02b45d442a9694db862c9fd9'),
+        views=[dict(view='genome', resolution=2_500_000, label='whole genome'),
+               dict(view='chromosome', chrom='chr1', start=0, end=196_202_544, resolution=500_000, label='chr1'),
+               dict(view='region', chrom='chr1', start=20_000_000, end=30_000_000, resolution=25_000,
+                    label='chr1:20–30 Mb'),
+               dict(view='locus', chrom='chr1', start=24_000_000, end=25_000_000, resolution=2_000,
+                    label='chr1:24–25 Mb')]),
+    'mouse': dict(
+        data='Hi-C of F123 cells (Kubo et al. 2021, 4DN set 4DNESKKSKG7Y) and CTCF ChIP-seq in the same line '
+             '(Huang et al. 2021, 4DNESD1LH7J9)',
+        mcool=(f'{FOURDN_FILES}/ef0eba47-ada0-42bc-9329-5145b57ff33a/4DNFI5QJNFAT.mcool',
+               '18bd736467fd20ca0181698e119595e3'),
+        hic=(f'{FOURDN_FILES}/93df02c6-1047-43f6-afae-d3598b61eeea/4DNFIBBKG9KD.hic',
+             '6b127efa5d47210bb90e4b522e27cee2'),
+        track=(f'{FOURDN_FILES}/6dd5c984-eccf-4d2d-8118-38ea2a4d30fb/4DNFIFFXFV82.bw',
+               '6de6cadcd28f603f386029d245577833'),
+        views=[dict(view='genome', resolution=5_000_000, label='whole genome'),
+               dict(view='chromosome', chrom='chr3', start=0, end=160_039_680, resolution=500_000, label='chr3'),
+               dict(view='region', chrom='chr3', start=27_000_000, end=37_000_000, resolution=25_000,
+                    label='chr3:27–37 Mb'),
+               dict(view='locus', chrom='chr3', start=34_000_000, end=35_000_000, resolution=2_000,
+                    label='chr3:34–35 Mb')]),
+}
+#: Each viewer and the format it is timed on, in the order the tables give them.
+VIEWERS = [('chromosomix', 'mcool'), ('chromosomix', 'hic'), ('juicebox', 'hic'), ('higlass', 'mcool')]
+LOCATIONS = ['local', 'cloud']
+NAMES = {'chromosomix': 'chromosomix', 'juicebox': 'juicebox.js', 'higlass': 'HiGlass'}
+WHERE = {'local': 'from disk', 'cloud': 'from the bucket'}
+
+
+def remote_size(url):
+    request = urllib.request.Request(url, method='HEAD')
+    with urllib.request.urlopen(request) as response:
+        return int(response.headers['Content-Length'])
+
+
+def fetch_viewer_file(url, md5):
+    """A published file, fetched once into work/viewers/data and held to its MD5."""
+    path = VDATA / urllib.parse.unquote(url.rsplit('/', 1)[-1])
+    if not path.exists():
+        print('fetching', url)
+        part = path.with_name(path.name + '.part')
+        with urllib.request.urlopen(url) as response, open(part, 'wb') as out:
+            shutil.copyfileobj(response, out, 1 << 22)
+        part.rename(path)
+    digest = hashlib.md5()
+    with open(path, 'rb') as handle:
+        for block in iter(lambda: handle.read(1 << 22), b''):
+            digest.update(block)
+    if digest.hexdigest() != md5:
+        raise ValueError(f'{path} is not {url}: its MD5 is {digest.hexdigest()}, not {md5}. '
+                         'Delete it, and it is fetched again.')
+    return path
+
+
+VDATA.mkdir(parents=True, exist_ok=True)
+WANTED = [GENOMES[g][kind] for g in GENOMES for kind in ('mcool', 'hic', 'track')]
+MISSING_BYTES = sum(remote_size(url) for url, _ in WANTED if not (VDATA / url.rsplit('/', 1)[-1]).exists())
+FREE_BYTES = shutil.disk_usage(VDATA).free
+if MISSING_BYTES > FREE_BYTES - 2e9:
+    raise OSError(f'The viewers’ files need {MISSING_BYTES / 1e9:.1f} GB more in {VDATA}, '
+                  f'and {FREE_BYTES / 1e9:.1f} GB are free.')
+FILES = {g: {kind: {'url': GENOMES[g][kind][0], 'local': fetch_viewer_file(*GENOMES[g][kind])}
+             for kind in ('mcool', 'hic', 'track')} for g in GENOMES}
+show(pd.DataFrame([{'genome': g, 'data': GENOMES[g]['data'],
+                    **{kind: f"{files[kind]['local'].name} ({files[kind]['local'].stat().st_size / 1e9:.2f} GB)"
+                       for kind in ('mcool', 'hic', 'track')}} for g, files in FILES.items()]))
+```
+
+```{python}
+import viewer_plan as vp
+
+
+def installed(package):
+    """A package's version as notebooks/viewers installed it."""
+    path = REPO / 'notebooks' / 'viewers' / 'node_modules' / package / 'package.json'
+    return json.loads(path.read_text())['version']
+
+
+def higlass_python():
+    """higlass-python's and clodius' versions, in the environment HiGlass's server runs in."""
+    probe = 'import importlib.metadata as m; print(m.version("higlass-python"), m.version("clodius"))'
+    run = subprocess.run([str(HIGLASS_PYTHON), '-c', probe], capture_output=True, text=True)
+    if run.returncode:
+        raise FileNotFoundError(f'{HIGLASS_PYTHON} cannot run HiGlass’s server: {run.stderr.strip()[-500:]}')
+    return run.stdout.split()
+
+
+def app_build():
+    """The build the section times: the app's version, its commit and a fingerprint of the build itself."""
+    index = APP_BUILD / 'index.html'
+    if not index.exists():
+        raise FileNotFoundError(f'{index} is not there: build the app first (npm run build).')
+    version = json.loads((REPO / 'package.json').read_text())['version']
+    commit = subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], capture_output=True, text=True,
+                            cwd=REPO).stdout.strip() or 'unknown'
+    return f'{version} at {commit}, build {hashlib.sha256(index.read_bytes()).hexdigest()[:10]}'
+
+
+HG_PYTHON, CLODIUS = higlass_python()
+VIEWER_VERSION = {'chromosomix': app_build(), 'juicebox': installed('juicebox.js'),
+                  'higlass': f"{installed('higlass')}, higlass-python {HG_PYTHON}, clodius {CLODIUS}"}
+
+PLANNED, REFUSED = [], []
+for genome, files in FILES.items():
+    given = {'mcool': {**files['mcool'], 'info': vp.mcool_info(files['mcool']['local'])},
+             'hic': {**files['hic'], 'info': vp.hic_header(files['hic']['local'])},
+             'track': {**files['track'], 'names': vp.bigwig_names(files['track']['local'])}}
+    runs, refused = vp.runs_for(genome, GENOMES[genome]['views'], given, VIEWERS, LOCATIONS, VWORK)
+    PLANNED += runs
+    REFUSED += refused
+
+# juicebox's map is narrowed by the track that arrives after it; the driver measures it once, on the yeast.
+YEAST_HIC = vp.hic_header(FILES['yeast']['hic']['local'])
+PLAN = {
+    'app': str(APP_BUILD),
+    'higlass': {'python': str(HIGLASS_PYTHON), 'server': str(REPO / 'notebooks' / 'scripts' / 'higlass_server.py')},
+    'screenshots': str(VIEWER_SHOTS),
+    'limitMs': 300_000,
+    'juiceboxProbe': {'map': str(FILES['yeast']['hic']['local']), 'track': str(FILES['yeast']['track']['local']),
+                      'chr': [name for name, _ in YEAST_HIC['chromosomes']].index('chrIV'),
+                      'zoom': YEAST_HIC['resolutions'].index(3_200)},
+    'runs': vp.ordered(PLANNED, VIEWER_RUNS),
+}
+VIEWER_PLAN.write_text(json.dumps(PLAN, indent=1))
+measures({'pictures': len({(run['genome'], run['view'], run['location']) for run in PLANNED}),
+          'runs a round, a picture in each viewer that can draw it': len(PLANNED), 'rounds': VIEWER_RUNS,
+          'runs in all': len(PLAN['runs']), 'cells refused': len(REFUSED),
+          **{NAMES[tool]: version for tool, version in VIEWER_VERSION.items()}})
+```
+
+```{python}
+#: The columns of viewers.tsv, in order: the picture, the viewer, the run, what it took, where.
+VIEWER_COLUMNS = ['genome', 'view', 'window', 'resolution', 'bins', 'viewer', 'format', 'location', 'run', 'status',
+                  'seconds', 'app_seconds', 'drawn_resolution', 'drawn_bins', 'requests', 'megabytes', 'note',
+                  'page_cache', 'started', 'picture', 'version', *MACHINE, 'chromium', 'map', 'track']
+
+
+def viewer_rows(results):
+    """viewers.tsv: every run of the plan, joined with what the driver measured, and every cell refused."""
+    rows = []
+    for run in PLAN['runs']:
+        got = results.get((run['id'], run['run']), {'status': 'not run', 'note': 'the driver stopped before it'})
+        ms, app = got.get('ms'), got.get('appMs')
+        rows.append({'genome': run['genome'], 'view': run['view'], 'window': run['window'],
+                     'resolution': run['resolution'], 'bins': run['bins'], 'viewer': run['tool'],
+                     'format': run['format'], 'location': run['location'], 'run': run['run'],
+                     'status': got['status'], 'seconds': None if ms is None else ms / 1000,
+                     'app_seconds': None if app is None else app / 1000,
+                     'drawn_resolution': got.get('resolution'), 'drawn_bins': got.get('bins'),
+                     'requests': got.get('requests'),
+                     'megabytes': None if got.get('bytes') is None else got['bytes'] / 1e6,
+                     'note': got.get('note') or '', 'page_cache': got.get('page_cache', ''),
+                     'started': got.get('started', ''), 'picture': run['picture'],
+                     'version': VIEWER_VERSION[run['tool']], **MACHINE, 'chromium': got.get('chromium', ''),
+                     'map': Path(run['map']).name, 'track': Path(run['track']).name})
+    for cell in REFUSED:
+        rows.append({**{key: cell[key] for key in ('genome', 'view', 'window', 'resolution', 'bins', 'format',
+                                                     'status', 'note')},
+                     'viewer': cell['tool'], 'location': '', 'run': None, 'version': VIEWER_VERSION[cell['tool']],
+                     **MACHINE})
+    return pd.DataFrame(rows, columns=VIEWER_COLUMNS)
+
+
+def viewers_current():
+    """Whether viewers.tsv holds every run of the plan, by these viewers, at these versions."""
+    if REDO_VIEWERS or not VIEWER_TABLE.exists():
+        return False
+    held = pd.read_csv(VIEWER_TABLE, sep='\t')
+    timed = held.dropna(subset=['run'])
+    wanted = {(run['picture'], run['run']) for run in PLAN['runs']}
+    return ({(p, int(r)) for p, r in zip(timed['picture'], timed['run'])} == wanted
+            and (timed['status'] != 'not run').all()
+            and (held['version'] == held['viewer'].map(VIEWER_VERSION)).all())
+
+
+if not viewers_current():
+    VIEWER_RESULTS.unlink(missing_ok=True)
+    shutil.rmtree(VIEWER_SHOTS, ignore_errors=True)
+    with open(VWORK / 'driver.log', 'w') as log:
+        driver = subprocess.run(['node', str(REPO / 'notebooks' / 'scripts' / 'viewers.mjs'), str(VIEWER_PLAN),
+                                 str(VIEWER_RESULTS)], cwd=REPO, stdout=log, stderr=subprocess.STDOUT)
+    # A driver that stopped part of the way keeps the runs it finished, and the table says which did not run.
+    held = [json.loads(line) for line in VIEWER_RESULTS.read_text().splitlines()] if VIEWER_RESULTS.exists() else []
+    viewer_rows({(one['id'], one['run']): one for one in held}).to_csv(VIEWER_TABLE, sep='\t', index=False)
+    if driver.returncode:
+        raise RuntimeError(f"The viewers' driver stopped:\n{(VWORK / 'driver.log').read_text()[-3000:]}")
+pictures = pd.read_csv(VIEWER_TABLE, sep='\t')
+CLIPS = {}
+if VIEWER_RESULTS.exists():
+    for line in VIEWER_RESULTS.read_text().splitlines():
+        one = json.loads(line)
+        if one['run'] == 1 and one.get('clip'):
+            CLIPS[one['id']] = one['clip']
+timed_runs = pictures.dropna(subset=['run'])
+#: What a run that drew a picture can say of it; any other run (an error, a time limit) drew none.
+PICTURED = ['drawn', 'in part', 'other resolution']
+drew = timed_runs[timed_runs['status'].isin(PICTURED)]
+measures({'runs in the table': f'{len(timed_runs):,}', 'cells refused': int(pictures['run'].isna().sum()),
+          'measured': f"{timed_runs['started'].min()} to {timed_runs['started'].max()}",
+          'page cache before a run from disk': ', '.join(sorted(set(timed_runs.loc[timed_runs['location'] == 'local',
+                                                                                    'page_cache'].dropna()))),
+          'browser': ', '.join(sorted(set(timed_runs['chromium'].dropna()))),
+          'table': os.path.relpath(VIEWER_TABLE, REPO)})
+```
+
+### What each viewer drew
+
+Median seconds over the runs, from handing the viewer its files to its picture being finished, for each
+picture: a genome, a view of it at one resolution, and where the files are read from. A cell that is
+not a time says why there is none; a time the viewer did not earn for the picture asked for says what
+it drew instead.
+
+```{python}
+#| column: page
+COLUMN = {(tool, form): f'{NAMES[tool]} · .{form}' for tool, form in VIEWERS}
+VIEWS = list(dict.fromkeys(view['view'] for g in GENOMES.values() for view in g['views']))
+
+
+def cell(rows):
+    """One picture in one viewer: the median time, and what it drew if not all of the picture asked for."""
+    if rows['run'].isna().all():
+        return rows['status'].iloc[0]
+    drawn = rows[rows['status'].isin(PICTURED)]
+    if drawn.empty:
+        return rows['status'].iloc[0]
+    text = f"{drawn['seconds'].median():.2f}"
+    statuses = set(drawn['status'])
+    if 'in part' in statuses:
+        text += f" (in part: {drawn.loc[drawn['status'] == 'in part', 'note'].iloc[0]})"
+    if 'other resolution' in statuses:
+        text += f" (at {int(drawn.loc[drawn['status'] == 'other resolution', 'drawn_resolution'].iloc[0]):,} bp)"
+    if len(drawn) < len(rows):
+        text += f' ({len(rows) - len(drawn)} of {len(rows)} runs failed)'
+    return text
+
+
+def drawn_table():
+    out = []
+    for genome in GENOMES:
+        for view in GENOMES[genome]['views']:
+            for location in LOCATIONS:
+                row = {'genome': genome, 'view': view['view'], 'window': view['label'],
+                       'resolution (bp)': f"{view['resolution']:,}", 'from': WHERE[location]}
+                here = pictures[(pictures['genome'] == genome) & (pictures['view'] == view['view'])]
+                for key, name in COLUMN.items():
+                    rows = here[(here['viewer'] == key[0]) & (here['format'] == key[1])
+                                & ((here['location'] == location) | here['run'].isna())]
+                    row[name] = cell(rows) if len(rows) else '—'
+                out.append(row)
+    return pd.DataFrame(out)
+
+
+show(drawn_table())
+```
+
+juicebox.js will not draw a chromosome smaller than its map, and it works out how small that is when
+the map is loaded, before the track beside it takes some of the map's width: a whole chromosome asked
+for is then drawn wider than the map, in part, and that time is not compared below. Every run that drew
+something other than the picture asked for, or nothing:
+
+```{python}
+ODD = timed_runs[timed_runs['status'] != 'drawn']
+if ODD.empty:
+    print('None: every run drew the whole window at the resolution asked for.')
+else:
+    odd = (ODD.groupby(['genome', 'view', 'viewer', 'format', 'location', 'status', 'note'], sort=False, dropna=False)
+           .size().rename('runs').reset_index())
+    odd['viewer'] = odd['viewer'].map(NAMES)
+    display(show(odd))
+```
+
+```{python}
+#| label: fig-viewers
+#| fig-cap: "Seconds from handing each viewer its files to its picture being finished, every run a dot and the median a bar, on a logarithmic axis, by genome (rows) and by where the files were read from (columns). An open dot is a run that drew part of the window, or at another resolution; a view with no dots for a viewer is one it cannot draw at that resolution (the table above)."
+VIEWER_COLOURS = {('chromosomix', 'mcool'): APP_COLOUR, ('chromosomix', 'hic'): '#7fb0ea',
+                  ('juicebox', 'hic'): REF, ('higlass', 'mcool'): '#4f9d69'}
+fig, axes = plt.subplots(len(GENOMES), len(LOCATIONS), figsize=(10, 2.6 * len(GENOMES) + 0.8), sharey=True,
+                         layout='constrained', squeeze=False)
+OFFSET = {key: (k - (len(VIEWERS) - 1) / 2) * 0.18 for k, key in enumerate(VIEWERS)}
+for (r, genome), (c, location) in [(rc, lc) for rc in enumerate(GENOMES) for lc in enumerate(LOCATIONS)]:
+    ax = axes[r][c]
+    here = drew[(drew['genome'] == genome) & (drew['location'] == location)]
+    for x, view in enumerate(VIEWS):
+        for key in VIEWERS:
+            rows = here[(here['view'] == view) & (here['viewer'] == key[0]) & (here['format'] == key[1])]
+            if rows.empty:
+                continue
+            at = x + OFFSET[key]
+            whole = rows['status'] == 'drawn'
+            colour = VIEWER_COLOURS[key]
+            ax.scatter(np.full(whole.sum(), at), rows.loc[whole, 'seconds'], s=14, color=colour, alpha=0.7, lw=0,
+                       zorder=3)
+            ax.scatter(np.full((~whole).sum(), at), rows.loc[~whole, 'seconds'], s=16, facecolors='none',
+                       edgecolors=colour, lw=1, zorder=3)
+            ax.plot([at - 0.07, at + 0.07], [rows['seconds'].median()] * 2, color=colour, lw=2.5, zorder=4)
+    ax.set_xticks(range(len(VIEWS)), [f"{v}\n{next(w['label'] for w in GENOMES[genome]['views'] if w['view'] == v)}"
+                                      for v in VIEWS], fontsize=8)
+    ax.set_yscale('log')
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f'{v:g}'))
+    ax.set_title(f'{genome}, {WHERE[location]}')
+    ax.grid(axis='x', visible=False)
+    if c == 0:
+        ax.set_ylabel('seconds')
+for key in VIEWERS:
+    axes[0][-1].scatter([], [], s=24, color=VIEWER_COLOURS[key], label=COLUMN[key])
+axes[0][-1].legend(loc='upper left', bbox_to_anchor=(1, 1))
+plt.show()
+```
+
+### Same file, other viewer
+
+Where two viewers read the same file — juicebox.js and chromosomix the `.hic`, HiGlass and chromosomix
+the `.mcool` — and both drew the whole window at the resolution asked for in every run, the other
+viewer's median time over chromosomix's, picture by picture: above 1, chromosomix was the faster.
+
+```{python}
+#| column: page
+def against(other, form):
+    """The other viewer's median seconds over chromosomix's on the same file, for each picture both drew whole."""
+    out = []
+    for (genome, view, location), rows in timed_runs.groupby(['genome', 'view', 'location'], sort=False):
+        mine = rows[(rows['viewer'] == 'chromosomix') & (rows['format'] == form)]
+        theirs = rows[(rows['viewer'] == other) & (rows['format'] == form)]
+        whole = (mine['status'] == 'drawn').all() and (theirs['status'] == 'drawn').all()
+        if mine.empty or theirs.empty or not whole:
+            continue
+        out.append({'genome': genome, 'view': view, 'from': WHERE[location], 'file': f'.{form}',
+                    'other viewer': NAMES[other], 'chromosomix s': mine['seconds'].median(),
+                    'other s': theirs['seconds'].median()})
+    return out
+
+
+SAME = pd.DataFrame(against('juicebox', 'hic') + against('higlass', 'mcool'))
+SAME['× faster'] = SAME['other s'] / SAME['chromosomix s']
+show(SAME, **{'× faster': '{:.2f}×'})
+```
+
+```{python}
+def geomean(values):
+    return float(np.exp(np.log(np.asarray(values, dtype=float)).mean()))
+
+
+def summary(other, location):
+    rows = SAME[(SAME['other viewer'] == NAMES[other]) & (SAME['from'] == WHERE[location])]
+    if rows.empty:
+        return 'no picture both drew whole'
+    return (f"{geomean(rows['× faster']):.2f}× over {len(rows)} pictures "
+            f"({rows['× faster'].min():.2f}× to {rows['× faster'].max():.2f}×)")
+
+
+V_TEXT = {'juicebox_local': summary('juicebox', 'local'), 'juicebox_cloud': summary('juicebox', 'cloud'),
+          'higlass_local': summary('higlass', 'local'), 'higlass_cloud': summary('higlass', 'cloud')}
+SLOWEST = drew.loc[drew['seconds'].idxmax()] if not drew.empty else None
+V_TEXT['slowest'] = ('' if SLOWEST is None else
+                     f"{SLOWEST['genome']}, {SLOWEST['view']} view, {NAMES[SLOWEST['viewer']]} on the "
+                     f".{SLOWEST['format']} {WHERE[SLOWEST['location']]}: {SLOWEST['seconds']:.1f} s, "
+                     f"{SLOWEST['requests']:.0f} requests")
+```
+
+On the same `.hic`, juicebox.js's time over chromosomix's is `{python} V_TEXT['juicebox_local']` from
+disk, and `{python} V_TEXT['juicebox_cloud']` from the bucket; on the same `.mcool`, HiGlass's is
+`{python} V_TEXT['higlass_local']` from disk, and `{python} V_TEXT['higlass_cloud']` from the bucket —
+geometric means of the folds above, with their ranges. The slowest run of all: `{python}
+V_TEXT['slowest']`.
+
+### What it read, and the pages themselves
+
+Requests and megabytes the page asked for before its picture was finished, median over the runs from
+the bucket; and each viewer's page, loaded empty with its code, median seconds, which the times above
+leave out.
+
+```{python}
+#| column: page
+CLOUD = drew[drew['location'] == 'cloud']
+read = (CLOUD.assign(viewer=CLOUD['viewer'].map(NAMES))
+        .groupby(['genome', 'view', 'viewer', 'format'], sort=False)
+        .agg(requests=('requests', 'median'), megabytes=('megabytes', 'median')).reset_index())
+display(show(read, requests='{:,.0f}', megabytes='{:,.1f}'))
+pages = (timed_runs.assign(viewer=timed_runs['viewer'].map(NAMES), where=timed_runs['location'].map(WHERE))
+         .groupby(['viewer', 'where'], sort=False)['app_seconds'].median().rename('page loaded, s').reset_index())
+show(pages)
+```
+
+```{python}
+#| label: fig-viewer-pictures
+#| fig-cap: "What each viewer had drawn when it said its picture was finished: the first round, from disk, cropped to the map and its track. Each column is a picture, each row a viewer and the file it read; an empty cell is a view the viewer cannot draw at the resolution asked for."
+#| column: page
+from PIL import Image
+
+PICTURE_KEYS = [(genome, view['view'], view['label']) for genome in GENOMES for view in GENOMES[genome]['views']]
+fig, axes = plt.subplots(len(VIEWERS), len(PICTURE_KEYS), layout='constrained', squeeze=False,
+                         figsize=(1.2 * len(PICTURE_KEYS) + 1, 1.35 * len(VIEWERS) + 0.6))
+for c, (genome, view, label) in enumerate(PICTURE_KEYS):
+    for r, (tool, form) in enumerate(VIEWERS):
+        ax = axes[r][c]
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.grid(False)
+        for side in ax.spines.values():
+            side.set_visible(False)
+        picture = f'{genome}-{view}-{tool}-{form}-local'
+        shot = VIEWER_SHOTS / f'{picture}.png'
+        if shot.exists() and picture in CLIPS:
+            clip = CLIPS[picture]
+            image = Image.open(shot).crop((round(clip['x']), round(clip['y']), round(clip['x'] + clip['width']),
+                                           round(clip['y'] + clip['height'])))
+            image.thumbnail((360, 360))
+            ax.imshow(image)
+        if r == 0:
+            ax.set_title(f'{genome}\n{label}', fontsize=7, fontweight='normal', loc='center')
+        if c == 0:
+            ax.set_ylabel(COLUMN[(tool, form)], fontsize=7, rotation=0, ha='right', va='center')
+plt.show()
+```
+
+## The machine
+
+```{python}
+if not MANIFEST.exists():
+    raise FileNotFoundError(f'{MANIFEST} is not there: render validation.qmd first.')
+LISTED = json.loads(MANIFEST.read_text())
+OUT = LISTED['placeholder']
+JOBS = [job for job in LISTED['commands'] if job['bench']]
 measures({**MACHINE, 'commands timed': f"{len(JOBS)} of the {len(LISTED['commands'])} listed",
           'runs of each': RUNS, 'chromosomix': LISTED['chromosomix'],
           'processes a reference was given, where it takes them': LISTED['threads']})

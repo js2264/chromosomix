@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HiGlass, timed</title>
+<!--
+  HiGlass as timing.qmd times it: one heatmap and one bigWig above it, from higlass-python's server
+  (notebooks/scripts/higlass_server.py), at the versions package.json pins, with nothing of
+  HiGlass's own changed. `time(plan)` builds the viewer and answers once every tile of both tracks
+  that is in view has been fetched and drawn, with the resolution the heatmap is drawn at.
+
+  The resolution is HiGlass's to choose: it draws the finest rung whose bins are each wider than a
+  pixel of the track, and its `maxZoom` option is the one way it offers to stop it there. The plan
+  sets `maxZoom` to the rung asked for, so a rung finer than HiGlass would draw in this box is drawn
+  coarser, and the answer says which.
+-->
+<link rel="stylesheet" href="node_modules/higlass/dist/hglib.css">
+<style>
+  html, body { margin: 0; background: #fff; }
+  #viewer { position: absolute; left: 0; top: 0; }
+</style>
+<script src="node_modules/react/umd/react.production.min.js"></script>
+<script src="node_modules/react-dom/umd/react-dom.production.min.js"></script>
+<script src="node_modules/pixi.js/dist/browser/pixi.min.js"></script>
+<script>
+  // hglib's script build takes React's JSX runtime as a global, `ReactJSXRuntime`, which no React
+  // ships as a script: a peer dependency of the build, supplied here as React itself defines it.
+  window.ReactJSXRuntime = {
+    Fragment: React.Fragment,
+    jsx: (type, props, key) => React.createElement(type, key === undefined ? props : { ...props, key }),
+    jsxs: (type, props, key) => React.createElement(type, key === undefined ? props : { ...props, key }),
+  }
+</script>
+<script src="node_modules/higlass/dist/hglib.min.js"></script>
+</head>
+<body>
+<div id="viewer"></div>
+<script>
+  /** Every frame until `test` holds, then the frame it held in; `null` after `limit` ms. */
+  function frameWhen(test, limit) {
+    const started = performance.now()
+    return new Promise((resolve) => {
+      const tick = (now) => {
+        let held = false
+        try { held = test() } catch (error) { held = false }
+        if (held) resolve(now)
+        else if (now - started > limit) resolve(null)
+        else requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+    })
+  }
+
+  /** Every visible tile of a track fetched, none still being turned into a picture. */
+  function drawn(track) {
+    if (!track || !track.tilesetInfo) return false
+    if (!track.areAllVisibleTilesLoaded()) return false
+    if (track.fetching && track.fetching.size > 0) return false
+    if (track.renderingTiles && track.renderingTiles.size > 0) return false
+    return true
+  }
+
+  /** The bin size HiGlass draws a resolutions tileset at: its rungs, coarsest first, at the zoom chosen. */
+  function resolutionOf(track) {
+    const rungs = track.tilesetInfo.resolutions.map(Number).sort((a, b) => b - a)
+    return rungs[track.calculateZoomLevel()]
+  }
+
+  window.time = async function time(plan) {
+    const box = document.getElementById('viewer')
+    box.style.width = `${plan.box}px`
+    box.style.height = `${plan.box + plan.trackHeight}px`
+    const config = {
+      editable: false,
+      zoomFixed: false,
+      trackSourceServers: [],
+      exportViewUrl: null,
+      views: [
+        {
+          uid: 'view',
+          layout: { w: 12, h: 12, x: 0, y: 0 },
+          initialXDomain: plan.domain,
+          initialYDomain: plan.domain,
+          tracks: {
+            top: [
+              {
+                uid: 'track',
+                type: 'horizontal-line',
+                server: plan.server,
+                tilesetUid: plan.track,
+                height: plan.trackHeight,
+                options: { labelPosition: 'hidden', lineStrokeColor: '#d55e00' },
+              },
+            ],
+            center: [
+              {
+                uid: 'map',
+                type: 'heatmap',
+                server: plan.server,
+                tilesetUid: plan.map,
+                options: {
+                  maxZoom: plan.maxZoom,
+                  dataTransform: 'None',
+                  heatmapValueScaling: 'log',
+                  labelPosition: 'hidden',
+                  colorbarPosition: 'hidden',
+                },
+              },
+            ],
+            left: [],
+            right: [],
+            bottom: [],
+          },
+        },
+      ],
+    }
+    const t0 = performance.now()
+    const api = await hglib.viewer(box, config, { bounded: true })
+    const tracks = () => [api.getTrackObject('view', 'map'), api.getTrackObject('view', 'track')]
+    const at = await frameWhen(() => tracks().every(drawn), plan.limit ?? 300000)
+    if (at === null) return { t0, at: null, note: 'not drawn in time' }
+    // The tiles are on their sprites; the frame after this one is the first that shows them.
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    const [map] = tracks()
+    const pixels = map._xScale.range()[1] - map._xScale.range()[0]
+    const { x, y, width, height } = box.getBoundingClientRect()
+    return { t0, at, resolution: resolutionOf(map), box: Math.round(pixels), clip: { x, y, width, height } }
+  }
+  window.ready = true
+</script>
+</body>
+</html>

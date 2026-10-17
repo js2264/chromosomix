@@ -9176,24 +9176,47 @@ always `chromosomix`'s. Every run is one line of the tidy table
 and every version — and each `chromosomix` command's speed is a fold over the reference commands it is
 paired with, a side's commands summed where there are several (deepTools' `computeMatrix` and then
 `plotProfile` against one metaplot, and `plotHeatmap` as well against one over two tracks).
-They are documents, not tests: they need the data (about 6 GB), the reference packages and yapc's
-own environment, and nothing in the suite runs them.
+
+**The timings open on the time to a picture.** Before the analyses, `notebooks/timing.qmd` times
+chromosomix against the two viewers most used for the same thing — juicebox.js on a `.hic`, and
+HiGlass on an `.mcool`, served by higlass-python's own tile server, at the versions
+`notebooks/viewers/package.json` and `notebooks/requirements-higlass.txt` pin — and chromosomix on both
+formats. Every picture is one map and one track: yeast, chicken and mouse (4DN's 7 GB mouse map), each
+seen whole, one chromosome, a region and a locus, every view at one resolution the plan names, of a
+window of three to five hundred bins on a side. **No viewer chooses the resolution**: chromosomix is
+handed a workspace naming the map's rung, juicebox.js an explicit state, HiGlass the window and the
+rung as its `maxZoom`; each answers with the resolution it drew, and a picture drawn at another
+resolution, or of part of the window, is kept as what it was, never as a time for the one asked for. A
+view a viewer cannot draw at that resolution — a rung its file does not store, or a whole genome in
+juicebox.js, which draws one only from the `.hic`'s own whole-genome matrix — is not run but reported,
+with why. Each picture is read from disk, the page cache emptied first where the runner allows, and
+from the bucket it is published in, and timed in a fresh browser context, the viewer's empty page
+loaded first and kept apart, from the moment the viewer is handed the files to the moment it says the
+picture is finished: chromosomix by its own report (§12, *A picture says when it is finished*),
+juicebox.js by its last repaint covering the state asked for and its track's tiles, HiGlass by every
+tile in view fetched and drawn. Four rounds, the viewers taking turns to go first; every run, and
+every cell refused, is one line of `notebooks/work/validation/viewers.tsv`, with the requests and
+bytes the page asked for, the machine and every version.
+They are documents, not tests: they need the data (about 6 GB for the analyses and 15 GB for the
+viewers), the reference packages, yapc's own environment and higlass-python's, and the two viewers, and
+nothing in the suite runs them.
 
 **They are published with every release.** `.github/workflows/notebooks.yml` installs all of it on a
 fresh runner — the reference environment pinned package by package in `notebooks/requirements.txt`,
 yapc's in `requirements-yapc.txt` with IDR and yapc built at the commits the notebook cites,
-Boost-HiC's checkout, Ubuntu's bedtools and seqkit — renders both notebooks, and publishes them at
+Boost-HiC's checkout, Ubuntu's bedtools and seqkit, the app's build, the two viewers with Playwright's
+Chromium, and higlass-python's environment with libfuse — renders both notebooks, and publishes them at
 `<site>/validation/` and `<site>/timings/`, each a self-contained page with its tables beside it
-(`commands.json` and `summary.tsv`, every command and every verdict; `timings.tsv`); a release keeps
-its own copies of both pages and both tables as assets, and every run keeps what it rendered as an
-artifact for 90 days, the validation alone, with the timing rounds it finished, when the timings
-fail. It runs when a release is published and on demand. Each page opens on a block saying when it
-was rendered, from which version, commit and release, by which run or by hand, and on what machine,
-and closes on how long it took; the two link to each other there and on a reader's disk alike. The
-pages are no build of the app, so the service worker leaves those two addresses to the network, as
-it does `v/` and `pr/`, and the app, from this version on, finding itself at either unregisters its
-worker and reloads once (`recoverPinnedNavigation`), as at `v/`; a worker from before answers there
-with its own app until its reader takes the update it offers.
+(`commands.json` and `summary.tsv`, every command and every verdict; `timings.tsv` and `viewers.tsv`);
+a release keeps its own copies of both pages and of the three tables as assets, and every run keeps
+what it rendered as an artifact for 90 days, the validation alone, with the timing rounds it finished,
+when the timings fail. It runs when a release is published and on demand. Each page opens on a block
+saying when it was rendered, from which version, commit and release, by which run or by hand, and on
+what machine, and closes on how long it took; the two link to each other there and on a reader's disk
+alike. The pages are no build of the app, so the service worker leaves those two addresses to the
+network, as it does `v/` and `pr/`, and the app, from this version on, finding itself at either
+unregisters its worker and reloads once (`recoverPinnedNavigation`), as at `v/`; a worker from before
+answers there with its own app until its reader takes the update it offers.
 
 ### 18.11 A set of scales is one picture
 

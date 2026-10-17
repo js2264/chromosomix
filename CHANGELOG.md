@@ -26,6 +26,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that follow a view hold nothing back. What a script screenshots on, or times — the viewer timings
   (`notebooks/timing.qmd`) wait on it.
 
+- **The timings page opens on the time to a picture (§18.10).** `notebooks/timing.qmd` now first
+  times chromosomix against juicebox.js (on a `.hic`) and HiGlass (on an `.mcool`, served by
+  higlass-python's own tile server): one map and one track, of yeast, chicken and mouse, each seen
+  whole, one chromosome, a region and a locus, from disk and from the bucket it is published in, in a
+  fresh browser context, from handing each viewer the files to the viewer saying its picture is
+  finished. Every view is at one resolution the plan names — never the viewer's choice — and a view a
+  viewer cannot draw at it, a rung the file lacks or juicebox.js's whole genome, is reported rather
+  than drawn some other way; a picture drawn in part, as juicebox.js draws a whole chromosome with a
+  track beside it, says how much. Every run is a line of `viewers.tsv`, published beside
+  `timings.tsv` and attached to each release.
+
 - **A guided tutorial, from the landing page and About (§30).** *play the tutorial*, on the landing
   page beside *Load files* and in About, walks a newcomer through a first session on a real map, one
   step at a time, with the window lightly greyed and the one control the step is about lit: the
