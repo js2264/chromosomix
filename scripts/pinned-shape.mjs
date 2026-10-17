@@ -42,6 +42,7 @@
 
 import { webCspProblems } from './csp.mjs'
 import { isDataFile } from './desktop-shape.mjs'
+import { NOTICES_FILE } from './third-party-notices.mjs'
 
 /**
  * What one archived build may weigh, in bytes.
@@ -57,6 +58,7 @@ export const SIZE_LIMIT = 12 * 1024 * 1024
 const REQUIRED = [
   ['index.html', 'the build produced no document'],
   ['icon-192.png', 'the header mark would be a broken image (`src/ui/mark.ts`)'],
+  [NOTICES_FILE, 'the licences of what the bundle compiles in would not travel with it (`third-party-notices.mjs`)'],
 ]
 
 /**

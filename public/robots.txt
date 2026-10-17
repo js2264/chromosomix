@@ -1,0 +1,13 @@
+# chromosomix.app — every crawler is welcome, those of language models included.
+# A summary written for them: https://chromosomix.app/llms.txt
+#
+# /v/ holds a frozen copy of the app for each release and recent commit, and /pr/
+# a preview of each open pull request: copies of the app at the root, kept for
+# links that must not change, and not pages to send a search to.
+
+User-agent: *
+Allow: /
+Disallow: /v/
+Disallow: /pr/
+
+Sitemap: https://chromosomix.app/sitemap.xml

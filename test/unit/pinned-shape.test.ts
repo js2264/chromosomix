@@ -24,6 +24,7 @@ const BASE = '/chromosomix/v/a1b2c3d/'
 const GOOD = [
   { name: 'index.html', size: 3_700 },
   { name: 'icon-192.png', size: 10_600 },
+  { name: 'THIRD-PARTY-NOTICES.txt', size: 50_000 },
   { name: 'assets/index-C15U3eta.js', size: 371_000 },
   { name: 'assets/index-BlXroeTc.css', size: 45_000 },
   { name: 'assets/hdf5_hl-8FoHa7pu.js', size: 4_784_000 },
@@ -69,6 +70,9 @@ describe('pinnedFileProblems', () => {
     // Not cosmetic: `markUrl()` asks for it from this build's own base, and
     // `publicDir` is off, so nothing else would put it there.
     expect(pinnedFileProblems(GOOD.filter((f) => f.name !== 'icon-192.png'))).toHaveLength(1)
+    // Nor the notices: an archived build is served to anyone, and is a copy of
+    // everything it compiled in.
+    expect(pinnedFileProblems(GOOD.filter((f) => f.name !== 'THIRD-PARTY-NOTICES.txt'))).toHaveLength(1)
   })
 
   it('refuses a build over the size cap, whatever made it big', () => {

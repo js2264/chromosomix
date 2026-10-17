@@ -64,6 +64,7 @@ import base from './vite.config'
 import { cspMeta } from './scripts/csp.mjs'
 import { stripPwaTags } from './scripts/pwa-tags.mjs'
 import { shellIcon } from './scripts/shell-icon.mjs'
+import { thirdPartyNotices } from './scripts/third-party-notices.mjs'
 
 export default defineConfig({
   ...base,
@@ -74,7 +75,7 @@ export default defineConfig({
   publicDir: false,
   // The site's policy too. A copy on somebody else's server is the copy whose
   // headers we cannot know, which is the case a meta is for (`scripts/csp.mjs`).
-  plugins: [stripPwaTags(), shellIcon('chromosomix-package-shell-icon'), cspMeta()],
+  plugins: [stripPwaTags(), shellIcon('chromosomix-package-shell-icon'), cspMeta(), thirdPartyNotices()],
   build: {
     ...base.build,
     emptyOutDir: true,

@@ -25,6 +25,7 @@ import { describe, expect, it } from 'vitest'
 import { WEB_CSP, cspMetaTag } from '../../scripts/csp.mjs'
 import {
   SIZE_LIMIT,
+  packageCliProblems,
   packageFileProblems,
   packageIndexProblems,
 } from '../../scripts/package-shape.mjs'
@@ -33,6 +34,7 @@ import {
 const GOOD = [
   { name: 'index.html', size: 3_500 },
   { name: 'icon-192.png', size: 10_600 },
+  { name: 'THIRD-PARTY-NOTICES.txt', size: 50_000 },
   { name: 'assets/index-C15U3eta.js', size: 371_000 },
   { name: 'assets/index-BlXroeTc.css', size: 45_000 },
   { name: 'assets/hdf5_hl-8FoHa7pu.js', size: 4_784_000 },
@@ -83,9 +85,32 @@ describe('packageFileProblems', () => {
     // A build that emitted nothing at all is the failure that reads most like
     // success: no file breaks a rule, because there are no files.
     const problems = packageFileProblems([])
-    expect(problems).toHaveLength(2)
+    expect(problems).toHaveLength(3)
     expect(problems[0]).toContain('index.html')
     expect(problems[1]).toContain('icon-192.png')
+    expect(problems[2]).toContain('THIRD-PARTY-NOTICES.txt')
+  })
+
+  it('refuses a build without the notices of what it compiles in', () => {
+    // echarts is Apache-2.0 and asks for its LICENSE and NOTICE in every copy,
+    // and a published tarball is a copy that can never be corrected.
+    const problems = packageFileProblems(GOOD.filter((file) => file.name !== 'THIRD-PARTY-NOTICES.txt'))
+    expect(problems).toEqual([expect.stringContaining('THIRD-PARTY-NOTICES.txt')])
+  })
+})
+
+describe('packageCliProblems', () => {
+  it('passes the command and its notices', () => {
+    expect(packageCliProblems(['chromosomix.mjs', 'THIRD-PARTY-NOTICES.txt'])).toEqual([])
+  })
+
+  it('names each file the tarball would be without', () => {
+    // `bin` pointing at a missing file is a symlink to nothing on a PATH, which
+    // npm reports as a successful install.
+    expect(packageCliProblems([])).toEqual([
+      expect.stringContaining('chromosomix.mjs'),
+      expect.stringContaining('THIRD-PARTY-NOTICES.txt'),
+    ])
   })
 
   it('has a cap that admits the build and refuses one with its maps', () => {

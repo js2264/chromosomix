@@ -18,6 +18,9 @@ export declare const SIZE_LIMIT: number
 /** Problems with the set of built files and their total size; empty when fine. */
 export declare function packageFileProblems(files: Iterable<BuiltFile>): string[]
 
+/** Problems with `dist-cli/`, given the names in it: the command and its notices. */
+export declare function packageCliProblems(names: readonly string[]): string[]
+
 /**
  * Problems with the built `index.html`.
  *

@@ -45,6 +45,7 @@
 
 import { webCspProblems } from './csp.mjs'
 import { isDataFile } from './desktop-shape.mjs'
+import { NOTICES_FILE } from './third-party-notices.mjs'
 
 /**
  * What the published `dist/` may weigh, in bytes.
@@ -61,7 +62,26 @@ export const SIZE_LIMIT = 12 * 1024 * 1024
 const REQUIRED = [
   ['index.html', 'the build produced no document'],
   ['icon-192.png', 'the header mark would be a broken image (`src/ui/mark.ts`)'],
+  [NOTICES_FILE, 'the licences of what the bundle compiles in would not travel with it (`third-party-notices.mjs`)'],
 ]
+
+/**
+ * What is wrong with `dist-cli/`, the other directory the tarball carries.
+ *
+ * Two files: the command `bin` names, and its notices. The rest of the command's
+ * shape is its bundler's — one file, built by `vite.cli.config.ts` — so a third
+ * name here is not refused.
+ */
+export function packageCliProblems(names) {
+  const problems = []
+  if (!names.includes('chromosomix.mjs')) {
+    problems.push('dist-cli/chromosomix.mjs is missing — `bin` would link a command to nothing')
+  }
+  if (!names.includes(NOTICES_FILE)) {
+    problems.push(`dist-cli/${NOTICES_FILE} is missing — the command's bundle would carry no licence but ours`)
+  }
+  return problems
+}
 
 /**
  * What is wrong with the *set* of files, and with their total size.

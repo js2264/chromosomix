@@ -111,7 +111,7 @@ import {
 } from '../ui/plotOptions'
 import { refineEnabled, toggleRefine } from '../ui/refine'
 import { embedded, mounting } from '../embed'
-import { IS_STANDALONE } from '../version'
+import { IS_STANDALONE, TARGET } from '../version'
 import { Session, reserveSessionIds, type SessionHost } from './Session'
 import { EmbedChannel, embedChannel } from './EmbedChannel'
 import { TabStrip } from './TabStrip'
@@ -120,7 +120,7 @@ import { highestId, readSessions, writeSessions, type SessionSnapshot } from './
 /** Where "source" points, from the about dialog and the header. */
 const REPO_URL = 'https://github.com/js2264/chromosomix'
 
-/** The document title with nothing open; the file name is prefixed to it. */
+/** The app's name: what a tab's title ends with, after the file's, and the embed's brand. */
 const APP_TITLE = 'chromosomix'
 
 /**
@@ -169,6 +169,15 @@ const chipOf = (on: boolean): 'on' | 'off' => (on ? 'on' : 'off')
 
 export class App implements SessionHost {
   private readonly sessions: Session[] = []
+  /**
+   * The document title with nothing open (§11). On the web it is the page's
+   * own, the one `index.html` gives it: a search engine indexes the page as it
+   * stands once the app has run, so a title the app replaced with its bare name
+   * was a page listed under its name alone, with none of the words it is
+   * searched by. The desktop window and the single file are found by no search,
+   * and keep the name.
+   */
+  private readonly landingTitle: string = TARGET === 'web' && document.title !== '' ? document.title : APP_TITLE
   private active = 0
 
   private readonly content: HTMLElement
@@ -1497,7 +1506,7 @@ export class App implements SessionHost {
     this.paintNotice()
     // The tab's own name where it has one (a Drive file's, a store row's), the
     // file's otherwise — the same line the tab strip shows.
-    document.title = session.state === null ? APP_TITLE : `${session.label} — ${APP_TITLE}`
+    document.title = session.state === null ? this.landingTitle : `${session.label} — ${APP_TITLE}`
   }
 
   private applyPanels(session: Session): void {
@@ -1776,7 +1785,7 @@ export class App implements SessionHost {
     if (session !== this.current) return
     // The tab's own name where it has one (a Drive file's, a store row's), the
     // file's otherwise — the same line the tab strip shows.
-    document.title = session.state === null ? APP_TITLE : `${session.label} — ${APP_TITLE}`
+    document.title = session.state === null ? this.landingTitle : `${session.label} — ${APP_TITLE}`
   }
 
   stateChanged(session: Session, options: { replace: boolean }): void {

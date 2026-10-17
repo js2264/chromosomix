@@ -14,6 +14,51 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The site describes itself to language models and crawlers (§11).** `chromosomix.app/llms.txt`,
+  in the shape llmstxt.org gives one: what the app is, the formats it opens, how to write a link that
+  opens a file at a place — every hash key a model is likely to want, with a map's `region` 0-based
+  and the 1D browser's `locus` as displayed — how to embed it, how to run the command line, and where
+  the documentation is. A test holds what it says to the app: each example link through the hash's
+  own reader, each value it lists against its list, each task against the registry and each store
+  against the shelf, and it names no dev feature (§29.5). Beside it, `llms-full.txt` is the README as
+  one file, generated at build time with its links made absolute; `robots.txt` welcomes every crawler
+  but keeps the archived pins and pull-request previews out of search; and `sitemap.xml` lists the
+  app and its validation and timing notebooks. New Open Graph tags give a pasted link a card to
+  unfurl with.
+
+- **chromosomix.app is written to be found by a search (§11).** The page's title and description
+  now name what the app is searched by — *genome browser for Hi-C, tracks and 3D models*; Hi-C and
+  Micro-C, `.cool`, `.mcool` and `.hic` — short enough for a results page to print whole, where the
+  title said *cool files, in the browser*. And the app no longer writes its bare name over that
+  title the moment it mounts: a search engine indexes the page as it stands after the script has
+  run, so no title the page was given had ever reached one. On the web a tab with nothing open keeps
+  the page's title; with a file open it is still the file's name and the app's. A canonical link
+  lists every address of the app — `?store=`, `?config=`, `?embed=1` — under the root; the
+  `<noscript>` says what the app is, what it reads and where its source and `llms.txt` are, for a
+  reader or a crawler without JavaScript, at the top of the page — it said only that JavaScript was
+  needed, a screen's height down a blank page, under the empty space the app mounts into; and the npm
+  package's description and keywords name the data and the analyses rather than *metagenomics* and
+  *metacool*, a dev feature's (§29.5).
+
+- **`chromosomix --version` (§23).** The first line is `chromosomix` and the version, with the
+  commit the build was made from — the words every file the command writes opens with, so `head -1`
+  is what a pipeline records. Then the Node it runs on, with the platform, and the `h5wasm` and
+  `@gmod/bbi` installed beside it, which read every map and track: both are ranges in `package.json`,
+  settled at install, so two installs of one version can read a file through two builds of either.
+  Answered wherever on the line it is written, as `--help` is. It printed the usage until now.
+
+- **Every build carries the licences of what it compiles in (§22.4).** `THIRD-PARTY-NOTICES.txt`
+  beside the site's, an archived pin's, the desktop renderer's and the package's `index.html`, and
+  beside the command in `dist-cli/`; a comment at the end of the standalone page, which may not be two
+  files. It lists what the build carries — read off the bundle, workers included, so the CLI's
+  external `h5wasm` and `@gmod/bbi` are not listed and echarts' `zrender` is — and reproduces each
+  licence in full: echarts' NOTICE and the d3 licence it embeds, HDF5's inside h5wasm's, and the
+  material generators copied into the source from Lucide, Simple Icons, chromosight, matplotlib and
+  ColorBrewer, whose upstream texts that are not npm packages are committed under `licenses/`. Every
+  build's check refuses one without them. Minifying had dropped every notice but three.js's, and a
+  tarball carried chromosomix's own LICENSE alone. The README's licence section says where each
+  build keeps them.
+
 - **A guided tutorial, from the landing page and About (§30).** *play the tutorial*, on the landing
   page beside *Load files* and in About, walks a newcomer through a first session on a real map, one
   step at a time, with the window lightly greyed and the one control the step is about lit: the
@@ -1080,6 +1125,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   as a sequence of its own, last, as the file reads it, selected and framed to be moved into place.
 
 ### Changed
+
+- **An install of the package downloads what the command runs, and no more (§22.2).** `echarts` and
+  `three` are devDependencies now: both are compiled into `dist/`, and the command line loads
+  neither, so as dependencies they and `zrender` under them were 90 MB of the 116 MB that
+  `npm install -g chromosomix` put on disk. What is left is the three the CLI's bundle leaves
+  external, and a test holds `dependencies` to exactly those. The README installs the CLI from npm —
+  `npm install -g chromosomix`, or `npx chromosomix@<version>` for a pinned release — and keeps the
+  clone and `npm link` for trying a change before it is released.
 
 - **Compartments finds its components by Lanczos iteration, in a third of the time (§18.8).** Each
   component was found by power iteration, which converges at the ratio of the two largest
@@ -2485,6 +2538,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that collides never reaches that refusal.
 
 ### Fixed
+
+- **A reader that stops reading no longer kills the command (§23).** `chromosomix tasks | head -1`,
+  or a `less` quit early, closed the pipe under the command, and Node's report of the next write —
+  `EPIPE`, `EOF` on Windows — went unheard: a stack trace and exit 1 the moment `head` had its line,
+  and under `insulation map.cool 2>&1 | head -1`, where the progress on stderr is what closes, a task
+  that died before writing a single file. Both streams now let the reader go; what was left to print
+  is dropped and the command finishes what it was doing — all seven of that run's files, identical to
+  an unpiped run's — and exits with the status it would have had.
 
 - **A track still reading goes with the map to another resolution (§8.6).** A change of resolution
   carried a map's tracks to the new one only once they had loaded: picking another resolution in the
