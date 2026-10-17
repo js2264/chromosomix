@@ -10235,6 +10235,14 @@ rebuilt over on the next push and a deployment is redeployed, while a tarball is
 ever, mirrored by every CDN that has seen it and pinned in the lockfile of whoever installed it that
 week. The pack is the last moment any of it is cheap to notice.
 
+**The version is asserted before the pack, too.** The release workflow publishes on a `v*` tag, and
+its first job refuses a tag that is not `v` and the version `package.json` carries, before anything
+is built or published: npm takes the number from `package.json`, not from the tag. `v0.14.0` was
+made by hand, on a commit still versioned 0.13.0, and the workflow packed `chromosomix@0.13.0` for
+it — published, it would have been 0.13.0 for ever with 0.14.0's code in it. Only a tag `npm version`
+made has been through the checks (`preversion`) and named its changelog section, and only that tag
+agrees with the file. There is no 0.14.0: the next release was 0.15.0.
+
 ### 22.4 The notices: what every build owes what it carries
 
 chromosomix is MIT, and most of what it compiles in is permissive — but each of those licences is a

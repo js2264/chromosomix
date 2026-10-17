@@ -12,6 +12,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+**There is no 0.14.0.** A `v0.14.0` tag and a GitHub release for it were made by hand, on the commit
+that merged #114, before `npm version` had bumped `package.json`: that build calls itself 0.13.0, its
+release carries no installers, and nothing was published to npm. Everything below is 0.15.0, cut the
+usual way, and the first version of the package on npm.
+
 ### Added
 
 - **The site describes itself to language models and crawlers (§11).** `chromosomix.app/llms.txt`,
@@ -2538,6 +2543,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that collides never reaches that refusal.
 
 ### Fixed
+
+- **A release tag that is not the package's version builds and publishes nothing (§22.3).** The
+  release workflow's first job now refuses a `v*` tag unless it is `v` and the version `package.json`
+  carries, and every other job waits on it. `v0.14.0`, made by hand with GitHub's release form on a
+  commit still versioned 0.13.0, had the workflow set about 0.13.0 installers and pack
+  `chromosomix@0.13.0` for npm, which only a refused token kept off the registry for good. A release
+  body that would be too long for GitHub — this one's changelog section is 290 kB — is posted as each
+  entry's bold lead with a link to the section in full, rather than failing the release at its last
+  step. And `docs/deploy.md` no longer tells anyone to create a release by hand: it still said the
+  installers were built by `gh release create`, which the workflow stopped waiting on when it moved
+  to the tag; it now says what a tag sets off, and what the npm token needs.
 
 - **A reader that stops reading no longer kills the command (§23).** `chromosomix tasks | head -1`,
   or a `less` quit early, closed the pipe under the command, and Node's report of the next write —
