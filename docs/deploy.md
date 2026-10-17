@@ -720,39 +720,56 @@ What "major" means here is not an API: this is an application, so the contract i
 it opens and the URL hash it publishes**. A major bump is a `.metacool` the previous version could
 open and this one cannot, or a shared `#uri=…` link that no longer resolves to the same view.
 
-### The desktop installers
+### What the tag sets off: the installers, the single page and the npm package
 
-Pushing the tag publishes the *web* build and nothing else. The installers are built by
-**creating a GitHub release**, which is a separate, deliberate act:
+Pushing the tag is the release. `.github/workflows/release.yml` runs on every `v*` tag and
 
-```bash
-npm version minor && git push --follow-tags     # site goes live
-gh release create v0.3.0 --draft --title v0.3.0 --notes-file <(…)
-```
+1. **refuses a tag that is not `v` and the version `package.json` carries**, before anything is
+   built or published (its `version` job, which every other job waits on). A tag `npm version` did
+   not make has been through none of the checks above, and what it built would call itself the
+   previous version;
+2. builds the macOS and Linux installers (the Windows leg is off for now) and the single-file page,
+   and attaches them to a **draft** release for the tag whose body is that version's CHANGELOG
+   section — look at it, then press publish;
+3. publishes the package to npm (§22 of SPECS), if the repository has an `NPM_TOKEN` secret and the
+   version is not on the registry yet.
 
-`.github/workflows/release.yml` triggers on `release: [created]`, builds on macOS, Windows and
-Linux, and attaches the `.dmg`, `.zip`, `.exe`, `.AppImage` and `.deb` to that release. Creating it
-as a **draft** is the recommended shape: the three legs attach their artifacts, you look at them,
-and then you press publish. Publishing an existing draft does not re-fire the workflow — nothing
-has changed to rebuild — so re-running a leg against an existing tag is `workflow_dispatch` with
-the tag as input.
+**Never make the tag or the release by hand.** GitHub's release form makes a tag for any name typed
+into it, on whatever `main` is: `v0.14.0` was made that way, on the commit that merged #114, whose
+`package.json` still said 0.13.0. Its installers would have called themselves 0.13.0 and its npm
+job packed `chromosomix@0.13.0`, which only the registry refusing the token kept from being
+published under the wrong tag for good — a version on npm can never be replaced. The workflow now
+stops at the first step instead, but a tag and a release made by hand stay where they are, and the
+site keeps that build under the tag's name (below). If a release goes wrong, cut the next version
+rather than moving a tag somebody may already have cited: that is why there is no 0.14.0.
 
-The tag does one other thing, from the moment it is pushed rather than when a release is created:
+**`NPM_TOKEN`** is an npm *granular access token* with read and write access to packages — to all of
+them until the first publish has created this one — and **Bypass two-factor authentication**
+ticked. An account that requires two-factor authentication to publish refuses any other token, with
+`E403 … Two-factor authentication or granular access token with bypass 2fa enabled is required`,
+which is what the first attempt got. Write tokens expire (90 days at most); once the package
+exists, npm's *trusted publishing* from this workflow replaces the token altogether.
+
+Re-running a leg against an existing tag is `workflow_dispatch` with the tag as input, or *Re-run
+failed jobs* on the run itself, which reads the secrets as they are at that moment — so a corrected
+token publishes on the re-run, and a version already on the registry is skipped rather than failed.
+Publishing a draft does not re-fire anything: nothing has changed to rebuild.
+
+The tag does one other thing, from the moment it is pushed rather than when a release is published:
 the deploy that publishes that commit records the tag in `versions.json`, keeps that build for ever,
 and gives it a permanent address at `/v/<tag>/`. See
 [What is kept, and how releases are treated](#what-is-kept-and-how-releases-are-treated) — and push
 the commit and the tag *together* (`--follow-tags`), or the deploy runs before the tag exists and
 the build is kept by its version number without a name.
 
-The trigger is the release rather than the tag because a tag on its own does not mean "ship
-binaries": `npm version` makes one on every patch bump, and building three installers to renumber
-a changelog is a waste of twenty minutes per release. It also keeps the two workflows genuinely
-independent — different events, different commands, different outputs, different concurrency
-groups — so a failed installer leg cannot delay or undo a site deployment that has already
-happened.
+The trigger is the tag rather than the release because a release saved as a draft fires no workflow
+at all, which is what this used to wait on (`release.yml`'s header has the history). The two
+workflows stay independent all the same — different events, different commands, different outputs,
+different concurrency groups — so a failed installer leg cannot delay or undo a site deployment
+that has already happened.
 
-Packaging is deliberately *not* part of `preversion`, for the same reason: `npm version patch`
-would otherwise download Electron and build a `.dmg` to bump a number.
+Packaging is deliberately *not* part of `preversion`: `npm version patch` would otherwise download
+Electron and build a `.dmg` to bump a number.
 
 ### How a build says what it is
 

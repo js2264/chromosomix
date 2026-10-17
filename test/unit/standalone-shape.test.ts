@@ -30,7 +30,7 @@ import {
 const GOOD = withStandaloneCsp(
   '<!doctype html><html><head><meta charset="utf-8"><title>t</title></head><body>' +
     '<script type="module">const w=new Worker(URL.createObjectURL(b));/*standalone*/</script>' +
-    '</body></html>',
+    '</body><!--\nThird-party notices for chromosomix 0.0.0\n-->\n</html>',
 )
 
 describe('the built page', () => {
@@ -95,6 +95,14 @@ describe('the built page', () => {
     // refused and nothing starts.
     const edited = GOOD.replace('/*standalone*/', '/*standalone*/;console.log(1)')
     expect(standaloneIndexProblems(edited).join(' ')).toMatch(/does not name exactly the inline scripts/)
+  })
+
+  it('refuses a page without the notices of what it compiles in', () => {
+    // Every other build writes them beside its page; this one, being one file,
+    // carries them inside it, and a page that lost them is a copy of echarts
+    // without the licence echarts asks every copy to carry.
+    const html = GOOD.replace(/<!--\nThird-party notices[^]*?-->/, '')
+    expect(standaloneIndexProblems(html).join(' ')).toMatch(/third-party notices/)
   })
 
   it('reports every problem, not the first', () => {

@@ -38,6 +38,92 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   track beside it, says how much. Every run is a line of `viewers.tsv`, published beside
   `timings.tsv` and attached to each release.
 
+### Changed
+
+- **The whole genome of a `.hic` is read in fewer requests, more of them at once, and a dropped one
+  without a megabyte of the disk round each read (§3.6, §6.5).** A walk across chromosome pairs — a whole-genome picture, the
+  census — read pair by pair, a record's head and then its blocks, four pairs at a time: the 4DN
+  chicken map's 630 pairs at 2.5 Mb were 1,258 requests, a minute and a half from its bucket. A walk
+  is now planned before it reads, every place it reads being known: the records' heads together,
+  each with the 4 KiB past its record's end, where Juicer puts the coarse blocks, as the stretches of
+  the file they make within 64 KiB of one another, and the blocks left over together after them. The
+  same picture is 427 requests, read six at a time; the yeast map of the demo store, whose records
+  lie end to end, 72 where it was 130; the 4DN mouse map, whose records are megabytes apart, 453
+  read six at a time where 460 were read four. Pixels are handed over as they were, in the same
+  order, and a plan holds no more than 24 MiB of them. A dropped `.hic` is walked the same way, in
+  exact reads, where each read paid a 1 MiB slice of the disk: 11 MB for that chicken genome, where
+  it was 222 MiB.
+
+### Fixed
+
+- **A page asking for a map's file starts the reader while the file is found (§6.1).** The picker
+  starts the reader's worker and h5wasm once the page is idle, so the first file dropped on it does
+  not wait for them — but the picker a workspace or a restored tab puts up to ask for a map on this
+  machine did not, and the file dropped there waited for a reader to be made. From disk, a
+  chromosome or a locus of the three maps the timings draw took 1.18 s from that page and takes
+  0.96 s, medians of eleven pictures. A genome, which reads through no reader, starts none.
+
+- **A file dropped on the page waiting for it opens the map the link or workspace named inside it
+  (§5.6).** A tab naming `map.mcool::/resolutions/25000` or a `.hic` at 4 kb that has to be given the
+  file asks for it to be dropped, and promises its view back; dropped, the file was opened by its
+  path alone, so an `.mcool` landed on a rung of its own choosing and on its Chromosomes table, and a
+  map dropped with a track beside it opened as a stranger to the view that asked for it. Both now
+  open at the resolution named, on the view named, the track joining it.
+
+## [0.15.0] - 2026-10-17
+
+**There is no 0.14.0.** A `v0.14.0` tag and a GitHub release for it were made by hand, on the commit
+that merged #114, before `npm version` had bumped `package.json`: that build calls itself 0.13.0, its
+release carries no installers, and nothing was published to npm. Everything below is 0.15.0, cut the
+usual way, and the first version of the package on npm.
+
+### Added
+
+- **The site describes itself to language models and crawlers (§11).** `chromosomix.app/llms.txt`,
+  in the shape llmstxt.org gives one: what the app is, the formats it opens, how to write a link that
+  opens a file at a place — every hash key a model is likely to want, with a map's `region` 0-based
+  and the 1D browser's `locus` as displayed — how to embed it, how to run the command line, and where
+  the documentation is. A test holds what it says to the app: each example link through the hash's
+  own reader, each value it lists against its list, each task against the registry and each store
+  against the shelf, and it names no dev feature (§29.5). Beside it, `llms-full.txt` is the README as
+  one file, generated at build time with its links made absolute; `robots.txt` welcomes every crawler
+  but keeps the archived pins and pull-request previews out of search; and `sitemap.xml` lists the
+  app and its validation and timing notebooks. New Open Graph tags give a pasted link a card to
+  unfurl with.
+
+- **chromosomix.app is written to be found by a search (§11).** The page's title and description
+  now name what the app is searched by — *genome browser for Hi-C, tracks and 3D models*; Hi-C and
+  Micro-C, `.cool`, `.mcool` and `.hic` — short enough for a results page to print whole, where the
+  title said *cool files, in the browser*. And the app no longer writes its bare name over that
+  title the moment it mounts: a search engine indexes the page as it stands after the script has
+  run, so no title the page was given had ever reached one. On the web a tab with nothing open keeps
+  the page's title; with a file open it is still the file's name and the app's. A canonical link
+  lists every address of the app — `?store=`, `?config=`, `?embed=1` — under the root; the
+  `<noscript>` says what the app is, what it reads and where its source and `llms.txt` are, for a
+  reader or a crawler without JavaScript, at the top of the page — it said only that JavaScript was
+  needed, a screen's height down a blank page, under the empty space the app mounts into; and the npm
+  package's description and keywords name the data and the analyses rather than *metagenomics* and
+  *metacool*, a dev feature's (§29.5).
+
+- **`chromosomix --version` (§23).** The first line is `chromosomix` and the version, with the
+  commit the build was made from — the words every file the command writes opens with, so `head -1`
+  is what a pipeline records. Then the Node it runs on, with the platform, and the `h5wasm` and
+  `@gmod/bbi` installed beside it, which read every map and track: both are ranges in `package.json`,
+  settled at install, so two installs of one version can read a file through two builds of either.
+  Answered wherever on the line it is written, as `--help` is. It printed the usage until now.
+
+- **Every build carries the licences of what it compiles in (§22.4).** `THIRD-PARTY-NOTICES.txt`
+  beside the site's, an archived pin's, the desktop renderer's and the package's `index.html`, and
+  beside the command in `dist-cli/`; a comment at the end of the standalone page, which may not be two
+  files. It lists what the build carries — read off the bundle, workers included, so the CLI's
+  external `h5wasm` and `@gmod/bbi` are not listed and echarts' `zrender` is — and reproduces each
+  licence in full: echarts' NOTICE and the d3 licence it embeds, HDF5's inside h5wasm's, and the
+  material generators copied into the source from Lucide, Simple Icons, chromosight, matplotlib and
+  ColorBrewer, whose upstream texts that are not npm packages are committed under `licenses/`. Every
+  build's check refuses one without them. Minifying had dropped every notice but three.js's, and a
+  tarball carried chromosomix's own LICENSE alone. The README's licence section says where each
+  build keeps them.
+
 - **A guided tutorial, from the landing page and About (§30).** *play the tutorial*, on the landing
   page beside *Load files* and in About, walks a newcomer through a first session on a real map, one
   step at a time, with the window lightly greyed and the one control the step is about lit: the
@@ -1105,19 +1191,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
-- **The whole genome of a `.hic` is read in fewer requests, more of them at once, and a dropped one
-  without a megabyte of the disk round each read (§3.6, §6.5).** A walk across chromosome pairs — a whole-genome picture, the
-  census — read pair by pair, a record's head and then its blocks, four pairs at a time: the 4DN
-  chicken map's 630 pairs at 2.5 Mb were 1,258 requests, a minute and a half from its bucket. A walk
-  is now planned before it reads, every place it reads being known: the records' heads together,
-  each with the 4 KiB past its record's end, where Juicer puts the coarse blocks, as the stretches of
-  the file they make within 64 KiB of one another, and the blocks left over together after them. The
-  same picture is 427 requests, read six at a time; the yeast map of the demo store, whose records
-  lie end to end, 72 where it was 130; the 4DN mouse map, whose records are megabytes apart, 453
-  read six at a time where 460 were read four. Pixels are handed over as they were, in the same
-  order, and a plan holds no more than 24 MiB of them. A dropped `.hic` is walked the same way, in
-  exact reads, where each read paid a 1 MiB slice of the disk: 11 MB for that chicken genome, where
-  it was 222 MiB.
+- **An install of the package downloads what the command runs, and no more (§22.2).** `echarts` and
+  `three` are devDependencies now: both are compiled into `dist/`, and the command line loads
+  neither, so as dependencies they and `zrender` under them were 90 MB of the 116 MB that
+  `npm install -g chromosomix` put on disk. What is left is the three the CLI's bundle leaves
+  external, and a test holds `dependencies` to exactly those. The README installs the CLI from npm —
+  `npm install -g chromosomix`, or `npx chromosomix@<version>` for a pinned release — and keeps the
+  clone and `npm link` for trying a change before it is released.
 
 - **Compartments finds its components by Lanczos iteration, in a third of the time (§18.8).** Each
   component was found by power iteration, which converges at the ratio of the two largest
@@ -2524,19 +2604,24 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
-- **A page asking for a map's file starts the reader while the file is found (§6.1).** The picker
-  starts the reader's worker and h5wasm once the page is idle, so the first file dropped on it does
-  not wait for them — but the picker a workspace or a restored tab puts up to ask for a map on this
-  machine did not, and the file dropped there waited for a reader to be made. From disk, a
-  chromosome or a locus of the three maps the timings draw took 1.18 s from that page and takes
-  0.96 s, medians of eleven pictures. A genome, which reads through no reader, starts none.
+- **A release tag that is not the package's version builds and publishes nothing (§22.3).** The
+  release workflow's first job now refuses a `v*` tag unless it is `v` and the version `package.json`
+  carries, and every other job waits on it. `v0.14.0`, made by hand with GitHub's release form on a
+  commit still versioned 0.13.0, had the workflow set about 0.13.0 installers and pack
+  `chromosomix@0.13.0` for npm, which only a refused token kept off the registry for good. A release
+  body that would be too long for GitHub — this one's changelog section is 290 kB — is posted as each
+  entry's bold lead with a link to the section in full, rather than failing the release at its last
+  step. And `docs/deploy.md` no longer tells anyone to create a release by hand: it still said the
+  installers were built by `gh release create`, which the workflow stopped waiting on when it moved
+  to the tag; it now says what a tag sets off, and what the npm token needs.
 
-- **A file dropped on the page waiting for it opens the map the link or workspace named inside it
-  (§5.6).** A tab naming `map.mcool::/resolutions/25000` or a `.hic` at 4 kb that has to be given the
-  file asks for it to be dropped, and promises its view back; dropped, the file was opened by its
-  path alone, so an `.mcool` landed on a rung of its own choosing and on its Chromosomes table, and a
-  map dropped with a track beside it opened as a stranger to the view that asked for it. Both now
-  open at the resolution named, on the view named, the track joining it.
+- **A reader that stops reading no longer kills the command (§23).** `chromosomix tasks | head -1`,
+  or a `less` quit early, closed the pipe under the command, and Node's report of the next write —
+  `EPIPE`, `EOF` on Windows — went unheard: a stack trace and exit 1 the moment `head` had its line,
+  and under `insulation map.cool 2>&1 | head -1`, where the progress on stderr is what closes, a task
+  that died before writing a single file. Both streams now let the reader go; what was left to print
+  is dropped and the command finishes what it was doing — all seven of that run's files, identical to
+  an unpiped run's — and exits with the status it would have had.
 
 - **A track still reading goes with the map to another resolution (§8.6).** A change of resolution
   carried a map's tracks to the new one only once they had loaded: picking another resolution in the

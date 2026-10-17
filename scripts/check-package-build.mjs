@@ -24,10 +24,11 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { packageFileProblems, packageIndexProblems } from './package-shape.mjs'
+import { packageCliProblems, packageFileProblems, packageIndexProblems } from './package-shape.mjs'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const OUT = join(ROOT, 'dist')
+const CLI = join(ROOT, 'dist-cli')
 
 /** Every file under `dir`, with its size, relative and `/`-separated. */
 function walk(dir) {
@@ -58,6 +59,16 @@ const problems = packageFileProblems(files)
 if (files.some((file) => file.name === 'index.html')) {
   problems.push(...packageIndexProblems(readFileSync(join(OUT, 'index.html'), 'utf8')))
 }
+
+// The command the tarball's `bin` names, which `build:package` builds first.
+// A directory that is not there is every file in it missing, said by name.
+let cliNames = []
+try {
+  cliNames = readdirSync(CLI)
+} catch {
+  // Left empty: `packageCliProblems` names what is absent.
+}
+problems.push(...packageCliProblems(cliNames))
 
 if (problems.length > 0) {
   console.error(`check-package-build: ${problems.length} problem(s) in dist\n`)

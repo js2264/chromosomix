@@ -1,17 +1,28 @@
 {
   "name": "chromosomix",
-  "version": "0.13.0",
+  "version": "0.15.0",
   "type": "module",
-  "description": "Browser-based viewer for Hi-C contact maps, genome tracks and 3D models. No backend, no preprocessing.",
+  "description": "Genome browser for Hi-C and Micro-C contact maps, genome tracks and 3D models, and the command line that runs its analyses: insulation, compartments, loops, APA, P(s) and more.",
   "keywords": [
     "hi-c",
-    "metagenomics",
+    "micro-c",
+    "hic",
     "cooler",
-    "metacool",
-    "hdf5",
+    "mcool",
+    "juicer",
     "contact-map",
+    "chromatin",
+    "3d-genome",
     "genome-browser",
-    "viewer"
+    "genomics",
+    "bioinformatics",
+    "bigwig",
+    "insulation",
+    "compartments",
+    "tad",
+    "hdf5",
+    "webassembly",
+    "cli"
   ],
   "homepage": "https://chromosomix.app/",
   "repository": {
@@ -69,16 +80,15 @@
   },
   "dependencies": {
     "@gmod/bbi": "^10.0.1",
-    "echarts": "^6.1.0",
     "generic-filehandle2": "^2.2.1",
-    "h5wasm": "^0.10.3",
-    "three": "0.186.0"
+    "h5wasm": "^0.10.3"
   },
   "devDependencies": {
     "@electron/asar": "^4.2.1",
     "@gmod/bam": "^9.0.1",
     "@types/node": "^24.0.0",
     "@types/three": "0.186.0",
+    "echarts": "^6.1.0",
     "electron": "43.7.9",
     "electron-builder": "26.15.3",
     "g3djs": "2.0.1",
@@ -86,6 +96,7 @@
     "jsdom": "^30.0.1",
     "lucide-static": "^1.28.0",
     "simple-icons": "^16.27.1",
+    "three": "0.186.0",
     "typescript": "^5.7.0",
     "vite": "^6.0.0",
     "vitest": "^3.0.0"
@@ -94,7 +105,8 @@
     "esbuild@0.25.12": true
   },
   "comments": {
-    "three": "The one runtime dependency that draws (§25). Everything else on screen is a `CanvasRenderingContext2D`, hand-written down to the PDF, and the argument for that was never *no dependencies* but *not for this arithmetic*: an eighty-line PDF writer beats a library that does the same sums. A lit tube of ten thousand beads under an orbiting camera, with instanced spheres, fat lines, sorted transparency and raycast picking, is not that arithmetic, and three.js is the smallest library that has all five. It draws the structure cell of a deck and nothing else: the map, the tracks and every figure export stay on the 2D context. **Pinned exactly**, as `electron` is and for the same reason: three.js breaks something every release, and a floating range would change the renderer under an `npm ci`. Bumping it is a CHANGELOG `Changed` entry. The site build splits it into its own chunk, loaded on the first structure opened; the standalone file inlines it (§19), which is the measured cost recorded there.",
+    "dependencies": "What `npm install -g chromosomix` installs, so only what a file in the package imports when it runs: the three the CLI's bundle leaves external (vite.cli.config.ts), and nothing else. Everything a bundle compiles in is a devDependency, `echarts` and `three` among them — `dist/` already carries both, and the command line loads neither. Declared here they were 90 MB of the 116 MB an install of the package put on disk (SPECS §22.2).",
+    "three": "The one library that draws in three dimensions (§25), and a devDependency for the reason `dependencies` gives. Everything else on screen is a `CanvasRenderingContext2D`, hand-written down to the PDF, and the argument for that was never *no dependencies* but *not for this arithmetic*: an eighty-line PDF writer beats a library that does the same sums. A lit tube of ten thousand beads under an orbiting camera, with instanced spheres, fat lines, sorted transparency and raycast picking, is not that arithmetic, and three.js is the smallest library that has all five. It draws the structure cell of a deck and nothing else: the map, the tracks and every figure export stay on the 2D context. **Pinned exactly**, as `electron` is and for the same reason: three.js breaks something every release, and a floating range would change the renderer under an `npm ci`. Bumping it is a CHANGELOG `Changed` entry. The site build splits it into its own chunk, loaded on the first structure opened; the standalone file inlines it (§19), which is the measured cost recorded there.",
     "@types/three": "The types for the pin above, at the same version, and for no other reason.",
     "g3djs": "A devDependency, and the oracle `test/unit/g3d-binary-oracle.test.ts` reads the fixtures with — never a runtime dependency, on `hic-straw`'s argument exactly: every read in this app goes through a source that counts its requests, caches its chunks and signs them where a bucket needs it, and a parser that fetches for itself sits outside all three. The binary `.g3d` reader is written here (`src/annotations/g3dBinary.ts`); what a second implementation buys is the one thing a round trip against our own writer cannot, which is a reading of the container that this repository did not make. Installed with `--ignore-scripts`, because a transitive dependency of it still calls `node-waf`, which has not existed for a decade; nothing that runs in the oracle needs the script.",
     "test:nofixtures": "Everything that does not need test/fixtures/, which are generated by `npm run fixtures` and need a Python interpreter with metacooler installed. This is what a fresh clone and a CI runner without metacooler can verify; `npm test` is the full suite and is what to run before a release. Of the request budgets (SPECS §12) only `requests.test.ts` is left out, because it opens the metacool fixtures: `alignments.test.ts` builds its BAM in memory and `analysis.test.ts` reads committed demo data, and excluding the whole directory once hid a red budget from CI for weeks.",

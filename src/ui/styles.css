@@ -271,6 +271,21 @@ body {
   min-height: 100vh;
 }
 
+/*
+ * What `index.html` says to a reader without JavaScript (§11). Never matched
+ * with it on: a `<noscript>`'s contents are not parsed into elements then, so
+ * nothing here can reach the app.
+ */
+.noscript {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+}
+
+.noscript a {
+  color: var(--accent);
+}
+
 h2 {
   font-size: var(--step-2);
   font-weight: 600;

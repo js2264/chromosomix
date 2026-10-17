@@ -28,6 +28,15 @@ name: Release artefacts
 # A `v*` tag here has already been through both, so it *is* a release. If a tag
 # ever should not build installers, exclude it by name in `tags:` below.
 #
+# That holds for a tag `npm version` made, and for no other. `v0.14.0` was made
+# by hand, with GitHub's release form — which makes a tag for any name typed
+# into it — on a commit whose `package.json` still said 0.13.0. This workflow
+# set about building 0.13.0 installers for it and packed `chromosomix@0.13.0`
+# for npm, and only the registry refusing the token kept that version from
+# being published under the wrong tag for good. So the first job, `version`, refuses a tag that
+# is not `v` and the version `package.json` carries, before anything is built
+# or published, and every other job waits on it.
+#
 # A re-run for an existing tag is `workflow_dispatch`. It is careful in a way
 # the automatic path need not be: the release it attaches to may already be
 # published, so it changes neither that state nor the body. See `collect`.
@@ -66,8 +75,33 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The tag is the version, or nothing here runs (see the header). Checked out
+  # at the tag for the reason every job below gives, and read with the Node the
+  # runner image already carries: one field of one file needs no `npm ci`.
+  version:
+    name: the tag is package.json's version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+
+      - name: Refuse a tag npm version did not make
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error title=Not a release tag::$TAG is on a commit whose package.json says $version. Cut a release with npm version, which bumps package.json, runs the checks, names the changelog section and makes the tag; then push with --follow-tags."
+            exit 1
+          fi
+          echo "$TAG is package.json's version" >> "$GITHUB_STEP_SUMMARY"
+
   build:
     name: ${{ matrix.id }}
+    needs: version
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -206,6 +240,7 @@ jobs:
   # unsigned binary gets a file they double-click instead.
   standalone:
     name: standalone HTML
+    needs: version
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -252,6 +287,7 @@ jobs:
 
   npm:
     name: publish to npm
+    needs: version
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -364,6 +400,30 @@ jobs:
             found
           ' CHANGELOG.md > notes.md
           test -s notes.md || { echo "::error::CHANGELOG.md has no section for ${TAG#v}"; exit 1; }
+          # A section as long as 0.15.0's (290 kB) risks GitHub's limit on a
+          # release body, and a refused body fails the release at its last step.
+          # Past 120 kB the body is each entry's bold lead, with a link to the
+          # section in full; a shorter section is posted as written.
+          if [ "$(wc -c < notes.md)" -gt 120000 ]; then
+            awk '
+              function flush() {
+                if (entry == "") return
+                if (match(entry, /^- \*\*([^*]|\*[^*])+\*\*/)) print substr(entry, RSTART, RLENGTH)
+                else print entry
+                entry = ""
+              }
+              /^- / { flush(); entry = $0; next }
+              /^  / {
+                if (entry != "" && entry !~ /^- \*\*([^*]|\*[^*])+\*\*/) { sub(/^ +/, " "); entry = entry $0 }
+                next
+              }
+              { flush(); print }
+              END { flush() }
+            ' notes.md > leads.md
+            printf '\nEvery entry in full is in [CHANGELOG.md](%s/%s/blob/%s/CHANGELOG.md).\n' \
+              "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$TAG" >> leads.md
+            mv leads.md notes.md
+          fi
           cat >> notes.md <<'NOTE'
 
           ---
