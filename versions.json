@@ -215,10 +215,10 @@
   "pulls": [
     {
       "number": 114,
-      "commit": "e2cacfb",
+      "commit": "cb07840",
       "title": "The npm package, ready to publish: build-only dependencies out, chromosomix --version, licence notices in every build, a closed pipe let go",
       "branch": "claude/package-distribution-cli-3bf0u4",
-      "date": "2026-10-17T13:08:34Z"
+      "date": "2026-10-17T13:28:00Z"
     },
     {
       "number": 112,
