@@ -76,7 +76,9 @@ function tile(front: StoreFront, props: StoreTilesProps): HTMLElement {
       class: `store-tile${DOORS.has(front.id) ? ' store-tile-add' : ''}${on ? ' is-on' : ''}`,
       type: 'button',
       title: front.blurb,
-      attrs: { role: 'listitem', 'aria-pressed': String(on) },
+      // The store's id, so the tutorial can point at one tile (§30) without
+      // reading a label that a later build is free to reword.
+      attrs: { role: 'listitem', 'aria-pressed': String(on), 'data-store': front.id },
     },
     storeMark(front.mark, MARK_SIZE[props.size]),
     el('span', { class: 'store-tile-name', text: front.label }),

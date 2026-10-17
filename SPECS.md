@@ -3146,6 +3146,12 @@ that fails gives its room back. Download progress reaches a row at most four tim
 tick was a write of every row to session storage and a rebuild of the card, forty a second for two
 large files, on the thread the map is panned on.
 
+**A row still reading goes with the file to another resolution**, and is read again there. The
+tracks a change of resolution carries were the loaded ones alone, and a row is remembered only once
+it has loaded, so a row on its way was in neither list while the old file's worker was put down
+under it: a reader who picked another resolution in the second or two after a store's session opened
+lost every one of its tracks.
+
 ### 8.7 bigBed
 
 Read whole, and parsed as the BED it holds. Not a windowed source like a bigWig: a `FeatureSet` lives
@@ -13776,3 +13782,143 @@ never the reason a session is lost.
   prompt's name and description — which cannot follow a switch, so it names nothing that is dev:
   *chromosomix – cool files, in the browser*, where both titles once said *(multi-genome) cool
   files*. The name is **chromosomix**.
+
+## 30. The guided tutorial
+
+A first session, played on the live window one step at a time: the window greyed, the one control the
+step is about lit through a hole in the grey, and a card beside it saying what to do with it and what
+it is for. The tutorial is **the app itself, used, on real data** — not a slideshow about it and not a
+sandbox beside it. Every step points at a real control on a real file and the reader presses it; the
+tour only watches. **Built**: all of it — the engine (`ui/Tour.ts`), the steps (`ui/tutorial.ts`),
+the place kept (`state/tour.ts`), the offer in *About* and the palette's row, and
+`scripts/ui-tutorial.mjs`, which plays it to the end on 4DN's data and shoots every step.
+
+### 30.1 Where it is offered
+
+**In *About*, straight after what the viewer is** — the answer to the question a reader who has just
+read that asks next, and the one way in a newcomer finds without being told where to look. One
+sentence, and one filled button that says what it will do: *play the tutorial* for a reader who has
+not begun it, *resume at step 19 of 35* for one who left it, with a quiet *start over* beside it, and
+*play the tutorial again* for one who finished it. The palette has it too, as *Guided tutorial* under
+Help, its hint saying which of the three a press will do.
+
+**Only where its first step is.** It opens on a store, so it is offered wherever the store drawer is:
+on the site and in the desktop app. An embed (§21) has no drawer, and its *About* says nothing of the
+tutorial; nor does the single file (§19), which offers this machine alone. Absent rather than greyed,
+since nothing the reader could do there would make it work.
+
+**From the start, it begins on the landing page**, whose 4DN tile is its first step. A tab that holds
+anything — a map, or a view restored from a reload that is about to open one — is left as it is and a
+new tab is opened beside it, as the brand does, rather than emptied under the reader. A resume does
+not move the window (§30.6).
+
+### 30.2 The data
+
+**4DNES4296C5Q** on the 4DN store: in situ Hi-C on IMR-90 lung fibroblasts, on GRCh38, with
+**1,067,738,237 contacts** — over a billion, so that domains are there to find at 10 kb, and not
+much more, so that a first session is not reading the deepest map on the shelf. Its map is
+`4DNFIJIP5BJF.mcool`, 7.8 GB on 4DN's bucket and read by range like any other (§12), and the set
+carries the three tracks 4DN's own pipeline computed from it: the compartment eigenvector at 250 kb
+(`4DNFIRL31X9M`), the insulation score at 10 kb (`4DNFIR2STZVV`) and the boundaries called on it.
+That is what makes the last step a fair comparison: the reader's own E1 at 250 kb and insulation at
+10 kb, computed in the page, against the consortium's at the same resolutions.
+
+**chr13**, for every task. It shows both halves of the story on one screen: an acrocentric whose
+short arm is empty — the blank square at its start is what a stretch with no unique sequence looks
+like on a map — and a long arm with broad, clean compartments.
+
+Every task is run **with its defaults**, chr13 alone aside: the tutorial teaches where things are,
+and a parameter it chose would be one the reader took for the app's.
+
+### 30.3 The steps
+
+Thirty-five, in seven parts, each part's name printed over its steps' titles:
+
+- **The 4DN store** — open the store; find `4DNES4296C5Q` in its search box, with *type it for me*
+  beside the step for a reader who would rather not type a twelve-character accession; open the set
+  with its tracks, one press.
+- **The map** — pick 250 kb; open chr13 from the Chromosomes table, scrolled to its row when the
+  table has not drawn it; and a step that is only read, about the map and its checkerboard.
+- **Compartments** — open the Analysis panel; choose Compartments; untick every sequence; tick
+  chr13; run; close the drawer; and a step that is only read, the reader's E1 and A/B calls beside
+  4DN's.
+- **Zooming in** — hold Shift and Option and drag along the diagonal, the keys named as the map's
+  corner names them, Shift and Alt off a Mac (§8.9); switch to 10 kb.
+- **Insulation** — the same six steps as Compartments for Diamond insulation, then one only read.
+- **Tracks** — open the Annotations panel; unfold the Insulation domains row; choose *1D track* for
+  its display; press its bottom edge, then its left one, so the lane is drawn under the map and not
+  beside it.
+- **Track correlation** — open the Analysis panel; choose Track correlation; tick 4DN's insulation,
+  4DN's E1, the reader's E1 and the reader's insulation, one step each; run; and the last step,
+  which lights the figure and says where the tutorial is when it is wanted again.
+
+### 30.4 How a step moves on
+
+**A step is done by a state, never by a click.** It moves on when what it asks for holds — the drawer
+open on the 4DN store, the map at 250 kb, a run of the task on chr13 alone — however the reader got
+there: by the lit control, a key, the palette or a road the tutorial does not mention. A tour that
+waited for one click on one element would be stuck the moment somebody took the shortcut it was about
+to teach. The state is read on a tick and again just after anything the reader does, and the card
+stays on a done step for a moment, so the reader sees what they did land before it moves.
+
+**Forward passes over, back waits.** Entered going forward, a step already done goes by on its own —
+never the last, which says the tour is over and is closed by the reader. Entered by *back*, a done
+step is shown and waits for *next*: back means looking again, not bouncing forward.
+
+**A step whose surroundings have gone goes back for them.** A step that points into the Analysis
+drawer, with the drawer closed for half a second, goes back to the step that opens it, and one whose
+map is no longer in front goes back to the store's last step — unless it was done anyway: a run that
+finishes after its drawer was closed is still a run that finished.
+
+**A step that waits on the reader offers to be skipped**, quietly — *skip step*, in the quiet style,
+saying the steps after it may need it — and a step that is only read is gone on from with *next*,
+filled. When a step's control has not been on screen for a second and a half, the card says so and
+what to do: *Not on screen — scroll the table to chr13*, *Not in the list — empty the box over it if a
+word is typed there*. Not on a step already done, reached by *back*: doing it often takes its control
+away — the drawer it closed — and that control is not missing.
+
+### 30.5 The grey, the hole and the card
+
+**One ring round the target, whose shadow is the grey**, so the hole and the grey are one shape and
+cannot drift apart; six pixels of air round the control, and the hole follows it every frame — a
+column scrolling, a drawer sliding, lanes arriving under a map. A target partly out of sight is
+scrolled into view once, when the step opens; one already in view is not, since a scroll nobody
+needed moves the window under a reader about to press what they could see.
+
+**A press on the grey is kept from the app** and answered by the ring pulsing — the reader is shown
+where to press rather than allowed off the step by accident. Inside the hole there is nothing of the
+tour's at all: the press, the drag and the wheel reach the control exactly as they would without a
+tour. Only the *starts* of a gesture are kept from the app outside the hole, so a drag begun on the
+map and run out of the hole still ends where the map hears it. A step that lights nothing keeps the
+grey and keeps nothing from the app, so the window can be used to get back to where the step is.
+
+**The card** stands below the hole, then above, right or left of it, whichever side it fits; in the
+bottom-right corner when the hole is the whole picture; at the bottom, centred, when nothing is lit.
+It says the part, *step n of 35*, and *skip tutorial* along its top, over a bar of how far the
+reader is; then the step's title, one or two sentences — an accession to type set in the face names
+are set in — and *back* and *next* (*skip step* while the step waits, *finish* on the last). The
+sentences are a polite live region, so a step that moves on by itself is heard as well as seen.
+
+**Above every surface of the app, below its dialogs, menus and notes**, and out of the way entirely
+while a dialog is up: a dialog owns the keyboard and the reader's attention, and a tour drawn over one
+would be a second voice talking over the first. It comes back, on the same step, when the dialog
+closes. Under *reduce motion* the ring jumps from control to control rather than sliding, and does
+not pulse.
+
+### 30.6 The place kept
+
+**Where the reader got to is a preference**, in `localStorage` under the app's prefix
+(`chromosomix:tour`): the step, by its id and by its position, how many steps there were, and
+whether the reader finished. It outlives a reload and a closed window, and the stored-data account
+(§11) counts it with the other settings. *skip tutorial* keeps the step it was pressed on; *finish*
+says the tour was finished, and *About* then offers to play it again.
+
+**A resume lands on the first step of the part the reader left**, not on the step itself, because the
+window may have moved on since — reloaded, a drawer closed, a tab switched — and that step may point
+into something no longer open. The part's first step is the one that opens it, and every step after
+it whose state still holds goes by on its own, so a window that has not moved lands exactly where the
+reader was. The position is only what *About* prints; a step a later build no longer has starts the
+tutorial from the beginning.
+
+**It is in a chunk of its own**, fetched by the press that plays it: a reader who never asks for it
+pays for one `localStorage` read when *About* opens.

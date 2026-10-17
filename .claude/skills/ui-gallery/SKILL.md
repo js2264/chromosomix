@@ -99,6 +99,7 @@ node scripts/ui-compare-oe.mjs gallery        # the O/E under a ratio of two map
 node scripts/ui-metaplot-tracks.mjs gallery   # the metaplot over two tracks and one set (§18.8): ATAC and Pol II over the ATAC peaks, the profile and a per-feature heatmap for each track, the same peak on the same row of both, each close up, both in the drawer, the second enlarged; then ranked by score in two groups, a heatmap for each of the four curves; prints every figure's heading: mt01 … mt05
 node scripts/ui-ps-floor.mjs gallery          # P(s) leaving out the first two diagonals by default (§18.8): the form as it opens, minimum separation 2 bins; the curve in the drawer; enlarged with fit pressed, its first point two bins out; then at 0, fitted, the diagonal's break back at the left edge; prints the axes' labels: pf01 … pf05
 node scripts/ui-tab-walk.mjs gallery          # Tab through the fields of one kind (§26.8), each step printed: the lane names under the map and on into the stack on its right (one renamed on the way, Shift+Tab back over the crossing), the ranges' ends to past the last, the colour key's low end to its high (left alone, then typed: tw04b), a Tracks card row to the next, the 1D browser's names and ranges down its lanes (tw05b, tw05c), the yeast deck's headings and keys from one map to the next, a 3D key's bottom to its top: tw01 … tw09
+node scripts/ui-tutorial.mjs gallery-tutorial  # the guided tutorial (§30) played from About to its last step on 4DN's IMR-90 set (4DNES4296C5Q) and chr13, every step shot with its counter and title printed: a press on the grey, *back* to a done step, *skip tutorial* half way and *resume* from About, the last step in the dark theme, and About after *finish*: 01-about … 41-about-again
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -406,6 +407,8 @@ the cell framed on the maps' window, a hover on a bead (the status bar names it)
 panel, the spatial-tracks task run, the reconstruction (*Model from the map*) run and landing
 in the cell, the Structures card with both models, and the 3D card naming the starred cell. **Look at every screenshot** — a blank cell, a stale
 note or a squashed plot is a bug the tests did not see, and this is where it shows.
+
+`scripts/ui-tutorial.mjs` plays **the guided tutorial** (§30) end to end, the way a reader would: a real press on each lit control, a real Shift-Alt drag on the map, so a step whose target the grey covers fails here as it would fail a reader. It reads the 4DN store from the deployed site — the dev server has no `stores/` — or from a folder holding `4dn.json` and `4dn-sessions.json` named in `GALLERY_STORES`, and the map and its tracks from 4DN's bucket, so it needs the network: a machine behind a proxy names it in `HTTPS_PROXY`, which is handed to Chromium as its own `--proxy-server` flag (Playwright's option proxies the loopback, and so the dev server, too). Each shot waits for the page's requests to land — a map still arriving from the bucket is a blank square under a card about it — and for the ring and the card to stop moving. It takes about three minutes. Run it after any change to `ui/Tour.ts`, `ui/tutorial.ts`, or a control a step lights — a renamed class, a moved button, a task's title.
 
 ## Gotchas met
 

@@ -5595,6 +5595,34 @@ canvas.is-frozen {
   color: var(--text-faint);
 }
 
+/* The guided tutorial's offer (§30): a box of its own straight under what the
+   viewer is, since it is the one thing in a dialog of facts that a newcomer
+   came for. */
+.about-tutorial {
+  margin: 0.8rem 0;
+  padding: 0.65rem 0.8rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+}
+
+.about-body .about-tutorial-text {
+  margin: 0 0 0.55rem;
+}
+
+.about-tutorial-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.about-tutorial-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 /* A slider: the one toggle in the application drawn as a track and a knob.
 
    It is lit by the rule that lights every toggle (§26.3) — border, fill and
@@ -14246,4 +14274,165 @@ span.deck-name {
 .folders-asked .hint {
   flex: 1 1 20rem;
   margin: 0;
+}
+
+/* --- the guided tutorial (§30) ------------------------------------------- */
+
+/* Above every surface of the app — its drawers stop at 40 — and under its
+   toasts, dialogs, menus, lifted cards and colour picker: each is something a
+   reader may need in the middle of a step, and none of them should be dimmed
+   or made unreachable by the thing telling them what to press. */
+.tour-veil,
+.tour-ring {
+  position: fixed;
+  z-index: 80;
+  pointer-events: none;
+}
+
+/* The grey over the whole window, for a step that has nothing to light. It
+   takes no press, so the window can be used to get back to where the step is. */
+.tour-veil {
+  inset: 0;
+  background: rgb(14 15 17 / 0.55);
+}
+
+/* The hole, with the grey drawn as its shadow: one shape, so the lit control
+   and the dim around it cannot drift apart while the hole follows a column
+   scrolling or a drawer sliding in. */
+.tour-ring {
+  border-radius: 8px;
+  box-shadow: 0 0 0 200vmax rgb(14 15 17 / 0.55);
+  outline: 2px solid var(--accent);
+  transition: left 160ms ease-out, top 160ms ease-out, width 160ms ease-out, height 160ms ease-out;
+}
+
+/* A press on the grey shows where to press instead. */
+.tour-ring.is-nudged {
+  animation: tour-nudge 650ms ease-out;
+}
+
+@keyframes tour-nudge {
+  35% {
+    outline-width: 4px;
+    outline-offset: 5px;
+  }
+}
+
+/* The four blocks round the hole, which take the presses that land on the
+   grey: transparent, because the grey is the ring's. */
+.tour-block {
+  position: fixed;
+  z-index: 81;
+}
+
+.tour-card {
+  position: fixed;
+  z-index: 82;
+  width: min(22rem, calc(100vw - 1rem));
+  padding: 0.7rem 0.9rem 0.65rem;
+  background: var(--bg-raised);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  font-size: var(--step-0);
+}
+
+.tour-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.tour-chapter {
+  font-size: var(--step--2);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.tour-count {
+  font-size: var(--step--2);
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.tour-head .tour-skip {
+  margin-left: auto;
+  padding: 0.15rem 0.35rem;
+  font-size: var(--step--2);
+}
+
+/* How far through, as a bar under the counter: the counter says where, the
+   bar says how much is left without being read. */
+.tour-track {
+  display: block;
+  height: 3px;
+  margin: 0.4rem 0 0.6rem;
+  background: var(--bg-muted);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.tour-bar {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 200ms ease-out;
+}
+
+.tour-title {
+  margin: 0 0 0.3rem;
+  font-size: var(--step-1);
+  font-weight: 600;
+}
+
+.tour-text {
+  margin: 0;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+
+.tour-note {
+  margin: 0.45rem 0 0;
+  font-size: var(--step--1);
+  color: var(--warn);
+}
+
+.tour-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+}
+
+/* A step's own helper — *type it for me* — stands apart from the way on. */
+.tour-assist {
+  margin-right: auto;
+}
+
+/* A dialog has the window: the tour waits under it, not over it. */
+.tour.is-yielding > * {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-ring,
+  .tour-bar {
+    transition: none;
+  }
+
+  .tour-ring.is-nudged {
+    animation: none;
+  }
+}
+
+/* A name to be read exactly — an accession the reader will type — in the face
+   the app sets names in. */
+.tour-name {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  color: var(--text);
 }

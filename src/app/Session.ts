@@ -1076,6 +1076,20 @@ export class Session {
     return this.file !== null
   }
 
+  /**
+   * The address of the file open here, as the hash names it, or `null` until
+   * one has opened — which is later than the hash names it, by the length of
+   * the open.
+   */
+  get fileUri(): string | null {
+    return this.file?.uri ?? null
+  }
+
+  /** The bin size of the map open here, or `null` with none, or none fixed. */
+  get binsize(): number | null {
+    return this.file?.info.binsize ?? null
+  }
+
   /** `true` while this session is a 1D genome browser rather than a map. */
   get isBrowsing(): boolean {
     return this.assembly !== null
@@ -1515,7 +1529,8 @@ export class Session {
   /**
    * Contig names, if the contigs table has already been read.
    *
-   * @internal SessionDeck names the lead's contigs with it.
+   * @internal SessionDeck names the lead's contigs with it, and the tutorial
+   * finds a row of the Chromosomes table by it (§30).
    */
   contigNames(): string[] | null {
     const table = this.file?.contigs
@@ -4938,6 +4953,14 @@ export class Session {
    * second "drop this again" in a session that already has one under the old
    * file's memory.
    *
+   * **Readable includes still reading.** A row whose bytes are on their way has
+   * an address to read them from as surely as one that has them, and it was
+   * left behind: a workspace seats its tracks reading, a row is remembered only
+   * once it has loaded (§8.6), and the old file's worker is put down under it —
+   * so a reader who picked another resolution in the second or two after a
+   * store's session opened lost every one of its tracks, at the new rung and for
+   * good. Carried, such a row is read again at the rung it arrives at.
+   *
    * And, for a **change of resolution only**, what was computed as well. That
    * condition is the whole of the difference between the two lists, and it is
    * `AnnotationLoader.carry`'s docstring stated the other way round: a computed
@@ -4947,7 +4970,9 @@ export class Session {
    * loses numbers this tab is still holding.
    */
   private carry(next: string): void {
-    const rows = this.annotations?.store.entries.filter((entry) => entry.status === 'ready')
+    const rows = this.annotations?.store.entries.filter(
+      (entry) => entry.status === 'ready' || entry.status === 'loading',
+    )
     this.carried = rows === undefined || rows.length === 0 ? null : [...rows]
     const lanes = this.annotations?.store.placements
     this.carriedLanes = lanes === undefined || lanes.length === 0 ? null : [...lanes]

@@ -66,6 +66,9 @@ import {
 } from '../ui/commands'
 import { learnKey, readLayout } from '../ui/keyboardLayout'
 import { openAbout, openShortcuts } from '../ui/dialogs'
+import { readTourProgress, writeTourProgress } from '../state/tour'
+import type { Tour } from '../ui/Tour'
+import type { TutorialHost } from '../ui/tutorial'
 import { button, dragHasFiles, el } from '../ui/dom'
 import { filesFrom } from '../ui/chooseFiles'
 import { icon, iconButton } from '../ui/icons'
@@ -296,6 +299,14 @@ export class App implements SessionHost {
   private readonly status: StatusBar | null
   /** At most one dialog at a time; it owns the keyboard while it is up. */
   private modal: Modal | null = null
+  /**
+   * The guided tutorial while it is on screen (§30), or `null`.
+   *
+   * Loaded by the press that plays it, as a chunk of its own: a reader who
+   * never asks for it pays for one `localStorage` read when About opens and for
+   * nothing else.
+   */
+  private tour: Tour | null = null
   /** Set while this class is the one moving the hash, so it ignores the echo. */
   private writingHash = false
   /**
@@ -2464,6 +2475,23 @@ export class App implements SessionHost {
         hint: 'Everything this computer has kept, with a button that clears all of it.',
         run: () => void this.openStoredDataDialog(),
       },
+      // Absent where About does not offer it either, and for its reason: the
+      // first step is a store, and the single file has none (§30).
+      ...(IS_STANDALONE
+        ? []
+        : [
+            {
+              id: 'tutorial',
+              group: 'Help',
+              title: 'Guided tutorial',
+              hint: tutorialHint(),
+              enabled: this.storeDrawer !== null,
+              run: () => {
+                const kept = readTourProgress()
+                void this.playTutorial(kept !== null && !kept.finished ? 'resume' : 'start')
+              },
+            },
+          ]),
       { id: 'about', group: 'Help', title: 'About this viewer', run: () => this.openAboutDialog() },
       {
         id: 'source',
@@ -2541,9 +2569,78 @@ export class App implements SessionHost {
     if (this.modal !== null) return
     // `desktop()?.platform` rather than a flag: on the website there is no
     // bridge and the dialog says exactly what it says today.
-    this.modal = openAbout(REPO_URL, desktop()?.platform ?? null, () => {
-      this.modal = null
+    this.modal = openAbout(
+      REPO_URL,
+      desktop()?.platform ?? null,
+      () => {
+        this.modal = null
+      },
+      // Offered wherever a store can be opened, which is where its first step
+      // is: not in an embed, which has no drawer, nor in the single file, which
+      // offers this machine alone (§19, §21.2).
+      this.storeDrawer === null
+        ? null
+        : { progress: readTourProgress(), play: (from) => void this.playTutorial(from) },
+    )
+  }
+
+  /**
+   * Put the guided tutorial on screen (§30), from its start or from where the
+   * reader left it.
+   *
+   * From the start, it begins on the landing page, because its first step is a
+   * tile there: a tab that holds something is left as it is and a new one is
+   * opened beside it, as the brand does (`goHome`), rather than emptied. A
+   * resume lands on the first step of the part the reader left, and the steps
+   * whose state still holds go by on their own (`ui/Tour.ts`).
+   */
+  private async playTutorial(from: 'start' | 'resume'): Promise<void> {
+    if (this.storeDrawer === null || this.tour !== null) return
+    this.modal?.close()
+    const [{ Tour, resumeIndex }, { tutorialSteps }] = await Promise.all([
+      import('../ui/Tour'),
+      import('../ui/tutorial'),
+    ])
+    if (this.tour !== null) return
+    const steps = tutorialSteps(this.tutorialHost())
+    const kept = readTourProgress()
+    const start = from === 'resume' && kept !== null && !kept.finished ? resumeIndex(steps, kept.step) : 0
+    // Any view at all, opened or not: a tab restored from a reload names its
+    // file before it has opened it, and is about to cover the landing page.
+    if (start === 0 && (this.current?.state ?? null) !== null) this.newSession()
+    const keep = (index: number, finished: boolean): void =>
+      writeTourProgress({ step: steps[index].id, index, total: steps.length, finished })
+    this.tour = new Tour({
+      steps,
+      start,
+      onStep: (_step, index) => keep(index, false),
+      onEnd: (how, index) => {
+        this.tour = null
+        // Skipped keeps the step it was left on, which is what About offers to
+        // resume; finished says so, and About offers to play it again.
+        if (how === 'finished') keep(index, true)
+      },
+      // Any dialog: About's own, a refusal, the palette. The tour waits under
+      // it rather than talking over it.
+      yielding: () => this.modal !== null || document.querySelector('.modal-backdrop') !== null,
     })
+    this.tour.start()
+  }
+
+  /** The window, as the tutorial's steps ask about it (`ui/tutorial.ts`). */
+  private tutorialHost(): TutorialHost {
+    return {
+      view: () => this.current?.state ?? null,
+      binsize: () => this.current?.binsize ?? null,
+      file: () => this.current?.fileUri ?? null,
+      sequences: () => this.current?.contigNames() ?? null,
+      store: () => this.storeDrawer?.storeId ?? null,
+      panelOpen: (panel) => (panel === 'analysis' ? this.analysisPanel : this.annotationsPanel).isOpen,
+      task: () => this.current?.analysis.workspace?.openTask ?? null,
+      runs: (task) => this.current?.analysis.workspace?.runsOf(task) ?? [],
+      running: (task) => this.current?.analysis.workspace?.isRunning(task) ?? false,
+      tracks: () => this.current?.annotations?.store ?? null,
+    }
   }
 
   /**
@@ -2596,6 +2693,14 @@ export class App implements SessionHost {
 
 /** Re-exported so the bootstrap can name the one error type it may see. */
 export { ViewerError }
+
+/** What the palette's *Guided tutorial* row will do, from where the reader left it (§30). */
+function tutorialHint(): string {
+  const kept = readTourProgress()
+  if (kept === null) return 'A first session on a 4DN Hi-C map, one step at a time.'
+  if (kept.finished) return 'The first session on a 4DN Hi-C map again, from the store.'
+  return `Carry on from step ${kept.index + 1} of ${kept.total}, where you left it.`
+}
 
 /** This window's `sessionStorage`, or `null` where the browser refuses it. */
 function sessionStorageOrNull(): Storage | null {
