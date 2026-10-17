@@ -1,11 +1,20 @@
 # chromosomix
 
-A unified genome browser for `.*cool`, `.scool`, `.hic`, `.pairs`, HiC-Pro, and other similar formats, 
-and other genome-wide data formats like bigWig, bedGraph, GTF, FASTA, `.2bit`, BAM, VCF, barChart, 
-genePred, bedMethyl, cytoBand ideograms, RNA-seq splice junctions and UCSC's formats, and 3D chromatin 
-models beside them. 
-The browser is a single-page application that runs entirely in the browser, with no 
-server-side processing or data upload.
+[![Web app](https://img.shields.io/badge/web%20app-chromosomix.app-1f6feb)](https://chromosomix.app/)
+[![Tests](https://github.com/js2264/chromosomix/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/js2264/chromosomix/actions/workflows/test.yml)
+[![Deploy](https://github.com/js2264/chromosomix/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/js2264/chromosomix/actions/workflows/deploy.yml)
+[![npm](https://img.shields.io/npm/v/chromosomix?logo=npm)](https://www.npmjs.com/package/chromosomix)
+[![Release](https://img.shields.io/github/v/release/js2264/chromosomix?logo=github)](https://github.com/js2264/chromosomix/releases)
+[![Validation](https://img.shields.io/badge/validation-vs%20reference%20tools-2ea44f)](https://chromosomix.app/validation/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+**A unified genome browser for multi-dimensional genomic data.** Chromatin contact maps, genome tracks and 3D models, side by side, straight from your files.
+
+chromosomix launches in about a second and reads your data where it lives, on your own disk or in the cloud. No server, no preprocessing, no installation, no account, and it works offline. Most formats open as they are: `.*cool`, `.hic`, HiC-Pro, `.pairs`, bigWig, BED, BAM, FASTA/`.2bit`, 3D structures and more.
+
+<p align="center">
+  <img src="docs/screenshot.png" alt="chromosomix: a yeast micro-C contact map with its loop calls, beside sequence, gene, ATAC and Pol II tracks" width="100%">
+</p>
 
 ## Main features 
 
