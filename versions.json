@@ -1,6 +1,13 @@
 {
-  "latest": "28cee95",
+  "latest": "0e053d6",
   "versions": [
+    {
+      "commit": "0e053d6",
+      "version": "0.13.0",
+      "date": "2026-10-17T15:34:07+02:00",
+      "subject": "Add guided tutorial for first-time users (#112)",
+      "tag": ""
+    },
     {
       "commit": "28cee95",
       "version": "0.13.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "6409249",
-      "version": "0.13.0",
-      "date": "2026-10-02T19:16:04+02:00",
-      "subject": "Draw a place visited again from memory (§2, §7.2, §12) (#90)",
-      "tag": ""
-    },
-    {
       "commit": "7a6fea2",
       "version": "0.13.0",
       "date": "2026-09-20T22:39:26+02:00",
@@ -219,13 +219,6 @@
       "title": "The npm package, ready to publish: build-only dependencies out, chromosomix --version, licence notices in every build, a closed pipe let go",
       "branch": "claude/package-distribution-cli-3bf0u4",
       "date": "2026-10-17T13:28:00Z"
-    },
-    {
-      "number": 112,
-      "commit": "233bc10",
-      "title": "Add guided tutorial for first-time users",
-      "branch": "claude/interactive-onboarding-tutorial-of5px8",
-      "date": "2026-10-17T13:08:44Z"
     },
     {
       "number": 107,
