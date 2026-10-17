@@ -53,13 +53,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   and on another machine its note names the folder to connect, with a button that does. The desktop
   app now lets its own page re-read what the user chose, and nothing else.
 
-- **The tracks' names beside the map, in its corners (§8.8).** Each stack's names now stand in the
-  corner that follows it clockwise — left of the tracks under the map, below the ones on its right,
-  above the ones on its left, right of the ones above it — instead of over the start of each track,
-  where a name and its range covered the first stretch of the signal. A short name sits in the margin
-  beside the map's own labels and a long one runs out over the corner, which grows to fit (wrapping a
-  name past 150 px); the range sits under its name, and a press on either still opens its caret, a
-  right click the lane's menu. Figures saved from the map carry them where the screen does.
+- **The tracks' names beside the map, in its corners, with the name column on (§8.8).** The 1D
+  browser's *name column* switch (`u`) is now at the end of the *all tracks* row of the map's Tracks
+  card too, and moves the names beside a map as well: on, each stack's names stand in the corner that
+  follows it clockwise — left of the tracks under the map, below the ones on its right, above the ones
+  on its left, right of the ones above it — rather than over the start of each track, where a name and
+  its range cover the first stretch of the signal. A short name sits in the margin beside the map's
+  own labels and a long one runs out over the corner, which grows to fit (wrapping a name past
+  150 px); the range sits under its name, and a press on either still opens its caret, a right click
+  the lane's menu. Figures saved from the map carry them where the screen does. The switch is **off**
+  to begin with, so the names are written over the tracks as they always were; for a while the
+  corners were the only place they went, with no switch on the map's card to put them back.
 
 - **Each cell of the deck can be on a sequence of its own (§16.3).** Every map's heading now says
   which sequence it shows, as a quiet picker beside its name: pick `V` on one cell and that map

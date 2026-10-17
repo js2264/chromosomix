@@ -308,7 +308,8 @@ describe('the Tracks card', () => {
     for (const key of TRACK_OPTIONS) {
       expect(titles.some((title) => title.startsWith(PLOT_OPTION_LABELS[key].label))).toBe(true)
     }
-    // …and the one that is this view's own, which no map has a use for.
+    // …and the name column, which is not an overlay: where the names stand,
+    // in this view's gutter here and in the corners beside a map (§8.8).
     expect(titles.some((title) => title.startsWith(PLOT_OPTION_LABELS['gutter'].label))).toBe(true)
   })
 })

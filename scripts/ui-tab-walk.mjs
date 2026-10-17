@@ -1,7 +1,8 @@
 /**
  * Tab between the fields of one kind (§26.8), end to end.
  *
- * On the yeast demo: a caret in the first track name under the map, then Tab
+ * On the yeast demo, with the name column on so that the names stand in the
+ * map's corners (§8.8): a caret in the first track name under the map, then Tab
  * after Tab — the names under the map in order, one renamed on the way, then
  * on into the stack beside the map; a caret in a range, Tab from its bottom to
  * its top and on to the next track's bottom; the colour key's low end, Tab to
@@ -113,6 +114,10 @@ try {
   await opened()
   await sleep(2500)
   await fold('Fold the General panel')
+  // The names under the map are walked in its corner, where the name column
+  // puts them; the app opens with it off and the names over the tracks.
+  await page.keyboard.press('u')
+  await sleep(1500)
 
   // The names, under the map and on into the stack beside it: Tab after Tab
   // to past the last, one renamed on the way, and at the step that crosses
