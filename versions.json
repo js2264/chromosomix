@@ -215,10 +215,10 @@
   "pulls": [
     {
       "number": 112,
-      "commit": "9e0c110",
+      "commit": "15f590d",
       "title": "Add guided tutorial for first-time users",
       "branch": "claude/interactive-onboarding-tutorial-of5px8",
-      "date": "2026-10-17T01:50:47Z"
+      "date": "2026-10-17T08:59:25Z"
     },
     {
       "number": 107,
