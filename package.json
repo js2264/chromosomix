@@ -1,6 +1,6 @@
 {
   "name": "chromosomix",
-  "version": "0.13.0",
+  "version": "0.15.0",
   "type": "module",
   "description": "Genome browser for Hi-C and Micro-C contact maps, genome tracks and 3D models, and the command line that runs its analyses: insulation, compartments, loops, APA, P(s) and more.",
   "keywords": [

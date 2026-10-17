@@ -10,7 +10,7 @@ The deployed site at <https://chromosomix.app/> is built from `main` on every pu
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
-## [Unreleased]
+## [0.15.0] - 2026-10-17
 
 **There is no 0.14.0.** A `v0.14.0` tag and a GitHub release for it were made by hand, on the commit
 that merged #114, before `npm version` had bumped `package.json`: that build calls itself 0.13.0, its
