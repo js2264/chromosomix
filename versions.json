@@ -214,6 +214,13 @@
   ],
   "pulls": [
     {
+      "number": 112,
+      "commit": "9e0c110",
+      "title": "Add guided tutorial for first-time users",
+      "branch": "claude/interactive-onboarding-tutorial-of5px8",
+      "date": "2026-10-17T01:50:47Z"
+    },
+    {
       "number": 107,
       "commit": "ae43db2",
       "title": "Add circular visualization of metagenome contact maps (§7.6)",
