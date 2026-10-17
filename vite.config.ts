@@ -5,6 +5,7 @@ import { fileURLToPath, URL } from 'node:url'
 
 import { cspMeta } from './scripts/csp.mjs'
 import { precacheUrls } from './scripts/sw-manifest.mjs'
+import { thirdPartyCollector, thirdPartyNotices } from './scripts/third-party-notices.mjs'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
   version?: string
@@ -152,7 +153,11 @@ export default defineConfig({
   // replace this list and name `cspMeta()` again, where the desktop's — whose
   // policy is a response header (`electron/protocol.cts`) — deliberately does
   // not. See `scripts/csp.mjs` for every clause and why a meta.
-  plugins: [serviceWorker(process.env.BASE_PATH ?? '/'), gzippedAsIs(), cspMeta()],
+  //
+  // The notices are every build's, and every config that replaces this list
+  // names `thirdPartyNotices()` again, last, where the worker builds report into
+  // it from `worker.plugins` below (`scripts/third-party-notices.mjs`).
+  plugins: [serviceWorker(process.env.BASE_PATH ?? '/'), gzippedAsIs(), cspMeta(), thirdPartyNotices()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
@@ -161,6 +166,9 @@ export default defineConfig({
   },
   worker: {
     format: 'es',
+    // Each worker is a Rollup of its own, which the page's plugins never see;
+    // this is how what the readers and the kernels compile in reaches the notices.
+    plugins: () => [thirdPartyCollector()],
   },
   build: {
     target: 'es2022',

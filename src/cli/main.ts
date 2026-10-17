@@ -80,7 +80,7 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { readFile, mkdir, writeFile } from 'node:fs/promises'
 import { deflateSync } from 'node:zlib'
 import { basename, dirname, join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { MetaCooler } from '../metacooler/MetaCooler'
 import { LocalFileSource } from '../sources/LocalFileSource'
@@ -163,7 +163,7 @@ import { importPairs, probePairs } from '../pairs/import'
 import { ViewerError } from '../errors'
 import { parseUri } from '../uri'
 import type { ByteSource } from '../types'
-import { VERSION } from '../version'
+import { COMMIT, VERSION } from '../version'
 
 /**
  * Which build wrote a file, after the `# chromosomix` every export opens with:
@@ -277,7 +277,7 @@ function unknownFlag(command: string, name: string): string {
  * Only the CLI's own flags may come before it, because only theirs are known
  * before the command is — what a task's `--x` takes is a fact about the task.
  * A task's flag ahead of its task is refused rather than guessed at, unless the
- * line holds no command at all (`chromosomix --version`), which is the usage.
+ * line holds no command at all (`chromosomix --verbose`), which is the usage.
  */
 function commandOf(argv: readonly string[]): string {
   const own = flagsFor('')
@@ -806,6 +806,7 @@ const RESERVED = new Set([
   'over',
   'quiet',
   'help',
+  'version',
   // How a `.pairs` positional is binned (§3.7). Reserved rather than declared
   // per task because it is a property of the *input*, not of the analysis: it
   // decides which grid the file is read on, and every task then runs on that
@@ -828,7 +829,7 @@ const RESERVED = new Set([
  * What `parseArgs` is typed by, with each task's toggles. The rest take the
  * word after them, and refuse to be the last word on the line.
  */
-const SWITCHES = new Set(['no-balance', 'quiet', 'help'])
+const SWITCHES = new Set(['no-balance', 'quiet', 'help', 'version'])
 
 function coerce(param: AnalysisTask['params'][number], values: string[]): Params[string] {
   const kind = (param as { kind?: string }).kind
@@ -2189,12 +2190,73 @@ const USAGE = `chromosomix — the Analysis panel, from a shell
                            the app's own id. Repeat it per track
       --against <file>     the other maps a recorded hicrep compared against
 
+  chromosomix --version
+      Which build this is: chromosomix, its version and the commit it was
+      built from, on the first line, as every file it writes opens with them.
+      Then what the version does not fix — the Node it runs on, and the
+      h5wasm and @gmod/bbi installed beside it, which read every map and track.
+
 A file may be an http or https address — a map, or what --against,
 --sequence, --tracks, --features or --pairs names. The app reads one by
 range, and its range requests are synchronous, which a browser worker has and
 Node does not; so the command downloads the whole of it first, into $TMPDIR,
 with its progress on stderr, and removes it when it ends.
 `
+
+/**
+ * What `--version` prints: which build this is, and what it is running on.
+ *
+ * The first line is the name and the version, with the commit the bundle was
+ * built from where it was built in a repository — the words every file the
+ * command writes opens with (`# chromosomix 0.13.0 cli`), so `head -1` is the
+ * line a pipeline records and a methods section cites.
+ *
+ * The rest is what a version does not fix. The Node the command runs on, with
+ * its platform; and the two libraries every map and every track is read
+ * through, `h5wasm` — which is HDF5 — and `@gmod/bbi`. Both are ranges in
+ * `package.json`, settled when the package is installed rather than when it was
+ * built, so two installs of one version can read a file through two builds of
+ * either; which is why their numbers are read off the copies installed beside
+ * this file, and not baked in. npm is not among them: it installs the command
+ * and takes no part in a run.
+ */
+function versionText(): string {
+  const lines = [
+    `chromosomix ${VERSION}${COMMIT === '' ? '' : ` (${COMMIT})`}`,
+    `node ${process.versions.node} on ${process.platform}-${process.arch}`,
+    ...['h5wasm', '@gmod/bbi'].map((name) => `${name} ${installedVersion(name) ?? '(not found)'}`),
+  ]
+  return `${lines.join('\n')}\n`
+}
+
+/**
+ * The version of `name` as installed where this file imports it from, or
+ * `undefined` where it is not.
+ *
+ * Node's own walk for a bare specifier — `node_modules/` beside this file and
+ * beside every directory above it — rather than `require.resolve`, which both
+ * packages refuse: each exports an `import` condition alone, and neither
+ * exports its `package.json`. The walk finds the copy a global install nests
+ * under the package and the one `npx` hoists beside it alike.
+ */
+function installedVersion(name: string): string | undefined {
+  let directory = dirname(fileURLToPath(import.meta.url))
+  for (;;) {
+    if (basename(directory) !== 'node_modules') {
+      try {
+        const manifest = JSON.parse(
+          readFileSync(join(directory, 'node_modules', name, 'package.json'), 'utf8'),
+        ) as { version?: unknown }
+        if (typeof manifest.version === 'string') return manifest.version
+      } catch {
+        // Not installed at this level; the next one up may have it.
+      }
+    }
+    const parent = dirname(directory)
+    if (parent === directory) return undefined
+    directory = parent
+  }
+}
 
 function listTasks(): void {
   for (const task of TASKS) {
@@ -2911,6 +2973,12 @@ export async function main(argv: readonly string[]): Promise<number> {
     process.stdout.write(USAGE)
     return 0
   }
+  // The version on the same terms — after the help, which is the longer answer
+  // to a line that asks for both.
+  if (argv.includes('--version')) {
+    process.stdout.write(versionText())
+    return 0
+  }
   let args: Args
   try {
     const command = commandOf(argv)
@@ -2973,8 +3041,32 @@ function isEntryPoint(argv1: string | undefined): boolean {
     return false
   }
 }
+
+/**
+ * Let a reader stop reading.
+ *
+ * `chromosomix tasks | head -1`, or a `less` quit before the end: the other end
+ * of the pipe closes, and Node reports the next write as an error on the stream
+ * — `EPIPE`, or `EOF` on Windows — which unheard is an uncaught exception, so
+ * the command died with a stack trace and exit 1 the moment `head` had its
+ * line. Heard, what was left to print is dropped, and the command finishes what
+ * it was doing and exits with the status it would have had. Not with a
+ * `process.exit()` on the spot: a task's progress and notes go to stderr, so
+ * `insulation map.cool 2>&1 | head -1` would have stopped with its files half
+ * written under an exit code that said nothing was wrong. Any other error on
+ * the stream is thrown, as it was.
+ */
+export function ignoreClosedPipe(stream: NodeJS.WritableStream): void {
+  stream.on('error', (error: NodeJS.ErrnoException) => {
+    if (error.code === 'EPIPE' || error.code === 'EOF') return
+    throw error
+  })
+}
+
 const invoked = isEntryPoint(process.argv[1])
 if (invoked) {
+  ignoreClosedPipe(process.stdout)
+  ignoreClosedPipe(process.stderr)
   main(process.argv.slice(2))
     .then((code) => {
       process.exitCode = code

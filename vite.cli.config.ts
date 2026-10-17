@@ -33,6 +33,8 @@ import { execSync } from 'node:child_process'
 import { chmodSync, readFileSync } from 'node:fs'
 import { join as joinPath } from 'node:path'
 
+import { thirdPartyNotices } from './scripts/third-party-notices.mjs'
+
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
   version?: string
   homepage?: string
@@ -77,7 +79,10 @@ function executable(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [executable()],
+  // The notices beside the command (`scripts/third-party-notices.mjs`): what
+  // the bundle compiled in, which is not what it leaves external — npm installs
+  // those three with licences of their own.
+  plugins: [executable(), thirdPartyNotices()],
   define: {
     __APP_VERSION__: JSON.stringify(VERSION),
     __APP_HOMEPAGE__: JSON.stringify(pkg.homepage ?? ''),

@@ -13,6 +13,7 @@
  */
 
 import { standaloneCspProblems } from './csp.mjs'
+import { NOTICES_TITLE } from './third-party-notices.mjs'
 
 /** Bytes over which the file stops being something anybody will email. */
 export const STANDALONE_MAX_BYTES = 24 * 1024 * 1024
@@ -91,6 +92,13 @@ export function standaloneIndexProblems(html) {
   //    script the page no longer has — is refused here rather than by the
   //    browser, which refuses it with a blank page.
   problems.push(...standaloneCspProblems(html))
+
+  // 8. The licences of what it compiles in, which every other build writes
+  //    beside its page and this one, being one file, writes into it as a
+  //    comment (`third-party-notices.mjs`).
+  if (!html.includes(`<!--\n${NOTICES_TITLE}`)) {
+    problems.push('the third-party notices are not in the page — singleFile() writes them ahead of </html>')
+  }
 
   return problems
 }

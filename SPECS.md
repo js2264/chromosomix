@@ -9621,8 +9621,10 @@ kept one `<script src>` paints its shell and stops, with nothing on a console no
 a page that kept the module worker format looks completely normal until a file is dropped on it.
 `scripts/standalone-shape.mjs` holds the rules — one file, within a size band (4 MB to 24 MB), no
 external script or stylesheet, no root-absolute reference, no PWA tag, no `{type:"module"}` worker
-construction, the blob-URL construction present, the target's own name in the page, and a policy
-naming exactly the scripts and stylesheet the page holds, recomputed over the file it reads — and
+construction, the blob-URL construction present, the target's own name in the page, a policy
+naming exactly the scripts and stylesheet the page holds, recomputed over the file it reads, and
+the third-party notices every other build writes beside its page, which this one carries as a
+comment ahead of `</html>` because it may not be two files (§22.4) — and
 `check-standalone-build.mjs` runs them over the directory as the last step of
 `npm run build:standalone`. The lower size bound is as load-bearing as the upper: a build whose
 inlining silently did nothing produces a small, tidy, entirely broken file.
@@ -10149,7 +10151,11 @@ is ~6 MB unpacked, 1.7 MB compressed.
 demo data: npm's default is everything not ignored by git. `dist-cli/` is there so the declared `bin`
 resolves inside the package — `npx chromosomix` then works against a published version with no
 clone, which is what makes `h5wasm`, `@gmod/bbi` and `generic-filehandle2` — the three the CLI's
-bundle leaves external — runtime dependencies rather than dev ones.
+bundle leaves external — runtime dependencies rather than dev ones. They are the only ones, because
+`dependencies` is what every install downloads. Everything a bundle compiles in is a devDependency —
+`echarts` and `three` among them, which `dist/` already carries and the command line never loads.
+Declared as dependencies, those two and `zrender` under them were 90 MB of the 116 MB an install of
+the package put on disk.
 
 npm **force-includes the file `main` names**, ahead of `files` and ahead of a negation. `main` is the
 Electron entry point (§15) and cannot be dropped without breaking `electron .`, so a pack run in a
@@ -10161,10 +10167,11 @@ why publishing happens from CI, on a clean checkout, where the directory does no
 
 `prepack` runs the build, so `npm pack` and `npm publish` both fill `dist/` from source at that
 moment rather than shipping whatever was there — and `dist-cli/` too, which `build:package` builds
-first. Then `check-package-build.mjs` refuses the result if it is wrong — no `index.html` or
-`icon-192.png`, no module script under `./assets/`, a root-absolute reference, a service worker or a
-web manifest, a source map, a data file, more than 12 MB in all, or a page without the site's
-policy (§11), which a copy carries in the page because no server it lands on will send it — and the
+first. Then `check-package-build.mjs` refuses the result if it is wrong — no `index.html`,
+`icon-192.png` or `THIRD-PARTY-NOTICES.txt`, no module script under `./assets/`, a root-absolute
+reference, a service worker or a web manifest, a source map, a data file, more than 12 MB in all, a
+page without the site's policy (§11), which a copy carries in the page because no server it lands on
+will send it, or a `dist-cli/` without the command `bin` names or its notices (§22.4) — and the
 rules are held by a test (`package-shape.mjs`, `test/unit/package-shape.test.ts`) in the arrangement
 §15 and §21's archived build both use.
 
@@ -10175,6 +10182,46 @@ other artifact in this repository, **a published version cannot be corrected**: 
 rebuilt over on the next push and a deployment is redeployed, while a tarball is on the registry for
 ever, mirrored by every CDN that has seen it and pinned in the lockfile of whoever installed it that
 week. The pack is the last moment any of it is cheap to notice.
+
+### 22.4 The notices: what every build owes what it carries
+
+chromosomix is MIT, and most of what it compiles in is permissive — but each of those licences is a
+condition on every copy, and a bundle is a copy. echarts is Apache-2.0, which asks for its licence
+and its NOTICE to travel with the work; zrender, and the HDF5 inside h5wasm, are BSD-style and ask
+for their notices in any redistribution in binary form; every MIT and ISC licence asks for its
+copyright line in all copies or substantial portions. Minifying drops the comments that carried
+them: three.js's two were the only notices that reached `dist/`, and a tarball carried chromosomix's
+own LICENSE and nobody else's.
+
+So **every build writes `THIRD-PARTY-NOTICES.txt` beside what it built** — the site and an archived
+pin at their roots, the desktop renderer in its asar, the package in `dist/` and, beside the command,
+in `dist-cli/` — listing what it carries and then reproducing each licence in full. The standalone
+page may not be two files and carries the same text as a comment ahead of `</html>` (§19).
+
+**What is listed is read off the bundle, not off `package.json`** (`scripts/third-party-notices.mjs`),
+because a dependency is not a copy and a copy need not be a dependency: the CLI leaves `h5wasm` and
+`@gmod/bbi` external, so npm installs each with its own licence and the command's notices owe them
+nothing, while `zrender` is nobody's dependency here but echarts' and is in every page that draws a
+figure. Every module that put code into an output is filed under its package by the `node_modules/`
+in its path, and the package's licence, copying and notice files are quoted as installed — echarts'
+`licenses/` too, which holds the licence of the d3 it embeds. Vite builds each worker with a Rollup
+of its own whose plugins the page's never see, and the readers, the kernels and h5wasm are all in
+workers, so a collector in `worker.plugins` reports into the same record the page's plugin writes
+from.
+
+**Material a generator copied into `src/` is carried too, and named by the file that holds it**: the
+interface icons from Lucide (ISC) and the brand marks from Simple Icons (CC0), chromosight's preset
+kernels (MIT), matplotlib's colour tables (the Matplotlib licence, which asks a derivative to say
+what it changed: sampled at 256 entries and stored as RGB) and ColorBrewer's schemes behind `Reds` and
+`RdBu_r` (Apache-2.0). Each licence is the installed devDependency the generator read or, for an
+upstream that is not an npm package, a text committed verbatim under `licenses/`; the version is read
+off the generated file's own header where it records one, so the notice names what the material came
+from rather than what is installed today. A test holds every such file to existing, since renaming
+one would drop its upstream's licence without a word.
+
+Each check asserts the notices are there — the package's (§22.3), the archived pin's (§21), the
+desktop renderer's (§15) and the standalone page's (§19) — because a notice that stopped being
+written leaves a build that looks exactly like one that succeeded.
 
 ## 23. The console: what this window has done
 
@@ -10281,8 +10328,8 @@ cooler's 0-based numbers, `chrIV:100000-200000`, which the shell read as written
 and the one locus in the console a base away from the same window everywhere else on the screen.
 
 **The line is read by what the command takes.** A task's descriptor says which of its parameters
-are switches, and the shell's own flags are known — `--quiet`, `--no-balance` and `--help` are
-switches, and `--out`, `--window`, `--features` and the rest take a value. So a switch never takes
+are switches, and the shell's own flags are known — `--quiet`, `--no-balance`, `--help` and
+`--version` are switches, and `--out`, `--window`, `--features` and the rest take a value. So a switch never takes
 the word after it: `--stranded` turns one on, and `--stranded=false` or `--no-stranded` turns it off
 (`--no-balance` stays the shell's own, the raw counts, and is never coverage's `--balance=false`). A
 flag took the next word unless that word began with `--`, so `coverage a.cool --no-balance b.hic` ran
@@ -10302,6 +10349,29 @@ a task. `replay` takes the files named after the workspace as it takes those aft
 `--over data/*.hic` as a shell expands it replays every file rather than the first alone. The console
 writes a switch as itself or as `--key=false`, the one spelling read alike before and after, and a
 test reads every task's line back through the parser.
+
+**`--version` names the build, and what it runs on.** The first line is `chromosomix` and the
+version, with the commit the bundle was built from where it was built in a repository —
+`chromosomix 0.13.0 (7a6fea2)` — the words every file the command writes opens with
+(`# chromosomix 0.13.0 cli`), so `head -1` is the line a pipeline records. The lines after it are
+what a version does not fix: the Node it runs on, with the platform, and the `h5wasm` and
+`@gmod/bbi` that every map and track is read through. Those two are ranges in `package.json`,
+settled when the package is installed and not when it was built, so two installs of one version can
+read a file through two builds of either; their numbers are read off the copies installed beside the
+command for that reason, never baked in. npm is not listed: it installs the command and takes no
+part in a run. Like `--help` it is answered wherever on the line it is written, before anything else
+is checked, with exit 0. `chromosomix --version` printed the usage until now — an answer to a
+question nobody had asked, and none to the one a pipeline's record of its tools asks.
+
+**A reader that stops reading is no failure of the command.** `chromosomix tasks | head -1` closes
+the pipe under the command, and Node reports the next write as an error on the stream — `EPIPE`, or
+`EOF` on Windows — which, unheard, killed the command with a stack trace and exit 1 the moment `head`
+had its line, and killed a task piped as `insulation map.cool 2>&1 | head -1` before it had written a
+single file. Both streams now let the reader go: what was left to print is dropped, and the command
+finishes what it was doing and exits with the status it would have had. It does not exit on the
+spot, which is the usual answer, because progress and notes go to stderr: that task would have
+stopped with its files half written under an exit code that said nothing was wrong. Any other error
+on a stream is thrown, as before (`ignoreClosedPipe`).
 
 **A value is one the form could have held.** A choice is one of the options its descriptor lists, a
 switch is on or off — `true`, `yes`, `on` or `1`, or their opposites, after an `=` — and a number is

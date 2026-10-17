@@ -122,7 +122,22 @@ The text below is a live version of the above `<iframe>` (it will not work on Gi
 
 ## Using the chromosomix analysis CLI
 
-Thirty-one analysis tasks can be executed programatically through the CLI, with the same parameters and producing the same results as the Analysis panel interactively. This can be used in a pipeline or a script. To install the CLI, run the following commands in a terminal:
+Thirty-one analysis tasks can be executed programatically through the CLI, with the same parameters and producing the same results as the Analysis panel interactively. This can be used in a pipeline or a script. The CLI is published to npm with every release, and needs Node 22.12 or later. To install it, run:
+
+```bash
+npm install -g chromosomix
+```
+
+This installs the `chromosomix` command globally, at the latest release. To pin a release instead, which is what a pipeline or a methods section should do, name its version; `npx` runs a given version without installing anything:
+
+```bash
+npm install -g chromosomix@<version>
+npx chromosomix@<version> insulation sample.cool --window 10 --out results/
+```
+
+`chromosomix --version` prints the version on its first line, then the Node it runs on and the versions of the two libraries that read every map and track, `h5wasm` and `@gmod/bbi`, as they are installed.
+
+To run the CLI from a clone instead, for example to try a change before it is released:
 
 ```bash
 git clone https://github.com/js2264/chromosomix
@@ -131,7 +146,7 @@ npm install
 npm run build:cli && npm link
 ```
 
-This will install the `chromosomix` command globally. You can then run the following command to see the available tasks and their parameters:
+You can then run the following command to see the available tasks and their parameters:
 
 ```bash
 chromosomix tasks
@@ -568,4 +583,13 @@ The log is kept in your own browser for seven days or five hundred lines, whiche
 
 ## Licence
 
-MIT.
+chromosomix is released under the MIT licence (`LICENSE`).
+
+Every build also carries the work of other projects, each under its own licence. The libraries compiled into the bundles are echarts (Apache-2.0), zrender (BSD-3-Clause), three.js (MIT), h5wasm (NIST's notice, with the BSD-style licence of the HDF5 library inside it), and `@gmod/bbi` with its dependencies (MIT). The source also holds material copied from Lucide (ISC), Simple Icons (CC0), chromosight (MIT), matplotlib (the Matplotlib licence) and ColorBrewer (Apache-2.0). Each build lists what it carries and reproduces every one of those licences in full in `THIRD-PARTY-NOTICES.txt`, beside its `index.html`:
+
+- the web app: <https://chromosomix.app/THIRD-PARTY-NOTICES.txt>;
+- the npm package: `dist/` for the viewer, `dist-cli/` for the command;
+- the desktop app: inside the application;
+- the standalone HTML page: in a comment at the end of the file.
+
+The upstream texts that are not in an npm package are kept under [`licenses/`](licenses/).
