@@ -5564,10 +5564,25 @@ absolute (`scripts/llms.mjs`), for a tool that reads a single document rather th
 **`llms.txt` is written by hand and held to the app by a test**, because a model acts on it — writes
 a link from it, runs a command from it — and nothing reading it can tell a summary that has drifted:
 each example link goes through the hash's own reader, each value it lists through the list it is
-drawn from, each task through the registry and each store through the shelf. The page's head
-carries a description and Open Graph tags, which a pasted link unfurls with and a crawler reads
-before the app has run. None of this is in the pinned, desktop or package builds, which carry no
-`public/`.
+drawn from, each task through the registry and each store through the shelf. None of these four
+files is in the pinned, desktop or package builds.
+
+**The page is written for a search engine too, which reads it after the app has run.** Its title,
+*chromosomix – genome browser for Hi-C, tracks and 3D models*, and its description name what the
+app is searched by — Hi-C and Micro-C, a genome browser, `.cool`, `.mcool` and `.hic` — inside the
+sixty and the hundred and sixty characters a results page prints whole, and the description is the
+one a pasted link unfurls with, beside the Open Graph tags. **On the web the app leaves that title
+alone while nothing is open** (`App.landingTitle`): a search engine indexes the page as it stands
+once the script has run, and the app used to write its bare name over the title the moment it
+mounted, so none of the words in it reached an index. A tab with a file open is still
+`<file> — chromosomix`, and the desktop window and the single file, which no search finds, say the
+name alone. A `<link rel="canonical">` names `https://chromosomix.app/` as the page's one address,
+whatever query a link to it carries — `?store=`, `?config=`, `?embed=1` — so that a link to any of
+them counts for the root; a pinned copy carries it too, behind `robots.txt`. The `<noscript>` says
+what the app is, the formats it reads and where its source and `llms.txt` are, for a reader without
+JavaScript and for a crawler that runs none, which reads nothing else of the page. It comes ahead of
+`#app`, which is a window tall even empty: after it, the line it used to hold was a screen's height
+down a blank page. The package's description and keywords say the same to npm's search (§22).
 
 ---
 
@@ -13880,10 +13895,12 @@ never the reason a session is lost.
 - **Not on the command line**: `chromosomix` is a developer's tool, lists every task and runs every
   one.
 - **Not in the static text** around the app — the page's title and description, the description a
-  pasted link unfurls with, the install prompt's name and description, and the `llms.txt` the site
-  serves to language models (§11) — which cannot follow a switch, so it names nothing that is dev:
-  *chromosomix – genome browser for contact maps, tracks and 3D models*, where both titles once said
-  *(multi-genome) cool files*. The name is **chromosomix**.
+  pasted link unfurls with, what the page says without JavaScript, the install prompt's name and
+  description, the `llms.txt` the site serves to language models (§11), and the package's description
+  and keywords on npm — which cannot follow a switch, so it names nothing that is dev, metagenomics
+  included: *chromosomix – genome browser for Hi-C, tracks and 3D models*, where both titles once said
+  *(multi-genome) cool files* and the package's keywords *metagenomics* and *metacool*. The name is
+  **chromosomix**.
 
 ## 30. The guided tutorial
 

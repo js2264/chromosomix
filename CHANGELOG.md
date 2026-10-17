@@ -23,9 +23,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   against the shelf, and it names no dev feature (§29.5). Beside it, `llms-full.txt` is the README as
   one file, generated at build time with its links made absolute; `robots.txt` welcomes every crawler
   but keeps the archived pins and pull-request previews out of search; and `sitemap.xml` lists the
-  app and its validation and timing notebooks. The page's title, description and new Open Graph tags
-  say what a pasted link unfurls with: a genome browser for contact maps, tracks and 3D models, where
-  the title said *cool files, in the browser*.
+  app and its validation and timing notebooks. New Open Graph tags give a pasted link a card to
+  unfurl with.
+
+- **chromosomix.app is written to be found by a search (§11).** The page's title and description
+  now name what the app is searched by — *genome browser for Hi-C, tracks and 3D models*; Hi-C and
+  Micro-C, `.cool`, `.mcool` and `.hic` — short enough for a results page to print whole, where the
+  title said *cool files, in the browser*. And the app no longer writes its bare name over that
+  title the moment it mounts: a search engine indexes the page as it stands after the script has
+  run, so no title the page was given had ever reached one. On the web a tab with nothing open keeps
+  the page's title; with a file open it is still the file's name and the app's. A canonical link
+  lists every address of the app — `?store=`, `?config=`, `?embed=1` — under the root; the
+  `<noscript>` says what the app is, what it reads and where its source and `llms.txt` are, for a
+  reader or a crawler without JavaScript, at the top of the page — it said only that JavaScript was
+  needed, a screen's height down a blank page, under the empty space the app mounts into; and the npm
+  package's description and keywords name the data and the analyses rather than *metagenomics* and
+  *metacool*, a dev feature's (§29.5).
 
 - **`chromosomix --version` (§23).** The first line is `chromosomix` and the version, with the
   commit the build was made from — the words every file the command writes opens with, so `head -1`
