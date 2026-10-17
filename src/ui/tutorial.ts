@@ -24,19 +24,26 @@
  *
  * ## The steps a reader would not think of
  *
+ * The tour opens with the store drawer on the **lab's store**, so that its
+ * first press is a switch to 4DN's that is always there to make (`app/App.ts`).
+ * It shows the two columns the map comes with — **General**, then **Aesthetics**
+ * once a map is on screen — and the Analysis panel's **three groups** of tasks,
+ * one by one, before it asks for any of them.
+ *
  * The map is drawn as a **correlation** before Compartments runs, because the
  * plaid that draws is what the task decomposes — the reader sees the pattern
  * before the number that summarises it — and back as **balanced** before the
- * zoom, because domains are a matter of contact frequency. Compartments is
- * **phased by 4DN's E1**: left to itself the form takes the first set of
- * intervals for a gene model, which on this session is 4DN's boundaries, and a
- * sign decided by those is a coin toss (its saddle says *phasing r 0.01*). 4DN's
- * own E1 is phased already, so following it makes A mean the same in both,
- * which the last step depends on. And the domains are looked at with
- * **O/E** and **adaptive smoothing** on: at 10 kb a pixel holds a handful of
- * contacts, and divided by its distance and pooled where it is thin, the
- * squares stand out from the decay. Neither changes what a task reads — the
- * insulation drawer still says *balanced* — so they stay on.
+ * zoom, because domains are a matter of contact frequency. Compartments is run
+ * **with no gene model**, which the tour sets itself rather than asking for:
+ * left to itself the form takes the first set of intervals for one, which on
+ * this session is 4DN's boundaries, and a sign decided by those is a coin toss
+ * (its saddle says *phasing r 0.01*). Nothing else phases it either, so the
+ * drawer says the sign is arbitrary, and the last step says an E1 can match
+ * 4DN's upside down. And the domains are looked at with **O/E** and **3 × 3
+ * smoothing** on: at 10 kb a pixel holds a handful of contacts, and divided by
+ * its distance and averaged with its neighbours, the squares stand out from the
+ * decay. Neither changes what a task reads — the insulation drawer still says
+ * *balanced* — so they stay on.
  *
  * ## How a step is written
  *
@@ -109,6 +116,8 @@ const OVERVIEW = { start: 35_000_000, end: 55_000_000 }
 const DOMAINS = { start: 41_000_000, end: 45_000_000 }
 /** How narrow a window has to be for the second zoom to count: a few domains, not a chromosome arm. */
 const DOMAINS_SPAN = 8_000_000
+/** The smoothing the domains are looked at with, as the view state names it (`render/smooth.ts`). */
+const SMOOTH_3X3 = '1'
 /**
  * The rows the reader's own runs leave on the Tracks card: a profile by its
  * output (`ui/synthetic.ts`'s `syntheticId`), the insulation score's ending in
@@ -151,10 +160,26 @@ function taskRow(title: string): HTMLElement | null {
   return null
 }
 
+/** The columns a step can point into, by their class and the name the header gives them. */
+type Column = 'general' | 'analysis' | 'annotations' | 'aesthetics'
+
 /** A folded column's spine, or the header's button for it. */
-function columnDoor(panel: 'analysis' | 'annotations' | 'aesthetics'): HTMLElement | null {
-  const title = panel === 'analysis' ? 'Analysis' : panel === 'annotations' ? 'Annotations' : 'Aesthetics'
+function columnDoor(panel: Column): HTMLElement | null {
+  const title = panel.charAt(0).toUpperCase() + panel.slice(1)
   return first(`.panel-${panel} .panel-tab`) ?? first(`.head-panels button[aria-label="${title} panel"]`)
+}
+
+/** An open column's cards, or the door to it while it is folded. */
+function columnCards(panel: Column): HTMLElement | null {
+  return first(`.panel-${panel}:not(.collapsed) .panel-column-body`) ?? columnDoor(panel)
+}
+
+/** One of the Analysis panel's groups of tasks, by its heading. */
+function taskGroup(heading: string): HTMLElement | null {
+  for (const group of document.querySelectorAll('.panel-analysis section.analysis-card')) {
+    if (laidOut(group) && words(group.querySelector('.card-head')).startsWith(heading)) return group
+  }
+  return null
 }
 
 /** The resolution control: a dropdown on a long ladder, a row of stops on a short one. */
@@ -196,9 +221,16 @@ function formSelect(word: string): HTMLSelectElement | null {
   return null
 }
 
-/** What a select shows, in its own words. */
-function shown(select: HTMLSelectElement | null): string {
-  return words(select?.selectedOptions[0])
+/**
+ * Compartments' gene model, set to none — the one parameter the tour sets for
+ * the reader (§30.2). Through the select and its `change`, as a press would, so
+ * the form records it as its own.
+ */
+function noGeneModel(): void {
+  const select = formSelect('phase by gene density')
+  if (select === null || select.value === '') return
+  select.value = ''
+  select.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
 /** A figure of the drawer's result, by the start of its heading. */
@@ -391,22 +423,27 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
   })
 
   /**
-   * A task run on chr13 alone, then its drawer closed: open the panel, choose
-   * the task, untick every sequence, tick chr13, set what `between` sets, run —
-   * and look at what `after` lights before closing.
+   * A task run on chr13 alone, then its drawer closed: open the panel, look at
+   * what `tour` shows of it, choose the task, untick every sequence, tick chr13,
+   * run — with `setup` done to the form on the way — and look at what `after`
+   * lights before closing.
    */
   const sequenceTask = (
     chapter: string,
     task: string,
     row: string,
     say: { choose: string; none: string; tick: string; run: string },
-    between: (open: () => boolean) => TourStep[] = () => [],
-    after: (open: () => boolean) => TourStep[] = () => [],
+    extra: {
+      tour?: (panel: string) => TourStep[]
+      setup?: () => void
+      after?: (open: () => boolean) => TourStep[]
+    } = {},
   ): TourStep[] => {
     const panel = `analysis-${task}`
     const open = (): boolean => host.task() === task
     return [
       analysisPanel(panel, chapter),
+      ...(extra.tour?.(panel) ?? []),
       {
         id: task,
         chapter,
@@ -422,6 +459,7 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
         chapter,
         title: 'Untick every sequence',
         text: say.none,
+        prepare: extra.setup,
         target: () => drawer()?.querySelector<HTMLElement>('button[title="Untick every sequence"]') ?? null,
         done: () => {
           const now = tickedSequences()
@@ -438,18 +476,20 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
         done: () => sameNames(tickedSequences(), [TUTORIAL_SEQUENCE]),
         needs: { holds: open, back: task },
       },
-      ...between(open),
       {
         id: `${task}-run`,
         chapter,
         title: 'Run it',
         text: say.run,
+        // Again on the step the run is pressed from: the one before it is
+        // passed over when it is already done, and its setup with it.
+        prepare: extra.setup,
         target: runButton,
         done: () => ranOn(task),
         // A run carries on with its drawer closed, and is still a run.
         needs: { holds: () => open() || host.running(task), back: task },
       },
-      ...after(open),
+      ...(extra.after?.(open) ?? []),
       {
         id: `${task}-close`,
         chapter,
@@ -461,21 +501,22 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
     ]
   }
 
-  /** One of the four tracks the correlation is run over, ticked in its form. */
-  const trackTick = (
-    id: string,
-    title: string,
-    text: TourText,
-    entry: () => AnnotationEntry | undefined,
-  ): TourStep => ({
+  /** The four tracks the correlation is run over: 4DN's insulation and E1, and the reader's. */
+  const fourTracks = (): Array<AnnotationEntry | undefined> => [
+    fourdn(FOURDN_INSULATION),
+    fourdn(FOURDN_E1),
+    ownE1(),
+    ownInsulation(),
+  ]
+
+  /** A group of the Analysis panel's tasks, shown while the panel is open. */
+  const groupStep = (id: string, heading: string, text: string, panel: string): TourStep => ({
     id,
-    chapter: 'Track correlation',
-    title,
+    chapter: 'Compartments',
+    title: heading,
     text,
-    target: () => trackBox(entry()),
-    done: () => trackBox(entry())?.querySelector('input')?.checked === true,
-    needs: { holds: () => host.task() === 'trackcorr', back: 'trackcorr' },
-    missing: 'Not in the list — this track did not load, or was closed.',
+    target: () => taskGroup(heading),
+    needs: { holds: () => host.panelOpen('analysis'), back: panel },
   })
 
   return [
@@ -498,8 +539,8 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       chapter: 'The 4DN store',
       title: 'Open the 4DN store',
       text:
-        'Stores are catalogues of published data, read from where they are kept. Open the 4D Nucleome ' +
-        'project’s.',
+        'Stores are catalogues of published data, read from where they are kept. Press 4DN to open the 4D ' +
+        'Nucleome project’s.',
       target: () =>
         (host.store() === null ? null : first(`.store-drawer .store-tile[data-store="${TUTORIAL_STORE}"]`)) ??
         first(`.store-tiles-large .store-tile[data-store="${TUTORIAL_STORE}"]`) ??
@@ -512,13 +553,19 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       title: 'Find an experiment',
       text: [
         'Type ',
-        { name: TUTORIAL_SET },
+        { name: TUTORIAL_SET, copy: true },
         ' in the search box: Hi-C on IMR-90 lung fibroblasts, about a billion contacts.',
       ],
       action: 'type',
       target: searchBox,
       focus: true,
       done: () => searchBox()?.value.toUpperCase().includes(TUTORIAL_SET) === true && setGroup() !== null,
+      // Wrong is what cannot become the accession by typing on: a beginning of
+      // it is a reader on their way, and anything holding it is done.
+      mistake: () => {
+        const typed = (searchBox()?.value ?? '').trim().toUpperCase()
+        return typed === '' || TUTORIAL_SET.startsWith(typed) || typed.includes(TUTORIAL_SET) ? null : typed
+      },
       needs: { holds: () => host.store() === TUTORIAL_STORE, back: 'store' },
       assist: {
         label: 'type it for me',
@@ -545,6 +592,15 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
     },
 
     // -- The map -------------------------------------------------------------
+    {
+      id: 'look-general',
+      chapter: 'The map',
+      title: 'The General panel',
+      text:
+        'What the file is: its bin size and contacts under File, its sequences under Sequences, and anything ' +
+        'else it carries under Metadata.',
+      target: () => columnCards('general'),
+    },
     {
       id: 'resolution-250',
       chapter: 'The map',
@@ -579,9 +635,19 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       chapter: 'The map',
       title: 'The contact map',
       text:
-        `Each pixel is how often two stretches of ${TUTORIAL_SEQUENCE} touch. The plaid off the diagonal is ` +
-        'its A and B compartments; 4DN’s own tracks are under the map.',
+        `Each pixel is how often two stretches of ${TUTORIAL_SEQUENCE} touch; 4DN’s tracks are drawn under it. ` +
+        'Scroll to zoom into the picture at this resolution, drag to move around, and double-click to fit it ' +
+        'back.',
       target: mapPicture,
+    },
+    {
+      id: 'look-aesthetics',
+      chapter: 'The map',
+      title: 'The Aesthetics panel',
+      text:
+        'How the picture is drawn: the Map card sets its score, smoothing and colours, the Tracks card its ' +
+        'tracks, and Export saves it as a figure.',
+      target: () => columnCards('aesthetics'),
     },
 
     // -- Compartments ---------------------------------------------------------
@@ -590,16 +656,15 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       'Compartments',
       CORRELATION_SCORE,
       'Draw it as a correlation',
-      'In the Map card, set score to correlation: each pixel becomes how alike two stretches’ contacts are, ' +
-        'once distance is divided out.',
+      'In the Map card, set score to correlation.',
     ),
     {
       id: 'look-correlation',
       chapter: 'Compartments',
       title: 'The plaid',
       text:
-        'Red where two stretches share a compartment, blue where they do not. Compartments finds this ' +
-        'pattern’s main axis: E1.',
+        'Red where two stretches share a compartment, blue where they do not. Compartments sums this pattern ' +
+        'up as one track, E1, positive in one compartment and negative in the other.',
       target: mapPicture,
     },
     ...sequenceTask(
@@ -612,46 +677,41 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
         tick: `…then tick ${TUTORIAL_SEQUENCE}, the chromosome on screen.`,
         run: 'Press run. It takes a few seconds.',
       },
-      (open) => [
-        {
-          id: 'phase-genes',
-          chapter: 'Compartments',
-          title: 'No gene model',
-          text:
-            'E1’s sign means nothing until it is phased, and this box took 4DN’s boundaries for genes. ' +
-            'Choose Do not use a gene model.',
-          action: 'choose',
-          target: () => formSelect('phase by gene density'),
-          done: () => shown(formSelect('phase by gene density')) === 'Do not use a gene model',
-          needs: { holds: open, back: 'compartments' },
-        },
-        {
-          id: 'phase-track',
-          chapter: 'Compartments',
-          title: 'Phase it by 4DN’s E1',
-          text: [
-            '4DN’s own E1 is phased already. Choose ',
-            { name: FOURDN_E1 },
-            ' under phase by a track, so that A means the same in both.',
-          ],
-          action: 'choose',
-          target: () => formSelect('phase by a track'),
-          done: () => shown(formSelect('phase by a track')).includes(FOURDN_E1),
-          needs: { holds: open, back: 'compartments' },
-        },
-      ],
-      (open) => [
-        {
-          id: 'look-saddle',
-          chapter: 'Compartments',
-          title: 'The saddle',
-          text:
-            'Bins sorted by E1, from B to A: strong opposite corners mean A touches A and B touches B. The ' +
-            'numbers under it say how much.',
-          target: () => figure('Saddle'),
-          needs: { holds: open, back: 'compartments' },
-        },
-      ],
+      {
+        tour: (panel) => [
+          groupStep(
+            'tasks-2d',
+            '2D tasks',
+            'These read the contact map: its decay with distance, insulation, compartments, loops and more.',
+            panel,
+          ),
+          groupStep(
+            'tasks-3d',
+            '3D tasks',
+            'These build a model of the chromosome’s shape from the map, or set one against it.',
+            panel,
+          ),
+          groupStep(
+            'tasks-1d',
+            '1D tasks',
+            'These read tracks rather than the map: peaks, profiles over features, correlations between tracks.',
+            panel,
+          ),
+        ],
+        setup: noGeneModel,
+        after: (open) => [
+          {
+            id: 'look-saddle',
+            chapter: 'Compartments',
+            title: 'The saddle',
+            text:
+              'Bins sorted by E1, low to high: bright corners on the diagonal mean like touches like, A with A ' +
+              'and B with B. The numbers under it say how much.',
+            target: () => figure('Saddle'),
+            needs: { holds: open, back: 'compartments' },
+          },
+        ],
+      },
     ),
     {
       id: 'look-compartments',
@@ -746,17 +806,17 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       chapter: 'Zooming in',
       title: 'Smooth it',
       text:
-        'At 10 kb most pixels hold a handful of contacts. Set smooth to adaptive, which pools neighbours where ' +
-        'the counts are thin.',
+        'At 10 kb most pixels hold a handful of contacts. Set smooth to 3 × 3, which averages each pixel with ' +
+        'the eight around it.',
       action: 'choose',
       target: inMapCard(() => mapField('smooth')),
-      done: () => host.view()?.smooth?.startsWith('a') === true,
+      done: () => host.view()?.smooth === SMOOTH_3X3,
       needs: { holds: onMap, back: 'open-set' },
     },
     {
       id: 'look-oe',
       chapter: 'Zooming in',
-      title: 'Structure, not distance',
+      title: 'Domains and compartments',
       text:
         'Red is more contact than the distance predicts, blue less: the domains are red squares, and the ' +
         'checkerboard behind them is A and B again.',
@@ -844,20 +904,27 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       needs: { holds: () => host.panelOpen('analysis'), back: 'analysis-trackcorr' },
       missing: 'Not in the list — empty the box over it if a word is typed there.',
     },
-    trackTick(
-      'tick-4dn-insulation',
-      'Tick 4DN’s insulation',
-      [{ name: FOURDN_INSULATION }, ', the insulation score 4DN computed at 10 kb.'],
-      () => fourdn(FOURDN_INSULATION),
-    ),
-    trackTick(
-      'tick-4dn-e1',
-      'Tick 4DN’s compartments',
-      [{ name: FOURDN_E1 }, ', the E1 4DN computed at 250 kb.'],
-      () => fourdn(FOURDN_E1),
-    ),
-    trackTick('tick-own-e1', 'Tick your E1', 'The compartment track you computed.', ownE1),
-    trackTick('tick-own-insulation', 'Tick your insulation', 'The insulation score you computed.', ownInsulation),
+    {
+      id: 'tick-tracks',
+      chapter: 'Track correlation',
+      title: 'Tick the four tracks',
+      text: [
+        { name: FOURDN_INSULATION },
+        ' and ',
+        { name: FOURDN_E1 },
+        ', 4DN’s insulation and E1, and the E1 and insulation you computed.',
+      ],
+      // The list rather than one box in it: four ticks are one step, and the
+      // reader is shown the whole of what they are choosing from.
+      target: () =>
+        fourTracks()
+          .map((entry) => trackBox(entry)?.closest<HTMLElement>('.param-field') ?? null)
+          .find((field) => field !== null) ?? null,
+      done: () =>
+        fourTracks().every((entry) => trackBox(entry)?.querySelector('input')?.checked === true),
+      needs: { holds: () => host.task() === 'trackcorr', back: 'trackcorr' },
+      missing: 'Not in the list — a track did not load, or was closed.',
+    },
     {
       id: 'trackcorr-run',
       chapter: 'Track correlation',
@@ -865,7 +932,7 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       text: `Every pair is compared over the windows all four have values in, which is ${TUTORIAL_SEQUENCE}.`,
       target: runButton,
       done: () => {
-        const wanted = [fourdn(FOURDN_INSULATION), fourdn(FOURDN_E1), ownE1(), ownInsulation()]
+        const wanted = fourTracks()
         if (wanted.some((entry) => entry === undefined)) return false
         return host.runs('trackcorr').some((run) => {
           const chosen = new Set(namesIn(run.provenance.params.tracks) ?? [])
@@ -879,8 +946,8 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       chapter: 'Track correlation',
       title: 'Yours against 4DN’s',
       text:
-        'Each square compares two tracks, dark red where they rise and fall together. Find your E1 against ' +
-        '4DN’s, and your insulation against theirs.',
+        'Each square compares two tracks: red where they rise and fall together, blue where one rises as the ' +
+        'other falls. Find yours against 4DN’s; an unphased E1 can match upside down, at −1.',
       target: () => figure('Track correlation'),
     },
 
@@ -901,7 +968,7 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       title: 'That’s the tour',
       text:
         'You opened a billion-contact map from 4DN, called compartments and domains on chr13, and set them ' +
-        'against 4DN’s own. The tutorial is in About whenever you want it again.',
+        'against 4DN’s own. The tutorial is on the landing page and in About whenever you want it again.',
       hero: true,
     },
   ]

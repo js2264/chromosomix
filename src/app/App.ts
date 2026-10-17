@@ -66,7 +66,7 @@ import {
 } from '../ui/commands'
 import { learnKey, readLayout } from '../ui/keyboardLayout'
 import { openAbout, openShortcuts } from '../ui/dialogs'
-import { readTourProgress, writeTourProgress } from '../state/tour'
+import { readTourProgress, setTourRunning, writeTourProgress } from '../state/tour'
 import type { Tour } from '../ui/Tour'
 import type { TutorialHost } from '../ui/tutorial'
 import { button, dragHasFiles, el } from '../ui/dom'
@@ -2584,15 +2584,24 @@ export class App implements SessionHost {
     )
   }
 
+  /** The landing page's tutorial button (§30), as a session hands it up. */
+  startTutorial(from: 'start' | 'resume'): void {
+    void this.playTutorial(from)
+  }
+
   /**
    * Put the guided tutorial on screen (§30), from its start or from where the
    * reader left it.
    *
    * From the start, it begins on the landing page, because its first step is a
    * tile there: a tab that holds something is left as it is and a new one is
-   * opened beside it, as the brand does (`goHome`), rather than emptied. A
-   * resume lands on the first step of the part the reader left, and the steps
-   * whose state still holds go by on their own (`ui/Tour.ts`).
+   * opened beside it, as the brand does (`goHome`), rather than emptied. And
+   * the store drawer is opened on the lab's store behind the welcome, so that
+   * the first thing the reader does is *switch* to 4DN's — a press that is
+   * always there to make, where a drawer left on 4DN by an earlier visit, or
+   * by a link, made the step one that had already happened. A resume lands on
+   * the first step of the part the reader left, and the steps whose state
+   * still holds go by on their own (`ui/Tour.ts`).
    */
   private async playTutorial(from: 'start' | 'resume'): Promise<void> {
     if (this.storeDrawer === null || this.tour !== null) return
@@ -2608,6 +2617,7 @@ export class App implements SessionHost {
     // Any view at all, opened or not: a tab restored from a reload names its
     // file before it has opened it, and is about to cover the landing page.
     if (start === 0 && (this.current?.state ?? null) !== null) this.newSession()
+    if (start === 0) this.storeDrawer.open('rsg')
     const keep = (index: number, finished: boolean): void =>
       writeTourProgress({ step: steps[index].id, index, total: steps.length, finished })
     this.tour = new Tour({
@@ -2616,14 +2626,17 @@ export class App implements SessionHost {
       onStep: (_step, index) => keep(index, false),
       onEnd: (how, index) => {
         this.tour = null
-        // Skipped keeps the step it was left on, which is what About offers to
-        // resume; finished says so, and About offers to play it again.
+        // Skipped keeps the step it was left on, which is what the landing
+        // page and About offer to resume; finished says so, and they offer to
+        // play it again.
         if (how === 'finished') keep(index, true)
+        setTourRunning(false)
       },
       // Any dialog: About's own, a refusal, the palette. The tour waits under
       // it rather than talking over it.
       yielding: () => this.modal !== null || document.querySelector('.modal-backdrop') !== null,
     })
+    setTourRunning(true)
     this.tour.start()
   }
 

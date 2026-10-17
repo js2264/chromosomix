@@ -11,9 +11,10 @@
  * a real drag across the square the tour lights — so a step whose target is
  * covered by the tour's own grey fails here as it would fail a reader. On the
  * way it also takes the roads that are not the main one, each shot and printed:
- * *type it for me*, a press on the grey, *back* to a step already done, *skip
- * tutorial* half way and *resume* from About, the dark theme, and About after
- * *finish*.
+ * the landing page's button that starts it, a wrong accession typed (the name
+ * blinks) and the right one pasted from its copy button, a press on the grey,
+ * *back* to a step already done, *skip tutorial* half way and *resume* from
+ * About, the dark theme, and About after *finish*.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-tutorial.mjs gallery-tutorial
@@ -65,6 +66,8 @@ const browser = await chromium.launch({
   ],
 })
 const context = await browser.newContext({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 1 })
+// The accession's copy button writes the clipboard and this script reads it back.
+await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE })
 await context.route(`${BASE}/stores/**`, async (route) => {
   const name = new URL(route.request().url()).pathname.replace(/^.*\/stores\//, '')
   if (STORES !== null && existsSync(join(STORES, name))) {
@@ -173,8 +176,6 @@ const clickSequence = (name) =>
     })
     .first()
     .click()
-const clickTrack = (words) =>
-  page.locator('.analysis-drawer label.param-check', { hasText: words }).first().click()
 const domains = '.ann-row[data-id="analysis:insulation:insulation-domains"]'
 /** A location toggle on the domains row, pressed where it is. */
 async function clickPlace(edge) {
@@ -227,39 +228,56 @@ const mapSelect = (word) =>
     .locator('label.field', { has: page.locator('.field-label', { hasText: new RegExp(`^${word}$`) }) })
     .locator('select')
     .first()
-/** A select of the drawer's form, by the words beside it, set to the option whose words include `text`. */
-async function chooseIn(word, text) {
-  const select = page
-    .locator('.analysis-drawer label.param-field', { has: page.locator('.field-label', { hasText: new RegExp(`^${word}$`) }) })
-    .locator('select')
-    .first()
-  const value = await select.evaluate(
-    (node, wanted) => [...node.options].find((option) => option.textContent.includes(wanted))?.value ?? null,
-    text,
-  )
-  if (value === null) throw new Error(`no option ${text} under ${word}`)
-  await select.selectOption(value)
+/** The store's 4DN tile: in the drawer, open on the lab's store behind the welcome, or on the page. */
+async function pressStore() {
+  const inDrawer = page.locator('.store-drawer .store-tile[data-store="4dn"]').first()
+  const onPage = page.locator('.store-tiles-large .store-tile[data-store="4dn"]').first()
+  await ((await inDrawer.isVisible()) ? inDrawer : onPage).click()
+}
+/** Tick whichever of the correlation's four tracks is not ticked yet. */
+async function tickFour() {
+  for (const words of ['4DNFIR2STZVV', '4DNFIRL31X9M', 'E1 · chr13', 'Insulation · ']) {
+    const box = page.locator('.analysis-drawer label.param-check', { hasText: words }).first()
+    if (!(await box.locator('input').isChecked())) await box.click()
+  }
 }
 
 /** What a reader does at each step. */
 const ACT = {
   welcome: next,
-  store: () => page.click('.store-tiles-large .store-tile[data-store="4dn"]'),
-  // The helper rather than the keyboard: the road a reader who does not want
-  // to type a twelve-character accession takes, and the one a test can miss.
-  search: () => page.click('.tour-card .tour-assist button'),
+  store: pressStore,
+  // A wrong accession first, shot blinking, then the right one pasted from the
+  // card's copy button: the road a reader who does not want to type twelve
+  // characters takes, and the one a test can miss.
+  search: async () => {
+    const box = page.locator('.store-drawer .portal-search')
+    await box.fill('')
+    await box.type('4DNES5', { delay: 30 })
+    await sleep(260)
+    await shot('search-wrong')
+    const marked = await page.locator('.tour-card .tour-name').getAttribute('class')
+    console.log(`  typed 4DNES5: the name is ${marked ?? ''}`)
+    await page.click('.tour-card .tour-copy')
+    await sleep(200)
+    const copied = await page.evaluate(() => navigator.clipboard.readText())
+    console.log(`  copied from the card: ${copied}`)
+    await box.fill(copied)
+  },
   'open-set': () => page.click('.store-drawer .portal-session'),
   'resolution-250': () => page.selectOption('select.res-pick', { label: '250 kb' }),
   chromosome: () => page.click('.content .tviewport .tr .td[title="chr13"]'),
+  'look-general': next,
   'look-map': next,
+  'look-aesthetics': next,
   'score-correlation': () => mapSelect('score').selectOption('correlation'),
   'look-correlation': next,
   'analysis-compartments': () => page.click('.panel-analysis .panel-tab'),
+  'tasks-2d': next,
+  'tasks-3d': next,
+  'tasks-1d': next,
   compartments: () => clickTask('Compartments'),
   'compartments-none': () => page.click('.analysis-drawer button[title="Untick every sequence"]'),
   'compartments-sequence': () => clickSequence('chr13'),
-  'phase-genes': () => chooseIn('phase by gene density', 'Do not use a gene model'),
-  'phase-track': () => chooseIn('phase by a track', '4DNFIRL31X9M'),
   'compartments-run': () => page.click('.analysis-drawer .analysis-run > button'),
   'look-saddle': next,
   'compartments-close': () => page.click('.analysis-drawer .analysis-drawer-head .btn-close'),
@@ -275,7 +293,7 @@ const ACT = {
       .locator('button', { hasText: /^O\/E$/ })
       .first()
       .click(),
-  smooth: () => mapSelect('smooth').selectOption('a50'),
+  smooth: () => mapSelect('smooth').selectOption('1'),
   'look-oe': next,
   'analysis-insulation': () => page.click('.panel-analysis .panel-tab'),
   insulation: () => clickTask('Diamond insulation'),
@@ -291,10 +309,7 @@ const ACT = {
   'domains-left': () => clickPlace('left'),
   'analysis-trackcorr': () => page.click('.panel-analysis .panel-tab'),
   trackcorr: () => clickTask('Track correlation'),
-  'tick-4dn-insulation': () => clickTrack('4DNFIR2STZVV'),
-  'tick-4dn-e1': () => clickTrack('4DNFIRL31X9M'),
-  'tick-own-e1': () => clickTrack('E1 · chr13'),
-  'tick-own-insulation': () => clickTrack('Insulation · '),
+  'tick-tracks': tickFour,
   'trackcorr-run': () => page.click('.analysis-drawer .analysis-run > button'),
   'look-trackcorr': next,
   console: () => page.click('button[aria-label="console"]'),
@@ -307,9 +322,12 @@ try {
   await page.goto(`${BASE}/`)
   await page.waitForSelector('.store-tiles-large')
   await sleep(800)
+  await shot('landing')
   await about()
   await shot('about')
-  await page.click('.about-tutorial-play')
+  await page.keyboard.press('Escape')
+  await page.waitForSelector('.modal-backdrop', { state: 'detached' })
+  await page.click('.picker-tutorial-play')
   // The tour is a chunk of its own, fetched by the press.
   await page.waitForSelector('.tour-card[data-step]')
 

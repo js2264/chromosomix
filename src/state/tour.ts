@@ -7,10 +7,16 @@
  * it is `localStorage` under the app's prefix, and the stored-data dialog counts
  * it among the settings without being told to (`state/stored.ts`'s prefix rule).
  *
- * Its own module rather than a corner of the tour's, because the one surface
- * that reads it on every visit — *About*, which offers to resume — must not
- * have to load the tour to ask a yes-or-no question about it. The tour itself
- * is a chunk of its own, fetched when it is played (`app/App.ts`).
+ * Its own module rather than a corner of the tour's, because the two surfaces
+ * that read it on every visit — *About* and the landing page, which offer to
+ * resume — must not have to load the tour to ask a yes-or-no question about
+ * it. The tour itself is a chunk of its own, fetched when it is played
+ * (`app/App.ts`).
+ *
+ * The landing page's offer stays on screen while the place changes under it —
+ * a step taken, a tour started — so the place and whether a tour is on screen
+ * are published as well as kept ({@link subscribeTour}), as the stores are
+ * (`state/stores.ts`).
  *
  * The step is kept **by id and by position**. The id is what a resume lands on,
  * and survives a later build that adds a step before it; the position and the
@@ -64,4 +70,33 @@ export function writeTourProgress(progress: TourProgress): void {
     // A browser that refuses storage still runs the tutorial; it only cannot
     // offer to resume it after a reload, which is the honest consequence.
   }
+  publish()
+}
+
+/** Whether a tour is on screen in this window. Not kept: a reload ends the tour. */
+let running = false
+
+export function tourRunning(): boolean {
+  return running
+}
+
+export function setTourRunning(on: boolean): void {
+  if (on === running) return
+  running = on
+  publish()
+}
+
+const listeners = new Set<() => void>()
+
+/**
+ * Be told when the place kept moves or a tour starts or ends; returns the
+ * unsubscribe. For an offer that stays on screen while either changes.
+ */
+export function subscribeTour(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+function publish(): void {
+  for (const listener of [...listeners]) listener()
 }

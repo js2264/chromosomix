@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 /**
- * The guided tutorial as *About* offers it (§30), and the place it keeps.
+ * The guided tutorial as *About* and the landing page offer it (§30), and the
+ * place it keeps.
  *
  * About is the way in a newcomer finds without being told, and the way back for
  * a reader who left half way: so what it offers follows what was kept — *play*
@@ -11,8 +12,9 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { TOUR_KEY, readTourProgress, writeTourProgress, type TourProgress } from '@/state/tour'
+import { TOUR_KEY, readTourProgress, setTourRunning, writeTourProgress, type TourProgress } from '@/state/tour'
 import { openAbout } from '@/ui/dialogs'
+import { FilePicker } from '@/ui/FilePicker'
 import { setUpDom } from '../support/dom'
 
 beforeEach(() => {
@@ -23,6 +25,7 @@ beforeEach(() => {
 afterEach(() => {
   document.querySelectorAll('.modal-backdrop').forEach((node) => node.remove())
   window.localStorage.clear()
+  setTourRunning(false)
 })
 
 function about(progress: TourProgress | null): { play: ReturnType<typeof vi.fn> } {
@@ -85,5 +88,53 @@ describe('the place kept', () => {
     expect(readTourProgress()).toBeNull()
     window.localStorage.setItem(TOUR_KEY, JSON.stringify({ step: 'zoom', index: '15' }))
     expect(readTourProgress()).toBeNull()
+  })
+})
+
+describe('the landing page', () => {
+  function landing(onTutorial?: (from: 'start' | 'resume') => void): FilePicker {
+    return new FilePicker({
+      onOpen: () => undefined,
+      onOpenFiles: () => undefined,
+      ...(onTutorial === undefined ? {} : { onTutorial }),
+    })
+  }
+  const offered = (picker: FilePicker): string[] =>
+    Array.from(picker.el.querySelectorAll('.picker-tutorial button')).map((node) => node.textContent ?? '')
+
+  it('offers the tutorial beside Load files, and plays it from the start', () => {
+    const play = vi.fn()
+    const picker = landing(play)
+    const offer = picker.el.querySelector('.picker-load > .picker-tutorial')
+    expect(offer).not.toBeNull()
+    expect(offered(picker)).toEqual(['play the tutorial'])
+    picker.el.querySelector<HTMLButtonElement>('.picker-tutorial-play')?.click()
+    expect(play).toHaveBeenCalledWith('start')
+    picker.destroy()
+  })
+
+  it('offers to resume, and follows the place kept as it moves', () => {
+    writeTourProgress({ step: 'insulation-sequence', index: 18, total: 49, finished: false })
+    const picker = landing(() => undefined)
+    expect(offered(picker)).toEqual(['resume at step 19 of 49', 'start over'])
+    writeTourProgress({ step: 'finish', index: 48, total: 49, finished: true })
+    expect(offered(picker)).toEqual(['play the tutorial again'])
+    picker.destroy()
+  })
+
+  it('steps out of the way while a tour is on screen', () => {
+    const picker = landing(() => undefined)
+    const offer = picker.el.querySelector('.picker-tutorial') as HTMLElement
+    setTourRunning(true)
+    expect(offer.classList.contains('hidden')).toBe(true)
+    setTourRunning(false)
+    expect(offer.classList.contains('hidden')).toBe(false)
+    picker.destroy()
+  })
+
+  it('offers nothing where the tutorial cannot be played', () => {
+    const picker = landing()
+    expect(picker.el.querySelector('.picker-tutorial')).toBeNull()
+    picker.destroy()
   })
 })

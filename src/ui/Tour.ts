@@ -69,13 +69,15 @@
 
 import { withKey } from './commands'
 import { button, el } from './dom'
+import { copyTextToClipboard } from './export'
 import { icon, type IconName } from './icons'
 
 /**
  * A step's sentences: words, with any name the reader has to read exactly — an
- * accession they will type, say — set apart in the face names are set in.
+ * accession they will type, say — set apart in the face names are set in, and
+ * with a button beside it that puts it on the clipboard where `copy` says so.
  */
-export type TourText = string | ReadonlyArray<string | { name: string }>
+export type TourText = string | ReadonlyArray<string | { name: string; copy?: boolean }>
 
 /** What a step asks the reader to do, drawn as an icon beside its title. */
 export type TourAction = 'press' | 'type' | 'choose' | 'drag' | 'look'
@@ -129,6 +131,13 @@ export interface TourStep {
   prepare?(): void
   /** A button that does the step's typing for the reader. */
   assist?: { label: string; title: string; run(): void }
+  /**
+   * What the reader has got wrong so far, read live, or `null` while nothing
+   * is: the text typed in a box that cannot become the name the step asks for.
+   * Each new mistake makes the step's names blink, so the eye goes back to
+   * what was to be typed; a mistake mended stops them.
+   */
+  mistake?(): string | null
   /** Put the caret in the lit control as the step opens, for a box to type into. */
   focus?: boolean
   /** What the card says once the target has been missing for a moment. */
@@ -210,6 +219,8 @@ interface Entry {
   scrolled: boolean
   /** Whether the caret has been put in it on this entry. */
   focused: boolean
+  /** The last reading of `mistake`, so the names blink once per new mistake. */
+  mistake: string | null
 }
 
 /** One part of the tour, as the card's bar draws it. */
@@ -532,6 +543,12 @@ export class Tour {
       }
     }
 
+    const mistake = step.mistake === undefined ? null : safely(() => step.mistake?.() ?? null)
+    if (mistake !== this.entry.mistake) {
+      this.entry.mistake = mistake
+      this.blink(mistake !== null)
+    }
+
     this.find(step, now)
     this.paintCard()
   }
@@ -556,7 +573,11 @@ export class Tour {
       // Only when some of it is out of sight: a scroll nobody needed moves the
       // window under a reader who was about to press the thing they could see.
       if (whole !== null && (shown === null || area(shown) < area(whole) - 1)) {
-        element.scrollIntoView({ block: 'center', inline: 'nearest' })
+        // A target taller than most of the window — a group of tasks, a column
+        // of cards — is brought in by its top, where its heading is: centred,
+        // its middle would be on screen and its name above the fold.
+        const tall = whole.bottom - whole.top > window.innerHeight * 0.6
+        element.scrollIntoView({ block: tall ? 'start' : 'center', inline: 'nearest' })
       }
     }
     if (step.focus === true && !this.entry.focused && element instanceof HTMLElement) {
@@ -689,10 +710,29 @@ export class Tour {
     if (this.textEl.dataset.text === key) return
     this.textEl.dataset.text = key
     this.textEl.replaceChildren(
-      ...(typeof text === 'string' ? [text] : text).map((part) =>
-        typeof part === 'string' ? document.createTextNode(part) : el('code', { class: 'tour-name', text: part.name }),
-      ),
+      ...(typeof text === 'string' ? [text] : text).flatMap((part): Node[] => {
+        if (typeof part === 'string') return [document.createTextNode(part)]
+        const name = el('code', { class: 'tour-name', text: part.name })
+        return part.copy === true ? [name, copyButton(part.name, name)] : [name]
+      }),
     )
+  }
+
+  /**
+   * The step's names, blinking for a new mistake and marked while it stands —
+   * or plain again once it is mended. The mark is what stays under *reduce
+   * motion*, where nothing blinks.
+   */
+  private blink(wrong: boolean): void {
+    for (const name of this.textEl.querySelectorAll<HTMLElement>('.tour-name')) {
+      name.classList.toggle('is-wrong', wrong)
+      name.classList.remove('is-blinking')
+      if (!wrong) continue
+      // Read between the two writes, so a second mistake blinks again rather
+      // than finding the class already there.
+      void name.offsetWidth
+      name.classList.add('is-blinking')
+    }
   }
 
   /** Follow the target every frame: a column scrolling, a drawer sliding, a window resized. */
@@ -813,6 +853,7 @@ function freshEntry(): Entry {
     failingSince: null,
     scrolled: false,
     focused: false,
+    mistake: null,
   }
 }
 
@@ -822,6 +863,42 @@ function isSpot(target: Element | TourSpot): target is TourSpot {
 
 function setText(node: HTMLElement, text: string): void {
   if (node.textContent !== text) node.textContent = text
+}
+
+/**
+ * A small button after a name that puts it on the clipboard, and says so with
+ * a tick for a moment. Where the browser will not write to the clipboard — an
+ * insecure page, an embedding that forbids it — the name is selected instead,
+ * so a copy is one key away rather than a refusal.
+ */
+function copyButton(text: string, name: HTMLElement): HTMLButtonElement {
+  const label = `Copy ${text}`
+  const node = el(
+    'button',
+    { class: 'tour-copy', type: 'button', title: label, attrs: { 'aria-label': label } },
+    icon('copy', { size: 13 }),
+  )
+  let reset: ReturnType<typeof setTimeout> | null = null
+  node.addEventListener('click', () => {
+    copyTextToClipboard(text).then(
+      () => {
+        node.classList.add('is-copied')
+        node.replaceChildren(icon('check', { size: 13 }))
+        node.title = 'Copied'
+        if (reset !== null) clearTimeout(reset)
+        reset = setTimeout(() => {
+          node.classList.remove('is-copied')
+          node.replaceChildren(icon('copy', { size: 13 }))
+          node.title = label
+        }, 1400)
+      },
+      () => {
+        window.getSelection()?.selectAllChildren(name)
+        node.title = 'Selected: copy it with the keyboard'
+      },
+    )
+  })
+  return node
 }
 
 function safely<T>(read: () => T): T | null {

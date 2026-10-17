@@ -281,6 +281,15 @@ export interface SessionHost {
    * (`ui/SidePanel.ts`, `conceal`), so the plot gets the room.
    */
   landingFileOpened(session: Session): void
+  /**
+   * The landing page's tutorial button was pressed: play the guided tutorial
+   * (§30) from its start or from where the reader left it.
+   *
+   * Optional, and absent where it cannot be played — a shell with no store
+   * drawer for its first step, and a host in a test — so the landing page
+   * offers it only where this is here.
+   */
+  startTutorial?(from: 'start' | 'resume'): void
 }
 
 /** What a heatmap view of the whole file at once has to offer the session. */
@@ -1028,6 +1037,12 @@ export class Session {
             // one.
             onConnect: (provider: ProviderId) => this.host.openConnect(provider),
             onConnected: (id: string) => this.host.folderConnected(id),
+            // The tutorial's offer, and the shell's for the same reason a store
+            // is: its first step is the window's drawer, and it plays across
+            // tabs (§30).
+            ...(this.host.startTutorial === undefined
+              ? {}
+              : { onTutorial: (from: 'start' | 'resume') => this.host.startTutorial?.(from) }),
           }),
     })
     this.store.subscribe((state, change) => {

@@ -13790,10 +13790,18 @@ step is about lit through a hole in the grey, and a card beside it saying what t
 it is for. The tutorial is **the app itself, used, on real data** — not a slideshow about it and not a
 sandbox beside it. Every step points at a real control on a real file and the reader presses it; the
 tour only watches. **Built**: all of it — the engine (`ui/Tour.ts`), the steps (`ui/tutorial.ts`),
-the place kept (`state/tour.ts`), the offer in *About* and the palette's row, and
-`scripts/ui-tutorial.mjs`, which plays it to the end on 4DN's data and shoots every step.
+the place kept (`state/tour.ts`), the offer on the landing page and in *About* and the palette's row,
+and `scripts/ui-tutorial.mjs`, which plays it to the end on 4DN's data and shoots every step.
 
 ### 30.1 Where it is offered
+
+**On the landing page, beside *Load files*** — a blue button under *New here?* and one line, in the
+margin left of the page's three ways in where the column is wide enough to have one, and as a row
+above *Load files* where it is not. It is the reader with none of the three yet, and no idea which,
+that the tutorial is for, and the landing page is where that reader is. **Never a dialog that opens by
+itself**: a reader who came to open a file is not asked first whether they would like a lesson. It
+says what *About* says (below), and steps out of sight while a tour is on screen, since under the grey
+an offer to play the tutorial is one more thing to read.
 
 **In *About*, straight after what the viewer is** — the answer to the question a reader who has just
 read that asks next, and the one way in a newcomer finds without being told where to look. One
@@ -13807,11 +13815,13 @@ on the site and in the desktop app. An embed (§21) has no drawer, and its *Abou
 tutorial; nor does the single file (§19), which offers this machine alone. Absent rather than greyed,
 since nothing the reader could do there would make it work.
 
-**From the start, it begins on the landing page**, under a card that says what the next ten minutes
-are and lists the parts, and whose next step is the page's 4DN tile. A tab that holds anything — a
-map, or a view restored from a reload that is about to open one — is left as it is and a new tab is
-opened beside it, as the brand does, rather than emptied under the reader. A resume does not move the
-window (§30.6).
+**From the start, it begins on the landing page**, under a card that says what the tutorial is and
+lists its parts, with the store drawer opened behind it on the lab's store, so that the first thing
+the reader does is switch to 4DN's — a press that is always there to make, where a drawer left on 4DN
+by an earlier visit, or by a link, made the step one that had already happened. A tab that holds
+anything — a map, or a view restored from a reload that is about to open one — is left as it is and a
+new tab is opened beside it, as the brand does, rather than emptied under the reader. A resume does
+not move the window (§30.6).
 
 ### 30.2 The data
 
@@ -13832,11 +13842,12 @@ at 250 kb, so that each of the two zooms is a drag across a square a hand can hi
 
 Every task is run **with its defaults but one**, chr13 alone aside: the tutorial teaches where things
 are, and a parameter it chose would be one the reader took for the app's. The one is Compartments'
-phasing. Left to itself its form takes the first set of intervals loaded for a gene model, which on
-this session is 4DN's boundaries, and a sign decided by those is a coin toss — the saddle says
-*phasing r 0.01* — so the tutorial has the reader choose no gene model and phase by 4DN's own E1
-instead: then A means the same in both, which the last part depends on. The two steps say why, because
-a reader who meets the same box on their own data needs the reason more than the setting.
+gene model, and the tutorial **sets it itself** rather than asking for it: left to itself the form
+takes the first set of intervals loaded for one, which on this session is 4DN's boundaries, and a sign
+decided by those is a coin toss — the saddle says *phasing r 0.01*. Set to none, through the form's
+own `change`, on the steps before the run. Nothing else phases E1 — no track, no sequence — so the
+drawer says the sign is arbitrary, the saddle's text is written to hold either way round, and the last
+part says that an E1 can match 4DN's upside down, at −1.
 
 ### 30.3 The steps
 
@@ -13845,32 +13856,38 @@ are a card each in the middle of the window, and between them every step lights 
 
 - **Welcome** — what the tutorial is, in two sentences, with its parts listed under them and *let's
   go*.
-- **The 4DN store** — open the store; find `4DNES4296C5Q` in its search box, with *type it for me*
-  beside the step for a reader who would rather not type a twelve-character accession; open the set
-  with its tracks, one press.
-- **The map** — pick 250 kb; open chr13 from the Chromosomes table, scrolled to its row when the
-  table has not drawn it; and a step that is only read, about the map and its plaid.
+- **The 4DN store** — switch the drawer from the lab's store to 4DN's; find `4DNES4296C5Q` in its
+  search box, the accession set in colour on the card with a button beside it that copies it, and
+  *type it for me* beside the step for a reader who would rather not type twelve characters at all;
+  open the set with its tracks, one press.
+- **The map** — a step that is only read, lighting the General column: the file, its sequences, its
+  metadata; pick 250 kb; open chr13 from the Chromosomes table, scrolled to its row when the table has
+  not drawn it; a step that is only read, about the map, and how to scroll, drag and double-click on
+  it; and one lighting the Aesthetics column, which a map brings — the Map card, the Tracks card and
+  Export.
 - **Compartments** — set the map's score to *correlation*, so the plaid the task decomposes is on
   screen before the number that summarises it, and a step that is only read, about the plaid; open
-  the Analysis panel; choose Compartments; untick every sequence; tick chr13; choose no gene model;
-  phase by 4DN's E1 (§30.2); run; a step that is only read, about the saddle the run drew; close the
-  drawer; and a step that is only read, the reader's E1 and A/B calls beside 4DN's.
+  the Analysis panel, and three steps that are only read, lighting its groups one by one — the 2D
+  tasks, which read the map; the 3D tasks, which model it; the 1D tasks, which read tracks; choose
+  Compartments; untick every sequence; tick chr13; run (§30.2 for the gene model); a step that is only
+  read, about the saddle the run drew; close the drawer; and a step that is only read, the reader's E1
+  and A/B calls beside 4DN's.
 - **Zooming in** — set the score back to *balanced*, since domains are a matter of how often
   stretches touch rather than how alike they are; hold Shift and Option and drag across the lit
   square of 35–55 Mb, the keys named as the map's corner names them, Shift and Alt off a Mac (§8.9);
   switch to 10 kb; drag across the lit square of 41–45 Mb; a step that is only read, about the
-  domains; turn on O/E; set smoothing to *adaptive*; and a step that is only read, about what O/E
-  leaves on screen. Both drags have *zoom for me* beside them, which types the stretch into the
-  map's locus box. Neither O/E nor smoothing changes what a task reads — the drawer's heading still
+  domains; turn on O/E; set smoothing to *3 × 3*; and a step that is only read, about domains and
+  compartments on one picture. Both drags have *zoom for me* beside them, which types the stretch into
+  the map's locus box. Neither O/E nor smoothing changes what a task reads — the drawer's heading still
   says *balanced* — so they are left on.
 - **Insulation** — open the Analysis panel; choose Diamond insulation; untick every sequence; tick
   chr13; run; close the drawer; and a step that is only read.
 - **Tracks** — open the Annotations panel; unfold the Insulation domains row; choose *1D track* for
   its display; press its bottom edge, then its left one, so the lane is drawn under the map and not
   beside it.
-- **Track correlation** — open the Analysis panel; choose Track correlation; tick 4DN's insulation,
-  4DN's E1, the reader's E1 and the reader's insulation, one step each; run; and a step that is only
-  read, which lights the figure.
+- **Track correlation** — open the Analysis panel; choose Track correlation; tick its four tracks —
+  4DN's insulation and E1 and the reader's — in one step, the list lit whole; run; and a step that is
+  only read, which lights the figure.
 - **The console** — open it: every file opened and every run made is a line to paste into a
   terminal.
 - **Done** — what the reader did, in one sentence, and where the tutorial is when it is wanted again.
@@ -13902,11 +13919,13 @@ away — the drawer it closed — and that control is not missing.
 
 ### 30.5 The grey, the hole and the card
 
-**One ring round the target, whose shadow is the grey**, so the hole and the grey are one shape and
+**One ring round the target, whose shadow is the grey** — light enough that what it covers can still be
+read, since the reader is learning where things are — so the hole and the grey are one shape and
 cannot drift apart; six pixels of air round the control, and the hole follows it every frame — a
 column scrolling, a drawer sliding, lanes arriving under a map. A target partly out of sight is
-scrolled into view once, when the step opens; one already in view is not, since a scroll nobody
-needed moves the window under a reader about to press what they could see.
+scrolled into view once, when the step opens — by its top when it is taller than most of the window, a
+group of tasks or a column of cards, so its heading is what shows; one already in view is not, since a
+scroll nobody needed moves the window under a reader about to press what they could see.
 
 **A press on the grey is kept from the app** and answered by the ring pulsing — the reader is shown
 where to press rather than allowed off the step by accident. Inside the hole there is nothing of the
@@ -13921,10 +13940,19 @@ the whole picture; at the bottom, centred, when nothing is lit. It glides from o
 rather than jumping, and its words come in rather than being swapped, so the eye follows the card to
 the next thing to press. Along its top it says the part, *step n of 49*, and *skip tutorial*, over a
 bar cut into the tour's parts, each filled as far as the reader has got through it. Then an icon for
-what the step asks — press, type, choose, drag, or only look — beside its title; one or two sentences,
-an accession to type set in the face names are set in; and *back* and *next* (*skip step* while the
-step waits, *finish* on the last, and no *back* on the first). The sentences are a polite live region,
-so a step that moves on by itself is heard as well as seen.
+what the step asks — press, type, choose, drag, or only look — beside its title; one or two sentences;
+and *back* and *next* (*skip step* while the step waits, *finish* on the last, and no *back* on the
+first). The sentences are a polite live region, so a step that moves on by itself is heard as well as
+seen.
+
+**A name to type is set apart**: an accession in the face names are set in, on the accent's soft
+ground and in its colour (§26.5), since it is what the reader is about to act on; where the step
+offers it, a small button beside it copies it, and says so with a tick for a moment — or, where the
+browser will not write to the clipboard, selects it, so a copy is a key away. **Typed wrong, it
+blinks**: text in the box that cannot become the accession by typing on — not a beginning of it —
+turns the name the colour of *look at this* and blinks it three times, again for each new mistake,
+until the box holds a beginning of it again. Under *reduce motion* the colour stays and nothing
+blinks.
 
 **A step done is shown done.** The moment its state holds, the icon turns into a tick and the ring
 into the colour of a thing that finished (§26.5), and they stay so for the beat before the next step:
@@ -13954,14 +13982,15 @@ the words do not come in, nothing breathes or pulses, and the tick is drawn rath
 (`chromosomix:tour`): the step, by its id and by its position, how many steps there were, and
 whether the reader finished. It outlives a reload and a closed window, and the stored-data account
 (§11) counts it with the other settings. *skip tutorial* keeps the step it was pressed on; *finish*
-says the tour was finished, and *About* then offers to play it again.
+says the tour was finished, and the landing page and *About* then offer to play it again. The landing
+page's offer follows the place as it moves, since it stays on screen while the reader works.
 
 **A resume lands on the first step of the part the reader left**, not on the step itself, because the
 window may have moved on since — reloaded, a drawer closed, a tab switched — and that step may point
 into something no longer open. The part's first step is the one that opens it, and every step after
 it whose state still holds goes by on its own, so a window that has not moved lands exactly where the
-reader was. The position is only what *About* prints; a step a later build no longer has starts the
-tutorial from the beginning.
+reader was. The position is only what the two offers print; a step a later build no longer has
+starts the tutorial from the beginning.
 
 **It is in a chunk of its own**, fetched by the press that plays it: a reader who never asks for it
-pays for one `localStorage` read when *About* opens.
+pays for one `localStorage` read when the landing page or *About* is drawn.

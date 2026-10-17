@@ -10,7 +10,7 @@
  * and closing on a card in the middle of the window.
  */
 
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { partsOf, resumeIndex } from '@/ui/Tour'
 import { TUTORIAL_SEQUENCE, TUTORIAL_SET, tutorialSteps, type TutorialHost } from '@/ui/tutorial'
@@ -35,6 +35,10 @@ const empty: TutorialHost = {
 
 beforeEach(() => {
   setUpDom()
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })
 
 describe('the tutorial’s steps', () => {
@@ -76,9 +80,29 @@ describe('the tutorial’s steps', () => {
   })
 
   it('resumes a reader who left mid-part at that part’s first step', () => {
-    const at = resumeIndex(steps, 'phase-track')
+    const at = resumeIndex(steps, 'compartments-run')
     expect(steps[at].chapter).toBe('Compartments')
     expect(steps[at - 1].chapter).not.toBe('Compartments')
+  })
+
+  it('shows the three groups of tasks the first time the Analysis panel opens, and only then', () => {
+    const ids = steps.map((step) => step.id)
+    const after = (id: string): string[] => ids.slice(ids.indexOf(id) + 1, ids.indexOf(id) + 5)
+    expect(after('analysis-compartments')).toEqual(['tasks-2d', 'tasks-3d', 'tasks-1d', 'compartments'])
+    expect(after('analysis-insulation')[0]).toBe('insulation')
+    expect(after('analysis-trackcorr')[0]).toBe('trackcorr')
+  })
+
+  it('asks nothing about phasing, and ticks the four tracks in one step', () => {
+    const ids = steps.map((step) => step.id)
+    expect(ids.filter((id) => id.startsWith('phase'))).toEqual([])
+    expect(ids.filter((id) => id.startsWith('tick'))).toEqual(['tick-tracks'])
+  })
+
+  it('shows General as the map opens, and Aesthetics once there is a map for it to draw', () => {
+    const ids = steps.map((step) => step.id)
+    expect(ids.indexOf('look-general')).toBe(ids.indexOf('open-set') + 1)
+    expect(ids.indexOf('look-aesthetics')).toBe(ids.indexOf('look-map') + 1)
   })
 
   it('reads an empty window without throwing, and finds done there only what asks for a closed drawer', () => {
@@ -88,5 +112,32 @@ describe('the tutorial’s steps', () => {
     }
     const done = steps.filter((step) => step.done?.() === true).map((step) => step.id)
     expect(done).toEqual(['compartments-close', 'insulation-close'])
+  })
+})
+
+describe('the gene model', () => {
+  it('is set to none by the tour before Compartments runs, through the form’s own change', () => {
+    // jsdom lays nothing out, and the steps find only what is laid out.
+    vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList)
+    const drawer = document.createElement('div')
+    drawer.className = 'analysis-drawer'
+    drawer.innerHTML =
+      '<label class="field param-field"><span class="field-label">phase by gene density</span>' +
+      '<select><option value="">Do not use a gene model</option>' +
+      '<option value="bed">Hi-C on IMR-90 — 4DNFIUI2RM2Q (bed.gz)</option></select></label>'
+    document.body.appendChild(drawer)
+    const select = drawer.querySelector('select') as HTMLSelectElement
+    select.value = 'bed'
+    const changes: string[] = []
+    select.addEventListener('change', () => changes.push(select.value))
+
+    const steps = tutorialSteps(empty)
+    steps.find((step) => step.id === 'compartments-run')?.prepare?.()
+    expect(select.value).toBe('')
+    expect(changes).toEqual([''])
+
+    // Already none: nothing is written, and no second change reaches the form.
+    steps.find((step) => step.id === 'compartments-none')?.prepare?.()
+    expect(changes).toEqual([''])
   })
 })

@@ -424,6 +424,57 @@ describe('leaving', () => {
   })
 })
 
+describe('a name to type', () => {
+  it('copies itself from the button beside it, and says so with a tick for a moment', async () => {
+    const writeText = vi.fn(async () => undefined)
+    Object.defineProperty(window.navigator, 'clipboard', { value: { writeText }, configurable: true })
+    tour([step('search', { text: ['Type ', { name: '4DNES4296C5Q', copy: true }, ' in the box.'] })])
+
+    const copy = q<HTMLButtonElement>('.tour-copy')
+    expect(copy.previousElementSibling?.textContent).toBe('4DNES4296C5Q')
+    expect(copy.getAttribute('aria-label')).toBe('Copy 4DNES4296C5Q')
+    copy.click()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(writeText).toHaveBeenCalledWith('4DNES4296C5Q')
+    expect(copy.classList.contains('is-copied')).toBe(true)
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(copy.classList.contains('is-copied')).toBe(false)
+    Reflect.deleteProperty(window.navigator, 'clipboard')
+  })
+
+  it('has no copy button where the step does not offer one', () => {
+    tour([step('read', { text: [{ name: '4DNFIRL31X9M' }, ', the E1 4DN computed.'] })])
+    expect(document.querySelector('.tour-copy')).toBeNull()
+  })
+
+  it('blinks for each new mistake, stays marked while it stands, and stops when it is mended', () => {
+    let typed: string | null = null
+    tour([step('search', { text: ['Type ', { name: 'ABC' }, '.'], mistake: () => typed, done: () => false })])
+    const name = (): HTMLElement => q('.tour-name')
+    vi.advanceTimersByTime(200)
+    expect(name().classList.contains('is-wrong')).toBe(false)
+
+    typed = 'X'
+    window.dispatchEvent(new Event('input'))
+    vi.advanceTimersByTime(1)
+    expect(name().classList.contains('is-wrong')).toBe(true)
+    expect(name().classList.contains('is-blinking')).toBe(true)
+
+    // The same mistake read again is not a new one.
+    name().classList.remove('is-blinking')
+    vi.advanceTimersByTime(400)
+    expect(name().classList.contains('is-blinking')).toBe(false)
+    typed = 'XY'
+    vi.advanceTimersByTime(200)
+    expect(name().classList.contains('is-blinking')).toBe(true)
+
+    typed = null
+    vi.advanceTimersByTime(200)
+    expect(name().classList.contains('is-wrong')).toBe(false)
+    expect(name().classList.contains('is-blinking')).toBe(false)
+  })
+})
+
 describe('the keys', () => {
   const press = (key: string, on: EventTarget = document.body): KeyboardEvent => {
     const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })

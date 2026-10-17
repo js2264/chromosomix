@@ -11,11 +11,11 @@
 import { Modal } from './Modal'
 import { versionPicker } from './VersionPicker'
 import { el } from './dom'
-import { icon } from './icons'
 import { groupRank, isMac, keyCap, optionKey, shiftKey, stateChip, type Command } from './commands'
 import { buildLine } from '../version'
 import { devFeature, devFeaturesOn, setDevFeatures } from '../state/devFeatures'
 import type { TourProgress } from '../state/tour'
+import { tutorialButtons } from './tutorialOffer'
 
 /**
  * The modifier a gesture actually wants, on the machine reading the dialog.
@@ -333,40 +333,10 @@ export function openAbout(
 /**
  * The guided tutorial (§30): one sentence on what it is, and the button that
  * plays it — or carries it on from the step the reader left it at, with the way
- * back to its start beside it.
- *
- * One invited answer at a time, filled: *play* for a reader who has not begun,
- * *resume* for one who has. Starting over is offered beside a resume, quietly,
- * rather than as a second filled button, since a reader who left half way is
- * far more often coming back than starting again.
+ * back to its start beside it (`ui/tutorialOffer.ts`, which the landing page
+ * draws too).
  */
 function tutorialOffer(tutorial: AboutTutorial, close: () => void): HTMLElement {
-  const kept = tutorial.progress
-  const resumable = kept !== null && !kept.finished
-  const play = (from: 'start' | 'resume') => (): void => {
-    close()
-    tutorial.play(from)
-  }
-  const invited = el(
-    'button',
-    { class: 'btn btn-primary about-tutorial-play', type: 'button' },
-    icon('play', { size: 12 }),
-    el('span', {
-      text: resumable
-        ? `resume at step ${kept.index + 1} of ${kept.total}`
-        : kept?.finished === true
-          ? 'play the tutorial again'
-          : 'play the tutorial',
-    }),
-  )
-  invited.addEventListener('click', play(resumable ? 'resume' : 'start'))
-  const over = el('button', {
-    class: 'btn btn-quiet',
-    type: 'button',
-    text: 'start over',
-    title: 'Begin again at the first step, in a tab of its own',
-  })
-  over.addEventListener('click', play('start'))
   return el(
     'div',
     { class: 'about-tutorial' },
@@ -376,7 +346,18 @@ function tutorialOffer(tutorial: AboutTutorial, close: () => void): HTMLElement 
         'New here? The guided tutorial walks through a first session on a real map from 4DN — ' +
         'the store, a chromosome, its compartments and domains — one step at a time.',
     }),
-    el('div', { class: 'about-tutorial-actions' }, invited, ...(resumable ? [over] : [])),
+    el(
+      'div',
+      { class: 'about-tutorial-actions' },
+      ...tutorialButtons(
+        tutorial.progress,
+        (from) => {
+          close()
+          tutorial.play(from)
+        },
+        { class: 'about-tutorial-play' },
+      ),
+    ),
   )
 }
 
