@@ -2,7 +2,7 @@
 
 > A unified, serverless genome browser for multi-dimensional genomic data: chromatin contact maps (Hi-C, Micro-C), genome tracks and 3D chromatin models, side by side, read straight from standard files in a web browser. Nothing is uploaded and nothing needs preprocessing. The same analyses run in the browser or from the `chromosomix` command line, with the same parameters and the same results.
 
-chromosomix is a static single-page application, free and open source under the MIT licence. It reads files where they are: a file on the user's disk is read in place and never leaves the machine, and a remote file is read by HTTP range requests, a few kilobytes at a time. It runs at https://chromosomix.app/, as an installable web app, as a desktop app (macOS, Linux), as one standalone HTML file attached to every GitHub release, and from npm as a command-line interface.
+chromosomix is a static single-page application, free and open source under the MIT licence. It reads files where they are: a file on the user's disk is read in place and never leaves the machine, and a remote file is read by HTTP range requests, a few kilobytes at a time. It runs at https://chromosomix.app/, as an installable web app, as a desktop app (macOS, Linux), as one standalone HTML file attached to every GitHub release, and from npm as a command-line interface. A newcomer can press *play the tutorial*, on the landing page or in About, for a first session on a public 4DN Hi-C map, played one control at a time in the live app.
 
 Formats it opens as they are:
 
