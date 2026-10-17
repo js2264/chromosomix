@@ -360,7 +360,13 @@ export class SampleCache {
         // Only if this promise still owns the slot — two requests share a key
         // for as long as it takes a cancelled one to reject, and deleting
         // unconditionally would remove the replacement's entry.
-        if (this.inflight.get(key) === slot) this.inflight.delete(key)
+        if (this.inflight.get(key) !== slot) return
+        this.inflight.delete(key)
+        // A read that ended without an answer asked for no frame of its own,
+        // and the lane is no longer waiting on it; one more frame lets whoever
+        // counts the lane's waits see so (`perf/rendered.ts`). After an answer
+        // the frame it asked for is already coming, and this joins it.
+        if (!this.disposed) this.onChange()
       })
 
     return cached?.samples ?? null
@@ -377,6 +383,15 @@ export class SampleCache {
     const running = this.inflight.get(`${entry}:${scope}`)
     if (running === undefined) return null
     return running.progress ?? { done: 0, total: 0 }
+  }
+
+  /**
+   * Whether a read is on its way for any lane this cache serves: what a lane
+   * stack says it is waiting for, for the page's report of a finished picture
+   * (`perf/rendered.ts`).
+   */
+  get busy(): boolean {
+    return this.inflight.size > 0
   }
 
   /** What is cached for one track in one scope, without asking for more. */

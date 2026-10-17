@@ -751,6 +751,9 @@ export class WholeView {
     )
     this.gate.classList.remove('hidden')
     this.panelHost.classList.add('hidden')
+    // What the page's report of a finished picture says in place of `drawn`:
+    // nothing is read until the reader agrees to the cost (§7.3).
+    this.panel.noteRendered('gated', `${this.wholeName()} waits for its button`)
   }
 
   /**
@@ -832,6 +835,7 @@ export class WholeView {
     this.gate.classList.add('hidden')
     this.panelHost.classList.remove('hidden')
     this.panel.setBusy(true)
+    this.panel.noteRendered(null)
     this.problem.replaceChildren()
     this.problem.classList.add('hidden')
     this.progressBar.value = 0
@@ -1149,6 +1153,7 @@ export class WholeView {
     this.summary.textContent = ''
     this.gate.classList.add('hidden')
     this.panelHost.classList.add('hidden')
+    this.panel.noteRendered('error', this.problem.textContent ?? '')
   }
 }
 

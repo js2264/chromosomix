@@ -766,9 +766,30 @@ export class AnnotationLanes {
   /** `true` while the reader has asked for the map without its tracks. */
   private bare = false
 
+  /** Lanes the last frame drew, for the page's report of a finished picture. */
+  private drawn = 0
+
   destroy(): void {
     this.cache?.destroy()
     this.layouts.clear()
+  }
+
+  /** How many lanes the last frame drew, on every edge (`perf/rendered.ts`). */
+  get drawnCount(): number {
+    return this.drawn
+  }
+
+  /**
+   * Whether a lane of this map is still on its way: a window being read for
+   * one, or a track this map draws that is still opening, which will ask for
+   * its own window the frame it lands (`perf/rendered.ts`). A map shown
+   * without its tracks waits for none of them.
+   */
+  waiting(): boolean {
+    if (this.cache?.busy === true) return true
+    if (this.bare) return false
+    const map = this.options.map ?? LEAD_MAP
+    return this.options.store.entriesOn(map).some((entry) => entry.visible && entry.status === 'loading')
   }
 
   /**
@@ -1010,6 +1031,7 @@ export class AnnotationLanes {
     this.dpr = window.devicePixelRatio > 0 ? window.devicePixelRatio : 1
     this.layouts.clear()
     const built = this.build(geometry)
+    this.drawn = 0
 
     for (const edge of EDGES) {
       const canvas = this.canvases[edge]
@@ -1044,6 +1066,7 @@ export class AnnotationLanes {
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
       ctx.clearRect(0, 0, cssWidth, cssHeight)
       if (lanes.length === 0) continue
+      this.drawn += lanes.length
       this.state[edge] = this.paintEdge(ctx, edge, geometry, lanes, built.groups, this.dpr)
     }
     // Wherever corners are mounted, whether or not the names are in them: with

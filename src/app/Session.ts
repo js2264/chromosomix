@@ -29,6 +29,7 @@
  */
 
 import { AnnotationLoader, leadOf, pairIndexes } from '../annotations/loader'
+import { begin } from '../perf/rendered'
 import { devFeature } from '../state/devFeatures'
 import { EDIT_SCOPE, EditStore, genomeEditKey, readEdit } from '../state/referenceEdit'
 import { EditedAssembly, editFingerprint, type ReferenceEdit } from '../genome/edit'
@@ -1749,6 +1750,18 @@ export class Session {
    * it needs and appears where the reader is expecting to be asked for a file.
    */
   async openConfig(config: SessionConfig): Promise<void> {
+    // A wait for the picture the workspace describes (`perf/rendered.ts`): its
+    // file is resolved before anything is opened or routed.
+    const end = begin()
+    try {
+      await this.openConfigNow(config)
+    } finally {
+      end()
+    }
+  }
+
+  /** What {@link openConfig} does. */
+  private async openConfigNow(config: SessionConfig): Promise<void> {
     setPlotOptions(config.plot)
     this.host.applyPanelLayout(config.panels)
     // Where its files are, in the installed app's kept folders (§20.6), before
@@ -1859,6 +1872,18 @@ export class Session {
    * no second door.
    */
   async openConfigUrl(rawUrl: string): Promise<void> {
+    // A wait for the picture the workspace describes, from the moment it is
+    // asked for (`perf/rendered.ts`): the fetch comes before anything opens.
+    const end = begin()
+    try {
+      await this.openConfigUrlNow(rawUrl)
+    } finally {
+      end()
+    }
+  }
+
+  /** What {@link openConfigUrl} does. */
+  private async openConfigUrlNow(rawUrl: string): Promise<void> {
     // `?config=` is the other road a URL arrives on — a link, not a box — so the
     // rewrite table runs here the way it runs in `inferSource` for `#uri=`
     // (SPECS §24.5). A workspace published on Drive or named `gs://` is fetched
@@ -1944,6 +1969,13 @@ export class Session {
       return
     }
     this.noteSourceMismatch(uri, config, source)
+    // The map the workspace named *inside* its file — `::/resolutions/25000` of
+    // an `.mcool`, an entry of an `.mmetacool` — rides on the file that answers
+    // for it. A dropped file is named by its path alone, and opened at its root
+    // it landed on a rung of the file's own choosing rather than the one the
+    // workspace was saved at (§3.4), under a key its tracks were not written to.
+    const named = splitUri(config.state.uri).group
+    if (source.kind === 'local' && splitUri(uri).group === '/' && named !== '/') uri = `${uri}::${named}`
     applyConfig(config, this.memoryKey(uri))
     // Kept for the one hop `open` can make on its own: a collection addressed
     // at its root lands on one of its entries, under a URI this config has
@@ -1987,6 +2019,19 @@ export class Session {
    * click away on the compare card, which is where a claim that strong belongs.
    */
   async openFiles(files: readonly File[], options: { fromLanding?: boolean } = {}): Promise<void> {
+    // A wait for the picture the drop ends in (`perf/rendered.ts`): between the
+    // drop and the first open, a file is being read for what it is and nothing
+    // on screen says a picture is coming.
+    const end = begin()
+    try {
+      await this.openFilesNow(files, options)
+    } finally {
+      end()
+    }
+  }
+
+  /** What {@link openFiles} does. */
+  private async openFilesNow(files: readonly File[], options: { fromLanding?: boolean }): Promise<void> {
     if (files.length === 0) return
     const config = files.find((file) => looksLikeConfig(file.name))
     if (config !== undefined) {
@@ -2000,7 +2045,7 @@ export class Session {
       return
     }
     if (files.length === 1) {
-      await this.open(files[0].name, { kind: 'local', file: files[0] })
+      await this.openLocal(files[0])
       this.landingOpened(options)
       return
     }
@@ -2015,7 +2060,7 @@ export class Session {
     const leadPair = leadOf(paired, (name) => this.routeOf(name))
     if (leadPair === undefined) return
     const lead = leadPair.file
-    await this.open(lead.name, { kind: 'local', file: lead }, undefined, leadPair.index)
+    await this.openLocal(lead, leadPair.index)
     if (this.destroyed) return
     for (const pair of paired) {
       if (pair.file === lead) continue
@@ -2030,6 +2075,30 @@ export class Session {
     this.landingOpened(options)
   }
 
+  /**
+   * Open a dropped file — through the workspace or the view waiting for it,
+   * where one is.
+   *
+   * A workspace or a link naming a local file asks for it to be dropped, and
+   * promises the rest of its view back when it is (`pickerWithNote`). One file
+   * dropped on that page went through a pending workspace; two — the map and a
+   * track beside it — opened the map as a stranger. Both now take its door.
+   */
+  private async openLocal(file: File, index?: File): Promise<void> {
+    const source: SourceSpec = { kind: 'local', file }
+    if (this.pendingConfig !== null && index === undefined) {
+      await this.openWithConfig(file.name, source)
+      return
+    }
+    // A view waiting on this page for this file — a link or a workspace that
+    // named it — named the map inside it as well: opened by its path alone, an
+    // `.mcool` landed on a rung of its own choosing, and the view the page had
+    // promised back (`pickerWithNote`) was dropped for its Chromosomes table.
+    const waiting = this.file === null ? this.store.state : null
+    const named = waiting !== null && splitUri(waiting.uri).path === file.name ? waiting.uri : file.name
+    await this.open(named, source, undefined, index)
+  }
+
   /** Tell the shell a landing-page open has produced a view, if it has. */
   private landingOpened(options: { fromLanding?: boolean }): void {
     if (!options.fromLanding || this.destroyed || this.state === null) return
@@ -2037,6 +2106,26 @@ export class Session {
   }
 
   async open(
+    uri: string,
+    source: SourceSpec,
+    carry?: ViewState,
+    index?: File,
+    binning?: PairsBinning,
+    label?: string,
+  ): Promise<void> {
+    // A wait for the picture the file is opened for (`perf/rendered.ts`). Most
+    // opens are already inside a render, which waits too; a rung picked, an
+    // entry chosen or a store row pressed is not, and opens before it renders.
+    const end = begin()
+    try {
+      await this.openNow(uri, source, carry, index, binning, label)
+    } finally {
+      end()
+    }
+  }
+
+  /** What {@link open} does; its arguments are explained here. */
+  private async openNow(
     uri: string,
     source: SourceSpec,
     carry?: ViewState,
@@ -2596,6 +2685,25 @@ export class Session {
    * @internal SessionRouter opens the genome a state names.
    */
   async openGenome(
+    uri: string,
+    source: SourceSpec,
+    locus?: string,
+    insist = false,
+    index?: File,
+    label?: string,
+    known?: AssemblyResult,
+  ): Promise<void> {
+    // A wait for the browser it opens, as {@link open} is for a map.
+    const end = begin()
+    try {
+      await this.openGenomeNow(uri, source, locus, insist, index, label, known)
+    } finally {
+      end()
+    }
+  }
+
+  /** What {@link openGenome} does; its arguments are explained here. */
+  private async openGenomeNow(
     uri: string,
     source: SourceSpec,
     locus?: string,

@@ -273,6 +273,7 @@ import {
 } from './plotOptions'
 import { captionField, getExportPrefs } from './exportPrefs'
 import { setReadout } from './readout'
+import { Surface } from '../perf/rendered'
 
 /** Gap between two stacked lanes, in CSS pixels. Same as beside the map. */
 const LANE_GAP = 4
@@ -608,6 +609,11 @@ export class BrowserView {
   private disposed = false
   private bands: RulerBand[] = []
   private lanes: Lane[] = []
+  /**
+   * These lanes in the page's report of a finished picture (`perf/rendered.ts`):
+   * a paint asked for, and a window, a residue or a pile still being read.
+   */
+  private surface: Surface | null = null
   /** Feature layouts from the last draw, for hit testing without a re-layout. */
   private readonly layouts = new Map<string, { frame: LaneFrame; layout: ReturnType<typeof layoutFeatures> }>()
   /**
@@ -926,6 +932,7 @@ export class BrowserView {
       ...(props.map === undefined ? [head] : []),
       this.stage,
     )
+    this.surface = new Surface(this.el, () => ({ lanes: this.lanes.length }))
 
     // Plot first, Groups under it. Plot is the card that acts on *this picture*
     // — refit, stretch, autoscale, the overlays, the export — and it is there
@@ -1031,6 +1038,7 @@ export class BrowserView {
     this.controls.destroy()
     this.groupsCard.destroy()
     if (this.frameHandle !== 0) cancelAnimationFrame(this.frameHandle)
+    this.surface?.forget()
     if (this.tipFrame !== 0) cancelAnimationFrame(this.tipFrame)
     if (this.clickTimer !== null) clearTimeout(this.clickTimer)
     if (this.reportTimer !== null) clearTimeout(this.reportTimer)
@@ -2141,6 +2149,7 @@ export class BrowserView {
 
   private schedule(): void {
     if (this.frameHandle !== 0 || this.disposed) return
+    this.surface?.wait('paint', true)
     this.frameHandle = requestAnimationFrame(() => {
       this.frameHandle = 0
       this.draw()
@@ -2150,7 +2159,21 @@ export class BrowserView {
         this.tabbing = null
         this.tabOn(tabbing.from, tabbing.step)
       }
+      // The draw above asked for whatever its lanes lack, so those reads are
+      // counted before the paint is said to have been made (`perf/rendered.ts`).
+      this.surface?.wait('lanes', this.waiting())
+      this.surface?.wait('paint', false)
     })
+  }
+
+  /**
+   * Whether a lane here is still on its way: a window, a stretch of residues or
+   * a pile being read, or a track still opening, which asks for its own window
+   * the frame it lands.
+   */
+  private waiting(): boolean {
+    if (this.cache.busy || this.bases.busy || this.piles.busy) return true
+    return this.props.store.entries.some((entry) => entry.visible && entry.status === 'loading')
   }
 
   /**

@@ -28,6 +28,7 @@
 import { ViewerError, type ErrorCode } from '../errors'
 import { devFeature } from '../state/devFeatures'
 import { button, el } from './dom'
+import { Surface } from '../perf/rendered'
 import { GOOGLE_HOSTS, GOOGLE_SIGN_IN_AVAILABLE, googleState, signIn } from '../auth/google'
 
 export interface ErrorViewProps {
@@ -421,6 +422,10 @@ export class ErrorView {
       el('div', { class: 'error-actions' }, ...actions),
       google !== null && google.offer !== null ? signInError : null,
     )
+    // A refusal is what is on screen in place of the picture, and the page's
+    // report of a finished picture says so rather than `drawn` (`perf/rendered.ts`).
+    // Never forgotten by hand: the page drops it once this element has left.
+    new Surface(this.el, () => ({})).note('error', error instanceof Error ? error.message : String(error))
   }
 }
 

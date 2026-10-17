@@ -14,6 +14,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The page says when a picture is finished, and at what resolution (§12, §21.4).** Once a view has
+  been routed, opened, read and painted — its map's block, the windows its lanes asked for, any
+  track on it still opening, a smoothing or a finer block being read — and a frame has passed with
+  nothing new begun, the window reports it once: a `performance` mark named `chromosomix:rendered`
+  at the moment the last of it ended, a `chromosomix:rendered` event on `window`, and, in an embed,
+  a `chromosomix:rendered` message to the host. The report gives each map on screen with the rung
+  its block was read from, the bins pooled into a cell and the resolution that makes, the lanes
+  drawn, the view state, and `drawn`, `gated` (the whole-genome read waiting for its button) or
+  `error` with the refusal. A repaint alone reports nothing, and the census and circularity reads
+  that follow a view hold nothing back. What a script screenshots on, or times — the viewer timings
+  (`notebooks/timing.qmd`) wait on it.
+
 - **A guided tutorial, from the landing page and About (§30).** *play the tutorial*, on the landing
   page beside *Load files* and in About, walks a newcomer through a first session on a real map, one
   step at a time, with the window lightly greyed and the one control the step is about lit: the
@@ -2485,6 +2497,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that collides never reaches that refusal.
 
 ### Fixed
+
+- **A file dropped on the page waiting for it opens the map the link or workspace named inside it
+  (§5.6).** A tab naming `map.mcool::/resolutions/25000` or a `.hic` at 4 kb that has to be given the
+  file asks for it to be dropped, and promises its view back; dropped, the file was opened by its
+  path alone, so an `.mcool` landed on a rung of its own choosing and on its Chromosomes table, and a
+  map dropped with a track beside it opened as a stranger to the view that asked for it. Both now
+  open at the resolution named, on the view named, the track joining it.
 
 - **A track still reading goes with the map to another resolution (§8.6).** A change of resolution
   carried a map's tracks to the new one only once they had loaded: picking another resolution in the

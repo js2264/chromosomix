@@ -26,6 +26,7 @@
  */
 
 import { el } from '../ui/dom'
+import { begin } from '../perf/rendered'
 import {
   differsOnlyInFocus,
   differsOnlyInPresentation,
@@ -75,8 +76,22 @@ export class SessionRouter {
    *
    * Reached through {@link Session.render} alone — every change to the store,
    * and the doors that rebuild a view on purpose.
+   *
+   * Counted as a wait for the picture it ends in (`perf/rendered.ts`): until it
+   * returns, the view it routes to may not even have been built, and nothing
+   * on screen can say it is still to come.
    */
   async render(state: ViewState | null): Promise<void> {
+    const end = begin()
+    try {
+      await this.route(state)
+    } finally {
+      end()
+    }
+  }
+
+  /** What {@link render} does. */
+  private async route(state: ViewState | null): Promise<void> {
     if (this.session.destroyed) return
     this.session.rendering.abort()
     const run = new AbortController()

@@ -1176,7 +1176,10 @@ and make the back button walk a history interleaving three files. The rest of th
 and its view state come back, its worker does not, and clicking it is what reads the file. A tab that
 named a local file comes back to the picker with §11's explanation — unless this browser kept a
 grant for that file (`state/handles.ts`, where the platform hands one over with the file), and then
-a click reopens it as it would a remote one.
+a click reopens it as it would a remote one. The file dropped there opens **the map the tab named
+inside it** — the `.mcool`'s rung, the `.hic`'s resolution — on the view the tab was showing, alone
+or with tracks dropped beside it, which join it: a dropped file is named by its path, and opened at
+its root it landed on a rung of its own choosing and on its Chromosomes table instead.
 
 **A closed browser is offered its tabs back, never given them.** Beside the strip, every tab's whole
 config — tracks, marks, filters — is kept in IndexedDB (`state/workspace.ts`) and read only when
@@ -5708,6 +5711,43 @@ by its bytes rather than by what its counts claim:
 | Open and read a binary file whose counts, offsets or compressed data are corrupt — `.hic`, BAM with BAI or CSI, `.2bit`, binary g3d | an answer or a refusal; **never more than 16× the file's size read** in one open, never one typed array past 64 MiB, never 1.5 s. `test/unit/fuzz-readers.test.ts` holds every reader to this over 1,140 seeded corruptions of files the repository's own writers made; the worst reads 4× its file and allocates 30 KB, and the slowest takes a tenth of a second |
 | An inflate of any kind | stopped as soon as its output passes its cap, at most one 64 KiB slice of input later (§10) |
 
+**A picture says when it is finished** (`perf/rendered.ts`). A view mounting, its map's first paint
+and the picture being finished are three moments: the lanes ask for their windows once the map is
+laid out, a track still opening asks for its own when it lands, and a smoothing replaces the map it
+was computed from. Nothing outside the page could tell them apart. A script timing the app waited
+for the network to go quiet, which it never does here while the census and the circularity check
+read behind a view (§6.5, §8.15), and a screenshot taken on the first paint had lanes reading
+*fetching…*. So everything that can still change the picture says so while it can — a navigation
+being routed, a file, a workspace or a shared link being opened, a map's veil (a read, a smoothing,
+a correlation), a paint asked for and not yet made, a lane's window, residues or pile in flight, a
+track on screen still opening, a finer block being read for a frozen map — and once the last of it
+has ended and a frame has passed with nothing new begun, the window says so, once:
+
+| Where | What |
+|---|---|
+| `performance.getEntriesByName('chromosomix:rendered')` | a mark whose `startTime` is the moment the last wait ended — the end of the frame the picture was finished in — on the clock the page's own navigation timing is on |
+| `window`, event `chromosomix:rendered` | the same report, as the event's `detail` |
+| the host of an embed, message `chromosomix:rendered` | the same report, under §21.4's rules |
+
+The report carries `seq`, counting from 1; `at`, the mark's time; `status` — `drawn`, `gated` for a
+whole-genome read waiting for its button (§7.3), or `error` for a refusal on screen in place of the
+picture, with the refusal as `note`; `state`, the view state as the address bar carries it; `maps`,
+one per map on screen, every cell of a deck, each with its title, the bin size of the rung its block
+was read from, the bins pooled into one cell, and their product as `resolution`; and `lanes`, the
+track lanes drawn. **It says what was drawn, not what was asked for.** A whole-genome view reads the
+coarsest rung that fits (§7.3) and a wide window may pool its cells (§7.2), so a link naming 5 kb can
+be on screen at 25 kb, and a script holding viewers to one resolution has to be told so rather than
+time a different picture.
+
+**A repaint alone is not a new picture.** Pointing at the map repaints it once a frame, and a report
+per frame would bury the one a script is waiting for: a paint keeps a picture unfinished but never
+starts one. A report follows every navigation — a colour change is one — and every read a picture
+waits on, a pan past the lanes' padding included. **What it does not wait for**: the side columns,
+the status bar and the console, which describe the picture rather than being it; an analysis task,
+whose result is waited for when it arrives as a track; the census and the circularity check, which
+change nothing on screen; and anything that has left the page — a tab in the background, a view torn
+down without saying so — which is looked for four times a second while something waits, and dropped.
+
 ---
 
 ## 13. Explicit non-features
@@ -10097,10 +10137,11 @@ those four things would be asking a reader to trust a picture with no provenance
 
 ### 21.4 The channel
 
-An embed that can only be linked to is a picture. `postMessage` is the other half, and it is four
+An embed that can only be linked to is a picture. `postMessage` is the other half, and it is five
 messages (`app/EmbedChannel.ts`). Out: `chromosomix:ready`, once, carrying the protocol version and
-the build and **nothing about the session**; and `chromosomix:state`, the view state as the hash is
-written from. In: `chromosomix:where`, answered with the state; and `chromosomix:navigate`, a **patch**
+the build and **nothing about the session**; `chromosomix:state`, the view state as the hash is
+written from; and `chromosomix:rendered`, the report of a finished picture (§12), which is what a
+host takes a screenshot on. In: `chromosomix:where`, answered with the state; and `chromosomix:navigate`, a **patch**
 laid over what is on screen — `{ locus: … }` moves the browser without the host knowing what else is
 in the state, a key sent as `null` is removed, and `state: null` is the picker.
 

@@ -19,6 +19,7 @@
  */
 
 import { ViewerError } from '../errors'
+import { begin, RENDERED, type RenderedReport } from '../perf/rendered'
 import { parseViewState, serialiseViewState, viewStateEquals } from '../state/ViewState'
 import { HistoryJournal } from '../state/historyJournal'
 import { historyItems } from '../ui/historyMenu'
@@ -951,8 +952,19 @@ export class App implements SessionHost {
       })
     }
 
+    // The window's first picture is routed and drawn under this, so the first
+    // report of a finished picture the page makes is of it (`perf/rendered.ts`)
+    // — the picker, a restored tab or a seeded workspace — and a host is told
+    // of each one after that.
+    const booting = begin()
     this.restore()
     this.channel?.start()
+    if (this.channel !== null) {
+      window.addEventListener(RENDERED, (event) => {
+        this.channel?.rendered((event as CustomEvent<RenderedReport>).detail)
+      })
+    }
+    booting()
   }
 
   /**
@@ -2012,6 +2024,18 @@ export class App implements SessionHost {
    * @returns `true` when a session was found and opened.
    */
   private async openSharedHash(): Promise<boolean> {
+    // A wait for the picture the link describes (`perf/rendered.ts`): the
+    // payload is inflated before anything opens.
+    const end = begin()
+    try {
+      return await this.openSharedHashNow()
+    } finally {
+      end()
+    }
+  }
+
+  /** What {@link openSharedHash} does. */
+  private async openSharedHashNow(): Promise<boolean> {
     const payload = readShareHash(window.location.hash)
     if (payload === null) return false
     const read = await decodeShare(payload)

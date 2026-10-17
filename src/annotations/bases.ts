@@ -118,9 +118,19 @@ export class BaseCache {
         // The card already reports a load failure; the lane keeps what it had
         // and the next view change tries again.
       })
-      .finally(() => this.inflight.delete(key))
+      .finally(() => {
+        this.inflight.delete(key)
+        // A failed read asked for no frame, and the lane is done waiting on it
+        // (`SampleCache`'s own `finally` says why that matters).
+        if (!this.disposed) this.onChange()
+      })
 
     return cached?.regions ?? null
+  }
+
+  /** Whether residues are on their way for any lane, as `SampleCache.busy` says of samples. */
+  get busy(): boolean {
+    return this.inflight.size > 0
   }
 
   /**
