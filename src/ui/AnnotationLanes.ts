@@ -388,10 +388,10 @@ function emptyEdgeState(): EdgeState {
 }
 
 /**
- * Where a stack's names go beside a map (§8.8): into the corner that follows
- * it clockwise, which leaves one corner to each stack whichever of the four
- * have lanes — left of the bottom stack, above the left one, right of the top
- * one, below the right one.
+ * Where a stack's names go beside a map with the name column on (§8.8): into
+ * the corner that follows it clockwise, which leaves one corner to each stack
+ * whichever of the four have lanes — left of the bottom stack, above the left
+ * one, right of the top one, below the right one.
  */
 export const CORNER_OF: Record<LaneEdge, 'bottom-left' | 'top-left' | 'top-right' | 'bottom-right'> = {
   bottom: 'bottom-left',
@@ -516,7 +516,8 @@ export class AnnotationLanes {
   /**
    * The four corners' canvases, one per stack, that its names run out onto
    * past its own canvas (§8.8) — mounted by a panel that asked for
-   * `corners`, and hidden while a stack's names fit its own margin.
+   * `corners`, and hidden while a stack's names fit its own margin or are
+   * written over its lanes, the name column off.
    */
   readonly labelCanvases: Record<LaneEdge, HTMLCanvasElement>
   /**
@@ -603,11 +604,12 @@ export class AnnotationLanes {
        */
       metadata?: MetaSource
       /**
-       * Write each stack's names beside the map, in the corner that follows
-       * the stack clockwise, rather than over its data (§8.8) — on
-       * {@link labelCanvases}, which the caller mounts in those corners.
-       * Absent where nobody does: the assembly editor's stage, whose stacks
-       * keep their names on their lanes.
+       * Let each stack's names stand beside the map, in the corner that
+       * follows the stack clockwise, rather than over its data (§8.8) — on
+       * {@link labelCanvases}, which the caller mounts in those corners —
+       * while the reader has the *name column* on ({@link inCorners}).
+       * Absent where nobody mounts them: the assembly editor's stage, whose
+       * stacks keep their names on their lanes.
        */
       corners?: boolean
       /** Ask for a repaint; the panel coalesces it into its own frame. */
@@ -645,6 +647,18 @@ export class AnnotationLanes {
   /** The marks drawn into every lane; empty where the file carries none. */
   private get manual(): LaneMarks {
     return this.options.manual ?? EMPTY_MARKS
+  }
+
+  /**
+   * Whether the stacks' names stand in the map's corners this frame (§8.8):
+   * on a surface that mounts them, with the *name column* on — the switch the
+   * 1D browser's column answers to, so one switch puts the names beside the
+   * tracks on both. Off, which is the default, each name is written over the
+   * start of its lane on a plate, and the stack leaves its last lane the room
+   * that name needs ({@link overhangOf}).
+   */
+  private get inCorners(): boolean {
+    return this.options.corners === true && getPlotOptions().gutter
   }
 
   /** Which of the map's two axes a stack on this edge runs along. */
@@ -952,8 +966,8 @@ export class AnnotationLanes {
     overlaid: readonly AnnotationEntry[]
     thickness: number
   }): number {
-    // Beside the map the names are in a corner, and nothing hangs off a lane.
-    if (!getPlotOptions().text || this.options.corners === true) return 0
+    // With the names in a corner nothing hangs off a lane.
+    if (!getPlotOptions().text || this.inCorners) return 0
     const members = [lane.entry, ...lane.overlaid]
     const row = stacksAsHeatmaps(members) ? lane.thickness / members.length : lane.thickness
     return Math.ceil(labelReach(row, laneLabelStyle()) - row)
@@ -1032,6 +1046,9 @@ export class AnnotationLanes {
       if (lanes.length === 0) continue
       this.state[edge] = this.paintEdge(ctx, edge, geometry, lanes, built.groups, this.dpr)
     }
+    // Wherever corners are mounted, whether or not the names are in them: with
+    // the name column off nothing was written for a corner, so this is what
+    // folds them away and gives their room back.
     if (this.options.corners === true) this.paintCorners(geometry)
   }
 
@@ -1921,11 +1938,11 @@ export class AnnotationLanes {
 
   /**
    * How far one stack's names run past its own canvas into the corner beside
-   * it (§8.8), in CSS pixels — `0` where they fit its own margin, or are not
-   * written at all.
+   * it (§8.8), in CSS pixels — `0` where they fit its own margin, are written
+   * over the lanes, or are not written at all.
    */
   cornerOf(edge: LaneEdge): number {
-    return this.options.corners === true ? this.corners[edge] : 0
+    return this.inCorners ? this.corners[edge] : 0
   }
 
   /**
@@ -1979,11 +1996,11 @@ export class AnnotationLanes {
    * The column one stack's names are written in beside the map (§8.8), in its
    * own canvas's coordinates: from the corner's outer edge to the end nearest
    * the data, flush with that end — so a short name stands in the stack's own
-   * margin and a long one runs out over the corner. `null` over the data, on
-   * a surface with no corners.
+   * margin and a long one runs out over the corner. `null` over the data: on
+   * a surface with no corners, and on one with the name column off.
    */
   private labelColumn(edge: LaneEdge, geometry: LaneGeometry): LaneLabelColumn | null {
-    if (this.options.corners !== true) return null
+    if (!this.inCorners) return null
     const corner = this.corners[edge]
     const pad = scaleLength(CORNER_PAD)
     const inner = this.columnInner(edge, geometry)
@@ -2092,10 +2109,13 @@ export class AnnotationLanes {
   /**
    * The lane's name, its colour chip, and what its value axis spans.
    *
-   * Inside the lane rather than in a gutter beside it. The gutters belong to the
-   * heatmap's block labels and collapse to six pixels when those are off — which
-   * is this app's default — so a name outside would have to reopen a band the
-   * reader closed. A halo is what keeps it readable over the track's own ink.
+   * Inside the lane by default, over its start on a plate. The gutters belong
+   * to the heatmap's block labels and collapse to six pixels when those are
+   * off — which is this app's default — so a name outside needs room of its
+   * own, and the reader asks for it with the *name column*: then the block is
+   * written in the corner's column ({@link labelColumn}, §8.8), the stack's
+   * margin running on into a canvas of the corner's own, since a lane's canvas
+   * cannot grow backwards into the margin before it.
    *
    * The drawing is `render/laneLabel.ts`'s, and it is the same call the 1D
    * browser makes: two implementations of one layout is the drift §5.8 exists to
@@ -2103,11 +2123,6 @@ export class AnnotationLanes {
    * were editable there. What the pass hands back is the point of it — the box
    * each end was measured into, the spot for the autoscale button, and the line
    * the name landed on, which is where this lane's handle goes.
-   *
-   * No name column. `column: null`, always, and not an oversight: the strip
-   * before a bottom lane is the heatmap's own left margin, a canvas cannot grow
-   * backwards to make one of its own, and a lane that started somewhere else
-   * would no longer be under the column it describes.
    */
   private labelLane(
     ctx: CanvasRenderingContext2D,
@@ -2138,7 +2153,7 @@ export class AnnotationLanes {
       ? label.entries.map((entry) => [entry])
       : [label.entries]
     const edge = lane.frame.orientation
-    // Beside the map, the corner's column; over the data where there is none.
+    // The corner's column with the name column on; over the data otherwise.
     const column = this.labelColumn(edge, geometry)
     const specs = frames.map((frame, at) => ({
       frame,

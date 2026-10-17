@@ -3603,12 +3603,14 @@ export class BrowserView {
               { class: 'btn btn-icon', size: 15 },
             ),
             // The name column's switch, here rather than at the end of the
-            // overlays row below. It is about this picture's own gutter — a
-            // heatmap's tracks are named in the map's margins and have no column
-            // to switch on — so it never belonged in a list the two cards share,
-            // and appended to that list it was the seventh toggle in a row that
-            // fits six: it wrapped to a line of its own at the default column
-            // width, where one glyph alone reads as a different kind of control.
+            // overlays row below. It is about where the names stand rather than
+            // how the tracks are inked — this picture's own gutter here, the
+            // map's corners beside a map, whose Tracks card has the same switch
+            // at the end of the same row (§8.8) — so it never belonged in the
+            // overlays list, and appended to that list it was the seventh toggle
+            // in a row that fits six: it wrapped to a line of its own at the
+            // default column width, where one glyph alone reads as a different
+            // kind of control.
             this.optionToggle('gutter'),
           ),
         ),
