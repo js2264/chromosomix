@@ -1,15 +1,21 @@
 /**
  * The tracks' names beside the map, in its corners (§8.8), end to end.
  *
- * On the yeast demo: the map with its bottom and right stacks, each stack's
- * names in the corner that follows it clockwise — left of the bottom stack,
- * below the right one — and both corners close up; the same demo with a track
+ * On the yeast demo as it opens: the name column off, every name written over
+ * the start of its track and no corner, with the switch unpressed at the end of
+ * the Tracks card's *all tracks* row (close up). Then the switch pressed: each
+ * stack's names in the corner that follows it clockwise — left of the bottom
+ * stack, below the right one — and both corners close up; a name and an end of
+ * a range pressed in a corner, each opening its caret there; the map's PNG and
+ * PDF, the PDF rendered with poppler's `pdftoppm`; the same demo with a track
  * on every edge (ATAC above the map as well as below it, Pol II / input left of
- * it as well as right), so all four corners hold names; a name and an end of a
- * range pressed in a corner, each opening its caret there; the map's PNG and
- * PDF, the PDF rendered with poppler's `pdftoppm`; the dark theme; and the
- * yeast deck, two maps each with its corners. Every step prints the corners'
- * sizes, so a corner that did not open is a line here as well as a picture.
+ * it as well as right), so all four corners hold names; the dark theme; the
+ * yeast deck, two maps each with its corners, and the same deck as it opens,
+ * its names over the tracks; and last the switch pressed again on the first
+ * map, the names back over the tracks and the corners folded, and its PNG saved
+ * with them there. Every step prints the corners' sizes and whether the switch
+ * is pressed, so a corner that did not open — or did not fold — is a line here
+ * as well as a picture.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-lane-corners.mjs [out-dir]
@@ -29,22 +35,36 @@ await page.context().addInitScript(() => {
 })
 
 const DEMO = `${base}/?config=${base}/demo/yeast/Yeast_microC.chromosomix.json`
+// Every open corner by edge, on every map on the page (a deck's maps each have
+// their four): `null` for an edge whose corners are all folded.
 const corners = (target = page) =>
-  target.evaluate(() =>
-    Object.fromEntries(
-      [...document.querySelectorAll('.lane-labels')].map((canvas) => [
-        canvas.className.replace(/.*lane-labels-(\w+).*/, '$1'),
-        canvas.classList.contains('hidden') ? null : `${canvas.style.width} × ${canvas.style.height}`,
-      ]),
-    ),
-  )
+  target.evaluate(() => {
+    const out = {}
+    for (const canvas of document.querySelectorAll('.lane-labels')) {
+      const edge = canvas.className.replace(/.*lane-labels-(\w+).*/, '$1')
+      out[edge] ??= null
+      if (canvas.classList.contains('hidden')) continue
+      const size = `${canvas.style.width} × ${canvas.style.height}`
+      out[edge] = out[edge] === null ? size : `${out[edge]}, ${size}`
+    }
+    return out
+  })
 const opened = async (target = page, maps = 1) => {
-  await target.waitForFunction(
-    (n) => !document.body.textContent.includes('Opening ') && document.querySelectorAll('.heatmap-canvas').length >= n,
-    maps,
-    { timeout: 180000 },
-  )
+  const ready = () =>
+    target.waitForFunction(
+      (n) =>
+        !document.body.textContent.includes('Opening ') &&
+        document.querySelectorAll('.heatmap-canvas').length >= n &&
+        document.querySelector('.lane-canvas:not(.hidden)') !== null,
+      maps,
+      { timeout: 180000 },
+    )
+  await ready()
   await sleep(5000)
+  // …and again: the workspace is fetched before its file opens, and the page
+  // can look ready between the two.
+  await ready()
+  await sleep(3000)
 }
 const clip = async (name, box) => {
   await page.screenshot({ path: `${OUT}/${name}.png`, clip: box, scale: 'device' })
@@ -57,11 +77,40 @@ const boxOf = (selector) =>
     const r = node.getBoundingClientRect()
     return { x: r.x, y: r.y, width: r.width, height: r.height }
   }, selector)
+// The map's Tracks card, and the name column's switch at the end of its
+// *all tracks* row.
+const tracksCard = page
+  .locator('.controls-card')
+  .filter({ has: page.locator('.controls-title', { hasText: /^Tracks$/ }) })
+  .first()
+const nameColumn = tracksCard.locator('button.btn-toggle[title^="name column"]')
+const pressed = async () => (await nameColumn.count()) === 0 ? 'no switch' : await nameColumn.getAttribute('aria-pressed')
+// The name column pressed from the keyboard, `u`, on a page that has opened. The
+// demos' workspaces carry their own `plot` settings, the name column off among
+// them, so a preference stored before the visit would be put back as they open.
+const pressU = async (target) => {
+  await target.keyboard.press('u')
+  await sleep(2000)
+}
 
 try {
   await page.goto(DEMO)
   await opened()
-  console.log('corners:', JSON.stringify(await corners()))
+  // As the app opens: the name column off, the names over the tracks.
+  console.log('as it opens, switch pressed:', await pressed(), 'corners:', JSON.stringify(await corners()))
+  await shot('lc00-names-over-the-tracks')
+  await tracksCard.scrollIntoViewIfNeeded()
+  const cardBox = await tracksCard.boundingBox()
+  if (cardBox !== null) await clip('lc00b-tracks-card-switch', { x: cardBox.x - 4, y: cardBox.y - 4, width: cardBox.width + 8, height: Math.min(cardBox.height + 8, 220) })
+  const under = await boxOf('.lane-canvas.lane-bottom')
+  if (under !== null) await clip('lc00c-bottom-names-over-the-tracks', { x: under.x - 8, y: under.y - 8, width: 420, height: under.height + 16 })
+
+  // The switch pressed: the names go to the corners. The pointer taken off it
+  // after, so the picture shows the switch lit rather than hovered.
+  await nameColumn.click()
+  await page.mouse.move(5, 500)
+  await sleep(1500)
+  console.log('switch pressed:', await pressed(), 'corners:', JSON.stringify(await corners()))
   await shot('lc01-map')
   const bl = await boxOf('.lane-labels-bottom')
   if (bl !== null) await clip('lc02-bottom-left', { x: bl.x - 8, y: bl.y - 8, width: bl.width + 220, height: bl.height + 16 })
@@ -136,6 +185,7 @@ try {
   })
   await other.goto(DEMO)
   await opened(other)
+  await pressU(other)
   console.log('four stacks, corners:', JSON.stringify(await corners(other)))
   await other.screenshot({ path: `${OUT}/lc07-four-corners.png` })
   console.log('wrote lc07-four-corners.png')
@@ -147,19 +197,39 @@ try {
   const night = await dark.newPage()
   await night.goto(DEMO)
   await opened(night)
+  await pressU(night)
   await night.screenshot({ path: `${OUT}/lc08-dark.png` })
   console.log('wrote lc08-dark.png')
   await dark.close()
 
-  // The deck: two maps, each with its corners.
+  // The deck: two maps, each with its corners…
   const decked = await browser.newContext({ viewport: { width: 1600, height: 1000 } })
   const deck = await decked.newPage()
   await deck.goto(`${base}/?config=${base}/demo/yeast/Yeast_deck.chromosomix.json`)
   await opened(deck, 2)
+  await pressU(deck)
   console.log('deck, corners:', JSON.stringify(await corners(deck)))
   await deck.screenshot({ path: `${OUT}/lc09-deck.png` })
   console.log('wrote lc09-deck.png')
   await decked.close()
+  // …and as it opens, the name column off: every map's names over its tracks.
+  const plain = await browser.newContext({ viewport: { width: 1600, height: 1000 } })
+  const plainDeck = await plain.newPage()
+  await plainDeck.goto(`${base}/?config=${base}/demo/yeast/Yeast_deck.chromosomix.json`)
+  await opened(plainDeck, 2)
+  console.log('deck as it opens, corners:', JSON.stringify(await corners(plainDeck)))
+  await plainDeck.screenshot({ path: `${OUT}/lc09b-deck-names-over-the-tracks.png` })
+  console.log('wrote lc09b-deck-names-over-the-tracks.png')
+  await plain.close()
+
+  // The first map's switch pressed again: back over the tracks, the corners folded…
+  await nameColumn.click()
+  await page.mouse.move(5, 500)
+  await sleep(1500)
+  console.log('pressed again:', await pressed(), 'corners:', JSON.stringify(await corners()))
+  await shot('lc10-off-again')
+  // …and the figure follows: its PNG with the names over the tracks.
+  await save('png', 'lc11-map-names-over-the-tracks.png')
 } finally {
   await close()
 }

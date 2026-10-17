@@ -3180,39 +3180,51 @@ and its text nine; a lane in the browser is ninety and its name is what identifi
 under it are the contents: at one size and one weight, `genes` read as the first item in a row of
 gene names.
 
-**Beside a map, the names are in its corners.** Each stack's names stand in the corner of the map that
-follows the stack clockwise — left of the bottom stack, above the left one, right of the top one, below
-the right one — so each corner holds one stack's whichever edges have lanes, and no name is written
-over a track. The column is the stack's own margin running on into that corner, and the block is set
-flush with the end beside the data: ending against the handle a bottom lane hangs before it, starting
-past the group bars beyond a top one, and on the two vertical stacks, whose text reads up the page,
-ending under the right stack's handles and starting over the left stack's bars. The name is on the
-first line and the range on the next, in reading order on all four sides; on a lane too thin to stack
-them the range goes beside the name and inside the column all the same. A short name stands in the
-margin the heatmap's own labels leave; a longer one runs out over the corner, which opens as wide as the
-widest block wants past that margin — measured off the names the paint wrote and applied a frame later,
-as the browser's column is, which cannot oscillate because a block reports its text's natural width —
-up to 150 pixels at the default text size, past which a name wraps onto a second line or is cut in the
-middle. The corner widens its side of the map in the panel's grid, in a deck's alignment of its maps
-and in every figure saved from the map, which writes the names where the screen does. They are pointed
-at as they were on the lane: a press on a name or an end of the range opens its caret there, a right
-click opens the lane's menu, the chip is the lane's colour. With *track text* off there are no names and
-no corners. They used to be written over the lane — a canvas under the map cannot grow backwards into
-the margin before it — which is what the next paragraph was about; the corners are the room that was
-there all along, and a canvas of their own each reaches it.
+**Beside a map, the names are written over the tracks, or in its corners with the *name column*
+on.** The switch is the 1D browser's own — *name column*, `u` — at the end of the *all tracks* row of
+both Tracks cards, and it is one preference with one meaning on both surfaces: the names beside the
+tracks rather than over them, in the browser's column there and in the map's corners here. It is **off**
+to begin with: each name is written over the start of its lane, on a plate (next paragraph), where the
+eye already is, and the map keeps the room. The corners take room from the map to give the names a
+place of their own, which is the reader's call to make. A press moves a mounted map's names at once and
+another folds the corners and gives their room back, in the grid, a deck's alignment and the figures
+alike.
 
-**Written over the data, the block sits on a plate** — on the one surface that still writes it there,
-the assembly editor's stage, whose stacks have no corners. In the browser it has a column of its own;
-beside a map the block was drawn over the lane and a halo around each glyph was the whole of the
-protection. On a sixteen-pixel peak lane the label *is* the lane: `ATAC peaks` came out with orange
-bars through every letter and `230 features in view` lay across a density block. A plate in the halo
-colour at 0.85 keeps the argued placement and makes the words readable — the lane under it stays
-visible as a shape, because the first eighty pixels of a peak set are data a reader may be counting.
-A name longer than its lane is **cut in the middle** there as it is in a column, since a clipped name
-is a different name: a track called `Distance to IV:1000000` was drawn as `Distance to IV:100000`,
-which is a wrong coordinate stated as a fact. And a lane whose signal lives where a stacked range
-line would land — the sequence lane, a fraction on a fixed `0 – 1` axis — keeps its range beside the
-name on one line rather than under it.
+With it on, each stack's names stand in the corner of the map that follows the stack clockwise —
+left of the bottom stack, above the left one, right of the top one, below the right one — so each
+corner holds one stack's whichever edges have lanes, and no name is written over a track. The column
+is the stack's own margin running on into that corner, and the block is set flush with the end
+beside the data: ending against the handle a bottom lane hangs before it, starting past the group
+bars beyond a top one, and on the two vertical stacks, whose text reads up the page, ending under
+the right stack's handles and starting over the left stack's bars. The name is on the first line and
+the range on the next, in reading order on all four sides; on a lane too thin to stack them the
+range goes beside the name and inside the column all the same. A short name stands in the margin the
+heatmap's own labels leave; a longer one runs out over the corner, which opens as wide as the widest
+block wants past that margin — measured off the names the paint wrote and applied a frame later, as
+the browser's column is, which cannot oscillate because a block reports its text's natural width —
+up to 150 pixels at the default text size, past which a name wraps onto a second line or is cut in
+the middle. The corner widens its side of the map in the panel's grid, in a deck's alignment of its
+maps and in every figure saved from the map, which writes the names where the screen does. They are
+pointed at as they were on the lane: a press on a name or an end of the range opens its caret there,
+a right click opens the lane's menu, the chip is the lane's colour. With *track text* off there are
+no names and no corners. A canvas under the map cannot grow backwards into the margin before it,
+which is why the names beside a map were only ever written over the lane; the corners are the room
+that was there all along, and a canvas of their own each reaches it. For a while they were the only
+place the names went, with no switch to put them back over the tracks; the switch is that way back,
+and the default.
+
+**Written over the data, the block sits on a plate** — on every surface with the name column off,
+beside a map and in the browser, and always on the assembly editor's stage, whose stacks have no
+corners. A halo around each glyph was once the whole of the protection over the lane. On a
+sixteen-pixel peak lane the label *is* the lane: `ATAC peaks` came out with orange bars through
+every letter and `230 features in view` lay across a density block. A plate in the halo colour at
+0.85 keeps the argued placement and makes the words readable — the lane under it stays visible as a
+shape, because the first eighty pixels of a peak set are data a reader may be counting. A name
+longer than its lane is **cut in the middle** there as it is in a column, since a clipped name is a
+different name: a track called `Distance to IV:1000000` was drawn as `Distance to IV:100000`, which
+is a wrong coordinate stated as a fact. And a lane whose signal lives where a stacked range line
+would land — the sequence lane, a fraction on a fixed `0 – 1` axis — keeps its range beside the name
+on one line rather than under it.
 
 **The last lane on an edge is given the room its name needs.** The block is written at the reader's
 text size and the lane is the height the reader gave it, and the two need not agree: at the default
@@ -3225,8 +3237,8 @@ alike. So the stack leaves room past its last lane for whatever its block reache
 (`labelReach`, `AnnotationLanes.thicknessOf`), and a loop's anchors are drawn past that
 room rather than into the name; the lane keeps its height and the writing its size. A stack whose
 last lane holds its block is the size it was, and so is one with *track text* off, which writes no
-names to make room for — and so is every stack beside a map, whose names are in a corner. On screen
-the room comes out of the map's share of its cell, as a lane's own height does.
+names to make room for — and so is a stack beside a map with the name column on, whose names are in
+a corner. On screen the room comes out of the map's share of its cell, as a lane's own height does.
 
 **Where the pointer is, is written one way on both surfaces and in the browser's status line**: the
 base, 1-based and grouped, while one pixel is worth less than a kilobase, and a unit form above that.
