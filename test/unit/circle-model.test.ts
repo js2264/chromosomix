@@ -28,6 +28,8 @@ import {
   midAngle,
   paintLabels,
   partnerWeights,
+  sectionDrop,
+  slotCount,
   unitAtAngle,
   type CircleModel,
 } from '../../src/render/circle'
@@ -239,8 +241,9 @@ describe('the sections a block is cut into', () => {
     )
     const lengths: Record<string, number> = { x1: 100, x2: 50, x3: 70, y1: 300 }
     const found = circleUnitsOf(data, {
-      slotSequences: (first, next) =>
-        first === 'x1' && next === 'x3'
+      // `x1 +1`: the slot that starts at x1 and holds one more.
+      slotSequences: (first, count) =>
+        first === 'x1' && count === 2
           ? [
               { name: 'x1', length: 100 },
               { name: 'x2', length: 50 },
@@ -956,5 +959,43 @@ describe('a ring moved', () => {
     // Nothing to move, or nowhere to move it: as it was.
     expect(ringBlockOrder(order, ['q'], ['d'], true)).toEqual(order)
     expect(ringBlockOrder(order, ['a'], ['q'], true)).toEqual(order)
+  })
+})
+
+describe('an arc carried along the circle (§7.6)', () => {
+  // Four sections from just past twelve, each 1.4 rad, 0.1 rad apart.
+  const arcs = Float64Array.from([0, 1, 2, 3].flatMap((k) => [TOP + 0.1 + 1.5 * k, TOP + 1.5 + 1.5 * k]))
+  const every = [0, 1, 2, 3]
+
+  it('lands in the gap whose edge is nearest the hand, beside the one after it', () => {
+    const drop = sectionDrop(arcs, every, 0, TOP + 3.05)
+    expect(drop).toEqual({ index: 2, side: 'before', at: expect.closeTo(TOP + 3.05, 9) })
+    // Before the first, from the last.
+    expect(sectionDrop(arcs, every, 3, TOP + 0.12)).toEqual({ index: 0, side: 'before', at: arcs[0] })
+  })
+
+  it('lands after the last past it, measured round the circle', () => {
+    expect(sectionDrop(arcs, every, 0, TOP + 6.05)).toEqual({ index: 3, side: 'after', at: arcs[7] })
+    // Just short of twelve again, the first's start is nearer round the turn:
+    // the gap it is already in.
+    expect(sectionDrop(arcs, every, 0, TOP + 6.25)).toBeNull()
+  })
+
+  it('goes nowhere dropped either side of itself', () => {
+    expect(sectionDrop(arcs, every, 1, TOP + 1.55)).toBeNull()
+    expect(sectionDrop(arcs, every, 1, TOP + 3.05)).toBeNull()
+  })
+
+  it('lands among its own only: a contig among its genome’s', () => {
+    // Carried from 1 among 1 and 2, the hand over 3: after 2, the nearest edge it may use.
+    expect(sectionDrop(arcs, [1, 2], 1, TOP + 5)).toEqual({ index: 2, side: 'after', at: arcs[5] })
+    expect(sectionDrop(arcs, [1], 1, TOP + 5)).toBeNull()
+    expect(sectionDrop(arcs, [1, 2], 0, TOP + 5)).toBeNull()
+  })
+
+  it('reads how many a pooled slot holds from its label', () => {
+    expect(slotCount('NODE_7431 +15')).toBe(16)
+    expect(slotCount('MAG_1')).toBe(1)
+    expect(slotCount('a+1')).toBe(1)
   })
 })

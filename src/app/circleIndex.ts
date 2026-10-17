@@ -12,6 +12,7 @@
  */
 
 import type { CircleResolver, CircleSequence } from '../render/circle'
+import { arrange, type ReaderOrder } from '../state/readerOrder'
 import type { TablePayload } from '../worker/protocol'
 
 /**
@@ -26,6 +27,8 @@ export function circleResolverFrom(
   genomes: TablePayload | null,
   display: ArrayLike<number> | null,
   contigs: TablePayload | null,
+  /** The reader's order now (§7.6), which a genome's contigs are laid out in. */
+  readerOrder: () => ReaderOrder | null = () => null,
 ): CircleResolver {
   const genomeNames = genomes?.data['name']
   const genomeLengthColumn = genomes?.data['length']
@@ -80,15 +83,38 @@ export function circleResolverFrom(
     }
   }
 
+  // A genome's contigs in the reader's order, laid out once per order.
+  const arranged = new Map<string, CircleSequence[]>()
+  let arrangedFor: ReaderOrder | null = null
+  const sequencesOf = (genome: string): CircleSequence[] => {
+    const file = byGenome.get(genome) ?? []
+    const now = readerOrder()
+    const placed = now?.contigs[genome]
+    if (placed === undefined) return file
+    if (now !== arrangedFor) {
+      arranged.clear()
+      arrangedFor = now
+    }
+    let list = arranged.get(genome)
+    if (list === undefined) {
+      const byName = new Map(file.map((sequence) => [sequence.name, sequence]))
+      list = arrange(
+        file.map((sequence) => sequence.name),
+        placed,
+      ).map((name) => byName.get(name) as CircleSequence)
+      arranged.set(genome, list)
+    }
+    return list
+  }
+
   return {
     genomeLength: (genome) => lengthOf.get(genome),
-    genomeSequences: (genome) => (haveContigs ? (byGenome.get(genome) ?? []) : null),
-    slotSequences: (first, next) => {
+    genomeSequences: (genome) => (haveContigs ? sequencesOf(genome) : null),
+    slotSequences: (first, count) => {
       if (!haveContigs) return null
       const from = at.get(first)
       if (from === undefined) return null
-      const to = next === undefined ? order.length : (at.get(next) ?? from + 1)
-      return order.slice(from, Math.max(from + 1, to))
+      return order.slice(from, from + Math.max(1, count))
     },
     contigLength: (name) => contigLength.get(name),
   }

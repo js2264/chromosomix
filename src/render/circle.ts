@@ -123,14 +123,18 @@ export interface CircleModel {
 export interface CircleResolver {
   /** A genome's length in base pairs, from `/genomes`. */
   genomeLength?(genome: string): number | undefined
-  /** A genome's displayable contigs in file order, or `null` before the table is read. */
+  /**
+   * A genome's displayable contigs in the reader's order (§7.6) — the file's
+   * where they were never moved — or `null` before the table is read.
+   */
   genomeSequences?(genome: string): readonly CircleSequence[] | null
   /**
-   * The contigs from `first` up to, not including, `next`, in file order —
-   * a pooled slot of the contig × contig level, which holds every displayable
-   * contig between the one it starts at and the one the next slot starts at.
+   * The `count` displayable contigs from `first` on, in file order — a pooled
+   * slot of the contig × contig level, which the scan filled with consecutive
+   * contigs of one genome. Counted rather than ended at the next slot's first,
+   * which in the reader's order (§7.6) need not be the next in the file.
    */
-  slotSequences?(first: string, next: string | undefined): readonly CircleSequence[] | null
+  slotSequences?(first: string, count: number): readonly CircleSequence[] | null
   contigLength?(name: string): number | undefined
 }
 
@@ -191,9 +195,7 @@ export function circleUnitsOf(
   }
   // Contigs: each run of the axis, one section, carrying the genome it is in.
   const genomeAt = genomeLookup(data.rowGenomes)
-  const units = data.rowGroups.map((group, index) =>
-    contigUnit(group, data.rowGroups[index + 1], genomeAt(group.start), resolver, cellBp, data.level),
-  )
+  const units = data.rowGroups.map((group) => contigUnit(group, genomeAt(group.start), resolver, cellBp, data.level))
   if (units.length < MIN_SECTIONS) return null
   return { units, kind: 'contig', groups: groupsOf(units) }
 }
@@ -254,7 +256,6 @@ function genomeRunUnit(
 
 function contigUnit(
   group: AxisGroup,
-  next: AxisGroup | undefined,
   genome: string | undefined,
   resolver: CircleResolver,
   cellBp: number,
@@ -265,7 +266,7 @@ function contigUnit(
   // table knows the rest. Anywhere else the run carries its own sequences.
   const slot =
     level !== 'bin' && group.merged === undefined && group.name !== undefined && group.name !== group.label
-      ? resolver.slotSequences?.(name, next?.name ?? next?.label)
+      ? resolver.slotSequences?.(name, slotCount(group.label))
       : null
   const sequences = slot !== null && slot !== undefined ? [...slot] : sequencesOfRun(group, resolver, cellBp)
   const bp = sumLengths(sequences) || Math.max(1, group.end - group.start) * cellBp
@@ -279,6 +280,16 @@ function contigUnit(
     bp,
     sequences,
   }
+}
+
+/**
+ * How many units a pooled slot holds, by its label: `NODE_7431 +15` is
+ * sixteen — the worker's slots name their first unit and count the rest
+ * (`reader.worker.ts`). One for anything else.
+ */
+export function slotCount(label: string): number {
+  const more = /\s\+(\d+)$/.exec(label)
+  return more === null ? 1 : Number(more[1]) + 1
 }
 
 /** The sequences one run of the axis covers, with their lengths. */
@@ -1825,6 +1836,54 @@ export function carryRadius(from: readonly number[], to: readonly number[], r: n
     }
   }
   return to[n - 1] + (r - from[n - 1])
+}
+
+/** Which side of a section a carried one lands. */
+export type DropSide = 'before' | 'after'
+
+/**
+ * Where a section carried along the circle lands (§7.6): beside the section
+ * whose edge is nearest the pointer's angle, measured round the circle, among
+ * `allowed` only — the indices it may land among, in their order: every genome
+ * for a genome, its own genome's contigs for a contig. `null` where it would
+ * not move, dropped beside itself.
+ *
+ * `arcs` holds each section's start and end, `from` is the one carried, and
+ * the answer names the section it lands beside, which side, and where the gap
+ * it lands in is, for the mark drawn there.
+ */
+export function sectionDrop(
+  arcs: ArrayLike<number>,
+  allowed: readonly number[],
+  from: number,
+  angle: number,
+): { index: number; side: DropSide; at: number } | null {
+  const position = allowed.indexOf(from)
+  if (position < 0 || allowed.length < 2) return null
+  const p = inTurn(angle)
+  // The gap it lands in, 0 … allowed.length: before the first, between two,
+  // after the last — whichever edge is nearest round the circle.
+  let gap = 0
+  let best = Number.POSITIVE_INFINITY
+  allowed.forEach((index, k) => {
+    for (const [edge, landing] of [
+      [arcs[2 * index], k],
+      [arcs[2 * index + 1], k + 1],
+    ] as const) {
+      const away = Math.abs(((((p - edge) % TAU) + TAU + Math.PI) % TAU) - Math.PI)
+      if (away < best) {
+        best = away
+        gap = landing
+      }
+    }
+  })
+  if (gap === position || gap === position + 1) return null
+  const before = gap - 1 >= 0 ? arcs[2 * allowed[gap - 1] + 1] : undefined
+  const after = gap < allowed.length ? arcs[2 * allowed[gap]] : undefined
+  const at = before !== undefined && after !== undefined ? (before + after) / 2 : (after ?? before ?? p)
+  return gap < allowed.length
+    ? { index: allowed[gap], side: 'before', at }
+    : { index: allowed[allowed.length - 1], side: 'after', at }
 }
 
 /** An angle in the circle's own turn, `[TOP, TOP + 2π)`: twelve o'clock, clockwise. */

@@ -72,6 +72,11 @@ const CORE_LABELS: Record<string, { label: string; title: string }> = {
 
 export interface GenomesTableOptions {
   data: GenomesResult
+  /**
+   * The genomes by name in the reader's order (§7.6), which is the table's own
+   * order wherever no column is sorted; absent, the file's.
+   */
+  order?: readonly string[]
   /** Restores the filters, search and sort a user left behind (`state/UiMemory`). */
   persistence?: VirtualTableOptions['persistence']
   onOpenGenome(name: string): void
@@ -149,7 +154,7 @@ export class GenomesTable {
 
     this.table = new VirtualTable({
       columns,
-      rows: Array.from(data.display),
+      rows: arrangedRows(data, this.names, options.order),
       selectable: true,
       searchKeys: ['name'],
       // `filter`, not `search`: this box narrows the list under it, and `search`
@@ -374,4 +379,18 @@ function columnDigits(column: ArrayLike<number>): number | null {
     if (point >= 0) digits = Math.max(digits, text.length - point - 1)
   }
   return digits
+}
+
+/**
+ * The displayed rows in the reader's order (§7.6): the rows it names, as it
+ * names them, then any it does not, in the file's order.
+ */
+function arrangedRows(data: GenomesResult, names: readonly string[], order: readonly string[] | undefined): number[] {
+  const rows = Array.from(data.display)
+  if (order === undefined || order.length === 0) return rows
+  const rank = new Map(order.map((name, index) => [name, index]))
+  return rows
+    .map((row, index) => ({ row, index, rank: rank.get(names[row]) ?? Number.POSITIVE_INFINITY }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map((entry) => entry.row)
 }

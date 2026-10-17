@@ -43,6 +43,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   thousand genomes, the contigs of one genome — and reads the rings again at the screen's resolution
   for the stretch in view once the view holds still; a zoomed figure is the view, its caption saying
   how many sections are in it at what zoom.
+  **Genomes and contigs are put in the reader's own order by dragging them along the circle** — a
+  genome among the genomes, by its arc or its band, and a contig among its own genome's contigs only,
+  a bar marking where it will land and Escape putting it back — and **every map of the file follows**,
+  the squares included, with the Genomes and Contigs cards, the Genomes table, the ticked genomes and
+  the `<` `>` steps. An order rather than an edit: the file is read as it is stored, the order is kept
+  per file by name, carried by a workspace and a share link, and the Map card's `order` row puts the
+  file's order back.
   The Aesthetics column drives it as it drives the square and the lanes: the names follow the Map
   card's `labels` (off by default, as for the square), with the square's rule — every name up to
   fifty, past that only contigs of 50 kb or more, and never a thousand genomes', whose room the

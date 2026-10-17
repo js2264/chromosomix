@@ -50,7 +50,7 @@ import {
   type DerivePresentation,
   type FramedRegion,
   type TurnPresentation,
- type FigureSubject} from './MatrixPanel'
+ type FigureSubject, type PanelOrder} from './MatrixPanel'
 import { axisRegion } from './mapSelection'
 import { blockSummary } from './mapSummary'
 import { icon, iconButton } from './icons'
@@ -146,6 +146,8 @@ export interface RegionViewProps {
   turn?: TurnPresentation
   /** The map drawn round (§7.6), built by the session like the turn. */
   round?: CirclePresentation
+  /** The reader's order of the file's genomes and contigs (§7.6), which the map is drawn in. */
+  order?: PanelOrder
   /**
    * A new selection. The second region makes the block rectangular — the
    * contacts *between* two contigs rather than within one (§5.3).
@@ -541,6 +543,7 @@ export class RegionView {
       ...(props.derive === undefined ? {} : { derive: props.derive }),
       ...(props.turn === undefined ? {} : { turn: props.turn }),
       ...(props.round === undefined ? {} : { round: props.round }),
+      ...(props.order === undefined ? {} : { order: props.order }),
       scores: {
         choices: scoreChoices(props),
         current: scoreFor(scoreChoices(props), props).id,

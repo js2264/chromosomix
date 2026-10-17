@@ -44,7 +44,7 @@ import type { Cancellable, ReaderClient } from '../worker/client'
 import { isCancellation } from '../worker/client'
 import { button, el, fmt, titleWhenCut } from './dom'
 import type { PanelSeed, ScaleState } from './GenomeView'
-import { MatrixPanel, type AnnotationContext, type FigureSubject} from './MatrixPanel'
+import { MatrixPanel, type AnnotationContext, type FigureSubject, type PanelOrder } from './MatrixPanel'
 import { blockSummary } from './mapSummary'
 import type { CirclePresentation } from './CircleView'
 import { SearchBox, locusPlaceholder } from './SearchBox'
@@ -179,6 +179,8 @@ export interface OverviewProps {
    * contigs grouped by genome at contig level — the cells this scan summed.
    */
   round?: CirclePresentation
+  /** The reader's order of the file's genomes and contigs (§7.6), which the map is drawn in. */
+  order?: PanelOrder
 }
 
 export class Overview {
@@ -231,8 +233,6 @@ export class Overview {
    * `groups`, kept because it is what a click resolves through.
    */
   private axisGenomes: string[] | undefined
-  /** Slot index → the unit that slot starts at; see {@link openCell}. */
-  private unitNames: string[] | null = null
 
   constructor(private readonly props: OverviewProps) {
     // The state gets the last word except where the offered route is a sidecar
@@ -283,6 +283,7 @@ export class Overview {
       ...(props.annotations === undefined ? {} : { annotations: props.annotations }),
       ...(props.caption === undefined ? {} : { caption: props.caption }),
       ...(props.round === undefined ? {} : { round: props.round }),
+      ...(props.order === undefined ? {} : { order: props.order }),
       detachedControls: true,
       hideTitle: true,
       initial: props.scale,
@@ -305,8 +306,10 @@ export class Overview {
       // anchor rather than the block label, because at contig level the label
       // is a contig and the genome behind it is what this view is read by.
       onSelectRegion: (selection) => {
-        const rows = this.axisGenomes?.[selection.anchor.row] ?? selection.rows.label
-        const cols = this.axisGenomes?.[selection.anchor.col] ?? selection.cols.label
+        // The genome under the anchor as drawn: in the reader's order (§7.6) a
+        // slot is no longer where the scan put it.
+        const rows = this.panel.genomeAt('rows', selection.anchor.row) ?? selection.rows.label
+        const cols = this.panel.genomeAt('cols', selection.anchor.col) ?? selection.cols.label
         // Across two genomes it is the pair — the phage-host and HGT block this
         // view exists to find — and within one it is that genome.
         if (rows === cols) this.props.onOpenGenome(rows)
@@ -390,17 +393,18 @@ export class Overview {
     groups: { row?: AxisGroup; col?: AxisGroup },
   ): void {
     if (groups.row === undefined || groups.col === undefined) return
-    const names = this.unitNames
+    const rowGenome = this.panel.genomeAt('rows', cell.row)
+    const colGenome = this.panel.genomeAt('cols', cell.col)
     const target = overviewTarget({
       level: this.level,
-      rowLabel: unitAt(names, groups.row),
-      colLabel: unitAt(names, groups.col),
-      // Indexed by slot, and a slot is snapped to a genome boundary, so a
-      // pooled row still belongs to exactly one genome — which is what makes
-      // the genome route survive pooling unchanged.
-      ...(this.axisGenomes === undefined
-        ? {}
-        : { rowGenome: this.axisGenomes[cell.row], colGenome: this.axisGenomes[cell.col] }),
+      rowLabel: unitAt(groups.row),
+      colLabel: unitAt(groups.col),
+      // The genome run under the cell as drawn. A slot is snapped to a genome
+      // boundary, so a pooled row still belongs to exactly one genome — which
+      // is what makes the genome route survive pooling unchanged — and the run
+      // is asked rather than a list by slot, since in the reader's order
+      // (§7.6) a slot is no longer where the scan put it.
+      ...(rowGenome === undefined || colGenome === undefined ? {} : { rowGenome, colGenome }),
     })
     switch (target.kind) {
       case 'genome':
@@ -583,7 +587,6 @@ export class Overview {
     this.summary.replaceChildren(
       ...blockSummary(0, toMatrixResult(result), result.level === 'genome' ? 'genome' : 'contig'),
     )
-    this.unitNames = result.unitNames
     this.panelHost.classList.remove('hidden')
     this.gate.classList.add('hidden')
     this.panel.setData(toMatrixResult(result), 'Whole metagenome')
@@ -595,12 +598,13 @@ export class Overview {
  *
  * Once an axis is pooled these are two different strings. A pooled row reads
  * `NODE_7431 +15` — which is what a reader needs to see, and is not something to
- * hand to a range parser. `unitNames` holds the contig or genome each slot
- * *starts* at, indexed by slot, and `AxisGroup.start` is exactly that index. On
- * an unpooled axis the two agree, so the fallback is not a degraded path.
+ * hand to a range parser. {@link toMatrixResult} carries the contig or genome
+ * each slot *starts* at on the run itself, as its `name`, wherever the two
+ * differ; on an unpooled axis they agree. Read off the run rather than a list
+ * by slot, which in the reader's order (§7.6) a slot no longer indexes.
  */
-export function unitAt(names: string[] | null | undefined, group: AxisGroup): string {
-  return names?.[group.start] ?? group.label
+export function unitAt(group: AxisGroup): string {
+  return group.name ?? group.label
 }
 
 /** Where a clicked overview cell leads. */

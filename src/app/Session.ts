@@ -108,7 +108,18 @@ import type {
   TurnPresentation,
 } from '../ui/MatrixPanel'
 import type { CirclePresentation } from '../ui/CircleView'
-import type { CircleResolver } from '../render/circle'
+import { slotCount, type CircleResolver, type CircleUnit } from '../render/circle'
+import type { AxisGenomes } from '../render/blockOrder'
+import {
+  FILE_ORDER,
+  OrderStore,
+  arrange,
+  isFileOrder,
+  withContigsMoved,
+  withGenomesMoved,
+  type ReaderOrder,
+  type Side,
+} from '../state/readerOrder'
 import { circleResolverFrom } from './circleIndex'
 import { binsForLength } from '../analysis/context'
 import { isCancellation, ReaderClient, type Cancellable } from '../worker/client'
@@ -166,7 +177,7 @@ import { metadataIndexFrom, type MetadataIndex } from '../annotations/metaIndex'
 import { summaryOf, type MetaLevel } from '../annotations/metadata'
 import { BookmarkStore, formatRegion, type Bookmark } from '../annotations/bookmarks'
 import { BookmarksCard } from '../ui/BookmarksCard'
-import type { AnnotationContext, BorrowedScale, FigureSubject, MatrixPanel } from '../ui/MatrixPanel'
+import type { AnnotationContext, BorrowedScale, FigureSubject, MatrixPanel, PanelOrder } from '../ui/MatrixPanel'
 import { ContigsTable, type CircularColumn, type OriginColumn } from '../ui/ContigsTable'
 import { ErrorView } from '../ui/ErrorView'
 import { FilePicker, firstEntry } from '../ui/FilePicker'
@@ -190,6 +201,7 @@ import {
   GENOME_TICKS,
   MAP_TICKS,
   sequenceCard,
+  type SequenceCardProps,
   type SequenceRow,
 } from '../ui/SequenceCard'
 import { WholeView } from '../ui/WholeView'
@@ -791,6 +803,10 @@ export class Session {
   rendering = new AbortController()
   /** Memoised {@link stepTargets}, keyed on the state object's identity. */
   private stepCache: { state: ViewState; previous: string | null; next: string | null } | null = null
+  /** The reader's order of the open file's genomes and contigs (§7.6), and the file it is kept for. */
+  private orderHeld: { key: string; store: OrderStore; off: () => void } | null = null
+  /** Every contig in the reader's order, kept until the table or the order moves. */
+  private arrangedContigsMemo: { names: string[]; order: ReaderOrder; out: number[] } | null = null
   /**
    * The second file in the lower-left triangle, and everything it takes to
    * hold one: its reader, its gate, its eye, and its carry across a change of
@@ -1477,11 +1493,12 @@ export class Session {
     const state = this.store.state
     const file = this.file
     if (state === null || file === null) return null
+    // `<` and `>` walk the order the lists are in, the reader's (§7.6).
     if (state.view === 'genome' && state.genome !== undefined) {
-      return neighbour(file.displayNames, state.genome, delta)
+      return neighbour(this.arrangedGenomes(), state.genome, delta)
     }
     if (state.view === 'region' && state.region !== undefined && state.region2 === undefined) {
-      const names = this.contigNames()
+      const names = this.arrangedContigNames()
       if (names === null) return null
       const current = contigOf(state.region, names)
       return current === null ? null : neighbour(names, current, delta)
@@ -3046,7 +3063,7 @@ export class Session {
     const file = this.file
     const panel = this.infoPanel
     if (file === null || panel === null) return
-    const rows = scope.kind === 'genomes' ? this.genomeRows() : this.contigRowsOf(scope.genome)
+    const rows = this.metaRows(scope)
     const selection = new SequenceSelection()
     this.sequenceListener?.()
     this.sequenceListener = selection.subscribe(() => this.metaChosen())
@@ -3082,11 +3099,25 @@ export class Session {
               : { uri, view: 'region', region: name, genome: scope.genome },
           ),
         ...(scope.kind === 'genomes' ? GENOME_TICKS : CONTIG_TICKS),
+        // The reader's order moved (§7.6): the rows again, in it.
+        ...this.metaReorder(scope),
       }),
     )
   }
 
-  /** The genomes, in the order the file displays them, `__unbinned__` left out. */
+  /** The rows of a metagenome's card: its genomes, or one genome's contigs, in the reader's order. */
+  private metaRows(scope: MetaScope): SequenceRow[] {
+    return scope.kind === 'genomes' ? this.genomeRows() : this.contigRowsOf(scope.genome)
+  }
+
+  /** What tells a card of genomes or contigs its rows in a new order (§7.6). */
+  private metaReorder(scope: MetaScope): Pick<SequenceCardProps, 'reordered'> {
+    const store = this.orderStore()
+    if (store === null) return {}
+    return { reordered: { subscribe: (listener) => store.subscribe(() => listener(this.metaRows(scope))) } }
+  }
+
+  /** The genomes, in the reader's order (§7.6), `__unbinned__` left out. */
   private genomeRows(): SequenceRow[] {
     const file = this.file
     if (file === null) return []
@@ -3096,11 +3127,23 @@ export class Session {
     if (Array.isArray(names) && lengths !== undefined && !Array.isArray(lengths)) {
       ;(names as string[]).forEach((name, row) => lengthOf.set(name, Number(lengths[row])))
     }
-    return file.displayNames.map((name) => ({ name, length: lengthOf.get(name) ?? 0 }))
+    return this.arrangedGenomes().map((name) => ({ name, length: lengthOf.get(name) ?? 0 }))
+  }
+
+  /** One genome's contigs, in the reader's order (§7.6). */
+  private contigRowsOf(genome: string): SequenceRow[] {
+    const rows = this.fileContigRowsOf(genome)
+    const placed = this.orderStore()?.current.contigs[genome]
+    if (placed === undefined) return rows
+    const byName = new Map(rows.map((row) => [row.name, row]))
+    return arrange(
+      rows.map((row) => row.name),
+      placed,
+    ).map((name) => byName.get(name) as SequenceRow)
   }
 
   /** One genome's contigs, in file order, from the contigs table's `genome_id`. */
-  private contigRowsOf(genome: string): SequenceRow[] {
+  private fileContigRowsOf(genome: string): SequenceRow[] {
     const file = this.file
     const table = file?.contigs?.table
     const genomeNames = file?.genomes.table.data['name']
@@ -5171,7 +5214,7 @@ export class Session {
       // reader now answers with (§27.7).
       const pairs = contigPairs(contigs)
       const file = { names: pairs.map(([name]) => name), lengths: pairs.map(([, length]) => length) }
-      const rows = genome === undefined ? [] : this.contigRowsOf(genome)
+      const rows = genome === undefined ? [] : this.fileContigRowsOf(genome)
       const original =
         genome === undefined ? (this.lens?.edit.original ?? file) : { names: rows.map((row) => row.name), lengths: rows.map((row) => row.length), genome }
       const store = new EditStore(key, original, undefined, file)
@@ -6136,6 +6179,11 @@ export class Session {
         })
       },
       onOpenGroup: (genome) => this.navigate({ uri, view: 'genome', genome }),
+      // An arc carried along the circle moves in the reader's order (§7.6),
+      // which every map and list of the file follows; a genome of the band
+      // over contig sections moves among the genomes.
+      onMoveUnit: (moved, anchor, side) => this.moveUnit(state, moved, anchor, side),
+      onMoveGroup: (moved, anchor, side) => this.moveGenomes([moved], anchor, side),
       // A chord opens the block between its two ends, as an off-diagonal cell
       // does: the pair view of two genomes, the window pair of two contigs.
       onOpenPair: (a, b) => {
@@ -6154,6 +6202,224 @@ export class Session {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // The reader's order (§7.6)
+  // -------------------------------------------------------------------------
+
+  /**
+   * The reader's order of the open file's genomes and contigs, kept per file
+   * in session memory (`state/readerOrder.ts`) — `null` on a file with no
+   * genomes, and where the circle, the one place it is set, is not offered.
+   */
+  private orderStore(): OrderStore | null {
+    const file = this.file
+    if (file === null || !file.info.hasGenomes || !devFeature('circle')) return null
+    const key = this.memoryKey(file.uri)
+    if (this.orderHeld?.key !== key) {
+      this.orderHeld?.off()
+      const store = new OrderStore(key)
+      this.orderHeld = { key, store, off: store.subscribe(() => this.orderMoved()) }
+    }
+    return this.orderHeld.store
+  }
+
+  /**
+   * What a map's panel draws its block in: the order now, told when it moves,
+   * and the genome each axis is where the block does not say — one genome's
+   * map, a pair's two.
+   */
+  private panelOrder(axes?: AxisGenomes): { order?: PanelOrder } {
+    const store = this.orderStore()
+    if (store === null) return {}
+    return {
+      order: {
+        ranks: () => store.currentRanks,
+        subscribe: (listener) => store.subscribe(listener),
+        ...(axes === undefined ? {} : { axes }),
+        moved: () => !isFileOrder(store.current),
+        reset: () => this.resetOrder(),
+      },
+    }
+  }
+
+  /**
+   * The genome each axis of a region view is: a region that names a genome is
+   * that genome, and a window is in the genome it was opened from.
+   */
+  private regionAxes(state: ViewState): AxisGenomes | undefined {
+    const names = this.file?.displayNames ?? []
+    const rows = state.region !== undefined && names.includes(state.region) ? state.region : state.genome
+    const cols =
+      state.region2 === undefined ? rows : names.includes(state.region2) ? state.region2 : undefined
+    if (rows === undefined && cols === undefined) return undefined
+    return { ...(rows === undefined ? {} : { rows }), ...(cols === undefined ? {} : { cols }) }
+  }
+
+  /**
+   * The order the lead's map is drawn in, for the deck's companions to draw
+   * theirs in (§7.6), with the lead's axes: a companion follows the lead's view.
+   *
+   * @internal SessionDeck hands it to every map of the deck.
+   */
+  leadOrder(): PanelOrder | undefined {
+    const state = this.store.state
+    if (state === null) return undefined
+    const axes =
+      state.view === 'genome'
+        ? { rows: state.genome, cols: state.genome }
+        : state.view === 'pair'
+          ? { rows: state.genome, cols: state.genome2 }
+          : state.view === 'region'
+            ? this.regionAxes(state)
+            : undefined
+    return this.panelOrder(axes).order
+  }
+
+  /** The file's genomes as the reader has them, `__unbinned__` left out. */
+  private arrangedGenomes(): string[] {
+    const file = this.file
+    if (file === null) return []
+    return arrange(file.displayNames, this.orderStore()?.current.genomes)
+  }
+
+  /**
+   * Every contig of the file in the reader's order, as rows of the contigs
+   * table: genome by genome as they are placed, and each genome's in its own —
+   * the contigs of no genome after, as the file has them. Rows rather than
+   * names, so two contigs of one name in two genomes each keep their own.
+   * `null` before the table is read, and where the order is the file's.
+   */
+  private arrangedContigRowList(): number[] | null {
+    const table = this.file?.contigs?.table
+    const order = this.orderStore()?.current ?? FILE_ORDER
+    if (table === undefined || isFileOrder(order)) return null
+    const names = table.data['name']
+    const memo = this.arrangedContigsMemo
+    if (memo !== null && memo.names === names && memo.order === order) return memo.out
+    const ids = table.data['genome_id']
+    const genomeNames = this.file?.genomes.table.data['name']
+    if (!Array.isArray(names) || ids === undefined || Array.isArray(ids) || !Array.isArray(genomeNames)) return null
+    const byGenome = new Map<string, number[]>()
+    for (let row = 0; row < names.length; row++) {
+      const genome = (genomeNames as string[])[Number(ids[row])] ?? ''
+      const rows = byGenome.get(genome)
+      if (rows === undefined) byGenome.set(genome, [row])
+      else rows.push(row)
+    }
+    const out: number[] = []
+    for (const genome of this.arrangedGenomes()) {
+      const rows = byGenome.get(genome)
+      if (rows === undefined) continue
+      byGenome.delete(genome)
+      const placed = order.contigs[genome]
+      if (placed === undefined) {
+        out.push(...rows)
+        continue
+      }
+      // Within one genome a name is one contig.
+      const rowOf = new Map(rows.map((row) => [(names as string[])[row], row]))
+      for (const name of arrange(rows.map((row) => (names as string[])[row]), placed)) {
+        const row = rowOf.get(name)
+        if (row !== undefined) out.push(row)
+      }
+    }
+    for (const rows of byGenome.values()) out.push(...rows)
+    this.arrangedContigsMemo = { names: names as string[], order, out }
+    return out
+  }
+
+  /** Every contig's name in the reader's order — {@link arrangedContigRowList}'s, as names. */
+  private arrangedContigNames(): string[] | null {
+    const names = this.contigNames()
+    const rows = this.arrangedContigRowList()
+    return names === null || rows === null ? names : rows.map((row) => names[row])
+  }
+
+  /** The contigs table's rows in the reader's order, where it is not the file's. */
+  private arrangedContigRows(data: { table: { data: Record<string, unknown> } }): { rows?: number[] } {
+    const rows = this.arrangedContigRowList()
+    const names = data.table.data['name']
+    return rows !== null && Array.isArray(names) && rows.length === names.length ? { rows } : {}
+  }
+
+  /**
+   * The order moved, from a drag on any map of the file: every map's panel
+   * follows on its own subscription, and so does the card of genomes or
+   * contigs; what the session keeps from them follows here — the steps `<` and
+   * `>` take, and the order a tick on the card draws its genomes in.
+   */
+  private orderMoved(): void {
+    this.stepCache = null
+    if (this.metaScope !== null) this.metaOrder = this.metaRows(this.metaScope).map((row) => row.name)
+  }
+
+  /** Genomes put beside another (§7.6): what a drop on the circle, or on a line, does. */
+  private moveGenomes(genomes: readonly string[], anchor: string, side: Side): void {
+    const file = this.file
+    const store = this.orderStore()
+    if (file === null || store === null) return
+    store.set(withGenomesMoved(store.current, file.displayNames, genomes, anchor, side))
+  }
+
+  /**
+   * Contigs put beside another of their genome's (§7.6), never into another
+   * genome — and nothing moved before the contigs table can say the genome's
+   * contigs, which an order is kept against.
+   */
+  private moveContigs(genome: string, contigs: readonly string[], anchor: string, side: Side): void {
+    const store = this.orderStore()
+    if (store === null) return
+    const file = this.fileContigRowsOf(genome).map((row) => row.name)
+    const known = new Set(file)
+    if (!known.has(anchor) || !contigs.every((name) => known.has(name))) return
+    store.set(withContigsMoved(store.current, genome, file, contigs, anchor, side))
+  }
+
+  /**
+   * An arc dropped beside another on the circle (§7.6): a genome — or a slot of
+   * several, where the file has more genomes than the picture has cells — among
+   * the genomes, and a contig, or every contig of a cell, among its genome's.
+   * Before a neighbour is before the first of it in the reader's order, after it
+   * after its last.
+   */
+  private moveUnit(state: ViewState, moved: CircleUnit, anchor: CircleUnit, side: Side): void {
+    const beside = (names: readonly string[], order: readonly string[]): string | undefined => {
+      const rank = new Map(order.map((name, i) => [name, i]))
+      const ranked = [...names].sort((a, b) => (rank.get(a) ?? 0) - (rank.get(b) ?? 0))
+      return side === 'before' ? ranked[0] : ranked[ranked.length - 1]
+    }
+    if (moved.kind === 'genome') {
+      const to = beside(this.unitGenomes(anchor), this.arrangedGenomes())
+      if (to !== undefined) this.moveGenomes(this.unitGenomes(moved), to, side)
+      return
+    }
+    const genome = moved.genome ?? state.genome
+    if (genome === undefined || (anchor.genome ?? genome) !== genome) return
+    const contigsOf = (unit: CircleUnit): string[] =>
+      unit.sequences.length > 0 ? unit.sequences.map((sequence) => sequence.name) : [unit.name]
+    const to = beside(
+      contigsOf(anchor),
+      this.contigRowsOf(genome).map((row) => row.name),
+    )
+    if (to !== undefined) this.moveContigs(genome, contigsOf(moved), to, side)
+  }
+
+  /**
+   * The genomes an arc of genomes is: its own, or a pooled slot's — the slot's
+   * first and the ones after it in the file, which the worker pools in order.
+   */
+  private unitGenomes(unit: CircleUnit): string[] {
+    const count = slotCount(unit.label)
+    const names = this.file?.displayNames ?? []
+    const from = count > 1 ? names.indexOf(unit.name) : -1
+    return from < 0 ? [unit.name] : names.slice(from, from + count)
+  }
+
+  /** Every genome and contig back where the file has it. */
+  private resetOrder(): void {
+    this.orderStore()?.set(FILE_ORDER)
+  }
+
   /**
    * The tables' answers about a circle's sections, asked afresh on every call.
    *
@@ -6169,14 +6435,19 @@ export class Session {
       const held = this.circleIndex
       if (held !== null && held.genomes === file.genomes && held.contigs === file.contigs) return held.resolver
       if (file.contigs === null) void this.awaitCircleContigs()
-      const resolver = circleResolverFrom(file.genomes.table, file.genomes.display, file.contigs?.table ?? null)
+      const resolver = circleResolverFrom(
+        file.genomes.table,
+        file.genomes.display,
+        file.contigs?.table ?? null,
+        () => this.orderStore()?.current ?? null,
+      )
       this.circleIndex = { genomes: file.genomes, contigs: file.contigs, resolver }
       return resolver
     }
     return {
       genomeLength: (genome) => now().genomeLength?.(genome),
       genomeSequences: (genome) => now().genomeSequences?.(genome) ?? null,
-      slotSequences: (first, next) => now().slotSequences?.(first, next) ?? null,
+      slotSequences: (first, count) => now().slotSequences?.(first, count) ?? null,
       contigLength: (name) => now().contigLength?.(name),
     }
   }
@@ -7216,6 +7487,8 @@ export class Session {
     if (file === null) return
     const view = new GenomesTable({
       data: file.genomes,
+      // Its own order unsorted, the reader's (§7.6).
+      order: this.arrangedGenomes(),
       persistence: this.tableMemory(state.uri, 'genomes'),
       onOpenGenome: (genome) => this.navigate({ uri: state.uri, view: 'genome', genome }),
       onOpenSelection: (names) =>
@@ -7422,6 +7695,9 @@ export class Session {
     const assembly = cooler ? this.assemblyOfFile(file) : null
     const view = new ContigsTable({
       data,
+      // In the reader's order (§7.6): genome by genome as placed, each one's
+      // contigs in its own — the file's on a cooler, which has no order to keep.
+      ...(cooler ? {} : this.arrangedContigRows(data)),
       hideColumns: cooler ? ['genome_id'] : [],
       title: cooler ? 'Chromosomes' : 'Contigs',
       // The same word the crumb and the title use, inside the table too: its
@@ -7551,6 +7827,7 @@ export class Session {
           derive: this.derivePresentation(state),
           turn: this.turnPresentation(state),
           round: this.circleFor(state),
+          ...this.panelOrder(),
           onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
           onOpenRegion: (region, region2) =>
             this.navigate({
@@ -7628,6 +7905,7 @@ export class Session {
       derive: this.derivePresentation(state),
       turn: this.turnPresentation(state),
       round: this.circleFor(state),
+      ...this.panelOrder(),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
       // A selection of several genomes is divided and labelled by genome, so an
       // axis label here is a MAG and the gesture on it is the one the genomes
@@ -7728,6 +8006,7 @@ export class Session {
       derive: this.derivePresentation(state),
       turn: this.turnPresentation(state),
       round: this.circleFor(state),
+      ...this.panelOrder({ rows: state.genome, cols: state.genome }),
       ...(this.circularPresentation(state) === undefined
         ? {}
         : { circular: this.circularPresentation(state) }),
@@ -7760,7 +8039,7 @@ export class Session {
       binsize: file.info.binsize ?? 1,
       rungs: file.info.entries,
       ...this.pooledProps(state),
-      genomeNames: file.displayNames,
+      genomeNames: this.arrangedGenomes(),
       balance: this.balanceOf(state),
       value: this.valueOf(state),
       ...this.scoreProps(state),
@@ -7768,6 +8047,7 @@ export class Session {
       derive: this.derivePresentation(state),
       turn: this.turnPresentation(state),
       round: this.circleFor(state),
+      ...this.panelOrder({ rows: state.genome, cols: state.genome2 }),
       rowGenome: state.genome,
       colGenome: state.genome2,
       level: matrixLevel(state),
@@ -7821,6 +8101,7 @@ export class Session {
       derive: this.derivePresentation(state),
       turn: this.turnPresentation(state),
       round: this.circleFor(state),
+      ...this.panelOrder(this.regionAxes(state)),
       ...(this.circularPresentation(state) === undefined
         ? {}
         : { circular: this.circularPresentation(state) }),
@@ -7909,8 +8190,9 @@ export class Session {
           ...(edgeListUrl === undefined ? {} : { edgeListUrl }),
           level,
           scale: this.seedOf(state),
-          genomeNames: file.displayNames,
+          genomeNames: this.arrangedGenomes(),
           round: this.circleFor(state),
+          ...this.panelOrder(),
           onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
           onOpenPair: (a, b) =>
             this.navigate({ uri: file.uri, view: 'pair', genome: a, genome2: b }),

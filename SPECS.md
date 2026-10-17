@@ -1062,7 +1062,9 @@ narrower than 60rem the last group goes under the first, without its divider, ra
 bar. An embed has no header and no buttons for these (§21).
 
 `<` and `>` step to the neighbouring genome, in the table's order, on a genome view, and to the
-neighbouring sequence, in the file's own order, on a region and in the 1D browser (§5.8); the `‹ ›`
+neighbouring sequence, in the file's own order, on a region and in the 1D browser (§5.8) — a
+metagenome's genomes and contigs in the order the reader has dragged them into, where they have
+(§7.6); the `‹ ›`
 beside a title is the same two keys as buttons (§5.4). A `contig × contig` block has two axes and no
 single neighbour, and does not step. They were `[` and `]`, which a French PC types with AltGr — a
 third level, so never a shortcut (§26.6) — and a French Mac with ⇧⌥. Either half of the key the
@@ -2718,7 +2720,8 @@ the same cells, read once, at the grid the square holds — so turning it on rea
 off is immediate, and the square and the circle never disagree about what the block says.
 **Built**: `render/circle.ts` (the sections, the chords, the geometry, the hit test),
 `render/circleRings.ts` (the rings), `ui/CircleView.ts` (the canvas, the hover, the clicks, the
-zoom, the drag), and the toggle and rows on the Map card. **Drawn here, not by a circos library**: the ones
+zoom, the drags), `state/readerOrder.ts` and `render/blockOrder.ts` (the reader's order, below), and
+the toggle and rows on the Map card. **Drawn here, not by a circos library**: the ones
 there are (circos.js, BioCircos, d3's chord layout) draw SVG — a node a ribbon at 3,000 chords and a
 node a bin at 4,096 sections — which the figure's vector page (§16.5) does not take, and the parts
 that make this the map's circle rather than a chart of it — the block's own cells, the hit test, the
@@ -2735,7 +2738,8 @@ reason, as it is on a block of fewer than two sections.
 **Three doors, one setting.** The Map card's *picture* row carries the toggle — the orbit mark, after
 the refit, lit while the circle is drawn (§26.3) — and while it is lit the card says only what the
 circle answers to: the transform and the colours stay, because they colour the chords, and three rows
-of the circle's own appear, `sections`, `chords` and `tracks`, while the square's — its other picture toggles,
+of the circle's own appear, `sections`, `chords` and `tracks` — and `order`, square or round, once
+the reader has moved a genome or a contig (below) — while the square's — its other picture toggles,
 the score, the despeckle, the clip, the comparison and the level — step aside and come back as they
 were. Its `overlays` row stays, with the four the circle reads (`CIRCLE_OPTIONS`): `labels` names the
 sections, `legend` is the key, `crosshair` the guide line through the rings and `tooltip` the card;
@@ -2805,9 +2809,10 @@ its middle.
 `/pixels` column by its name — over the ramp from its floor to its strongest, in counts, and how many
 chords are drawn of how many there are. It stands beside the circle where the column is wide enough
 and in its corner where it is not, and under it, on hover, the gestures nothing on the picture
-announces, in two lines: *Scroll to zoom* — zoomed, *Drag to pan; double-click to fit* — and *Click an
-arc or a chord to open it*, or, with rings, *Click to open; drag a ring by its name to move it* (with
-the names off, *at the top*). The `legend` overlay turns it off, on screen and in the figure, as it
+announces: *Scroll to zoom* — zoomed, *Drag to pan; double-click to fit*, or *Drag off the arcs to
+pan* where an arc is carried (below) — then *Click an arc or a chord to open it*, or, with rings,
+*Click to open; drag a ring by its name to move it* (with the names off, *at the top*), and *Drag an
+arc along the circle to reorder*. The `legend` overlay turns it off, on screen and in the figure, as it
 does the square's; the hint then stands in the corner, and the caption still states the ramp's two
 ends.
 
@@ -2832,8 +2837,46 @@ overlay turns the card off.
 (drawn round, the setting being a reading), a contig's arc its window, a genome's band that genome, a
 chord between two genomes the pair view and a chord between two contigs the two windows. A click is
 held back for the double click's window, as the square's is, so the second click of a fit does not
-land after the first has opened something. A press that travels opens nothing: on a ring's name it
-carries the ring (below), and elsewhere on a zoomed picture it pans.
+land after the first has opened something. A press that travels opens nothing: on an arc it carries
+the arc, on a ring's name the ring (both below), and elsewhere on a zoomed picture it pans.
+
+**The reader's order.** An arc is carried **along the circle** to another place: a genome among the
+genomes, a genome's band — over contig sections — among the genomes, and a contig **among its own
+genome's contigs only**, which a circle of several genomes says in the tooltip, *Within* the genome:
+which genome a contig is in is the binning's, and moving one into another is the reference editor's
+*send* (§27.10), which this is not. While the hand is down the picture keeps its order — the arc lit
+with its partners and edged in the accent, a bar in the accent across the sections in the gap it
+would land in, whichever gap's edge is nearest the hand's angle at any radius (`sectionDrop`), and
+beside the hand *Before* or *After* its new neighbour, or *Stays where it is* — and let go, the arc
+takes that place; Escape puts it back, and a press that never travelled is the click it began as.
+**An order, not an edit**: the file is still read as it is stored, genome then length (C4), and what
+moves is where each whole genome, and each whole contig within its genome, is drawn and listed
+(`ReaderOrder`, `state/readerOrder.ts`). Kept per file in session memory beside the file's other
+choices (`map:order`), so a reload, a saved workspace and a share link carry it (§5.6) — **by name**,
+so one opened against a file with a genome more or fewer still puts the rest where the reader put
+them, whatever it names that the file does not have dropped and whatever it does not name after the
+rest, in the file's order. A move is said beside a neighbour, before or after it, which is what a
+picture of some of the genomes can say of all of them: a circle of five ticked genomes knows the one
+it was dropped beside, not where that one is among a thousand.
+
+**One order everywhere.** Every map of the file is drawn in it — the circle, and **every square**: the
+whole metagenome at its three levels, ticked genomes and contigs, one genome's contigs, a pair's two
+axes, a window's — by moving the block's whole runs, nothing read again (`orderBlock`,
+`render/blockOrder.ts`): a genome's run with the contigs inside it, each run's arithmetic origin
+moved with it, so the labels, the dividers, the readout, the lanes, a click and a box, which all
+resolve through the run they are in, still name the right place, and an O/E still measures distance
+within one run. A deck's companions follow the first map's order. The lists follow too: the Genomes
+card and a genome's Contigs card (§5.8) — their rows put in the new order in place, the ticks, the
+filter being typed and the scroll kept — the Genomes table's rows before a column is sorted, the
+genomes a tick draws, the steps `<` and `>` take (§5.5), and a circle's contigs along each genome's
+arc, which its rings are drawn against. What a run cannot do is split: a cell holding several small
+contigs, merged or pooled, moves as one with the first of them the reader placed, and a pooled slot
+of genomes with its first genome. Three things stay in the file's order, each for its reason: a task
+(§18) reads the block **as read**, since it indexes it by absolute bin; a block drawn in the reader's
+order reads no finer window as a zoom settles (§2), since a window of the picture is no longer a
+stretch of the file's bins; and a block of more than 64 million cells (`ORDER_COPY_CELLS`) is drawn as
+read rather than held twice. The Map card's `order` row appears, on the square and the circle, once
+anything has moved: *file order* puts every genome and contig back where the file has them.
 
 **It zooms as the square does** (§7.2). The wheel and a pinch zoom about the pointer, up to 200 times
 (`CIRCLE_MAX_ZOOM`), and zoomed, a drag pans, a sideways scroll or ⌘ with the wheel slides, and a
@@ -2855,7 +2898,8 @@ that stretch of the axis at that resolution, beside the whole circle's read so n
 other, a read a stretch where the view straddles twelve o'clock or shows two sides of the circle, and
 a column put in the finer bins. Zoomed, the circle runs under the key, which stands on a card of the
 page's colour, as the hint does. A new block of the same sections — another balance, another
-transform — keeps the zoom; other sections are another circle, drawn whole.
+transform, the same sections in the reader's new order — keeps the zoom, so a reader zoomed into a
+genome can move its contigs one after another; other sections are another circle, drawn whole.
 
 **The rings are the tracks the map draws** — a signal (bigWig, bedGraph, a sequence's GC, an
 alignment's coverage) in its lane's mode, heatmap, line, points, bar or area; features (BED, GTF,

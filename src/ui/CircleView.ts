@@ -50,6 +50,7 @@ import {
   NO_FOCUS,
   TOP,
   anglesInView,
+  annulusPath,
   arcCurve,
   carryRadius,
   namesInView,
@@ -73,6 +74,7 @@ import {
   paintLabels,
   paintSections,
   partnerWeights,
+  sectionDrop,
   type ChordLayout,
   type CircleCut,
   type CircleFocus,
@@ -83,6 +85,7 @@ import {
   type CirclePalette,
   type CircleResolver,
   type CircleUnit,
+  type DropSide,
 } from '../render/circle'
 import {
   binAt,
@@ -141,6 +144,15 @@ export interface CirclePresentation {
   cut?: CircleCut
   /** The reader chose the other cut; absent where the panel only draws. */
   onCut?(cut: CircleCut): void
+  /**
+   * A section carried along the circle and let go beside another (§7.6): a
+   * genome among the genomes, a contig among its own genome's. The reader's
+   * order takes the move, and every map and list of the file follows it.
+   * Absent where there is no order to set — the picture is then only drawn.
+   */
+  onMoveUnit?(moved: CircleUnit, anchor: CircleUnit, side: DropSide): void
+  /** A genome of the band over contig sections carried beside another, by name. */
+  onMoveGroup?(moved: string, anchor: string, side: DropSide): void
 }
 
 export interface CircleViewOptions {
@@ -226,14 +238,16 @@ const KEY_FONT = '10px system-ui, sans-serif'
  * The ring's line names its grip as it is drawn — the name, or with the names
  * off the ring's end at twelve o'clock.
  */
-function hintLines(zoomed: boolean, rings: boolean, named: boolean): string[] {
+function hintLines(zoomed: boolean, rings: boolean, named: boolean, reorder: boolean): string[] {
   return [
-    zoomed ? 'Drag to pan; double-click to fit' : 'Scroll to zoom',
+    // Zoomed, a drag that starts on an arc carries it: the pan is everywhere else.
+    zoomed ? (reorder ? 'Drag off the arcs to pan; double-click to fit' : 'Drag to pan; double-click to fit') : 'Scroll to zoom',
     !rings
       ? 'Click an arc or a chord to open it'
       : named
         ? 'Click to open; drag a ring by its name to move it'
         : 'Click to open; drag a ring at the top to move it',
+    ...(reorder ? ['Drag an arc along the circle to reorder'] : []),
   ]
 }
 
@@ -281,6 +295,27 @@ interface RingDrag {
   start: { x: number; y: number }
 }
 
+/**
+ * A section carried along the circle (§7.6): a genome among the genomes, a
+ * contig among its genome's, or a genome of the band over contig sections. The
+ * picture keeps its order while the hand is down — the section lit, and a mark
+ * in the gap it would land in — and the reader's order takes the move when the
+ * hand lets go. A press that never travelled is the click it began as.
+ */
+interface Carry {
+  kind: 'unit' | 'group'
+  /** The section's index in {@link model}, or the genome's in its band. */
+  index: number
+  /** The circle it was taken from: one rebuilt under the hand is not it. */
+  model: CircleModel
+  pointer: number
+  x: number
+  y: number
+  moved: boolean
+  /** Where it lands if let go now; `null` where it is, or beside itself. */
+  drop: { index: number; side: DropSide; at: number } | null
+}
+
 /** A binned ring, kept until its inputs change. */
 interface HeldRing {
   key: unknown
@@ -310,6 +345,7 @@ export class CircleView {
   private focus: CircleFocus = NO_FOCUS
   private drag: RingDrag | null = null
   private pending: { id: string; x: number; y: number; pointer: number } | null = null
+  private carry: Carry | null = null
   /**
    * The zoom (§7.6): how many times the picture's radius the circle is drawn
    * at, and where its middle is, from the middle of the box. 1 and nowhere is
@@ -541,9 +577,10 @@ export class CircleView {
     this.held.clear()
     this.detail = null
     this.focus = NO_FOCUS
-    // The same sections read again — another balance, another transform —
-    // are the same circle, and keep the zoom the reader is in; other sections
-    // are another circle, drawn whole.
+    // The same sections read again — another balance, another transform, or
+    // another order the reader dragged them into (§7.6) — are the same circle,
+    // and keep the zoom the reader is in; other sections are another circle,
+    // drawn whole.
     if (before === null || this.model === null || !sameSections(before, this.model)) this.resetZoom()
     this.schedule()
   }
@@ -1171,7 +1208,7 @@ export class CircleView {
     this.describeGeometry()
     const at = this.rehover
     this.rehover = null
-    if (at !== null && this.drag === null && this.press?.panning !== true) this.hover(at)
+    if (at !== null && this.drag === null && this.carry?.moved !== true && this.press?.panning !== true) this.hover(at)
   }
 
   /**
@@ -1320,6 +1357,7 @@ export class CircleView {
     this.paintRingNames(ctx, geometry, palette, live)
     this.paintKey(ctx, chords, palette)
     if (live && this.drag?.moved === true) this.paintHeld(ctx, geometry, palette)
+    if (live && this.carry?.moved === true) this.paintCarry(ctx, geometry, palette, this.carry)
   }
 
   /**
@@ -1337,7 +1375,7 @@ export class CircleView {
       ? `${Math.max(0, Math.min(240, Math.floor(left - KEY_INSET)))}px`
       : `${Math.max(0, Math.floor(this.size.width - left - KEY_INSET))}px`
     this.hint.style.textAlign = fromRight ? 'right' : ''
-    const lines = hintLines(this.zoom > 1, rings, getPlotOptions().text)
+    const lines = hintLines(this.zoom > 1, rings, getPlotOptions().text, this.reorderable())
     const text = lines.join('\n')
     if (this.hint.dataset.text !== text) {
       this.hint.dataset.text = text
@@ -1641,7 +1679,7 @@ export class CircleView {
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     const geometry = this.geometry
-    const held = this.drag !== null || this.resize?.moved === true
+    const held = this.drag !== null || this.resize?.moved === true || this.carry?.moved === true
     if (at === null || geometry === null || held || !getPlotOptions().crosshair) return
     const dx = at.x - geometry.cx
     const dy = at.y - geometry.cy
@@ -1702,6 +1740,7 @@ export class CircleView {
         this.press = null
         if (this.drag !== null) this.endDrag(false)
         if (this.resize !== null) this.endResize(false)
+        if (this.carry !== null) this.endCarry(false)
         this.cancelClick()
         this.pinch = this.pinchNow()
         return
@@ -1736,6 +1775,10 @@ export class CircleView {
         }
         return
       }
+      // An arc, or a genome of the band, is its own handle (§7.6): carried, it
+      // moves in the reader's order — before a pan, as a ring's name is — and
+      // let go where it was pressed, it is the click it began as.
+      this.carry = this.carryFrom(this.hitAt(at), event.pointerId, at)
       this.press = { pointer: event.pointerId, x: at.x, y: at.y, offset: { ...this.offset }, panning: false }
     })
     canvas.addEventListener('pointermove', (event) => {
@@ -1750,6 +1793,13 @@ export class CircleView {
         if (!resize.moved && Math.hypot(at.x - resize.x, at.y - resize.y) < DRAG_SLOP) return
         this.moveResize(at)
         return
+      }
+      const carry = this.carry
+      if (carry !== null && carry.pointer === event.pointerId) {
+        if (carry.moved || Math.hypot(at.x - carry.x, at.y - carry.y) >= DRAG_SLOP) {
+          this.moveCarry(carry, at)
+          return
+        }
       }
       const pending = this.pending
       if (pending !== null && this.drag === null && pending.pointer === event.pointerId) {
@@ -1772,7 +1822,15 @@ export class CircleView {
       this.hover(at)
     })
     canvas.addEventListener('pointerleave', () => {
-      if (this.drag !== null || this.press?.panning === true || this.pinch !== null || this.resize !== null) return
+      if (
+        this.drag !== null ||
+        this.press?.panning === true ||
+        this.pinch !== null ||
+        this.resize !== null ||
+        this.carry?.moved === true
+      ) {
+        return
+      }
       this.drawGuide(null)
       this.setFocus(NO_FOCUS)
       this.setGripHover(null)
@@ -1801,6 +1859,14 @@ export class CircleView {
         this.released(at)
         return
       }
+      const carry = this.carry
+      if (carry !== null && carry.pointer === event.pointerId && carry.moved) {
+        this.endCarry(true)
+        this.rehover = at
+        return
+      }
+      // Pressed and let go where it was: the click below.
+      this.carry = null
       const pending = this.pending
       this.pending = null
       if (this.drag !== null) {
@@ -1822,6 +1888,7 @@ export class CircleView {
       this.pending = null
       if (this.drag !== null) this.endDrag(false)
       if (this.resize !== null) this.endResize(false)
+      if (this.carry !== null) this.endCarry(false)
       if (this.press?.panning === true) canvas.style.cursor = ''
       this.press = null
     }
@@ -1856,6 +1923,10 @@ export class CircleView {
       if (this.drag !== null) {
         event.preventDefault()
         this.endDrag(false)
+      } else if (this.carry?.moved === true) {
+        // The arc goes back where it was, and the press is no click.
+        event.preventDefault()
+        this.endCarry(false)
       } else if (this.resize?.moved === true) {
         event.preventDefault()
         this.endResize(false)
@@ -2222,6 +2293,181 @@ export class CircleView {
   }
 
   // -------------------------------------------------------------------------
+  // Carrying an arc (§7.6)
+  // -------------------------------------------------------------------------
+
+  /** Whether an arc can be carried at all: the session keeps an order, and there are two to order. */
+  private reorderable(): boolean {
+    const presentation = this.options.presentation()
+    const model = this.model
+    if (presentation === undefined || model === null || model.units.length < 2) return false
+    return presentation.onMoveUnit !== undefined || presentation.onMoveGroup !== undefined
+  }
+
+  /** What a press on this hit would carry, if it travels: a section, a genome of the band, or nothing. */
+  private carryFrom(hit: CircleHit | null, pointer: number, at: { x: number; y: number }): Carry | null {
+    const model = this.model
+    const presentation = this.options.presentation()
+    if (hit === null || model === null || presentation === undefined) return null
+    const taken =
+      hit.kind === 'section' && presentation.onMoveUnit !== undefined
+        ? { kind: 'unit' as const, index: hit.unit }
+        : hit.kind === 'group' && presentation.onMoveGroup !== undefined
+          ? { kind: 'group' as const, index: hit.group }
+          : null
+    if (taken === null) return null
+    const carry: Carry = { ...taken, model, pointer, x: at.x, y: at.y, moved: false, drop: null }
+    // Nothing to carry among: a genome alone in its band, a contig alone in its genome.
+    return this.carryAmong(carry).length < 2 ? null : carry
+  }
+
+  /**
+   * The places a carried arc can land among, in their order round the circle:
+   * every genome for a genome, its own genome's contigs for a contig — a
+   * contig stays its genome's, which is the reference editor's to change
+   * (§27.10) — and every genome of the band for one of them.
+   */
+  private carryAmong(carry: Carry): number[] {
+    const model = carry.model
+    if (carry.kind === 'group') return (model.groups ?? []).map((_, g) => g)
+    const group = model.groups?.find((candidate) => carry.index >= candidate.from && carry.index < candidate.to)
+    const from = group?.from ?? 0
+    const to = group?.to ?? model.units.length
+    return Array.from({ length: to - from }, (_, k) => from + k)
+  }
+
+  /**
+   * The carried arc at the pointer: the gap whose edge is nearest the hand's
+   * angle among the places it can land (`sectionDrop`), marked — at any radius,
+   * so the hand can go wherever the picture is clearest.
+   */
+  private moveCarry(carry: Carry, at: { x: number; y: number }): void {
+    const geometry = this.geometry
+    if (geometry === null || this.model !== carry.model) {
+      this.endCarry(false)
+      return
+    }
+    if (!carry.moved) {
+      carry.moved = true
+      // Not a click, not a pan: the press is the carry's now.
+      this.press = null
+      this.cancelClick()
+      this.canvas.setPointerCapture(carry.pointer)
+      this.canvas.style.cursor = 'grabbing'
+      this.drawGuide(null)
+      this.setGripHover(null)
+      this.setEdgeHover(null)
+      // The carried arc lit, its partners with it: what is in the hand.
+      this.setFocus(
+        carry.kind === 'unit' ? { unit: carry.index, slot: -1, group: -1 } : { unit: -1, slot: -1, group: carry.index },
+      )
+    }
+    const arcs = carry.kind === 'unit' ? geometry.arcs : geometry.groupArcs
+    const angle = Math.atan2(at.y - geometry.cy, at.x - geometry.cx)
+    carry.drop = arcs === null ? null : sectionDrop(arcs, this.carryAmong(carry), carry.index, angle)
+    this.schedule()
+    this.describeCarry(carry, at)
+  }
+
+  /** What the hand holds and where it lands, beside it. */
+  private describeCarry(carry: Carry, at: { x: number; y: number }): void {
+    if (!getPlotOptions().tooltip) {
+      this.tip.classList.add('hidden')
+      return
+    }
+    const model = carry.model
+    const name = (index: number): string =>
+      carry.kind === 'unit' ? (model.units[index]?.label ?? '') : (model.groups?.[index]?.name ?? '')
+    const drop = carry.drop
+    const unit = carry.kind === 'unit' ? model.units[carry.index] : undefined
+    const lines = [
+      el('div', { class: 'cell-tip-title', text: name(carry.index) }),
+      el('div', {
+        class: 'cell-tip-line',
+        text: drop === null ? 'Stays where it is' : `${drop.side === 'before' ? 'Before' : 'After'} ${name(drop.index)}`,
+      }),
+    ]
+    // A contig of a circle of several genomes goes nowhere but among its own.
+    if (unit?.genome !== undefined && model.groups !== null) {
+      lines.push(el('div', { class: 'cell-tip-line', text: `Within ${unit.genome}` }))
+    }
+    this.tip.replaceChildren(...lines)
+    this.tip.classList.remove('hidden')
+    this.placeTip(at)
+  }
+
+  /**
+   * Let go: the arc goes beside the one it was dropped by, in the reader's
+   * order — which every map of the file is drawn in and every list follows —
+   * or, cancelled or dropped where it was, stays.
+   */
+  private endCarry(commit: boolean): void {
+    const carry = this.carry
+    this.carry = null
+    if (carry === null) return
+    if (carry.moved) {
+      this.canvas.style.cursor = ''
+      this.tip.classList.add('hidden')
+      this.setFocus(NO_FOCUS)
+    }
+    const drop = carry.drop
+    const presentation = this.options.presentation()
+    if (commit && carry.moved && drop !== null && presentation !== undefined && this.model === carry.model) {
+      if (carry.kind === 'unit') {
+        const moved = carry.model.units[carry.index]
+        const anchor = carry.model.units[drop.index]
+        if (moved !== undefined && anchor !== undefined) presentation.onMoveUnit?.(moved, anchor, drop.side)
+      } else {
+        const moved = carry.model.groups?.[carry.index]
+        const anchor = carry.model.groups?.[drop.index]
+        if (moved !== undefined && anchor !== undefined) presentation.onMoveGroup?.(moved.name, anchor.name, drop.side)
+      }
+    }
+    this.schedule()
+  }
+
+  /**
+   * The arc in the hand, edged in the accent, and the mark where it would land:
+   * a bar across the sections — and the band, where there is one — in the gap
+   * it would go into, as a list's drop line goes between two rows.
+   */
+  private paintCarry(ctx: CanvasRenderingContext2D, geometry: CircleGeometry, palette: CirclePalette, carry: Carry): void {
+    const { cx, cy } = geometry
+    const arcs = carry.kind === 'unit' ? geometry.arcs : geometry.groupArcs
+    const band = carry.kind === 'unit' ? geometry.sections : geometry.band
+    if (arcs === null || band === null) return
+    ctx.save()
+    const a0 = arcs[2 * carry.index]
+    const a1 = arcs[2 * carry.index + 1]
+    if (a1 > a0) {
+      ctx.beginPath()
+      annulusPath(ctx, cx, cy, band.inner - 1.5, band.outer + 1.5, a0, a1)
+      ctx.strokeStyle = palette.accent
+      ctx.lineWidth = 1.5
+      ctx.stroke()
+    }
+    const drop = carry.drop
+    if (drop !== null) {
+      const inner = Math.min(geometry.sections.inner, geometry.band?.inner ?? Number.POSITIVE_INFINITY) - 6
+      const outer = Math.max(geometry.sections.outer, geometry.band?.outer ?? 0) + 6
+      const cos = Math.cos(drop.at)
+      const sin = Math.sin(drop.at)
+      ctx.lineCap = 'round'
+      ctx.beginPath()
+      ctx.moveTo(cx + cos * inner, cy + sin * inner)
+      ctx.lineTo(cx + cos * outer, cy + sin * outer)
+      // A halo first, so the mark reads over a dark arc as over the page.
+      ctx.strokeStyle = palette.halo
+      ctx.lineWidth = 6
+      ctx.stroke()
+      ctx.strokeStyle = palette.accent
+      ctx.lineWidth = 3
+      ctx.stroke()
+    }
+    ctx.restore()
+  }
+
+  // -------------------------------------------------------------------------
   // The card under the pointer
   // -------------------------------------------------------------------------
 
@@ -2446,13 +2692,16 @@ function sameList(a: readonly unknown[], b: readonly unknown[]): boolean {
   return a.length === b.length && a.every((item, k) => item === b[k])
 }
 
-/** Whether two circles are of the same sections, in the same order and of the same lengths. */
+/**
+ * Whether two circles are of the same sections, of the same lengths, in any
+ * order: a section is its genome's and its name, since two genomes' contigs
+ * can share a name.
+ */
 function sameSections(a: CircleModel, b: CircleModel): boolean {
-  return (
-    a.kind === b.kind &&
-    a.units.length === b.units.length &&
-    a.units.every((unit, u) => unit.name === b.units[u].name && unit.bp === b.units[u].bp)
-  )
+  if (a.kind !== b.kind || a.units.length !== b.units.length) return false
+  const key = (unit: CircleUnit): string => `${unit.genome ?? ''}\u0001${unit.name}`
+  const lengths = new Map(a.units.map((unit) => [key(unit), unit.bp]))
+  return lengths.size === a.units.length && b.units.every((unit) => lengths.get(key(unit)) === unit.bp)
 }
 
 function sameKey(a: unknown, b: { set: unknown; geometry: unknown }): boolean {

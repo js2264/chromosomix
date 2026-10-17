@@ -43,6 +43,8 @@ import { KEYS, keyLabel, optionKey, shiftKey, withKey } from './commands'
 import { cardTitle, icon, iconButton } from './icons'
 import { CircleView, type CirclePresentation } from './CircleView'
 import { circleCuts, circleUnitsOf } from '../render/circle'
+import { orderBlock, type AxisGenomes } from '../render/blockOrder'
+import type { OrderRanks } from '../state/readerOrder'
 import {
   CHORD_LIMITS,
   RING_COLUMN_HINT,
@@ -199,7 +201,7 @@ import {
   smallestLaneSize,
   trackHeightField,
 } from './trackControls'
-import { el, field, fmt, trimNumber } from './dom'
+import { button, el, field, fmt, trimNumber } from './dom'
 import { resolutionLabel } from '../units'
 import { depthPhrase, type DrawnDepth } from '../contacts'
 import { MapKey } from './MapKey'
@@ -366,6 +368,21 @@ export interface BorrowedScale {
  */
 const LANE_TAB_ORDER: readonly LaneEdge[] = ['bottom', 'left', 'top', 'right']
 
+/**
+ * Where a panel's genomes and contigs go (§7.6): the order's ranks now, told
+ * when they change, and which genome each axis is where the block carries no
+ * genome runs over it — one genome's map, a pair's two.
+ */
+export interface PanelOrder {
+  ranks(): OrderRanks
+  subscribe(listener: () => void): () => void
+  axes?: AxisGenomes
+  /** Whether anything has been moved from where the file has it. */
+  moved?(): boolean
+  /** Every genome and contig back where the file has them; absent where the panel only draws. */
+  reset?(): void
+}
+
 export interface MatrixPanelOptions {
   /** Bin size in bp, for the coordinate readout. */
   binsize: number
@@ -519,6 +536,13 @@ export interface MatrixPanelOptions {
    * views is §8.15's — a sequence declared circular.
    */
   round?: CirclePresentation
+  /**
+   * The reader's order of the file's genomes and contigs (§7.6), which the
+   * block is drawn in: whole genomes moved, and whole contigs within their
+   * genome, by `render/blockOrder.ts`. The block as read is kept beside it, for
+   * the tasks and the ladder, which index it by absolute bin.
+   */
+  order?: PanelOrder
   /**
    * The window on screen changed — a pan, a zoom, a new block.
    *
@@ -1117,6 +1141,15 @@ export class MatrixPanel {
    */
   private second: { data: MatrixResult } | null = null
   /**
+   * The block and its second as they were read, in the file's order, where
+   * {@link data} is what is drawn — the reader's order (§7.6). The tasks, the
+   * ladder and a re-run from the top start from these.
+   */
+  private raw: { data: MatrixResult; second: MatrixResult | undefined } | null = null
+  /** The last block put in the reader's order, and the ranks it was put in. */
+  private orderedMemo: { from: MatrixResult; ranks: OrderRanks; out: MatrixResult } | null = null
+  private unsubscribeOrder: () => void = () => {}
+  /**
    * What this block was turned into, kept for the readout and the colourbar.
    *
    * The readout's problem is the compared map's, one step further on: after the
@@ -1166,6 +1199,8 @@ export class MatrixPanel {
   /** The Tracks card's `name column` while the circle is drawn, lit from the circle's own setting. */
   private columnButton: HTMLElement | null = null
   private tracksSelect: HTMLSelectElement | null = null
+  /** The `order` row, shown while the reader's order is not the file's (§7.6). */
+  private orderRow: HTMLElement | null = null
   /** The `chords` select, kept so a change made on another circle shows here. */
   private chordSelect: HTMLSelectElement | null = null
   /** The `sections` row and its select: offered where the block can be cut two ways. */
@@ -1598,6 +1633,7 @@ export class MatrixPanel {
       // and in the CLI, where it is a parameter rather than a label.
       field('colours', colormapSelect, 'The ramp; a ✓ marks a colour-vision-safe one. afmhot_r is what the CLI draws.'),
       ...(options.round === undefined ? [] : [this.sectionsField(), this.chordsField(), this.tracksField()]),
+      ...(options.order?.reset === undefined ? [] : [this.orderField()]),
       clipRow,
     ]
 
@@ -2326,6 +2362,13 @@ export class MatrixPanel {
     this.unsubscribeChordLimit = subscribeChordLimit(() => this.syncCircle())
     // …and lays its rings out the same way, inside or out.
     this.unsubscribeRingPlacement = subscribeRingPlacement(() => this.syncCircle())
+    // The reader's order (§7.6): a genome or a contig moved anywhere — on this
+    // circle, on another map of the file — is the block drawn again in it.
+    this.unsubscribeOrder =
+      this.options.order?.subscribe(() => {
+        this.paintOrder()
+        this.reorder()
+      }) ?? (() => {})
     // …and names them the same way, in a column or across the opening.
     this.unsubscribeRingColumn = subscribeRingColumn((on) =>
       this.columnButton?.setAttribute('aria-pressed', String(on)),
@@ -2933,6 +2976,7 @@ export class MatrixPanel {
     this.unsubscribeDiagonalLock()
     this.unsubscribeChordLimit()
     this.unsubscribeRingPlacement()
+    this.unsubscribeOrder()
     this.unsubscribeRingColumn()
     this.circleView?.destroy()
     this.circleView = null
@@ -3281,6 +3325,17 @@ export class MatrixPanel {
   }
 
   /**
+   * The genome of a cell of the picture as drawn, from the block's genome runs
+   * — or `undefined` where it has none. A view that keeps its own lists by
+   * slot asks this instead, since in the reader's order (§7.6) a slot is no
+   * longer where the file put it.
+   */
+  genomeAt(axis: 'rows' | 'cols', cell: number): string | undefined {
+    const runs = axis === 'rows' ? this.data?.rowGenomes : this.data?.colGenomes
+    return runs?.find((run) => cell >= run.start && cell < run.end)?.label
+  }
+
+  /**
    * A copy of the block on screen, when copying it is cheap (§18.3).
    *
    * **Copied, never transferred.** `Transferable` is the optimisation that looks
@@ -3305,11 +3360,15 @@ export class MatrixPanel {
    * {@link analysisBlock}, which copies and refuses a wrapped one.
    */
   get block(): MatrixResult | null {
-    return this.data
+    // As read: a ladder plans its next read in the file's bins, and a block in
+    // the reader's order (§7.6) is the same bins somewhere else on screen.
+    return this.raw?.data ?? this.data
   }
 
   analysisBlock(): BlockInput | null {
-    const data = this.data
+    // As read, in the file's order: a task indexes it by absolute bin, and a
+    // block in the reader's order (§7.6) has its genomes elsewhere.
+    const data = this.raw?.data ?? this.data
     if (data === null) return null
     if (data.values.byteLength > BLOCK_COPY_LIMIT_BYTES) return null
     // **Never a block read round a circle** (SPECS §8.15). Its extents are
@@ -3824,7 +3883,10 @@ export class MatrixPanel {
    * view that refitted whenever the colour scale moved would throw away the pan
    * and zoom the reader had arrived at.
    */
-  setData(data: MatrixResult, title: string, second?: MatrixResult): void {
+  setData(read: MatrixResult, title: string, readSecond?: MatrixResult): void {
+    this.raw = { data: read, second: readSecond }
+    const data = this.ordered(read)
+    const second = readSecond === undefined ? undefined : this.ordered(readSecond)
     this.data = data
     this.markFirstData()
     this.syncCardsShown()
@@ -3981,8 +4043,10 @@ export class MatrixPanel {
    * the right place at the wrong zoom is recoverable, and one in the wrong place
    * is not.
    */
-  regrid(data: MatrixResult, binsize: number, second?: MatrixResult): boolean {
+  regrid(read: MatrixResult, binsize: number, readSecond?: MatrixResult): boolean {
     if (this.data === null) return false
+    const data = this.ordered(read)
+    const second = readSecond === undefined ? undefined : this.ordered(readSecond)
     // Read *before* anything moves, off the axes the picture is currently drawn
     // against. A turned map has no row locus, and that is not a failure: its
     // rows are distance from the diagonal and are decided by the band's own cut.
@@ -3993,8 +4057,10 @@ export class MatrixPanel {
     if (want.cols === null) return false
 
     const outgoing = this.data
+    const outgoingRaw = this.raw
     const outgoingBinsize = this.options.binsize
     this.data = data
+    this.raw = { data: read, second: readSecond }
     this.setResolution(binsize)
     const { dense, gauge, presentationMoved, turned } = this.derive(data, second)
 
@@ -4009,6 +4075,7 @@ export class MatrixPanel {
       // `this.drawn` and `this.second`, so the caller must re-run it — which
       // `setData` does, and which is exactly what the fallback is.
       this.data = outgoing
+      this.raw = outgoingRaw
       this.setResolution(outgoingBinsize)
       return false
     }
@@ -5205,6 +5272,31 @@ export class MatrixPanel {
   }
 
   /**
+   * The `order` row (§7.6): there once the reader has dragged a genome or a
+   * contig somewhere else, with the one thing to do about it — put them all
+   * back. Square or round, since the square is drawn in the same order. Not a
+   * `field()`, whose `<label>` would press the button for a click on its name.
+   */
+  private orderField(): HTMLElement {
+    const reset = button('file order', () => this.options.order?.reset?.(), {
+      title: 'Put every genome and contig back where the file has them.',
+    })
+    const row = el(
+      'div',
+      { class: 'field', title: 'Genomes and contigs are drawn in the order they were dragged into on the circle.' },
+      el('span', { class: 'field-label', text: 'order' }),
+      reset,
+    )
+    this.orderRow = row
+    this.paintOrder()
+    return row
+  }
+
+  private paintOrder(): void {
+    this.orderRow?.classList.toggle('hidden', this.options.order?.moved?.() !== true)
+  }
+
+  /**
    * The Tracks card's `name column` while the circle is drawn (§7.6): the 1D
    * browser's mark, key and word, lit from and writing to the circle's own
    * setting (`ui/circlePrefs.ts`) rather than the browser's `gutter`.
@@ -5309,6 +5401,33 @@ export class MatrixPanel {
   }
 
   /**
+   * A block in the reader's order (§7.6), the same block where nothing moves
+   * or the panel was given no order. The last one is kept, so a re-run over the
+   * same block in the same order costs no copy.
+   */
+  private ordered(read: MatrixResult): MatrixResult {
+    const order = this.options.order
+    if (order === undefined) return read
+    const ranks = order.ranks()
+    const memo = this.orderedMemo
+    if (memo !== null && memo.from === read && memo.ranks === ranks) return memo.out
+    const out = orderBlock(read, ranks, order.axes)
+    this.orderedMemo = { from: read, ranks, out }
+    return out
+  }
+
+  /**
+   * The order moved: the block as read, drawn again in it. A new picture
+   * rather than a swap, since its genomes are elsewhere — the readout, the
+   * axes, the lanes and the circle all follow from the top.
+   */
+  private reorder(): void {
+    const raw = this.raw
+    if (raw === null) return
+    this.setData(raw.data, this.lastTitle, raw.second)
+  }
+
+  /**
    * Recompute the picture from the block already in hand.
    *
    * What a change of derivation is: the same cells, in different units. Reading
@@ -5358,7 +5477,8 @@ export class MatrixPanel {
       // axes change meaning, and the view has to be refitted around them.
       // Re-run from the top, which is one pass over a block already in memory
       // and still costs no read.
-      this.setData(data, this.lastTitle, this.second?.data)
+      if (this.raw !== null) this.setData(this.raw.data, this.lastTitle, this.raw.second)
+      else this.setData(data, this.lastTitle, this.second?.data)
       return
     }
     this.redraw()
@@ -5820,6 +5940,9 @@ export class MatrixPanel {
   private refineWindow(): RefineView | null {
     const data = this.data
     if (data === null || data.level !== 'bin') return null
+    // A block in the reader's order (§7.6) is not a stretch of the file's bins,
+    // and a finer read planned from its window would be of somewhere else.
+    if (this.raw !== null && data !== this.raw.data) return null
     if ((data.contigsPerCell ?? 1) > 1) return null
     const k = Math.max(1, data.binsPerCell ?? 1)
     const window = this.heatmap.cellWindow()
