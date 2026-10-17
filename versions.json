@@ -1,5 +1,5 @@
 {
-  "latest": "f453599",
+  "latest": "f8da5d8",
   "versions": [
     {
       "commit": "f453599",
@@ -7,6 +7,13 @@
       "date": "2026-10-17T20:55:45+02:00",
       "subject": "The npm package, ready to publish; the README reworked; the site written for search engines and language models (#114)",
       "tag": "v0.14.0"
+    },
+    {
+      "commit": "f8da5d8",
+      "version": "0.15.0",
+      "date": "2026-10-17T19:16:22Z",
+      "subject": "0.15.0",
+      "tag": "v0.15.0"
     },
     {
       "commit": "0e053d6",
@@ -132,13 +139,6 @@
       "version": "0.13.0",
       "date": "2026-10-07T15:33:58+02:00",
       "subject": "Read a whole chromosome one bin to a pixel up to 16,384 bins a side (§7.2, §9, §16.7) (#93)",
-      "tag": ""
-    },
-    {
-      "commit": "ea7452f",
-      "version": "0.13.0",
-      "date": "2026-10-06T17:24:00+02:00",
-      "subject": "Fold the columns from the digit row, step on the angle brackets, lock the map onto its diagonal, say how to zoom in, and scale the 1D browser's tracks together (§5.5, §5.8, §7.2, §8.9, §26.6) (#92)",
       "tag": ""
     },
     {
