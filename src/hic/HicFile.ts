@@ -48,9 +48,17 @@
  * difference between counting its contacts from 500 MiB of chunks and from
  * about 1 MB.
  *
- * What is left of a walk's cost is round trips — a record's head, then its
- * blocks, for each of 231 pairs — and those are exact reads that do not hold
- * the worker, so a walk keeps a few pairs in flight ({@link walkAhead}).
+ * What is left of a walk's cost is round trips, and a walk is planned so that
+ * there are few of them ({@link prefetchWalk}). Every place it will read is
+ * known before it reads: the master index gives each record's, and in a file
+ * Juicer wrote, each pair's coarse blocks lie just past its record. So the
+ * heads of many records, and the bytes past each, are fetched together as a
+ * few stretches of the file, and the blocks they did not bring are fetched
+ * together after them. Read pair by pair — a record's head, then its blocks —
+ * the whole genome of a 4DN chicken map at 2.5 Mb was 1,258 requests, a minute
+ * and a half from a bucket; planned, it is 427, read six at a time. Reads are
+ * exact and do not hold the worker; a picture's walk has six out at once, every
+ * connection a browser opens to one host, and the census, behind the views, four.
  */
 
 import { ViewerError } from '../errors'
@@ -59,6 +67,7 @@ import { declaredSpan, inflateCapped, inflationCap } from '../sources/untrusted'
 import type { ByteSource, Extent } from '../types'
 import {
   HIC,
+  Truncated,
   normKey,
   readFooter,
   readHeader,
@@ -66,6 +75,7 @@ import {
   type HicChrom,
   type HicFooter,
   type HicHeader,
+  type MasterIndexEntry,
   type NormVectorKey,
 } from './format'
 import {
@@ -74,8 +84,10 @@ import {
   blockNumbersFor,
   blockRuns,
   decodeBlock,
+  findZoom,
   readZoom,
   readZoomAsync,
+  wholeRecord,
   type BlockRecords,
   type BlockRef,
   type ZoomData,
@@ -101,6 +113,16 @@ const BLOCK_CACHE_BYTES = 48 << 20
 const WALK_AHEAD = 4
 
 /**
+ * The most reads a walk a view is waiting on — a whole-genome picture — may
+ * have out at once: every connection a browser opens to one host.
+ *
+ * {@link WALK_AHEAD} is the census's, which runs behind the views; it stands
+ * aside while one reads, so the two do not want the connections at once, and a
+ * picture made of a few hundred round trips gets them all.
+ */
+const VIEW_WALK_AHEAD = 6
+
+/**
  * The memory a walk's pairs in flight may hold between them, at most.
  *
  * A pair is decoded whole (`HicStore.scanAll` says why), about 28 bytes a
@@ -123,6 +145,36 @@ const RUN_GAP_BYTES = 64 << 10
 const RUN_CAP_BYTES = 16 << 20
 
 /**
+ * Bytes read past the end of each matrix record, in the request for its head.
+ *
+ * Juicer writes each pair's blocks straight after its record, coarsest rung
+ * first, so the blocks a whole-genome picture or a census reads lie just past
+ * it — on the 4DN chicken map, within these bytes for all but a handful of its
+ * 630 pairs — and the request that read the record's head read them too. A
+ * file laid out otherwise (the yeast map of the app's demo store keeps every
+ * record after every block) loses only these bytes, and its blocks are read
+ * with the rest.
+ *
+ * Little, and the gap a walk reads through is a window's ({@link
+ * RUN_GAP_BYTES}), on purpose. Each byte a walk carries for nothing saves it
+ * round trips only on a link whose round trips cost more than its bytes: read
+ * through a quarter of a megabyte, the mouse map's whole genome was 17 MB for
+ * 369 requests, which a fast link far from the bucket would read sooner than its
+ * 453 at 64 KiB, and a home connection at 5 MB/s later than the 460 pair by
+ * pair. At these sizes it is faster than pair by pair on every link.
+ */
+const RECORD_TAIL_BYTES = 4 << 10
+
+/**
+ * The decoded pixels one plan of a walk may hold — half the block cache, so the
+ * plan read next fits beside the one being handed over ({@link HicFile.walkPlans}).
+ */
+const WALK_PLAN_BYTES = BLOCK_CACHE_BYTES / 2
+
+/** The most pairs one plan of a walk reads together. */
+const WALK_PLAN_PAIRS = 1024
+
+/**
  * The normalisations this reader will use as `bins/weight`, best first.
  *
  * `SCALE` is Juicer's balancing from version 9 on and is the same fixed point
@@ -139,6 +191,58 @@ const NORM_PREFERENCE = ['SCALE', 'KR', 'INTER_KR', 'GW_KR', 'VC_SQRT', 'VC'] as
 
 /** The unit this reader accepts. `FRAG` is excluded — see `hic/format.ts`. */
 const BP = 'BP'
+
+/** One chromosome pair of a walk, and the rectangle of it the walk reads, in global bins. */
+export interface WalkPair {
+  a: number
+  b: number
+  rows: Extent
+  cols: Extent
+}
+
+/** What a walk is told between its reads: to stand aside a while, or to stop. */
+export interface WalkReadOptions {
+  pause?: () => Promise<void>
+  cancelled?: () => boolean
+}
+
+/** The part of one stored pair a rectangle covers, on each axis, in each chromosome's own bins. */
+interface PairWindow {
+  low: number
+  high: number
+  intra: boolean
+  lowSpan: [number, number]
+  highSpan: [number, number]
+}
+
+/**
+ * At most `size` reads at a time, the rest waiting in the order they asked.
+ *
+ * A walk asks for reads from two places — a plan reading its pairs together
+ * ({@link HicFile.prefetchWalk}) and a pair reading what no plan brought — and
+ * the limit is the file's, not either's, so that together they hold no more
+ * connections than {@link HicFile.walkAhead} allows.
+ */
+class Slots {
+  private free: number
+  private readonly waiting: Array<() => void> = []
+
+  constructor(size: number) {
+    this.free = Math.max(1, size)
+  }
+
+  async run<T>(task: () => Promise<T>): Promise<T> {
+    if (this.free > 0) this.free -= 1
+    else await new Promise<void>((resolve) => this.waiting.push(resolve))
+    try {
+      return await task()
+    } finally {
+      const next = this.waiting.shift()
+      if (next === undefined) this.free += 1
+      else next()
+    }
+  }
+}
 
 export interface HicOpenOptions {
   /** Bin size to open at; the landing rung when omitted (`metacooler/detect.ts`, `landingRung`). */
@@ -185,6 +289,13 @@ export class HicFile {
    * {@link normType}, and which one — see {@link normVector}.
    */
   private readonly normFallbacks = new Map<number, string>()
+  /**
+   * The exact reads a walk may have out at once: {@link VIEW_WALK_AHEAD} at a
+   * rung where pairs are small, {@link walkAhead} where they are not.
+   */
+  private readonly exactSlots: Slots
+  /** The fewer a walk behind the views may have — the census's ({@link walkAhead}). */
+  private readonly backgroundSlots: Slots
 
   private constructor(source: ByteSource, header: HicHeader, footer: HicFooter, binSize: number) {
     this.source = source
@@ -208,6 +319,9 @@ export class HicFile {
       this.chromOffset[i + 1] = this.chromOffset[i] + Math.ceil(kept[i].length / binSize)
     }
     this.nBins = this.chromOffset[kept.length]
+    const ahead = this.walkAhead()
+    this.exactSlots = new Slots(ahead === WALK_AHEAD ? VIEW_WALK_AHEAD : ahead)
+    this.backgroundSlots = new Slots(ahead)
 
     this.normType =
       NORM_PREFERENCE.find((type) =>
@@ -446,11 +560,9 @@ export class HicFile {
     const flying = this.zoomsInFlight.get(key)
     if (flying !== undefined) return flying
     const entry = this.footer.masterIndex.get(key)
-    const source = this.source
-    const exact = source.readExact
-    if (entry === undefined || exact === undefined) return Promise.resolve(this.zoomAt(key))
+    if (entry === undefined || this.source.readExact === undefined) return Promise.resolve(this.zoomAt(key))
     const reading = readZoomAsync(
-      (position, length) => exact.call(source, position, length),
+      (position, length) => this.exactRead(position, length),
       entry,
       BP,
       this.binSize,
@@ -492,6 +604,199 @@ export class HicFile {
     }
     const pair = Math.max(1, widest * widest * BYTES_PER_PIXEL)
     return Math.max(1, Math.min(WALK_AHEAD, Math.floor(WALK_AHEAD_BYTES / pair)))
+  }
+
+  /**
+   * A walk's pairs, in its order, cut into the plans {@link prefetchWalk} reads
+   * together.
+   *
+   * A plan is read before the first of its pairs is handed over, and its blocks
+   * are held, decoded, until the last of them is, so it ends where its pairs'
+   * rectangles at this rung — the most pixels a pair can hold — would pass
+   * {@link WALK_PLAN_BYTES}. At the rung a whole genome is drawn at, that is
+   * every pair of it; at a rung where one pair could fill the budget alone, each
+   * is a plan of its own.
+   */
+  walkPlans<T extends readonly [number, number]>(pairs: readonly T[]): T[][] {
+    const plans: T[][] = []
+    let plan: T[] = []
+    let held = 0
+    for (const pair of pairs) {
+      const pixels = this.binsOf(pair[0]) * this.binsOf(pair[1]) * BYTES_PER_PIXEL
+      if (plan.length > 0 && (held + pixels > WALK_PLAN_BYTES || plan.length >= WALK_PLAN_PAIRS)) {
+        plans.push(plan)
+        plan = []
+        held = 0
+      }
+      plan.push(pair)
+      held += pixels
+    }
+    if (plan.length > 0) plans.push(plan)
+    return plans
+  }
+
+  /**
+   * Read what a walk will read of `pairs` — each record as far as this rung, and
+   * the blocks each pair's rectangle touches — in as few requests as the file
+   * allows, and keep it, so that {@link pairRecords} reads nothing for them.
+   *
+   * Everything it reads is placed before a byte is read. The master index gives
+   * each record's place, so the records' heads are read together, as the few
+   * stretches of the file {@link blockRuns} makes of them, and with each head the
+   * bytes past its record's end ({@link RECORD_TAIL_BYTES}), where Juicer put the
+   * pair's coarse blocks. A record whose rung lies past its head is then read
+   * whole, as {@link readZoom} would read it. The blocks are decoded from the
+   * bytes that brought them, and those still missing are read together last.
+   *
+   * A source without exact reads is left to {@link pairRecords}, which reads it
+   * as it always has. Answers `false` when `cancelled` stopped it between reads;
+   * a read that fails fails the walk, as it did pair by pair.
+   */
+  async prefetchWalk(pairs: readonly WalkPair[], options: WalkReadOptions = {}): Promise<boolean> {
+    if (this.source.readExact === undefined) return true
+
+    // The records not yet read, each once.
+    const records: MasterIndexEntry[] = []
+    const asked = new Set<string>()
+    for (const pair of pairs) {
+      const key = this.pairKey(Math.min(pair.a, pair.b), Math.max(pair.a, pair.b))
+      if (asked.has(key) || this.zooms.has(key)) continue
+      asked.add(key)
+      const entry = this.footer.masterIndex.get(key)
+      if (entry === undefined) this.zooms.set(key, null)
+      else records.push(entry)
+    }
+
+    // Their heads, and the bytes past each one's end.
+    const spans: Array<{ position: number; size: number; entry: MasterIndexEntry; head: boolean }> = []
+    for (const entry of records) {
+      const head = this.beyondHead ? entry.size : Math.min(entry.size, RECORD_HEAD_BYTES)
+      spans.push({ position: entry.position, size: head, entry, head: true })
+      const end = entry.position + entry.size
+      const tail = Math.min(RECORD_TAIL_BYTES, this.source.size - end)
+      if (tail > 0) spans.push({ position: end, size: tail, entry, head: false })
+    }
+    const tails = new Map<string, { position: number; bytes: Uint8Array }>()
+    const whole: Array<{ position: number; size: number; entry: MasterIndexEntry }> = []
+    const headsRead = await this.fetchRuns(blockRuns(spans, RUN_GAP_BYTES, RUN_CAP_BYTES), options, (run, bytes) => {
+      for (const span of run.refs) {
+        const at = span.position - run.position
+        const piece = bytes.subarray(at, at + span.size)
+        if (!span.head) {
+          // Copied, so the stretch it came in is not kept alive by it.
+          tails.set(span.entry.key, { position: span.position, bytes: piece.slice() })
+          continue
+        }
+        const { entry } = span
+        try {
+          const zoom =
+            span.size === entry.size
+              ? wholeRecord(piece, entry, BP, this.binSize)
+              : findZoom(piece, BP, this.binSize, entry.size)
+          this.zooms.set(entry.key, this.fitted(entry.key, zoom))
+        } catch (err) {
+          if (!(err instanceof Truncated)) throw err
+          // Every record lists its rungs in one order: past this head, past all of them.
+          this.beyondHead = true
+          whole.push({ position: entry.position, size: entry.size, entry })
+        }
+      }
+    })
+    if (!headsRead) return false
+    if (whole.length > 0) {
+      const wholeRead = await this.fetchRuns(blockRuns(whole, RUN_GAP_BYTES, RUN_CAP_BYTES), options, (run, bytes) => {
+        for (const record of run.refs) {
+          const at = record.position - run.position
+          const zoom = wholeRecord(bytes.subarray(at, at + record.size), record.entry, BP, this.binSize)
+          this.zooms.set(record.entry.key, this.fitted(record.entry.key, zoom))
+        }
+      })
+      if (!wholeRead) return false
+    }
+
+    // The blocks: from the bytes past their record where they were, the rest together.
+    const missing: BlockRef[] = []
+    const named = new Set<string>()
+    for (const pair of pairs) {
+      const window = this.windowOf(pair.a, pair.b, pair.rows, pair.cols)
+      if (window === null) continue
+      const key = this.pairKey(window.low, window.high)
+      const zoom = this.zooms.get(key)
+      if (zoom === undefined || zoom === null) continue
+      const tail = tails.get(key)
+      for (const number of blockNumbersFor(zoom, this.header.version, window.intra, window.lowSpan, window.highSpan)) {
+        const ref = zoom.blocks.get(number)
+        if (ref === undefined || ref.size <= 0) continue
+        const held = this.blockKey(ref)
+        if (named.has(held) || this.blockCache.has(held)) continue
+        named.add(held)
+        this.checkBlock(ref)
+        const at = tail === undefined ? -1 : ref.position - tail.position
+        if (tail !== undefined && at >= 0 && at + ref.size <= tail.bytes.byteLength) {
+          await this.decode(ref, tail.bytes.subarray(at, at + ref.size))
+        } else {
+          missing.push(ref)
+        }
+      }
+    }
+    return this.fetchRuns(blockRuns(missing, RUN_GAP_BYTES, RUN_CAP_BYTES), options, async (run, bytes) => {
+      for (const ref of run.refs) {
+        const at = ref.position - run.position
+        await this.decode(ref, bytes.subarray(at, at + ref.size))
+      }
+    })
+  }
+
+  /**
+   * Read each stretch, no more at once than {@link exactSlots} lets out — and a
+   * walk behind the views, one told to stand aside, no more than
+   * {@link backgroundSlots} — and hand each to `use` as it arrives. A walk told
+   * to stand aside does so before each read; one cancelled stops between them,
+   * and the answer is then `false`.
+   */
+  private async fetchRuns<T>(
+    runs: ReadonlyArray<{ position: number; length: number; refs: T[] }>,
+    options: WalkReadOptions,
+    use: (run: { position: number; length: number; refs: T[] }, bytes: Uint8Array) => void | Promise<void>,
+  ): Promise<boolean> {
+    let stopped = false
+    await Promise.all(
+      runs.map(async (run) => {
+        // Standing aside before a slot is taken, never while one is held: a
+        // census waiting on a view that walks the same file would otherwise
+        // hold the very slots the view waits for, and neither would finish.
+        await options.pause?.()
+        const read = (): Promise<Uint8Array | null> =>
+          this.exactSlots.run(async () => {
+            if (stopped || options.cancelled?.() === true) {
+              stopped = true
+              return null
+            }
+            return this.readExactNow(run.position, run.length)
+          })
+        // A walk told to stand aside is one behind the views, and keeps to fewer.
+        const bytes = options.pause === undefined ? await read() : await this.backgroundSlots.run(read)
+        if (bytes !== null) await use(run, bytes)
+      }),
+    )
+    return !stopped
+  }
+
+  /** One exact read, once a slot is free. */
+  private exactRead(position: number, length: number): Promise<Uint8Array> {
+    return this.exactSlots.run(() => this.readExactNow(position, length))
+  }
+
+  /** One exact read, now; the ordinary read on a source without exact ones. */
+  private readExactNow(position: number, length: number): Promise<Uint8Array> {
+    const source = this.source
+    const exact = source.readExact
+    if (exact === undefined) return Promise.resolve(source.readBytes(position, length))
+    return exact.call(source, position, length)
+  }
+
+  private binsOf(display: number): number {
+    return this.chromOffset[display + 1] - this.chromOffset[display]
   }
 
   /** Whether any matrix exists at this bin size — the acceptance gate's question. */
@@ -566,21 +871,9 @@ export class HicFile {
       ? await this.zoomAtSparse(this.pairKey(lowChrom, highChrom))
       : this.zoomFor(lowChrom, highChrom)
     if (zoom === null) return null
-    const intra = lowChrom === highChrom
-
-    // The window each axis of the *stored* pair covers. For an inter pair the
-    // stored first axis is the lower chromosome, which is not necessarily the
-    // caller's row axis, so each axis takes whichever window covers its
-    // chromosome. For an intra pair each keeps its own: the block arithmetic
-    // adds every block's transpose, which is where the half of a window below
-    // the diagonal is stored. Unioning the two instead read the bounding square
-    // — a corner of a chromosome, six bins by six, read every block of it: a
-    // whole chromosome's 15 MB at 25 kb for each of the circularity check's
-    // corner reads (§8.15).
-    const [lowSpan, highSpan] = intra
-      ? [this.clipSpan(lowChrom, rows), this.clipSpan(lowChrom, cols)]
-      : [this.localSpan(lowChrom, rows, cols), this.localSpan(highChrom, rows, cols)]
-    if (lowSpan === null || highSpan === null) return null
+    const window = this.windowOf(a, b, rows, cols)
+    if (window === null) return null
+    const { intra, lowSpan, highSpan } = window
 
     const numbers = blockNumbersFor(zoom, this.header.version, intra, lowSpan, highSpan)
     const lowBase = this.chromOffset[lowChrom]
@@ -615,6 +908,29 @@ export class HicFile {
       }
     }
     return { bin1, bin2, count, length: n }
+  }
+
+  /**
+   * The part of the stored pair `a × b` the rectangle `rows × cols` covers, on
+   * each of its axes in its own chromosome's bins — or `null` where it misses.
+   *
+   * For an inter pair the stored first axis is the lower chromosome, which is
+   * not necessarily the caller's row axis, so each axis takes whichever window
+   * covers its chromosome. For an intra pair each keeps its own: the block
+   * arithmetic adds every block's transpose, which is where the half of a window
+   * below the diagonal is stored. Unioning the two instead read the bounding
+   * square — a corner of a chromosome, six bins by six, read every block of it:
+   * a whole chromosome's 15 MB at 25 kb for each of the circularity check's
+   * corner reads (§8.15).
+   */
+  private windowOf(a: number, b: number, rows: Extent, cols: Extent): PairWindow | null {
+    const [low, high] = a <= b ? [a, b] : [b, a]
+    const intra = low === high
+    const [lowSpan, highSpan] = intra
+      ? [this.clipSpan(low, rows), this.clipSpan(low, cols)]
+      : [this.localSpan(low, rows, cols), this.localSpan(high, rows, cols)]
+    if (lowSpan === null || highSpan === null) return null
+    return { low, high, intra, lowSpan, highSpan }
   }
 
   /**
@@ -674,20 +990,12 @@ export class HicFile {
         got.set(number, held)
         continue
       }
-      declaredSpan(ref.position, ref.size, {
-        format: HIC,
-        field: `block ${ref.number} of the ${this.binSize} bp matrix`,
-        size: this.source.size,
-        // Compressed, a block is never larger than it inflates to.
-        ceiling: HIC_BLOCK_INFLATION.ceiling,
-      })
+      this.checkBlock(ref)
       missing.push(ref)
     }
-    const source = this.source
-    const exact = sparse ? source.readExact : undefined
-    if (exact !== undefined) {
+    if (sparse && this.source.readExact !== undefined) {
       for (const run of blockRuns(missing, RUN_GAP_BYTES, RUN_CAP_BYTES)) {
-        const bytes = await exact.call(source, run.position, run.length)
+        const bytes = await this.exactRead(run.position, run.length)
         for (const ref of run.refs) {
           const at = ref.position - run.position
           got.set(ref.number, await this.decode(ref, bytes.subarray(at, at + ref.size)))
@@ -704,6 +1012,17 @@ export class HicFile {
       if (records !== undefined) out.push(records)
     }
     return out
+  }
+
+  /** Refuse a block whose place in the index runs past the file, before a byte of it is read. */
+  private checkBlock(ref: BlockRef): void {
+    declaredSpan(ref.position, ref.size, {
+      format: HIC,
+      field: `block ${ref.number} of the ${this.binSize} bp matrix`,
+      size: this.source.size,
+      // Compressed, a block is never larger than it inflates to.
+      ceiling: HIC_BLOCK_INFLATION.ceiling,
+    })
   }
 
   /** A block already decompressed, marked most recently used; `undefined` when it is not held. */

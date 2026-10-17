@@ -373,10 +373,23 @@ the block index of every resolution the pair was written at — 725 KB for chr1 
 map written at thirteen — so it is read only as far as the resolution open, which for the coarse ones
 Juicer writes first is a record's first few dozen bytes. A window inside a chromosome reads through
 the source's chunks, which a pan comes back to. A walk across the pairs — a whole-genome picture, the
-census of §6.5 — lands a few hundred bytes a pair in places megabytes apart and never comes back, so
-it reads exactly those bytes, leaves the chunks to the windows, and keeps four pairs in flight, since
-round trips are then nearly all it costs — fewer, down to one, at a rung where the pairs in flight
-could hold more than 64 MiB of pixels between them, since a pair is decoded whole.
+census of §6.5 — lands a few hundred bytes a pair in places megabytes apart and never comes back, so it
+reads exactly those bytes and leaves the chunks to the windows, a dropped file's as well as a remote
+one's. **And a walk is planned, because round trips are then nearly all it costs.** Every place it
+reads is known before it reads: the master index gives each record's, and Juicer writes each pair's
+blocks just past its record, coarsest rung first. So the heads of the records are read together,
+each with the 4 KiB past its record's end, as the stretches of the file they make where they lie
+within 64 KiB of one another; the blocks those bytes brought are decoded from them; and the blocks
+left over are read together after, the same way. A picture's walk keeps six reads in flight, every
+connection a browser opens to one host; the census, behind the views, four. Pair by pair — a record's
+head, then its blocks — the whole genome of the 4DN chicken map 4DNFIRKUYKP4 at 2.5 Mb was 1,258
+requests; planned, it is 427, and a dropped copy of it reads 11 MB of the disk where its 1 MiB slices
+were 222 MiB. The gap read through is a window's on purpose: a wider one saves round trips only on a
+link whose round trips cost more than its bytes, and read through 256 KiB the 4DN mouse map's whole
+genome is 17 MB for 369 requests, which a home connection — 5 MB/s, 50 ms a round trip — would read
+more slowly than the 460 of the walk pair by pair. A plan holds its pairs' pixels until they are handed over, so it ends where its
+pairs could hold more than 24 MiB of them; at a rung where one pair could hold 64 MiB, each pair is a
+plan of its own, read one at a time, since a pair is decoded whole.
 
 **Three things are translated, and nothing else.**
 
@@ -1720,7 +1733,7 @@ read of the weights between two pixel chunks does not start it again. A miss far
 recent — an index, a header, another sequence — fetches what it asks for and nothing more, so
 opening a file costs what it did, and a source opened to read in small pieces (§3.8's `fine`) never
 reads ahead. The same chromosome is now 34 requests. A walk across a `.hic`'s chromosome pairs reads
-the other way, exactly and not through the chunks at all (§3.6).
+the other way, exactly and not through the chunks at all, planned so its reads are few (§3.6).
 
 **The reader is started before it is asked for anything.** Its worker fetches and compiles h5wasm the
 moment it exists, and it used to exist only once a file was opened, so every first open waited for
@@ -1907,10 +1920,12 @@ in the fewest pixels), and the box shows them when they land.
 thread every view reads through, so it reads nothing before a request already waiting has been
 answered — on an open, the loading screen's — and it walks the file the way §3.6 walks one across
 chromosome pairs: each pair's matrix record read only as far as the coarsest rung, which is the
-record's first few dozen bytes, and that rung's one block, both as exact ranges, four pairs in
-flight. On the 5 GB 4DN map of mouse granule neurons (4DNFI916JQ1Y, thirteen rungs, 231 pairs) that
-is 456 requests and under 1 MB. Reading each record whole first — the block index of all thirteen
-rungs, 70 MB, in 1 MiB chunks — was 500 MiB, and held the loading screen for a minute and a half.
+record's first few dozen bytes, and that rung's blocks, all as exact ranges planned together, four
+reads in flight. On the 5 GB 4DN map of mouse granule neurons (4DNFI916JQ1Y, thirteen rungs, 231
+pairs) that was 456 requests and under 1 MB pair by pair; on the 4DN chicken map 4DNFIRKUYKP4 (630
+pairs) it is 419 requests where pair by pair it was 1,258. Reading each record whole first — the
+block index of all thirteen rungs, 70 MB, in 1 MiB chunks — was 500 MiB, and held the loading screen
+for a minute and a half.
 And **it stands aside for as long as a view is reading**, not for one turn: between pairs it waits
 until no view's request has run for a quarter of a second (§12), so a chromosome clicked while it
 counts is read as if it were not counting. A resample waiting on the census ends the wait, since the
@@ -5580,7 +5595,7 @@ whole-genome picture, and the census §6.5 takes on every open:
 
 | Operation | Budget |
 |---|---|
-| A read across chromosome pairs (remote), at a rung inside a record's first 4 KiB | ≤ 2 exact range requests a pair — its record's head, its blocks — and no chunk of the cache spent on either; four pairs in flight |
+| A read across chromosome pairs (remote), at a rung inside a record's first 4 KiB | ≤ 2 exact range requests a pair — its record's head, its blocks — and one for many where they lie within 64 KiB of one another, the blocks just past a record read with its head; no chunk of the cache spent on any; six in flight for a picture, four for the census |
 | The census, started beside an open | **0** reads before a request already queued has been answered |
 | The census or the circularity check, while a view is reading | **0** steps started until no view request has run for 250 ms; at most the one step already in flight |
 

@@ -1104,6 +1104,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The whole genome of a `.hic` is read in fewer requests, more of them at once, and a dropped one
+  without a megabyte of the disk round each read (§3.6, §6.5).** A walk across chromosome pairs — a whole-genome picture, the
+  census — read pair by pair, a record's head and then its blocks, four pairs at a time: the 4DN
+  chicken map's 630 pairs at 2.5 Mb were 1,258 requests, a minute and a half from its bucket. A walk
+  is now planned before it reads, every place it reads being known: the records' heads together,
+  each with the 4 KiB past its record's end, where Juicer puts the coarse blocks, as the stretches of
+  the file they make within 64 KiB of one another, and the blocks left over together after them. The
+  same picture is 427 requests, read six at a time; the yeast map of the demo store, whose records
+  lie end to end, 72 where it was 130; the 4DN mouse map, whose records are megabytes apart, 453
+  read six at a time where 460 were read four. Pixels are handed over as they were, in the same
+  order, and a plan holds no more than 24 MiB of them. A dropped `.hic` is walked the same way, in
+  exact reads, where each read paid a 1 MiB slice of the disk: 11 MB for that chicken genome, where
+  it was 222 MiB.
+
 - **Compartments finds its components by Lanczos iteration, in a third of the time (§18.8).** Each
   component was found by power iteration, which converges at the ratio of the two largest
   eigenvalues: five hundred products of the matrix a component, seven-tenths of the task's time on
