@@ -11,10 +11,12 @@
  * a real drag across the square the tour lights — so a step whose target is
  * covered by the tour's own grey fails here as it would fail a reader. On the
  * way it also takes the roads that are not the main one, each shot and printed:
- * the landing page's button that starts it, a wrong accession typed (the name
- * blinks) and the right one pasted from its copy button, a press on the grey,
- * *back* to a step already done, *skip tutorial* half way and *resume* from
- * About, the dark theme, and About after *finish*.
+ * the landing page's button that starts it, with the store drawer left on 4DN
+ * beforehand as an earlier visit leaves it — the tutorial starts with it shut,
+ * and its first press opens it on the lab's store all the same — a wrong
+ * accession typed (the name blinks) and the right one pasted from its copy
+ * button, a press on the grey, *back* to a step already done, *skip tutorial*
+ * half way and *resume* from About, the dark theme, and About after *finish*.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-tutorial.mjs gallery-tutorial
@@ -228,11 +230,22 @@ const mapSelect = (word) =>
     .locator('label.field', { has: page.locator('.field-label', { hasText: new RegExp(`^${word}$`) }) })
     .locator('select')
     .first()
-/** The store's 4DN tile: in the drawer, open on the lab's store behind the welcome, or on the page. */
-async function pressStore() {
-  const inDrawer = page.locator('.store-drawer .store-tile[data-store="4dn"]').first()
-  const onPage = page.locator('.store-tiles-large .store-tile[data-store="4dn"]').first()
-  await ((await inDrawer.isVisible()) ? inDrawer : onPage).click()
+/** The header's stores button. */
+const storesButton = '.head-files button[aria-label="stores"]'
+/** The store the drawer is open on, or `null` while it is shut. */
+const drawerOn = () =>
+  page.evaluate(() =>
+    document.querySelector('.store-drawer.collapsed') === null
+      ? (document.querySelector('.store-drawer .store-tile.is-on')?.getAttribute('data-store') ?? '?')
+      : null,
+  )
+/** The header's button, and the store it opened on — the lab's, whatever was left open before. */
+async function openStores() {
+  await page.click(storesButton)
+  await page.waitForSelector('.store-drawer:not(.collapsed)')
+  const on = await drawerOn()
+  console.log(`  the stores opened on ${on}`)
+  if (on !== 'rsg') throw new Error(`the stores opened on ${on}, not the lab's store`)
 }
 /** Tick whichever of the correlation's four tracks is not ticked yet. */
 async function tickFour() {
@@ -245,7 +258,8 @@ async function tickFour() {
 /** What a reader does at each step. */
 const ACT = {
   welcome: next,
-  store: pressStore,
+  stores: openStores,
+  store: () => page.click('.store-drawer .store-tile[data-store="4dn"]'),
   // A wrong accession first, shot blinking, then the right one pasted from the
   // card's copy button: the road a reader who does not want to type twelve
   // characters takes, and the one a test can miss.
@@ -327,9 +341,18 @@ try {
   await shot('about')
   await page.keyboard.press('Escape')
   await page.waitForSelector('.modal-backdrop', { state: 'detached' })
+  // An earlier look at 4DN's store, put down again: what the stores button
+  // opens on next, unless the tutorial says otherwise.
+  await page.click('.store-tiles-large .store-tile[data-store="4dn"]')
+  await page.waitForSelector('.store-drawer .portal-search')
+  await page.click(storesButton)
+  await page.waitForSelector('.store-drawer.collapsed', { state: 'attached' })
   await page.click('.picker-tutorial-play')
   // The tour is a chunk of its own, fetched by the press.
   await page.waitForSelector('.tour-card[data-step]')
+  const behind = await drawerOn()
+  console.log(`  the drawer behind the welcome: ${behind ?? 'shut'}`)
+  if (behind !== null) throw new Error(`the tutorial opened the drawer on ${behind} by itself`)
 
   let resumed = false
   let backed = false

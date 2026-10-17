@@ -162,6 +162,23 @@ describe('opening', () => {
     expect(drawer.isOpen).toBe(false)
   })
 
+  it('can be aimed at a store without opening, for the header button to land on (§30)', () => {
+    // The tutorial's first step is that button, and what it opens has to be
+    // the lab's store whatever the browser remembers from an earlier visit.
+    const earlier = build()
+    earlier.drawer.open('4dn')
+    earlier.drawer.destroy()
+    const { drawer } = build()
+    drawer.toggle.click()
+    expect(drawer.storeId).toBe('4dn')
+    drawer.close()
+    drawer.aim('rsg')
+    drawer.aim('not-a-store')
+    expect(drawer.isOpen).toBe(false)
+    drawer.toggle.click()
+    expect(drawer.storeId).toBe('rsg')
+  })
+
   it('says what the header button opens without a list of stores to go stale', () => {
     // It named four — the lab's data, IGV's genomes, 4DN, ENCODE — beside a
     // drawer whose tiles were seven of the shipped ones; the tiles are the list.

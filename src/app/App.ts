@@ -2593,15 +2593,16 @@ export class App implements SessionHost {
    * Put the guided tutorial on screen (§30), from its start or from where the
    * reader left it.
    *
-   * From the start, it begins on the landing page, because its first step is a
-   * tile there: a tab that holds something is left as it is and a new one is
-   * opened beside it, as the brand does (`goHome`), rather than emptied. And
-   * the store drawer is opened on the lab's store behind the welcome, so that
-   * the first thing the reader does is *switch* to 4DN's — a press that is
-   * always there to make, where a drawer left on 4DN by an earlier visit, or
-   * by a link, made the step one that had already happened. A resume lands on
-   * the first step of the part the reader left, and the steps whose state
-   * still holds go by on their own (`ui/Tour.ts`).
+   * From the start, it begins on the landing page, under the header button its
+   * first step lights: a tab that holds something is left as it is and a new
+   * one is opened beside it, as the brand does (`goHome`), rather than emptied.
+   * And the store drawer is put down and aimed at the lab's store, not opened:
+   * opening it is the reader's first step, and what that press opens is a
+   * store to *switch* from — so the switch to 4DN's is a press that is always
+   * there to make, where a drawer left on 4DN by an earlier visit, or by a
+   * link, made it one that had already happened. A resume lands on the first
+   * step of the part the reader left, and the steps whose state still holds go
+   * by on their own (`ui/Tour.ts`).
    */
   private async playTutorial(from: 'start' | 'resume'): Promise<void> {
     if (this.storeDrawer === null || this.tour !== null) return
@@ -2617,7 +2618,10 @@ export class App implements SessionHost {
     // Any view at all, opened or not: a tab restored from a reload names its
     // file before it has opened it, and is about to cover the landing page.
     if (start === 0 && (this.current?.state ?? null) !== null) this.newSession()
-    if (start === 0) this.storeDrawer.open('rsg')
+    if (start === 0) {
+      this.storeDrawer.close()
+      this.storeDrawer.aim('rsg')
+    }
     const keep = (index: number, finished: boolean): void =>
       writeTourProgress({ step: steps[index].id, index, total: steps.length, finished })
     this.tour = new Tour({

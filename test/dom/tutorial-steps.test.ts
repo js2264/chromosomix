@@ -12,7 +12,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { partsOf, resumeIndex } from '@/ui/Tour'
+import { partsOf, resumeIndex, type TourStep } from '@/ui/Tour'
 import { TUTORIAL_SEQUENCE, TUTORIAL_SET, tutorialSteps, type TutorialHost } from '@/ui/tutorial'
 import { setUpDom } from '../support/dom'
 
@@ -112,6 +112,38 @@ describe('the tutorial’s steps', () => {
     }
     const done = steps.filter((step) => step.done?.() === true).map((step) => step.id)
     expect(done).toEqual(['compartments-close', 'insulation-close'])
+  })
+})
+
+describe('the stores', () => {
+  it('has the drawer opened from its header button, then switched to 4DN’s, and goes back if it is put down', () => {
+    // jsdom lays nothing out, and the steps find only what is laid out.
+    vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList)
+    document.body.innerHTML =
+      '<div class="head-files"><button aria-label="stores"></button></div>' +
+      '<div class="store-drawer"><button class="store-tile" data-store="rsg"></button>' +
+      '<button class="store-tile" data-store="4dn"></button></div>'
+    let open: string | null = null
+    const steps = tutorialSteps({ ...empty, store: () => open })
+    const step = (id: string): TourStep => {
+      const found = steps.find((candidate) => candidate.id === id)
+      if (found === undefined) throw new Error(`no step ${id}`)
+      return found
+    }
+    expect(steps.slice(0, 4).map((candidate) => candidate.id)).toEqual(['welcome', 'stores', 'store', 'search'])
+
+    expect(step('stores').target?.()).toBe(document.querySelector('.head-files button'))
+    expect(step('stores').done?.()).toBe(false)
+    open = 'rsg'
+    expect(step('stores').done?.()).toBe(true)
+    expect(step('store').target?.()).toBe(document.querySelector('[data-store="4dn"]'))
+    expect(step('store').done?.()).toBe(false)
+    open = '4dn'
+    expect(step('store').done?.()).toBe(true)
+
+    open = null
+    expect(step('store').needs?.holds()).toBe(false)
+    expect(step('store').needs?.back).toBe('stores')
   })
 })
 

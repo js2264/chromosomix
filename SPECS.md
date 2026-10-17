@@ -13806,7 +13806,7 @@ an offer to play the tutorial is one more thing to read.
 **In *About*, straight after what the viewer is** — the answer to the question a reader who has just
 read that asks next, and the one way in a newcomer finds without being told where to look. One
 sentence, and one filled button that says what it will do: *play the tutorial* for a reader who has
-not begun it, *resume at step 31 of 49* for one who left it, with a quiet *start over* beside it, and
+not begun it, *resume at step 32 of 50* for one who left it, with a quiet *start over* beside it, and
 *play the tutorial again* for one who finished it. The palette has it too, as *Guided tutorial* under
 Help, its hint saying which of the three a press will do.
 
@@ -13816,12 +13816,13 @@ tutorial; nor does the single file (§19), which offers this machine alone. Abse
 since nothing the reader could do there would make it work.
 
 **From the start, it begins on the landing page**, under a card that says what the tutorial is and
-lists its parts, with the store drawer opened behind it on the lab's store, so that the first thing
-the reader does is switch to 4DN's — a press that is always there to make, where a drawer left on 4DN
-by an earlier visit, or by a link, made the step one that had already happened. A tab that holds
-anything — a map, or a view restored from a reload that is about to open one — is left as it is and a
-new tab is opened beside it, as the brand does, rather than emptied under the reader. A resume does
-not move the window (§30.6).
+lists its parts. Nothing opens behind it: the store drawer is put down if it was open and **aimed at
+the lab's store**, so that the reader's first press, on the header button, opens the drawer on a
+store to switch *from*, and the second switches to 4DN's — a press that is always there to make,
+where a drawer left on 4DN by an earlier visit, or by a link, made it one that had already happened.
+A tab that holds anything — a map, or a view restored from a reload that is about to open one — is
+left as it is and a new tab is opened beside it, as the brand does, rather than emptied under the
+reader. A resume does not move the window (§30.6).
 
 ### 30.2 The data
 
@@ -13851,15 +13852,15 @@ part says that an E1 can match 4DN's upside down, at −1.
 
 ### 30.3 The steps
 
-Forty-nine, in ten parts, each part's name printed over its steps' titles. The welcome and the end
+Fifty, in ten parts, each part's name printed over its steps' titles. The welcome and the end
 are a card each in the middle of the window, and between them every step lights one thing:
 
 - **Welcome** — what the tutorial is, in two sentences, with its parts listed under them and *let's
   go*.
-- **The 4DN store** — switch the drawer from the lab's store to 4DN's; find `4DNES4296C5Q` in its
-  search box, the accession set in colour on the card with a button beside it that copies it, and
-  *type it for me* beside the step for a reader who would rather not type twelve characters at all;
-  open the set with its tracks, one press.
+- **The 4DN store** — open the store drawer from its header button, on the lab's store; switch it to
+  4DN's; find `4DNES4296C5Q` in its search box, the accession set in colour on the card with a button
+  beside it that copies it, and *type it for me* beside the step for a reader who would rather not
+  type twelve characters at all; open the set with its tracks, one press.
 - **The map** — a step that is only read, lighting the General column: the file, its sequences, its
   metadata; pick 250 kb; open chr13 from the Chromosomes table, scrolled to its row when the table has
   not drawn it; a step that is only read, about the map, and how to scroll, drag and double-click on
@@ -13938,7 +13939,7 @@ grey and keeps nothing from the app, so the window can be used to get back to wh
 tail pointing into the hole from that side; in the bottom-right corner, with no tail, when the hole is
 the whole picture; at the bottom, centred, when nothing is lit. It glides from one control to the next
 rather than jumping, and its words come in rather than being swapped, so the eye follows the card to
-the next thing to press. Along its top it says the part, *step n of 49*, and *skip tutorial*, over a
+the next thing to press. Along its top it says the part, *step n of 50*, and *skip tutorial*, over a
 bar cut into the tour's parts, each filled as far as the reader has got through it. Then an icon for
 what the step asks — press, type, choose, drag, or only look — beside its title; one or two sentences;
 and *back* and *next* (*skip step* while the step waits, *finish* on the last, and no *back* on the

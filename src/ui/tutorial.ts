@@ -24,8 +24,9 @@
  *
  * ## The steps a reader would not think of
  *
- * The tour opens with the store drawer on the **lab's store**, so that its
- * first press is a switch to 4DN's that is always there to make (`app/App.ts`).
+ * The tour starts with the store drawer shut and aimed at the **lab's store**
+ * (`app/App.ts`): its first press opens the drawer, and its second is a switch
+ * to 4DN's that is always there to make, whatever the drawer was last left on.
  * It shows the two columns the map comes with — **General**, then **Aesthetics**
  * once a map is on screen — and the Analysis panel's **three groups** of tasks,
  * one by one, before it asks for any of them.
@@ -535,17 +536,23 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
 
     // -- The store -----------------------------------------------------------
     {
+      id: 'stores',
+      chapter: 'The 4DN store',
+      title: 'Open the data stores',
+      text:
+        'Stores are catalogues of published data, read from where they are kept. Press this button to open ' +
+        'the drawer that holds them.',
+      target: () => first('.head-files button[aria-label="stores"]'),
+      done: () => host.store() !== null,
+    },
+    {
       id: 'store',
       chapter: 'The 4DN store',
-      title: 'Open the 4DN store',
-      text:
-        'Stores are catalogues of published data, read from where they are kept. Press 4DN to open the 4D ' +
-        'Nucleome project’s.',
-      target: () =>
-        (host.store() === null ? null : first(`.store-drawer .store-tile[data-store="${TUTORIAL_STORE}"]`)) ??
-        first(`.store-tiles-large .store-tile[data-store="${TUTORIAL_STORE}"]`) ??
-        first('.head-files button[aria-label="stores"]'),
+      title: 'Switch to 4DN',
+      text: 'It opens on the lab’s own store, RSG. Press 4DN to switch to the 4D Nucleome project’s.',
+      target: () => first(`.store-drawer .store-tile[data-store="${TUTORIAL_STORE}"]`),
       done: () => host.store() === TUTORIAL_STORE,
+      needs: { holds: () => host.store() !== null, back: 'stores' },
     },
     {
       id: 'search',
