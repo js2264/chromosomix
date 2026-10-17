@@ -2523,6 +2523,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A page asking for a map's file starts the reader while the file is found (§6.1).** The picker
+  starts the reader's worker and h5wasm once the page is idle, so the first file dropped on it does
+  not wait for them — but the picker a workspace or a restored tab puts up to ask for a map on this
+  machine did not, and the file dropped there waited for a reader to be made. From disk, a
+  chromosome or a locus of the three maps the timings draw took 1.18 s from that page and takes
+  0.96 s, medians of eleven pictures. A genome, which reads through no reader, starts none.
+
 - **A file dropped on the page waiting for it opens the map the link or workspace named inside it
   (§5.6).** A tab naming `map.mcool::/resolutions/25000` or a `.hic` at 4 kb that has to be given the
   file asks for it to be dropped, and promises its view back; dropped, the file was opened by its

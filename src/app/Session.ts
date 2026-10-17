@@ -1617,6 +1617,13 @@ export class Session {
    * looking at, and only once: a tab restored with a map open makes its worker
    * straight away, and one with a genome never needs this one.
    *
+   * The picker asking for a map's file is one of them — a workspace's, or a
+   * restored tab's, whose map is on this machine — and it used to be passed
+   * over: the file a workspace named was dropped on a page with no reader, and
+   * waited for one. From disk, a chromosome or a locus of the three maps
+   * `notebooks/timing.qmd` times took 1.18 s to draw from such a page, and
+   * takes 0.96 s now, medians of eleven pictures.
+   *
    * @internal SessionRouter starts the reader under the picker.
    */
   warmReader(): void {
@@ -1773,6 +1780,8 @@ export class Session {
       this.pendingConfig = config
       this.showContent(this.pickerWithConfig(config))
       this.host.sessionChanged(this)
+      // A picker asking for the map: its reader starts while the file is found.
+      this.warmReader()
       return
     }
     this.pendingConfig = config

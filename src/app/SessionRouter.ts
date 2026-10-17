@@ -222,6 +222,8 @@ export class SessionRouter {
       if (this.session.stale(state, signal)) return
       if (source === null) {
         this.session.showContent(this.session.pickerWithNote(state.uri))
+        // Asking for a map's file: the reader starts while it is found.
+        this.session.warmReader()
         return
       }
       await this.session.open(state.uri, source)

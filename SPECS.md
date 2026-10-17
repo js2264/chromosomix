@@ -1739,7 +1739,9 @@ the other way, exactly and not through the chunks at all, planned so its reads a
 moment it exists, and it used to exist only once a file was opened, so every first open waited for
 the runtime between the click and the first byte: 2.6 of the 3.2 seconds a 1 GB `.mcool` dropped on a
 fresh tab took to land. It is made when the picker is on screen and the page is idle, and the same
-drop lands in 0.3 s.
+drop lands in 0.3 s — the picker a workspace or a restored tab puts up to ask for a map on this
+machine included, where a file dropped used to wait for a reader: a chromosome or a locus of the
+timings' three maps (§18.10) took 1.18 s to draw from it, and takes 0.96 s.
 
 ### 6.2 Decoding requirements
 
