@@ -45,6 +45,11 @@ const KEY = 'chromosomix:overlays2'
  * of them a *shape* — it is where the values actually are, and the fill under it
  * is only shading. It was off because it is one more mark, which is the wrong
  * trade for the one mark that carries the data.
+ *
+ * `gutter` is off, on both surfaces: a track's name is written over the start of
+ * the track it names, on a plate, where the eye already is. The 1D browser's
+ * name column and the map's corners (§8.8) take room from the picture to give
+ * the names a place of their own, which is the reader's call to make.
  */
 export const DEFAULT_UI_PLOT_OPTIONS: PlotOptions = {
   text: true,
@@ -193,7 +198,10 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
     // does, what a double click hands back — filled four lines of the palette
     // and pushed the commands under it off the list. The gestures are on the
     // edge itself, where a hand that is already there finds them.
-    hint: 'Start the tracks after the widest name, right-aligned in the column that leaves.',
+    //
+    // Both surfaces in the one line, since the one switch moves both (§8.8):
+    // off, which is the default, a name is written over the start of its track.
+    hint: 'Track names beside the tracks rather than over them: in a column before them, or in the map’s corners.',
   },
   crosshair: { label: 'crosshair', hint: 'Guide lines through the cell under the pointer.' },
   tooltip: {

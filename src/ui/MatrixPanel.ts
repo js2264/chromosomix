@@ -1379,7 +1379,8 @@ export class MatrixPanel {
         ? {}
         : { metadata: options.annotations.metadata }),
       // Each stack's names beside the map, in the corner that follows it
-      // clockwise, rather than over its data (§8.8).
+      // clockwise, rather than over its data — with the name column on, which
+      // is off to begin with (§8.8).
       corners: true,
       onChange: () => this.schedule(),
     })
@@ -1646,6 +1647,12 @@ export class MatrixPanel {
                   () => this.shrinkTracks(),
                   { class: 'btn btn-icon', size: 15 },
                 ),
+                // Where the names stand: over each track, the default, or in
+                // the map's corners (§8.8). The 1D browser's name column, in
+                // the same place in its own card, and the same preference —
+                // a reader who wants the names beside the tracks wants them
+                // there on both surfaces.
+                optionToggle('gutter'),
               ]),
           ),
         ),
