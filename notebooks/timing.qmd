@@ -419,6 +419,7 @@ if not viewers_current():
                                  str(VIEWER_RESULTS)], cwd=REPO, stdout=log, stderr=subprocess.STDOUT)
     # A driver that stopped part of the way keeps the runs it finished, and the table says which did not run.
     held = [json.loads(line) for line in VIEWER_RESULTS.read_text().splitlines()] if VIEWER_RESULTS.exists() else []
+    VIEWER_TABLE.parent.mkdir(parents=True, exist_ok=True)
     viewer_rows({(one['id'], one['run']): one for one in held}).to_csv(VIEWER_TABLE, sep='\t', index=False)
     if driver.returncode:
         raise RuntimeError(f"The viewers' driver stopped:\n{(VWORK / 'driver.log').read_text()[-3000:]}")

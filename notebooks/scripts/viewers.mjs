@@ -309,11 +309,19 @@ async function chromosomix(run, base, scratch) {
     if (drawn === null) return { status: 'error', note: 'no report of a finished picture', appMs, errors }
     const map = drawn.maps[0]
     await screenshot(page, run)
+    // The map's canvas and the lanes drawn beside it, without the panel's margins.
     const clip = await page.evaluate(() => {
       const body = document.querySelector('section.panel .panel-body')
       if (body === null) return null
-      const { x, y, width, height } = body.getBoundingClientRect()
-      return { x, y, width, height }
+      const drawn = [...body.querySelectorAll('canvas')]
+        .map((canvas) => canvas.getBoundingClientRect())
+        .filter((box) => box.width > 0 && box.height > 0)
+      const boxes = drawn.length > 0 ? drawn : [body.getBoundingClientRect()]
+      const left = Math.min(...boxes.map((box) => box.left))
+      const top = Math.min(...boxes.map((box) => box.top))
+      const right = Math.max(...boxes.map((box) => box.right))
+      const bottom = Math.max(...boxes.map((box) => box.bottom))
+      return { x: left, y: top, width: right - left, height: bottom - top }
     })
     const bins = map === undefined ? null : Math.max(map.rows, map.cols)
     const status =
