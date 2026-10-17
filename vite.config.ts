@@ -6,6 +6,7 @@ import { fileURLToPath, URL } from 'node:url'
 import { cspMeta } from './scripts/csp.mjs'
 import { precacheUrls } from './scripts/sw-manifest.mjs'
 import { thirdPartyCollector, thirdPartyNotices } from './scripts/third-party-notices.mjs'
+import { llmsFull } from './scripts/llms.mjs'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
   version?: string
@@ -157,7 +158,10 @@ export default defineConfig({
   // The notices are every build's, and every config that replaces this list
   // names `thirdPartyNotices()` again, last, where the worker builds report into
   // it from `worker.plugins` below (`scripts/third-party-notices.mjs`).
-  plugins: [serviceWorker(process.env.BASE_PATH ?? '/'), gzippedAsIs(), cspMeta(), thirdPartyNotices()],
+  //
+  // `llms-full.txt` is the site's alone, beside the `llms.txt`, `robots.txt` and
+  // `sitemap.xml` its `public/` carries (`scripts/llms.mjs`).
+  plugins: [serviceWorker(process.env.BASE_PATH ?? '/'), gzippedAsIs(), cspMeta(), thirdPartyNotices(), llmsFull()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },

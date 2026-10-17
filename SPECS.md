@@ -5544,6 +5544,25 @@ no policy, since it injects every stylesheet as a `<style>` and talks to the pag
 — a map, a figure hovered, the 1D browser from a second origin — and fails on any refusal the page
 did not ask for, and on a map or a lane left without its data.
 
+**The site describes itself to crawlers and to language models, in files beside the app.** Its
+`public/` puts three at the root. `llms.txt` is a summary in the shape llmstxt.org gives one: what
+the app is, the formats it opens, how to write a link that opens a file at a place — the hash of
+§5.5, with a map's `region` in the machine form and the browser's `locus` in the display form
+(§26.1) — how to embed one (§21), how to run the command line (§23), and links to the README, the
+validation and timing notebooks, the changelog and this specification. `robots.txt` lets every
+crawler in, those of language models included, keeps the archived pins and the pull-request
+previews (`/v/`, `/pr/`) out of search — each is a copy of the app at the root, kept for links that
+must not change — and names `sitemap.xml`, which lists the app and its two notebooks. The site
+build adds a fourth, `llms-full.txt`: the README as one file, its repository-relative links made
+absolute (`scripts/llms.mjs`), for a tool that reads a single document rather than following links.
+**`llms.txt` is written by hand and held to the app by a test**, because a model acts on it — writes
+a link from it, runs a command from it — and nothing reading it can tell a summary that has drifted:
+each example link goes through the hash's own reader, each value it lists through the list it is
+drawn from, each task through the registry and each store through the shelf. The page's head
+carries a description and Open Graph tags, which a pasted link unfurls with and a crawler reads
+before the app has run. None of this is in the pinned, desktop or package builds, which carry no
+`public/`.
+
 ---
 
 ## 12. Performance budgets
@@ -13854,7 +13873,8 @@ never the reason a session is lost.
   browser.
 - **Not on the command line**: `chromosomix` is a developer's tool, lists every task and runs every
   one.
-- **Not in the static text** around the app — the page's title and description, the install
-  prompt's name and description — which cannot follow a switch, so it names nothing that is dev:
-  *chromosomix – cool files, in the browser*, where both titles once said *(multi-genome) cool
-  files*. The name is **chromosomix**.
+- **Not in the static text** around the app — the page's title and description, the description a
+  pasted link unfurls with, the install prompt's name and description, and the `llms.txt` the site
+  serves to language models (§11) — which cannot follow a switch, so it names nothing that is dev:
+  *chromosomix – genome browser for contact maps, tracks and 3D models*, where both titles once said
+  *(multi-genome) cool files*. The name is **chromosomix**.

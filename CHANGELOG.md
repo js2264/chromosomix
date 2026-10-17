@@ -14,6 +14,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The site describes itself to language models and crawlers (§11).** `chromosomix.app/llms.txt`,
+  in the shape llmstxt.org gives one: what the app is, the formats it opens, how to write a link that
+  opens a file at a place — every hash key a model is likely to want, with a map's `region` 0-based
+  and the 1D browser's `locus` as displayed — how to embed it, how to run the command line, and where
+  the documentation is. A test holds what it says to the app: each example link through the hash's
+  own reader, each value it lists against its list, each task against the registry and each store
+  against the shelf, and it names no dev feature (§29.5). Beside it, `llms-full.txt` is the README as
+  one file, generated at build time with its links made absolute; `robots.txt` welcomes every crawler
+  but keeps the archived pins and pull-request previews out of search; and `sitemap.xml` lists the
+  app and its validation and timing notebooks. The page's title, description and new Open Graph tags
+  say what a pasted link unfurls with: a genome browser for contact maps, tracks and 3D models, where
+  the title said *cool files, in the browser*.
 - **`chromosomix --version` (§23).** The first line is `chromosomix` and the version, with the
   commit the build was made from — the words every file the command writes opens with, so `head -1`
   is what a pipeline records. Then the Node it runs on, with the platform, and the `h5wasm` and

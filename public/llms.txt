@@ -1,0 +1,72 @@
+# chromosomix
+
+> A unified, serverless genome browser for multi-dimensional genomic data: chromatin contact maps (Hi-C, Micro-C), genome tracks and 3D chromatin models, side by side, read straight from standard files in a web browser. Nothing is uploaded and nothing needs preprocessing. The same analyses run in the browser or from the `chromosomix` command line, with the same parameters and the same results.
+
+chromosomix is a static single-page application, free and open source under the MIT licence. It reads files where they are: a file on the user's disk is read in place and never leaves the machine, and a remote file is read by HTTP range requests, a few kilobytes at a time. It runs at https://chromosomix.app/, as an installable web app, as a desktop app (macOS, Linux), as one standalone HTML file attached to every GitHub release, and from npm as a command-line interface.
+
+Formats it opens as they are:
+
+- Contact maps: `.cool`, `.mcool`, `.hic`, HiC-Pro matrices, `.pairs` and `.pairs.gz`.
+- Tracks and annotations: bigWig, bedGraph, wig, bigBed, BED, narrowPeak, GTF/GFF3, genePred, VCF, BAM (with its `.bai`), FASTA (with its `.fai`), `.2bit`, barChart, bedMethyl, chrom.sizes, and UCSC track hubs (`hub.txt`).
+- Interactions: BEDPE, `interact`/`bigInteract` and `longrange`.
+- 3D models: g3d (text or binary), `.3dg` and bed3d.
+
+A remote file has to be served with CORS and HTTP range requests, which S3, Google Cloud Storage, Cloudflare R2 and most static web servers do. Dropbox and Google Drive share links work too.
+
+**Linking to a view.** Every view is a URL. The state is in the fragment, as `key=value` pairs joined by `&`, with each value percent-encoded. To show a file at a place, write a link:
+
+    https://chromosomix.app/#uri=<file URL>&view=region&region=<sequence>:<start>-<end>&transform=log10&balance=true
+
+- `uri` (required): the address of the file. For one resolution of an `.mcool`, append `::/resolutions/<bin size>`, as in `sample.mcool::/resolutions/10000`.
+- `view`: `contigs` (the table of chromosomes), `whole` (the whole matrix), `region` (a window of the map) or `browser` (the 1D track browser over the file). A value it does not know opens the file's table.
+- `region`: `<sequence>:<start>-<end>`, 0-based and half-open, without thousands separators, as cooler writes it: `IV:1000000-1400000` is shown as IV:1,000,001-1,400,000. A sequence name alone is the whole sequence. `region2` adds the column side of an off-diagonal block.
+- `locus`, with `view=browser`: the window of the 1D browser, written as it is displayed, 1-based and inclusive: `IV:1,000,001-1,400,000`.
+- `transform`: `log10`, `log2`, `log1p` or `none`.
+- `balance`: `true` for balanced values, with the weights the file carries, or `false` for raw counts.
+- `colormap`: `default`, `afmhot_r`, `afmhot`, `Reds`, `viridis`, `magma`, `cividis`, `RdBu_r`, `BuWtRd` or `seismic`. `vmin` and `vmax` clip the colour scale, in transformed units.
+- `oe`: `true` for observed over expected.
+- `uri2`: a second map, drawn in the lower triangle of the same square; `op` is `split`, `ratio` or `difference`.
+- `maps`: more maps beside the first, as a deck, their addresses joined by `|`.
+
+Put `?embed=1` before the `#` for the bare view, to frame in an `<iframe>`, and `?config=<URL>` to open a saved workspace (a `.chromosomix.json` file) instead of a single file. For a link whose picture must never change, use a release's permanent copy in place of the root: `https://chromosomix.app/v/<tag>/`, such as `https://chromosomix.app/v/v0.13.0/`. `https://chromosomix.app/?store=<id>&q=<text>` opens a public data store filtered by a search; the store ids are `rsg` (the lab's demo and paper data), `igv`, `4dn`, `encode`, `dnazoo` and `roadmap`.
+
+An example, Micro-C of synthetic yeast chromosome IV from the public demo bucket:
+
+    https://chromosomix.app/#uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&transform=log10&balance=true
+
+The same view, embedded in a page:
+
+    <iframe src="https://chromosomix.app/?embed=1#uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&transform=log10&balance=true" width="100%" height="640" style="border: 0" title="Micro-C of yeast chromosome IV"></iframe>
+
+**The command line.** The analyses without the interface, for scripts and pipelines: `npm install -g chromosomix`, with Node 22.12 or later, or `npx chromosomix@<version>` to run a pinned release without installing anything.
+
+    chromosomix tasks                      # every task, with its parameters and their defaults
+    chromosomix insulation sample.mcool::/resolutions/10000 --window 10 --out results/
+    chromosomix expected sample.cool --out results/
+    chromosomix metaplot --tracks ATAC.bw --features peaks.narrowPeak --out results/
+    chromosomix --version
+
+Each task writes its results into `--out` as TSV, and as BED, bedGraph or bigWig where those apply, named `<file stem>.<task>.<output>.<ext>`; a text output opens with the version, the file and the parameters that produced it. A map is read balanced wherever the file carries weights, and `--no-balance` reads the raw counts. A locus on the command line is 1-based and inclusive, as the app displays it. The tasks are `coverage`, `cistrans`, `expected` (P(s)), `scalogram`, `fourc` (virtual 4C), `insulation`, `di` (directionality index), `hicscore`, `compartments`, `interarm`, `chromosight` (loops, borders and other patterns), `apa`, `reconstruct3d`, `structuremap`, `spatialtracks`, `motif`, `peaks`, `composition`, `oriter`, `metaplot`, `trackcorr`, `frip`, `groupsignal` and `overlap`.
+
+Every analysis is held to the package it reproduces (cooltools, coolpuppy, chromosight, deepTools, bedtools and others) on public data, command for command, in a notebook rendered with every release.
+
+## Docs
+
+- [README](https://raw.githubusercontent.com/js2264/chromosomix/main/README.md): features, installation, the command line with every task's parameters, embedding and licences
+- [The documentation in one file](https://chromosomix.app/llms-full.txt): the README, served beside this file for tools that read a single document
+- [Validation](https://chromosomix.app/validation/): each analysis compared with its reference implementation
+- [Timings](https://chromosomix.app/timings/): how long each command takes beside its reference
+- [Changelog](https://raw.githubusercontent.com/js2264/chromosomix/main/CHANGELOG.md): what changed in each release
+
+## Get it
+
+- [Web app](https://chromosomix.app/): nothing to install
+- [Releases](https://github.com/js2264/chromosomix/releases): the desktop installers and the standalone HTML page, for every version
+- [npm package](https://www.npmjs.com/package/chromosomix): the `chromosomix` command line, and the viewer as static files to host
+- [Source code](https://github.com/js2264/chromosomix): the repository, under the MIT licence
+
+## Optional
+
+- [Specification](https://raw.githubusercontent.com/js2264/chromosomix/main/SPECS.md): the complete behavioural contract, section by section, over a megabyte
+- [Glossary](https://raw.githubusercontent.com/js2264/chromosomix/main/GLOSSARY.md): the words the interface uses, defined
+- [Third-party notices](https://chromosomix.app/THIRD-PARTY-NOTICES.txt): the licences of the work the app carries

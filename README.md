@@ -27,8 +27,6 @@ chromosomix launches in about a second and reads your data where it lives, on yo
   - 1D analysis tasks: peak calling from a coverage track (yapc, with IDR between replicates), motif search, base composition and GC skew, the origin and terminus of replication, metaplots, track correlation, FRiP over a feature set, signal by group, interval overlap with a shuffle null, ...
   - 2D analysis tasks: P(s) (and its four pair orientations), scalogram, diamond insulation, directionality index, HiC score, coverage, cis/trans per chromosome, virtual 4C, compartments annotation and saddle plot, the alignment of a bacterial chromosome's two arms, loops and borders detection, APA, loop ranking, ...
   - 3D analysis tasks: build a 3D model from the contact map (pastis-NB or ShRec3D), compare a 3D model with the contact map, and turn a 3D model into tracks.
-  - Comparing what is on screen: HiCRep reproducibility across the maps in a deck, stratum by stratum and pooled.
-  - Single cells: per-cell contact QC over an `.scool`, with the cell-cycle phasing scatter feeding back into the Cells table.
 
 - Serverless browser & CLI-based: there is no upload, no required preprocessing step and no backend of any kind — the viewer is static files that read standard genome-wide formats directly. Every analysis can be run **interactively**, in the browser, or **programmatically**, with the `chromosomix` command line in a script or a pipeline: the same tasks, with the same parameters, producing the same results. A bottom Console panel in the browser records every run and reports the `chromosomix` command that repeats it.
 
@@ -167,14 +165,6 @@ chromosomix tasks
 ##       --matrix (default true)  draw the square
 ##       --no-balance  read the raw counts (balanced by default where the file carries weights)
 ## 
-## cellqc
-##     Per-cell contact QC
-##       --cells (default "all")  cells
-##       --nearFrom (default 23000)  near band, from
-##       --nearTo (default 2000000)  near band, to
-##       --mitoticTo (default 12000000)  mitotic band, to
-##       --no-balance  read the raw counts (balanced by default where the file carries weights)
-## 
 ## expected
 ##     Contact probability P(s)
 ##       --scope (default "contig")  scope
@@ -275,14 +265,6 @@ chromosomix tasks
 ##       --maxPercZero (default 10)  most empty pixels a window may hold
 ##       --nMads (default 5)  detectability cut
 ##       --maxQvalue (default 1)  report down to a q-value of
-##       --no-balance  read the raw counts (balanced by default where the file carries weights)
-## 
-## hicrep
-##     Reproducibility
-##       --against <file>  The other maps to compare with; repeat per map
-##       --sequences  sequences
-##       --maxDistance (default 500)  furthest separation compared
-##       --smooth (default 1)  smoothing half-width
 ##       --no-balance  read the raw counts (balanced by default where the file carries weights)
 ## 
 ## apa
@@ -531,9 +513,6 @@ chromosomix metaplot --tracks ATAC.bw --features peaks.narrowPeak --out results/
 chromosomix peaks --signal ChIP.bw --out results/
 chromosomix composition --sequence ref.fa.gz --out results/
 
-# Reproducibility compares the file with every map --against names.
-chromosomix hicrep rep1.mcool::resolutions/5000 --against rep2.mcool::resolutions/5000 --maxDistance 400
-
 # Compartments phased by GC content read the reference under --sequence.
 chromosomix compartments sample.cool --sequence ref.fa.gz --phaseSequence ref.fa.gz
 
@@ -559,11 +538,9 @@ chromosomix interarm ecoli.mcool::/resolutions/5000 --circular NC_000913.3 \
 chromosomix reconstruct3d ecoli.mcool::/resolutions/20000 --out results/
 
 # What the session set from the picture, as flags: the score column a
-# .metacool is drawn from, the sequences declared circular, the cells of an
-# .scool that were ticked. The console writes them whenever they differ from
-# the defaults (count, none, every cell).
+# .metacool is drawn from and the sequences declared circular. The console
+# writes them whenever they differ from the defaults (count, none).
 chromosomix insulation sample.metacool --value balanced_by_depth --circular pCEN,p2u
-chromosomix cellqc cells.scool --cell c01,c02,c07 --cells selected
 
 # A .pairs is binned first, at a resolution you name — the shell's answer to
 # the browser's dialog. `--pairs` above is a BEDPE of features; the contact
