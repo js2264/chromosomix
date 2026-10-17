@@ -203,12 +203,15 @@ which is how it serves a file it does not hold.
 (`notebooks/scripts/viewers.mjs`) — with no cache and no storage, and every HiGlass run meets a server
 started for it alone, with an empty block cache when it reads from the bucket. The viewer's page is
 loaded empty first, with its code and its workers, and that time is kept apart (`app_seconds`): what is
-timed is the data's road to the screen. Each of `VIEWER_RUNS` rounds (four, unless `VIEWER_RUNS` in the
-environment says otherwise) draws every picture once, the viewers taking turns to go first, so that the
-one that reads a file first, from a disk or from a bucket that answers a second read faster, is a
-different one each round. The requests and bytes counted are those the page asked for between the two
-moments: of the bucket, for chromosomix and juicebox.js; of its server, for HiGlass, whose own reads go
-through FUSE, outside the page, and are not counted.
+timed is the data's road to the screen. It is then left two seconds, as a reader's page is while they
+find their file — what a viewer starts once its page is idle, as chromosomix starts its reader and
+h5wasm, a reader finds started — and chromosomix, from disk, as long again on the page its workspace
+leaves asking for the files. Each of `VIEWER_RUNS` rounds (four, unless `VIEWER_RUNS` in the environment
+says otherwise) draws every picture once, the viewers taking turns to go first, so that the one that
+reads a file first, from a disk or from a bucket that answers a second read faster, is a different one
+each round. The requests and bytes counted are those the page asked for between the two moments: of the
+bucket, for chromosomix and juicebox.js; of its server, for HiGlass, whose own reads go through FUSE,
+outside the page, and are not counted.
 
 ```{python}
 #: Each genome's map, in both formats, and its track: where they are published and their MD5s, and the four

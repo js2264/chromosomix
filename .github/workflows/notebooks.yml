@@ -43,7 +43,7 @@ name: Notebooks
 # Electron caches, and the buckets answer a runner at hundreds of megabytes a
 # second. From nothing, the validation renders in about an hour on a standard
 # runner (4 cores, 16 GB — the heaviest reference peaks at about 4 GB), every
-# reference run for the first time; the viewers' pictures in about fifteen
+# reference run for the first time; the viewers' pictures in about twenty
 # minutes a round, and the timings in about twenty minutes a run, so four of
 # each fit the six hours a job may take — four, an even number, so that each
 # side of a pair goes first in as many rounds as the other (timing.qmd's

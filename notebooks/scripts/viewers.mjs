@@ -19,7 +19,10 @@
  *   (`notebooks/viewers/higlass.html`), from higlass-python's server, started for the run.
  *
  * Each viewer is first loaded empty — its page, its code, its workers — and that time is kept
- * apart (`app_ms`), so what is compared is the data's road to the screen. Each answers with the
+ * apart (`app_ms`), so what is compared is the data's road to the screen. Then each is left to
+ * settle for {@link SETTLE_MS}, as a reader's page is while they find their file: what a viewer
+ * starts once its page is idle (chromosomix's reader and h5wasm) is started by then for a reader,
+ * and handed the data at once it was in the time of the first picture. Each answers with the
  * resolution it drew, and a run whose viewer drew another resolution, or part of the window, is
  * kept as what it was and not as a time for the one asked for.
  *
@@ -49,6 +52,8 @@ if (planPath === undefined || resultsPath === undefined) {
 const PLAN = JSON.parse(readFileSync(planPath, 'utf8'))
 /** How long a run may take before it is given up as not drawn. */
 const LIMIT_MS = PLAN.limitMs ?? 300_000
+/** How long each viewer's page is left, loaded, before it is handed the data. */
+const SETTLE_MS = PLAN.settleMs ?? 2_000
 /** The window: wide enough that every viewer's map is about 600 pixels square. */
 const VIEWPORT = { width: 1600, height: 1000 }
 /** juicebox's container, and the HiGlass map's side; see their pages. */
@@ -226,6 +231,11 @@ async function fresh(base) {
   return { context, page, reports, requests, errors }
 }
 
+/** A loaded page left alone, as a reader's is while they find their file. */
+function settle() {
+  return new Promise((resolve) => setTimeout(resolve, SETTLE_MS))
+}
+
 /** The first report after `after` that `wanted` accepts, or `null` past the limit. */
 async function report(reports, after, wanted) {
   const started = Date.now()
@@ -282,6 +292,7 @@ async function chromosomix(run, base, scratch) {
     const landed = await report(reports, 0, () => true)
     if (landed === null) return { status: 'error', note: 'the app did not finish its landing page' }
     const appMs = landed.at
+    await settle()
     const workspace = join(scratch, `${run.id}.chromosomix.json`)
     writeFileSync(workspace, JSON.stringify(run.chromosomix.workspace))
     await addInput(page, 'timed-files')
@@ -294,6 +305,8 @@ async function chromosomix(run, base, scratch) {
       before = reports.length
       await dropOn(page, '#timed-files')
       if ((await report(reports, before, () => true)) === null) return { status: 'error', note: 'the workspace did not open' }
+      // The page asking for the files, as a reader finds them.
+      await settle()
       await addInput(page, 'timed-files')
       await give(page, '#timed-files', [run.map, run.track])
     } else {
@@ -350,6 +363,7 @@ async function juicebox(run, base, juiceboxWidth) {
     await page.waitForFunction(() => window.ready === true)
     await page.evaluate((plan) => window.prepare(plan), JUICEBOX_BOX)
     const appMs = await page.evaluate(() => performance.now())
+    await settle()
     if (run.location === 'local') await give(page, '#files', [run.map, run.track])
     const plan = {
       map: run.location === 'local' ? basename(run.map) : run.map,
@@ -395,6 +409,7 @@ async function higlass(run, base) {
     await page.goto(`${base}/viewers/higlass.html`)
     await page.waitForFunction(() => window.ready === true)
     const appMs = await page.evaluate(() => performance.now())
+    await settle()
     const answer = await page.evaluate((plan) => window.time(plan), {
       server: served.server,
       map: served.map,

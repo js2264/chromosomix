@@ -30,7 +30,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   times chromosomix against juicebox.js (on a `.hic`) and HiGlass (on an `.mcool`, served by
   higlass-python's own tile server): one map and one track, of yeast, chicken and mouse, each seen
   whole, one chromosome, a region and a locus, from disk and from the bucket it is published in, in a
-  fresh browser context, from handing each viewer the files to the viewer saying its picture is
+  fresh browser context — each viewer's page loaded empty and left two seconds, as a reader's is
+  while they find their file — from handing each viewer the files to the viewer saying its picture is
   finished. Every view is at one resolution the plan names — never the viewer's choice — and a view a
   viewer cannot draw at it, a rung the file lacks or juicebox.js's whole genome, is reported rather
   than drawn some other way; a picture drawn in part, as juicebox.js draws a whole chromosome with a

@@ -9208,8 +9208,8 @@ view a viewer cannot draw at that resolution — a rung its file does not store,
 juicebox.js, which draws one only from the `.hic`'s own whole-genome matrix — is not run but reported,
 with why. Each picture is read from disk, the page cache emptied first where the runner allows, and
 from the bucket it is published in, and timed in a fresh browser context, the viewer's empty page
-loaded first and kept apart, from the moment the viewer is handed the files to the moment it says the
-picture is finished: chromosomix by its own report (§12, *A picture says when it is finished*),
+loaded first and kept apart, then left two seconds as a reader's is while they find their file, from
+the moment the viewer is handed the files to the moment it says the picture is finished: chromosomix by its own report (§12, *A picture says when it is finished*),
 juicebox.js by its last repaint covering the state asked for and its track's tiles, HiGlass by every
 tile in view fetched and drawn. Four rounds, the viewers taking turns to go first; every run, and
 every cell refused, is one line of `notebooks/work/validation/viewers.tsv`, with the requests and
