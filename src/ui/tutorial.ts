@@ -17,7 +17,26 @@
  * **chr13**, because it shows both halves of the story on one screen: an
  * acrocentric whose short arm is empty — the blank square at its start is what
  * a stretch with no unique sequence looks like — and a long arm with broad,
- * clean compartments.
+ * clean compartments. **41–45 Mb** of it is where the tutorial looks at domains:
+ * at 10 kb, a run of clear squares along the diagonal, some nested in others,
+ * reached from **35–55 Mb** at 250 kb so that each drag is across a square a
+ * hand can hit.
+ *
+ * ## The steps a reader would not think of
+ *
+ * The map is drawn as a **correlation** before Compartments runs, because the
+ * plaid that draws is what the task decomposes — the reader sees the pattern
+ * before the number that summarises it — and back as **balanced** before the
+ * zoom, because domains are a matter of contact frequency. Compartments is
+ * **phased by 4DN's E1**: left to itself the form takes the first set of
+ * intervals for a gene model, which on this session is 4DN's boundaries, and a
+ * sign decided by those is a coin toss (its saddle says *phasing r 0.01*). 4DN's
+ * own E1 is phased already, so following it makes A mean the same in both,
+ * which the last step depends on. And the domains are looked at with
+ * **O/E** and **adaptive smoothing** on: at 10 kb a pixel holds a handful of
+ * contacts, and divided by its distance and pooled where it is thin, the
+ * squares stand out from the decay. Neither changes what a task reads — the
+ * insulation drawer still says *balanced* — so they stay on.
  *
  * ## How a step is written
  *
@@ -37,7 +56,8 @@ import { displayOf } from '../analysis/surfaces'
 import type { TaskResult } from '../analysis/types'
 import type { ViewState } from '../types'
 import { isMac } from './commands'
-import type { TourStep, TourText } from './Tour'
+import { BALANCED_SCORE, CORRELATION_SCORE } from './scores'
+import type { TourSpot, TourStep, TourText } from './Tour'
 
 /** What the steps read from the window. */
 export interface TutorialHost {
@@ -45,6 +65,12 @@ export interface TutorialHost {
   view(): ViewState | null
   /** The bin size of the map in front, or `null`. */
   binsize(): number | null
+  /**
+   * The score its cells are drawn from, by the picker's id, with the file's
+   * default applied — a balanced cooler opens balanced and says so nowhere in
+   * its view state — or `null`.
+   */
+  score(): string | null
   /** The address of the file open in the tab in front, or `null` until it has opened. */
   file(): string | null
   /** Its sequences' names, in its own order, or `null` before they are read. */
@@ -52,7 +78,7 @@ export interface TutorialHost {
   /** The store the drawer is open on, or `null` while it is closed. */
   store(): string | null
   /** Whether a column is open. */
-  panelOpen(panel: 'analysis' | 'annotations'): boolean
+  panelOpen(panel: 'analysis' | 'annotations' | 'aesthetics'): boolean
   /** The task the Analysis drawer is open on, or `null`. */
   task(): string | null
   /** Every finished run of a task on the map in front, newest first. */
@@ -61,6 +87,10 @@ export interface TutorialHost {
   running(task: string): boolean
   /** The rows of the tab in front's Tracks card, or `null`. */
   tracks(): AnnotationStore | null
+  /** Where a stretch of a sequence is drawn on the map in front, as its square on the diagonal. */
+  square(stretch: { contig: string; start: number; end: number }): DOMRect | null
+  /** Whether the console is open along the bottom of the window. */
+  consoleOpen(): boolean
 }
 
 /** The experiment set the tutorial opens. */
@@ -74,6 +104,11 @@ const MAP_FILE = '4DNFIJIP5BJF'
 /** 4DN's own tracks from the same set: E1 at 250 kb, insulation at 10 kb. */
 const FOURDN_E1 = '4DNFIRL31X9M'
 const FOURDN_INSULATION = '4DNFIR2STZVV'
+/** The square the first drag crosses, at 250 kb, and the one the second crosses, at 10 kb. */
+const OVERVIEW = { start: 35_000_000, end: 55_000_000 }
+const DOMAINS = { start: 41_000_000, end: 45_000_000 }
+/** How narrow a window has to be for the second zoom to count: a few domains, not a chromosome arm. */
+const DOMAINS_SPAN = 8_000_000
 /**
  * The rows the reader's own runs leave on the Tracks card: a profile by its
  * output (`ui/synthetic.ts`'s `syntheticId`), the insulation score's ending in
@@ -117,14 +152,61 @@ function taskRow(title: string): HTMLElement | null {
 }
 
 /** A folded column's spine, or the header's button for it. */
-function columnDoor(panel: 'analysis' | 'annotations'): HTMLElement | null {
-  const title = panel === 'analysis' ? 'Analysis' : 'Annotations'
+function columnDoor(panel: 'analysis' | 'annotations' | 'aesthetics'): HTMLElement | null {
+  const title = panel === 'analysis' ? 'Analysis' : panel === 'annotations' ? 'Annotations' : 'Aesthetics'
   return first(`.panel-${panel} .panel-tab`) ?? first(`.head-panels button[aria-label="${title} panel"]`)
 }
 
 /** The resolution control: a dropdown on a long ladder, a row of stops on a short one. */
 function resolutionControl(): HTMLElement | null {
   return first('select.res-pick, [role="radiogroup"][aria-label="resolution"]')
+}
+
+/** The Map card, wherever it has been carried, while it is laid out. */
+function mapCard(): HTMLElement | null {
+  for (const card of document.querySelectorAll('.controls-card')) {
+    if (laidOut(card) && words(card.querySelector('.controls-title')) === 'Map') return card
+  }
+  return null
+}
+
+/** A control of the Map card, by the word beside it. */
+function mapField(word: string): HTMLElement | null {
+  for (const label of mapCard()?.querySelectorAll('label.field') ?? []) {
+    if (words(label.querySelector('.field-label')) === word) return label.querySelector<HTMLElement>('select, input')
+  }
+  return null
+}
+
+/** The Map card's O/E toggle. */
+function oeToggle(): HTMLElement | null {
+  for (const node of mapCard()?.querySelectorAll<HTMLElement>('button') ?? []) {
+    if (words(node) === 'O/E') return node
+  }
+  return null
+}
+
+/** A select of the drawer's form, by the words beside it. */
+function formSelect(word: string): HTMLSelectElement | null {
+  for (const label of drawer()?.querySelectorAll('label.param-field') ?? []) {
+    if (words(label.querySelector('.field-label')) !== word) continue
+    const select = label.querySelector('select')
+    return select instanceof HTMLSelectElement ? select : null
+  }
+  return null
+}
+
+/** What a select shows, in its own words. */
+function shown(select: HTMLSelectElement | null): string {
+  return words(select?.selectedOptions[0])
+}
+
+/** A figure of the drawer's result, by the start of its heading. */
+function figure(heading: string): HTMLElement | null {
+  for (const node of drawer()?.querySelectorAll<HTMLElement>('.analysis-figure') ?? []) {
+    if (words(node.querySelector('.analysis-figure-head')).startsWith(heading)) return node
+  }
+  return null
 }
 
 /** The experiment set's heading in the store's list. */
@@ -186,9 +268,31 @@ function sequenceOf(view: ViewState | null): string | null {
   return view.region.split(':')[0]
 }
 
+/** The stretch a view is on, in base pairs, or `null` on a whole sequence or none. */
+function stretchOf(view: ViewState | null): { contig: string; start: number; end: number } | null {
+  if (view === null || view.view !== 'region' || view.region === undefined) return null
+  const match = /^([^:]+):([\d,]+)-([\d,]+)$/.exec(view.region)
+  if (match === null) return null
+  return { contig: match[1], start: Number(match[2].replace(/,/g, '')), end: Number(match[3].replace(/,/g, '')) }
+}
+
 /** The Chromosomes table's name cell for one sequence, which is what a press opens it by. */
 function sequenceRow(name: string): HTMLElement | null {
   return first(`.content .tviewport .tr .td[title="${name}"]`)
+}
+
+/** The map's locus box, typed into and committed, as a reader who would rather not drag does it. */
+function goTo(region: string): void {
+  const box = first('.content input.input-region')
+  if (!(box instanceof HTMLInputElement)) return
+  box.value = region
+  box.dispatchEvent(new Event('input', { bubbles: true }))
+  box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+}
+
+/** Base pairs as the locus box takes them, `41,000,000`. */
+function bp(at: number): string {
+  return at.toLocaleString('en-US')
 }
 
 // ---------------------------------------------------------------------------
@@ -234,6 +338,20 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
     return null
   }
   const mapPicture = (): HTMLElement | null => first('.content .panel-grid')
+  /** A Map card control, or the door to the column it is in while that is folded. */
+  const inMapCard = (find: () => HTMLElement | null) => (): HTMLElement | null =>
+    find() ?? columnDoor('aesthetics')
+  /** The square a stretch of chr13 makes on the map, lit within the map's canvas. */
+  const square =
+    (stretch: { start: number; end: number }) =>
+    (): Element | TourSpot | null => {
+      const canvas = first('.content .heatmap-canvas')
+      if (canvas === null) return null
+      const box = host.square({ contig: TUTORIAL_SEQUENCE, ...stretch })
+      return box === null
+        ? canvas
+        : { within: canvas, box: { left: box.left, top: box.top, right: box.right, bottom: box.bottom } }
+    }
   const keys = isMac() ? '⇧ Shift and ⌥ Option' : 'Shift and Alt'
 
   // The Chromosomes table draws only the rows in view, so a short window may
@@ -260,15 +378,30 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
     needs: { holds: onMap, back: 'open-set' },
   })
 
+  /** The map's score, set in the Map card. */
+  const scoreStep = (id: string, chapter: string, score: string, title: string, text: TourText): TourStep => ({
+    id,
+    chapter,
+    title,
+    text,
+    action: 'choose',
+    target: inMapCard(() => mapField('score')),
+    done: () => host.score() === score,
+    needs: { holds: onMap, back: 'open-set' },
+  })
+
   /**
    * A task run on chr13 alone, then its drawer closed: open the panel, choose
-   * the task, untick every sequence, tick chr13, run, close.
+   * the task, untick every sequence, tick chr13, set what `between` sets, run —
+   * and look at what `after` lights before closing.
    */
   const sequenceTask = (
     chapter: string,
     task: string,
     row: string,
     say: { choose: string; none: string; tick: string; run: string },
+    between: (open: () => boolean) => TourStep[] = () => [],
+    after: (open: () => boolean) => TourStep[] = () => [],
   ): TourStep[] => {
     const panel = `analysis-${task}`
     const open = (): boolean => host.task() === task
@@ -305,6 +438,7 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
         done: () => sameNames(tickedSequences(), [TUTORIAL_SEQUENCE]),
         needs: { holds: open, back: task },
       },
+      ...between(open),
       {
         id: `${task}-run`,
         chapter,
@@ -315,6 +449,7 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
         // A run carries on with its drawer closed, and is still a run.
         needs: { holds: () => open() || host.running(task), back: task },
       },
+      ...after(open),
       {
         id: `${task}-close`,
         chapter,
@@ -344,6 +479,19 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
   })
 
   return [
+    // -- Welcome --------------------------------------------------------------
+    {
+      id: 'welcome',
+      chapter: 'Welcome',
+      title: 'A first session, on real data',
+      text:
+        'Open a Hi-C map from the 4D Nucleome project, find its compartments and domains on chr13, and set ' +
+        'them against 4DN’s own — in the real app, one step at a time.',
+      hero: true,
+      agenda: true,
+      next: 'let’s go',
+    },
+
     // -- The store -----------------------------------------------------------
     {
       id: 'store',
@@ -367,6 +515,7 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
         { name: TUTORIAL_SET },
         ' in the search box: Hi-C on IMR-90 lung fibroblasts, about a billion contacts.',
       ],
+      action: 'type',
       target: searchBox,
       focus: true,
       done: () => searchBox()?.value.toUpperCase().includes(TUTORIAL_SET) === true && setGroup() !== null,
@@ -403,6 +552,7 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       text:
         'A map is stored at several resolutions, the size of one bin. 250 kb is coarse enough to show a whole ' +
         'chromosome’s compartments.',
+      action: 'choose',
       target: resolutionControl,
       done: () => host.binsize() === 250_000,
       needs: { holds: onMap, back: 'open-set' },
@@ -429,18 +579,80 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       chapter: 'The map',
       title: 'The contact map',
       text:
-        `Each pixel is how often two stretches of ${TUTORIAL_SEQUENCE} touch. The checkerboard off the ` +
-        'diagonal is its A and B compartments; 4DN’s own tracks are under the map.',
+        `Each pixel is how often two stretches of ${TUTORIAL_SEQUENCE} touch. The plaid off the diagonal is ` +
+        'its A and B compartments; 4DN’s own tracks are under the map.',
       target: mapPicture,
     },
 
     // -- Compartments ---------------------------------------------------------
-    ...sequenceTask('Compartments', 'compartments', 'Compartments', {
-      choose: 'It splits a chromosome into A and B compartments from the map’s checkerboard.',
-      none: 'It runs on every sequence of the file to begin with. Press none…',
-      tick: `…then tick ${TUTORIAL_SEQUENCE}, the chromosome on screen.`,
-      run: 'Leave the rest as it is and press run. It takes a few seconds.',
-    }),
+    scoreStep(
+      'score-correlation',
+      'Compartments',
+      CORRELATION_SCORE,
+      'Draw it as a correlation',
+      'In the Map card, set score to correlation: each pixel becomes how alike two stretches’ contacts are, ' +
+        'once distance is divided out.',
+    ),
+    {
+      id: 'look-correlation',
+      chapter: 'Compartments',
+      title: 'The plaid',
+      text:
+        'Red where two stretches share a compartment, blue where they do not. Compartments finds this ' +
+        'pattern’s main axis: E1.',
+      target: mapPicture,
+    },
+    ...sequenceTask(
+      'Compartments',
+      'compartments',
+      'Compartments',
+      {
+        choose: 'It splits a chromosome into A and B compartments from the map’s plaid.',
+        none: 'It runs on every sequence of the file to begin with. Press none…',
+        tick: `…then tick ${TUTORIAL_SEQUENCE}, the chromosome on screen.`,
+        run: 'Press run. It takes a few seconds.',
+      },
+      (open) => [
+        {
+          id: 'phase-genes',
+          chapter: 'Compartments',
+          title: 'No gene model',
+          text:
+            'E1’s sign means nothing until it is phased, and this box took 4DN’s boundaries for genes. ' +
+            'Choose Do not use a gene model.',
+          action: 'choose',
+          target: () => formSelect('phase by gene density'),
+          done: () => shown(formSelect('phase by gene density')) === 'Do not use a gene model',
+          needs: { holds: open, back: 'compartments' },
+        },
+        {
+          id: 'phase-track',
+          chapter: 'Compartments',
+          title: 'Phase it by 4DN’s E1',
+          text: [
+            '4DN’s own E1 is phased already. Choose ',
+            { name: FOURDN_E1 },
+            ' under phase by a track, so that A means the same in both.',
+          ],
+          action: 'choose',
+          target: () => formSelect('phase by a track'),
+          done: () => shown(formSelect('phase by a track')).includes(FOURDN_E1),
+          needs: { holds: open, back: 'compartments' },
+        },
+      ],
+      (open) => [
+        {
+          id: 'look-saddle',
+          chapter: 'Compartments',
+          title: 'The saddle',
+          text:
+            'Bins sorted by E1, from B to A: strong opposite corners mean A touches A and B touches B. The ' +
+            'numbers under it say how much.',
+          target: () => figure('Saddle'),
+          needs: { holds: open, back: 'compartments' },
+        },
+      ],
+    ),
     {
       id: 'look-compartments',
       chapter: 'Compartments',
@@ -452,26 +664,103 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
     },
 
     // -- Zooming in -----------------------------------------------------------
+    scoreStep(
+      'score-balanced',
+      'Zooming in',
+      BALANCED_SCORE,
+      'Back to contacts',
+      'Domains are about how often stretches touch, not how alike they are: set score back to balanced.',
+    ),
     {
       id: 'zoom',
       chapter: 'Zooming in',
       title: 'Zoom along the diagonal',
-      text: `Hold ${keys}, then drag along the diagonal across a few squares: that stretch opens on its own.`,
-      target: () => first('.content .heatmap-canvas'),
+      text: `Hold ${keys}, then drag across the lit square, from one corner to the other: that stretch opens.`,
+      action: 'drag',
+      target: square(OVERVIEW),
       done: () => {
         const view = host.view()
         return onSequence() && view?.region?.includes(':') === true && view.region2 === undefined
       },
       needs: { holds: onSequence, back: 'chromosome' },
+      assist: {
+        label: 'zoom for me',
+        title: `Open ${TUTORIAL_SEQUENCE}:${bp(OVERVIEW.start)}-${bp(OVERVIEW.end)}`,
+        run: () => goTo(`${TUTORIAL_SEQUENCE}:${bp(OVERVIEW.start)}-${bp(OVERVIEW.end)}`),
+      },
     },
     {
       id: 'resolution-10',
       chapter: 'Zooming in',
       title: 'Switch to 10 kb',
       text: 'At 10 kb the domains along the diagonal come into view.',
+      action: 'choose',
       target: resolutionControl,
       done: () => host.binsize() === 10_000,
       needs: { holds: onMap, back: 'open-set' },
+    },
+    {
+      id: 'zoom-domains',
+      chapter: 'Zooming in',
+      title: 'Closer, on a few domains',
+      text: `Once more: hold ${keys} and drag across the lit square.`,
+      action: 'drag',
+      target: square(DOMAINS),
+      done: () => {
+        const stretch = stretchOf(host.view())
+        return (
+          stretch !== null &&
+          stretch.contig === TUTORIAL_SEQUENCE &&
+          stretch.end - stretch.start <= DOMAINS_SPAN &&
+          host.binsize() === 10_000
+        )
+      },
+      needs: { holds: () => onSequence() && host.binsize() === 10_000, back: 'resolution-10' },
+      missing: 'Not in view — press zoom for me, or go back a step.',
+      assist: {
+        label: 'zoom for me',
+        title: `Open ${TUTORIAL_SEQUENCE}:${bp(DOMAINS.start)}-${bp(DOMAINS.end)}`,
+        run: () => goTo(`${TUTORIAL_SEQUENCE}:${bp(DOMAINS.start)}-${bp(DOMAINS.end)}`),
+      },
+    },
+    {
+      id: 'look-domains',
+      chapter: 'Zooming in',
+      title: 'Domains',
+      text:
+        'Each dark square along the diagonal is a domain, or TAD: a stretch that touches itself more than its ' +
+        'neighbours. Some sit inside bigger ones.',
+      target: mapPicture,
+    },
+    {
+      id: 'oe-on',
+      chapter: 'Zooming in',
+      title: 'Turn on O/E',
+      text: 'O/E divides each pixel by what its distance predicts, so what is left is structure rather than distance.',
+      target: inMapCard(oeToggle),
+      done: () => host.view()?.oe === true,
+      needs: { holds: onMap, back: 'open-set' },
+    },
+    {
+      id: 'smooth',
+      chapter: 'Zooming in',
+      title: 'Smooth it',
+      text:
+        'At 10 kb most pixels hold a handful of contacts. Set smooth to adaptive, which pools neighbours where ' +
+        'the counts are thin.',
+      action: 'choose',
+      target: inMapCard(() => mapField('smooth')),
+      done: () => host.view()?.smooth?.startsWith('a') === true,
+      needs: { holds: onMap, back: 'open-set' },
+    },
+    {
+      id: 'look-oe',
+      chapter: 'Zooming in',
+      title: 'Structure, not distance',
+      text:
+        'Red is more contact than the distance predicts, blue less: the domains are red squares, and the ' +
+        'checkerboard behind them is A and B again.',
+      target: mapPicture,
     },
 
     // -- Insulation -----------------------------------------------------------
@@ -516,6 +805,7 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       chapter: 'Tracks',
       title: 'Draw them as a 1D track',
       text: 'Domains are outlined on the map. Choose 1D track to draw them as a lane beside it instead.',
+      action: 'choose',
       target: () => domainsRow()?.querySelector<HTMLElement>(`select[data-display="${OWN_DOMAINS}"]`) ?? null,
       done: domainsLane,
       needs: { holds: domainsOpen, back: 'domains' },
@@ -585,13 +875,34 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       needs: { holds: () => host.task() === 'trackcorr' || host.running('trackcorr'), back: 'trackcorr' },
     },
     {
-      id: 'finish',
+      id: 'look-trackcorr',
       chapter: 'Track correlation',
+      title: 'Yours against 4DN’s',
+      text:
+        'Each square compares two tracks, dark red where they rise and fall together. Find your E1 against ' +
+        '4DN’s, and your insulation against theirs.',
+      target: () => figure('Track correlation'),
+    },
+
+    // -- The console ----------------------------------------------------------
+    {
+      id: 'console',
+      chapter: 'The console',
+      title: 'Every step is a command',
+      text:
+        'Open the console: each file you opened and each run you made is a line you can paste into a terminal ' +
+        'to do it again.',
+      target: () => first('.head-actions button[aria-label="console"]') ?? first('button[aria-label="console"]'),
+      done: () => host.consoleOpen(),
+    },
+    {
+      id: 'finish',
+      chapter: 'Done',
       title: 'That’s the tour',
       text:
-        'Your E1 and insulation against 4DN’s, pair by pair. The console keeps every file and run as a ' +
-        'command, and the tutorial is in About whenever you want it again.',
-      target: () => drawer()?.querySelector<HTMLElement>('.analysis-figure') ?? null,
+        'You opened a billion-contact map from 4DN, called compartments and domains on chr13, and set them ' +
+        'against 4DN’s own. The tutorial is in About whenever you want it again.',
+      hero: true,
     },
   ]
 }

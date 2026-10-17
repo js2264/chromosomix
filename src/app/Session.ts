@@ -1090,6 +1090,26 @@ export class Session {
     return this.file?.info.binsize ?? null
   }
 
+  /**
+   * Where a stretch of one sequence is drawn on the map in front, as the square
+   * it makes on the diagonal, in viewport pixels; `null` with no map in front
+   * or where it does not draw one (`MatrixPanel.squareOf`). For the tutorial
+   * (§30), which lights the square it asks a reader to drag across.
+   */
+  squareOnScreen(stretch: { contig: string; start: number; end: number }): DOMRect | null {
+    return this.current?.panel?.squareOf(stretch) ?? null
+  }
+
+  /**
+   * The score the map in front is drawn from, by its picker's id — `balanced`,
+   * `correlation` — with the file's default applied, which the view state leaves
+   * out ({@link scoreOf}); `null` with no map. For the tutorial (§30).
+   */
+  get scoreInForce(): string | null {
+    const state = this.state
+    return state === null || this.file === null ? null : this.scoreOf(state).id
+  }
+
   /** `true` while this session is a 1D genome browser rather than a map. */
   get isBrowsing(): boolean {
     return this.assembly !== null

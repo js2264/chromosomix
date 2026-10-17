@@ -17,12 +17,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 - **A guided tutorial, from About (§30).** *play the tutorial* walks a newcomer through a first
   session on a real map, one step at a time, with the window greyed and the one control the step is
   about lit: the 4DN store, the IMR-90 Hi-C set `4DNES4296C5Q` (a billion contacts) opened with its
-  tracks, 250 kb, chr13, Compartments run on chr13 alone, a Shift-Option drag along the diagonal,
-  10 kb, Diamond insulation on chr13, the domains drawn as a lane under the map, and Track correlation
-  over the reader's E1 and insulation and 4DN's. Each step moves on when what it asks for is done,
-  however it was done; a card says *step n of 35*, *back*, *skip step* and *skip tutorial*, and a
-  press on the grey shows where to press instead. Skipped half way, About offers to resume at the
-  part the reader left; finished, to play it again. Also in the palette as *Guided tutorial*.
+  tracks, 250 kb and chr13; the map drawn as a correlation to show its plaid, then Compartments run on
+  chr13 alone, phased by 4DN's own E1, and its saddle; back to balanced, two Shift-Option drags across
+  the squares the tutorial lights, down to a few domains at 10 kb, seen with O/E and adaptive
+  smoothing; Diamond insulation on chr13; the domains drawn as a lane under the map; Track correlation
+  of the reader's E1 and insulation against 4DN's; and the console. Each step moves on when what it
+  asks for is done, however it was done, and shows a tick first. The card points at what to press,
+  glides to the next thing, says what the step asks with an icon, and carries a progress bar cut into
+  the tutorial's ten parts, *back*, *skip step* and *skip tutorial*; ← and → step through it, and a
+  press on the grey shows where to press instead. Skipped half way, About offers to resume at the part
+  the reader left; finished, to play it again. Also in the palette as *Guided tutorial*.
 
 - **Tab goes on to the next field of its kind (§26.8).** In any field edited in place, Tab now takes
   what was typed, as Enter does, and puts the caret in the next field of the same kind — Shift+Tab

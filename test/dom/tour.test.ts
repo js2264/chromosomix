@@ -18,7 +18,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { Tour, cardPlace, resumeIndex, type TourOptions, type TourStep } from '@/ui/Tour'
+import { Tour, cardPlace, partsOf, resumeIndex, type TourOptions, type TourStep } from '@/ui/Tour'
 import { setUpDom, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown
@@ -135,6 +135,29 @@ describe('the dim and the hole', () => {
     )
   })
 
+  it('lights a stretch of an element when the step names one, clipped to what the element shows', () => {
+    const canvas = control({ left: 100, top: 100, width: 400, height: 400 })
+    tour([
+      step('drag', {
+        action: 'drag',
+        target: () => ({ within: canvas, box: { left: 200, top: 200, right: 300, bottom: 300 } }),
+        done: () => false,
+      }),
+      step('edge', {
+        // Half of it off the canvas: only what the canvas shows is lit.
+        target: () => ({ within: canvas, box: { left: 450, top: 450, right: 600, bottom: 600 } }),
+      }),
+    ])
+    vi.advanceTimersByTime(100)
+    const ring = q('.tour-ring').style
+    expect([ring.left, ring.top, ring.width, ring.height]).toEqual(['194px', '194px', '112px', '112px'])
+    expect(q('.tour-chip').title).toBe('drag')
+
+    q<HTMLButtonElement>('.tour-next').click()
+    vi.advanceTimersByTime(100)
+    expect([ring.left, ring.top, ring.width, ring.height]).toEqual(['444px', '444px', '62px', '62px'])
+  })
+
   it('says so when the thing to press is not on screen, and only on a step that waits for it', () => {
     let target: HTMLElement | null = null
     tour([
@@ -182,7 +205,59 @@ describe('the card', () => {
     expect(q('.tour-chapter').textContent).toBe('The store')
     expect(q('.tour-text').textContent).toBe('Type 4DNES4296C5Q in the box.')
     expect(q('.tour-text code.tour-name').textContent).toBe('4DNES4296C5Q')
-    expect(q('.tour-bar').style.width).toBe('100%')
+  })
+
+  it('cuts the bar into the tour’s parts, and fills each as far as the reader has got', () => {
+    tour([
+      step('a', { chapter: 'One' }),
+      step('b', { chapter: 'One' }),
+      step('c', { chapter: 'Two' }),
+      step('d', { chapter: 'Two' }),
+      step('e', { chapter: 'Two' }),
+    ])
+    q<HTMLButtonElement>('.tour-next').click()
+    q<HTMLButtonElement>('.tour-next').click()
+    q<HTMLButtonElement>('.tour-next').click()
+    const segments = Array.from(document.querySelectorAll<HTMLElement>('.tour-segment'))
+    expect(segments.map((segment) => segment.title)).toEqual(['One', 'Two'])
+    expect(segments.map((segment) => segment.style.flexGrow)).toEqual(['2', '3'])
+    const fills = segments.map((segment) => Number.parseFloat((segment.firstElementChild as HTMLElement).style.width))
+    expect(fills[0]).toBe(100)
+    expect(fills[1]).toBeCloseTo(200 / 3)
+  })
+
+  it('says what a step asks with an icon, and ticks it the moment it is done', () => {
+    let picked = false
+    tour([
+      step('pick', { action: 'choose', done: () => picked }),
+      step('press', { done: () => false }),
+      step('read'),
+    ])
+    const chip = (): HTMLElement => q('.tour-chip')
+    expect(chip().title).toBe('choose')
+    expect(chip().classList.contains('is-done')).toBe(false)
+
+    picked = true
+    vi.advanceTimersByTime(200)
+    // Ticked for the beat before the next step, on the card and on the ring.
+    expect(on()).toBe('pick')
+    expect(chip().title).toBe('done')
+    expect(chip().classList.contains('is-done')).toBe(true)
+    expect(q('.tour').classList.contains('is-done')).toBe(true)
+
+    vi.advanceTimersByTime(800)
+    expect(on()).toBe('press')
+    expect(chip().title).toBe('press')
+    expect(q('.tour').classList.contains('is-done')).toBe(false)
+    q<HTMLButtonElement>('.tour-next').click()
+    expect(chip().title).toBe('look')
+  })
+
+  it('breathes on a step that waits on the reader, and holds still on one that is only read', () => {
+    tour([step('press', { done: () => false }), step('read')])
+    expect(q('.tour').classList.contains('is-waiting')).toBe(true)
+    q<HTMLButtonElement>('.tour-next').click()
+    expect(q('.tour').classList.contains('is-waiting')).toBe(false)
   })
 
   it('offers a step that waits on the reader to be skipped, quietly, and a read one to be gone on from', () => {
@@ -282,7 +357,7 @@ describe('moving on', () => {
     expect(on()).toBe('open')
 
     drawer = true
-    vi.advanceTimersByTime(800)
+    vi.advanceTimersByTime(1000)
     expect(on()).toBe('inside')
   })
 
@@ -349,6 +424,78 @@ describe('leaving', () => {
   })
 })
 
+describe('the keys', () => {
+  const press = (key: string, on: EventTarget = document.body): KeyboardEvent => {
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+    on.dispatchEvent(event)
+    return event
+  }
+
+  it('goes on with → from a step that is only read, and back with ←', () => {
+    tour([step('read'), step('again'), step('end')])
+    press('ArrowRight')
+    expect(on()).toBe('again')
+    press('ArrowLeft')
+    expect(on()).toBe('read')
+  })
+
+  it('never skips a step that waits on the reader with →: that is the skip button’s, pressed on purpose', () => {
+    tour([step('press', { done: () => false }), step('after')])
+    const event = press('ArrowRight')
+    expect(on()).toBe('press')
+    expect(event.defaultPrevented).toBe(false)
+  })
+
+  it('leaves the arrows to a box, a menu or the map', () => {
+    const box = document.createElement('input')
+    document.body.appendChild(box)
+    tour([step('read'), step('after')])
+    const event = press('ArrowRight', box)
+    expect(on()).toBe('read')
+    expect(event.defaultPrevented).toBe(false)
+  })
+
+  it('names its keys on the buttons that do the same', () => {
+    tour([step('read'), step('after'), step('end')])
+    q<HTMLButtonElement>('.tour-next').click()
+    expect(q('.tour-next').title).toBe('The next step (→)')
+    expect(q('.tour-back').title).toBe('The step before this one (←)')
+  })
+})
+
+describe('the welcome and the end', () => {
+  it('opens on a card in the middle of the window, with the tour’s parts listed and its own word to go on', () => {
+    tour([
+      step('welcome', { chapter: 'Welcome', hero: true, agenda: true, next: 'let’s go' }),
+      step('a', { chapter: 'The store' }),
+      step('b', { chapter: 'The map' }),
+      step('end', { chapter: 'Done', hero: true }),
+    ])
+    vi.advanceTimersByTime(100)
+    expect(q('.tour-card').classList.contains('is-hero')).toBe(true)
+    expect(q('.tour-card').dataset.side).toBe('none')
+    expect(shown('.tour-veil')).toBe(true)
+    expect(shown('.tour-ring')).toBe(false)
+    expect(document.querySelector('.tour-chip')?.classList.contains('hidden')).toBe(true)
+    // Its own parts and the end's are not parts of the tour.
+    expect(Array.from(document.querySelectorAll('.tour-agenda li')).map((li) => li.textContent)).toEqual([
+      'The store',
+      'The map',
+    ])
+    expect(nextLabel()).toBe('let’s go')
+    expect(document.activeElement).toBe(q('.tour-next'))
+    q<HTMLButtonElement>('.tour-next').click()
+    expect(q('.tour-card').classList.contains('is-hero')).toBe(false)
+    expect(shown('.tour-agenda')).toBe(false)
+  })
+
+  it('ends on a card with a tick over it', () => {
+    tour([step('a'), step('end', { chapter: 'Done', hero: true })], { start: 1 })
+    expect(shown('.tour-badge')).toBe(true)
+    expect(nextLabel()).toBe('finish')
+  })
+})
+
 describe('resumeIndex', () => {
   const steps = [
     step('store', { chapter: 'The store' }),
@@ -373,12 +520,20 @@ describe('cardPlace', () => {
   const card = { width: 300, height: 150 }
   const view = { width: 1600, height: 1000 }
 
-  it('puts the card under the hole, centred on it', () => {
-    expect(cardPlace(card, { left: 500, top: 100, right: 600, bottom: 140 }, view)).toEqual({ left: 400, top: 152 })
+  it('puts the card under the hole, centred on it, its tail on top', () => {
+    expect(cardPlace(card, { left: 500, top: 100, right: 600, bottom: 140 }, view)).toEqual({
+      left: 400,
+      top: 154,
+      side: 'below',
+    })
   })
 
   it('puts it above when there is no room under', () => {
-    expect(cardPlace(card, { left: 500, top: 800, right: 600, bottom: 900 }, view)).toEqual({ left: 400, top: 638 })
+    expect(cardPlace(card, { left: 500, top: 800, right: 600, bottom: 900 }, view)).toEqual({
+      left: 400,
+      top: 636,
+      side: 'above',
+    })
   })
 
   it('keeps it inside the window at an edge', () => {
@@ -386,14 +541,38 @@ describe('cardPlace', () => {
   })
 
   it('stands it beside a hole as tall as the window', () => {
-    expect(cardPlace(card, { left: 100, top: 0, right: 600, bottom: 1000 }, view)).toEqual({ left: 612, top: 425 })
+    expect(cardPlace(card, { left: 100, top: 0, right: 600, bottom: 1000 }, view)).toEqual({
+      left: 614,
+      top: 425,
+      side: 'right',
+    })
   })
 
-  it('puts it in the corner when the hole is the whole window', () => {
-    expect(cardPlace(card, { left: 0, top: 0, right: 1600, bottom: 1000 }, view)).toEqual({ left: 1276, top: 826 })
+  it('puts it in the corner, with no tail, when the hole is the whole window', () => {
+    expect(cardPlace(card, { left: 0, top: 0, right: 1600, bottom: 1000 }, view)).toEqual({
+      left: 1272,
+      top: 822,
+      side: 'over',
+    })
   })
 
   it('sits it at the bottom, centred, with nothing lit', () => {
-    expect(cardPlace(card, null, view)).toEqual({ left: 650, top: 814 })
+    expect(cardPlace(card, null, view)).toEqual({ left: 650, top: 808, side: 'none' })
+  })
+})
+
+describe('partsOf', () => {
+  it('runs of one chapter, in order, each with its first step and its length', () => {
+    const steps = [
+      step('a', { chapter: 'One' }),
+      step('b', { chapter: 'Two' }),
+      step('c', { chapter: 'Two' }),
+      step('d', { chapter: 'Three' }),
+    ]
+    expect(partsOf(steps)).toEqual([
+      { chapter: 'One', from: 0, count: 1 },
+      { chapter: 'Two', from: 1, count: 2 },
+      { chapter: 'Three', from: 3, count: 1 },
+    ])
   })
 })

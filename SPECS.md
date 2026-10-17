@@ -13798,7 +13798,7 @@ the place kept (`state/tour.ts`), the offer in *About* and the palette's row, an
 **In *About*, straight after what the viewer is** — the answer to the question a reader who has just
 read that asks next, and the one way in a newcomer finds without being told where to look. One
 sentence, and one filled button that says what it will do: *play the tutorial* for a reader who has
-not begun it, *resume at step 19 of 35* for one who left it, with a quiet *start over* beside it, and
+not begun it, *resume at step 31 of 49* for one who left it, with a quiet *start over* beside it, and
 *play the tutorial again* for one who finished it. The palette has it too, as *Guided tutorial* under
 Help, its hint saying which of the three a press will do.
 
@@ -13807,10 +13807,11 @@ on the site and in the desktop app. An embed (§21) has no drawer, and its *Abou
 tutorial; nor does the single file (§19), which offers this machine alone. Absent rather than greyed,
 since nothing the reader could do there would make it work.
 
-**From the start, it begins on the landing page**, whose 4DN tile is its first step. A tab that holds
-anything — a map, or a view restored from a reload that is about to open one — is left as it is and a
-new tab is opened beside it, as the brand does, rather than emptied under the reader. A resume does
-not move the window (§30.6).
+**From the start, it begins on the landing page**, under a card that says what the next ten minutes
+are and lists the parts, and whose next step is the page's 4DN tile. A tab that holds anything — a
+map, or a view restored from a reload that is about to open one — is left as it is and a new tab is
+opened beside it, as the brand does, rather than emptied under the reader. A resume does not move the
+window (§30.6).
 
 ### 30.2 The data
 
@@ -13823,34 +13824,56 @@ carries the three tracks 4DN's own pipeline computed from it: the compartment ei
 That is what makes the last step a fair comparison: the reader's own E1 at 250 kb and insulation at
 10 kb, computed in the page, against the consortium's at the same resolutions.
 
-**chr13**, for every task. It shows both halves of the story on one screen: an acrocentric whose
-short arm is empty — the blank square at its start is what a stretch with no unique sequence looks
-like on a map — and a long arm with broad, clean compartments.
+**chr13**, for every task. It shows both halves of the story on one screen: an acrocentric whose short
+arm is empty — the blank square at its start is what a stretch with no unique sequence looks like on a
+map — and a long arm with broad, clean compartments. **41–45 Mb** of it is where domains are looked
+at: at 10 kb a run of clear squares along the diagonal, some inside others, reached from **35–55 Mb**
+at 250 kb, so that each of the two zooms is a drag across a square a hand can hit.
 
-Every task is run **with its defaults**, chr13 alone aside: the tutorial teaches where things are,
-and a parameter it chose would be one the reader took for the app's.
+Every task is run **with its defaults but one**, chr13 alone aside: the tutorial teaches where things
+are, and a parameter it chose would be one the reader took for the app's. The one is Compartments'
+phasing. Left to itself its form takes the first set of intervals loaded for a gene model, which on
+this session is 4DN's boundaries, and a sign decided by those is a coin toss — the saddle says
+*phasing r 0.01* — so the tutorial has the reader choose no gene model and phase by 4DN's own E1
+instead: then A means the same in both, which the last part depends on. The two steps say why, because
+a reader who meets the same box on their own data needs the reason more than the setting.
 
 ### 30.3 The steps
 
-Thirty-five, in seven parts, each part's name printed over its steps' titles:
+Forty-nine, in ten parts, each part's name printed over its steps' titles. The welcome and the end
+are a card each in the middle of the window, and between them every step lights one thing:
 
+- **Welcome** — what the tutorial is, in two sentences, with its parts listed under them and *let's
+  go*.
 - **The 4DN store** — open the store; find `4DNES4296C5Q` in its search box, with *type it for me*
   beside the step for a reader who would rather not type a twelve-character accession; open the set
   with its tracks, one press.
 - **The map** — pick 250 kb; open chr13 from the Chromosomes table, scrolled to its row when the
-  table has not drawn it; and a step that is only read, about the map and its checkerboard.
-- **Compartments** — open the Analysis panel; choose Compartments; untick every sequence; tick
-  chr13; run; close the drawer; and a step that is only read, the reader's E1 and A/B calls beside
-  4DN's.
-- **Zooming in** — hold Shift and Option and drag along the diagonal, the keys named as the map's
-  corner names them, Shift and Alt off a Mac (§8.9); switch to 10 kb.
-- **Insulation** — the same six steps as Compartments for Diamond insulation, then one only read.
+  table has not drawn it; and a step that is only read, about the map and its plaid.
+- **Compartments** — set the map's score to *correlation*, so the plaid the task decomposes is on
+  screen before the number that summarises it, and a step that is only read, about the plaid; open
+  the Analysis panel; choose Compartments; untick every sequence; tick chr13; choose no gene model;
+  phase by 4DN's E1 (§30.2); run; a step that is only read, about the saddle the run drew; close the
+  drawer; and a step that is only read, the reader's E1 and A/B calls beside 4DN's.
+- **Zooming in** — set the score back to *balanced*, since domains are a matter of how often
+  stretches touch rather than how alike they are; hold Shift and Option and drag across the lit
+  square of 35–55 Mb, the keys named as the map's corner names them, Shift and Alt off a Mac (§8.9);
+  switch to 10 kb; drag across the lit square of 41–45 Mb; a step that is only read, about the
+  domains; turn on O/E; set smoothing to *adaptive*; and a step that is only read, about what O/E
+  leaves on screen. Both drags have *zoom for me* beside them, which types the stretch into the
+  map's locus box. Neither O/E nor smoothing changes what a task reads — the drawer's heading still
+  says *balanced* — so they are left on.
+- **Insulation** — open the Analysis panel; choose Diamond insulation; untick every sequence; tick
+  chr13; run; close the drawer; and a step that is only read.
 - **Tracks** — open the Annotations panel; unfold the Insulation domains row; choose *1D track* for
   its display; press its bottom edge, then its left one, so the lane is drawn under the map and not
   beside it.
 - **Track correlation** — open the Analysis panel; choose Track correlation; tick 4DN's insulation,
-  4DN's E1, the reader's E1 and the reader's insulation, one step each; run; and the last step,
-  which lights the figure and says where the tutorial is when it is wanted again.
+  4DN's E1, the reader's E1 and the reader's insulation, one step each; run; and a step that is only
+  read, which lights the figure.
+- **The console** — open it: every file opened and every run made is a line to paste into a
+  terminal.
+- **Done** — what the reader did, in one sentence, and where the tutorial is when it is wanted again.
 
 ### 30.4 How a step moves on
 
@@ -13892,18 +13915,38 @@ tour. Only the *starts* of a gesture are kept from the app outside the hole, so 
 map and run out of the hole still ends where the map hears it. A step that lights nothing keeps the
 grey and keeps nothing from the app, so the window can be used to get back to where the step is.
 
-**The card** stands below the hole, then above, right or left of it, whichever side it fits; in the
-bottom-right corner when the hole is the whole picture; at the bottom, centred, when nothing is lit.
-It says the part, *step n of 35*, and *skip tutorial* along its top, over a bar of how far the
-reader is; then the step's title, one or two sentences — an accession to type set in the face names
-are set in — and *back* and *next* (*skip step* while the step waits, *finish* on the last). The
-sentences are a polite live region, so a step that moves on by itself is heard as well as seen.
+**The card** stands below the hole, then above, right or left of it, whichever side it fits, with a
+tail pointing into the hole from that side; in the bottom-right corner, with no tail, when the hole is
+the whole picture; at the bottom, centred, when nothing is lit. It glides from one control to the next
+rather than jumping, and its words come in rather than being swapped, so the eye follows the card to
+the next thing to press. Along its top it says the part, *step n of 49*, and *skip tutorial*, over a
+bar cut into the tour's parts, each filled as far as the reader has got through it. Then an icon for
+what the step asks — press, type, choose, drag, or only look — beside its title; one or two sentences,
+an accession to type set in the face names are set in; and *back* and *next* (*skip step* while the
+step waits, *finish* on the last, and no *back* on the first). The sentences are a polite live region,
+so a step that moves on by itself is heard as well as seen.
+
+**A step done is shown done.** The moment its state holds, the icon turns into a tick and the ring
+into the colour of a thing that finished (§26.5), and they stay so for the beat before the next step:
+the reader sees their action land before the card moves. A step waiting on the reader breathes — a
+slow halo out from the ring, here is where to press — and a step that is only read, or already done,
+holds still. The welcome and the end are a card a size up in the middle of the window over the plain
+grey; the end wears a tick over its title.
+
+**← and → go back and on**, from anywhere the keys are not a control's own — a box, a menu, a list,
+the map, which pans with them — and → never skips a step that waits on the reader: that is *skip
+step*'s, pressed on purpose. The buttons say their keys as every control does (§26.4).
+
+**A target can be a stretch of a map rather than a control**: the square a drag is to cross, placed
+through the map's own scales so that the square lit is the square a drag from one of its corners to
+the other names, and cut to what the map shows. Not in view — the reader zoomed somewhere else — it is
+not lit, and the card says so and offers *zoom for me*.
 
 **Above every surface of the app, below its dialogs, menus and notes**, and out of the way entirely
 while a dialog is up: a dialog owns the keyboard and the reader's attention, and a tour drawn over one
 would be a second voice talking over the first. It comes back, on the same step, when the dialog
-closes. Under *reduce motion* the ring jumps from control to control rather than sliding, and does
-not pulse.
+closes. Under *reduce motion* the ring and the card jump from control to control rather than gliding,
+the words do not come in, nothing breathes or pulses, and the tick is drawn rather than grown.
 
 ### 30.6 The place kept
 

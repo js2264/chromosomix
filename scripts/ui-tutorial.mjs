@@ -3,10 +3,12 @@
  * Chromium, and shoot every step it shows.
  *
  * The tutorial is the app used on real data, so this is the app used on real
- * data: the 4DN store, the IMR-90 map on 4DN's bucket, compartments and
- * insulation run on chr13, the domains moved under the map, the four tracks
- * correlated. Each step is answered the way a reader would answer it — a real
- * press on the lit control, a real drag on the map — so a step whose target is
+ * data: the 4DN store, the IMR-90 map on 4DN's bucket, the map drawn as a
+ * correlation, compartments phased and run on chr13, two zooms down to a few
+ * domains seen under O/E and smoothing, insulation run, the domains moved under
+ * the map, the four tracks correlated and the console opened. Each step is
+ * answered the way a reader would answer it — a real press on the lit control,
+ * a real drag across the square the tour lights — so a step whose target is
  * covered by the tour's own grey fails here as it would fail a reader. On the
  * way it also takes the roads that are not the main one, each shot and printed:
  * *type it for me*, a press on the grey, *back* to a step already done, *skip
@@ -191,11 +193,17 @@ async function clickPlace(edge) {
   await page.mouse.click(at.x, at.y)
 }
 
-/** Shift and Option (Alt) held, a drag along the diagonal across a few squares. */
-async function dragDiagonal() {
-  const box = await page.locator('.content .heatmap-canvas').first().boundingBox()
-  const from = { x: box.x + box.width * 0.42, y: box.y + box.height * 0.42 }
-  const to = { x: box.x + box.width * 0.54, y: box.y + box.height * 0.54 }
+/**
+ * Shift and Option (Alt) held, a drag across the square the tour lights, from
+ * one of its corners to the other — what the step asks of a reader, read off
+ * the ring rather than worked out again here.
+ */
+async function dragLit() {
+  const ring = await page.locator('.tour-ring').boundingBox()
+  if (ring === null) throw new Error('nothing lit to drag across')
+  // Inside the ring's six pixels of air, and a little in from the corners.
+  const from = { x: ring.x + 10, y: ring.y + 10 }
+  const to = { x: ring.x + ring.width - 10, y: ring.y + ring.height - 10 }
   await page.keyboard.down('Shift')
   await page.keyboard.down('Alt')
   await page.mouse.move(from.x, from.y)
@@ -207,10 +215,35 @@ async function dragDiagonal() {
   await page.mouse.up()
   await page.keyboard.up('Alt')
   await page.keyboard.up('Shift')
+  // Off the map, as a hand reaching for the card does: a pointer resting on
+  // the map shows the map's own hint over its corner.
+  await page.mouse.move(8, 500)
+}
+
+/** A select of the Map card, by the word beside it. */
+const mapSelect = (word) =>
+  page
+    .locator('.controls-card', { has: page.locator('.controls-title', { hasText: /^Map$/ }) })
+    .locator('label.field', { has: page.locator('.field-label', { hasText: new RegExp(`^${word}$`) }) })
+    .locator('select')
+    .first()
+/** A select of the drawer's form, by the words beside it, set to the option whose words include `text`. */
+async function chooseIn(word, text) {
+  const select = page
+    .locator('.analysis-drawer label.param-field', { has: page.locator('.field-label', { hasText: new RegExp(`^${word}$`) }) })
+    .locator('select')
+    .first()
+  const value = await select.evaluate(
+    (node, wanted) => [...node.options].find((option) => option.textContent.includes(wanted))?.value ?? null,
+    text,
+  )
+  if (value === null) throw new Error(`no option ${text} under ${word}`)
+  await select.selectOption(value)
 }
 
 /** What a reader does at each step. */
 const ACT = {
+  welcome: next,
   store: () => page.click('.store-tiles-large .store-tile[data-store="4dn"]'),
   // The helper rather than the keyboard: the road a reader who does not want
   // to type a twelve-character accession takes, and the one a test can miss.
@@ -219,15 +252,31 @@ const ACT = {
   'resolution-250': () => page.selectOption('select.res-pick', { label: '250 kb' }),
   chromosome: () => page.click('.content .tviewport .tr .td[title="chr13"]'),
   'look-map': next,
+  'score-correlation': () => mapSelect('score').selectOption('correlation'),
+  'look-correlation': next,
   'analysis-compartments': () => page.click('.panel-analysis .panel-tab'),
   compartments: () => clickTask('Compartments'),
   'compartments-none': () => page.click('.analysis-drawer button[title="Untick every sequence"]'),
   'compartments-sequence': () => clickSequence('chr13'),
+  'phase-genes': () => chooseIn('phase by gene density', 'Do not use a gene model'),
+  'phase-track': () => chooseIn('phase by a track', '4DNFIRL31X9M'),
   'compartments-run': () => page.click('.analysis-drawer .analysis-run > button'),
+  'look-saddle': next,
   'compartments-close': () => page.click('.analysis-drawer .analysis-drawer-head .btn-close'),
   'look-compartments': next,
-  zoom: dragDiagonal,
+  'score-balanced': () => mapSelect('score').selectOption('balanced'),
+  zoom: dragLit,
   'resolution-10': () => page.selectOption('select.res-pick', { label: '10 kb' }),
+  'zoom-domains': dragLit,
+  'look-domains': next,
+  'oe-on': () =>
+    page
+      .locator('.controls-card', { has: page.locator('.controls-title', { hasText: /^Map$/ }) })
+      .locator('button', { hasText: /^O\/E$/ })
+      .first()
+      .click(),
+  smooth: () => mapSelect('smooth').selectOption('a50'),
+  'look-oe': next,
   'analysis-insulation': () => page.click('.panel-analysis .panel-tab'),
   insulation: () => clickTask('Diamond insulation'),
   'insulation-none': () => page.click('.analysis-drawer button[title="Untick every sequence"]'),
@@ -247,6 +296,8 @@ const ACT = {
   'tick-own-e1': () => clickTrack('E1 · chr13'),
   'tick-own-insulation': () => clickTrack('Insulation · '),
   'trackcorr-run': () => page.click('.analysis-drawer .analysis-run > button'),
+  'look-trackcorr': next,
+  console: () => page.click('button[aria-label="console"]'),
   finish: next,
 }
 

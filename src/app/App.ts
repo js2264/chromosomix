@@ -2632,14 +2632,19 @@ export class App implements SessionHost {
     return {
       view: () => this.current?.state ?? null,
       binsize: () => this.current?.binsize ?? null,
+      score: () => this.current?.scoreInForce ?? null,
       file: () => this.current?.fileUri ?? null,
       sequences: () => this.current?.contigNames() ?? null,
       store: () => this.storeDrawer?.storeId ?? null,
-      panelOpen: (panel) => (panel === 'analysis' ? this.analysisPanel : this.annotationsPanel).isOpen,
+      panelOpen: (panel) =>
+        ({ analysis: this.analysisPanel, annotations: this.annotationsPanel, aesthetics: this.aestheticsPanel })[panel]
+          .isOpen,
       task: () => this.current?.analysis.workspace?.openTask ?? null,
       runs: (task) => this.current?.analysis.workspace?.runsOf(task) ?? [],
       running: (task) => this.current?.analysis.workspace?.isRunning(task) ?? false,
       tracks: () => this.current?.annotations?.store ?? null,
+      square: (stretch) => this.current?.squareOnScreen(stretch) ?? null,
+      consoleOpen: () => this.consolePanel?.isOpen === true,
     }
   }
 

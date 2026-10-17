@@ -60,6 +60,7 @@ const SET_FROM_SCRIPT = [
   '--seq-share',
   '--strength',
   '--structure-h',
+  '--tail-at',
   '--text-scale',
   '--tracks-h',
   '--turn-height',
