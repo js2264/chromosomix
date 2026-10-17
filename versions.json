@@ -1,6 +1,13 @@
 {
-  "latest": "56a3e7e",
+  "latest": "28cee95",
   "versions": [
+    {
+      "commit": "28cee95",
+      "version": "0.13.0",
+      "date": "2026-10-17T15:07:22+02:00",
+      "subject": "Put the name column's switch on the map's Tracks card, and keep the names over the tracks until it is pressed (§8.8) (#113)",
+      "tag": ""
+    },
     {
       "commit": "56a3e7e",
       "version": "0.13.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "05f1b2f",
-      "version": "0.13.0",
-      "date": "2026-10-02T16:52:08+02:00",
-      "subject": "Validation notebook: use public data with accessions (#89)",
-      "tag": ""
-    },
-    {
       "commit": "7a6fea2",
       "version": "0.13.0",
       "date": "2026-09-20T22:39:26+02:00",
@@ -219,13 +219,6 @@
       "title": "The npm package, ready to publish: build-only dependencies out, chromosomix --version, licence notices in every build, a closed pipe let go",
       "branch": "claude/package-distribution-cli-3bf0u4",
       "date": "2026-10-17T09:36:04Z"
-    },
-    {
-      "number": 113,
-      "commit": "c8a1e09",
-      "title": "Add name column toggle to map's Tracks card",
-      "branch": "js/dazzling-lovelace-vfwaeo",
-      "date": "2026-10-17T08:40:00Z"
     },
     {
       "number": 112,
