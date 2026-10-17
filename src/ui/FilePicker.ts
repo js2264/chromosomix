@@ -19,11 +19,16 @@
  * its own in the drawer (`ui/StoreDrawer.ts`). For the reader who has no data
  * of their own at all.
  *
- * Nothing else is on the page. The three are in the order a reader is likely
- * to want them — what you brought, where you keep it, what somebody else
- * published — and everything that used to be here beside them was one of the
- * three wearing a different name: a catalogue was a store, and a hub was a
- * store.
+ * Nothing else is on the page but one offer beside it. The three are in the
+ * order a reader is likely to want them — what you brought, where you keep it,
+ * what somebody else published — and everything that used to be here beside
+ * them was one of the three wearing a different name: a catalogue was a store,
+ * and a hub was a store. The offer is the guided tutorial's (§30), for the
+ * reader who has none of the three yet and does not know where to start: a
+ * button in the margin left of them, where a wide window has nothing, and over
+ * *Load files* where a narrow one has no margin. Never a dialog that opens by
+ * itself — a reader who came to open a file is not asked first whether they
+ * would like a lesson.
  *
  * The privacy claim is on screen, prominently, because it is a headline claim
  * of the paper and because it is *true of the code*: a dropped `File` is handed
@@ -45,6 +50,8 @@ import { CONNECT_FOLDER_TITLE, providerFronts, type ProviderId } from './connect
 import { storeFronts } from './stores/registry'
 import { storeTiles } from './stores/tiles'
 import { subscribeStores } from '../state/stores'
+import { readTourProgress, subscribeTour, tourRunning } from '../state/tour'
+import { tutorialButtons, type TutorialStart } from './tutorialOffer'
 import type { SourceSpec } from '../worker/protocol'
 import { ViewerError } from '../errors'
 import { landingRung } from '../metacooler/detect'
@@ -106,6 +113,14 @@ export interface FilePickerProps {
    * front — because a reader who has just connected a place is looking for it.
    */
   onConnected?(id: string): void
+  /**
+   * The tutorial's button was pressed (§30). The shell plays it.
+   *
+   * Absent where it cannot be played, which is where there is no store drawer
+   * for its first step: an embed, and a picker in a test. The standalone build
+   * offers none whatever is passed, for the same reason it offers no store.
+   */
+  onTutorial?(from: TutorialStart): void
 }
 
 /**
@@ -131,6 +146,9 @@ export class FilePicker {
   private readonly entryBox: HTMLElement
   private readonly tilesSlot: HTMLElement | null
   private readonly unsubscribe: (() => void) | null
+  /** The tutorial's offer, or `null` where it cannot be played. */
+  private readonly tutorialSlot: HTMLElement | null
+  private readonly unsubscribeTour: (() => void) | null
 
   constructor(private readonly props: FilePickerProps) {
     const load = new LoadBox({
@@ -141,6 +159,11 @@ export class FilePicker {
 
     const onStore = props.onStore
     this.tilesSlot = IS_STANDALONE || onStore === undefined ? null : el('div', { class: 'picker-stores' })
+    const onTutorial = props.onTutorial
+    this.tutorialSlot =
+      IS_STANDALONE || onTutorial === undefined
+        ? null
+        : el('aside', { class: 'picker-tutorial', attrs: { 'aria-label': 'Guided tutorial' } })
     this.el = el(
       'section',
       { class: 'view view-picker' },
@@ -151,7 +174,11 @@ export class FilePicker {
       ),
       el(
         'section',
-        { class: 'picker-section' },
+        { class: 'picker-section picker-load' },
+        // First in the first section, so that where it cannot stand in the
+        // margin it is the first thing under the masthead, and where it can it
+        // is placed against the top of *Load files* (`styles.css`).
+        this.tutorialSlot,
         pickerHeading('Load files', 'file'),
         load.el,
       ),
@@ -180,6 +207,28 @@ export class FilePicker {
       this.unsubscribe = subscribeStores(paint)
     } else {
       this.unsubscribe = null
+    }
+
+    if (this.tutorialSlot !== null && onTutorial !== undefined) {
+      const slot = this.tutorialSlot
+      const paint = (): void => {
+        // Out of the way while a tour is on screen: under its grey, an offer to
+        // play it is one more thing to read, and it would count the steps of
+        // the tour the reader is in.
+        slot.classList.toggle('hidden', tourRunning())
+        slot.replaceChildren(
+          el('p', { class: 'picker-tutorial-kicker', text: 'New here?' }),
+          ...tutorialButtons(readTourProgress(), onTutorial, { class: 'picker-tutorial-play' }),
+          el('p', {
+            class: 'picker-tutorial-text',
+            text: 'A first session on a real Hi-C map from 4DN, one step at a time.',
+          }),
+        )
+      }
+      paint()
+      this.unsubscribeTour = subscribeTour(paint)
+    } else {
+      this.unsubscribeTour = null
     }
   }
 
@@ -265,6 +314,7 @@ export class FilePicker {
    */
   destroy(): void {
     this.unsubscribe?.()
+    this.unsubscribeTour?.()
   }
 
   /**

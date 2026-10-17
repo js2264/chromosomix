@@ -5577,6 +5577,26 @@ export class MatrixPanel {
     return { row: Math.floor(rows[0]), col: Math.floor(cols[0]) }
   }
 
+  /**
+   * Where a stretch of one sequence is drawn, as the square it makes on the
+   * diagonal, in viewport pixels — or `null` where this map does not draw it as
+   * one: before a block has arrived, and on a turned map, whose rows are
+   * separations rather than places.
+   *
+   * For the guided tutorial (§30), which lights the square it asks a reader to
+   * drag across rather than describing it in megabases.
+   */
+  squareOf(stretch: { contig: string; start: number; end: number }): DOMRect | null {
+    if (this.data === null || this.turned !== null) return null
+    const { rows, cols } = this.locusAxes
+    const r0 = rows?.locusToUnit(stretch.contig, stretch.start) ?? null
+    const r1 = rows?.locusToUnit(stretch.contig, stretch.end) ?? null
+    const c0 = cols?.locusToUnit(stretch.contig, stretch.start) ?? null
+    const c1 = cols?.locusToUnit(stretch.contig, stretch.end) ?? null
+    if (r0 === null || r1 === null || c0 === null || c1 === null) return null
+    return this.heatmap.cellsOnScreen([r0, r1], [c0, c1])
+  }
+
   showLocusEcho(locus: { contig: string; bp: number } | null): void {
     if (locus === null) {
       this.showLaneEcho(null)

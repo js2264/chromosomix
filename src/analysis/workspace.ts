@@ -395,6 +395,28 @@ export class AnalysisWorkspace {
     return this.drawer.isOpen
   }
 
+  /**
+   * The task the drawer is open on, by id, or `null`.
+   *
+   * For the tutorial (§30), which asks the window questions rather than
+   * listening for clicks: *is the drawer on Compartments* is the state its step
+   * waits for, however the reader opened it.
+   */
+  get openTask(): string | null {
+    return this.drawer.task?.id ?? null
+  }
+
+  /** Every finished run of a task on the starred map, newest first — the runner's own list. */
+  runsOf(taskId: string): TaskResult[] {
+    return this.runner.runsOf(taskId)
+  }
+
+  /** Whether a task is running or waiting to, as the panel's row shows it. */
+  isRunning(taskId: string): boolean {
+    const status = this.runner.stateOf(taskId).status
+    return status === 'running' || status === 'queued'
+  }
+
   /** Open the drawer on a task, or close it. */
   show(task: AnalysisTask | null): void {
     this.open = task

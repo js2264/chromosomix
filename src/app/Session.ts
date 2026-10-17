@@ -281,6 +281,15 @@ export interface SessionHost {
    * (`ui/SidePanel.ts`, `conceal`), so the plot gets the room.
    */
   landingFileOpened(session: Session): void
+  /**
+   * The landing page's tutorial button was pressed: play the guided tutorial
+   * (§30) from its start or from where the reader left it.
+   *
+   * Optional, and absent where it cannot be played — a shell with no store
+   * drawer for its first step, and a host in a test — so the landing page
+   * offers it only where this is here.
+   */
+  startTutorial?(from: 'start' | 'resume'): void
 }
 
 /** What a heatmap view of the whole file at once has to offer the session. */
@@ -1028,6 +1037,12 @@ export class Session {
             // one.
             onConnect: (provider: ProviderId) => this.host.openConnect(provider),
             onConnected: (id: string) => this.host.folderConnected(id),
+            // The tutorial's offer, and the shell's for the same reason a store
+            // is: its first step is the window's drawer, and it plays across
+            // tabs (§30).
+            ...(this.host.startTutorial === undefined
+              ? {}
+              : { onTutorial: (from: 'start' | 'resume') => this.host.startTutorial?.(from) }),
           }),
     })
     this.store.subscribe((state, change) => {
@@ -1074,6 +1089,40 @@ export class Session {
 
   get hasFile(): boolean {
     return this.file !== null
+  }
+
+  /**
+   * The address of the file open here, as the hash names it, or `null` until
+   * one has opened — which is later than the hash names it, by the length of
+   * the open.
+   */
+  get fileUri(): string | null {
+    return this.file?.uri ?? null
+  }
+
+  /** The bin size of the map open here, or `null` with none, or none fixed. */
+  get binsize(): number | null {
+    return this.file?.info.binsize ?? null
+  }
+
+  /**
+   * Where a stretch of one sequence is drawn on the map in front, as the square
+   * it makes on the diagonal, in viewport pixels; `null` with no map in front
+   * or where it does not draw one (`MatrixPanel.squareOf`). For the tutorial
+   * (§30), which lights the square it asks a reader to drag across.
+   */
+  squareOnScreen(stretch: { contig: string; start: number; end: number }): DOMRect | null {
+    return this.current?.panel?.squareOf(stretch) ?? null
+  }
+
+  /**
+   * The score the map in front is drawn from, by its picker's id — `balanced`,
+   * `correlation` — with the file's default applied, which the view state leaves
+   * out ({@link scoreOf}); `null` with no map. For the tutorial (§30).
+   */
+  get scoreInForce(): string | null {
+    const state = this.state
+    return state === null || this.file === null ? null : this.scoreOf(state).id
   }
 
   /** `true` while this session is a 1D genome browser rather than a map. */
@@ -1515,7 +1564,8 @@ export class Session {
   /**
    * Contig names, if the contigs table has already been read.
    *
-   * @internal SessionDeck names the lead's contigs with it.
+   * @internal SessionDeck names the lead's contigs with it, and the tutorial
+   * finds a row of the Chromosomes table by it (§30).
    */
   contigNames(): string[] | null {
     const table = this.file?.contigs
@@ -4938,6 +4988,14 @@ export class Session {
    * second "drop this again" in a session that already has one under the old
    * file's memory.
    *
+   * **Readable includes still reading.** A row whose bytes are on their way has
+   * an address to read them from as surely as one that has them, and it was
+   * left behind: a workspace seats its tracks reading, a row is remembered only
+   * once it has loaded (§8.6), and the old file's worker is put down under it —
+   * so a reader who picked another resolution in the second or two after a
+   * store's session opened lost every one of its tracks, at the new rung and for
+   * good. Carried, such a row is read again at the rung it arrives at.
+   *
    * And, for a **change of resolution only**, what was computed as well. That
    * condition is the whole of the difference between the two lists, and it is
    * `AnnotationLoader.carry`'s docstring stated the other way round: a computed
@@ -4947,7 +5005,9 @@ export class Session {
    * loses numbers this tab is still holding.
    */
   private carry(next: string): void {
-    const rows = this.annotations?.store.entries.filter((entry) => entry.status === 'ready')
+    const rows = this.annotations?.store.entries.filter(
+      (entry) => entry.status === 'ready' || entry.status === 'loading',
+    )
     this.carried = rows === undefined || rows.length === 0 ? null : [...rows]
     const lanes = this.annotations?.store.placements
     this.carriedLanes = lanes === undefined || lanes.length === 0 ? null : [...lanes]

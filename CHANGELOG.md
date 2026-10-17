@@ -26,12 +26,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   app and its validation and timing notebooks. The page's title, description and new Open Graph tags
   say what a pasted link unfurls with: a genome browser for contact maps, tracks and 3D models, where
   the title said *cool files, in the browser*.
+
 - **`chromosomix --version` (§23).** The first line is `chromosomix` and the version, with the
   commit the build was made from — the words every file the command writes opens with, so `head -1`
   is what a pipeline records. Then the Node it runs on, with the platform, and the `h5wasm` and
   `@gmod/bbi` installed beside it, which read every map and track: both are ranges in `package.json`,
   settled at install, so two installs of one version can read a file through two builds of either.
   Answered wherever on the line it is written, as `--help` is. It printed the usage until now.
+
 - **Every build carries the licences of what it compiles in (§22.4).** `THIRD-PARTY-NOTICES.txt`
   beside the site's, an archived pin's, the desktop renderer's and the package's `index.html`, and
   beside the command in `dist-cli/`; a comment at the end of the standalone page, which may not be two
@@ -43,6 +45,25 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   build's check refuses one without them. Minifying had dropped every notice but three.js's, and a
   tarball carried chromosomix's own LICENSE alone. The README's licence section says where each
   build keeps them.
+
+- **A guided tutorial, from the landing page and About (§30).** *play the tutorial*, on the landing
+  page beside *Load files* and in About, walks a newcomer through a first session on a real map, one
+  step at a time, with the window lightly greyed and the one control the step is about lit: the
+  store drawer, opened from its header button on the lab's store, then switched to 4DN's; the IMR-90
+  Hi-C set `4DNES4296C5Q` (a billion contacts), its accession in colour with a copy button, blinking
+  when something else is typed; the set opened with its tracks, the General and Aesthetics columns
+  shown, 250 kb and chr13; the map drawn as a correlation to show its plaid; the Analysis panel's
+  2D, 3D and 1D tasks shown one group at a time, then Compartments run on chr13 alone, and its
+  saddle; back to balanced, two Shift-Option drags across the squares the tutorial lights, down to a
+  few domains at 10 kb, seen with O/E and 3 × 3 smoothing; Diamond insulation on chr13; the domains
+  drawn as a lane under the map; Track correlation of the reader's E1 and insulation against 4DN's,
+  the four ticked in one step; and the console. Each step moves on when what it asks for is done,
+  however it was done, and shows a tick first. The card points at what to press, glides to the next
+  thing, says what the step asks with an icon, and carries a progress bar cut into the tutorial's
+  ten parts, *back*, *skip step* and *skip tutorial*; ← and → step through it, and a press on the
+  grey shows where to press instead. Skipped half way, the landing page and About offer to resume at
+  the part the reader left; finished, to play it again. Also in the palette as *Guided tutorial*.
+  Nothing opens by itself.
 
 - **Tab goes on to the next field of its kind (§26.8).** In any field edited in place, Tab now takes
   what was typed, as Enter does, and puts the caret in the next field of the same kind — Shift+Tab
@@ -1099,6 +1120,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   external, and a test holds `dependencies` to exactly those. The README installs the CLI from npm —
   `npm install -g chromosomix`, or `npx chromosomix@<version>` for a pinned release — and keeps the
   clone and `npm link` for trying a change before it is released.
+
 - **Compartments finds its components by Lanczos iteration, in a third of the time (§18.8).** Each
   component was found by power iteration, which converges at the ratio of the two largest
   eigenvalues: five hundred products of the matrix a component, seven-tenths of the task's time on
@@ -2511,6 +2533,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that died before writing a single file. Both streams now let the reader go; what was left to print
   is dropped and the command finishes what it was doing — all seven of that run's files, identical to
   an unpiped run's — and exits with the status it would have had.
+
+- **A track still reading goes with the map to another resolution (§8.6).** A change of resolution
+  carried a map's tracks to the new one only once they had loaded: picking another resolution in the
+  second or two after a store's session opened, while its tracks were still being read, lost every
+  one of them, there and for good. A track on its way is now carried too, and read again at the new
+  resolution.
+
 - **A box is washed over the tracks beside a map, as it is in the 1D browser (§8.1).** A stretch
   highlighted in the browser — a rectangle drawn on the tracks — showed there as a wash over every
   track and on the map as the square on its diagonal, but beside the map it turned into two small
