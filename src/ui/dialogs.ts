@@ -14,6 +14,8 @@ import { el } from './dom'
 import { groupRank, isMac, keyCap, optionKey, shiftKey, stateChip, type Command } from './commands'
 import { buildLine } from '../version'
 import { devFeature, devFeaturesOn, setDevFeatures } from '../state/devFeatures'
+import type { TourProgress } from '../state/tour'
+import { tutorialButtons } from './tutorialOffer'
 
 /**
  * The modifier a gesture actually wants, on the machine reading the dialog.
@@ -218,17 +220,27 @@ export interface AboutPlatform {
   signed: boolean
 }
 
+/**
+ * The guided tutorial, as *About* offers it (§30): where the reader got to,
+ * and the one call that plays it.
+ */
+export interface AboutTutorial {
+  progress: TourProgress | null
+  play(from: 'start' | 'resume'): void
+}
+
 export function openAbout(
   repoUrl: string,
   platform?: AboutPlatform | null,
   onClose?: () => void,
+  tutorial?: AboutTutorial | null,
 ): Modal {
   return new Modal({
     // Titled for what it is, like every other dialog, rather than for the
     // brand, which `.modal-title` would shout in capitals.
     title: 'About this viewer',
     ...(onClose === undefined ? {} : { onClose }),
-    body: () =>
+    body: (close) =>
       el(
         'div',
         { class: 'about-body' },
@@ -261,6 +273,11 @@ export function openAbout(
             'own computer. Remote files are read the same way over HTTP range requests, so ' +
             'opening a map on a bucket costs a few requests rather than a download.',
         }),
+        // Straight after what the viewer is, because it is the answer to the
+        // question a reader who has just read that asks next — *so how do I
+        // start* — and it is the one way in to the tutorial a newcomer will
+        // find without being told where to look (§30).
+        ...(tutorial === undefined || tutorial === null ? [] : [tutorialOffer(tutorial, close)]),
         el(
           'p',
           {},
@@ -311,6 +328,37 @@ export function openAbout(
           : []),
       ),
   })
+}
+
+/**
+ * The guided tutorial (§30): one sentence on what it is, and the button that
+ * plays it — or carries it on from the step the reader left it at, with the way
+ * back to its start beside it (`ui/tutorialOffer.ts`, which the landing page
+ * draws too).
+ */
+function tutorialOffer(tutorial: AboutTutorial, close: () => void): HTMLElement {
+  return el(
+    'div',
+    { class: 'about-tutorial' },
+    el('p', {
+      class: 'about-tutorial-text',
+      text:
+        'New here? The guided tutorial walks through a first session on a real map from 4DN — ' +
+        'the store, a chromosome, its compartments and domains — one step at a time.',
+    }),
+    el(
+      'div',
+      { class: 'about-tutorial-actions' },
+      ...tutorialButtons(
+        tutorial.progress,
+        (from) => {
+          close()
+          tutorial.play(from)
+        },
+        { class: 'about-tutorial-play' },
+      ),
+    ),
+  )
 }
 
 /**

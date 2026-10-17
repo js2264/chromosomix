@@ -335,6 +335,18 @@ export class StoreDrawer {
     if (frontById(target) !== null) this.open(target, view)
   }
 
+  /**
+   * Have the header button's next press land on this store, without opening
+   * the drawer.
+   *
+   * For the tutorial (§30), whose first step is that press: what it opens is
+   * the lab's store, whatever an earlier visit or a link left the drawer on, so
+   * that switching to 4DN's is a step of its own rather than one already taken.
+   */
+  aim(id: string): void {
+    if (frontById(id) !== null) this.lastOpened = id
+  }
+
   close(): void {
     if (this.current === null) return
     const { front, view, target } = this.current

@@ -3260,6 +3260,27 @@ export class HeatmapView {
   }
 
   /**
+   * A block-local range of cells on both axes, as a rectangle in viewport
+   * pixels — {@link bandAt} the other way round, through the same two scales —
+   * or `null` with no block.
+   *
+   * For the guided tutorial (§30), which lights the square it asks a reader to
+   * drag across: through these scales, the square lit is the square a drag from
+   * one of its corners to the other names. Not clipped to the plot; the tour
+   * clips what it lights to what the canvas shows.
+   */
+  cellsOnScreen(rows: [number, number], cols: [number, number]): DOMRect | null {
+    if (this.matrix === null) return null
+    const plot = this.plotRect
+    const canvas = this.canvas.getBoundingClientRect()
+    const x0 = canvas.left + plot.x + this.colScale.toPixel(cols[0])
+    const x1 = canvas.left + plot.x + this.colScale.toPixel(cols[1])
+    const y0 = canvas.top + plot.y + this.rowScale.toPixel(rows[0])
+    const y1 = canvas.top + plot.y + this.rowScale.toPixel(rows[1])
+    return new DOMRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0))
+  }
+
+  /**
    * A band being dragged out **on a lane stack**, drawn across the map.
    *
    * The gesture happens beside the picture and the answer is about the picture,

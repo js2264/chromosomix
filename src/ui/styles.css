@@ -5595,6 +5595,34 @@ canvas.is-frozen {
   color: var(--text-faint);
 }
 
+/* The guided tutorial's offer (§30): a box of its own straight under what the
+   viewer is, since it is the one thing in a dialog of facts that a newcomer
+   came for. */
+.about-tutorial {
+  margin: 0.8rem 0;
+  padding: 0.65rem 0.8rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+}
+
+.about-body .about-tutorial-text {
+  margin: 0 0 0.55rem;
+}
+
+.about-tutorial-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.about-tutorial-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 /* A slider: the one toggle in the application drawn as a track and a knob.
 
    It is lit by the rule that lights every toggle (§26.3) — border, fill and
@@ -6191,6 +6219,10 @@ canvas.is-frozen {
   /* From the top-left corner of the box rather than of the viewport, so the
      grid does not walk when the column scrolls. */
   background-position: 0 0;
+  /* What the tutorial's offer asks whether there is a margin to stand in: the
+     column's width, which a Files column open beside it takes from, and not the
+     window's. */
+  container: landing / inline-size;
 }
 
 .view-picker {
@@ -6255,6 +6287,64 @@ canvas.is-frozen {
   height: 1em;
   border-radius: 0.22em;
   transform: translateY(0.108em);
+}
+
+/* The guided tutorial's offer (§30): first under the masthead, as a row, where
+   the column is narrow; in the margin left of *Load files*, as a small column of
+   its own, where the column is wide enough to have one. Against *Load files*
+   rather than the page's top, so it starts where the page's offers start. */
+.picker-load {
+  position: relative;
+}
+
+.picker-tutorial {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  margin: 0 0 1rem;
+}
+
+.picker-tutorial-kicker {
+  margin: 0;
+  font-size: var(--step--2);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.picker-tutorial-play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+}
+
+.picker-tutorial-text {
+  margin: 0;
+  font-size: var(--step--1);
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+@container landing (min-width: 86rem) {
+  .picker-tutorial {
+    position: absolute;
+    top: 0;
+    right: calc(100% + 2.5rem);
+    width: 13.5rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+    margin: 0;
+  }
+
+  .picker-tutorial-play {
+    padding: 0.55rem 0.9rem;
+    font-size: var(--step-0);
+    box-shadow: var(--shadow-2);
+  }
 }
 
 /* Opened *over* a view the brand block goes: the page it would introduce is
@@ -14246,4 +14336,492 @@ span.deck-name {
 .folders-asked .hint {
   flex: 1 1 20rem;
   margin: 0;
+}
+
+/* --- the guided tutorial (§30) ------------------------------------------- */
+
+/* The grey and its weight, once for both of the shapes that draw it. A shade
+   of the page's own darkest rather than black, which over the warm white of
+   the light theme reads as dirt; and light enough that what it covers can
+   still be read through it — the reader is learning where things are, and a
+   window they cannot see is a lesson in the one control lit. */
+.tour {
+  --tour-dim: rgb(16 18 24 / 0.36);
+  --tour-glide: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Above every surface of the app — its drawers stop at 40 — and under its
+   toasts, dialogs, menus, lifted cards and colour picker: each is something a
+   reader may need in the middle of a step, and none of them should be dimmed
+   or made unreachable by the thing telling them what to press. */
+.tour-veil,
+.tour-ring {
+  position: fixed;
+  z-index: 80;
+  pointer-events: none;
+}
+
+/* The grey over the whole window, for a step that has nothing to light. It
+   takes no press, so the window can be used to get back to where the step is. */
+.tour-veil {
+  inset: 0;
+  background: var(--tour-dim);
+  animation: tour-fade 240ms ease-out;
+}
+
+/* The hole, with the grey drawn as its shadow: one shape, so the lit control
+   and the dim around it cannot drift apart while the hole follows a column
+   scrolling or a drawer sliding in. The soft band just outside the outline is
+   what makes the hole read as lit rather than cut. */
+.tour-ring {
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--accent) 28%, transparent),
+    0 0 0 200vmax var(--tour-dim);
+  outline: 2px solid var(--accent);
+  transition:
+    left 260ms var(--tour-glide),
+    top 260ms var(--tour-glide),
+    width 260ms var(--tour-glide),
+    height 260ms var(--tour-glide),
+    outline-color 160ms ease-out;
+}
+
+/* A step waiting on the reader breathes, slowly: here is where to press. */
+.tour-ring::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.tour.is-waiting .tour-ring::after {
+  animation: tour-breathe 2.2s ease-out infinite;
+}
+
+@keyframes tour-breathe {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+
+  70%,
+  100% {
+    box-shadow: 0 0 0 14px color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+}
+
+/* Done: the ring takes the colour of a thing that finished (§26.5) for the
+   beat before the next step. */
+.tour.is-done .tour-ring {
+  outline-color: var(--ok);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--ok) 30%, transparent),
+    0 0 0 200vmax var(--tour-dim);
+}
+
+/* A press on the grey shows where to press instead. */
+.tour-ring.is-nudged {
+  animation: tour-nudge 650ms ease-out;
+}
+
+@keyframes tour-nudge {
+  35% {
+    outline-width: 4px;
+    outline-offset: 5px;
+  }
+}
+
+/* The four blocks round the hole, which take the presses that land on the
+   grey: transparent, because the grey is the ring's. */
+.tour-block {
+  position: fixed;
+  z-index: 81;
+}
+
+/* A first place is taken, not glided to from wherever the box was. */
+.tour-ring.is-snapping,
+.tour-card.is-snapping {
+  transition: none;
+}
+
+.tour-card {
+  position: fixed;
+  z-index: 82;
+  width: min(23rem, calc(100vw - 1rem));
+  padding: 0.75rem 0.95rem 0.7rem;
+  background: var(--bg-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow:
+    var(--shadow-2),
+    0 18px 40px -18px rgb(12 14 20 / 0.45);
+  font-size: var(--step-0);
+  transition:
+    left 260ms var(--tour-glide),
+    top 260ms var(--tour-glide);
+}
+
+/* The tail, pointing into the hole from whichever side the card stands on. A
+   square turned on its corner and drawn in the card's own colours, so card and
+   tail are one shape; `--tail-at` is how far along the edge the hole's middle
+   is. */
+.tour-tail {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  transform: rotate(45deg);
+  display: none;
+}
+
+.tour-card[data-side="below"] .tour-tail {
+  display: block;
+  top: -7px;
+  left: calc(var(--tail-at, 50%) - 6px);
+  border-right: none;
+  border-bottom: none;
+}
+
+.tour-card[data-side="above"] .tour-tail {
+  display: block;
+  bottom: -7px;
+  left: calc(var(--tail-at, 50%) - 6px);
+  border-left: none;
+  border-top: none;
+}
+
+.tour-card[data-side="right"] .tour-tail {
+  display: block;
+  left: -7px;
+  top: calc(var(--tail-at, 50%) - 6px);
+  border-top: none;
+  border-right: none;
+}
+
+.tour-card[data-side="left"] .tour-tail {
+  display: block;
+  right: -7px;
+  top: calc(var(--tail-at, 50%) - 6px);
+  border-bottom: none;
+  border-left: none;
+}
+
+.tour-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.tour-chapter {
+  font-size: var(--step--2);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.tour-count {
+  font-size: var(--step--2);
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.tour-head .tour-skip {
+  margin-left: auto;
+  padding: 0.15rem 0.35rem;
+  font-size: var(--step--2);
+}
+
+/* How far through, cut into the tour's parts: the counter says where, the
+   bar says how much is left and which part of it, without being read. */
+.tour-track {
+  display: flex;
+  gap: 3px;
+  margin: 0.45rem 0 0.75rem;
+}
+
+.tour-segment {
+  flex: 1 1 0;
+  min-width: 4px;
+  height: 4px;
+  background: var(--bg-muted);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.tour-segment-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--accent);
+  transition: width 320ms var(--tour-glide);
+}
+
+/* The words come in, rather than being swapped under the reader's eye. */
+.tour-card.is-entering .tour-body {
+  animation: tour-enter 260ms var(--tour-glide);
+}
+
+@keyframes tour-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes tour-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.tour-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-bottom: 0.3rem;
+}
+
+/* What the step asks — press, type, choose, drag, look — and a tick once it
+   is done. */
+.tour-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  margin-top: -0.1rem;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  transition:
+    background 160ms ease-out,
+    color 160ms ease-out;
+}
+
+.tour-chip.is-done {
+  background: color-mix(in srgb, var(--ok) 16%, transparent);
+  color: var(--ok);
+}
+
+.tour-chip.is-done .icon {
+  animation: tour-tick 320ms var(--tour-glide);
+}
+
+@keyframes tour-tick {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+}
+
+.tour-title {
+  margin: 0;
+  font-size: var(--step-1);
+  font-weight: 600;
+  line-height: 1.3;
+  align-self: center;
+}
+
+.tour-text {
+  margin: 0;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+/* Under the title's words, not under its icon: the chip and the gap after it. */
+.tour-card:not(.is-hero) .tour-live {
+  margin-left: 2.25rem;
+}
+
+.tour-note {
+  margin: 0.45rem 0 0;
+  font-size: var(--step--1);
+  color: var(--warn);
+}
+
+.tour-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  margin-top: 0.8rem;
+}
+
+/* A step's own helper — *type it for me* — stands apart from the way on. */
+.tour-assist {
+  margin-right: auto;
+}
+
+.tour-next {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* An arrow for the way on; none on *skip step*, which is not the way the card
+   invites, nor on *finish*, which goes nowhere. */
+.tour-next.btn-quiet .tour-next-arrow,
+.tour-next.is-last .tour-next-arrow {
+  display: none;
+}
+
+/* The welcome and the end: a card in the middle of the window, a size up. */
+.tour-card.is-hero {
+  width: min(30rem, calc(100vw - 2rem));
+  padding: 1.1rem 1.3rem 1rem;
+}
+
+.tour-card.is-hero .tour-title {
+  font-size: var(--step-2);
+}
+
+.tour-card.is-hero .tour-text {
+  font-size: var(--step-0);
+}
+
+/* The tour's parts, under the welcome's sentences. */
+.tour-agenda {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.3rem 1rem;
+  margin: 0.9rem 0 0.2rem;
+  padding: 0;
+  list-style: none;
+  counter-reset: tour-part;
+}
+
+.tour-agenda li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--step--1);
+  color: var(--text-dim);
+  counter-increment: tour-part;
+}
+
+.tour-agenda li::before {
+  content: counter(tour-part);
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--step--2);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The end: a tick in the colour of a thing that finished, over the title. */
+.tour-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  margin-bottom: 0.6rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ok) 15%, transparent);
+  color: var(--ok);
+  animation: tour-tick 420ms var(--tour-glide);
+}
+
+/* A dialog has the window: the tour waits under it, not over it. */
+.tour.is-yielding > * {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-ring,
+  .tour-card,
+  .tour-segment-fill,
+  .tour-chip {
+    transition: none;
+  }
+
+  .tour-veil,
+  .tour-ring.is-nudged,
+  .tour.is-waiting .tour-ring::after,
+  .tour-card.is-entering .tour-body,
+  .tour-chip.is-done .icon,
+  .tour-badge {
+    animation: none;
+  }
+}
+
+/* A name to be read exactly — an accession the reader will type — in the face
+   the app sets names in, and in the colour of what can be acted on (§26.5):
+   it is what the reader is about to type. */
+.tour-name {
+  padding: 0.05em 0.35em;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.92em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Typed wrong: "look at this before you trust it" (§26.5) for as long as the
+   box holds what cannot become the name, and three blinks for each new
+   mistake. */
+.tour-name.is-wrong {
+  background: var(--warn-soft);
+  color: var(--warn);
+  outline: 1px solid var(--warn);
+}
+
+.tour-name.is-blinking {
+  animation: tour-blink 900ms steps(2, jump-none) 3;
+}
+
+@keyframes tour-blink {
+  50% {
+    background: var(--warn);
+    color: var(--bg-raised);
+  }
+}
+
+/* Under its own rule rather than the section's, which comes first and would
+   lose to the blink above: the mark stays, the blinking goes. */
+@media (prefers-reduced-motion: reduce) {
+  .tour-name.is-blinking {
+    animation: none;
+  }
+}
+
+/* The name's own copy button, a glyph's width after it. */
+.tour-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: -0.2em;
+  width: 1.5em;
+  height: 1.5em;
+  margin-left: 0.2em;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.tour-copy:hover,
+.tour-copy:focus-visible {
+  border-color: var(--border);
+  color: var(--accent);
+}
+
+.tour-copy.is-copied {
+  color: var(--ok);
 }
