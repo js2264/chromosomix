@@ -214,6 +214,13 @@
   ],
   "pulls": [
     {
+      "number": 113,
+      "commit": "c8a1e09",
+      "title": "Add name column toggle to map's Tracks card",
+      "branch": "js/dazzling-lovelace-vfwaeo",
+      "date": "2026-10-17T08:40:00Z"
+    },
+    {
       "number": 112,
       "commit": "15f590d",
       "title": "Add guided tutorial for first-time users",
