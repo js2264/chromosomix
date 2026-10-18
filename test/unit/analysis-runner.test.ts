@@ -25,7 +25,7 @@ import {
   type RunTarget,
 } from '@/analysis/runner'
 import { actions, forgetActions, resetActions } from '@/state/actions'
-import { READY } from '@/analysis/types'
+import { READY, readsMap } from '@/analysis/types'
 import type {
   AnalysisContext,
   AnalysisFraming,
@@ -755,6 +755,153 @@ describe('running on every map', () => {
       expect(runner.targetCount()).toBe(1)
       runner.destroy()
     })
+  })
+})
+
+/**
+ * A task that reads no map, on a deck (§18.1).
+ *
+ * Its runner reads the session's tracks and sequences and never a matrix, so
+ * three maps on screen are one answer and not three. A batch of it ran the same
+ * tracks three times and filed three identical lanes, each named after a map it
+ * never read; a plain Run filed it on whichever map was starred, so moving the
+ * star and pressing Run again made a second copy rather than a second run.
+ */
+describe('a task that reads no map, on a deck', () => {
+  const metaplot = task('metaplot', { group: '1d', venue: 'annotations' })
+
+  /** The annotations worker, answering each run only when told, oldest first. */
+  function heldTracks(): {
+    client: ReturnType<NonNullable<RunnerHost['annotations']>>
+    sent(): number
+    finish(): void
+  } {
+    const pending: Array<(result: TaskResult) => void> = []
+    let sent = 0
+    const client = {
+      cancellable: () => {
+        sent++
+        const promise = new Promise<TaskResult>((resolve) => pending.push(resolve))
+        return { promise, cancel: () => {} }
+      },
+    }
+    return {
+      client: client as unknown as ReturnType<NonNullable<RunnerHost['annotations']>>,
+      sent: () => sent,
+      finish: () => pending.shift()?.(trackResult('metaplot')),
+    }
+  }
+
+  /** The three-map deck with its star on the first companion, and the tracks' worker. */
+  function onDeck(): Harness & { star: { block: BlockInput | null; map: string }; tracks: ReturnType<typeof heldTracks> } {
+    const tracks = heldTracks()
+    const star = { block: null as BlockInput | null, map: 'p1' }
+    const bench = harness(FRAMING, null, DECK, star, { annotations: () => tracks.client })
+    bench.catalogue.set(metaplot.id, metaplot)
+    return { ...bench, star, tracks }
+  }
+
+  it('is told apart from a task that reads one by its venue, or by saying so', () => {
+    expect(readsMap(task('insulation'))).toBe(true)
+    expect(readsMap(metaplot)).toBe(false)
+    expect(readsMap(task('dotplot', { venue: 'annotations', mapless: true }))).toBe(false)
+  })
+
+  it('is run once by a batch, and filed on the lead', async () => {
+    const { runner, fake, finished, tracks } = onDeck()
+    runner.runAll(metaplot, {}, runner.targets())
+    await settle()
+    expect(tracks.sent()).toBe(1)
+    // A run of one, so nothing says `1 of 3`.
+    const state = runner.stateOf('metaplot')
+    expect(state.status).toBe('running')
+    expect(state.status === 'running' ? state.batch : null).toBeUndefined()
+
+    tracks.finish()
+    await settle()
+    expect(runner.stateOf('metaplot').status).toBe('done')
+    expect(finished.map((entry) => entry.map)).toEqual(['lead'])
+    // No map was opened in the analysis worker: there is no pixel to ask for.
+    expect(fake.seen).toHaveLength(0)
+    runner.destroy()
+  })
+
+  it('files a plain Run on the lead with the star elsewhere, and finds it wherever the star goes', async () => {
+    const { runner, finished, star, tracks } = onDeck()
+    runner.run(metaplot, {})
+    await settle()
+    tracks.finish()
+    await settle()
+    expect(finished.map((entry) => entry.map)).toEqual(['lead'])
+    expect(runner.runsOf('metaplot')).toHaveLength(1)
+    star.map = 'p2'
+    expect(runner.runsOf('metaplot')).toHaveLength(1)
+    expect(runner.resultOf('metaplot')).not.toBeNull()
+    // One result, so the drawer has no tabs to walk between.
+    expect(runner.resultsFor('metaplot')).toHaveLength(1)
+    runner.destroy()
+  })
+
+  it('takes a second press after the star moved as the run already going', async () => {
+    const { runner, finished, star, tracks } = onDeck()
+    runner.run(metaplot, {})
+    await settle()
+    star.map = 'p2'
+    runner.run(metaplot, {})
+    await settle()
+    expect(tracks.sent()).toBe(1)
+    tracks.finish()
+    await settle()
+    expect(runner.busy).toBe(false)
+    expect(finished).toHaveLength(1)
+    runner.destroy()
+  })
+
+  it('is framed by the session’s own map, and laid out on its sequences, whichever is starred', async () => {
+    // The host answers the starred map's facts unless it is asked about a task
+    // that reads no map. With the star's, moving it changed the sequences a 1D
+    // task read and the grid its lanes were cut on.
+    const sent: Array<{ framing?: AnalysisFraming; inputs?: { contigLengths?: Record<string, number> } }> = []
+    const tracks = trackClient((payload) => {
+      sent.push(payload as (typeof sent)[number])
+      return Promise.resolve(trackResult('metaplot'))
+    })
+    const own = (asked?: AnalysisTask): boolean => asked !== undefined && !readsMap(asked)
+    const { runner, catalogue } = harness(FRAMING, null, DECK, { block: null, map: 'p1' }, {
+      context: (asked) => context({ ...FRAMING, uri: own(asked) ? URI : 'rep2.cool' }),
+      source: (asked) =>
+        own(asked)
+          ? { uri: URI, source: { kind: 'local', file: new File([], URI) }, label: 'lead.cool' }
+          : { uri: 'rep2.cool', source: { kind: 'remote', url: 'rep2.cool' }, label: 'rep2.cool' },
+      contigLengths: (asked): Record<string, number> =>
+        own(asked) ? { chrI: 100_000 } : { I: 99_000, M: 86_000 },
+      annotations: () => tracks as unknown as ReturnType<NonNullable<RunnerHost['annotations']>>,
+    })
+    catalogue.set(metaplot.id, metaplot)
+    runner.run(metaplot, {})
+    await settle()
+    expect(sent).toHaveLength(1)
+    expect(sent[0].framing?.uri).toBe(URI)
+    expect(sent[0].inputs?.contigLengths).toEqual({ chrI: 100_000 })
+    runner.destroy()
+  })
+
+  it('keeps the run before when it is run again under another star, not a copy beside it', async () => {
+    const { runner, star, tracks } = onDeck()
+    runner.run(metaplot, { flank: 1000 })
+    await settle()
+    tracks.finish()
+    await settle()
+    star.map = 'p2'
+    runner.run(metaplot, { flank: 2000 })
+    await settle()
+    tracks.finish()
+    await settle()
+    const runs = runner.runsOf('metaplot', 'lead')
+    expect(runs.map((run) => run.provenance.params)).toEqual([{ flank: 2000 }, { flank: 1000 }])
+    expect(runner.runsOf('metaplot', 'p1')).toEqual([])
+    expect(runner.runsOf('metaplot', 'p2')).toEqual([])
+    runner.destroy()
   })
 })
 

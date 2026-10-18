@@ -96,6 +96,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A 1D task is one Run, deck or not (§18.1, §18.4).** The 1D tasks read the loaded tracks and
+  sequences and never a map, yet a deck offered them *run on ★* and *run on all N maps*: the batch
+  read the same tracks once per map and filed as many identical lanes, each named after a map it
+  never read, and a plain Run filed its lane on whichever map was starred, so moving the star and
+  pressing Run again made a second copy of it. A 1D task's button now reads plain *run*, with no
+  batch beside it, and the star is nothing to it: it is priced, framed and laid out on the first
+  map's sequences and grid, where its form followed the star's — a deck of two assemblies offered
+  sixteen sequences or seventeen by which map was starred — and what it makes is filed with the
+  session's tracks, on the first map, so a second press after the star moved is the run already
+  going, or the next run of the same one. Its heading says it reads the loaded tracks, not the map,
+  and a pan no longer marks its result stale and offers to *recompute here* the same answer. A deck
+  with no map starred greys only the tasks that read a map, and says *only the 1D tasks can run*,
+  where it greyed the 1D card too under a sentence about a map.
+
 - **A connected folder offers every file the app opens, and says why of the rest (§20.5, §24.9).**
   The Files column drew 3D structures (`.g3d`, `.3dg`, `.bed3d`, `.pdb`), saved workspaces
   (`.json`), text tables (`.txt`, `.tsv`, `.tab`, compressed or not) and anything bgzipped as `.bgz`

@@ -385,12 +385,12 @@ function placeOf(value: unknown): { rows: string; cols?: string } | null {
  * One function for the first map's star and every companion's, because they
  * are one radio drawn as several. A filled star is **live**: pressing it
  * leaves no map starred, which is the state in which the *Map* card sets every
- * map and no task runs — so the sentence on it says both.
+ * map and no task that reads a map runs — so the sentence on it says both.
  */
 export function mapStarTitle(name: string, on: boolean): string {
   return on
     ? `${name} is starred: the Map card sets it and the analyses run on it. ` +
-        'Click to unstar — the card then sets every map, and no task can run.'
+        'Click to unstar — the card then sets every map, and only the 1D tasks can run.'
     : `Star ${name}: the Map card then sets it, and the analyses run on it.`
 }
 

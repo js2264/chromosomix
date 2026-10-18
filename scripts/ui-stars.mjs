@@ -5,12 +5,12 @@
  * The stars are gestures a gallery of arrivals never makes: which map the
  * Aesthetics column's *Map* card sets moves with the star, a filled star
  * pressed leaves nothing starred — the card then sets every map and the
- * Analysis column greys every task — and an empty cell takes a track row as
- * readily as a map. Opens the yeast deck demo (a cooler beside a `.hic`),
- * presses each star in turn, changes a setting on the card in each state, and
- * prints what it found to stdout as well as shooting it, so a card that did
- * not follow the star is a line in the log rather than something to spot in a
- * picture.
+ * Analysis column greys every task that reads a map — and an empty cell takes
+ * a track row as readily as a map. Opens the yeast deck demo (a cooler beside
+ * a `.hic`), presses each star in turn, changes a setting on the card in each
+ * state, and prints what it found to stdout as well as shooting it, so a card
+ * that did not follow the star is a line in the log rather than something to
+ * spot in a picture.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-stars.mjs [out-dir]
@@ -140,7 +140,8 @@ try {
   )
   console.log('match presses disabled with no star:', JSON.stringify(presses))
 
-  // The Analysis column with nothing starred: every task greyed, one warning.
+  // The Analysis column with nothing starred: every task that reads a map
+  // greyed under one warning, and the 1D card left as its tracks have it.
   await fold('Fold the Aesthetics panel')
   await fold('Show the Analysis panel')
   await sleep(1200)

@@ -87,6 +87,7 @@ node scripts/ui-map-look.mjs gallery          # the map's look and what leaves i
 node scripts/ui-locus-pairs.mjs gallery       # two windows typed as one (§5.4): a space, ` x ` and `|` between them in the region box, each opening IV × V, the box showing the pair and Enter on it not moving, `I x II` in the whole genome's box, a pair in the Chromosomes table's: lp01 … lp05
 node scripts/ui-history-list.mjs gallery      # the list of steps back beside the header's back (§5.5): five steps taken, the list, a row three back pressed, a reload and the list still there, Back and the list one shorter, the dark theme: hl01 … hl04
 node scripts/ui-task-filter.mjs gallery       # the box over the Analysis column's task list (§18.1): the column, `TAD`, `pileup`, `a/b`, a word nothing matches, Escape, and Enter opening the first task left: tf01 … tf06
+node scripts/ui-run-row.mjs gallery           # the drawer's run row on the yeast deck (§18.1, §18.4): P(s) with `run on ★` and `run on all 2 maps`, Peak calling with one plain `run` under either star and its form unchanged by the star, its peaks one row beside the first map, P(s) stale after a pan and the peak call not, then no map starred — P(s) refused, the column's warning, the 1D card live, Peak calling's Run live: rr01 … rr09, rr08b
 node scripts/ui-metaplot-heatmap.mjs gallery  # the metaplot's per-feature heatmap as one smoothed image (§18.13): ATAC over its peaks, close up, the pointer over it with nothing lit, enlarged, and its PNG and PDF under files/, the PDF checked for one interpolated image: mh01 … mh05
 node scripts/ui-installed-folders.mjs gallery # folders kept by the installed app (§20.6), with a stand-in folder dialog and display mode: run2 connected, a map and a track opened from it, the workspace saved (files/), reopened in a fresh window with nobody asked; another installation asked to connect run2 and finding it; and a tab's folder for this visit, gone after a reload: if01 … if06
 node scripts/ui-files-routes.mjs gallery     # the Files column against every kind of file a folder holds (§20.5), on the yeast demo's directory plus a PDB (run ui-saves.mjs first), a .bgz, a page of prose and five names nothing opens: each row offered or dimmed with its tooltip printed, the map from its row, a loop .tsv, a .g3d.gz and the PDB each added in one cell, the .bgz as a track, the workspace's one mark appending its tab, and the prose .txt refused as text: fr01 … fr08, fr01b
@@ -128,7 +129,8 @@ The fifth drives the **stars** of a deck (§16.5, §18.1, §25.3) and its empty 
 yeast deck demo (a cooler beside a `.hic`): the Aesthetics column's *Map* card following the star
 onto a companion, a setting changed there reaching that map alone, the filled star pressed so that
 nothing is starred — the card then says *every map* and sets them all, and the Analysis column greys
-every task under one warning — an empty cell taking a row dragged from the Tracks card, and two
+every task that reads a map under one warning, the 1D card keeping its own answers — an empty cell
+taking a row dragged from the Tracks card, and two
 structure cells — the 3D card naming the starred one under its title, then the other starred, then
 neither. It prints what the card said at each step, so a card that did
 not follow the star is a line in the log. Run it after any change to the stars, the Map card's
@@ -299,6 +301,18 @@ could. Then *Diamond insulation*'s form — its *Boundaries* section holding the
 calls are read over — and a run, with its lane and its domains on the map. It prints the row's
 state, each run's notes and the per-sequence rows. Run it after any change to either task's form,
 to `analysis/insulation.ts`, to `analysis/hicrep.ts`, or to how the deck tells the column its maps.
+
+`scripts/ui-run-row.mjs` drives the drawer's **run row** on a deck (§18.1, §18.4), on the yeast
+deck: *Contact probability P(s)*, which reads a map, offered `run on ★` and `run on all 2 maps`;
+*Peak calling*, which reads only the tracks, offered one plain `run` with the first map starred and
+with the `.hic` starred — its form's sequences the first map's both times, where they used to follow
+the star — and run there, its peaks one row on the Tracks card named by no map, beside the first
+map; P(s) run on the star and the view moved half a window, its heading stale with *recompute
+here*, and the peak call's heading naming the tracks with nothing to recompute; then no map
+starred: P(s)'s open drawer refusing with the column's sentence, the column greying every task that
+reads a map and leaving the 1D card live, and Peak calling's Run live. It prints the run row, the
+heading, the tabs, the column and the computed rows at each step. Run it after any change to the
+run row, to the star, to `readsMap`, or to which map a task is framed by.
 
 `scripts/ui-called-sets.mjs` drives a called set as **one row** (§18.7) on the micro-C demo's
 chromosome IV: diamond insulation run, the drawer's two displays — and the look appearing beside the

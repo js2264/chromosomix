@@ -6372,8 +6372,9 @@ the micro-C file's bin size as the map they had just chosen.
 column shows the first map's card with *every map — all N* under its title, in the warn colour: a
 setting changed there is made to **every map of the deck at once**, one moved setting at a time, so
 picking a ramp does not also flatten each map's clip onto the first one's. That is also the state in
-which no task can run (§18.1). *None* holds for as long as the deck does, and a deck put down leaves
-the next one starred on its first map, which is where every deck starts.
+which no task that reads a map can run, and the 1D tasks, which read none, still do (§18.1). *None*
+holds for as long as the deck does, and a deck put down leaves the next one starred on its first
+map, which is where every deck starts.
 
 A companion's settings used to ride **on its picture**: a button in the bottom-left corner of the map
 opening a menu upward over it, with the score, the transform, the ramp and the clip, while the Map
@@ -7235,16 +7236,20 @@ or not the sentence is printed under it.
 The distinction is not *can this run now* but *can what the reader does next make it run*, and
 `TaskAvailability` is the three answers: `ready`, `waiting` with a sentence, `absent`.
 
-**Every task is greyed while a deck has no map starred.** A task reads one map and the star is how
-that map is named (§16.5), so a deck the reader has left with no star filled has no file for any
-task to run against — and none is guessed for them, the first map least of all, which would be the
-star's old default passed off as a choice. The column says so once, above its cards, in the warn
-colour: *no map is starred, so no task can run*; every row is greyed with that sentence in its
-tooltip and without the per-group and per-row lines, which would print it twenty times; and the
-drawer's Run and *run on all* refuse with it in the price's place. It is every task, the 1D tasks
-that read only tracks and sequences included, because the rule a reader is given is *a task runs on
-the starred map* and a column in which some run and some do not under no star is a rule with
-exceptions to learn. Starring any map puts every task back.
+**Every task that reads a map is greyed while a deck has no map starred.** Such a task reads one map
+and the star is how that map is named (§16.5), so a deck the reader has left with no star filled has
+no file for it to run against — and none is guessed for them, the first map least of all, which
+would be the star's old default passed off as a choice. The column says so once, above its cards, in
+the warn colour: *no map is starred, so only the 1D tasks can run*; every row that reads a map is
+greyed with that sentence in its tooltip and without the per-group and per-row lines, which would
+print it twenty times; and the drawer's Run and *run on all* refuse with it in the price's place.
+**The 1D tasks are not greyed.** They read only tracks and sequences (§18.3), so there is no map for
+the star to name and nothing for its absence to stop: they keep their own answers — ready, or waiting
+on a file — and run. They were greyed too at first, because the rule a reader is given is *a task
+runs on the starred map* and a column in which some run and some do not looked like a rule with
+exceptions to learn. But a 1D task does not run on the starred map — its button says *run*, not *run
+on ★* (below) — and greying it under a sentence about a map was the exception. Starring any map puts
+every task back.
 
 **The column is asked again whenever the deck's maps change** — a companion's file opening, a cell
 moving to another rung, a cell closing — as it is when the star moves: which tasks apply is a question
@@ -7282,13 +7287,25 @@ one.
 a job runs and the price after the pair, progress, results, exports. On a deck the button reads
 *run on ★*, with the starred map named in its tooltip, and what a plain Run makes — its tab, its
 lanes, its name — is that map's; *run on all N maps* beside it runs the task once per map, in the
-grid's order (§16.9), and is not there on a single map. The row's controls are ordinary bordered
-buttons like everything else in a bar (§5.4), and so are the exports under the results: the control
-that stops a forty-second scan and the ones that get the numbers out of the application are the two a
-reader most needs to find, and drawn borderless they read as captions. It is anchored to the right of
-the body, full height — down to the console's top edge while the console is up (§23.4) — resizable by
-its left edge with its width remembered, and it overlays the content and the two right columns rather
-than squeezing them — at three quarters of the window there is nothing left to squeeze.
+grid's order (§16.9), and is not there on a single map. **A 1D task is one plain *run*, deck or
+not**, with no *run on all N maps* beside it: it reads the loaded tracks and sequences and never a
+map (§18.3), so four maps on screen are one answer and not four. It was offered both once; the batch
+read the same tracks once per map and filed as many identical lanes, each named after a map it never
+read, and a plain Run filed its lane on whichever map was starred, so moving the star and pressing
+Run again made a second copy of one lane rather than a second run. It is the session's task, so the
+star is nothing to it: it is priced, framed and laid out on the first map's sequences and grid,
+whichever map is starred — with the star's, moving the star changed the sequences its form offered
+and the bins its lanes were cut on — and what it makes is filed with the session's tracks, on the
+first map: its lanes take no map's name, its results have one history (§18.4) and no tabs, and a
+press after the star moved is the run already going, or the next run of the same one. The runner
+holds the same rule where a batch is queued, so nothing offers it one. The row's controls are
+ordinary bordered buttons like everything else in a bar (§5.4), and so are the exports under the
+results: the control that stops a forty-second scan and the ones that get the numbers out of the
+application are the two a reader most needs to find, and drawn borderless they read as captions. It
+is anchored to the right of the body, full height — down to the console's top edge while the console
+is up (§23.4) — resizable by its left edge with its width remembered, and it overlays the content
+and the two right columns rather than squeezing them — at three quarters of the window there is
+nothing left to squeeze.
 
 **It is deliberately not a modal.** The dialogs in §5 are questions; this is a place to work. A modal
 here would take the keyboard (which is how the app is driven), would dismiss on a stray click outside
@@ -7541,9 +7558,13 @@ against the new one. This is the discipline the on-the-fly 4C lane never kept �
 whatever block happened to be loaded, which is one of the reasons it is gone (§8.9) — and it is why
 the genome-wide 4C **task** (§18.8) is a different object from that **lane** rather than a bigger
 version of it. The panel is what makes the two obviously different, which is a good reason for the
-panel to exist. **A task that reads no map** — two sequence sets against each other (§28) — has no
-framing to name or to leave: its heading says it reads the sequences chosen, not the map, its result
-is never stale for a view that moved, and its provenance is of the sequences.
+panel to exist. **A task that reads no map** — two sequence sets against each other (§28), and every
+1D task, which reads the loaded tracks — has no framing to name or to leave: its heading says it
+reads the sequences chosen, or the loaded tracks, not the map; its result is never stale for a view
+that moved, or a star that did, and so it offers no *recompute here*, which would be the same run
+again. The dot plot's provenance is of the sequences; a 1D task's records the first map's framing,
+whichever map is starred, for the bin size its lanes are laid out on and the circles and origins it
+reads (§8.15).
 
 **Provenance travels with the numbers.** Every result carries its task and task version, every
 parameter, the framing snapshot, the file URI, the app's version and commit, and a timestamp. It is
@@ -7565,13 +7586,13 @@ a finished result makes it cheap to produce again: a pileup over forty thousand 
 range requests, and a reader who lost it by pressing Run lost the minute. What people actually do with
 this catalogue is run a thing, change one number, run it again, and then want the two side by side —
 or, more often, discover that the previous answer was the one worth keeping. So the runner keeps the
-latest run of each task **on each map** and the **eight** before it, newest first, and the drawer
-offers `older` / `newer` / `latest` over them with the run's own clock time and, in its tooltip,
-*which parameter differs from the latest* — the reason the two pictures are two pictures, which
-nothing else on screen states. Everything downstream follows the run on screen: the framing line,
-**recompute here**, the CLI command, the TSV and the vector export are all that run's, because a
-result is a record and stepping back to one means stepping back to all of it. Bounded because these
-hold typed arrays, and not
+latest run of each task **on each map** — a 1D task's on the first map, the one it is filed on
+(§18.1) — and the **eight** before it, newest first, and the drawer offers `older` / `newer` /
+`latest` over them with the run's own clock time and, in its tooltip, *which parameter differs from
+the latest* — the reason the two pictures are two pictures, which nothing else on screen states.
+Everything downstream follows the run on screen: the framing line, **recompute here**, the CLI
+command, the TSV and the vector export are all that run's, because a result is a record and stepping
+back to one means stepping back to all of it. Bounded because these hold typed arrays, and not
 persisted for the reason the framing is a snapshot: a history restored against a file that has since
 been re-binned would be a list of figures that no longer describe anything.
 
@@ -10464,7 +10485,8 @@ log that outlives the result, the tab and the browser session. That log is the c
 
 The record is written by `AnalysisRunner.execute`, which is the one place that knows a **job** from
 a button: `runAll` queues one job per map, so a batch over six maps is six lines, each naming its
-own file and each carrying its own command. Nothing else can produce that — the drawer holds one
+own file and each carrying its own command — and a 1D task, which reads no map, is one job and one
+line however many maps there are (§18.1). Nothing else can produce that — the drawer holds one
 result, the panel row holds one state per task, and both are per session.
 
 It is also the only place that sees a run which produced nothing. A **failure** and a **Stop** leave
