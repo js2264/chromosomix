@@ -214,6 +214,13 @@
   ],
   "pulls": [
     {
+      "number": 116,
+      "commit": "22f7281",
+      "title": "Publish to npm by trusted publishing, without a token",
+      "branch": "claude/package-distribution-cli-3bf0u4",
+      "date": "2026-10-18T07:04:15Z"
+    },
+    {
       "number": 107,
       "commit": "ae43db2",
       "title": "Add circular visualization of metagenome contact maps (§7.6)",
