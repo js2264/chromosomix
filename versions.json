@@ -1,6 +1,13 @@
 {
-  "latest": "bc17f92",
+  "latest": "4509797",
   "versions": [
+    {
+      "commit": "4509797",
+      "version": "0.15.0",
+      "date": "2026-10-18T09:58:30+02:00",
+      "subject": "Publish to npm by trusted publishing, without a token (#116)",
+      "tag": ""
+    },
     {
       "commit": "bc17f92",
       "version": "0.15.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "1bc64c9",
-      "version": "0.13.0",
-      "date": "2026-10-07T16:48:07+02:00",
-      "subject": "Pick every colour in one picker of the app's own: hex first, the last colours kept, and a drag that does not close it (§26.6) (#95)",
-      "tag": ""
-    },
-    {
       "commit": "7a6fea2",
       "version": "0.13.0",
       "date": "2026-09-20T22:39:26+02:00",
@@ -213,13 +213,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 116,
-      "commit": "22f7281",
-      "title": "Publish to npm by trusted publishing, without a token",
-      "branch": "claude/package-distribution-cli-3bf0u4",
-      "date": "2026-10-18T07:04:15Z"
-    },
     {
       "number": 107,
       "commit": "ae43db2",
