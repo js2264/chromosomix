@@ -10324,6 +10324,13 @@ it — published, it would have been 0.13.0 for ever with 0.14.0's code in it. O
 made has been through the checks (`preversion`) and named its changelog section, and only that tag
 agrees with the file. There is no 0.14.0: the next release was 0.15.0.
 
+**And it publishes without a secret.** The workflow publishes by npm's trusted publishing: npm takes
+the upload only from this repository's `release.yml`, by the short-lived identity GitHub gives that
+run, and publishes it with provenance, so a version on the registry says which commit and which run
+built it. There is no token to leak or let expire — 0.15.0, the first version, needed one, because
+npm trusts a workflow only with a package that already exists. A run in any other repository, a
+fork's, skips the registry rather than being refused by it.
+
 ### 22.4 The notices: what every build owes what it carries
 
 chromosomix is MIT, and most of what it compiles in is permissive — but each of those licences is a

@@ -40,6 +40,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The package is published without a token (§22.3).** The release workflow publishes to npm by
+  trusted publishing: npm takes the upload only from this repository's `release.yml`, by the
+  short-lived identity GitHub gives the run, and publishes it with provenance, so each version on
+  npm says which commit and which run built it. The `NPM_TOKEN` secret is no longer read — 0.15.0
+  needed it, because npm trusts a workflow only with a package that already exists — and
+  `docs/deploy.md` says how to configure the package on npmjs.com and retire the token. A fork's
+  release skips the registry rather than failing on it, where a missing token used to be the test.
+
 - **The whole genome of a `.hic` is read in fewer requests, more of them at once, and a dropped one
   without a megabyte of the disk round each read (§3.6, §6.5).** A walk across chromosome pairs — a whole-genome picture, the
   census — read pair by pair, a record's head and then its blocks, four pairs at a time: the 4DN
