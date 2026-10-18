@@ -11693,10 +11693,26 @@ here (`annotations/g3dBinary.ts`, `annotations/msgpack.ts`) rather than a depend
 its finest resolution and names the others under the row. A version-1 container is refused by
 name, with the way out (`g3dtools` rewrites it).
 
-All four are sniffed by content before the BED family sees them — a five-column g3d read as a BED
+**PDB**, as this app writes it (§25.7), and no other (`annotations/pdb.ts`). A PDB says where each
+atom is in space and nothing about the genome — a residue number is four columns and a chain one
+character — so a model written here carries its loci in a table of REMARK 250 lines a viewer skips:
+each chain's sequence and haplotype by atom serial, each run of beads laid end to end as its first
+serial, count, start and width, and the centre and the factor its coordinates were written with,
+which the reader undoes so the model opens in its own units and reads back bead for bead. The first
+MODEL of several is read, since a row holds one model (§25.8). **Every other PDB is refused, with
+the reason.** pastis writes its beads in bin order — one chain, no residue numbers, no bonds, `nan`
+for a bead it could not place — and the other solvers that write a PDB say no more, so the only way
+to put such a file on the genome is to number its atoms against some map's bins, which is a guess
+drawn as a fact; the refusal says to write the coordinates beside the bins they were modelled at, as
+a bed3d. A PDB written here and saved again by PyMOL gets a sentence of its own: PyMOL keeps every
+atom and every bond and drops every REMARK, the table with them, so the file to open is the one this
+app wrote, or its bed3d. A PDB under a name that does not say so is told by its records — it opens on
+one a PDB opens on, and holds an atom — which nothing in the BED family can do.
+
+All five are sniffed by content before the BED family sees them — a five-column g3d read as a BED
 would be a lane of boxes whose *end* is a coordinate in space — and **a file that names its format
-is not sniffed at all**: `.g3d`, `.3dg`, `.bed3d`, gzipped or not, local or over HTTP, is read as
-the structure it says it is. The name is read **first**, before a single row, and read the way the
+is not sniffed at all**: `.g3d`, `.3dg`, `.bed3d`, `.pdb`, gzipped or not, local or over HTTP, is
+read as the structure it says it is. The name is read **first**, before a single row, and read the way the
 drop routing reads it: past any directories, with a `?query` or `#fragment` cut off, so a model
 published at a URL is as named as one on disk. A file whose name claims no format is asked two
 questions, and each exists to tell a structure from a BED whose columns happen to be numbers: are
@@ -11730,15 +11746,16 @@ location control, and skipped by every stack; its picture is the cell.
 (§25.6) — is a row of one card under the Tracks card, and of no other: the Tracks card leaves
 `structure` rows out, computed or not. Each row carries the head every row has (grip, colour, name,
 eye, close), what it holds (`2,412 beads · 5 kb · 16 sequences`), the task and the framing for a
-computed one, and **bed3d**, the model out (§25.7), after the word *export*. The **eye** in the row's
+computed one, and **bed3d** and **PDB**, the model out (§25.7), after the word *export* — the PDB
+disabled, with the format's reason as its tooltip, for a model past what its columns can number. The **eye** in the row's
 head is what shows and hides: it puts the model in **a cell of its own**, opening one beside whatever
 is already there, and takes it away again — from every cell drawing it (§25.3). The lit eye is the
 whole of the state — the row carried an accent bar down its left gutter as well, which was a second
 way of saying what the eye already says. There is no second control for that and no button
 labelled with what is already true (§26.3, §26.7) — a *shown in the deck* button beside the eye was
 two controls for one act, and a reader who pressed the lit one expecting it to un-show got nothing.
-The card's own load zone names the three formats and, like every other zone that asks for a file,
-says it takes a drop or a click.
+The card's own load zone names what it reads — the three formats, and a PDB this app wrote — and,
+like every other zone that asks for a file, says it takes a drop or a click.
 A computed row that came back from a reload is detached and offers **recompute**, which opens its
 recipe in the drawer, as a synthetic row on the Tracks card does (§18.5).
 
@@ -12494,6 +12511,53 @@ TSV every output carries (§18.7), through this same writer — because the batc
 whose coordinates went missing is least likely to be noticed, and because a reconstruction is the
 one task whose whole result is the three columns BED has nowhere to put.
 
+**A model also leaves as a PDB, for PyMOL** and every other molecular viewer — from the **PDB**
+button beside the bed3d on its row, from the drawer's result beside the bed3d there, and from
+`reconstruct3d --out`, which writes it beside the bed3d — through one writer (`annotations/pdb.ts`),
+with a TITLE that says what the bed3d's `#` line says, in ASCII. pastis' own PDB is a list of atoms
+in bin order on one chain with no bonds, which PyMOL draws as a cloud joined by guesswork; this one
+is the file a viewer can draw as the fibre it is:
+
+- **One HETATM per bead**, a carbon `C` in a residue `BEA`: a bead is no amino acid and no
+  nucleotide, and HETATM is the record a non-standard group takes. A bead the model left unplaced is
+  no atom.
+- **One chain per sequence and haplotype**, the scene's chains in the scene's order, so colouring by
+  chain tells chromosomes apart and the homologues of a phased model apart, and residues numbered
+  along each chain from 1, so a rainbow by residue runs from one end of a chromosome to the other.
+  The chain letters are A–Z, a–z and 0–9, which PyMOL keeps apart by case; a model with more than
+  sixty-two chains — a metagenome's contigs — takes them round again, and every chain's segment
+  identifier is then its number, which PyMOL selects by too.
+- **CONECT between neighbouring beads and nowhere else**: a bond for every step of every run the
+  cell draws its tube along, none across a gap the model left and none between chains, each bonded
+  atom listing its neighbours both ways round. This is what keeps PyMOL from guessing, **measured
+  against PyMOL 3.2** rather than read in a manual: a file with CONECT records has distance-based
+  bonding switched off, so two beads 0.6 apart on different chains stay apart, where without them
+  every pair closer than about two units is joined and a model a unit per step comes out a lattice.
+  With them PyMOL loads exactly the bonds written — on the demo yeast, E. coli and mouse models,
+  atoms, chains and bonds all as declared, none between chains — and `cartoon_trace_atoms` draws a
+  tube through them that breaks where the model breaks. `scripts/check_pdb_pymol.py` repeats the
+  measurement on any PDB written here, with PyMOL as the judge.
+- **Coordinates the columns can hold.** A coordinate is eight columns with three decimals and a
+  model is in its solver's units — a unit sphere, where three decimals is a fortieth of a step, or
+  nanometres, where a nucleus overflows the column. So it is centred on its placed beads and
+  multiplied until the **median step between neighbours is 3.8**, a Cα trace's, which PyMOL's
+  spheres, sticks and cartoon trace are sized for; a model that would then overflow its columns is
+  drawn in until its furthest bead fits, with shorter steps rather than not at all. The centre, to a
+  thousandth of a step, and the factor are written in the table §25.2 reads, and nothing claims an
+  ångström.
+- **REMARK 250** says all of this in prose, gives the lines that draw the model in PyMOL as the cell
+  draws it — `set cartoon_trace_atoms, 1; set cartoon_tube_radius, r` then `as cartoon; util.cbc`,
+  or `set sphere_scale, s; as spheres; util.cbc` — with `r` and `s` the cell's default tube and bead
+  radii in this file's coordinates, on the cell's floored step, which is what keeps a bacterial ring
+  from being a hairline where PyMOL's own tube is half a unit whatever the model; and then the
+  placement table.
+
+What a PDB cannot number it does not write. **At most 99,999 beads**, its serial being five columns;
+**no chain longer than 9,999 beads**, its residue number being four, where wrapping the numbers was
+measured to scramble PyMOL's order along the chain and hybrid-36 is not read; and at most 9,999
+chains. Past any of them the row's and the drawer's button is disabled with that reason as its
+tooltip, and the shell writes the bed3d alone with the reason on stderr — the bed3d holds any model.
+
 ### 25.8 Refused, and not yet built
 
 - ~~**Inference** — computing a structure from the map.~~ Built as *Model from the map* (§25.6), as
@@ -12503,6 +12567,12 @@ one task whose whole result is the three columns BED has nowhere to put.
   model rather than the best of several local optima; **fitting α**, which is the reader's control
   and is what makes a model here comparable with one from either published tool; and pastis-NB's
   **alternation** between the dispersion and the structure, where the dispersion is estimated once.
+- **A PDB that does not say where its beads are on the genome** (§25.2) — pastis', and every
+  solver's that writes atoms in bin order and nothing else. Placing them would mean numbering the
+  atoms against a map's bins and trusting the count, which is the one claim a model beside a map
+  must never make; the refusal names the way out, a bed3d of the coordinates beside their bins. And
+  no **mmCIF** for a model past a PDB's columns: the bed3d holds it, and PyMOL is not where a
+  hundred thousand beads are looked at.
 - **Ensembles, frames, point clouds** (FOF-CT, `.cndb`, several models of one map): a row holds
   one model. The scene's shape does not close the door.
 - **A map beside a browser lead**: a companion needs a lead to follow, and a browser is not one

@@ -9,7 +9,7 @@ Formats it opens as they are:
 - Contact maps: `.cool`, `.mcool`, `.hic`, HiC-Pro matrices, `.pairs` and `.pairs.gz`.
 - Tracks and annotations: bigWig, bedGraph, wig, bigBed, BED, narrowPeak, GTF/GFF3, genePred, VCF, BAM (with its `.bai`), FASTA (with its `.fai`), `.2bit`, barChart, bedMethyl, chrom.sizes, and UCSC track hubs (`hub.txt`).
 - Interactions: BEDPE, `interact`/`bigInteract` and `longrange`.
-- 3D models: g3d (text or binary), `.3dg` and bed3d.
+- 3D models: g3d (text or binary), `.3dg`, bed3d, and the PDB it writes for PyMOL and the other molecular viewers.
 
 A remote file has to be served with CORS and HTTP range requests, which S3, Google Cloud Storage, Cloudflare R2 and most static web servers do. Dropbox and Google Drive share links work too.
 

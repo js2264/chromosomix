@@ -14,6 +14,23 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A 3D model leaves as a PDB, for PyMOL, and a PDB this app wrote reads back (§25.2, §25.7).** A
+  **PDB** button beside **bed3d** on every row of the Structures card and on the drawer's result for
+  *Model from the map*, and a `.pdb` beside the `.bed3d` that `chromosomix reconstruct3d --out`
+  writes. One HETATM per bead, one chain per sequence and haplotype with its residues numbered along
+  it, and CONECT between neighbouring beads and nowhere else — none across a gap the model left,
+  none between chains — which is what stops PyMOL joining beads by distance; coordinates centred
+  and scaled so neighbouring beads are 3.8 apart, drawn in further where a model would overflow its
+  columns, with the centre and the factor written down. Its REMARK 250 block gives the PyMOL lines
+  that draw the model as the cell does — a cartoon trace at the cell's tube radius, or beads — and a
+  table of where each atom is on the genome, which is what lets the Structures card, the deck and
+  `--features`/`--structure` read the file back bead for bead. A PDB from anywhere else says nothing
+  about the genome — pastis' lists its beads in bin order on one chain — and is refused with that
+  reason and the way out, a bed3d of the coordinates beside their bins; so is one of these saved
+  again by PyMOL, which drops every REMARK. A model past a PDB's columns (99,999 beads, 9,999 in a
+  chain) has its button disabled with the reason, and the shell says it on stderr. Checked against
+  PyMOL 3.2 on the demo yeast, E. coli and mouse models; `scripts/check_pdb_pymol.py` repeats it.
+
 - **The page says when a picture is finished, and at what resolution (§12, §21.4).** Once a view has
   been routed, opened, read and painted — its map's block, the windows its lanes asked for, any
   track on it still opening, a smoothing or a finer block being read — and a frame has passed with
