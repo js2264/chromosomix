@@ -14,6 +14,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A `+` before back, for one more file in this tab (§5.5).** It opens the landing page's first
+  section, *Load files*, in a dialog: the drop area that is also the file chooser, and the URL box
+  under it. A map comes up beside the one open and a track is drawn on it, as a dropped file is; on
+  an empty tab the file opens there, and the tooltip and the dialog's title say which. A tab opened
+  by dropping a file has no Files column, nothing being connected, and no landing page any more, so
+  a second file held at an address had no door but the palette's *Add a file to this tab*.
+
+- **A store's rows are dragged as the Files column's are (§20.5, §24.2).** Every row that is a
+  file — in a portal's list, under the lab's figures and under IGV's genomes — can be let go on a
+  map's edge or its middle, on a cell of the deck, on the Tracks card, on an analysis form's file
+  box or on the landing page, and opens there with the name the store gives it and the tracks it
+  brings. The two verbs on a row say *add here* and *open in a tab of its own*, and neither could say
+  *under the third map*. A saved workspace's row does not drag, being tabs rather than a file. The
+  drag carries a token for the row, never its address, so a drag from another page opens nothing.
+
 - **The page says when a picture is finished, and at what resolution (§12, §21.4).** Once a view has
   been routed, opened, read and painted — its map's block, the windows its lanes asked for, any
   track on it still opening, a smoothing or a finer block being read — and a frame has passed with
@@ -63,6 +78,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   it was 222 MiB.
 
 ### Fixed
+
+- **A file let go on a cell of the deck goes into that cell (§16.9).** A companion's map took a file
+  only on its five rectangles, and a tracks cell on none, so a track dropped on the lanes under the
+  second map, on its heading or anywhere on a tracks cell — off the disk or out of the Files column —
+  was drawn under the first map. The whole cell is the target now: on a map it means *on this map*,
+  a track on its usual edge and an overlay on its face; on a tracks cell, a track drawn in it. The
+  cell is outlined while the file is over it, and the map's own rectangles keep their finer aim.
+
+- **A row let go on the landing page opens with what it carries (§20.5, §24.2).** A row of the Files
+  column dropped on *Load files* was opened by its address alone, so a `.bam` came without the
+  `.bai` its folder had found beside it and was refused for want of one. It opens as a dropped file
+  does now, index and all — and a store's row, which can be dragged there too, under the store's
+  name for it.
 
 - **A page asking for a map's file starts the reader while the file is found (§6.1).** The picker
   starts the reader's worker and h5wasm once the page is idle, so the first file dropped on it does

@@ -1042,13 +1042,13 @@ read — an array is not stringified into a name, and a string the URI encoder w
 its key rather than the tab — and every state this application writes comes back unchanged, which a
 test holds for every published demo workspace.
 
-**Back and forward are in the header**, past a divider after the four panels' toggles, as Lucide's
-*undo* and *redo* arrows: the browser's own back and forward, as buttons, so they walk exactly the
-entries every navigation here writes — a crumb, a typed locus, a zoom or pan step, a sequence
-stepped — and nothing that does not write one, such as a wheel or a drag on the map. Where the
-browser says whether there is anywhere to go (Chromium's Navigation API) a button greys when there
-is not; elsewhere both stay live, and a press with nowhere to go does nothing, as the browser's own
-does.
+**Back and forward are in the header**, past a divider after the four panels' toggles and a `+`
+(below), as Lucide's *undo* and *redo* arrows: the browser's own back and forward, as buttons, so
+they walk exactly the entries every navigation here writes — a crumb, a typed locus, a zoom or pan
+step, a sequence stepped — and nothing that does not write one, such as a wheel or a drag on the
+map. Where the browser says whether there is anywhere to go (Chromium's Navigation API) a button
+greys when there is not; elsewhere both stay live, and a press with nowhere to go does nothing, as
+the browser's own does.
 
 **Back has its list of steps**, a chevron butted against it as the second half of one control, the
 shape every browser gives its own back button: pressed, it lists every step behind the one on
@@ -1064,7 +1064,19 @@ reload says where the record stands; the record is the window's, in `sessionStor
 steps at most. An entry it did not write — an address typed into the bar — is a new step after the
 one on screen, as the browser takes it. The chevron greys while there is no step behind.
 
-After them in the same group, in this order, are the three that take the work out of the
+**Before back, a `+`: one more file in this tab.** It opens the landing page's first section,
+*Load files*, in a dialog — the drop area that is also the file chooser, and the URL box under it
+behind *or a URL* (`ui/LoadBox.ts`, §24.2) — and nothing else: no folders to connect, no stores. What
+it does is what dropping on the window does (§16.9): a contact map comes up beside the one open, a
+track is drawn on it, an empty tab is filled rather than added to; its tooltip says which, *add a
+file to this tab* or *open a file in this tab*, and so does the dialog's title. It is for the tab a
+file was dropped into: nothing is connected there, so there is no Files column, and the landing page
+and its URL box have gone — a second file held at an address had no door but the palette's *Add a
+file to this tab*, which it is the button for. A `+` stood beside the stores' toggle once and was
+taken away as a second *Open a file* (§24.2), which it was not: the file crumb's *Open a file*
+replaces the tab's file, and this adds to it.
+
+After back and forward in the same group, in this order, are the three that take the work out of the
 window: *Share this tab as a link*, *Save every tab as a file* and the console (§23). They used to
 sit on the far side of the command bar, away from the controls a reader's hand is already among; the
 far right is now only about the window itself — theme, shortcuts, source, about. Where the header
@@ -2831,7 +2843,8 @@ which a deck closed after *no map* leaves it, and then it is the one mark that p
 rectangle, *on this map*, lit with the four strips at its edges while a file or a row is dragged —
 and **alone** while an overlay's row is, since the strips name stacks and an overlay has none. A
 file dropped there opens onto that map only, an overlay on its face and a track on its usual edge,
-where a file dropped in the middle of a companion used to land on the first map; a row of the Tracks
+where a file dropped in the middle of a companion used to land on the first map — and so does one
+let go anywhere else on a companion's cell, its strips aside (§16.9); a row of the Tracks
 card dropped there is drawn on that map **as well** as wherever it was, as the marks put it. An
 overlay's row let go on a strip is taken the same way, and given no edge. A lane carried by its
 grip is not offered the face: that gesture is about an edge.
@@ -6585,6 +6598,22 @@ arriving by any other road — the bar's URL box, the file chooser, the command 
 first empty cell instead, because those name no position and the empty cells are the reader's own
 instruction about where the next map goes.
 
+**A file let go on a filled cell is that cell's too, wherever on it the hand lets go**
+(`PanelDeck`'s `watchFileDrops`). On a companion's map it means what the rectangle in the map's
+middle means, *on this map* (§8.1): a track drawn on that map on its usual edge, an overlay on its
+face. On a tracks cell it is a track drawn in that cell, at its foot, where every track on one is
+drawn. A row dragged out of the Files column or out of a store (§20.5, §24.2) is aimed the same way
+as a file off the disk. What a file *is* is still decided by its name, where every drop's is: a
+contact map let go on a map is a map, beside it — the first empty cell, or a new one — and a
+structure opens a cell of its own (§25.3), which a structure cell, answering for itself, does too.
+The map's own rectangles keep their drop, being aimed more finely, and so does an empty cell. While
+the file is in the air the cell that will take it is outlined, as a cell a map is carried to is, and
+the outline goes while the hand is over one of the map's rectangles, which then say where. A
+companion used to take a file on its rectangles alone and a tracks cell on nothing, so a track let go
+on the lanes under the second map, on its heading or anywhere on a tracks cell was loaded under the
+first map — the content area's answer to a drop nothing else took, and still the answer on the first
+map's own cell, which is the session's.
+
 **Rows of the Tracks and Structures cards take the edges too.** A Tracks card row dropped on a `+`
 opens the cells with a tracks cell drawing that track in the one nearest the edge — *placed*, as on
 an empty cell, so it stays on every map it was drawn on. A Structures card row opens its model there
@@ -9967,12 +9996,16 @@ name is the first verb.
 
 Dragging a file lets the reader say *where*: onto the map's edge rectangles for a lane in a named
 stack (§8.9), onto the rectangle in the middle of a map for that map alone — an overlay's one target
-(§8.1) — onto a companion for a track on that map (§16), onto the Tracks card, onto a deck's edge or
-an empty cell for a cell of its own (§16.9), onto a 3D cell for the model it draws (§25.3), onto the
-Contact maps card's *Load a map into the lower triangle* for the second file in the square (§5.7),
-onto an analysis form's file box as the run's input rather than as anything opened (§18.8), onto the content
-area, onto the landing page's drop zone — which replaces, because that is what the landing page has
-always meant.
+(§8.1) — onto a companion, anywhere on its cell, for a track on that map, and onto a tracks cell for
+a track drawn in it (§16.9), onto the Tracks card, onto a deck's edge or an empty cell for a cell of
+its own (§16.9), onto a 3D cell for the model it draws (§25.3), onto the Contact maps card's *Load a
+map into the lower triangle* for the second file in the square (§5.7), onto an analysis form's file
+box as the run's input rather than as anything opened (§18.8), onto the content area, onto the
+landing page's drop zone — which replaces, because that is what the landing page has always meant.
+**A store's row is dragged the same way, to the same places** (§24.2): every row that is a file,
+in the drawer's lists and under its cards, as every file row here is — and not a saved workspace's,
+which is tabs rather than a file and has nowhere to be aimed, as a workspace in a folder is a row
+that does not drag.
 
 **The Files column is the only door onto a connected place.** Its folder view lists every place the
 window is connected to — a directory on this machine included — and a row hands back the file with
@@ -10007,17 +10040,25 @@ nothing under it.
 
 A dragged row carries a **folder id and a path**, never bytes: the file behind it is fetched at the
 drop, once, by the target that accepted it. The path alone would be ambiguous the moment two folders
-are connected. Everything ends at `Session.addPicked`, which decides nothing — it hands a local file
-to the same door a dropped one takes and a remote one to the door a typed URL takes. A third routing
-table is how a `.cool` picked from a folder would come to open somewhere a `.cool` dropped on the
-window does not.
+are connected. A store's row carries **neither, and not its address either**: it travels under the
+same type, so every target that takes a folder's row takes it, and what the type carries is a token
+naming the drag, the row's file being held by the page that started it (`writePickedDrag`). An
+address in the payload would let any page have this one open any URL by dragging something across
+it with the right label on; a token, like a folder id, resolves only to what this window is holding,
+and the tracks the row brings (§24.3) are noted when a target takes it, not when the hand picks it
+up. Everything ends at `Session.addPicked`, which decides nothing — it hands a local file to the
+same door a dropped one takes and a remote one to the door a typed URL takes. A third routing table
+is how a `.cool` picked from a folder would come to open somewhere a `.cool` dropped on the window
+does not.
 
 **A file the viewer has no route for is drawn, dimmed and inert, with the reason in its tooltip.**
 Hiding it would make the folder view disagree with the folder, which is the one thing it is for; a
 `.cram` sitting there unhighlighted answers *why is nothing happening when I click it* before it is
 asked. An index is one of them, and its tooltip says it is picked up with the file it indexes: a
 file picked from a folder on this machine brings its index from beside it (`browse/folder.ts`'s
-`PickedFile.index`), so a `.bam` whose `.bai` is one row down opens with it. The one thing a local
+`PickedFile.index`), so a `.bam` whose `.bai` is one row down opens with it — wherever the row is
+let go, the landing page's *Load files* included, which took a row by its address alone and opened
+the `.bam` without it (`LoadBox`'s `onPicked`). The one thing a local
 listing does leave out is a name beginning with a dot — `.DS_Store`, `.git` — which is somebody's
 tooling rather than a file. The route is the name's (`browse/route.ts`), so every name a format of
 §8 is published under has to be in it: a `.barChart`, a `.bigBarChart` and a cytoBand in the plural
@@ -10793,7 +10834,8 @@ which is what lets a generator add a column before a viewer knows it.
 
 **The landing page has three things on it, and they are named.** *Load files* is one drop area with
 the URL box under it behind a rule reading *or a URL* (`ui/LoadBox.ts`), which the file crumb's
-*Open a file* reuses in a dialog with the other verb behind it. There is no *choose files* button:
+*Open a file* and the header's `+` reuse in a dialog, each with its own verb behind it — the crumb
+replaces the tab's file, the `+` adds one (§5.5). There is no *choose files* button:
 a click on the target opens the same file dialog, and the same action drawn twice is a choice a
 reader has to make between two controls that do one thing. The target says both things it does —
 drop, or click — and no more; what opens as what is stated once, in **About**, whose first sentence
@@ -10911,8 +10953,9 @@ and the two lists kept beside it named four stores while seven shipped. Opened t
 by a tile, it lands on the store it was last on — in this page,
 else the last one this browser opened, else the lab's — and its dragged width is kept the same way,
 in `localStorage`; whether it is open is the address bar's to say (below). The header holds
-nothing else on that side: the plug and the `+` that stood there were the Files column's own
-*connect a local or remote folder* and the file crumb's *Open a file* said a second time.
+nothing else on that side: the plug that stood there was the Files column's own *connect a local or
+remote folder* said a second time, and the `+` beside it is before back now, adding a file to the tab
+(§5.5).
 
 **A store row carries its name with it.** A 4DN file is called by its accession on the bucket —
 `4DNFI24F7GRY.mcool` — and by *Hi-C on HFF cells, protocol variations* on the shelf, and the second is
@@ -10920,6 +10963,16 @@ what a reader picked it by. So the row's line goes with the file through the sam
 by a Drive folder takes (`PickedFile.name`, §24.9): onto the map it becomes, onto the track it
 becomes (`addRemote`'s label, and `relabelTrack` for the file that opened a browser and was seated
 under its URL before the name could reach it), and onto the tab a row opens in a session of its own.
+
+**A store row is dragged as a row of the Files column is** (§20.5), and goes where it is let go: on
+a map's edge or its middle, on a cell of the deck (§16.9), on the Tracks card, on an analysis form's
+file box, on the landing page. The two verbs say *add here* and *open in a tab of its own*; neither
+says *which map*, *which edge* or *which cell*, and a reader narrowing a catalogue beside a deck of
+four had no way to put a bigWig under the third map but to add it under the first and carry its lane
+across. Every row that is a file drags, in the portal lists and under the gallery cards alike, and
+it carries what *add* would: the file, the row's name and the tracks it brings, noted when it lands.
+A saved workspace's row does not, being tabs rather than a file. The drawer stays up after a drop, as
+it does after *add*: the reader was aiming at something beside it.
 
 **The two galleries are one shape of card** (`GalleryView.ts`, `GenomesView.ts`): the name and the
 card's one verb on the first line — the new-session mark, icon only, its words in the tooltip — the
@@ -11986,7 +12039,9 @@ is still in the air, and the cell's hint offers both.
 
 **The tracks cell** is the session's own browser over the lead file's sequences — the same store,
 client, groups and marks — drawing only the tracks **placed on it**: the location control lists
-it beside the maps, with its one edge live and the other three greyed and saying why. It follows
+it beside the maps, with its one edge live and the other three greyed and saying why, and a track
+file let go anywhere on it — off the disk, out of the Files column or a store — is drawn in it, at
+its foot (§16.9). It follows
 the maps and the maps follow it without joining the lock, whose currency is cells of a block: the
 deck hands the cell the lead's window as loci, one way and never reported back, and a pan in the
 cell takes the lead's *column* axis there (`MatrixPanel.showLocusOnColumns`), which the lock

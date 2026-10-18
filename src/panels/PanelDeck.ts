@@ -69,7 +69,9 @@ import type {
 } from '../ui/MatrixPanel'
 import type { SelectedRegion } from '../ui/mapSelection'
 import type { ScaleState } from '../ui/GenomeView'
-import { button, dragHasMapRow, el, fmt, readMapRow, type MapRow } from '../ui/dom'
+import { button, dragHasFiles, dragHasMapRow, el, fmt, readMapRow, type MapRow } from '../ui/dom'
+import { dragHasFileRow } from '../ui/fileDrag'
+import { filesFrom } from '../ui/chooseFiles'
 import { tabAmong } from '../ui/tabWalk'
 import { resolutionLabel } from '../units'
 import {
@@ -941,6 +943,7 @@ export class PanelDeck {
 
     this.grid = el('div', { class: 'deck-grid' }, this.leadCell)
     this.watchArranging()
+    this.watchFileDrops()
     this.toolbar = el('div', { class: 'deck-bar' })
     // The same edges the session was showing a moment ago, now round the grid
     // instead of round one map — which is the whole reason they are a component
@@ -2363,6 +2366,89 @@ export class PanelDeck {
       if (event.relatedTarget instanceof Node && this.grid.contains(event.relatedTarget)) return
       for (const other of this.grid.children) other.classList.remove('is-target')
     })
+  }
+
+  /**
+   * A file dropped on a cell is **that cell's**, wherever on it the hand lets
+   * go (§16.9).
+   *
+   * A companion's map took a file only on its five rectangles — its four edges
+   * and *on this map* in the middle — and they cover a ring round the picture and
+   * a square inside it: a file let go between the two, on the lanes under the
+   * map or on its heading fell through to the content area, which loads every
+   * drop onto the first map. A tracks cell had no rectangle at all, so a track
+   * dropped on one was drawn under the first map every time. Now the whole cell
+   * is the target, and it means what the middle of a map means: the file is
+   * opened for this cell — a track drawn on that map on its usual edge, an
+   * overlay on its face, a track in a tracks cell at its foot — by the same two
+   * roads the rectangles take (`AnnotationContext.loadOnEdge`, `pickOnEdge`).
+   * What a file *is* is still decided by name where every drop's is, so a
+   * `.cool` let go on a map is still a map, in a cell of its own.
+   *
+   * The rectangles keep their drop, being the more specific aim, and so do an
+   * empty cell (`VacantPanel`) and a structure cell, which answer for
+   * themselves. The lead's own cell is not one of these: a drop on it is the
+   * session's, as it always was. Delegated to the grid, as the grip's half is
+   * ({@link watchArranging}), because the cells are rebuilt on every change to
+   * the deck.
+   */
+  private watchFileDrops(): void {
+    let lit: HTMLElement | null = null
+    const light = (cell: HTMLElement | null): void => {
+      if (lit === cell) return
+      lit?.classList.remove('is-file-target')
+      lit = cell
+      cell?.classList.add('is-file-target')
+    }
+    // In the capture phase: a map's rectangles stop the `dragover` they answer,
+    // and the cell has to go dark the moment the hand is over one of them, so
+    // that one thing on screen at a time says where the file will go.
+    this.grid.addEventListener('dragover', (event) => light(this.fileAim(event)?.cell ?? null), true)
+    this.grid.addEventListener('dragleave', (event) => {
+      if (event.relatedTarget instanceof Node && this.grid.contains(event.relatedTarget)) return
+      light(null)
+    })
+    this.grid.addEventListener('drop', (event) => {
+      light(null)
+      const aim = this.fileAim(event)
+      if (aim === null) return
+      // Prevented and not stopped: the content area's handler still has its
+      // highlight to put away, and stands aside for a drop somebody answered.
+      event.preventDefault()
+      if (dragHasFileRow(event)) {
+        aim.context.pickOnEdge?.(event, aim.edge)
+        return
+      }
+      const files = filesFrom(event.dataTransfer)
+      if (files.length > 0) aim.context.loadOnEdge?.(files, aim.edge)
+    })
+  }
+
+  /**
+   * The cell a dragged file is over, where that cell takes a file for itself —
+   * a companion's map, or a tracks cell — with the edge it means there: `null`
+   * for a map's middle, *on this map*, and the foot of a tracks cell, where
+   * every track on one is drawn. `null` for everything else, which is somebody
+   * else's to answer.
+   */
+  private fileAim(event: DragEvent): { cell: HTMLElement; edge: LaneEdge | null; context: AnnotationContext } | null {
+    if (!dragHasFiles(event) && !dragHasFileRow(event)) return null
+    const node = event.target instanceof Node ? event.target : null
+    const target = node instanceof Element ? node : (node?.parentElement ?? null)
+    // A map's rectangles, an empty cell and the `+` edges are aimed more
+    // finely than the cell they are in, and answer for themselves.
+    if (target === null || target.closest('.lane-drop, .deck-drop, .dropzone') !== null) return null
+    const cell = target.closest('.deck-panel')
+    if (!(cell instanceof HTMLElement) || !this.grid.contains(cell)) return null
+    const slot = this.slots.find((held) => elOf(held) === cell)
+    if (slot === undefined) return null
+    const edge: LaneEdge | null | undefined =
+      slot.panel !== null ? null : slot.cell?.kind === 'tracks' ? 'bottom' : undefined
+    if (edge === undefined) return null
+    const context = this.props.annotations?.(slot.id)
+    const road = dragHasFileRow(event) ? context?.pickOnEdge : context?.loadOnEdge
+    if (context === undefined || road === undefined) return null
+    return { cell, edge, context }
   }
 
   /**

@@ -43,6 +43,7 @@ import { dragHasFileRow, readFileDrag } from './fileDrag'
 import { canonicalUrl } from '../sources/rewrite'
 import { splitUri } from './labels'
 import type { SourceSpec } from '../worker/protocol'
+import type { PickedFile } from '../browse/folder'
 
 export interface LoadBoxProps {
   onOpen(uri: string, source: SourceSpec): void
@@ -53,6 +54,13 @@ export interface LoadBoxProps {
    * session decides which of them is the view and which are its tracks.
    */
   onOpenFiles(files: readonly File[]): void
+  /**
+   * A row out of the Files column or a store, dropped here: the file with all
+   * it carries — the index found beside it, the name a store gave it — which
+   * {@link onOpen} would lose to an address. Absent, such a row is opened by
+   * its address alone.
+   */
+  onPicked?(picked: PickedFile): void
   /** A shallower drop area, for the dialogs. */
   compact?: boolean
 }
@@ -85,10 +93,13 @@ export class LoadBox {
     this.drop.addEventListener('drop', (event) => {
       event.preventDefault()
       this.drop.classList.remove('over')
-      // A row dragged out of the Files column lands where a dropped file lands.
+      // A row dragged out of the Files column or a store lands where a dropped
+      // file lands.
       if (dragHasFileRow(event)) {
         void readFileDrag(event).then((picked) => {
-          if (picked !== null) this.props.onOpen(picked.uri, picked.source)
+          if (picked === null) return
+          if (this.props.onPicked !== undefined) this.props.onPicked(picked)
+          else this.props.onOpen(picked.uri, picked.source)
         })
         return
       }

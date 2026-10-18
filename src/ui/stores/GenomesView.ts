@@ -36,7 +36,7 @@ import { button, el, fmt } from '../dom'
 import { iconButton } from '../icons'
 import { valueOf } from '../../state/facets'
 import { fetchStore, type StoreEntry, type StoreFile } from '../../state/store'
-import { rowActions, type StoreHost } from './host'
+import { rowActions, rowDrag, type StoreHost } from './host'
 import { storeFailure } from './PortalView'
 import type { StoreFront } from './registry'
 
@@ -375,17 +375,21 @@ export class GenomesView {
     const shown =
       card === null || this.igv ? entry.label : withinCard(entry.label, card.title)
     const tooltip = [shown === entry.label ? '' : entry.label, entry.note ?? ''].filter((part) => part !== '').join(' — ')
-    return el(
-      'div',
-      { class: 'portal-row' },
+    return rowDrag(
       el(
         'div',
-        { class: 'portal-row-text' },
-        button(shown, () => this.props.host.open(entry), { class: 'btn-link portal-name', title: tooltip }),
-        role === '' ? null : el('span', { class: 'portal-chip portal-chip-dim', text: role }),
+        { class: 'portal-row' },
+        el(
+          'div',
+          { class: 'portal-row-text' },
+          button(shown, () => this.props.host.open(entry), { class: 'btn-link portal-name', title: tooltip }),
+          role === '' ? null : el('span', { class: 'portal-chip portal-chip-dim', text: role }),
+        ),
+        entry.size === undefined ? null : el('span', { class: 'portal-size', text: fmt.bytes(entry.size) }),
+        el('div', { class: 'portal-row-actions' }, ...rowActions(entry, this.props.host)),
       ),
-      entry.size === undefined ? null : el('span', { class: 'portal-size', text: fmt.bytes(entry.size) }),
-      el('div', { class: 'portal-row-actions' }, ...rowActions(entry, this.props.host)),
+      entry,
+      this.props.host,
     )
   }
 }

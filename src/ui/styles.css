@@ -7186,6 +7186,13 @@ canvas.is-frozen {
   background: var(--accent-soft);
 }
 
+/* A row that is a file can be carried out of the drawer to where it should
+   open (§24.2): the open hand over its ground, and each control in it keeps its
+   own pointer. */
+.portal-row.is-draggable {
+  cursor: grab;
+}
+
 .portal-row.is-on {
   background: var(--accent-soft);
 }
@@ -10621,6 +10628,16 @@ span.deck-name {
 
 .deck-grid.is-arranging .deck-panel.is-target {
   outline: 2px solid var(--accent);
+  background: var(--accent-soft);
+}
+
+/* A file in the air over a cell that will take it (§16.9): the cell a map is
+   moved into, drawn the same way, since the answer is the same — *here*. Gone
+   while the hand is over one of a map's rectangles, which says it more finely. */
+.deck-panel.is-file-target {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--radius);
   background: var(--accent-soft);
 }
 

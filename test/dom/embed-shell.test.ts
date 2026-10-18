@@ -183,18 +183,21 @@ describe('a window mounted as an embed', () => {
     expect(panel).not.toBeNull()
     expect(panel?.classList.contains('collapsed')).toBe(true)
 
-    // Past the panels' divider: the window's history, then the two buttons that
-    // take something *out* of this window — a link and a file — then the
-    // console, because the commands that repeat the day are the third of those.
+    // Past the panels' divider: one more file in this tab, the window's
+    // history, then the two buttons that take something *out* of this window —
+    // a link and a file — then the console, because the commands that repeat
+    // the day are the third of those.
     const group = Array.from(root.querySelectorAll('.head-history [aria-label]')).map((node) =>
       node.getAttribute('aria-label'),
     )
-    expect(group[0]).toBe('Go back')
+    // The `+` before back (§5.5), which on an empty tab opens rather than adds.
+    expect(group[0]).toMatch(/^Open a file in this tab/)
+    expect(group[1]).toBe('Go back')
     // Back's own list of steps, as the second half of back (§5.5).
-    expect(group[1]).toBe('Every step back, to go straight to one')
-    expect(group[2]).toBe('Go forward')
+    expect(group[2]).toBe('Every step back, to go straight to one')
+    expect(group[3]).toBe('Go forward')
     expect(group[group.length - 1]).toBe('console')
-    expect(group.slice(3, 5).map((name) => name?.split(' ')[0])).toEqual(['Share', 'Save'])
+    expect(group.slice(4, 6).map((name) => name?.split(' ')[0])).toEqual(['Share', 'Save'])
     // And the right of the bar is about the window alone, theme first.
     const actions = Array.from(root.querySelectorAll('.head-actions [aria-label]')).map((node) =>
       node.getAttribute('aria-label'),
