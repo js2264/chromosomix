@@ -214,13 +214,6 @@
   ],
   "pulls": [
     {
-      "number": 115,
-      "commit": "d93031d",
-      "title": "The page says when a picture is finished, and at what resolution (§12, §21.4)",
-      "branch": "ccr-563361ab-h0r315",
-      "date": "2026-10-17T20:49:10Z"
-    },
-    {
       "number": 107,
       "commit": "ae43db2",
       "title": "Add circular visualization of metagenome contact maps (§7.6)",
