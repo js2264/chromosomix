@@ -1,6 +1,13 @@
 {
-  "latest": "f8da5d8",
+  "latest": "bc17f92",
   "versions": [
+    {
+      "commit": "bc17f92",
+      "version": "0.15.0",
+      "date": "2026-10-18T08:35:18+02:00",
+      "subject": "The page says when a picture is finished, and at what resolution (§12, §21.4) (#115)",
+      "tag": ""
+    },
     {
       "commit": "f453599",
       "version": "0.13.0",
@@ -132,13 +139,6 @@
       "version": "0.13.0",
       "date": "2026-10-07T16:48:07+02:00",
       "subject": "Pick every colour in one picker of the app's own: hex first, the last colours kept, and a drag that does not close it (§26.6) (#95)",
-      "tag": ""
-    },
-    {
-      "commit": "8cbf0c2",
-      "version": "0.13.0",
-      "date": "2026-10-07T15:33:58+02:00",
-      "subject": "Read a whole chromosome one bin to a pixel up to 16,384 bins a side (§7.2, §9, §16.7) (#93)",
       "tag": ""
     },
     {
