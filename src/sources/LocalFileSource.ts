@@ -85,6 +85,12 @@ export class LocalFileSource implements ByteSource {
   private syncReader: FileReaderSync | null = null
   /** Resolved at mount, so {@link readBytes} has an FS to read a path through. */
   private module: H5Module | null = null
+  /**
+   * An exact read, for a dropped file only — see {@link readBlobExact}. A file
+   * held in memory, or read by path, is read exactly already, and a walk
+   * reads it the ordinary way.
+   */
+  readonly readExact?: (position: number, length: number) => Promise<Uint8Array>
 
   /**
    * Wrap a `File`, a `Blob`, raw bytes, or a {@link LocalPathRef}.
@@ -111,6 +117,7 @@ export class LocalFileSource implements ByteSource {
       this.blob = input
       this.size = input.size
       this.id = options.name ?? named ?? `blob-${nextId()}`
+      this.readExact = (position, length) => this.readBlobExact(input, position, length)
       return
     }
     if (isPathRef(input)) {
@@ -290,6 +297,33 @@ export class LocalFileSource implements ByteSource {
     } finally {
       h5.FS.close(stream)
     }
+  }
+
+  /**
+   * Read `[position, position + length)` of a dropped file exactly: a `.hic`
+   * walk's read (`ByteSource.readExact`).
+   *
+   * Through the slice cache, a walk paid a 1 MiB slice of the disk for most of
+   * its reads: the 630 matrix records of a 4DN chicken map, read for its whole
+   * genome at 2.5 Mb, lie a median 146 KB apart, and their heads and blocks came
+   * to 222 MiB of slices; read exactly, they are 11 MB. So, as the
+   * remote source does it, the cache is consulted and never filled: a range
+   * whose slices are all held is copied out of them, and any other is read as
+   * asked for and handed over whole. Asynchronous, through `Blob.arrayBuffer`,
+   * so the worker answers other requests while a walk's reads are out.
+   */
+  private async readBlobExact(blob: Blob, position: number, length: number): Promise<Uint8Array> {
+    const n = Math.max(0, Math.min(this.size - position, length))
+    if (n === 0) return new Uint8Array(0)
+    const first = Math.floor(position / LOCAL_CHUNK_SIZE)
+    const last = Math.floor((position + n - 1) / LOCAL_CHUNK_SIZE)
+    let held = true
+    for (let i = first; i <= last && held; i++) held = this.cache.has(i)
+    if (held) return this.readBytes(position, n)
+    const bytes = new Uint8Array(await blob.slice(position, position + n).arrayBuffer())
+    this.requests += 1
+    this.bytesRead += bytes.byteLength
+    return bytes
   }
 
   /**

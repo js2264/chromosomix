@@ -6,7 +6,7 @@
  * rows move the map, and a caption under it that follows the map when the reader
  * moves it themselves. Both are one `postMessage` channel, and this is it.
  *
- * ## The protocol, in four messages
+ * ## The protocol, in five messages
  *
  * Out, from the frame:
  *
@@ -16,6 +16,10 @@
  *   themselves.
  * - `{ type: 'chromosomix:state', state }` — the view state (§5.5), as the same
  *   object the URL hash is written from, or `null` for the file picker.
+ * - `{ type: 'chromosomix:rendered', report }` — the picture on screen is
+ *   finished, and what it is (`perf/rendered.ts`): once a navigation has been
+ *   drawn with everything beside it, its maps at the resolutions they were
+ *   drawn at. What a host takes a screenshot on, or times.
  *
  * In, from the host:
  *
@@ -57,6 +61,7 @@
  * with them — a workspace file and a share link. One parser, every road.
  */
 
+import { RENDERED, type RenderedReport } from '../perf/rendered'
 import { serialiseViewState, viewStateOf } from '../state/ViewState'
 import type { ViewState } from '../types'
 import { COMMIT, VERSION } from '../version'
@@ -211,6 +216,19 @@ export class EmbedChannel {
    */
   moved(): void {
     this.send()
+  }
+
+  /**
+   * The picture on screen is finished (`perf/rendered.ts`).
+   *
+   * Told to the host that has spoken and to nobody before it, like every
+   * message but `ready`: the report carries the view state, and that names
+   * whatever file the reader opened.
+   */
+  rendered(report: RenderedReport): void {
+    const to = this.reply
+    if (to === null) return
+    to.target.postMessage({ type: RENDERED, report }, to.origin)
   }
 
   /**

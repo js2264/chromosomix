@@ -32,13 +32,21 @@ class SyncBlob extends Blob {
   override slice(from = 0, to = this.content.length): Blob {
     return new SyncBlob(this.content.subarray(from, to)) as unknown as Blob
   }
+  /** What a `.hic` walk's exact reads read through, counted as a slice of its own. */
+  override async arrayBuffer(): Promise<ArrayBuffer> {
+    exact.push(this.content.length)
+    return this.content.slice().buffer
+  }
 }
 
 /** Slices the stub served, so the cache can be asserted on. */
 let slices: number[] = []
+/** Exact reads made, by their length. */
+let exact: number[] = []
 
 beforeEach(() => {
   slices = []
+  exact = []
   ;(globalThis as Record<string, unknown>)['FileReaderSync'] = class {
     readAsArrayBuffer(part: Blob): ArrayBuffer {
       slices.push(part.size)
@@ -121,5 +129,37 @@ describe('a dropped file is read lazily', () => {
     expect(source.size).toBe(9 * MIB)
     expect(slices).toHaveLength(0)
     expect(source.stats()).toEqual({ requests: 0, bytes: 0 })
+  })
+})
+
+describe('a dropped file read exactly, as a .hic walk reads it', () => {
+  it('reads the range asked for and nothing round it, and keeps none of it', async () => {
+    const size = 8 * MIB
+    const source = new LocalFileSource(patterned(size), { name: 'walk.hic' })
+    const got = await source.readExact!(5 * MIB + 7, 300)
+    expect(got).toEqual(Uint8Array.from({ length: 300 }, (_, i) => (5 * MIB + 7 + i) % 251))
+    expect(exact).toEqual([300])
+    expect(slices).toEqual([])
+    expect(source.cachedChunkCount()).toBe(0)
+    expect(source.stats()).toEqual({ requests: 1, bytes: 300 })
+  })
+
+  it('is answered from the slices already held, for nothing', async () => {
+    const source = new LocalFileSource(patterned(4 * MIB), { name: 'walk.hic' })
+    source.readBytes(0, 16)
+    const got = await source.readExact!(100, 50)
+    expect(got).toEqual(Uint8Array.from({ length: 50 }, (_, i) => (100 + i) % 251))
+    expect(exact).toEqual([])
+    expect(slices).toHaveLength(1)
+  })
+
+  it('stops at the end of the file', async () => {
+    const source = new LocalFileSource(patterned(MIB), { name: 'walk.hic' })
+    expect(await source.readExact!(MIB - 10, 100)).toHaveLength(10)
+    expect(await source.readExact!(MIB, 100)).toHaveLength(0)
+  })
+
+  it('is a dropped file’s only: bytes in memory are read exactly already', () => {
+    expect(new LocalFileSource(new Uint8Array(16)).readExact).toBeUndefined()
   })
 })

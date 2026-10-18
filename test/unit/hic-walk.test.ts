@@ -15,6 +15,13 @@
  * the master index without a read; a record is read only as far as the rung;
  * the walk yields before it reads; and on a remote file it reads exact ranges
  * that neither pay for the chunk around them nor evict a chunk a view wants.
+ *
+ * And what made the whole genome of a remote `.hic` a minute and a half: read
+ * pair by pair, a record's head and then its blocks, a 4DN chicken map's 630
+ * pairs were 1,260 round trips. A walk is now planned — every place it reads is
+ * known before it reads — and the heads, the blocks past each record and the
+ * blocks left over are each read together, as the few stretches of the file
+ * they make, in whichever layout the file was written.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -24,9 +31,10 @@ import { RECORD_HEAD_BYTES, blockRuns, findZoom, readZoom, type BlockRef } from 
 import { readFooter, readHeader, type HicFooter } from '@/hic/format'
 import { HicFile } from '@/hic/HicFile'
 import { HicStore } from '@/hic/store'
+import { LocalFileSource } from '@/sources/LocalFileSource'
 import { RemoteRangeSource } from '@/sources/RemoteRangeSource'
 import { createSource, releaseSources } from '@/worker/sources'
-import type { ByteSource, SourceStats } from '@/types'
+import type { ByteSource, PixelChunk, SourceStats } from '@/types'
 import { writeHic, type HicRecord } from '../support/hicWriter'
 
 // ---------------------------------------------------------------------------
@@ -89,21 +97,38 @@ interface Fixture {
   pairs: number
 }
 
-let written: Promise<Fixture> | null = null
-
 function fixture(): Promise<Fixture> {
-  written ??= (async () => {
-    const { records, total } = contacts()
-    const file = await writeHic({
-      version: 8,
-      chroms: CHROMS,
-      resolutions: RESOLUTIONS,
-      records,
-      blockBinCount: 8,
-      rebin: true,
-    })
-    return { bytes: file.bytes, total, pairs: Object.keys(records).length }
-  })()
+  return laidOut({})
+}
+
+/** Each layout, written once: every test of it reads the same bytes. */
+const layouts = new Map<string, Promise<Fixture>>()
+
+/**
+ * The fixture's contacts, written another way: as Juicer lays out a v8 file —
+ * each record before its own blocks — or as a v9 file, or with each pair's
+ * record and blocks `padding` bytes from the next.
+ */
+function laidOut(options: { interleaved?: boolean; padding?: number; version?: 8 | 9 }): Promise<Fixture> {
+  const key = JSON.stringify([options.interleaved ?? false, options.padding ?? 0, options.version ?? 8])
+  let written = layouts.get(key)
+  if (written === undefined) {
+    written = (async () => {
+      const { records, total } = contacts()
+      const file = await writeHic({
+        version: options.version ?? 8,
+        chroms: CHROMS,
+        resolutions: RESOLUTIONS,
+        records,
+        blockBinCount: 8,
+        rebin: true,
+        interleaved: options.interleaved,
+        padding: options.padding,
+      })
+      return { bytes: file.bytes, total, pairs: Object.keys(records).length }
+    })()
+    layouts.set(key, written)
+  }
   return written
 }
 
@@ -115,14 +140,16 @@ function fixture(): Promise<Fixture> {
  */
 class RecordingSource implements ByteSource {
   readonly id = 'walk.hic'
-  readonly isRemote = true
   readonly size: number
   readonly reads: Array<{ exact: boolean; position: number; length: number }> = []
   /** Exact reads asked for and not yet answered, now and at most. */
   inFlight = 0
   mostInFlight = 0
 
-  constructor(private readonly data: Uint8Array) {
+  constructor(
+    private readonly data: Uint8Array,
+    readonly isRemote = true,
+  ) {
     this.size = data.byteLength
   }
 
@@ -466,7 +493,7 @@ describe('the census of a .hic, walked pair by pair (§6.5)', () => {
     mc.close()
   })
 
-  it('has read the pairs in flight, not every pair, when it hands over its first pixels', async () => {
+  it('reads a plan’s records together, then its blocks, before it hands over its first pixels', async () => {
     const { bytes, pairs } = await fixture()
     const source = new RecordingSource(bytes)
     const file = HicFile.open(source, { binSize: COARSE })
@@ -480,17 +507,44 @@ describe('the census of a .hic, walked pair by pair (§6.5)', () => {
         return true
       },
     })
-    // A record's head and its one block, for each pair read at once.
-    expect(atFirst).toBeGreaterThanOrEqual(2)
-    expect(atFirst).toBeLessThanOrEqual(2 * file.walkAhead())
-    expect(source.reads).toHaveLength(2 * pairs)
+    // Every pair is one plan at this rung. This layout keeps every record after
+    // every block: one read for the heads, which lie end to end, and one for
+    // the blocks — where pair by pair it was a head and a block for each.
+    expect(file.walkPlans(file.indexedPairs())).toHaveLength(1)
+    expect(pairs).toBe(10)
+    expect(source.reads).toHaveLength(2)
+    expect(source.reads.every((read) => read.exact)).toBe(true)
+    expect(atFirst).toBe(source.reads.length)
   })
 
-  it('keeps several pairs in flight, and hands their pixels over in order', async () => {
-    const { bytes } = await fixture()
+  it('reads a record’s coarse blocks with its head, where Juicer put them just past it', async () => {
+    const { bytes, pairs, total } = await laidOut({ interleaved: true, padding: 1 << 20 })
     const source = new RecordingSource(bytes)
     const file = HicFile.open(source, { binSize: COARSE })
-    expect(file.walkAhead()).toBeGreaterThan(1)
+    source.reads.length = 0
+    let sum = 0
+    await new HicStore(file).scanAll({
+      onChunk: (chunk) => {
+        for (let i = 0; i < chunk.length; i++) sum += chunk.count[i]
+        return true
+      },
+    })
+    expect(sum).toBe(total)
+    // A megabyte between pairs is not read through: one read a pair, from its
+    // record's first byte to the bytes past its end, and none for its blocks.
+    expect(source.reads).toHaveLength(pairs)
+    const records = new Map([...footerOf(bytes).masterIndex.values()].map((entry) => [entry.position, entry]))
+    for (const read of source.reads) {
+      expect(read.exact).toBe(true)
+      expect(read.length).toBe(records.get(read.position)!.size + (4 << 10))
+    }
+  })
+
+  it('keeps no more reads out than a census may, and hands the pixels over in order', async () => {
+    const { bytes } = await laidOut({ interleaved: true, padding: 1 << 20 })
+    const source = new RecordingSource(bytes)
+    const file = HicFile.open(source, { binSize: COARSE })
+    expect(file.walkAhead()).toBe(4)
     const order: number[] = []
     await new HicStore(file).scanAll({
       chunkSize: 1,
@@ -498,22 +552,43 @@ describe('the census of a .hic, walked pair by pair (§6.5)', () => {
         order.push(chunk.bin1[0])
         return true
       },
+      // The census is told to stand aside while a view reads: that is what makes it one.
+      pause: () => Promise.resolve(),
     })
+    // Pairs a megabyte apart are read apart, several at once and never more.
     expect(source.mostInFlight).toBeGreaterThan(1)
     expect(source.mostInFlight).toBeLessThanOrEqual(file.walkAhead())
     // `indexedPairs` order, which is ascending in the lower chromosome.
     expect(order).toEqual([...order].sort((x, y) => x - y))
   })
 
+  it('lets a picture’s walk have every connection a browser opens to one host', async () => {
+    const { bytes } = await laidOut({ interleaved: true, padding: 1 << 20 })
+    const source = new RecordingSource(bytes)
+    const file = HicFile.open(source, { binSize: COARSE })
+    await new HicStore(file).forEachWindow([0, file.nBins], [0, file.nBins], {} as never, () => undefined)
+    expect(source.mostInFlight).toBeGreaterThan(file.walkAhead())
+    expect(source.mostInFlight).toBeLessThanOrEqual(6)
+  })
+
   it('reads one pair at a time at a rung where one pair could fill the budget', async () => {
     const written = await writeHic({
       version: 8,
-      chroms: [{ name: 'chrBig', length: 250_000_000 }],
+      chroms: [
+        { name: 'chrBig', length: 250_000_000 },
+        { name: 'chrSmall', length: 1_000_000 },
+        { name: 'chrSmaller', length: 500_000 },
+      ],
       resolutions: [10_000],
       records: { '1_1': [{ x: 0, y: 0, value: 1 }] },
     })
     const file = HicFile.open(new RecordingSource(written.bytes))
     expect(file.walkAhead()).toBe(1)
+    // And plans each such pair on its own — a plan is held, decoded, until its
+    // last pair is handed over — and the small ones after it together.
+    expect(file.walkPlans(file.indexedPairs()).map((plan) => plan.length)).toEqual([1])
+    const pairs: Array<readonly [number, number]> = [[0, 0], [0, 1], [1, 1], [1, 2], [2, 2]]
+    expect(file.walkPlans(pairs).map((plan) => plan.length)).toEqual([1, 1, 3])
   })
 
   it('counts the same contacts at the coarsest rung as at the finest, which are the ones written', async () => {
@@ -529,17 +604,8 @@ describe('the census of a .hic, walked pair by pair (§6.5)', () => {
     }
   })
 
-  it('reads one head and one block per pair over the network, exactly, and keeps none of it', async () => {
+  it('reads over the network in exact ranges, a few for the whole genome, and keeps none of it', async () => {
     const { bytes, pairs } = await fixture()
-    const footer = footerOf(bytes)
-    // The most the walk may read: each record's head, or the record where it
-    // is shorter, and each pair's coarse blocks.
-    let bound = 0
-    for (const entry of footer.masterIndex.values()) {
-      const whole = new RecordingSource(bytes).readBytes(entry.position, entry.size)
-      bound += Math.min(entry.size, RECORD_HEAD_BYTES)
-      for (const block of findZoom(whole, 'BP', COARSE)?.blocks.values() ?? []) bound += block.size
-    }
     const source = await remote()
     const mc = MetaCooler.fromHic(`${URL_UNDER_TEST}::/resolutions/${COARSE}`, source)
     const held = source.cachedChunkCount()
@@ -547,15 +613,36 @@ describe('the census of a .hic, walked pair by pair (§6.5)', () => {
     try {
       await mc.countContacts()
       const { requests, bytes: read } = source.stats()
-      expect(requests).toBeLessThanOrEqual(2 * pairs)
-      expect(read).toBeLessThanOrEqual(bound)
+      // The heads together and the blocks together, where pair by pair it was
+      // two requests a pair.
+      expect(requests).toBeLessThanOrEqual(2)
+      expect(requests).toBeLessThan(pairs)
+      expect(read).toBeLessThan(bytes.byteLength)
       // Every read the walk made is its own range; the chunks a view reads
       // through are as the open left them.
       expect(source.cachedChunkCount()).toBe(held)
-      // Against the file: reading the records whole would have been more than
-      // the walk read in all.
-      const records = [...footer.masterIndex.values()].reduce((sum, entry) => sum + entry.size, 0)
-      expect(read).toBeLessThan(records)
+    } finally {
+      mc.close()
+    }
+  })
+
+  it('does not read through the distance between records far apart, over the network', async () => {
+    const padded = await laidOut({ interleaved: true, padding: 1 << 20 })
+    const footer = footerOf(padded.bytes)
+    // The most the walk may read: each record, its head through to the bytes
+    // past its end, and nothing of the megabyte after them.
+    const bound = [...footer.masterIndex.values()].reduce((sum, entry) => sum + entry.size + (4 << 10), 0)
+    served = padded.bytes
+    stub('XMLHttpRequest', RangeXhr)
+    const source = await RemoteRangeSource.open(URL_UNDER_TEST, { fetchImpl: probe, chunkSize: 64 << 10 })
+    const mc = MetaCooler.fromHic(`${URL_UNDER_TEST}::/resolutions/${COARSE}`, source)
+    source.resetStats()
+    try {
+      expect(await mc.countContacts()).toBe(padded.total)
+      const { requests, bytes: read } = source.stats()
+      // One request a pair at most: the open's chunks may already hold a record.
+      expect(requests).toBeLessThanOrEqual(padded.pairs)
+      expect(read).toBeLessThanOrEqual(bound)
     } finally {
       mc.close()
     }
@@ -585,5 +672,208 @@ describe('the census of a .hic, walked pair by pair (§6.5)', () => {
     expect(sum).toBe((await fixture()).total)
     expect(source.reads.length).toBeGreaterThan(0)
     expect(source.reads.every((read) => read.exact)).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// A walk read a plan at a time draws what one read pair by pair draws
+// ---------------------------------------------------------------------------
+
+/** The same file with no exact reads: what a walk read pair by pair, through the ordinary reads, saw. */
+class PlainSource implements ByteSource {
+  readonly id = 'plain.hic'
+  readonly isRemote = false
+  readonly size: number
+
+  constructor(private readonly data: Uint8Array) {
+    this.size = data.byteLength
+  }
+
+  async mount(): Promise<string> {
+    return this.id
+  }
+
+  readBytes(position: number, length: number): Uint8Array {
+    return this.data.subarray(position, Math.min(this.size, position + length)).slice()
+  }
+
+  stats(): SourceStats {
+    return { requests: 0, bytes: 0 }
+  }
+
+  close(): void {}
+}
+
+/** Every chunk a read hands over, flattened in order, so two reads can be compared pixel for pixel. */
+async function drawn(
+  source: ByteSource,
+  binSize: number,
+  read: (store: HicStore, file: HicFile, onChunk: (chunk: PixelChunk) => void) => Promise<unknown>,
+): Promise<Array<[number, number, number]>> {
+  const file = HicFile.open(source, { binSize })
+  const out: Array<[number, number, number]> = []
+  await read(new HicStore(file), file, (chunk) => {
+    for (let i = 0; i < chunk.length; i++) out.push([chunk.bin1[i], chunk.bin2[i], chunk.count[i]])
+  })
+  return out
+}
+
+describe('a walk read a plan at a time', () => {
+  const layouts = [
+    { name: 'records after blocks, v8', options: {} },
+    { name: 'records before their blocks, v8 (Juicer)', options: { interleaved: true } },
+    { name: 'records before their blocks, far apart', options: { interleaved: true, padding: 300 << 10 } },
+    { name: 'records after blocks, v9', options: { version: 9 as const } },
+  ]
+  const reads: Array<[string, (store: HicStore, file: HicFile, onChunk: (chunk: PixelChunk) => void) => Promise<unknown>]> = [
+    ['the whole genome', (store, file, onChunk) => store.forEachWindow([0, file.nBins], [0, file.nBins], {} as never, onChunk)],
+    [
+      'a rectangle across chromosomes',
+      (store, file, onChunk) =>
+        store.forEachWindow([file.chromExtent(0)[0] + 3, file.chromExtent(2)[1] - 2], [file.chromExtent(1)[0], file.nBins], {} as never, onChunk),
+    ],
+    [
+      'bands on two chromosomes',
+      (store, file, onChunk) => store.forEachBands([file.chromExtent(1), [file.chromExtent(3)[0], file.chromExtent(3)[0] + 4]], onChunk),
+    ],
+    ['the census', (store, _file, onChunk) => store.scanAll({ onChunk: (chunk) => void onChunk(chunk) })],
+  ]
+
+  for (const layout of layouts) {
+    for (const binSize of RESOLUTIONS) {
+      for (const [what, read] of reads) {
+        it(`hands over the same pixels: ${what}, at ${binSize} bp, ${layout.name}`, async () => {
+          const { bytes } = await laidOut(layout.options)
+          const planned = new RecordingSource(bytes)
+          const expected = await drawn(new PlainSource(bytes), binSize, read)
+          expect(expected.length).toBeGreaterThan(0)
+          expect(await drawn(planned, binSize, read)).toEqual(expected)
+          // And read nothing but exact ranges to do it, the open's aside.
+          expect(planned.reads.filter((one) => one.exact).length).toBeGreaterThan(0)
+        })
+      }
+    }
+  }
+
+  it('reads a rung past the records’ heads as whole records, together, and the blocks after them', async () => {
+    const { bytes, total, pairs } = await laidOut({})
+    const source = new RecordingSource(bytes)
+    const file = HicFile.open(source, { binSize: FINE })
+    source.reads.length = 0
+    let sum = 0
+    await new HicStore(file).scanAll({
+      onChunk: (chunk) => {
+        for (let i = 0; i < chunk.length; i++) sum += chunk.count[i]
+        return true
+      },
+    })
+    expect(sum).toBe(total)
+    // Pair by pair it was a head, the record, and its blocks for each.
+    expect(source.reads.length).toBeLessThan(pairs)
+  })
+
+  it('stops between its reads when the walk is cancelled, and reads no further', async () => {
+    const { bytes } = await laidOut({ interleaved: true, padding: 1 << 20 })
+    const source = new RecordingSource(bytes)
+    const file = HicFile.open(source, { binSize: COARSE })
+    source.reads.length = 0
+    let stop = false
+    const reading = new HicStore(file).forEachWindow([0, file.nBins], [0, file.nBins], {} as never, () => undefined, {
+      cancelled: () => stop,
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    stop = true
+    expect(await reading).toBe(false)
+    const after = source.reads.length
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(source.reads.length).toBe(after)
+    // What was out when it stopped — a picture's walk has six out — and no more.
+    expect(after).toBeLessThanOrEqual(6)
+  })
+})
+
+describe('a dropped .hic, walked', () => {
+  /** A `Blob` whose bytes are synchronously reachable, as `local-lazy.test.ts` has it. */
+  class SyncBlob extends Blob {
+    constructor(readonly content: Uint8Array) {
+      super([])
+    }
+    override get size(): number {
+      return this.content.length
+    }
+    override slice(from = 0, to = this.content.length): Blob {
+      return new SyncBlob(this.content.subarray(from, to)) as unknown as Blob
+    }
+    override async arrayBuffer(): Promise<ArrayBuffer> {
+      return this.content.slice().buffer
+    }
+  }
+
+  beforeEach(() => {
+    stub(
+      'FileReaderSync',
+      class {
+        readAsArrayBuffer(part: Blob): ArrayBuffer {
+          return (part as SyncBlob).content.slice().buffer
+        }
+      },
+    )
+  })
+
+  it('reads each record and the blocks past it exactly, not a megabyte of the disk round each', async () => {
+    const { bytes, pairs, total } = await laidOut({ interleaved: true, padding: 1 << 20 })
+    const source = new LocalFileSource(new SyncBlob(bytes) as unknown as Blob, { name: 'walk.hic' })
+    const file = HicFile.open(source, { binSize: COARSE })
+    source.resetStats()
+    let sum = 0
+    await new HicStore(file).scanAll({
+      onChunk: (chunk) => {
+        for (let i = 0; i < chunk.length; i++) sum += chunk.count[i]
+        return true
+      },
+    })
+    expect(sum).toBe(total)
+    const { requests, bytes: read } = source.stats()
+    // A read a pair at most — the open's slices may hold one — where through
+    // the slice cache each was a 1 MiB slice of the disk.
+    expect(requests).toBeLessThanOrEqual(pairs)
+    expect(read).toBeLessThan(pairs * (64 << 10))
+  })
+})
+
+describe('a census standing aside for a view that walks the same file', () => {
+  it('holds none of the reads the view needs while it waits, so both finish', async () => {
+    const { bytes, total } = await laidOut({ interleaved: true, padding: 1 << 20 })
+    const source = new RecordingSource(bytes)
+    const file = HicFile.open(source, { binSize: COARSE })
+    const store = new HicStore(file)
+    // The census goes first, and stands aside from its second step on — once it
+    // is reading, which is when it could be holding reads the view waits for.
+    let viewing: Promise<unknown> | null = null
+    let steps = 0
+    const counted: number[] = []
+    const census = store.scanAll({
+      onChunk: (chunk) => {
+        for (let i = 0; i < chunk.length; i++) counted.push(chunk.count[i])
+        return true
+      },
+      pause: async () => {
+        steps += 1
+        if (steps === 2) {
+          let sum = 0
+          viewing = store.forEachWindow([0, file.nBins], [0, file.nBins], {} as never, (chunk) => {
+            for (let i = 0; i < chunk.length; i++) sum += chunk.count[i]
+          }).then(() => sum)
+        }
+        if (viewing !== null) await viewing
+      },
+    })
+    const finished = await Promise.race([
+      census.then(() => 'finished'),
+      new Promise((resolve) => setTimeout(() => resolve('stuck'), 5_000)),
+    ])
+    expect(finished).toBe('finished')
+    expect(await viewing).toBe(total)
+    expect(counted.reduce((sum, value) => sum + value, 0)).toBe(total)
   })
 })

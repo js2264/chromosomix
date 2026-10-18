@@ -123,6 +123,23 @@ export interface HicWriteOptions {
    * larger than a coarse one's, as in a real file.
    */
   rebin?: boolean
+  /**
+   * Write each pair's matrix record **before its own blocks**, coarsest rung
+   * first, as Juicer lays out a v8 file — the 4DN maps among them.
+   *
+   * Off by default, so every fixture written before it keeps its bytes: those
+   * put every block first and every record after them, together, which is how
+   * other writers lay a file out (the yeast map of the app's demo store is one).
+   * A walk that reads a record's coarse blocks from the bytes just past it
+   * (`HicFile.prefetchWalk`) is a different read of each layout.
+   */
+  interleaved?: boolean
+  /**
+   * Under `interleaved`, bytes of nothing written after each pair's blocks: the
+   * records of a large file lie megabytes apart, and a walk must not read
+   * through the distance between them.
+   */
+  padding?: number
 }
 
 /** `records` at `from` bp bins, summed into `to` bp bins. */
@@ -583,8 +600,9 @@ export async function writeHic(options: HicWriteOptions): Promise<HicFixture> {
   for (const binSize of options.resolutions) w.int32(binSize)
   w.int32(0) // no fragment resolutions
 
-  // ---- block payloads ------------------------------------------------------
-  for (const zooms of pending.values()) {
+  // ---- block payloads and matrix records ------------------------------------
+  /** Every block of one pair, coarsest rung first, each where it lands. */
+  const writeBlocks = (zooms: PendingZoom[]): void => {
     for (const zoom of zooms) {
       for (const block of zoom.blocks) {
         block.position = w.length
@@ -592,11 +610,10 @@ export async function writeHic(options: HicWriteOptions): Promise<HicFixture> {
       }
     }
   }
-
-  // ---- matrix records ------------------------------------------------------
-  const matrixPositions = new Map<string, { position: number; size: number }>()
-  for (const [key, zooms] of pending.entries()) {
+  /** One pair's record; the slots of its block positions, for blocks not yet placed. */
+  const writeRecord = (key: string, zooms: PendingZoom[]): Array<{ block: PendingBlock; slot: number }> => {
     const [a, b] = key.split('_').map((part) => Number.parseInt(part, 10))
+    const slots: Array<{ block: PendingBlock; slot: number }> = []
     const position = w.length
     w.int32(a)
     w.int32(b)
@@ -614,11 +631,25 @@ export async function writeHic(options: HicWriteOptions): Promise<HicFixture> {
       w.int32(zoom.blocks.length)
       for (const block of zoom.blocks) {
         w.int32(block.number)
+        slots.push({ block, slot: w.length })
         w.int64(block.position)
         w.int32(block.payload.length)
       }
     })
     matrixPositions.set(key, { position, size: w.length - position })
+    return slots
+  }
+  const matrixPositions = new Map<string, { position: number; size: number }>()
+  if (options.interleaved === true) {
+    for (const [key, zooms] of pending.entries()) {
+      const slots = writeRecord(key, zooms)
+      writeBlocks(zooms)
+      for (const { block, slot } of slots) w.patchInt64(slot, block.position)
+      if ((options.padding ?? 0) > 0) w.raw(new Uint8Array(options.padding ?? 0))
+    }
+  } else {
+    for (const zooms of pending.values()) writeBlocks(zooms)
+    for (const [key, zooms] of pending.entries()) writeRecord(key, zooms)
   }
 
   // ---- normalisation vectors ----------------------------------------------

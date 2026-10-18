@@ -10,6 +10,66 @@ The deployed site at <https://chromosomix.app/> is built from `main` on every pu
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Added
+
+- **The page says when a picture is finished, and at what resolution (§12, §21.4).** Once a view has
+  been routed, opened, read and painted — its map's block, the windows its lanes asked for, any
+  track on it still opening, a smoothing or a finer block being read — and a frame has passed with
+  nothing new begun, the window reports it once: a `performance` mark named `chromosomix:rendered`
+  at the moment the last of it ended, a `chromosomix:rendered` event on `window`, and, in an embed,
+  a `chromosomix:rendered` message to the host. The report gives each map on screen with the rung
+  its block was read from, the bins pooled into a cell and the resolution that makes, the lanes
+  drawn, the view state, and `drawn`, `gated` (the whole-genome read waiting for its button) or
+  `error` with the refusal. A repaint alone reports nothing, and the census and circularity reads
+  that follow a view hold nothing back. What a script screenshots on, or times — the viewer timings
+  (`notebooks/timing.qmd`) wait on it.
+
+- **The timings page opens on the time to a picture (§18.10).** `notebooks/timing.qmd` now first
+  times chromosomix against juicebox.js (on a `.hic`) and HiGlass (on an `.mcool`, served by
+  higlass-python's own tile server): one map and one track, of yeast, chicken and mouse, each seen
+  whole, one chromosome, a region and a locus, from disk and from the bucket it is published in, in a
+  fresh browser context — each viewer's page loaded empty and left two seconds, as a reader's is
+  while they find their file — from handing each viewer the files to the viewer saying its picture is
+  finished. Every view is at one resolution the plan names — never the viewer's choice — and a view a
+  viewer cannot draw at it, a rung the file lacks or juicebox.js's whole genome, is reported rather
+  than drawn some other way; a picture drawn in part, as juicebox.js draws a whole chromosome with a
+  track beside it, says how much. Every run is a line of `viewers.tsv`, published beside
+  `timings.tsv` and attached to each release.
+
+### Changed
+
+- **The whole genome of a `.hic` is read in fewer requests, more of them at once, and a dropped one
+  without a megabyte of the disk round each read (§3.6, §6.5).** A walk across chromosome pairs — a whole-genome picture, the
+  census — read pair by pair, a record's head and then its blocks, four pairs at a time: the 4DN
+  chicken map's 630 pairs at 2.5 Mb were 1,258 requests, a minute and a half from its bucket. A walk
+  is now planned before it reads, every place it reads being known: the records' heads together,
+  each with the 4 KiB past its record's end, where Juicer puts the coarse blocks, as the stretches of
+  the file they make within 64 KiB of one another, and the blocks left over together after them. The
+  same picture is 427 requests, read six at a time; the yeast map of the demo store, whose records
+  lie end to end, 72 where it was 130; the 4DN mouse map, whose records are megabytes apart, 453
+  read six at a time where 460 were read four. Pixels are handed over as they were, in the same
+  order, and a plan holds no more than 24 MiB of them. A dropped `.hic` is walked the same way, in
+  exact reads, where each read paid a 1 MiB slice of the disk: 11 MB for that chicken genome, where
+  it was 222 MiB.
+
+### Fixed
+
+- **A page asking for a map's file starts the reader while the file is found (§6.1).** The picker
+  starts the reader's worker and h5wasm once the page is idle, so the first file dropped on it does
+  not wait for them — but the picker a workspace or a restored tab puts up to ask for a map on this
+  machine did not, and the file dropped there waited for a reader to be made. From disk, a
+  chromosome or a locus of the three maps the timings draw took 1.18 s from that page and takes
+  0.96 s, medians of eleven pictures. A genome, which reads through no reader, starts none.
+
+- **A file dropped on the page waiting for it opens the map the link or workspace named inside it
+  (§5.6).** A tab naming `map.mcool::/resolutions/25000` or a `.hic` at 4 kb that has to be given the
+  file asks for it to be dropped, and promises its view back; dropped, the file was opened by its
+  path alone, so an `.mcool` landed on a rung of its own choosing and on its Chromosomes table, and a
+  map dropped with a track beside it opened as a stranger to the view that asked for it. Both now
+  open at the resolution named, on the view named, the track joining it.
+
 ## [0.15.0] - 2026-10-17
 
 **There is no 0.14.0.** A `v0.14.0` tag and a GitHub release for it were made by hand, on the commit

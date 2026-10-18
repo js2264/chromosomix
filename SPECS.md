@@ -373,10 +373,23 @@ the block index of every resolution the pair was written at — 725 KB for chr1 
 map written at thirteen — so it is read only as far as the resolution open, which for the coarse ones
 Juicer writes first is a record's first few dozen bytes. A window inside a chromosome reads through
 the source's chunks, which a pan comes back to. A walk across the pairs — a whole-genome picture, the
-census of §6.5 — lands a few hundred bytes a pair in places megabytes apart and never comes back, so
-it reads exactly those bytes, leaves the chunks to the windows, and keeps four pairs in flight, since
-round trips are then nearly all it costs — fewer, down to one, at a rung where the pairs in flight
-could hold more than 64 MiB of pixels between them, since a pair is decoded whole.
+census of §6.5 — lands a few hundred bytes a pair in places megabytes apart and never comes back, so it
+reads exactly those bytes and leaves the chunks to the windows, a dropped file's as well as a remote
+one's. **And a walk is planned, because round trips are then nearly all it costs.** Every place it
+reads is known before it reads: the master index gives each record's, and Juicer writes each pair's
+blocks just past its record, coarsest rung first. So the heads of the records are read together,
+each with the 4 KiB past its record's end, as the stretches of the file they make where they lie
+within 64 KiB of one another; the blocks those bytes brought are decoded from them; and the blocks
+left over are read together after, the same way. A picture's walk keeps six reads in flight, every
+connection a browser opens to one host; the census, behind the views, four. Pair by pair — a record's
+head, then its blocks — the whole genome of the 4DN chicken map 4DNFIRKUYKP4 at 2.5 Mb was 1,258
+requests; planned, it is 427, and a dropped copy of it reads 11 MB of the disk where its 1 MiB slices
+were 222 MiB. The gap read through is a window's on purpose: a wider one saves round trips only on a
+link whose round trips cost more than its bytes, and read through 256 KiB the 4DN mouse map's whole
+genome is 17 MB for 369 requests, which a home connection — 5 MB/s, 50 ms a round trip — would read
+more slowly than the 460 of the walk pair by pair. A plan holds its pairs' pixels until they are handed over, so it ends where its
+pairs could hold more than 24 MiB of them; at a rung where one pair could hold 64 MiB, each pair is a
+plan of its own, read one at a time, since a pair is decoded whole.
 
 **Three things are translated, and nothing else.**
 
@@ -1176,7 +1189,10 @@ and make the back button walk a history interleaving three files. The rest of th
 and its view state come back, its worker does not, and clicking it is what reads the file. A tab that
 named a local file comes back to the picker with §11's explanation — unless this browser kept a
 grant for that file (`state/handles.ts`, where the platform hands one over with the file), and then
-a click reopens it as it would a remote one.
+a click reopens it as it would a remote one. The file dropped there opens **the map the tab named
+inside it** — the `.mcool`'s rung, the `.hic`'s resolution — on the view the tab was showing, alone
+or with tracks dropped beside it, which join it: a dropped file is named by its path, and opened at
+its root it landed on a rung of its own choosing and on its Chromosomes table instead.
 
 **A closed browser is offered its tabs back, never given them.** Beside the strip, every tab's whole
 config — tracks, marks, filters — is kept in IndexedDB (`state/workspace.ts`) and read only when
@@ -1717,13 +1733,15 @@ read of the weights between two pixel chunks does not start it again. A miss far
 recent — an index, a header, another sequence — fetches what it asks for and nothing more, so
 opening a file costs what it did, and a source opened to read in small pieces (§3.8's `fine`) never
 reads ahead. The same chromosome is now 34 requests. A walk across a `.hic`'s chromosome pairs reads
-the other way, exactly and not through the chunks at all (§3.6).
+the other way, exactly and not through the chunks at all, planned so its reads are few (§3.6).
 
 **The reader is started before it is asked for anything.** Its worker fetches and compiles h5wasm the
 moment it exists, and it used to exist only once a file was opened, so every first open waited for
 the runtime between the click and the first byte: 2.6 of the 3.2 seconds a 1 GB `.mcool` dropped on a
 fresh tab took to land. It is made when the picker is on screen and the page is idle, and the same
-drop lands in 0.3 s.
+drop lands in 0.3 s — the picker a workspace or a restored tab puts up to ask for a map on this
+machine included, where a file dropped used to wait for a reader: a chromosome or a locus of the
+timings' three maps (§18.10) took 1.18 s to draw from it, and takes 0.96 s.
 
 ### 6.2 Decoding requirements
 
@@ -1904,10 +1922,12 @@ in the fewest pixels), and the box shows them when they land.
 thread every view reads through, so it reads nothing before a request already waiting has been
 answered — on an open, the loading screen's — and it walks the file the way §3.6 walks one across
 chromosome pairs: each pair's matrix record read only as far as the coarsest rung, which is the
-record's first few dozen bytes, and that rung's one block, both as exact ranges, four pairs in
-flight. On the 5 GB 4DN map of mouse granule neurons (4DNFI916JQ1Y, thirteen rungs, 231 pairs) that
-is 456 requests and under 1 MB. Reading each record whole first — the block index of all thirteen
-rungs, 70 MB, in 1 MiB chunks — was 500 MiB, and held the loading screen for a minute and a half.
+record's first few dozen bytes, and that rung's blocks, all as exact ranges planned together, four
+reads in flight. On the 5 GB 4DN map of mouse granule neurons (4DNFI916JQ1Y, thirteen rungs, 231
+pairs) that was 456 requests and under 1 MB pair by pair; on the 4DN chicken map 4DNFIRKUYKP4 (630
+pairs) it is 419 requests where pair by pair it was 1,258. Reading each record whole first — the
+block index of all thirteen rungs, 70 MB, in 1 MiB chunks — was 500 MiB, and held the loading screen
+for a minute and a half.
 And **it stands aside for as long as a view is reading**, not for one turn: between pairs it waits
 until no view's request has run for a quarter of a second (§12), so a chromosome clicked while it
 counts is read as if it were not counting. A resample waiting on the census ends the wait, since the
@@ -5611,7 +5631,7 @@ whole-genome picture, and the census §6.5 takes on every open:
 
 | Operation | Budget |
 |---|---|
-| A read across chromosome pairs (remote), at a rung inside a record's first 4 KiB | ≤ 2 exact range requests a pair — its record's head, its blocks — and no chunk of the cache spent on either; four pairs in flight |
+| A read across chromosome pairs (remote), at a rung inside a record's first 4 KiB | ≤ 2 exact range requests a pair — its record's head, its blocks — and one for many where they lie within 64 KiB of one another, the blocks just past a record read with its head; no chunk of the cache spent on any; six in flight for a picture, four for the census |
 | The census, started beside an open | **0** reads before a request already queued has been answered |
 | The census or the circularity check, while a view is reading | **0** steps started until no view request has run for 250 ms; at most the one step already in flight |
 
@@ -5741,6 +5761,43 @@ by its bytes rather than by what its counts claim:
 |---|---|
 | Open and read a binary file whose counts, offsets or compressed data are corrupt — `.hic`, BAM with BAI or CSI, `.2bit`, binary g3d | an answer or a refusal; **never more than 16× the file's size read** in one open, never one typed array past 64 MiB, never 1.5 s. `test/unit/fuzz-readers.test.ts` holds every reader to this over 1,140 seeded corruptions of files the repository's own writers made; the worst reads 4× its file and allocates 30 KB, and the slowest takes a tenth of a second |
 | An inflate of any kind | stopped as soon as its output passes its cap, at most one 64 KiB slice of input later (§10) |
+
+**A picture says when it is finished** (`perf/rendered.ts`). A view mounting, its map's first paint
+and the picture being finished are three moments: the lanes ask for their windows once the map is
+laid out, a track still opening asks for its own when it lands, and a smoothing replaces the map it
+was computed from. Nothing outside the page could tell them apart. A script timing the app waited
+for the network to go quiet, which it never does here while the census and the circularity check
+read behind a view (§6.5, §8.15), and a screenshot taken on the first paint had lanes reading
+*fetching…*. So everything that can still change the picture says so while it can — a navigation
+being routed, a file, a workspace or a shared link being opened, a map's veil (a read, a smoothing,
+a correlation), a paint asked for and not yet made, a lane's window, residues or pile in flight, a
+track on screen still opening, a finer block being read for a frozen map — and once the last of it
+has ended and a frame has passed with nothing new begun, the window says so, once:
+
+| Where | What |
+|---|---|
+| `performance.getEntriesByName('chromosomix:rendered')` | a mark whose `startTime` is the moment the last wait ended — the end of the frame the picture was finished in — on the clock the page's own navigation timing is on |
+| `window`, event `chromosomix:rendered` | the same report, as the event's `detail` |
+| the host of an embed, message `chromosomix:rendered` | the same report, under §21.4's rules |
+
+The report carries `seq`, counting from 1; `at`, the mark's time; `status` — `drawn`, `gated` for a
+whole-genome read waiting for its button (§7.3), or `error` for a refusal on screen in place of the
+picture, with the refusal as `note`; `state`, the view state as the address bar carries it; `maps`,
+one per map on screen, every cell of a deck, each with its title, the bin size of the rung its block
+was read from, the bins pooled into one cell, and their product as `resolution`; and `lanes`, the
+track lanes drawn. **It says what was drawn, not what was asked for.** A whole-genome view reads the
+coarsest rung that fits (§7.3) and a wide window may pool its cells (§7.2), so a link naming 5 kb can
+be on screen at 25 kb, and a script holding viewers to one resolution has to be told so rather than
+time a different picture.
+
+**A repaint alone is not a new picture.** Pointing at the map repaints it once a frame, and a report
+per frame would bury the one a script is waiting for: a paint keeps a picture unfinished but never
+starts one. A report follows every navigation — a colour change is one — and every read a picture
+waits on, a pan past the lanes' padding included. **What it does not wait for**: the side columns,
+the status bar and the console, which describe the picture rather than being it; an analysis task,
+whose result is waited for when it arrives as a track; the census and the circularity check, which
+change nothing on screen; and anything that has left the page — a tab in the background, a view torn
+down without saying so — which is looked for four times a second while something waits, and dropped.
 
 ---
 
@@ -9170,24 +9227,47 @@ always `chromosomix`'s. Every run is one line of the tidy table
 and every version — and each `chromosomix` command's speed is a fold over the reference commands it is
 paired with, a side's commands summed where there are several (deepTools' `computeMatrix` and then
 `plotProfile` against one metaplot, and `plotHeatmap` as well against one over two tracks).
-They are documents, not tests: they need the data (about 6 GB), the reference packages and yapc's
-own environment, and nothing in the suite runs them.
+
+**The timings open on the time to a picture.** Before the analyses, `notebooks/timing.qmd` times
+chromosomix against the two viewers most used for the same thing — juicebox.js on a `.hic`, and
+HiGlass on an `.mcool`, served by higlass-python's own tile server, at the versions
+`notebooks/viewers/package.json` and `notebooks/requirements-higlass.txt` pin — and chromosomix on both
+formats. Every picture is one map and one track: yeast, chicken and mouse (4DN's 7 GB mouse map), each
+seen whole, one chromosome, a region and a locus, every view at one resolution the plan names, of a
+window of three to five hundred bins on a side. **No viewer chooses the resolution**: chromosomix is
+handed a workspace naming the map's rung, juicebox.js an explicit state, HiGlass the window and the
+rung as its `maxZoom`; each answers with the resolution it drew, and a picture drawn at another
+resolution, or of part of the window, is kept as what it was, never as a time for the one asked for. A
+view a viewer cannot draw at that resolution — a rung its file does not store, or a whole genome in
+juicebox.js, which draws one only from the `.hic`'s own whole-genome matrix — is not run but reported,
+with why. Each picture is read from disk, the page cache emptied first where the runner allows, and
+from the bucket it is published in, and timed in a fresh browser context, the viewer's empty page
+loaded first and kept apart, then left two seconds as a reader's is while they find their file, from
+the moment the viewer is handed the files to the moment it says the picture is finished: chromosomix by its own report (§12, *A picture says when it is finished*),
+juicebox.js by its last repaint covering the state asked for and its track's tiles, HiGlass by every
+tile in view fetched and drawn. Four rounds, the viewers taking turns to go first; every run, and
+every cell refused, is one line of `notebooks/work/validation/viewers.tsv`, with the requests and
+bytes the page asked for, the machine and every version.
+They are documents, not tests: they need the data (about 6 GB for the analyses and 15 GB for the
+viewers), the reference packages, yapc's own environment and higlass-python's, and the two viewers, and
+nothing in the suite runs them.
 
 **They are published with every release.** `.github/workflows/notebooks.yml` installs all of it on a
 fresh runner — the reference environment pinned package by package in `notebooks/requirements.txt`,
 yapc's in `requirements-yapc.txt` with IDR and yapc built at the commits the notebook cites,
-Boost-HiC's checkout, Ubuntu's bedtools and seqkit — renders both notebooks, and publishes them at
+Boost-HiC's checkout, Ubuntu's bedtools and seqkit, the app's build, the two viewers with Playwright's
+Chromium, and higlass-python's environment with libfuse — renders both notebooks, and publishes them at
 `<site>/validation/` and `<site>/timings/`, each a self-contained page with its tables beside it
-(`commands.json` and `summary.tsv`, every command and every verdict; `timings.tsv`); a release keeps
-its own copies of both pages and both tables as assets, and every run keeps what it rendered as an
-artifact for 90 days, the validation alone, with the timing rounds it finished, when the timings
-fail. It runs when a release is published and on demand. Each page opens on a block saying when it
-was rendered, from which version, commit and release, by which run or by hand, and on what machine,
-and closes on how long it took; the two link to each other there and on a reader's disk alike. The
-pages are no build of the app, so the service worker leaves those two addresses to the network, as
-it does `v/` and `pr/`, and the app, from this version on, finding itself at either unregisters its
-worker and reloads once (`recoverPinnedNavigation`), as at `v/`; a worker from before answers there
-with its own app until its reader takes the update it offers.
+(`commands.json` and `summary.tsv`, every command and every verdict; `timings.tsv` and `viewers.tsv`);
+a release keeps its own copies of both pages and of the three tables as assets, and every run keeps
+what it rendered as an artifact for 90 days, the validation alone, with the timing rounds it finished,
+when the timings fail. It runs when a release is published and on demand. Each page opens on a block
+saying when it was rendered, from which version, commit and release, by which run or by hand, and on
+what machine, and closes on how long it took; the two link to each other there and on a reader's disk
+alike. The pages are no build of the app, so the service worker leaves those two addresses to the
+network, as it does `v/` and `pr/`, and the app, from this version on, finding itself at either
+unregisters its worker and reloads once (`recoverPinnedNavigation`), as at `v/`; a worker from before
+answers there with its own app until its reader takes the update it offers.
 
 ### 18.11 A set of scales is one picture
 
@@ -10133,10 +10213,11 @@ those four things would be asking a reader to trust a picture with no provenance
 
 ### 21.4 The channel
 
-An embed that can only be linked to is a picture. `postMessage` is the other half, and it is four
+An embed that can only be linked to is a picture. `postMessage` is the other half, and it is five
 messages (`app/EmbedChannel.ts`). Out: `chromosomix:ready`, once, carrying the protocol version and
-the build and **nothing about the session**; and `chromosomix:state`, the view state as the hash is
-written from. In: `chromosomix:where`, answered with the state; and `chromosomix:navigate`, a **patch**
+the build and **nothing about the session**; `chromosomix:state`, the view state as the hash is
+written from; and `chromosomix:rendered`, the report of a finished picture (§12), which is what a
+host takes a screenshot on. In: `chromosomix:where`, answered with the state; and `chromosomix:navigate`, a **patch**
 laid over what is on screen — `{ locus: … }` moves the browser without the host knowing what else is
 in the state, a key sent as `null` is removed, and `state: null` is the picker.
 

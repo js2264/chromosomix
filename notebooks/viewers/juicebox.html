@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>juicebox.js, timed</title>
+<!--
+  juicebox.js as timing.qmd times it: one .hic and one bigWig, at the version package.json pins,
+  with nothing of juicebox's own changed. `prepare(plan)` builds an empty browser of the plan's size,
+  as the page a reader loads a map into; `time(plan)` then loads the map with an explicit state —
+  the chromosome, the resolution's index in the file's list, the window's first bin, and the pixels
+  a bin is drawn at, which is the map's width over the window's bins — and its track, and answers
+  once the map's last repaint has drawn that state and both of the track's views (juicebox draws a
+  track along each axis) hold their tiles, with the resolution and the window it drew.
+
+  juicebox draws a bin at a pixel or more, and never a chromosome smaller than its map: a window it
+  cannot show whole at that resolution is drawn in part, and the answer says how much.
+
+  A local file is a File, as a reader's drop gives one: the plan names it, and the driver has put
+  it in the page's file input beforehand.
+-->
+<link rel="stylesheet" href="node_modules/juicebox.js/dist/css/juicebox.css">
+<style>
+  html, body { margin: 0; background: #fff; font-family: sans-serif; }
+  #files { display: none; }
+</style>
+<script src="node_modules/juicebox.js/dist/juicebox.min.js"></script>
+</head>
+<body>
+<input id="files" type="file" multiple>
+<div id="viewer"></div>
+<script>
+  /** Every frame until `test` holds, then the frame it held in; `null` after `limit` ms. */
+  function frameWhen(test, limit) {
+    const started = performance.now()
+    return new Promise((resolve) => {
+      const tick = (now) => {
+        let held = false
+        try { held = test() } catch (error) { held = false }
+        if (held) resolve(now)
+        else if (now - started > limit) resolve(null)
+        else requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+    })
+  }
+
+  /** A URL as it is, or the File of that name the driver put in the input. */
+  function source(location) {
+    if (/^https?:\/\//.test(location)) return location
+    const file = [...document.getElementById('files').files].find((one) => one.name === location)
+    if (file === undefined) throw new Error(`no file called ${location} was given to the page`)
+    return file
+  }
+
+  /**
+   * The picture is finished: no spinner, the map's last repaint covered the state asked for, and
+   * every track pair holds a tile on both axes with nothing still updating.
+   */
+  function finished(browser, state) {
+    if (!browser.dataset || !browser.state) return false
+    const view = browser.contactMatrixView
+    if (view.spinnerCount > 0 || !view.genomicExtent) return false
+    const extent = view.genomicExtent
+    const now = browser.state
+    if (now.chr1 !== state.chr1 || now.chr2 !== state.chr2) return false
+    if (extent.chr1 !== now.chr1 || extent.chr2 !== now.chr2) return false
+    if (browser.trackPairs.length === 0) return false
+    for (const pair of browser.trackPairs) {
+      if (pair.updating || pair.pending || !pair.tileX || !pair.tileY) return false
+    }
+    return true
+  }
+
+  /** An empty browser of the plan's size, as the page a reader loads a map into. */
+  window.prepare = async function prepare(plan) {
+    const box = document.getElementById('viewer')
+    box.style.width = `${plan.width}px`
+    box.style.height = `${plan.height}px`
+    window.browser = await juicebox.init(box, {})
+    const viewport = window.browser.contactMatrixView.viewportElement
+    return { width: viewport.offsetWidth, height: viewport.offsetHeight }
+  }
+
+  window.time = async function time(plan) {
+    const browser = window.browser
+    const t0 = performance.now()
+    await browser.loadHicFile({ url: source(plan.map), name: plan.name, state: plan.state, normalization: 'NONE' })
+    await browser.loadTracks([{ url: source(plan.track), type: 'wig', format: 'bigwig', name: plan.trackName, color: '#d55e00' }])
+    const at = await frameWhen(() => finished(browser, plan.state), plan.limit ?? 300000)
+    if (at === null) return { t0, at: null, note: 'not drawn in time' }
+    const state = browser.state
+    const resolution = browser.dataset.bpResolutions[state.zoom]
+    const pixels = browser.contactMatrixView.viewportElement.offsetWidth
+    // The map and the track along its top, and the one down its side: what a thumbnail keeps.
+    const layout = browser.layoutController
+    const top = layout.xTrackContainer.getBoundingClientRect()
+    const rest = layout.contentContainer.getBoundingClientRect()
+    const left = Math.min(top.left, rest.left)
+    const clip = { x: left, y: top.top, width: Math.max(top.right, rest.right) - left, height: rest.bottom - top.top }
+    // What juicebox made of the state asked for: the bins it shows, and how wide each is drawn.
+    return {
+      t0,
+      at,
+      resolution,
+      box: pixels,
+      pixelSize: state.pixelSize,
+      bins: pixels / state.pixelSize,
+      x: state.x,
+      zoom: state.zoom,
+      clip,
+    }
+  }
+  window.ready = true
+</script>
+</body>
+</html>

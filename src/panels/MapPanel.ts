@@ -92,6 +92,7 @@ import { attachRefine, rungsOf, type BlockLadder } from '../ui/refine'
 import { icon, iconButton } from '../ui/icons'
 import { paintSequencePicker, sequencePicker, shownSequence } from './sequencePicker'
 import { entryLabel, fileBaseLabel, fileLabel, splitUri } from '../ui/labels'
+import { Surface } from '../perf/rendered'
 
 /**
  * What block a view state asks a companion for, before any file has been
@@ -452,6 +453,14 @@ export class MapPanel {
   private opening: Promise<OpenResult> | null = null
   private disposed = false
   /**
+   * This cell in the page's report of a finished picture (`perf/rendered.ts`):
+   * a companion opens its file and reads its block before it has a map to
+   * draw it on, and until then nothing else on screen says a map is coming.
+   */
+  private surface: Surface | null = null
+  /** Reads under way, a descent to another rung inside one included. */
+  private loads = 0
+  /**
    * The state the last read was issued for.
    *
    * A deck is reconciled on every render, and most renders change nothing about
@@ -771,6 +780,7 @@ export class MapPanel {
       this.renameNoteEl,
       this.body,
     )
+    this.surface = new Surface(this.el, () => ({}))
     this.say('opening…')
     this.paintPlace()
   }
@@ -1485,6 +1495,7 @@ export class MapPanel {
     this.ladder = null
     this.panel?.destroy()
     this.panel = null
+    this.surface?.forget()
     this.client.terminate()
   }
 
@@ -1630,6 +1641,20 @@ export class MapPanel {
   }
 
   private async load(state: ViewState): Promise<void> {
+    // The picture waits for this cell until its block is drawn or refused; a
+    // read that finds the same read already under way waits on that one.
+    this.loads += 1
+    this.surface?.wait('read', true)
+    try {
+      await this.loadNow(state)
+    } finally {
+      this.loads -= 1
+      if (this.loads === 0) this.surface?.wait('read', false)
+    }
+  }
+
+  /** What {@link load} does. */
+  private async loadNow(state: ViewState): Promise<void> {
     this.state = state
     this.seed()
     const plan = this.planOf(state)
