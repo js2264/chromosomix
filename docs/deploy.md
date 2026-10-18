@@ -731,8 +731,8 @@ Pushing the tag is the release. `.github/workflows/release.yml` runs on every `v
 2. builds the macOS and Linux installers (the Windows leg is off for now) and the single-file page,
    and attaches them to a **draft** release for the tag whose body is that version's CHANGELOG
    section — look at it, then press publish;
-3. publishes the package to npm (§22 of SPECS), if the repository has an `NPM_TOKEN` secret and the
-   version is not on the registry yet.
+3. publishes the package to npm (§22 of SPECS) by trusted publishing (below), unless the version is
+   on the registry already or the run is not in the repository npm trusts.
 
 **Never make the tag or the release by hand.** GitHub's release form makes a tag for any name typed
 into it, on whatever `main` is: `v0.14.0` was made that way, on the commit that merged #114, whose
@@ -743,17 +743,31 @@ stops at the first step instead, but a tag and a release made by hand stay where
 site keeps that build under the tag's name (below). If a release goes wrong, cut the next version
 rather than moving a tag somebody may already have cited: that is why there is no 0.14.0.
 
-**`NPM_TOKEN`** is an npm *granular access token* with read and write access to packages — to all of
-them until the first publish has created this one — and **Bypass two-factor authentication**
-ticked. An account that requires two-factor authentication to publish refuses any other token, with
-`E403 … Two-factor authentication or granular access token with bypass 2fa enabled is required`,
-which is what the first attempt got. Write tokens expire (90 days at most); once the package
-exists, npm's *trusted publishing* from this workflow replaces the token altogether.
+**npm trusts the workflow, not a token.** The `npm` job publishes by npm's *trusted publishing*:
+GitHub gives the run a short-lived identity (`id-token: write`), npm swaps it for a one-off
+credential because the package names this repository and `release.yml` as its trusted publisher,
+and the version is published with provenance — a signed statement of the commit and the run that
+built it, shown on its npm page. There is no secret to store, rotate or leak. It is configured once,
+on npmjs.com, which only allows it on a package that already exists — so 0.15.0, the first
+version, went up with a token:
+
+1. the package's **Settings** → **Trusted Publisher** → **GitHub Actions**: owner `js2264`,
+   repository `chromosomix`, workflow file `release.yml`, no environment;
+2. on the same page, **Publishing access**: require two-factor authentication and disallow
+   tokens, so that nothing but this workflow and a person with their second factor can publish;
+3. revoke the token in **Access Tokens**, and delete the repository's `NPM_TOKEN` secret, which
+   nothing reads any more.
+
+A fork's release skips the registry instead of failing on it: its repository is not the one
+`package.json` names, which is the one npm trusts. npm may still hold a version back for a
+maintainer to approve (*staged publishing*, which 0.15.0 went through, behind a placeholder named
+`0.0.0-stage`): approve it with two-factor authentication on npmjs.com, or with `npm stage list`
+and `npm stage approve <id>` from npm 11.15 on, and it is published.
 
 Re-running a leg against an existing tag is `workflow_dispatch` with the tag as input, or *Re-run
-failed jobs* on the run itself, which reads the secrets as they are at that moment — so a corrected
-token publishes on the re-run, and a version already on the registry is skipped rather than failed.
-Publishing a draft does not re-fire anything: nothing has changed to rebuild.
+failed jobs* on the run itself — so a version whose upload failed goes up once the cause is fixed,
+and a version already on the registry is skipped rather than failed. Publishing a draft does not
+re-fire anything: nothing has changed to rebuild.
 
 The tag does one other thing, from the moment it is pushed rather than when a release is published:
 the deploy that publishes that commit records the tag in `versions.json`, keeps that build for ever,
