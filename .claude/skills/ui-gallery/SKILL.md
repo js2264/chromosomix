@@ -69,6 +69,7 @@ node scripts/ui-edit-reassembly.mjs gallery  # the stage on the chrXVI–mycoide
 node scripts/ui-edit-live-dotplot.mjs gallery  # the stage's corner dot plot against the theoretical genome (data/), a streak hovered, redrawn through auto: l01 … l03
 node scripts/ui-dotplot.mjs gallery          # the dot plot task (§28, dev) on the same assembly against its theory (data/): the form, the signed density, a streak hovered and zoomed, the streaks: d01 … d06, d04b, d04c, and the PNG export under files/
 node scripts/ui-ideogram-junctions.mjs gallery  # the hg19 ideogram, a BAM's sashimi arcs and two samples' STAR junctions at RPL10, FLNA's reverse arcs, chrX whole, the junction and band cards, the Tracks card's rows, colour by annotated at DDX3X, a band typed, the karyotype, a regtools BED dropped, the dark theme, the yeast karyotype on a map's edges and EFB1's arc: ij01 … ij17
+node scripts/ui-ideogram-view.mjs gallery   # the ideogram view (§5.10) on the yeast tracks: the browser's switch, z standing, IV hovered and close up, the Ideogram card, lying, coloured by ATAC with its scale and by the peaks, wider and further apart, a drag along IV and the stretch it opens, XII opened whole, the PNG and a coloured PDF; the human karyotype, a map put down by z and brought back by v, dark: iv01 … iv19
 node scripts/ui-vector-pdf.mjs gallery      # the Export card with PDF (vector) and no resolution, then the map's, the deck's and the model's PDFs kept whole, each rendered with poppler and its images counted: v01 … v05, v-map.pdf, v-deck.pdf, v-model.pdf, *-page.png
 node scripts/ui-loci.mjs gallery             # every locus a reader sees or types, 1-based: bookmarks, marks, the map's menu, 4C's anchor, its lane and the console's line, FRiP per feature, a genome view's box: lo01 … lo10
 node scripts/ui-fixes.mjs gallery            # the shortcuts' gestures, the circular column, a cis block slid along its diagonal, a thirteenth rung refused, a picker tab's status bar, a variant lane's menu, a .hic's normalisation, a map closed into the browser, what Pattern detection, APA under chromosight and Compartments say they will read, the palette's Annotations row on a metacool, an embed's landing page and palette: fx01 … fx17
@@ -378,6 +379,20 @@ stays on paper, §16.5). Then the yeast map with its karyotype on two edges, CEN
 chromosome I with EFB1's arc beside it, from a session it writes to `demo/yeast/` and removes. It
 prints every row, card and hit it met. Run it after any change to `render/ideogram.ts`,
 `render/junctions.ts`, `render/sashimi.ts`, the two parsers, or the band search.
+
+`scripts/ui-ideogram-view.mjs` drives **the ideogram view** (§5.10), a dev feature it turns on, on
+the yeast tracks demo from a session it writes to `demo/yeast/` and removes: the karyotype, ATAC
+(with a ceiling under the rDNA's pile-up), Pol II, MNase as a heatmap, the micro-C loops and a file
+of pairs between the centromeres it writes beside them, the peaks and the genes open but hidden,
+and a line, a box and an arrowhead. It shoots the browser with the switch in its bar, `z` standing,
+chromosome IV under the pointer and close up, the Ideogram card, the picture flipped to lying,
+coloured by ATAC — the scale in the key's corner — and by the peaks, wider and further apart, a drag
+along IV in the air and the browser it opens, then Back and a click on XII (only where XII is on
+screen) opening it whole; it saves the figure as a PNG and, coloured, as a PDF through the stand-in
+save dialog. Then the human demo's hg19 karyotype, the yeast micro-C map put down by `z` and brought
+back by `v`, and the dark theme. It prints the hash, the summary, the card's rows and the readout at
+each step. Run it after any change to `render/karyotype.ts`, `state/ideogramLook.ts`, the ideogram's
+half of `ui/BrowserView.ts`, or a painter a lane beside a chromosome is drawn by.
 
 Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
 than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on

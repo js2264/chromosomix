@@ -308,12 +308,42 @@ export function ideogramBody(thickness: number): number {
 }
 
 /**
+ * Trace each chromosome's outline into the current path, and fill and stroke
+ * nothing: one closed subpath a run, the shape {@link drawIdeogram} fills its
+ * bands inside. What the ideogram view clips a chromosome's own colouring to
+ * (§5.10), so a body coloured by a track still pinches at its centromere and
+ * rounds at its telomeres. Returns how many runs it traced — none where the
+ * file has no band on the sequences in view.
+ */
+export function traceIdeogramOutline(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  set: FeatureSet,
+  layout: FeatureLayout,
+  body = ideogramBody(frame.thickness),
+): number {
+  let traced = 0
+  for (const run of runsOf(set, layout)) {
+    const { edge } = edgeOf(set, run, body / 2)
+    if (edge.length === 0) continue
+    tracePath(ctx, frame, edge, frame.thickness / 2, run)
+    traced++
+  }
+  return traced
+}
+
+/**
  * Draw an ideogram's bands (§8.22).
  *
  * Every placement is drawn, whatever `layout.dense` says: the collapse to a
  * density is for features that overlap, and bands tile — a genome's worth of
  * them at a pixel apiece is still the karyotype, which is what a reader zoomed
  * out that far is looking at.
+ *
+ * `body` is how thick the chromosome is drawn: the lane's own rule by default,
+ * which keeps room round it for the lane's label, and the frame's whole
+ * thickness in the ideogram view, where the frame *is* the chromosome and its
+ * width is the reader's to set (§5.10).
  */
 export function drawIdeogram(
   ctx: CanvasRenderingContext2D,
@@ -321,9 +351,9 @@ export function drawIdeogram(
   set: FeatureSet,
   layout: FeatureLayout,
   paint: FeaturePaint,
+  body = ideogramBody(frame.thickness),
 ): void {
   if (layout.placements.length === 0) return
-  const body = ideogramBody(frame.thickness)
   const half = body / 2
   const centre = frame.thickness / 2
   const colourOf = (index: number): string =>

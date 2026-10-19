@@ -54,6 +54,7 @@ const KEY_ORDER = [
   'cells',
   'contacts',
   'locus',
+  'ideogram',
   'level',
   'coarsen',
   'transform',
@@ -83,6 +84,7 @@ const OPTIONAL_KEYS = [
   'cells',
   'contacts',
   'locus',
+  'ideogram',
   'level',
   'coarsen',
   'transform',
@@ -203,6 +205,13 @@ export function parseViewState(hash: string): ViewState | null {
   if (cells !== undefined && cells !== '') state.cells = cells
   const locus = raw.get('locus')
   if (locus !== undefined && locus !== '') state.locus = locus
+  // Which way the ideogram's chromosomes run (§5.10), or nothing: a word this
+  // build does not draw is the browser's own picture, as every unrecognised
+  // value here lands on the plain view. A bare `ideogram=1` typed by hand is
+  // the ideogram as it opens, standing.
+  const ideogram = raw.get('ideogram')
+  if (ideogram === 'vertical' || ideogram === 'horizontal') state.ideogram = ideogram
+  else if (ideogram === '1' || ideogram === 'true') state.ideogram = 'vertical'
   const colormap = raw.get('colormap')
   if (colormap !== undefined) state.colormap = colormap
 

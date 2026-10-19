@@ -41,6 +41,8 @@ import { ReferenceChip } from '../edit/ReferenceChip'
 import { DEFAULT_UI_COLORMAP } from '../render/colormaps'
 import { ManualStore, type ManualMark } from '../annotations/manual'
 import { GroupSettings } from '../annotations/groups'
+import { IdeogramSettings } from '../state/ideogramLook'
+import type { KaryotypeOrientation } from '../render/karyotype'
 import { AnnotationStore } from '../annotations/store'
 import { AnnotationClient } from '../annotations/worker/client'
 import { AnalysisClient } from '../analysis/worker/client'
@@ -558,6 +560,12 @@ interface FileAnnotations {
    * map (`annotations/groups.ts`).
    */
   groups: GroupSettings
+  /**
+   * How the ideogram view draws this file's chromosomes (§5.10) — one instance
+   * for the file, as {@link groups} is, so the card that writes it and the
+   * picture that reads it hear one change.
+   */
+  ideogram: IdeogramSettings
   contigLength(name: string): number | undefined
 }
 
@@ -3037,6 +3045,7 @@ export class Session {
       client,
       loader,
       groups: new GroupSettings(scope),
+      ideogram: new IdeogramSettings(scope),
       contigLength: (name) => lengths.get(name),
     }
 
@@ -3581,6 +3590,11 @@ export class Session {
       // rather than read back through the session, for the reason the tracks and
       // the groups are: a view is rebuilt on every navigation and a mark is not.
       manual: held.manual,
+      // The ideogram (§5.10): which way it is drawn is the view state's, how it
+      // is inked is the file's, and a change to either is one step of history.
+      ...(state.ideogram === undefined ? {} : { ideogram: state.ideogram }),
+      look: held.ideogram,
+      onIdeogramChange: (orientation, locus) => this.setIdeogram(orientation, locus),
     })
     this.browser = view
     this.showContent(view.el, {
@@ -4256,7 +4270,7 @@ export class Session {
    *
    * @internal SessionRouter puts the map down when a state asks for its tracks.
    */
-  hideMap(): void {
+  hideMap(ideogram?: KaryotypeOrientation): void {
     const file = this.file
     const state = this.store.state
     if (file === null || state === null || !this.canHideMap) return
@@ -4289,11 +4303,45 @@ export class Session {
       uri: file.uri,
       view: 'browser',
       ...(locus === undefined ? {} : { locus }),
+      // Asked for as the ideogram (§5.10): the map put down as `v` puts it down,
+      // and the tracks drawn beside every chromosome rather than along one axis.
+      ...(ideogram === undefined ? {} : { ideogram }),
     }
     const willNotify = !viewStateEquals(target, this.store.state)
     this.navigate(target)
     if (!willNotify) void this.render(target)
     this.host.sessionChanged(this)
+  }
+
+  /**
+   * Put the ideogram on, turn it, or put it away (§5.10) — one step in the view
+   * state, so Back comes back to it; with where the browser opens, where a click
+   * or a drag on a chromosome is what put it away.
+   *
+   * Over a map, the map is put down first, as `v` puts it down: the ideogram is
+   * a picture of the tracks, and the map is not unloaded, so `v` brings it back.
+   *
+   * @internal The browser asks through its prop; the command and its key run it.
+   */
+  setIdeogram(orientation: KaryotypeOrientation | undefined, locus?: string): void {
+    const state = this.store.state
+    if (state === null || !devFeature('ideogram')) return
+    if (this.assembly !== null && state.view === 'browser') {
+      this.store.patch({ ideogram: orientation, ...(locus === undefined ? {} : { locus }) })
+      return
+    }
+    if (orientation !== undefined && this.canHideMap) this.hideMap(orientation)
+  }
+
+  /** Whether the ideogram is what is drawn: the browser, as one (§5.10). */
+  get ideogramShown(): boolean {
+    const state = this.store.state
+    return this.assembly !== null && state?.view === 'browser' && state.ideogram !== undefined
+  }
+
+  /** The ideogram's key, `z`: on, from the map or the browser alike, and off. */
+  toggleIdeogram(): void {
+    this.setIdeogram(this.ideogramShown ? undefined : 'vertical')
   }
 
   /**
@@ -4934,6 +4982,7 @@ export class Session {
       client,
       loader,
       groups: new GroupSettings(scope),
+      ideogram: new IdeogramSettings(scope),
       contigLength: (name) => lengths.get(name),
       metadata: metadataIndexFrom({
         // The two tables the app has already read, and the third by name only.

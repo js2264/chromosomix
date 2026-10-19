@@ -220,20 +220,10 @@ export function drawKey(
   ctx.save()
   ctx.textBaseline = 'top'
   ctx.textAlign = 'left'
-  ctx.font = `${m.titleSize}px ${options.font}`
-  const titleWidth = ctx.measureText(content.title).width
   const note = content.note ?? ''
-  ctx.font = `${m.noteSize}px ${options.font}`
-  const noteWidth = note === '' ? 0 : ctx.measureText(note).width
   const noteBlock = note === '' ? 0 : m.noteGap + m.noteSize
-  ctx.font = `${m.valueSize}px ${options.font}`
-  const loWidth = ctx.measureText(content.loLabel).width
-  const hiWidth = ctx.measureText(content.hiLabel).width
+  const { width, height, loWidth, rowWidth } = measureKey(ctx, content, options.font)
   const rampWidth = m.ramp
-  const rowWidth = loWidth + m.gap + rampWidth + m.gap + hiWidth
-  const width = Math.max(titleWidth, noteWidth, rowWidth) + m.padding * 2
-  const height =
-    m.titleSize + noteBlock + m.lineGap + Math.max(m.rampHeight, m.valueSize) + m.padding * 2
   const x = right - width
   const y = top
 
@@ -278,4 +268,35 @@ export function drawKey(
   ctx.restore()
 
   return { x, y, width, height }
+}
+
+/**
+ * The box {@link drawKey} draws for this content, without drawing it: for a
+ * caller that lays the key out before its numbers are known, and keeps the
+ * room with placeholders as wide as they will be.
+ */
+export function measureKey(
+  ctx: CanvasRenderingContext2D,
+  content: Pick<KeyContent, 'title' | 'note' | 'loLabel' | 'hiLabel'>,
+  font: string,
+): { width: number; height: number; loWidth: number; rowWidth: number } {
+  const m = KEY_METRICS
+  ctx.save()
+  ctx.font = `${m.titleSize}px ${font}`
+  const titleWidth = ctx.measureText(content.title).width
+  const note = content.note ?? ''
+  ctx.font = `${m.noteSize}px ${font}`
+  const noteWidth = note === '' ? 0 : ctx.measureText(note).width
+  const noteBlock = note === '' ? 0 : m.noteGap + m.noteSize
+  ctx.font = `${m.valueSize}px ${font}`
+  const loWidth = ctx.measureText(content.loLabel).width
+  const hiWidth = ctx.measureText(content.hiLabel).width
+  ctx.restore()
+  const rowWidth = loWidth + m.gap + m.ramp + m.gap + hiWidth
+  return {
+    width: Math.max(titleWidth, noteWidth, rowWidth) + m.padding * 2,
+    height: m.titleSize + noteBlock + m.lineGap + Math.max(m.rampHeight, m.valueSize) + m.padding * 2,
+    loWidth,
+    rowWidth,
+  }
 }

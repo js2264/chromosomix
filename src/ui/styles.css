@@ -1235,6 +1235,13 @@ p {
   width: 100%;
 }
 
+/* The ideogram (§5.10) is as wide as its chromosomes need where they cannot
+   fit the window, even with their lanes at the floor: the stage scrolls
+   sideways rather than cutting the last of them off. */
+.view-browser.is-ideogram .browser-stage {
+  overflow-x: auto;
+}
+
 .browser-canvas {
   display: block;
   width: 100%;
@@ -4277,6 +4284,12 @@ p {
 .heatmap-wrap:hover .map-hint,
 .browser-stage:hover .browser-hint {
   opacity: 1;
+}
+
+/* The ideogram has no window to zoom into: a chromosome is opened by a click,
+   and the card under the pointer says so (§5.10). */
+.view-browser.is-ideogram .browser-hint {
+  display: none;
 }
 
 @media (hover: none) {

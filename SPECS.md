@@ -1368,7 +1368,8 @@ named on its tab, in the Genome card and in the trail. The one box takes a locus
 opens a window round it — a sequence's name, `*` for the whole genome, and, from the list it drops
 as a word is typed, a sequence or a feature of the starred set (§5.4's hit list). Enter goes to the
 text where it reads as a place and to the first hit where it does not, and the box keeps the locus
-it went to.
+it went to. With the dev features on (§29), a switch ends the bar: the ideogram, every chromosome
+whole with the tracks beside each (§5.10).
 
 The gestures are the map's, deliberately (§7.2): a drag pans, Option- or Shift-drag selects a range
 to zoom into, the wheel zooms about the pointer, a **sideways** wheel slides along the axis, a double
@@ -1686,6 +1687,152 @@ disagree is carried into the report and named there. Without that, the one case 
 word would be the one case that reported a clean bill. `compareRefusal` (§5.7) no longer refuses two files for spelling
 one assembly differently — but still requires the same list in the same order, and still refuses two
 sequences of one name at different lengths, which is the check that catches hg19 against hg38.
+
+### 5.10 The ideogram view
+
+The browser's tracks drawn as a **karyotype**: every sequence of the genome whole, side by side, on
+one scale, with the tracks beside each — ideogram.js's annotated karyotypes (its *histogram* and
+*mouse* examples are the two layouts), drawn by this application's own lanes. It is not a second
+browser and not a fourth view: it is `view=browser` with one more word in the link, `ideogram=`; the
+tracks, their cards, their groups, their marks and their painters are §8's; and a reader goes back
+and forth between it and the browser's own picture with one key. **Built**, as a dev feature (§29):
+`render/karyotype.ts` (the layout, the chromosome, the curves between two, the marks across one and
+the hit test), `state/ideogramLook.ts` (the card's settings), the mode in `ui/BrowserView.ts`, and
+`scripts/ui-ideogram-view.mjs`, which drives all of it on the yeast and human demos.
+
+**Getting there.** The switch at the end of the browser's bar, the palette's *Ideogram* — a switch
+titled by its noun and wearing its state (§26.4) — and its key, **`z`**, on the row `v` is on: the two
+are the keys that change which picture of the genome is drawn. The same key, or the switch, puts it
+away. Pressed over a contact map, `z` puts the map down first, exactly as `v` does on its way to the
+tracks alone (§5.8) — so the ideogram is the tracks and nothing else — and the map is not unloaded:
+`v` from the ideogram brings it back. The link says it (`ideogram=vertical` or `horizontal`, after
+`locus=`; a bare `ideogram=1` typed by hand is the ideogram as it opens, and a word this build does
+not draw is the browser's own picture). The `locus` stays beside it as where the browser was, and
+where it goes back to.
+
+**What is drawn: the genome, whatever the browser has ticked.** The ticks are the browser's axis, and
+a browser opened on one chromosome — the ordinary case, and any window a link or a click arrives at —
+has one ticked: an ideogram of that one would be the browser drawn worse. It leaves out only the
+sequences under a five-hundredth of the longest, which are a dot at any size this view draws — a
+human mitochondrion beside chromosome 1 — and draws no more than the longest sixty of the rest, which
+is past every assembled karyotype and short of a draft assembly's forty thousand scaffolds. A line under the key says how
+many were left out, and so does the summary over the picture: `ideogram · 24 sequences · 3095.68 Mb ·
+396.3 kb per pixel`. One chromosome alone is drawn lying, as the browser reads one.
+
+**Two layouts, one turned from the other.** **Standing** — the default, and ideogram.js's — the
+chromosomes are one **row** of columns, each read from its first base at the top to its last at the
+bottom, its name over it and its lanes to its right. **Lying** — the Ideogram card's *flip* — they
+are one **column** of rows, each read left to right, its name before it and its lanes above it. The
+second is the first turned a quarter: what is *above* a lying chromosome is *right of* a standing one,
+which is how ideogram.js turns its own, so a reader who learns which side the tracks are on learns it
+once. Every chromosome is drawn on **one scale** — the longest fills the room it runs in and the rest
+are drawn to its base pairs per pixel — because a karyotype whose chromosomes were each stretched to
+the same length is a list of sequences, not a picture of a genome. Each chromosome keeps a strip on
+its far side from its lanes for the marks' anchors (below).
+
+**The lanes are the browser's.** Beside every chromosome, a lane for every slot of the browser's
+stack, in its order and with its overlay groups — but two kinds: the karyotype, which is the
+chromosomes themselves rather than a lane beside them, and a pile of reads, which no chromosome drawn
+whole is ever close enough to show (§8.13). Each lane is a `LaneFrame` whose axis is that
+chromosome's stretch of the browser's own axis and whose thickness runs outward from it, so the
+painters that draw a lane beside a map draw it beside a chromosome: a bigWig in any of its modes —
+area, line, bars, points, heatmap, ribbon — a gene model, a peak set, a junction lane's arcs, a loop
+set's arcs. A lane right of a standing chromosome is the right-hand stack beside a map, and a lane
+above a lying one is the top stack: two of the four edges §8.9 already covers. Every lane is read
+through the browser's own fill at the resolution it is drawn at — one read of the whole axis, at as
+many pixels as the chromosomes are long together — and every track has **one axis over every
+chromosome**: a peak on chromosome 1 and one on chromosome 21 are drawn against the same ceiling,
+which is ideogram.js's *absolute* histogram scaling and the only reading under which two chromosomes
+can be compared. Groups are resolved over every chromosome too (§8.8).
+
+**Fitted to the window, and never past the browser's heights.** *Tracks — fitted to the window*, the
+default, shrinks every lane by **one factor** until the row (or the column) fits the room, and never
+grows one past its height in the browser, which is the height its reader chose. Squeezed, the lanes
+keep a pixel between them rather than the gap they have at their own heights — three pixels of air
+beside a lane four wide is most of the row — and no lane is drawn under **four pixels**, where a
+heatmap is still a colour and a profile still a shape: past that the picture is wider than the room
+and the stage **scrolls**, which beats a row of hairlines that only say a track is there. *As tall as
+in the browser* keeps every lane's height and lets the picture run past the room.
+
+**The key** is over the chromosomes: a line for each slot, left to right and onto a second row where
+the first is full, written by the lane label the browser writes beside a lane — the names, the chip
+before each that opens the colour picker, the range and its autoscale arrow — so the name and the
+range in it are the browser's and are typed into the same way (§8.8). A range typed there is the
+lane's limits, here and in the browser.
+
+**The chromosome** is its cytoBand where one is open (§8.22) — the bands, the centromere's red waist,
+a stalk's narrowing, `gvar` hatched — drawn by the karyotype lane's own `drawIdeogram` at the
+chromosome's whole thickness, and a pill rounded at both telomeres where none covers it. What fills
+it is the card's **colour by**:
+
+- **bands** — the default wherever a cytoBand is open, since a karyotype is what that file is;
+- **one colour** — the card's colour, the default where none is;
+- **a track**, any value track open, shown or not: its value along the chromosome against the
+  track's own limits, **in the colours its lane is drawn in** — a heatmap lane's colormap, and any
+  other lane's colour from white (`TRACK_TINT_RAMP`, the ramp a 3D model can be coloured on, §25.5).
+  White to the colour reads as a stain, as a band's does; a dark colormap's low end would draw most
+  of a chromosome nearly black. The key's top-right corner then holds the **colour scale** — the
+  map's own key (`drawKey`, §7.1), at the pictures' text size, the track's name over its two limits and
+  the ramp between them, turned where the track is flipped — so a figure says what a colour on a
+  chromosome means, as one of a map does; and the summary ends `· coloured by ATAC`;
+- **a feature set**, shown or not: its features in their own colours (§8.16) over the plain colour —
+  compartments, chromatin states, a peak set.
+
+The cytoBand's outline holds whatever the fill: a chromosome coloured by a track still pinches at its
+centromere. A colour-by whose row has gone falls back to the bands or the one colour, as a stored
+colour-by whose column has gone does (§8.16).
+
+**Pairs: arcs beside a chromosome, curves between two.** A pair set's pairs on one chromosome are its
+lane's — `drawArcs`, as in the browser — and its pairs **between two chromosomes** are curves: each
+leaves its chromosome straight across it, towards the other, and arrives the same way, so two
+neighbours are joined by a gentle S and two far apart by a long one, and every curve says at both ends
+exactly where on the chromosome it begins — the two-lines picture of PR #107's circle seats its
+ribbons the same way. From the chromosome's middle, in the set's colour at half its opacity, and
+**drawn first**, under every body and lane, so the tracks a curve passes stay readable over it. The
+strongest **4,000** where there are more, by the file's score — the junction lanes' cap (§8.23), for
+its reason. Only pair sets — a BEDPE, `interact` or `longrange` (§8.18), a table of loop calls
+(§8.3): a contact map's own trans contacts are the map's to show. A pair set whose every pair
+is between two chromosomes has nothing to draw beside one, and its lane takes no room — its line in
+the key stays, since its curves are drawn in its colour.
+
+**The reader's marks** (§8.1) are drawn as the browser draws them, turned to lie across a chromosome
+and no further — the next chromosome along has its own base pair at that height, and a mark carried on
+through it would name a place there nobody marked: a **line** is a rule across the chromosome and its
+lanes; a **box** is the tenth-of-its-ink wash over its stretch, on each chromosome its two ends are
+on; an **arrowhead** is the browser's anchor, the same triangle at the same size, in the strip on the
+chromosome's far side, pointing into it and the tracks beyond. A right click on a chromosome is the
+browser's: the lane's own menu, and the marks within reach.
+
+**Pointing.** Over a chromosome, the hand's **hairline** across it and its lanes — and only those —
+its name set in the accent, and the card (§8.8): where, to the precision the picture resolves, the
+band there in ISCN where a cytoBand is open (`IV:949.8 kb · IVq`), every track beside that chromosome
+at that base pair with the lane under the pointer set in its name's weight, the feature under it in a
+feature lane, and how to open it. The footer's readout says the same in one line, and the place is
+published to every other surface (§25.4), whose own pointer comes back as the same rule.
+
+**A click opens the chromosome, a drag opens a stretch — always lying.** A press on a chromosome that
+does not travel opens it whole in the browser's own picture, one sequence along one axis; a drag along
+it draws the browser's selection turned across the chromosome — a wash, a rule at each end, a chip
+naming each end and the span between them — held to the chromosome the drag began on, and the release
+opens that stretch. Either is **one step** in the view state, the ideogram put away and the window
+named together, so Back comes back to the ideogram. The zoom buttons are greyed with the reason — the
+ideogram draws every chromosome whole — and a locus typed in the box opens it in the browser. While a
+mark is being placed (§8.1), the press is its place and the drag its box, as in the browser.
+
+**The Ideogram card**, in the Aesthetics column while the ideogram is drawn: *picture* (the flip),
+*colour by*, *colour*, *width* (how thick a chromosome is drawn, 4–60 px, twelve by default),
+*gap* (between two, 0–200 px, fourteen), *height* (how long the longest is drawn, 40–20,000 px; blank
+fills the window, and the mark beside it puts it back there) and *tracks*. Twelve pixels and fourteen
+apart are ideogram.js's ten made wide enough for a band's stain to read as a colour, with room between
+two for a curve to be seen leaving one. Which way the chromosomes run is what is being looked at, and
+is in the link; how a chromosome is inked is a choice about the picture of a file, kept with the file
+as its groups are — in session memory, and in a saved workspace (`SessionConfig.ideogram`, read field
+by field, each held to its bounds, optional so an older workspace opens unchanged).
+
+**The figure** is the ideogram: the Export card's PNG and PDF draw the key, the names, the
+chromosomes, their lanes, the curves and the marks, at the picture's own extent — wider than the
+window where it scrolls — without the hairline and the drag, under the caption the browser's export
+writes (§7.2).
 
 ---
 
@@ -14113,8 +14260,9 @@ writes none, which the note ends by saying in those words.
 A feature on `main` — built, specified, tested and released like any other — that a reader **does not
 see at all** until they turn it on. What it is for is the stretch between *it works* and *it is
 finished*: long enough that a branch would rot, and too unfinished for a reader who did not ask for it.
-**Built**: the switch, the registry (`state/devFeatures.ts`), and all three gates below — `metacool`'s,
-and `edit`'s and `dotplot`'s over as much of §27 and §28 as is built, each gated from its first line.
+**Built**: the switch, the registry (`state/devFeatures.ts`), and all four gates below — `metacool`'s,
+`edit`'s and `dotplot`'s over as much of §27 and §28 as is built, and `ideogram`'s over §5.10, each
+gated from its first line.
 
 ### 29.1 One switch
 
@@ -14166,11 +14314,16 @@ What is dev, and what switched off means for each:
   storage as it was. The dot plot in the stage's corner (§27.3) is the stage's, and goes with it.
 - **`dotplot`** — the task, and with it the view on screen its figure is drawn as (§28.2); the view of
   its own in the link, once it is built (§28). Switched off, the task is not in the Analysis panel.
+- **`ideogram`** — the ideogram view (§5.10): the browser bar's switch, the Ideogram card, the
+  palette's *Ideogram* and its key `z`. Switched off, none of them is drawn, the key is unbound, and
+  a link's `ideogram=` is kept and not applied: the browser draws its own picture of the same
+  window, and turning the switch on draws the ideogram again (§29.4). The look the card set is left
+  in session memory and in a workspace as it was.
 
 ### 29.4 What a dev feature left in a session
 
-**Kept, and not applied.** A link or a workspace carrying an edit, or naming a dot plot, opens while
-the switch is off as if it did not: the view falls back to the one it would have without the feature,
+**Kept, and not applied.** A link or a workspace carrying an edit, naming a dot plot or drawing an
+ideogram, opens while the switch is off as if it did not: the view falls back to the one it would have without the feature,
 and the record is left exactly as it was, so turning the switch on brings it back. A dev feature is
 never the reason a session is lost.
 

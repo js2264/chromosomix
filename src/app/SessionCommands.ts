@@ -62,6 +62,31 @@ export class SessionCommands {
     }
   }
 
+  /**
+   * The ideogram (§5.10), `Z`: every chromosome whole, side by side, with the
+   * tracks beside each — from the browser, or from a map, which is put down as
+   * `v` puts it down. A switch titled by its noun and wearing its state
+   * (§26.4); a dev feature (§29), so absent while the switch is off.
+   */
+  private ideogram(): Command[] {
+    if (!devFeature('ideogram')) return []
+    const shown = this.session.ideogramShown
+    return [
+      {
+        id: 'ideogram',
+        group: 'View',
+        title: 'Ideogram',
+        hint: shown
+          ? 'Back to the tracks along one axis, where the browser was.'
+          : 'Every chromosome whole, side by side, with the tracks beside each; a contact map is put down first, as V puts it down.',
+        keys: KEYS.ideogram,
+        state: shown ? 'on' : 'off',
+        enabled: this.session.assembly !== null || this.session.canHideMap,
+        run: () => this.session.toggleIdeogram(),
+      },
+    ]
+  }
+
   private own(): Command[] {
     const state = this.session.store.state
     const file = this.session.file
@@ -194,6 +219,7 @@ export class SessionCommands {
           keys: KEYS.find,
           run: () => this.session.browser?.focusSearch(),
         },
+        ...this.ideogram(),
         {
           id: 'show-map',
           group: 'View',
@@ -274,6 +300,7 @@ export class SessionCommands {
         enabled: this.session.canHideMap,
         run: () => this.session.cycleView(),
       },
+      ...this.ideogram(),
       {
         id: 'map-export',
         group: 'File',

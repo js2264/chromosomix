@@ -17,6 +17,7 @@
  */
 
 import { TICK_MIN_GAP_PX, chooseBpStep, formatBpTick } from './heatmap'
+import { laneCurve, laneMove, valueAcross, type LaneFrame } from './lane'
 import type { LocusAxis } from './locus'
 import type { Scale } from './scale'
 
@@ -582,17 +583,20 @@ export function drawBoundaries(
  * A pair with both ends off screen is skipped; a pair with *one* end off screen
  * is drawn, because the arc leaving the view is exactly the information that
  * something over there is connected to something here.
+ *
+ * Through the lane's own coordinates, so an arc stands on whichever edge the
+ * lane's values grow from, on any of the four (`render/lane.ts`): under the
+ * browser's ruler it rises from the floor as it always did, and beside a
+ * standing chromosome in the ideogram view it bows out to the right (§5.10).
+ * `only` keeps the pairs with both ends on that one sequence: the ideogram
+ * view draws a chromosome's own loops in its lane and the pairs between two
+ * chromosomes as curves across the picture, so a lane that drew those too
+ * would draw each of them twice, the second time as an arc cut off at the
+ * chromosome's end.
  */
 export function drawArcs(
   ctx: CanvasRenderingContext2D,
-  frame: {
-    toPixel(unit: number): number
-    domain: readonly [number, number]
-    alongFrom: number
-    alongTo: number
-    acrossFrom: number
-    thickness: number
-  },
+  frame: LaneFrame,
   axis: LocusAxis,
   pairs: {
     length: number
@@ -605,17 +609,23 @@ export function drawArcs(
     end2: Int32Array
   },
   paint: { colour: string; opacity: number },
+  only?: string,
 ): number {
   ctx.save()
   ctx.strokeStyle = paint.colour
   ctx.globalAlpha = paint.opacity * 0.75
   ctx.lineWidth = 1.25
-  const floor = frame.acrossFrom + frame.thickness
+  // The edge the values grow from, and the one they grow towards.
+  const base = valueAcross(frame, 0)
+  const tip = valueAcross(frame, 1)
   const span = Math.max(1, frame.domain[1] - frame.domain[0])
   let drawn = 0
   for (let i = 0; i < pairs.length; i++) {
-    const a = axis.locusToUnit(pairs.contigs[pairs.contig1[i]], (pairs.start1[i] + pairs.end1[i]) / 2)
-    const b = axis.locusToUnit(pairs.contigs[pairs.contig2[i]], (pairs.start2[i] + pairs.end2[i]) / 2)
+    const one = pairs.contigs[pairs.contig1[i]]
+    const two = pairs.contigs[pairs.contig2[i]]
+    if (only !== undefined && (one !== only || two !== only)) continue
+    const a = axis.locusToUnit(one, (pairs.start1[i] + pairs.end1[i]) / 2)
+    const b = axis.locusToUnit(two, (pairs.start2[i] + pairs.end2[i]) / 2)
     if (a === null || b === null) continue
     const low = Math.min(a, b)
     const high = Math.max(a, b)
@@ -626,12 +636,12 @@ export function drawArcs(
     // loop spanning the whole view reaches the top; one spanning a thousandth of
     // it still reaches a third of the way.
     const fraction = Math.min(1, (high - low) / span)
-    const height = frame.thickness * Math.min(1, 0.2 + 0.8 * (1 + Math.log10(Math.max(1e-4, fraction)) / 4))
+    const reach = Math.min(1, 0.2 + 0.8 * (1 + Math.log10(Math.max(1e-4, fraction)) / 4))
     ctx.beginPath()
-    ctx.moveTo(x0, floor)
+    laneMove(ctx, frame, x0, base)
     // A quadratic through a control point at twice the apex: the curve passes
-    // through half of it, which puts the top of the arc where `height` says.
-    ctx.quadraticCurveTo((x0 + x1) / 2, floor - height * 2, x1, floor)
+    // through half of it, which puts the top of the arc where `reach` says.
+    laneCurve(ctx, frame, (x0 + x1) / 2, base + (tip - base) * reach * 2, x1, base)
     ctx.stroke()
     drawn++
   }

@@ -32,6 +32,7 @@ import { ORIGIN_SCOPE } from './origins'
 import { EDIT_SCOPE, LEARNED_SCOPE, genomeEditKey, readEdit, readLearned, type Learned } from './referenceEdit'
 import type { ReferenceEdit } from '../genome/edit'
 import { RESOLUTIONS_SCOPE } from './resolutions'
+import { IDEOGRAM_SCOPE, readIdeogramLook, type IdeogramLook } from './ideogramLook'
 import { recall, recallBelow, remember } from './UiMemory'
 import { adoptFolders, foldersOf, type FolderRecord } from './locations'
 import { ANALYSIS_SCOPE, type AnalysisMemory } from '../analysis/memory'
@@ -237,6 +238,13 @@ export interface SessionConfig {
   /** Per-group stacking and scaling, by group name. */
   groups: GroupModes
   scaling: GroupModes
+  /**
+   * How the ideogram view draws the chromosomes (§5.10): their width, length
+   * and spacing, their colour and what fills them, and the tracks' fit. Which
+   * way they run is in `state` (`ideogram=`). Optional, so a workspace written
+   * before the ideogram existed imports as what it was, the look left alone.
+   */
+  ideogram?: IdeogramLook
   /** Sort, search and column filters for the two tables. */
   tables: { genomes?: TableUiState; contigs?: TableUiState }
   /**
@@ -488,6 +496,7 @@ const SCOPES = {
   resolutions: RESOLUTIONS_SCOPE,
   groups: 'browser:groups',
   scaling: 'browser:scaling',
+  ideogram: IDEOGRAM_SCOPE,
   genomes: 'table:genomes',
   contigs: 'table:contigs',
   analysis: ANALYSIS_SCOPE,
@@ -583,6 +592,7 @@ export function buildConfig(options: {
     ...resolutionsOf(recall<number[]>(key, SCOPES.resolutions)),
     groups: recall<GroupModes>(key, SCOPES.groups) ?? {},
     scaling: recall<GroupModes>(key, SCOPES.scaling) ?? {},
+    ...ideogramOf(recall<unknown>(key, SCOPES.ideogram)),
     tables: {
       ...tableOf('genomes', recall<TableUiState>(key, SCOPES.genomes)),
       ...tableOf('contigs', recall<TableUiState>(key, SCOPES.contigs)),
@@ -606,6 +616,15 @@ export function buildConfig(options: {
   // nothing anywhere else, which writes no path down.
   const folders = foldersOf(localNamesOf(config))
   return folders.length === 0 ? config : { ...config, folders }
+}
+
+/**
+ * `{ ideogram: … }` where a look was ever set, else nothing — read field by
+ * field (`readIdeogramLook`), since a workspace is a file a stranger can edit.
+ */
+function ideogramOf(raw: unknown): { ideogram?: IdeogramLook } {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {}
+  return { ideogram: readIdeogramLook(raw) }
 }
 
 /**
@@ -741,6 +760,7 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
   }
   remember(key, SCOPES.groups, config.groups)
   remember(key, SCOPES.scaling, config.scaling)
+  if (config.ideogram !== undefined) remember(key, SCOPES.ideogram, config.ideogram)
   if (config.tables.genomes !== undefined) remember(key, SCOPES.genomes, config.tables.genomes)
   if (config.tables.contigs !== undefined) remember(key, SCOPES.contigs, config.tables.contigs)
   // Absent from every config written before §18 existed, and a missing key is
@@ -935,6 +955,7 @@ export function readTab(parsed: unknown): SessionConfig | ConfigRefusal {
     sequences: list<string>(row['sequences']).filter((name) => typeof name === 'string'),
     groups: record(row['groups']),
     scaling: record(row['scaling']),
+    ...ideogramOf(row['ideogram']),
     // Absent from every config written before §18 and read as an empty
     // workspace, which is the tolerance `CONFIG_VERSION`'s comment promises for
     // an *added* field: an older file opens in a newer viewer with the parts it
