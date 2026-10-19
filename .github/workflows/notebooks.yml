@@ -60,9 +60,8 @@ name: Notebooks
 # each page: `rendered.json`, what the stamp at its top says (when, from which
 # commit and release, by which run, on what machine); `commands.json`,
 # `summary.tsv` and `validation.txt` beside the validation, every command it
-# ran, every verdict and every number its figures draw, one row a mark (about
-# 35 MB, most of it Boost-HiC's two maps of chr19 and the metaplot over two
-# tracks);
+# ran, every verdict and every number its figures draw, one row a mark (33 MB,
+# most of it Boost-HiC's two maps of chr19 and the metaplot over two tracks);
 # `timings.tsv` beside the timings, every timed run, one row each, and
 # `viewers.tsv`, every picture timed in a viewer. A release also gets the two
 # pages and the four tables as assets of its own — every verdict as
