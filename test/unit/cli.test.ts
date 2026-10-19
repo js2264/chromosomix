@@ -596,6 +596,21 @@ describe('running a task', () => {
     }
     // A file of zeroes would satisfy every check above and hold no model.
     expect(moved).toBeGreaterThan(0)
+    // …and as a PDB beside it, for PyMOL, through the drawer's own writer: a
+    // HETATM per bead, and the same beads back when this app reads it.
+    expect(files).toContain('sample.reconstruct3d.reconstructed-model.pdb')
+    const pdbPath = join(out, 'sample.reconstruct3d.reconstructed-model.pdb')
+    const pdb = await readFile(pdbPath, 'utf8')
+    expect(pdb.split('\n').filter((line) => line.startsWith('HETATM'))).toHaveLength(rows.length)
+    const fromPdb = readFeatureText(pdb, pdbPath)
+    const fromBed3d = readFeatureText(text, 'model.bed3d')
+    if (!('features' in fromPdb) || !('features' in fromBed3d)) throw new Error('not a feature set')
+    expect(Array.from(fromPdb.features.start)).toEqual(Array.from(fromBed3d.features.start))
+    expect(Array.from(fromPdb.features.end)).toEqual(Array.from(fromBed3d.features.end))
+    expect(fromPdb.features.contigs).toEqual(fromBed3d.features.contigs)
+    for (let i = 0; i < fromPdb.features.length; i++) {
+      expect(fromPdb.features.model?.x[i]).toBeCloseTo(fromBed3d.features.model?.x[i] ?? Number.NaN, 3)
+    }
   })
 
   it('reads a model it wrote back in as a structure, for the tasks that read one', async () => {
@@ -614,6 +629,14 @@ describe('running a task', () => {
     ).toBe(0)
     expect(complained()).not.toMatch(/not a structure/)
     expect((await readdir(where)).some((name) => /structure-radial.*\.tsv$/.test(name))).toBe(true)
+    // The PDB written beside it is the same model to every task that reads one.
+    const fromPdb = join(directory, 'spatial-pdb')
+    const pdb = join(where, 'sample.reconstruct3d.reconstructed-model.pdb')
+    expect(
+      await main(['spatialtracks', sample, '--features', pdb, '--structure', pdb, '--out', fromPdb, '--quiet']),
+    ).toBe(0)
+    expect(complained()).not.toMatch(/not a structure/)
+    expect((await readdir(fromPdb)).some((name) => /structure-radial.*\.tsv$/.test(name))).toBe(true)
   })
 
   it('takes the `::` resolution its own refusal tells a reader to write', async () => {

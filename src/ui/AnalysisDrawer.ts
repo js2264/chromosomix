@@ -67,6 +67,7 @@
 import { sameRecipe, type AnalysisRunner, type JobState } from '../analysis/runner'
 import {
   defaultParams,
+  readsMap,
   resolveSeeds,
   type AnalysisContext,
   type AnalysisFraming,
@@ -104,6 +105,7 @@ import type { RunTarget } from '../analysis/runner'
 const ALL_MAPS = '\u0000all-maps' as const
 import { formatIntervals } from '../annotations/export'
 import { writeBed3d } from '../annotations/g3d'
+import { pdbRefusal, writePdb } from '../annotations/pdb'
 import { recallParams, rememberParams } from '../analysis/memory'
 import { durationText, stopPromise } from './AnalysisPanelCard'
 import { runClock } from '../units'
@@ -157,10 +159,15 @@ let drawers = 0
 
 export interface AnalysisDrawerOptions {
   runner: AnalysisRunner
-  context(): AnalysisContext | null
   /**
-   * Why no task can run at all, or `null` — a deck with no map starred
-   * (§18.1). Run and *run on all* refuse with it, in the price's place.
+   * What a task is priced, seeded and framed against — for a `task` that reads
+   * no map, the session's own map whichever is starred (§18.1).
+   */
+  context(task?: AnalysisTask): AnalysisContext | null
+  /**
+   * Why no task that reads a map can run, or `null` — a deck with no map
+   * starred (§18.1). Run and *run on all* refuse with it, in the price's place;
+   * a task that reads only the tracks has no map to be named and runs.
    */
   blocked?(): string | null
   /** The framing a run started now would be a record of (§18.4). */
@@ -385,6 +392,19 @@ function paramText(value: ParamValue | undefined): string {
   return String(value)
 }
 
+/**
+ * What a task that reads no map reads instead, as its heading and its Run say.
+ *
+ * Named rather than left to the map's framing line, because that line is the
+ * claim a result is a record of a view (§18.4) — and the view is the one thing
+ * these tasks never read: panning past a metaplot changes none of its numbers,
+ * and a heading that turned red and offered *recompute here* would be offering
+ * the same run again.
+ */
+function readInstead(task: AnalysisTask): string {
+  return task.mapless === true ? 'the sequences chosen' : 'the loaded tracks'
+}
+
 function runNote(state: JobState): Array<HTMLElement | string> {
   switch (state.status) {
     case 'running':
@@ -463,13 +483,16 @@ export class AnalysisDrawer {
   private readonly formSlot = el('div', { class: 'analysis-form' })
   private readonly runButton: HTMLButtonElement
   /**
-   * Run this task on every map in the deck — hidden while there is one map.
+   * Run this task on every map in the deck — hidden while there is one map,
+   * and for a task that reads no map.
    *
    * Beside Run rather than instead of it, because the two are different
    * questions and the reader has already answered which by opening a deck:
    * *this* picture, or all of them. Hidden rather than disabled on a session
    * with one map, since a control offering to do something to a set of one is a
-   * control a reader has to work out.
+   * control a reader has to work out — and on a task that reads only the
+   * tracks, where every map's answer is the same answer and a batch was that
+   * one run made once per map.
    */
   private readonly runAllButton: HTMLButtonElement
   private readonly cancelButton: HTMLButtonElement
@@ -701,6 +724,11 @@ export class AnalysisDrawer {
     return this.current !== null
   }
 
+  /** The context of the task on screen; see {@link AnalysisDrawerOptions.context}. */
+  private context(): AnalysisContext | null {
+    return this.options.context(this.current ?? undefined)
+  }
+
   /** Re-read the runner, the context and the framing, and repaint from them. */
   /**
    * Say which map Run is about, on a deck — with the star itself.
@@ -720,8 +748,20 @@ export class AnalysisDrawer {
    * Plain `run` on a single map, and deliberately not `run on ★`: there is no
    * star on screen for it to point at, and a mark standing for a choice nobody
    * has been offered is a control a reader has to go looking for.
+   *
+   * Plain `run` too for a task that reads no map, deck or not. The star says
+   * which picture a task measures, and this one measures the tracks: `run on ★`
+   * claimed the star mattered to it, and a press after moving the star read as
+   * a different run when it was the same one again.
    */
   private paintRun(task: AnalysisTask, maps: number): void {
+    if (!readsMap(task)) {
+      this.runButton.replaceChildren('run')
+      this.runButton.title =
+        `Run ${task.title} on ${readInstead(task)}` +
+        (maps < 2 ? '.' : ' — it reads no map, so it runs once, whichever map is starred.')
+      return
+    }
     const target = maps < 2 ? null : this.options.runner.target()
     if (target === null) {
       this.runButton.replaceChildren('run')
@@ -737,7 +777,7 @@ export class AnalysisDrawer {
   refresh(): void {
     const task = this.current
     if (task === null) return
-    const context = this.options.context()
+    const context = this.context()
     this.titleEl.textContent = task.title
     this.syncForm(task, context)
     const across = this.options.runner.resultsFor(task.id)
@@ -932,7 +972,7 @@ export class AnalysisDrawer {
   private onParams(next: Params): void {
     this.params = next
     const task = this.current
-    const context = this.options.context()
+    const context = this.context()
     if (task === null || context === null) return
     // Remembered on every edit rather than on Run, so that reproducing a figure
     // is opening the session and pressing Run (§18.2) — including the run the
@@ -945,11 +985,20 @@ export class AnalysisDrawer {
   // Running
   // -------------------------------------------------------------------------
 
+  /**
+   * Why this task cannot run on this deck, or `null`: no map starred, for a
+   * task that reads one. A task that reads only the tracks has no map to be
+   * named, so the star's absence is nothing to it (§18.1).
+   */
+  private blockedFor(task: AnalysisTask): string | null {
+    return readsMap(task) ? (this.options.blocked?.() ?? null) : null
+  }
+
   private run(): void {
     const task = this.current
     if (task === null) return
     // Whatever reached here — the button is greyed, but a key is not.
-    if ((this.options.blocked?.() ?? null) !== null) return
+    if (this.blockedFor(task) !== null) return
     this.setStatus('')
     // Back to the newest, because the one about to arrive *is* the newest and a
     // reader who pressed Run while reading run 3 would otherwise watch their
@@ -965,7 +1014,7 @@ export class AnalysisDrawer {
    * map, and the record of a run says which number it read.
    */
   private seeded(task: AnalysisTask): Params {
-    const context = this.options.context()
+    const context = this.context()
     return context === null ? this.params : resolveSeeds(task.params, context, this.params)
   }
 
@@ -980,7 +1029,7 @@ export class AnalysisDrawer {
   private runAll(): void {
     const task = this.current
     if (task === null) return
-    if ((this.options.blocked?.() ?? null) !== null) return
+    if (this.blockedFor(task) !== null) return
     this.setStatus('')
     this.chosenRun.delete(task.id)
     // **Awaited**, and this is the whole of the fix. A companion opens to draw a
@@ -1016,7 +1065,7 @@ export class AnalysisDrawer {
     const state = this.options.runner.stateOf(task.id)
     const busy = state.status === 'running' || state.status === 'queued'
     const estimate = context === null ? null : task.estimate(context, this.params)
-    const blocked = this.options.blocked?.() ?? null
+    const blocked = this.blockedFor(task)
     const refusal =
       blocked !== null
         ? blocked
@@ -1035,7 +1084,9 @@ export class AnalysisDrawer {
     // all 3 maps" over a deck of four and then ran four.
     const maps = this.options.runner.targetCount()
     this.paintRun(task, maps)
-    this.runAllButton.classList.toggle('hidden', maps < 2)
+    // And only for a task that reads a map: one that reads the tracks has one
+    // answer however many maps are open, so a batch of it is that run N times.
+    this.runAllButton.classList.toggle('hidden', maps < 2 || !readsMap(task))
     this.runAllButton.disabled = busy || refusal !== null
     this.runAllButton.textContent = `run on all ${maps} maps`
     if (refusal !== null) {
@@ -1283,7 +1334,7 @@ export class AnalysisDrawer {
     const block = figureBlock({
       output,
       task: `${this.current?.id ?? 'task'}:combined`,
-      uri: this.options.context()?.uri ?? '',
+      uri: this.context()?.uri ?? '',
       extras: [
         button('TSV', () => this.saveCombinedTsv(output, maps), {
           class: 'btn',
@@ -1324,10 +1375,13 @@ export class AnalysisDrawer {
    */
   private syncFraming(result: TaskResult | null): void {
     const current = this.options.framing()
-    // A task that reads no map has no framing to name, nor one to leave.
-    if (this.current?.mapless === true) {
+    // A task that reads no map has no framing to name, nor one to leave: a
+    // view that moved, or a star that did, changes nothing it read, so there is
+    // no *recompute here* to offer — it would be the same run again.
+    if (this.current !== null && !readsMap(this.current)) {
+      const read = readInstead(this.current)
       this.framingEl.className = 'analysis-framing'
-      this.framingEl.textContent = result === null ? 'reads the sequences chosen, not the map' : 'from the sequences chosen, not the map'
+      this.framingEl.textContent = result === null ? `reads ${read}, not the map` : `from ${read}, not the map`
       this.framingEl.title = ''
       this.recomputeButton.classList.add('hidden')
       return
@@ -1486,7 +1540,7 @@ export class AnalysisDrawer {
     const block = figureBlock({
       output,
       task: this.current?.id ?? 'task',
-      uri: this.options.context()?.uri ?? '',
+      uri: this.context()?.uri ?? '',
       extras: [
         // The two formats a genome browser opens, on the one file where this
         // drawer is the only place they are offered from (§18.7).
@@ -1564,7 +1618,7 @@ export class AnalysisDrawer {
         : where === 'structure'
           ? 'Added to the Structures card in the Annotations panel, and shown in the deck’s ' +
             'structure cell (add one from the deck’s bar if none is open).'
-          : where === 'overlay' && this.options.context()?.hasMap === false
+          : where === 'overlay' && this.context()?.hasMap === false
             ? many
               ? `${fmt.int(outputs.length)} sets added to the Tracks card in the Annotations panel as 1D tracks, marked *.`
               : 'Added to the Tracks card in the Annotations panel as a 1D track, marked *.'
@@ -1584,6 +1638,9 @@ export class AnalysisDrawer {
           { class: 'plot-icon-row' },
           el('span', { class: 'analysis-elsewhere-name', text: output.label, title: output.label }),
           ...(output.kind === 'intervals' ? [this.bedButton(output, provenance)] : []),
+          ...(output.kind === 'intervals' && output.entryKind === 'structure'
+            ? [this.pdbButton(output, provenance)]
+            : []),
           this.tsvButton(output, provenance),
         ),
       ).flatMap((row, i) => {
@@ -1661,6 +1718,39 @@ export class AnalysisDrawer {
     void downloadBlob(
       new Blob([text], { type: 'text/plain' }),
       exportName(output, provenance, stamp, suffix),
+    )
+  }
+
+  /**
+   * A computed model as a PDB, for PyMOL (§25.7) — beside its bed3d, as the
+   * Structures card has it, with the same `#`-line facts in its TITLE. Disabled,
+   * with the format's own reason, for a model past what a PDB's columns number.
+   */
+  private pdbButton(output: IntervalsOutput, provenance: Provenance): HTMLButtonElement {
+    const payload = output.payload
+    const refusal = payload.kind === 'features' ? pdbRefusal(payload.data) : 'This output holds no model.'
+    const node = button('PDB', () => this.savePdb(output, provenance), {
+      class: 'btn',
+      title:
+        refusal ??
+        'The model as a PDB — an atom per bead, a chain per sequence, bonds along the fibre — which ' +
+          'PyMOL and ChimeraX open and this app reads back',
+    })
+    node.disabled = refusal !== null
+    return node
+  }
+
+  private savePdb(output: IntervalsOutput, provenance: Provenance): void {
+    const payload = output.payload
+    if (payload.kind !== 'features') return
+    const text = writePdb(payload.data, {
+      label: output.label,
+      file: provenance.framing.label,
+      created: provenance.createdAt,
+    })
+    void downloadBlob(
+      new Blob([text], { type: 'text/plain' }),
+      exportName(output, provenance, fileStamp(new Date()), 'pdb'),
     )
   }
 
@@ -1847,7 +1937,7 @@ export class AnalysisDrawer {
     const task = taskById(first.provenance.task)
     if (task === undefined) return
     const commands = shown.map(({ label, provenance }) => {
-      const text = cliCommandFor({ task, provenance, context: this.options.context() }).text
+      const text = cliCommandFor({ task, provenance, context: this.options.context(task) }).text
       // On the all-maps tab, a command per map under its name — the batch as
       // the shell would run it, one file at a time.
       return label === null ? text : `# ${label}\n${text}`

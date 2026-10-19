@@ -132,6 +132,7 @@ import { parseLongRange, sniffLongRange } from '../annotations/longrange'
 import { parseVcf, sniffVcf } from '../annotations/vcf'
 import { formatIntervals } from '../annotations/export'
 import { parseBed3d, parseG3d, sniffBed3d, sniffG3d, writeBed3d } from '../annotations/g3d'
+import { parsePdb, pdbRefusal, sniffPdb, writePdb } from '../annotations/pdb'
 import type { FeatureSet, PairSet, StoredEntry } from '../annotations/types'
 import { hicProBinsNames, isHicProMatrix } from '../annotations/sidecar'
 import { openReference, type Reference } from './reference'
@@ -1041,7 +1042,7 @@ async function openForTask(
  * reader must not have to know which convention produced the pair they have.
  */
 async function openPairsIndex(path: string): Promise<ByteSource | null> {
-  for (const candidate of [`${path}.px2`, `${path.replace(/\.gz$/i, '')}.px2`]) {
+  for (const candidate of [`${path}.px2`, `${path.replace(/\.b?gz$/i, '')}.px2`]) {
     if (!existsSync(candidate)) continue
     try {
       return await LocalFileSource.fromPath(candidate)
@@ -1788,6 +1789,15 @@ async function writeOutputs(
           ? writeBed3d(payload.data, context)
           : formatIntervals(payload, context),
       )
+      // And as a PDB beside it, for PyMOL, as the drawer and the Structures card
+      // offer one (§25.7) — except where the format's columns cannot number the
+      // model, which is said rather than skipped: a batch that silently wrote
+      // one file fewer is a folder somebody finds short a week later.
+      if (model && payload.kind === 'features') {
+        const refusal = pdbRefusal(payload.data)
+        if (refusal === null) await put(`${stem}.pdb`, writePdb(payload.data, context))
+        else if (!quiet) process.stderr.write(`  no PDB for ${stem}: ${refusal}\n`)
+      }
     }
     if (output.kind === 'profile') {
       // Over the grid the values are on: the map's, for every task that reads at
@@ -1860,7 +1870,10 @@ export function readFeatureText(
   // A model — the bed3d `reconstruct3d` writes, or a text g3d — is a set whose
   // rows carry coordinates, which is what the structure tasks read (§25). Read
   // as a BED it kept its intervals and lost the model, and Spatial tracks said
-  // the row it had just been handed was not a structure.
+  // the row it had just been handed was not a structure. A PDB first, by its
+  // name or its records: one this app wrote reads back as its model, and any
+  // other is refused with the reason rather than read as a BED of nonsense.
+  if (sniffPdb(text, path)) return { features: parsePdb(text, path) }
   if (sniffBed3d(text, path)) return { features: parseBed3d(text, path) }
   if (sniffG3d(text, path)) return { features: parseG3d(text, path) }
   // UCSC's two interaction formats and its gene-model tables (§8.18, §8.19),

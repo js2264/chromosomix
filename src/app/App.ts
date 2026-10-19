@@ -46,7 +46,7 @@ import {
 } from '../ui/SidePanel'
 import { CardArranger } from '../ui/cardLayout'
 import { FilesCard } from '../ui/FilesCard'
-import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
+import { dragHasFileRow, readFileDrag, writePickedDrag } from '../ui/fileDrag'
 import { connectedFolders, hydrateFolders, subscribeFolders } from '../browse/connected'
 import type { PickedFile } from '../browse/folder'
 import '../browse/backends'
@@ -82,6 +82,7 @@ import {
   type SessionConfig,
 } from '../state/SessionConfig'
 import { fileMemoryKey } from '../state/UiMemory'
+import { routeFor } from '../browse/route'
 import {
   WORKSPACE_VERSION,
   buildWorkspaceFile,
@@ -135,6 +136,12 @@ const APP_TITLE = 'chromosomix'
  */
 const ADD_FILE_HINT =
   'A second map comes up beside the one open, and anything else is drawn on top.'
+
+/** The header's `+` with something open: the command's title and its hint, as one sentence (§26.4). */
+const ADD_FILE_TITLE = 'Add a file to this tab — a second map comes up beside the one open, anything else on top'
+
+/** …and on an empty tab, which there is nothing to add to: it opens, as the landing page does. */
+const OPEN_FILE_TITLE = 'Open a file in this tab — dropped, chosen or by its URL'
 
 /**
  * What the header's plug promises, read by its tooltip and by its command.
@@ -354,6 +361,15 @@ export class App implements SessionHost {
   private readonly backButton: HTMLButtonElement = iconButton('undo-2', 'Go back', () =>
     window.history.back(),
   )
+  /**
+   * One more file in this tab, from wherever the reader is: the `+` before
+   * back (§5.5), opening the landing page's *Load files* in a dialog
+   * ({@link addFileDialog}). Its tooltip follows the tab ({@link syncAdd}),
+   * because on an empty one there is nothing to add to and it opens instead.
+   */
+  private readonly addButton: HTMLButtonElement = iconButton('plus', ADD_FILE_TITLE, () => this.addFileDialog(), {
+    class: 'btn btn-icon head-add',
+  })
   private readonly forwardButton: HTMLButtonElement = iconButton('redo-2', 'Go forward', () =>
     window.history.forward(),
   )
@@ -433,9 +449,12 @@ export class App implements SessionHost {
       // A session of its own: the empty tab in front, or a new one — the
       // same choice a store row makes ({@link openStoreEntry}), and through
       // `addPicked` so that an empty tab is *filled* by the same road a
-      // dropped file takes, index and name included.
+      // dropped file takes, index and name included. Except a workspace,
+      // which is tabs of its own appended beside these, as a store row's is:
+      // a new tab opened for it first was left empty beside them.
       onOpenNew: (picked) => {
-        const session = this.tabEmpty() ? this.current : this.newSession()
+        const tabs = routeFor(picked.uri, picked.name) === 'workspace'
+        const session = this.tabEmpty() || tabs ? this.current : this.newSession()
         void session?.addPicked(picked)
       },
       tabEmpty: () => this.tabEmpty(),
@@ -497,6 +516,10 @@ export class App implements SessionHost {
               void this.openStoreEntries(entries)
               this.storeDrawer?.close()
             },
+            // The file *add* opens, with its shelf noted when a target takes
+            // it. The drawer stays up, as it does for *add*: the reader is
+            // aiming at something beside it.
+            drag: (entry, event) => writePickedDrag(event, this.pickedFrom(entry), () => this.noteShelf(entry)),
             tabEmpty: () => this.tabEmpty(),
           },
           onLayout: relayout,
@@ -571,15 +594,11 @@ export class App implements SessionHost {
           { class: 'head-files' },
           // The stores first — somebody else's shelf, in a drawer, and the
           // door most readers arrive through — then the Files column, the
-          // reader's own places. Nothing else: the two buttons that stood
-          // here, a plug that connected a place and a `+` that added a file,
-          // were the Files column's own *connect a local or remote folder* and the
-          // file crumb's *Open a file* said a second time, one row up, and a
-          // header with three doors to a file reads as three different
-          // things. Dropping is still the gesture the app is opened with and
-          // the whole content area still takes it (see {@link addFileDialog}
-          // for why a drop *adds* rather than replaces), and both verbs stay
-          // in the palette.
+          // reader's own places. Nothing else: the plug that stood here was
+          // the Files column's own *connect a local or remote folder* said a
+          // second time, one row up, and stays in the palette. The `+` that
+          // stood beside it is past the second divider now, before back:
+          // see there.
           ...(this.storeDrawer === null ? [] : [this.storeDrawer.toggle]),
           this.filesPanel.toggle,
         ),
@@ -602,6 +621,15 @@ export class App implements SessionHost {
         el(
           'div',
           { class: 'head-history' },
+          // **One more file in this tab, first** (§5.5): the landing page's
+          // *Load files* — a drop area that is the file chooser too, and a box
+          // for a URL — in a dialog. It is back for the tab a file was dropped
+          // into: nothing there is connected, so there is no Files column, and
+          // the landing page and its URL box have gone, so a second file at an
+          // address had no door but the palette. Dropping still adds (see
+          // {@link addFileDialog}); this is the door for a file that is not on
+          // the screen to be dragged.
+          this.addButton,
           this.backButton,
           this.historyButton,
           this.forwardButton,
@@ -610,10 +638,10 @@ export class App implements SessionHost {
           // being looked at* (§5.5) and there is one of those on screen,
           // while a file is the window.
           //
-          // Nothing here *opens* a file, and the doors that do are elsewhere:
-          // the file crumb's *Open a file* adds one to this tab, and the
-          // brand — whose hover says so — goes back to the picker and
-          // replaces.
+          // The `+` adds a file to this tab, and the doors to another one are
+          // elsewhere: the file crumb's *Open a file*, which replaces this
+          // tab's, and the brand — whose hover says so — which goes back to
+          // the picker in a new tab.
           //
           // Held, because it is the one header button whose promise depends
           // on the tab: with nothing open there is no view to put in a link,
@@ -908,6 +936,13 @@ export class App implements SessionHost {
       ) {
         return
       }
+      // A fourth answers for the whole of itself: a companion's cell, or a
+      // tracks cell, takes a file let go anywhere on it (`PanelDeck`'s
+      // `watchFileDrops`, §16.9), where it used to fall through to here and
+      // load onto the first map. It has no class to be told apart by — it is
+      // the cell, and whether it took the file depends on what it holds — so
+      // it says so the way a handler can: by preventing the drop's default.
+      if (event.defaultPrevented) return
       // A row out of the Files panel, which carries a name rather than bytes.
       // Read before `filesFrom`, because it is the only branch that can be told
       // apart cheaply and a drag is never both.
@@ -1574,6 +1609,7 @@ export class App implements SessionHost {
       this.sessions.length < MAX_SESSIONS,
     )
     this.syncShare()
+    this.syncAdd()
   }
 
   /**
@@ -1614,6 +1650,18 @@ export class App implements SessionHost {
       : 'Share this tab as a link — open a file first'
     this.shareButton.title = title
     this.shareButton.setAttribute('aria-label', title)
+  }
+
+  /**
+   * What the `+` says it does, which is what {@link addFileDialog} will do:
+   * add to this tab, or — on an empty one, where there is nothing to add to —
+   * open in it. Live in both, unlike the link beside it, because both keep the
+   * promise.
+   */
+  private syncAdd(): void {
+    const title = this.tabEmpty() ? OPEN_FILE_TITLE : ADD_FILE_TITLE
+    this.addButton.title = title
+    this.addButton.setAttribute('aria-label', title)
   }
 
   /**
@@ -1804,8 +1852,10 @@ export class App implements SessionHost {
     this.remember()
     if (session !== this.current) return
     // A navigation is how a tab comes to hold something, or stops holding it,
-    // so it is also when the link button becomes available or goes.
+    // so it is also when the link button becomes available or goes, and when
+    // the `+` stops opening and starts adding.
     this.syncShare()
+    this.syncAdd()
     this.writeHash(session.state, options)
     // The other bar, for a window that has one. `moved` is silent until a host
     // has asked to be told, so an embed nobody is driving posts nothing at all

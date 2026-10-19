@@ -1042,13 +1042,13 @@ read — an array is not stringified into a name, and a string the URI encoder w
 its key rather than the tab — and every state this application writes comes back unchanged, which a
 test holds for every published demo workspace.
 
-**Back and forward are in the header**, past a divider after the four panels' toggles, as Lucide's
-*undo* and *redo* arrows: the browser's own back and forward, as buttons, so they walk exactly the
-entries every navigation here writes — a crumb, a typed locus, a zoom or pan step, a sequence
-stepped — and nothing that does not write one, such as a wheel or a drag on the map. Where the
-browser says whether there is anywhere to go (Chromium's Navigation API) a button greys when there
-is not; elsewhere both stay live, and a press with nowhere to go does nothing, as the browser's own
-does.
+**Back and forward are in the header**, past a divider after the four panels' toggles and a `+`
+(below), as Lucide's *undo* and *redo* arrows: the browser's own back and forward, as buttons, so
+they walk exactly the entries every navigation here writes — a crumb, a typed locus, a zoom or pan
+step, a sequence stepped — and nothing that does not write one, such as a wheel or a drag on the
+map. Where the browser says whether there is anywhere to go (Chromium's Navigation API) a button
+greys when there is not; elsewhere both stay live, and a press with nowhere to go does nothing, as
+the browser's own does.
 
 **Back has its list of steps**, a chevron butted against it as the second half of one control, the
 shape every browser gives its own back button: pressed, it lists every step behind the one on
@@ -1064,7 +1064,19 @@ reload says where the record stands; the record is the window's, in `sessionStor
 steps at most. An entry it did not write — an address typed into the bar — is a new step after the
 one on screen, as the browser takes it. The chevron greys while there is no step behind.
 
-After them in the same group, in this order, are the three that take the work out of the
+**Before back, a `+`: one more file in this tab.** It opens the landing page's first section,
+*Load files*, in a dialog — the drop area that is also the file chooser, and the URL box under it
+behind *or a URL* (`ui/LoadBox.ts`, §24.2) — and nothing else: no folders to connect, no stores. What
+it does is what dropping on the window does (§16.9): a contact map comes up beside the one open, a
+track is drawn on it, an empty tab is filled rather than added to; its tooltip says which, *add a
+file to this tab* or *open a file in this tab*, and so does the dialog's title. It is for the tab a
+file was dropped into: nothing is connected there, so there is no Files column, and the landing page
+and its URL box have gone — a second file held at an address had no door but the palette's *Add a
+file to this tab*, which it is the button for. A `+` stood beside the stores' toggle once and was
+taken away as a second *Open a file* (§24.2), which it was not: the file crumb's *Open a file*
+replaces the tab's file, and this adds to it.
+
+After back and forward in the same group, in this order, are the three that take the work out of the
 window: *Share this tab as a link*, *Save every tab as a file* and the console (§23). They used to
 sit on the far side of the command bar, away from the controls a reader's hand is already among; the
 far right is now only about the window itself — theme, shortcuts, source, about. Where the header
@@ -2831,7 +2843,8 @@ which a deck closed after *no map* leaves it, and then it is the one mark that p
 rectangle, *on this map*, lit with the four strips at its edges while a file or a row is dragged —
 and **alone** while an overlay's row is, since the strips name stacks and an overlay has none. A
 file dropped there opens onto that map only, an overlay on its face and a track on its usual edge,
-where a file dropped in the middle of a companion used to land on the first map; a row of the Tracks
+where a file dropped in the middle of a companion used to land on the first map — and so does one
+let go anywhere else on a companion's cell, its strips aside (§16.9); a row of the Tracks
 card dropped there is drawn on that map **as well** as wherever it was, as the marks put it. An
 overlay's row let go on a strip is taken the same way, and given no edge. A lane carried by its
 grip is not offered the face: that gesture is about an edge.
@@ -6359,8 +6372,9 @@ the micro-C file's bin size as the map they had just chosen.
 column shows the first map's card with *every map — all N* under its title, in the warn colour: a
 setting changed there is made to **every map of the deck at once**, one moved setting at a time, so
 picking a ramp does not also flatten each map's clip onto the first one's. That is also the state in
-which no task can run (§18.1). *None* holds for as long as the deck does, and a deck put down leaves
-the next one starred on its first map, which is where every deck starts.
+which no task that reads a map can run, and the 1D tasks, which read none, still do (§18.1). *None*
+holds for as long as the deck does, and a deck put down leaves the next one starred on its first
+map, which is where every deck starts.
 
 A companion's settings used to ride **on its picture**: a button in the bottom-left corner of the map
 opening a menu upward over it, with the score, the transform, the ramp and the clip, while the Map
@@ -6584,6 +6598,22 @@ the first cell the press opened, either: a press below a short last row squares 
 arriving by any other road — the bar's URL box, the file chooser, the command palette — takes the
 first empty cell instead, because those name no position and the empty cells are the reader's own
 instruction about where the next map goes.
+
+**A file let go on a filled cell is that cell's too, wherever on it the hand lets go**
+(`PanelDeck`'s `watchFileDrops`). On a companion's map it means what the rectangle in the map's
+middle means, *on this map* (§8.1): a track drawn on that map on its usual edge, an overlay on its
+face. On a tracks cell it is a track drawn in that cell, at its foot, where every track on one is
+drawn. A row dragged out of the Files column or out of a store (§20.5, §24.2) is aimed the same way
+as a file off the disk. What a file *is* is still decided by its name, where every drop's is: a
+contact map let go on a map is a map, beside it — the first empty cell, or a new one — and a
+structure opens a cell of its own (§25.3), which a structure cell, answering for itself, does too.
+The map's own rectangles keep their drop, being aimed more finely, and so does an empty cell. While
+the file is in the air the cell that will take it is outlined, as a cell a map is carried to is, and
+the outline goes while the hand is over one of the map's rectangles, which then say where. A
+companion used to take a file on its rectangles alone and a tracks cell on nothing, so a track let go
+on the lanes under the second map, on its heading or anywhere on a tracks cell was loaded under the
+first map — the content area's answer to a drop nothing else took, and still the answer on the first
+map's own cell, which is the session's.
 
 **Rows of the Tracks and Structures cards take the edges too.** A Tracks card row dropped on a `+`
 opens the cells with a tracks cell drawing that track in the one nearest the edge — *placed*, as on
@@ -7206,16 +7236,20 @@ or not the sentence is printed under it.
 The distinction is not *can this run now* but *can what the reader does next make it run*, and
 `TaskAvailability` is the three answers: `ready`, `waiting` with a sentence, `absent`.
 
-**Every task is greyed while a deck has no map starred.** A task reads one map and the star is how
-that map is named (§16.5), so a deck the reader has left with no star filled has no file for any
-task to run against — and none is guessed for them, the first map least of all, which would be the
-star's old default passed off as a choice. The column says so once, above its cards, in the warn
-colour: *no map is starred, so no task can run*; every row is greyed with that sentence in its
-tooltip and without the per-group and per-row lines, which would print it twenty times; and the
-drawer's Run and *run on all* refuse with it in the price's place. It is every task, the 1D tasks
-that read only tracks and sequences included, because the rule a reader is given is *a task runs on
-the starred map* and a column in which some run and some do not under no star is a rule with
-exceptions to learn. Starring any map puts every task back.
+**Every task that reads a map is greyed while a deck has no map starred.** Such a task reads one map
+and the star is how that map is named (§16.5), so a deck the reader has left with no star filled has
+no file for it to run against — and none is guessed for them, the first map least of all, which
+would be the star's old default passed off as a choice. The column says so once, above its cards, in
+the warn colour: *no map is starred, so only the 1D tasks can run*; every row that reads a map is
+greyed with that sentence in its tooltip and without the per-group and per-row lines, which would
+print it twenty times; and the drawer's Run and *run on all* refuse with it in the price's place.
+**The 1D tasks are not greyed.** They read only tracks and sequences (§18.3), so there is no map for
+the star to name and nothing for its absence to stop: they keep their own answers — ready, or waiting
+on a file — and run. They were greyed too at first, because the rule a reader is given is *a task
+runs on the starred map* and a column in which some run and some do not looked like a rule with
+exceptions to learn. But a 1D task does not run on the starred map — its button says *run*, not *run
+on ★* (below) — and greying it under a sentence about a map was the exception. Starring any map puts
+every task back.
 
 **The column is asked again whenever the deck's maps change** — a companion's file opening, a cell
 moving to another rung, a cell closing — as it is when the star moves: which tasks apply is a question
@@ -7253,13 +7287,25 @@ one.
 a job runs and the price after the pair, progress, results, exports. On a deck the button reads
 *run on ★*, with the starred map named in its tooltip, and what a plain Run makes — its tab, its
 lanes, its name — is that map's; *run on all N maps* beside it runs the task once per map, in the
-grid's order (§16.9), and is not there on a single map. The row's controls are ordinary bordered
-buttons like everything else in a bar (§5.4), and so are the exports under the results: the control
-that stops a forty-second scan and the ones that get the numbers out of the application are the two a
-reader most needs to find, and drawn borderless they read as captions. It is anchored to the right of
-the body, full height — down to the console's top edge while the console is up (§23.4) — resizable by
-its left edge with its width remembered, and it overlays the content and the two right columns rather
-than squeezing them — at three quarters of the window there is nothing left to squeeze.
+grid's order (§16.9), and is not there on a single map. **A 1D task is one plain *run*, deck or
+not**, with no *run on all N maps* beside it: it reads the loaded tracks and sequences and never a
+map (§18.3), so four maps on screen are one answer and not four. It was offered both once; the batch
+read the same tracks once per map and filed as many identical lanes, each named after a map it never
+read, and a plain Run filed its lane on whichever map was starred, so moving the star and pressing
+Run again made a second copy of one lane rather than a second run. It is the session's task, so the
+star is nothing to it: it is priced, framed and laid out on the first map's sequences and grid,
+whichever map is starred — with the star's, moving the star changed the sequences its form offered
+and the bins its lanes were cut on — and what it makes is filed with the session's tracks, on the
+first map: its lanes take no map's name, its results have one history (§18.4) and no tabs, and a
+press after the star moved is the run already going, or the next run of the same one. The runner
+holds the same rule where a batch is queued, so nothing offers it one. The row's controls are
+ordinary bordered buttons like everything else in a bar (§5.4), and so are the exports under the
+results: the control that stops a forty-second scan and the ones that get the numbers out of the
+application are the two a reader most needs to find, and drawn borderless they read as captions. It
+is anchored to the right of the body, full height — down to the console's top edge while the console
+is up (§23.4) — resizable by its left edge with its width remembered, and it overlays the content
+and the two right columns rather than squeezing them — at three quarters of the window there is
+nothing left to squeeze.
 
 **It is deliberately not a modal.** The dialogs in §5 are questions; this is a place to work. A modal
 here would take the keyboard (which is how the app is driven), would dismiss on a stray click outside
@@ -7512,9 +7558,13 @@ against the new one. This is the discipline the on-the-fly 4C lane never kept �
 whatever block happened to be loaded, which is one of the reasons it is gone (§8.9) — and it is why
 the genome-wide 4C **task** (§18.8) is a different object from that **lane** rather than a bigger
 version of it. The panel is what makes the two obviously different, which is a good reason for the
-panel to exist. **A task that reads no map** — two sequence sets against each other (§28) — has no
-framing to name or to leave: its heading says it reads the sequences chosen, not the map, its result
-is never stale for a view that moved, and its provenance is of the sequences.
+panel to exist. **A task that reads no map** — two sequence sets against each other (§28), and every
+1D task, which reads the loaded tracks — has no framing to name or to leave: its heading says it
+reads the sequences chosen, or the loaded tracks, not the map; its result is never stale for a view
+that moved, or a star that did, and so it offers no *recompute here*, which would be the same run
+again. The dot plot's provenance is of the sequences; a 1D task's records the first map's framing,
+whichever map is starred, for the bin size its lanes are laid out on and the circles and origins it
+reads (§8.15).
 
 **Provenance travels with the numbers.** Every result carries its task and task version, every
 parameter, the framing snapshot, the file URI, the app's version and commit, and a timestamp. It is
@@ -7536,13 +7586,13 @@ a finished result makes it cheap to produce again: a pileup over forty thousand 
 range requests, and a reader who lost it by pressing Run lost the minute. What people actually do with
 this catalogue is run a thing, change one number, run it again, and then want the two side by side —
 or, more often, discover that the previous answer was the one worth keeping. So the runner keeps the
-latest run of each task **on each map** and the **eight** before it, newest first, and the drawer
-offers `older` / `newer` / `latest` over them with the run's own clock time and, in its tooltip,
-*which parameter differs from the latest* — the reason the two pictures are two pictures, which
-nothing else on screen states. Everything downstream follows the run on screen: the framing line,
-**recompute here**, the CLI command, the TSV and the vector export are all that run's, because a
-result is a record and stepping back to one means stepping back to all of it. Bounded because these
-hold typed arrays, and not
+latest run of each task **on each map** — a 1D task's on the first map, the one it is filed on
+(§18.1) — and the **eight** before it, newest first, and the drawer offers `older` / `newer` /
+`latest` over them with the run's own clock time and, in its tooltip, *which parameter differs from
+the latest* — the reason the two pictures are two pictures, which nothing else on screen states.
+Everything downstream follows the run on screen: the framing line, **recompute here**, the CLI
+command, the TSV and the vector export are all that run's, because a result is a record and stepping
+back to one means stepping back to all of it. Bounded because these hold typed arrays, and not
 persisted for the reason the framing is a snapshot: a history restored against a file that has since
 been re-binned would be a list of figures that no longer describe anything.
 
@@ -9964,26 +10014,33 @@ folder first.
 
 Every file row in the application carries the same two marks, and only marks (`ui/rowVerbs.ts`): a
 `+` that **adds the file to the session in front** — a second map beside the one that is there,
-anything else drawn on top, an empty tab filled rather than added to, which is the routing a dropped
-file takes — and a window with a `+` where its corner was that **opens it in a session of its
-own**, the empty tab in front or a new one, leaving whatever was open as it is. The words are in
-the tooltips, which also say what *add* means for that kind of file. Both are offered whatever the
-tab holds: on an empty tab the two land in the same place and the tooltips say so, because a row
-with two marks in one store and one in the next is a row a reader has to think about. A workspace
-row has the second alone — it is tabs, not a file, and there is nothing it could be added to. The
-same pair stands on a store's rows (§24.2), on a folder's rows here and on the files under a gallery
-card, whose own head carries the second mark alone; with words beside the marks it is the tray under
-a portal, and the second mark is on a portal group's *open with its tracks*. Clicking a folder row's
-name is the first verb.
+anything else drawn on top, an empty tab filled rather than added to, which is the routing a
+dropped file takes — and a window with a `+` where its corner was that **opens it in a session of
+its own**, the empty tab in front or a new one, leaving whatever was open as it is. The words are
+in the tooltips, which also say what *add* means for that kind of file. Both are offered whatever
+the tab holds: on an empty tab the two land in the same place and the tooltips say so, because a
+row with two marks in one store and one in the next is a row a reader has to think about. **An
+empty tab is filled by a row of any kind**, as the landing page's drop zone fills it: a folder on
+this machine hands its file to the road a drop on the window takes, whose empty seat was a map's
+alone, so a bigWig pressed there — its `+` saying it would open in this tab — did nothing and said
+nothing. A workspace row has the second alone — it is tabs, not a file, and there is nothing it
+could be added to. The same pair stands on a store's rows (§24.2), on a folder's rows here and on
+the files under a gallery card, whose own head carries the second mark alone; with words beside the
+marks it is the tray under a portal, and the second mark is on a portal group's *open with its
+tracks*. Clicking a folder row's name is the first verb.
 
 Dragging a file lets the reader say *where*: onto the map's edge rectangles for a lane in a named
 stack (§8.9), onto the rectangle in the middle of a map for that map alone — an overlay's one target
-(§8.1) — onto a companion for a track on that map (§16), onto the Tracks card, onto a deck's edge or
-an empty cell for a cell of its own (§16.9), onto a 3D cell for the model it draws (§25.3), onto the
-Contact maps card's *Load a map into the lower triangle* for the second file in the square (§5.7),
-onto an analysis form's file box as the run's input rather than as anything opened (§18.8), onto the content
-area, onto the landing page's drop zone — which replaces, because that is what the landing page has
-always meant.
+(§8.1) — onto a companion, anywhere on its cell, for a track on that map, and onto a tracks cell for
+a track drawn in it (§16.9), onto the Tracks card, onto a deck's edge or an empty cell for a cell of
+its own (§16.9), onto a 3D cell for the model it draws (§25.3), onto the Contact maps card's *Load a
+map into the lower triangle* for the second file in the square (§5.7), onto an analysis form's file
+box as the run's input rather than as anything opened (§18.8), onto the content area, onto the
+landing page's drop zone — which replaces, because that is what the landing page has always meant.
+**A store's row is dragged the same way, to the same places** (§24.2): every row that is a file,
+in the drawer's lists and under its cards, as every file row here is — and not a saved workspace's,
+which is tabs rather than a file and has nowhere to be aimed, as a workspace in a folder is a row
+that does not drag.
 
 **The Files column is the only door onto a connected place.** Its folder view lists every place the
 window is connected to — a directory on this machine included — and a row hands back the file with
@@ -10018,21 +10075,52 @@ nothing under it.
 
 A dragged row carries a **folder id and a path**, never bytes: the file behind it is fetched at the
 drop, once, by the target that accepted it. The path alone would be ambiguous the moment two folders
-are connected. Everything ends at `Session.addPicked`, which decides nothing — it hands a local file
-to the same door a dropped one takes and a remote one to the door a typed URL takes. A third routing
-table is how a `.cool` picked from a folder would come to open somewhere a `.cool` dropped on the
-window does not.
+are connected. A store's row carries **neither, and not its address either**: it travels under the
+same type, so every target that takes a folder's row takes it, and what the type carries is a token
+naming the drag, the row's file being held by the page that started it (`writePickedDrag`). An
+address in the payload would let any page have this one open any URL by dragging something across
+it with the right label on; a token, like a folder id, resolves only to what this window is holding,
+and the tracks the row brings (§24.3) are noted when a target takes it, not when the hand picks it
+up. Everything ends at `Session.addPicked`, which decides nothing — it hands a local file to the
+same door a dropped one takes and a remote one to the door a typed URL takes. A third routing table
+is how a `.cool` picked from a folder would come to open somewhere a `.cool` dropped on the window
+does not.
 
 **A file the viewer has no route for is drawn, dimmed and inert, with the reason in its tooltip.**
 Hiding it would make the folder view disagree with the folder, which is the one thing it is for; a
 `.cram` sitting there unhighlighted answers *why is nothing happening when I click it* before it is
 asked. An index is one of them, and its tooltip says it is picked up with the file it indexes: a
 file picked from a folder on this machine brings its index from beside it (`browse/folder.ts`'s
-`PickedFile.index`), so a `.bam` whose `.bai` is one row down opens with it. The one thing a local
+`PickedFile.index`), so a `.bam` whose `.bai` is one row down opens with it — wherever the row is
+let go, the landing page's *Load files* included, which took a row by its address alone and opened
+the `.bam` without it (`LoadBox`'s `onPicked`). The one thing a local
 listing does leave out is a name beginning with a dot — `.DS_Store`, `.git` — which is somebody's
 tooling rather than a file. The route is the name's (`browse/route.ts`), so every name a format of
 §8 is published under has to be in it: a `.barChart`, a `.bigBarChart` and a cytoBand in the plural
-were drawn dimmed while the loader read all three.
+were drawn dimmed while the loader read all three — and so, until every name each reader takes was
+checked against the table (`test/unit/browse-route.test.ts` holds the list), were four kinds more.
+A **3D structure** (§25) — `.g3d`, `.3dg`, `.bed3d`, `.pdb` — is the genome door's, and the same
+name test makes its row a structure the moment it is begun, so its cell opens before a byte is
+read. A **saved workspace** is a `.json`, routed by the test the config road itself uses; its row
+carries the new-session mark alone, and pressed, its tabs are appended beside the window's as a
+store row's are, with no empty tab opened for them first. A **text table** — `.txt`, `.tsv`,
+`.tab`, compressed or not — says nothing by its name and is offered all the same, because it is
+what a §8 format is published under when its own suffix is not used (chromosight's `loops.tsv`, a
+GEO supplement's `peaks.txt.gz`), and the loader reads it by its bytes (§8.3) as it does a dropped
+one; one whose rows no reader takes — a page of notes — is refused as *text, but not a table this
+viewer reads*, saying what a table is read as, where it used to reach the contact map's door and be
+told it was not an HDF5 file. And **`.bgz`**, which is what `bgzip` is told to write for a file
+meant to be indexed — gnomAD's VCFs — is read everywhere a `.gz` is, its `.tbi` found beside it
+included.
+
+What stays dimmed says the one thing its reader needs. A track hub's `hub.txt` is a store, opened
+from the stores drawer (§24.10), and its `genomes.txt` and `trackDb.txt` are read from it rather
+than offered as tables; a CSV is comma-separated, and every table read here is tab- or
+space-separated; a `.bz2`, `.xz` or `.zst` is a compression this viewer cannot inflate, and gzip or
+bgzip is the way out; a `.gzi` is an index this viewer does not use, a compressed FASTA being read
+whole (§8.8); a `.crai` is refused with its CRAM. A name a folder's address does not carry decides
+as well: a Drive or Dropbox row is routed by the name the folder handed along (§24.9), a workspace
+and a model as well as a map and a track.
 
 ### 20.6 What a connected folder is, in privacy terms
 
@@ -10408,7 +10496,8 @@ log that outlives the result, the tab and the browser session. That log is the c
 
 The record is written by `AnalysisRunner.execute`, which is the one place that knows a **job** from
 a button: `runAll` queues one job per map, so a batch over six maps is six lines, each naming its
-own file and each carrying its own command. Nothing else can produce that — the drawer holds one
+own file and each carrying its own command — and a 1D task, which reads no map, is one job and one
+line however many maps there are (§18.1). Nothing else can produce that — the drawer holds one
 result, the panel row holds one state per task, and both are per session.
 
 It is also the only place that sees a run which produced nothing. A **failure** and a **Stop** leave
@@ -10804,7 +10893,8 @@ which is what lets a generator add a column before a viewer knows it.
 
 **The landing page has three things on it, and they are named.** *Load files* is one drop area with
 the URL box under it behind a rule reading *or a URL* (`ui/LoadBox.ts`), which the file crumb's
-*Open a file* reuses in a dialog with the other verb behind it. There is no *choose files* button:
+*Open a file* and the header's `+` reuse in a dialog, each with its own verb behind it — the crumb
+replaces the tab's file, the `+` adds one (§5.5). There is no *choose files* button:
 a click on the target opens the same file dialog, and the same action drawn twice is a choice a
 reader has to make between two controls that do one thing. The target says both things it does —
 drop, or click — and no more; what opens as what is stated once, in **About**, whose first sentence
@@ -10922,8 +11012,9 @@ and the two lists kept beside it named four stores while seven shipped. Opened t
 by a tile, it lands on the store it was last on — in this page,
 else the last one this browser opened, else the lab's — and its dragged width is kept the same way,
 in `localStorage`; whether it is open is the address bar's to say (below). The header holds
-nothing else on that side: the plug and the `+` that stood there were the Files column's own
-*connect a local or remote folder* and the file crumb's *Open a file* said a second time.
+nothing else on that side: the plug that stood there was the Files column's own *connect a local or
+remote folder* said a second time, and the `+` beside it is before back now, adding a file to the tab
+(§5.5).
 
 **A store row carries its name with it.** A 4DN file is called by its accession on the bucket —
 `4DNFI24F7GRY.mcool` — and by *Hi-C on HFF cells, protocol variations* on the shelf, and the second is
@@ -10931,6 +11022,16 @@ what a reader picked it by. So the row's line goes with the file through the sam
 by a Drive folder takes (`PickedFile.name`, §24.9): onto the map it becomes, onto the track it
 becomes (`addRemote`'s label, and `relabelTrack` for the file that opened a browser and was seated
 under its URL before the name could reach it), and onto the tab a row opens in a session of its own.
+
+**A store row is dragged as a row of the Files column is** (§20.5), and goes where it is let go: on
+a map's edge or its middle, on a cell of the deck (§16.9), on the Tracks card, on an analysis form's
+file box, on the landing page. The two verbs say *add here* and *open in a tab of its own*; neither
+says *which map*, *which edge* or *which cell*, and a reader narrowing a catalogue beside a deck of
+four had no way to put a bigWig under the third map but to add it under the first and carry its lane
+across. Every row that is a file drags, in the portal lists and under the gallery cards alike, and
+it carries what *add* would: the file, the row's name and the tracks it brings, noted when it lands.
+A saved workspace's row does not, being tabs rather than a file. The drawer stays up after a drop, as
+it does after *add*: the reader was aiming at something beside it.
 
 **The two galleries are one shape of card** (`GalleryView.ts`, `GenomesView.ts`): the name and the
 card's one verb on the first line — the new-session mark, icon only, its words in the tooltip — the
@@ -11456,7 +11557,10 @@ sign in, until the reader does. A picked file is the API's
 media URL — the same address `canonicalUrl` gives a pasted share link — with its name carried
 beside it, and **the name is what routes it**: the address ends in an id, which says nothing about
 what the file is, so `routeFor` lets the name choose the door the address cannot, and the loading
-screen and the tab say the name rather than the address. Where nobody gave a name — a share link
+screen and the tab say the name rather than the address. That holds for the two kinds a door is
+not a matter of map or track: a `session.json` is fetched as a workspace and its tabs appended, and
+a `model.pdb` opens a 3D cell of its own (§25.3), where by its address alone the first was taken
+for a track and the second for a map. Where nobody gave a name — a share link
 pasted into the URL box, a `view=browser` link, a track added by address — **Drive is asked for
 it first** (`browse/driveName.ts`): one `files.get` with `fields=name`, on the same key or
 token the read will carry, memoised by id for the page, and never in the way — a refusal, a site
@@ -11704,10 +11808,26 @@ here (`annotations/g3dBinary.ts`, `annotations/msgpack.ts`) rather than a depend
 its finest resolution and names the others under the row. A version-1 container is refused by
 name, with the way out (`g3dtools` rewrites it).
 
-All four are sniffed by content before the BED family sees them — a five-column g3d read as a BED
+**PDB**, as this app writes it (§25.7), and no other (`annotations/pdb.ts`). A PDB says where each
+atom is in space and nothing about the genome — a residue number is four columns and a chain one
+character — so a model written here carries its loci in a table of REMARK 250 lines a viewer skips:
+each chain's sequence and haplotype by atom serial, each run of beads laid end to end as its first
+serial, count, start and width, and the centre and the factor its coordinates were written with,
+which the reader undoes so the model opens in its own units and reads back bead for bead. The first
+MODEL of several is read, since a row holds one model (§25.8). **Every other PDB is refused, with
+the reason.** pastis writes its beads in bin order — one chain, no residue numbers, no bonds, `nan`
+for a bead it could not place — and the other solvers that write a PDB say no more, so the only way
+to put such a file on the genome is to number its atoms against some map's bins, which is a guess
+drawn as a fact; the refusal says to write the coordinates beside the bins they were modelled at, as
+a bed3d. A PDB written here and saved again by PyMOL gets a sentence of its own: PyMOL keeps every
+atom and every bond and drops every REMARK, the table with them, so the file to open is the one this
+app wrote, or its bed3d. A PDB under a name that does not say so is told by its records — it opens on
+one a PDB opens on, and holds an atom — which nothing in the BED family can do.
+
+All five are sniffed by content before the BED family sees them — a five-column g3d read as a BED
 would be a lane of boxes whose *end* is a coordinate in space — and **a file that names its format
-is not sniffed at all**: `.g3d`, `.3dg`, `.bed3d`, gzipped or not, local or over HTTP, is read as
-the structure it says it is. The name is read **first**, before a single row, and read the way the
+is not sniffed at all**: `.g3d`, `.3dg`, `.bed3d`, `.pdb`, gzipped or not, local or over HTTP, is
+read as the structure it says it is. The name is read **first**, before a single row, and read the way the
 drop routing reads it: past any directories, with a `?query` or `#fragment` cut off, so a model
 published at a URL is as named as one on disk. A file whose name claims no format is asked two
 questions, and each exists to tell a structure from a BED whose columns happen to be numbers: are
@@ -11741,15 +11861,16 @@ location control, and skipped by every stack; its picture is the cell.
 (§25.6) — is a row of one card under the Tracks card, and of no other: the Tracks card leaves
 `structure` rows out, computed or not. Each row carries the head every row has (grip, colour, name,
 eye, close), what it holds (`2,412 beads · 5 kb · 16 sequences`), the task and the framing for a
-computed one, and **bed3d**, the model out (§25.7), after the word *export*. The **eye** in the row's
+computed one, and **bed3d** and **PDB**, the model out (§25.7), after the word *export* — the PDB
+disabled, with the format's reason as its tooltip, for a model past what its columns can number. The **eye** in the row's
 head is what shows and hides: it puts the model in **a cell of its own**, opening one beside whatever
 is already there, and takes it away again — from every cell drawing it (§25.3). The lit eye is the
 whole of the state — the row carried an accent bar down its left gutter as well, which was a second
 way of saying what the eye already says. There is no second control for that and no button
 labelled with what is already true (§26.3, §26.7) — a *shown in the deck* button beside the eye was
 two controls for one act, and a reader who pressed the lit one expecting it to un-show got nothing.
-The card's own load zone names the three formats and, like every other zone that asks for a file,
-says it takes a drop or a click.
+The card's own load zone names what it reads — the three formats, and a PDB this app wrote — and,
+like every other zone that asks for a file, says it takes a drop or a click.
 A computed row that came back from a reload is detached and offers **recompute**, which opens its
 recipe in the drawer, as a synthetic row on the Tracks card does (§18.5).
 
@@ -11774,9 +11895,12 @@ used to write to one slot, so a deck of two views came back from a reload as the
 named by a URL, or computed, and *every* one of them where several land together, where only the
 last of a batch used to get a picture and the others sat on the card as rows with nothing drawn,
 which is the one state a reader reads as *it did not work*. It opens beside whatever was there
-rather than taking it over. It used to be one cell per deck, which made two models something a
-reader could only compare by swapping back and forth, and made a reconstruction landing destroy the
-model it was to be judged against — the commonest way to lose a picture in this application.
+rather than taking it over, and it opens **one**: a model dropped on a map, named by a URL or
+picked from a folder opened two, a cell for the file's name and another for the row's arrival; the
+watch on the store that every road ends in is the one that opens it now. It used to be one cell per
+deck, which made two models something a reader could only compare by swapping back and forth, and
+made a reconstruction landing destroy the model it was to be judged against — the commonest way to
+lose a picture in this application.
 **A model that opens the session on its own is drawn alone.** A structure file dropped on an empty
 window names a genome — its beads are on sequences — so the session it opens is a browser of that
 genome, and the browser has nothing to draw: a structure is a row and a cell, never a lane. It used
@@ -11997,7 +12121,9 @@ is still in the air, and the cell's hint offers both.
 
 **The tracks cell** is the session's own browser over the lead file's sequences — the same store,
 client, groups and marks — drawing only the tracks **placed on it**: the location control lists
-it beside the maps, with its one edge live and the other three greyed and saying why. It follows
+it beside the maps, with its one edge live and the other three greyed and saying why, and a track
+file let go anywhere on it — off the disk, out of the Files column or a store — is drawn in it, at
+its foot (§16.9). It follows
 the maps and the maps follow it without joining the lock, whose currency is cells of a block: the
 deck hands the cell the lead's window as loci, one way and never reported back, and a pan in the
 cell takes the lead's *column* axis there (`MatrixPanel.showLocusOnColumns`), which the lock
@@ -12505,6 +12631,53 @@ TSV every output carries (§18.7), through this same writer — because the batc
 whose coordinates went missing is least likely to be noticed, and because a reconstruction is the
 one task whose whole result is the three columns BED has nowhere to put.
 
+**A model also leaves as a PDB, for PyMOL** and every other molecular viewer — from the **PDB**
+button beside the bed3d on its row, from the drawer's result beside the bed3d there, and from
+`reconstruct3d --out`, which writes it beside the bed3d — through one writer (`annotations/pdb.ts`),
+with a TITLE that says what the bed3d's `#` line says, in ASCII. pastis' own PDB is a list of atoms
+in bin order on one chain with no bonds, which PyMOL draws as a cloud joined by guesswork; this one
+is the file a viewer can draw as the fibre it is:
+
+- **One HETATM per bead**, a carbon `C` in a residue `BEA`: a bead is no amino acid and no
+  nucleotide, and HETATM is the record a non-standard group takes. A bead the model left unplaced is
+  no atom.
+- **One chain per sequence and haplotype**, the scene's chains in the scene's order, so colouring by
+  chain tells chromosomes apart and the homologues of a phased model apart, and residues numbered
+  along each chain from 1, so a rainbow by residue runs from one end of a chromosome to the other.
+  The chain letters are A–Z, a–z and 0–9, which PyMOL keeps apart by case; a model with more than
+  sixty-two chains — a metagenome's contigs — takes them round again, and every chain's segment
+  identifier is then its number, which PyMOL selects by too.
+- **CONECT between neighbouring beads and nowhere else**: a bond for every step of every run the
+  cell draws its tube along, none across a gap the model left and none between chains, each bonded
+  atom listing its neighbours both ways round. This is what keeps PyMOL from guessing, **measured
+  against PyMOL 3.2** rather than read in a manual: a file with CONECT records has distance-based
+  bonding switched off, so two beads 0.6 apart on different chains stay apart, where without them
+  every pair closer than about two units is joined and a model a unit per step comes out a lattice.
+  With them PyMOL loads exactly the bonds written — on the demo yeast, E. coli and mouse models,
+  atoms, chains and bonds all as declared, none between chains — and `cartoon_trace_atoms` draws a
+  tube through them that breaks where the model breaks. `scripts/check_pdb_pymol.py` repeats the
+  measurement on any PDB written here, with PyMOL as the judge.
+- **Coordinates the columns can hold.** A coordinate is eight columns with three decimals and a
+  model is in its solver's units — a unit sphere, where three decimals is a fortieth of a step, or
+  nanometres, where a nucleus overflows the column. So it is centred on its placed beads and
+  multiplied until the **median step between neighbours is 3.8**, a Cα trace's, which PyMOL's
+  spheres, sticks and cartoon trace are sized for; a model that would then overflow its columns is
+  drawn in until its furthest bead fits, with shorter steps rather than not at all. The centre, to a
+  thousandth of a step, and the factor are written in the table §25.2 reads, and nothing claims an
+  ångström.
+- **REMARK 250** says all of this in prose, gives the lines that draw the model in PyMOL as the cell
+  draws it — `set cartoon_trace_atoms, 1; set cartoon_tube_radius, r` then `as cartoon; util.cbc`,
+  or `set sphere_scale, s; as spheres; util.cbc` — with `r` and `s` the cell's default tube and bead
+  radii in this file's coordinates, on the cell's floored step, which is what keeps a bacterial ring
+  from being a hairline where PyMOL's own tube is half a unit whatever the model; and then the
+  placement table.
+
+What a PDB cannot number it does not write. **At most 99,999 beads**, its serial being five columns;
+**no chain longer than 9,999 beads**, its residue number being four, where wrapping the numbers was
+measured to scramble PyMOL's order along the chain and hybrid-36 is not read; and at most 9,999
+chains. Past any of them the row's and the drawer's button is disabled with that reason as its
+tooltip, and the shell writes the bed3d alone with the reason on stderr — the bed3d holds any model.
+
 ### 25.8 Refused, and not yet built
 
 - ~~**Inference** — computing a structure from the map.~~ Built as *Model from the map* (§25.6), as
@@ -12514,6 +12687,12 @@ one task whose whole result is the three columns BED has nowhere to put.
   model rather than the best of several local optima; **fitting α**, which is the reader's control
   and is what makes a model here comparable with one from either published tool; and pastis-NB's
   **alternation** between the dispersion and the structure, where the dispersion is estimated once.
+- **A PDB that does not say where its beads are on the genome** (§25.2) — pastis', and every
+  solver's that writes atoms in bin order and nothing else. Placing them would mean numbering the
+  atoms against a map's bins and trusting the count, which is the one claim a model beside a map
+  must never make; the refusal names the way out, a bed3d of the coordinates beside their bins. And
+  no **mmCIF** for a model past a PDB's columns: the bed3d holds it, and PyMOL is not where a
+  hundred thousand beads are looked at.
 - **Ensembles, frames, point clouds** (FOF-CT, `.cndb`, several models of one map): a row holds
   one model. The scene's shape does not close the door.
 - **A map beside a browser lead**: a companion needs a lead to follow, and a browser is not one

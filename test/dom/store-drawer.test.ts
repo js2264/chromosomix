@@ -69,6 +69,7 @@ function build(): { drawer: StoreDrawer; opened: StoreEntry[]; layouts: number }
     openWithTracks: (entry) => opened.push(entry),
     add: () => undefined,
     openTogether: () => undefined,
+    drag: () => undefined,
     tabEmpty: () => true,
   }
   const drawer = new StoreDrawer({

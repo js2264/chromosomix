@@ -75,7 +75,7 @@ const PERCENT_AT = 10
 const ENOUGH_ROWS = 4
 
 /** A name that says the format outright. */
-const BEDMETHYL_NAME = /\.(bedmethyl|bigmethyl|bed ?methyl)(\.gz)?$/i
+const BEDMETHYL_NAME = /\.(bedmethyl|bigmethyl|bed ?methyl)(\.b?gz)?$/i
 
 /** One modification code's share of the file. */
 export interface ModCount {

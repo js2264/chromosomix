@@ -14,9 +14,11 @@
  * a lane; the row's grip, dragged onto a cell, draws the model there instead.
  * The cell has no picker: which model a cell draws is this card's to say.
  * **bed3d** — the model out, as the file it would be loaded from, which is how
- * a computed one leaves the tab. **The provenance** — what made it and what it
- * was made from, for a computed row, in two lines under it, because a model
- * whose framing is invisible is a picture nobody can defend.
+ * a computed one leaves the tab — and **PDB**, the same model for PyMOL and the
+ * other molecular viewers, which this app also reads back. **The provenance** —
+ * what made it and what it was made from, for a computed row, in two lines
+ * under it, because a model whose framing is invisible is a picture nobody can
+ * defend.
  *
  * Everything else on a row is the Tracks card's own head — the colour, the name,
  * the close — calling the same store with the same arguments, and a load zone
@@ -26,6 +28,7 @@
 
 import { taskById } from '../analysis/registry'
 import { g3dSummary, writeBed3d } from '../annotations/g3d'
+import { pdbRefusal, writePdb } from '../annotations/pdb'
 import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationEntry } from '../annotations/types'
@@ -237,9 +240,15 @@ export class StructureCard {
    * the word in front is what pressing it is for — the same pair the Metadata
    * annotations card draws (§26.6). `bed3d` alone was a format noun with no verb
    * anywhere near it.
+   *
+   * **PDB** beside it is the same model for PyMOL (§25.7). A model the format's
+   * columns cannot number — past 99,999 beads, or a chain past 9,999 — has the
+   * button disabled with that reason as its tooltip, rather than a file whose
+   * serials run into the next column.
    */
   private actions(entry: AnnotationEntry): HTMLElement {
-    const ready = entry.status === 'ready' && entry.payload?.kind === 'features'
+    const payload = entry.payload
+    const ready = entry.status === 'ready' && payload?.kind === 'features'
     const nodes: HTMLElement[] = []
     if (entry.status === 'detached' && entry.source.kind === 'computed' && this.options.onRecompute !== undefined) {
       nodes.push(
@@ -249,30 +258,42 @@ export class StructureCard {
         }),
       )
     }
+    const refusal = ready && payload?.kind === 'features' ? pdbRefusal(payload.data) : null
     nodes.push(
       el('span', { class: 'field-label', text: 'export' }),
       disabledUnless(
         ready,
-        button('bed3d', () => this.save(entry), {
+        button('bed3d', () => this.save(entry, 'bed3d'), {
           class: 'btn structure-bed3d',
           title: 'The model as a bed3d — chrom, start, end, x, y, z — which this app and g3dtools read back',
+        }),
+      ),
+      disabledUnless(
+        ready && refusal === null,
+        button('PDB', () => this.save(entry, 'pdb'), {
+          class: 'btn structure-pdb',
+          title:
+            refusal ??
+            'The model as a PDB — an atom per bead, a chain per sequence, bonds along the fibre — which ' +
+              'PyMOL and ChimeraX open and this app reads back',
         }),
       ),
     )
     return el('div', { class: 'ann-inline structure-actions' }, ...nodes)
   }
 
-  private save(entry: AnnotationEntry): void {
+  private save(entry: AnnotationEntry, format: 'bed3d' | 'pdb'): void {
     const payload = entry.payload
     if (payload === undefined || payload.kind !== 'features') return
     const stamp = fileStamp(new Date())
     const created = this.options.createdAt?.(entry)
-    const text = writeBed3d(payload.data, {
+    const context = {
       label: entry.label,
       ...(entry.source.kind === 'computed' ? { file: entry.source.framing } : {}),
       ...(created === undefined ? {} : { created }),
-    })
-    void downloadBlob(new Blob([text], { type: 'text/plain' }), `${exportBaseName(entry.label)}-${stamp}.bed3d`)
+    }
+    const text = format === 'pdb' ? writePdb(payload.data, context) : writeBed3d(payload.data, context)
+    void downloadBlob(new Blob([text], { type: 'text/plain' }), `${exportBaseName(entry.label)}-${stamp}.${format}`)
   }
 
   private swatch(entry: AnnotationEntry): HTMLElement {
@@ -399,8 +420,8 @@ function loadZone(loader: AnnotationLoader): HTMLElement[] {
       // is what happens next, in the internal words for it, on the one zone of
       // three that explained itself at that length.
       text:
-        'A g3d (WashU, text or binary), a .3dg (Dip-C) or a bed3d. Drop one here, or click to ' +
-        'choose.',
+        'A g3d (WashU, text or binary), a .3dg (Dip-C), a bed3d or a PDB this app wrote. Drop one ' +
+        'here, or click to choose.',
     }),
   )
   zone.addEventListener('click', () => void choose())

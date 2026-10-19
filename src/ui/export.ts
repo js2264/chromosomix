@@ -233,6 +233,7 @@ const KIND_NAMES: Record<string, string> = {
   bed: 'BED intervals',
   bedpe: 'BEDPE pairs',
   bed3d: 'bed3d structure',
+  pdb: 'PDB structure',
   mcool: 'Multi-resolution cooler',
 }
 

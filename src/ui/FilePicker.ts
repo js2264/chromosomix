@@ -53,6 +53,7 @@ import { subscribeStores } from '../state/stores'
 import { readTourProgress, subscribeTour, tourRunning } from '../state/tour'
 import { tutorialButtons, type TutorialStart } from './tutorialOffer'
 import type { SourceSpec } from '../worker/protocol'
+import type { PickedFile } from '../browse/folder'
 import { ViewerError } from '../errors'
 import { landingRung } from '../metacooler/detect'
 
@@ -83,6 +84,8 @@ function dismissPrivacy(): void {
 export interface FilePickerProps {
   onOpen(uri: string, source: SourceSpec): void
   onOpenFiles(files: readonly File[]): void
+  /** A row of the Files column or a store, dropped on *Load files* (`LoadBox`'s). */
+  onPicked?(picked: PickedFile): void
   /**
    * A store tile was pressed. The shell opens the drawer on it.
    *
@@ -151,9 +154,11 @@ export class FilePicker {
   private readonly unsubscribeTour: (() => void) | null
 
   constructor(private readonly props: FilePickerProps) {
+    const onPicked = props.onPicked
     const load = new LoadBox({
       onOpen: (uri, source) => props.onOpen(uri, source),
       onOpenFiles: (files) => props.onOpenFiles(files),
+      ...(onPicked === undefined ? {} : { onPicked: (picked: PickedFile) => onPicked(picked) }),
     })
     this.entryBox = el('div', { class: 'entry-box hidden' })
 

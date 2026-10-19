@@ -59,7 +59,7 @@ const FAR_END = /^([^\s:]+):(\d+)-(\d+)(?:,(.+))?$/
 const ENOUGH_ROWS = 4
 
 /** A name that says the format outright. */
-const LONGRANGE_NAME = /\.(longrange|longtabix)(\.(bed|txt))?(\.gz)?$/i
+const LONGRANGE_NAME = /\.(longrange|longtabix)(\.(bed|txt))?(\.b?gz)?$/i
 
 /**
  * Whether these lines are a `longrange`.

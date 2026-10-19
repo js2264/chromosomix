@@ -463,11 +463,11 @@ lock; the other two are told the lead's window as loci and never report one back
 
 Which map of a deck the Analysis column reads (§18.1), the Aesthetics column's *Map* card sets and
 the General column's *File* card describes (§16.5). It starts on the lead; a filled star pressed
-leaves **no map starred**, in which state the card sets every map at once and no task can run
-(§18.1). A structure cell has a star of its own, saying which cell the *3D structure* card sets — or,
-with none filled, that it sets them all (§25.3). A feature set's row on the Tracks card has a third,
-of another kind: which set the feature search reads, and the one a task's parameter defaults to
-(§5.8, §18.2).
+leaves **no map starred**, in which state the card sets every map at once and no task that reads a
+map can run — the 1D tasks, which read only tracks, still do (§18.1). A structure cell has a star of
+its own, saying which cell the *3D structure* card sets — or, with none filled, that it sets them
+all (§25.3). A feature set's row on the Tracks card has a third, of another kind: which set the
+feature search reads, and the one a task's parameter defaults to (§5.8, §18.2).
 
 ### lock, chain
 
@@ -533,7 +533,9 @@ A **structure** is a file of beads with a place in space (g3d, bed3d, §25) and 
 the Structures card — a row that is also a feature set, since every bead is an interval, and that is
 never a lane. A model can also be *made* from the map (§25.6). A **model** is one set of coordinates; a **chain** is the beads of one sequence and one
 haplotype in genomic order; a **bead** is one row of the file, whose **width** is the spacing the
-file was modelled at, inferred from its starts and independent of the map's bin size.
+file was modelled at, inferred from its starts and independent of the map's bin size. A model
+written as a PDB (§25.7) keeps both words: each chain is a PDB chain, lettered A, B, C… in the
+scene's order, and each bead one atom of it.
 
 ### telomere *(on a model)*
 

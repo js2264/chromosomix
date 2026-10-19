@@ -26,6 +26,38 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   now draw each line as the mean of 100 transcripts, which is what the table holds. The P(s)
   figure's four panels are lettered, as every other figure's are.
 
+- **A 3D model leaves as a PDB, for PyMOL, and a PDB this app wrote reads back (§25.2, §25.7).** A
+  **PDB** button beside **bed3d** on every row of the Structures card and on the drawer's result for
+  *Model from the map*, and a `.pdb` beside the `.bed3d` that `chromosomix reconstruct3d --out`
+  writes. One HETATM per bead, one chain per sequence and haplotype with its residues numbered along
+  it, and CONECT between neighbouring beads and nowhere else — none across a gap the model left,
+  none between chains — which is what stops PyMOL joining beads by distance; coordinates centred
+  and scaled so neighbouring beads are 3.8 apart, drawn in further where a model would overflow its
+  columns, with the centre and the factor written down. Its REMARK 250 block gives the PyMOL lines
+  that draw the model as the cell does — a cartoon trace at the cell's tube radius, or beads — and a
+  table of where each atom is on the genome, which is what lets the Structures card, the deck and
+  `--features`/`--structure` read the file back bead for bead. A PDB from anywhere else says nothing
+  about the genome — pastis' lists its beads in bin order on one chain — and is refused with that
+  reason and the way out, a bed3d of the coordinates beside their bins; so is one of these saved
+  again by PyMOL, which drops every REMARK. A model past a PDB's columns (99,999 beads, 9,999 in a
+  chain) has its button disabled with the reason, and the shell says it on stderr. Checked against
+  PyMOL 3.2 on the demo yeast, E. coli and mouse models; `scripts/check_pdb_pymol.py` repeats it.
+
+- **A `+` before back, for one more file in this tab (§5.5).** It opens the landing page's first
+  section, *Load files*, in a dialog: the drop area that is also the file chooser, and the URL box
+  under it. A map comes up beside the one open and a track is drawn on it, as a dropped file is; on
+  an empty tab the file opens there, and the tooltip and the dialog's title say which. A tab opened
+  by dropping a file has no Files column, nothing being connected, and no landing page any more, so
+  a second file held at an address had no door but the palette's *Add a file to this tab*.
+
+- **A store's rows are dragged as the Files column's are (§20.5, §24.2).** Every row that is a
+  file — in a portal's list, under the lab's figures and under IGV's genomes — can be let go on a
+  map's edge or its middle, on a cell of the deck, on the Tracks card, on an analysis form's file
+  box or on the landing page, and opens there with the name the store gives it and the tracks it
+  brings. The two verbs on a row say *add here* and *open in a tab of its own*, and neither could say
+  *under the third map*. A saved workspace's row does not drag, being tabs rather than a file. The
+  drag carries a token for the row, never its address, so a drag from another page opens nothing.
+
 - **The page says when a picture is finished, and at what resolution (§12, §21.4).** Once a view has
   been routed, opened, read and painted — its map's block, the windows its lanes asked for, any
   track on it still opening, a smoothing or a finer block being read — and a frame has passed with
@@ -75,6 +107,63 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   it was 222 MiB.
 
 ### Fixed
+
+- **A 1D task is one Run, deck or not (§18.1, §18.4).** The 1D tasks read the loaded tracks and
+  sequences and never a map, yet a deck offered them *run on ★* and *run on all N maps*: the batch
+  read the same tracks once per map and filed as many identical lanes, each named after a map it
+  never read, and a plain Run filed its lane on whichever map was starred, so moving the star and
+  pressing Run again made a second copy of it. A 1D task's button now reads plain *run*, with no
+  batch beside it, and the star is nothing to it: it is priced, framed and laid out on the first
+  map's sequences and grid, where its form followed the star's — a deck of two assemblies offered
+  sixteen sequences or seventeen by which map was starred — and what it makes is filed with the
+  session's tracks, on the first map, so a second press after the star moved is the run already
+  going, or the next run of the same one. Its heading says it reads the loaded tracks, not the map,
+  and a pan no longer marks its result stale and offers to *recompute here* the same answer. A deck
+  with no map starred greys only the tasks that read a map, and says *only the 1D tasks can run*,
+  where it greyed the 1D card too under a sentence about a map.
+
+- **A connected folder offers every file the app opens, and says why of the rest (§20.5, §24.9).**
+  The Files column drew 3D structures (`.g3d`, `.3dg`, `.bed3d`, `.pdb`), saved workspaces
+  (`.json`), text tables (`.txt`, `.tsv`, `.tab`, compressed or not) and anything bgzipped as `.bgz`
+  dimmed — *not a format this viewer opens* — though a drop opened every one of them, because the
+  table that routes a name had never been taught them. They are offered now: a structure opens its
+  3D cell, a workspace's one mark appends its tabs without leaving an empty tab beside them (its row
+  does not drag, as a store's workspace row does not), a text table is read by its bytes as a
+  dropped one is, and a `.bgz` is read as a `.gz` everywhere, its `.tbi` included — which, for a
+  gnomAD `.vcf.bgz` opened by URL, was never looked for. Every name each reader takes is in
+  `test/unit/browse-route.test.ts`. What stays dimmed says what to do: a track hub's `hub.txt` opens
+  from the stores drawer, and its `genomes.txt` and `trackDb.txt` are read from it; a CSV is not a
+  table any reader here takes; a `.bz2`, `.xz` or `.zst` wants gzip; a `.gzi` is not used, a
+  compressed FASTA being read whole; a `.crai` goes with its CRAM. A workspace or a model in a Drive
+  folder or a Dropbox, whose address is an id or a temporary link, now goes by the name the folder
+  lists it under — fetched as a workspace, or opening a cell — instead of being taken for a track or
+  a map; and a store row of a structure is marked a genome file, no longer a contact map.
+
+- **A row pressed in the Files column opens on an empty tab, whatever it is (§20.5).** From a folder
+  on this machine, only a map did: a bigWig, a BED, a model or a loop table pressed on an empty tab
+  went to the road a drop on an open map takes, found no tracks to join and did nothing, under a
+  `+` that said it would open there. So did a file dropped on an empty window outside the landing
+  page's zone. Both now take the landing page's road. And a text file the column offers whose rows
+  no reader takes is refused as *text, but not a table this viewer reads*, with what a table is
+  read as, rather than as a contact map that is not an HDF5 file.
+
+- **A model dropped beside a map opens one cell, not two (§25.3).** A structure dropped on a map,
+  named by a URL or picked from a folder was given a cell for its name and another for its row's
+  arrival, so every model was drawn twice, and a second model's spare cell fell back to the first.
+  The watch on the store, which every road ends in, is now the only one that opens a cell.
+
+- **A file let go on a cell of the deck goes into that cell (§16.9).** A companion's map took a file
+  only on its five rectangles, and a tracks cell on none, so a track dropped on the lanes under the
+  second map, on its heading or anywhere on a tracks cell — off the disk or out of the Files column —
+  was drawn under the first map. The whole cell is the target now: on a map it means *on this map*,
+  a track on its usual edge and an overlay on its face; on a tracks cell, a track drawn in it. The
+  cell is outlined while the file is over it, and the map's own rectangles keep their finer aim.
+
+- **A row let go on the landing page opens with what it carries (§20.5, §24.2).** A row of the Files
+  column dropped on *Load files* was opened by its address alone, so a `.bam` came without the
+  `.bai` its folder had found beside it and was refused for want of one. It opens as a dropped file
+  does now, index and all — and a store's row, which can be dragged there too, under the store's
+  name for it.
 
 - **A page asking for a map's file starts the reader while the file is found (§6.1).** The picker
   starts the reader's worker and h5wasm once the page is idle, so the first file dropped on it does

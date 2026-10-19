@@ -69,6 +69,16 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
       'If it is compressed (.gz, .zip), decompress it first — HDF5 is read in place and cannot be decompressed on the fly.',
     ],
   },
+  // A text file pressed or dropped under a name that says only *text* — a
+  // `.txt`, a `.tsv` — whose rows no reader took. The map door's refusal is
+  // true of it and is about HDF5, which is not what the reader opened.
+  'not-a-table': {
+    title: 'Text, but not a table this viewer reads',
+    advice: [
+      'A text file is read by its rows whatever its name: BED, bedGraph, BEDPE, GTF, VCF, a chrom.sizes, a cytoBand and the other tables a track comes in, tab- or space-separated, one feature to a line.',
+      'A table with a header row is read when its first three columns are a sequence, a start and an end, or when it names chrom1, start1, end1, chrom2, start2 and end2.',
+    ],
+  },
   'not-a-cooler': {
     title: 'HDF5, but not a cooler or metacool',
     advice: [
