@@ -106,7 +106,7 @@ The text below is a live version of the above `<iframe>` (it will not work on Gi
 
 ## Using the chromosomix analysis CLI
 
-Thirty-one analysis tasks can be executed programatically through the CLI, with the same parameters and producing the same results as the Analysis panel interactively. This can be used in a pipeline or a script.
+Thirty-two analysis tasks can be executed programatically through the CLI, with the same parameters and producing the same results as the Analysis panel interactively. This can be used in a pipeline or a script.
 
 ### Installing the CLI
 
@@ -163,6 +163,14 @@ chromosomix tasks
 ##       --minContacts (default 10)  least contact worth listing
 ##       --maxEdges (default 500)  pairs to list
 ##       --matrix (default true)  draw the square
+##       --no-balance  read the raw counts (balanced by default where the file carries weights)
+## 
+## cellqc
+##     Per-cell contact QC
+##       --cells (default "all")  cells
+##       --nearFrom (default 23000)  near band, from
+##       --nearTo (default 2000000)  near band, to
+##       --mitoticTo (default 12000000)  mitotic band, to
 ##       --no-balance  read the raw counts (balanced by default where the file carries weights)
 ## 
 ## expected
@@ -251,6 +259,18 @@ chromosomix tasks
 ##       --armWindow (default 50)  window along the arms
 ##       --no-balance  read the raw counts (balanced by default where the file carries weights)
 ## 
+## loops
+##     Loop calling
+##       --sequences  sequences
+##       --outer (default 5)  outer half-width
+##       --inner (default 2)  inner half-width
+##       --maxSeparation (default 1000)  furthest from the diagonal
+##       --fdr (default 0.1)  false discovery rate
+##       --lambdaBins (default 40)  λ-chunks
+##       --clusteringRadius (default 2)  clustering radius
+##       --filter (default true)  enrichment filter
+##       --no-balance  read the raw counts (balanced by default where the file carries weights)
+## 
 ## chromosight
 ##     Pattern detection
 ##       --pattern (default "loops")  pattern
@@ -265,6 +285,14 @@ chromosomix tasks
 ##       --maxPercZero (default 10)  most empty pixels a window may hold
 ##       --nMads (default 5)  detectability cut
 ##       --maxQvalue (default 1)  report down to a q-value of
+##       --no-balance  read the raw counts (balanced by default where the file carries weights)
+## 
+## hicrep
+##     Reproducibility
+##       --against <file>  The other maps to compare with; repeat per map
+##       --sequences  sequences
+##       --maxDistance (default 500)  furthest separation compared
+##       --smooth (default 1)  smoothing half-width
 ##       --no-balance  read the raw counts (balanced by default where the file carries weights)
 ## 
 ## apa

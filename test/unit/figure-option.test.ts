@@ -381,6 +381,20 @@ describe('optionOf', () => {
     expect(points['max']).toBeCloseTo(5 + 2 * 0.05, 12)
   })
 
+  it('keeps the first and last ticks it gives a log axis whose ends are not round', () => {
+    // A loop spectrum, 12 to 82 kb: the fit runs from under 11 kb, an end that
+    // is not labelled, and the library hid the first *given* tick for it —
+    // 20 kb, with its grid line — and the last, 80 kb, for the other end.
+    const spectrum = curve({
+      xScale: 'log',
+      series: [{ name: 'a', x: new Float64Array([12_000, 30_000, 82_000]), y: new Float64Array([2, 3, 6]) }],
+    })
+    const x = build(spectrum).option['xAxis'] as Record<string, Record<string, unknown>>
+    expect(x['axisLabel']['customValues']).toEqual([20_000, 30_000, 40_000, 50_000, 60_000, 70_000, 80_000])
+    expect(x['axisLabel']['showMinLabel']).toBeUndefined()
+    expect(x['axisLabel']['showMaxLabel']).toBeUndefined()
+  })
+
   it('labels a log axis of a dozen decades every few, on whole decades', () => {
     const wide = curve({
       yScale: 'log',

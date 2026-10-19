@@ -564,7 +564,26 @@ export function axisReach(
   // axis.
   const [low, high] = style[which].domain ?? [reach.bounds['min'], reach.bounds['max']]
   const ticks = typeof low === 'number' && typeof high === 'number' ? logTicks(low, high) : null
-  return ticks === null ? reach : { ...reach, ticks }
+  return ticks === null ? reach : { ...reach, labels: tickedEnds(reach.labels, ticks, low, high), ticks }
+}
+
+/**
+ * An axis's end labels, where its ticks are given rather than the library's.
+ *
+ * The library hides the first and the last of the *given* ticks, wherever they
+ * fall, not the labels at the axis's ends: `showMinLabel: false`, meant for an
+ * end at `10.85 kb`, took the 20 kb tick off a loop spectrum, its grid line
+ * with it. So each stays only where that first or last tick is the end itself.
+ */
+function tickedEnds(labels: ChartOption, ticks: readonly number[], low: unknown, high: unknown): ChartOption {
+  const at = (tick: number | undefined, end: unknown): boolean =>
+    tick !== undefined &&
+    typeof end === 'number' &&
+    Math.abs(tick - end) <= 1e-9 * Math.max(Math.abs(tick), Math.abs(end))
+  const out: ChartOption = { ...labels }
+  if (!at(ticks[0], low)) delete out['showMinLabel']
+  if (!at(ticks[ticks.length - 1], high)) delete out['showMaxLabel']
+  return out
 }
 
 // ---------------------------------------------------------------------------
@@ -1256,7 +1275,11 @@ function distributionOption(
       ...(ticks === null ? {} : { axisTick: { ...(axisBase(theme, style, style.y.grid).axisTick as object), customValues: ticks } }),
       axisLabel: {
         ...(axisBase(theme, style, style.y.grid).axisLabel as object),
-        ...(window === null ? {} : reachOf(window, null, [], log).labels),
+        ...(window === null
+          ? {}
+          : ticks === null
+            ? reachOf(window, null, [], log).labels
+            : tickedEnds(reachOf(window, null, [], log).labels, ticks, window[0], window[1])),
         ...(ticks === null ? {} : { customValues: ticks }),
         formatter: (value: number) => axisNumber(value, log ? 'log' : 'linear'),
       },

@@ -7386,11 +7386,15 @@ Parameters are remembered per file and per task, and travel in an exported sessi
 a figure is opening the session and pressing Run.
 
 **A number can take its default from the file.** Base composition's bin size, and *Signal by group*'s,
-is the open map's resolution until the reader types another, and 10 kb where no map is open (§18.8).
-The form shows what that comes to on the file in front of it and follows a change of resolution,
-because the answer is still *the map's*; the run is handed the number itself, and its record, its
-command line and a replay carry that number. A `chromosomix` line with no such flag gets the same
-rule from the map it names, or 10 kb with none.
+is the open map's resolution until the reader types another, and 10 kb where no map is open; *Loop
+calling*'s kernel is the one for the open map's bins, and its scan's reach and clustering radius are
+10 Mb and 20 kb in them (§18.8). The form shows what that comes to on the file in front of it and
+follows a change of resolution, because the answer is still *the map's*; the run is handed the number
+itself, and its record, its command line and a replay carry that number. **After a run as before
+one**: what the form remembers of a run is what it was asked, so a number the reader left to the map
+is still the map's, and a run on the 1 kb rung does not leave the 10 kb rung's form holding 1 kb's
+answer — ten times the reach it meant. A `chromosomix` line with no such flag gets the same rule from
+the map it names, or 10 kb with none.
 
 **A locus parameter is in the typed form of §26.1** — 1-based and inclusive, digits grouped or not,
 `IV:1,000,001-1,400,000` — wherever it is held: in the form, in a result's provenance and the
@@ -7992,7 +7996,7 @@ exact stamp is that line's tooltip, so it is one hover from the words and identi
 
 ### 18.8 The catalogue
 
-Thirty-one tasks, in **four cards — 2D, 3D, 1D and Metagenome**, headed *2D tasks*, *3D tasks*,
+Thirty-two tasks, in **four cards — 2D, 3D, 1D and Metagenome**, headed *2D tasks*, *3D tasks*,
 *1D tasks* and *Metagenome*. The build order is in `docs/TASKS_PLAN.md`; what follows is what each
 one must be.
 
@@ -8015,14 +8019,14 @@ because a reader with no structure loaded has exactly one thing to do in it; *fi
 the other from a track. Five tasks are **dev features** (§29.3), absent rather than greyed while the
 switch is off and in every embed: the four metagenome tasks (`metacool`), and their card with them,
 and the 1D card's last, *Two sequences against each other* (`dotplot`); `chromosomix` lists and
-runs all thirty-one (§29.5). The 3D card's three — *Model from the map*, *Model versus map* and
+runs all thirty-two (§29.5). The 3D card's three — *Model from the map*, *Model versus map* and
 *Spatial tracks* — are specified beside the structures they make and read (§25.6), and the dot plot
 beside the view it draws (§28); every other task is below.
 
 **Which card each sits on**, in the registry's order: *2D tasks* — coverage and marginals, cis and
 trans per sequence, per-cell contact QC, P(s), the scalogram, the 4C profile, diamond insulation, the
-directionality index, the HiC score, compartments, inter-arm alignment, pattern detection,
-reproducibility and aggregate peak analysis; *3D tasks* — model from the map, model versus map and
+directionality index, the HiC score, compartments, inter-arm alignment, loop calling, pattern
+detection, reproducibility and aggregate peak analysis; *3D tasks* — model from the map, model versus map and
 spatial tracks; *1D tasks* — find a motif, peak calling, base composition, origin and terminus, the
 metaplot, track correlation, FRiP, signal by group, interval set overlap and the dot plot;
 *Metagenome* — MAG contact QC, the inter-MAG network, MAG purity and split-MAG detection. The entries
@@ -8446,6 +8450,37 @@ should: 3.1–3.2× on *P. aeruginosa* PAK from 2 to 16 kb, reaching 3.0 of its 
 *E. coli* MG1655 from 2 to 20 kb, whose arms are not aligned; and after detrend PAK's is 0.93–0.97×.
 Each square is read whole, so a sequence past Compartments' 8,192-bin gate is left out and named. Absent on a metacool,
 whose MAGs have no declared origins.
+*Loop calling* — the one question *where are the loops*, which Pattern detection answers as one of
+five shapes it can be handed: HiCCUPS (Rao et al. 2014) as `cooltools.dots` computes it, ported with
+its Python API's defaults. Every pixel the scan reaches is tested against four **neighbourhoods** of
+its own — the donut about it, a bar through it each way and the square below and left of it, out to
+the kernel's outer half-width `w` and with the square of half-width `p` about the pixel left out —
+whose **locally adjusted expected** is the distance decay at the pixel times what the neighbourhood
+holds over what the decay says it should, on the balanced map, scaled back to the pixel's raw count
+by its two weights so that a raw count is tested against a Poisson tail. The pixels are put in
+**λ-chunks** of like expected, 40 by default, log-spaced by 2^⅓, and Benjamini–Hochberg runs within
+each chunk, kernel by kernel, to the count a pixel of that chunk must reach; a pixel that reaches all
+four is **enriched**, enriched pixels within the **clustering radius** of each other are one loop,
+called at its brightest — clustered by BIRCH, as `dots` clusters them — and the **enrichment
+filter** keeps a loop at 1.5× its vertical and horizontal expecteds, 1.75× its donut and lower-left
+ones and 2× one of those two, and a cluster of one pixel only at q-values summing to 0.02 or less.
+**The kernel is the one setting with no default.** cooltools has kernels for 4 to 28 kb bins —
+`w 7, p 4` from 4 kb, `5, 2` from 8 kb, `3, 1` from 18 kb, Rao et al.'s — and refuses any other
+resolution unless it is handed one; so the two half-widths are seeded from that table, and on a map
+outside it the boxes are empty and the run is refused, saying why, until the reader fills them.
+Every other default is `dots()`'s, in the map's bins where it is a distance: 10 Mb from the
+diagonal, a 20 kb radius, an FDR of 0.1 — where cooltools' command line has 2 Mb, 39 kb and 0.02 —
+and like Base composition's bin size they follow a change of resolution until typed (§18.2). Four
+outputs: the **loop set**, a BEDPE that lands on the map as rings the moment the run finishes; a
+**table** of every call with its four expecteds and q-values; the **loop spectrum**, each loop's
+enrichment over its donut against separation (below); and **the contacts each λ-chunk asked of a
+pixel**, kernel by kernel against the line where a pixel merely meets its expected — the
+correction drawn, which is where a sparse map shows it was held to thresholds nothing in it could
+reach. A balanced map only: the expected is the balanced map's, so a file with no weights waits,
+saying to run `cooler balance`. **The task's own words name no package**: its row, its form, its
+notes, its figures and its command, `chromosomix loops`, say *loop calling*, and Pattern
+detection's row, form and notes name none either; the package each is a port of is named here, in
+§18.9 and §18.10, and in the validation notebook, where what is claimed for it is checked.
 *Pattern detection*, which is chromosight — loops, borders, hairpins, centromeres and stripes, by
 normalised cross-correlation against a template, over a map detrended by its own distance law, with
 neighbour suppression and a Benjamini-Hochberg q-value on every call. **The pattern is a parameter
@@ -8481,9 +8516,10 @@ a log axis, for the reason every distance plot here is. Drawn only off the diago
 separation to plot against; thinned by rank in separation past a couple of thousand marks, never
 truncated, so it stays the same picture. The same plot comes back from the chromosight **pileup**
 (where the scores are per anchor rather than per call) and from the ordinary APA over a loop set,
-where the quantity on the ordinate is each anchor's own P2LL. This is the one task whose
+where the quantity on the ordinate is each anchor's own P2LL, and from *Loop calling*, where it is
+each loop's count over its donut's expected. This and *Loop calling* are the two 2D tasks whose
 output is a *claim about the data* rather than a summary of it, which is why §18.9's paragraph
-against loop calling is answered in that section rather than here, and why its golden is the
+against loop calling is answered in that section rather than here, and why each one's golden is its
 package's own output rather than a re-derivation (§18.10).
 *Reproducibility* is the one task in the catalogue whose unit is a **pair of files**, and it is a
 port: HiCRep's stratum-adjusted correlation (Yang et al. 2017), which smooths both maps with a 2D
@@ -8972,6 +9008,16 @@ refused: a single track is reported as a ranked candidate list with no significa
 than cut at a valley in its histogram or at a score that looked about right, because yapc's cut is
 IDR and nobody published another.
 
+**Loop calling is the third, and the one the original rule named.** *Loop calling* is HiCCUPS as
+`cooltools.dots` 0.7.1 computes it — the Python API's defaults, a kernel from cooltools' own table
+or the reader's — and its golden is that package's own output over `demo/yeast/`, stage by stage, in
+two configurations, the API's and the command line's (`test/golden/analysis/hiccups.json`). The port
+does not improve on it here either. The λ-chunk labels pandas rounds to three decimals are the λ the
+Poisson test and the q-values are taken at, and a pixel a hair past the last rounded label is
+dropped, as `dots` drops it; the tail is SciPy's `pdtrc`, Temme's asymptotic series included; and the
+clusters are sklearn's BIRCH down to the roundings the BLAS beneath it fuses, without which a pixel
+equidistant from two subclusters joins the other one.
+
 **Contact-based reordering and scaffolding: the reference editor (§27).** ~~No contact-based contig
 reordering or scaffolding. It would only be useful if the reordering could be written back into a
 file, and it cannot — see the next paragraph — so it would produce an ordering with nowhere to go.~~
@@ -9109,9 +9155,9 @@ are floats rather than counts:
 
 - **`scripts/make_golden.py` gains an analysis section**, guarded so that a machine without the extra
   packages still produces every existing golden. The new developer-side Python dependencies are
-  **cooltools** (expected, insulation, eigenvectors, saddle), **coolpuppy** (pileups),
-  **chromosight** (detection and quantification), **deeptools** (`computeMatrix`, for the 1D
-  metaplots) and **pyBigWig** (the writer cross-check).
+  **cooltools** (expected, insulation, eigenvectors, saddle, dots), **scikit-learn** (the clustering
+  `dots` calls), **coolpuppy** (pileups), **chromosight** (detection and quantification),
+  **deeptools** (`computeMatrix`, for the 1D metaplots) and **pyBigWig** (the writer cross-check).
 - **The tolerance is recorded per task in the golden file**, not written into the test, so it is data
   that can be tightened: relative `1e-6` for anything that is a sum or a ratio of sums, `2e-6` where
   numpy's float64 is held to arithmetic over the `Float32Array` a block reaches a task as, `1e-4` for
@@ -9186,6 +9232,19 @@ the residue lands as `3.2e-8` **absolute** on coefficients of a few ten-thousand
 orders below the 0.15–0.3 a call has to reach, which is why the calls compare exactly and the map
 compares against an absolute floor.
 
+**The loop caller's golden is staged the same way, for the same reason.** `dots` is the definition of
+what it calls, so its golden is its own functions called in its own order over the demo cooler — the
+expected `expected_cis` hands it, the kernels, the λ-chunk edges and the labels pandas cuts by, the
+chunk every scored pixel of a tile falls in and its four expecteds, the four histograms whole, the
+thresholds, every enriched pixel with its expecteds and q-values, the clusters with their centroids,
+and the calls — and then `dots()` itself, asserted equal to the staged calls before anything is
+written, in two configurations: the API's defaults at `w 5, p 2`, and the command line's at `w 3,
+p 1`. The thresholds, the histograms, the clusters and the calls compare exactly; the expecteds to
+`1e-13` and the q-values to `1e-11`, relative, since the expected is summed in a different order and
+the tail is a series. Beside it, the tail at 2,950 points over fifty λ against SciPy's own, exactly
+zero where SciPy's is, and BIRCH on two point sets whose nodes split and whose distances tie, chosen
+because a plain rounding of them clusters otherwise.
+
 **And one golden is against R rather than Python, for the curve the panel actually draws.**
 `HiContacts::distanceLaw()` is P(s) as a *probability density* — the share of all cis contacts at a
 separation, per base pair — where cooltools' `expected-cis`, goldened above, is P(s) as a *mean per bin
@@ -9248,14 +9307,14 @@ takes the same coordinate-ascent fallback, with SciPy's bounded Brent ported bes
 the same 1,615 to 1,630 peaks at the six thresholds.
 
 **And beside the goldens, two notebooks at full size.** `notebooks/validation.qmd`, rendered with
-Quarto, runs eighteen analyses twice over public data, each file named by its accession and fetched
+Quarto, runs nineteen analyses twice over public data, each file named by its accession and fetched
 from where it was published (4DN's; GEO's yeast Micro-C; and UCSC's mm10 sequence and RefSeq genes
 as Illumina iGenomes distributes them) — once through `chromosomix`, once through the package each
 reproduces, called as it is meant to be called and never re-implemented — and lines the two up bin
 by bin or call by call: insulation, compartments, P(s), coverage and virtual 4C against cooltools;
 the directionality index against `domaincaller`; peak calling with IDR on two replicates against
 yapc 0.1; loops against chromosight 1.6.3, and the pileup's chromosight score against `chromosight
-quantify`; pileups — raw, over the expected and over distance-matched controls, off the diagonal and
+quantify`; loop calling, genome-wide on a mouse map at 10 kb, against `cooltools.dots`; pileups — raw, over the expected and over distance-matched controls, off the diagonal and
 on it — against coolpuppy; reproducibility against `hicrep` 0.2.6; the 3D model against pastis;
 Boost-HiC against its own Python, through `chromosomix boost` (§6.5); the metaplot against
 deepTools, over one track and over two, its heatmaps in `plotHeatmap`'s order; interval overlap and its shuffled null against bedtools; base composition against
@@ -9593,7 +9652,10 @@ of them, about six to the axis — the library's own step there is ten decades, 
 drawn as violins, and a step handed to it is counted from the axis's end, which on a fitted axis
 is no decade (`1.2e-10`, `1.2e-8`); and with fewer than three decades inside, where the library
 labels only decades, at 1, 2 and 5 of each, then at every digit, then on a linear ladder — a P(s)
-zoomed to 221 kb – 783 kb had no label at all.
+zoomed to 221 kb – 783 kb had no label at all. **And every one of those ticks is drawn**: the library
+hides the first and the last of the ticks it is handed where an axis's end label is left bare, wherever
+they fall, so a loop spectrum fitted from 10.9 kb lost its 20 kb tick, and the grid line with it; an
+end's label is left bare only where the first or the last tick is that end.
 
 **A legend down the right is beside the plot, never over it.** Its room was a fixed 132 pixels, and
 a series named after its file — `T4dNDD-infection.10min.mcool::5000`, as a map in a deck is — ran

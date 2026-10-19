@@ -1,6 +1,6 @@
 ---
 title: "chromosomix against reference implementations"
-subtitle: "Eighteen analyses on public data, each run by chromosomix and by the package it reproduces"
+subtitle: "Nineteen analyses on public data, each run by chromosomix and by the package it reproduces"
 format:
   html:
     toc: true
@@ -68,6 +68,7 @@ the mean of 100, which is what is written.
 | 16 | Base composition | mm10, 10 kb | `bioframe.frac_gc`, Biopython `GC_skew` |
 | 17 | Motif search | mm10, chr19 | `seqkit locate` |
 | 18 | Track correlation | mouse ATAC-seq, two replicates, and insulation, chr19, 100 bp to 10 kb | pyBigWig and SciPy; deepTools `multiBigwigSummary`, `plotCorrelation` |
+| 19 | Loop calling | mouse Hi-C, 10 kb | `cooltools.dots` |
 
 **To render.** `npm run build:cli` at the repository root builds this checkout's `chromosomix`.
 yapc needs an environment of its own (numpy < 1.24; the recipe is in the yapc section of
@@ -2703,6 +2704,128 @@ record('Track correlation', 'mouse ATAC-seq, two replicates, and insulation, chr
        refs=[*[f'pybigwig-correlation-{size}-{method}' for size in SIZES for method in METHODS],
              *[f'multibigwigsummary-{size}' for size in SIZES],
              *[f'plotcorrelation-{size}-{method}' for size in SIZES for method in METHODS]])
+```
+
+## 19 · Loop calling (cooltools)
+
+HiCCUPS as `cooltools.dots` computes it, with its Python API's defaults in both, over every chromosome
+of the map: a pixel is tested against four neighbourhoods of its own, each pixel's chunk of like local
+expected corrected on its own, and the pixels that pass are clustered and filtered. Calls matched by bin
+pair; the four locally adjusted expecteds and q-values of each compared to the digits chromosomix writes
+— four decimals, and six significant digits for a q below 10⁻⁴.
+
+| | chromosomix | cooltools |
+|---|---|---|
+| kernel | the one for the map's bins (w 5, p 2 at 10 kb) | `recommend_kernels(10_000)` |
+| expected | the map's own, the first two diagonals left out | `expected_cis(ignore_diags=2)` |
+| furthest from the diagonal | 1,000 bins, 10 Mb (default) | `max_loci_separation=10_000_000` |
+| λ-chunks, FDR | `--lambdaBins 40`, `--fdr 0.1` (defaults) | `n_lambda_bins=40`, `lambda_bin_fdr=0.1` |
+| clusters | `--clusteringRadius` 2 bins, 20 kb, and the filter (defaults) | `clustering_radius=20_000`, `cluster_filtering=True` |
+
+```{python}
+LC = WORK / 'loopcalling'
+mr('loops', MOUSE_10K, out=LC / 'app', name='loops', analysis='Loop calling')
+reference('cooltools-dots', 'Loop calling', 'cooltools',
+          [PYTHON, script('cooltools_dots'), MOUSE_10K, OUT, THREADS], out=LC / 'cooltools.tsv', threads=THREADS)
+
+#: Each kernel by cooltools' name, with the word chromosomix's table spells its q-value column with.
+KERNELS = {'donut': 'Donut', 'vertical': 'Vertical', 'horizontal': 'Horizontal', 'lowleft': 'Lowleft'}
+#: And as the figures name it.
+KERNEL_NAMES = {'donut': 'donut', 'vertical': 'vertical', 'horizontal': 'horizontal', 'lowleft': 'lower-left'}
+ref_dots = pd.read_csv(LC / 'cooltools.tsv', sep='\t').rename(columns={'chrom1': 'sequence'})
+app_dots = table(one(LC / 'app', '*.loops-table.tsv'))
+dots = app_dots.merge(ref_dots, on=['sequence', 'start1', 'start2'], how='outer', indicator=True,
+                      suffixes=('_app', '_ref'))
+both_dots = dots[dots['_merge'] == 'both']
+lam_app = np.concatenate([both_dots[k].to_numpy(float) for k in KERNELS])
+lam_ref = np.concatenate([both_dots[f'la_exp.{k}.value'].to_numpy(float) for k in KERNELS])
+q_app = np.concatenate([both_dots[f'q{K}'].to_numpy(float) for K in KERNELS.values()])
+q_ref = np.concatenate([both_dots[f'la_exp.{k}.qval'].to_numpy(float) for k in KERNELS])
+# chromosomix writes a q to four decimals, and one below 1e-4 to six significant digits.
+fixed, small = q_ref >= 1e-4, (q_ref < 1e-4) & (q_ref > 0)
+lc_lam = np.abs(lam_app - lam_ref).max()
+lc_q = np.abs(q_app[fixed] - q_ref[fixed]).max()
+lc_q_small = np.abs(q_app[small] / q_ref[small] - 1).max()
+lc_zero = int((q_ref == 0).sum())
+LC_EXACT = (len(both_dots) == len(app_dots) == len(ref_dots)
+            and (both_dots['count_app'] == both_dots['count_ref']).all()
+            and (both_dots['cluster'] == both_dots['c_size']).all()
+            and lc_lam <= 5.0001e-5 and lc_q <= 5.0001e-5 and lc_q_small <= 5.0001e-6
+            and (q_app[q_ref == 0] == 0).all())
+measures({
+    'loops, chromosomix / cooltools': f'{len(app_dots):,} / {len(ref_dots):,}',
+    'same bin pair; in one only': f"{len(both_dots):,}; {int((dots['_merge'] != 'both').sum())}",
+    'contacts, the same at every pair': f"{int((both_dots['count_app'] == both_dots['count_ref']).sum()):,}",
+    'cluster size, the same at every pair': f"{int((both_dots['cluster'] == both_dots['c_size']).sum()):,}",
+    f'λ, max |difference| ({len(lam_ref):,}, four to a loop)': f'{lc_lam:.1e}',
+    f'q ≥ 1e-4, max |difference| ({int(fixed.sum()):,})': f'{lc_q:.1e}',
+    f'q < 1e-4, max relative difference ({int(small.sum()):,})': f'{lc_q_small:.1e}',
+    'q of 0 in cooltools, 0 in chromosomix': f"{int((q_app[q_ref == 0] == 0).sum())} of {lc_zero}",
+    'chromosomix, as it noted': ' '.join(NOTES['loops'][2:]),
+})
+```
+
+```{python}
+#| label: fig-loopcalling
+#| fig-cap: "Loop calling, mouse Hi-C at 10 kb. a, the four locally adjusted expecteds of every loop both call; b, their q-values; c, the 2 Mb stretch that holds the most of them, with 100 kb either side, both call sets over the balanced map."
+TEXT['lc_n'] = f'{len(both_dots):,}'
+TEXT['lc_only'] = f"{int((dots['_merge'] != 'both').sum())}"
+TEXT['lc_lam'] = f'{lc_lam:.1e}'
+TEXT['lc_q'] = f'{lc_q:.1e}'
+TEXT['lc_q_small'] = f'{lc_q_small:.1e}'
+
+fig = plt.figure(figsize=(11, 7.6), layout='constrained')
+grid = fig.add_gridspec(2, 2, height_ratios=[1, 1.25])
+ax = fig.add_subplot(grid[0, 0])
+for k, colour in zip(KERNELS, (APP_COLOUR, REF, INK2, '#7c56c2')):
+    ax.scatter(both_dots[f'la_exp.{k}.value'], both_dots[k], s=7, color=colour, alpha=0.6, lw=0,
+               label=KERNEL_NAMES[k])
+identity(ax, lam_ref.min(), lam_ref.max())
+ax.set(xscale='log', yscale='log', xlabel='cooltools, λ (raw counts)', ylabel='chromosomix, λ (raw counts)',
+       title='a  locally adjusted expected')
+ax.legend(loc='upper left', markerscale=2)
+ax = fig.add_subplot(grid[0, 1])
+seen = q_ref > 0
+ax.scatter(-np.log10(q_ref[seen]), -np.log10(q_app[seen]), s=7, color=APP_COLOUR, alpha=0.6, lw=0)
+identity(ax, -np.log10(q_ref[seen].max()), -np.log10(q_ref[seen].min()))
+ax.set(xscale='log', yscale='log', xlabel='cooltools, −log10 q', ylabel='chromosomix, −log10 q',
+       title='b  q-values, four kernels')
+# The 2 Mb that hold the most loops both call, from one of them.
+LC_SPAN = 2_000_000
+busiest = max(((chrom, start) for chrom, start in both_dots[['sequence', 'start1']].itertuples(index=False)),
+              key=lambda at: ((both_dots['sequence'] == at[0]) & (both_dots['start1'] >= at[1])
+                              & (both_dots['start2'] < at[1] + LC_SPAN)).sum())
+chrom, first = busiest
+# Drawn with 100 kb either side, so that no loop sits on the frame.
+lo, hi = max(0, first - 100_000), min(int(clr10.chromsizes[chrom]), first + LC_SPAN + 100_000)
+held = clr10.matrix(balance=True).fetch(f'{chrom}:{lo}-{hi}')
+ax = fig.add_subplot(grid[1, :])
+ax.imshow(np.where(held > 0, held, np.nan), cmap=DENSITY, norm=LogNorm(), interpolation='nearest',
+          extent=(lo / 1e6, hi / 1e6, hi / 1e6, lo / 1e6))
+ax.grid(False)
+inside = lambda frame: frame[(frame['sequence'] == chrom) & (frame['start1'] >= lo) & (frame['start2'] < hi)]
+mine, theirs = inside(app_dots), inside(ref_dots)
+ax.scatter((mine['start2'] + 5_000) / 1e6, (mine['start1'] + 5_000) / 1e6, s=90, facecolors='none',
+           edgecolors=APP_COLOUR, lw=1.4, label='chromosomix')
+ax.scatter((theirs['start2'] + 5_000) / 1e6, (theirs['start1'] + 5_000) / 1e6, s=18, marker='x', color=REF,
+           lw=1.2, label='cooltools')
+ax.set(xlabel=f'{chrom} (Mb)', ylabel=f'{chrom} (Mb)', title=f'c  {chrom}, {lo / 1e6:.2f}–{hi / 1e6:.2f} Mb')
+ax.set_aspect('equal')
+ax.legend(loc='lower left')
+drawn('fig-loopcalling')
+```
+
+`{python} TEXT['lc_n']` loops at the same bin pairs (`{python} TEXT['lc_only']` in one only), with
+the same contacts and the same cluster sizes; the locally adjusted expecteds within
+`{python} TEXT['lc_lam']` and the q-values within `{python} TEXT['lc_q']` — and, below 10⁻⁴, within
+`{python} TEXT['lc_q_small']` of their own size — which is the rounding of the digits chromosomix
+writes.
+
+```{python}
+record('Loop calling', 'mouse Hi-C, 10 kb, every chromosome', f"cooltools {VERSIONS['cooltools']}",
+       f"{TEXT['lc_n']} loops, the same bin pairs, contacts and clusters; λ within {TEXT['lc_lam']}, q within "
+       f"{TEXT['lc_q']}, the digits written",
+       'Identical (to the digits written)' if LC_EXACT else 'Differs', apps=['loops'], refs=['cooltools-dots'])
 ```
 
 ## Summary

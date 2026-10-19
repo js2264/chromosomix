@@ -20,6 +20,7 @@ import { runCisTrans } from './cistrans'
 import { runCompartments } from './compartments'
 import { runDi } from './di'
 import { runHicScore } from './hicscore'
+import { runHiccups } from './hiccups'
 import { runScalogram } from './scalogram'
 import { runHicrep } from './hicrep'
 import { runCoverage } from './coverage'
@@ -50,6 +51,7 @@ export const RUNNERS: Record<string, TaskRunner> = {
   scalogram: runScalogram,
   fourc: runFourC,
   apa: runApa,
+  loops: runHiccups,
   chromosight: runChromosight,
   compartments: runCompartments,
   interarm: runInterArm,

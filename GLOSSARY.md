@@ -817,8 +817,10 @@ and a lane, with a switch each; a session written then is folded into the one ro
 A published method reproduced here, as opposed to one this app would have devised (§18.9): its
 numbers are the reference's, held to a golden built from that software's **own output** rather than
 from a reading of its paper, and kept where they look like oversights, because changing one changes
-what the result means. Chromosight's detection (`analysis/chromosight.ts`), HiCRep, and the peak
-caller — yapc (`analysis/yapc.ts`) with the IDR it thresholds by (`analysis/idr.ts`) — are ports, and
+what the result means. Chromosight's detection (`analysis/chromosight.ts`), the loop caller —
+`cooltools.dots`, HiCCUPS, with the SciPy tail and the BIRCH it calls (`analysis/hiccups.ts`) — HiCRep,
+and the peak caller — yapc (`analysis/yapc.ts`) with the IDR it thresholds by (`analysis/idr.ts`) — are
+ports, and
 so is Boost-HiC, which a map is oversampled with (`metacooler/boost.ts`, §6.5). A *caller* has to be
 one: a method that turns numbers into calls is only admitted with a published upstream and its
 golden. The one stated exception is the reference editor's suggestions, the app's own method, held

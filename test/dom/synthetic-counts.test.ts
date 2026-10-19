@@ -87,7 +87,7 @@ function context(): AnalysisContext {
   }
 }
 
-const TASK = { id: 'chromosight', title: 'Pattern detection' } as unknown as AnalysisTask
+const TASK = { id: 'chromosight', title: 'Pattern detection', params: [] } as unknown as AnalysisTask
 
 /** The seam the runner calls when a task finishes — reached as the lanes test does. */
 function finish(workspace: AnalysisWorkspace, output: IntervalsOutput): void {
