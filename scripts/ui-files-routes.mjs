@@ -10,7 +10,7 @@
  * origin-private file system as `run2`, handed back by a stand-in folder
  * dialog — a real directory handle, read by the code a folder on disk is.
  *
- * - **fr01** the column as connected, every row's state and tooltip printed;
+ * - **fr01** the column as connected, every row's state, drag and tooltip printed;
  *   **fr01b** the column alone, close up;
  * - **fr02** the map opened from its row, at IV:1–1.4 Mb;
  * - **fr03** the loop table added by its `+` — a `.tsv` the column dimmed;
@@ -134,13 +134,14 @@ try {
     [...document.querySelectorAll('.folder-entry')].map((node) => ({
       name: node.querySelector('.folder-entry-name')?.textContent,
       offered: node.classList.contains('folder-entry-file'),
+      drags: node.draggable,
       verbs: [...node.querySelectorAll('.row-verb')].map((verb) => verb.getAttribute('title')),
       why: node.getAttribute('title'),
     })),
   )
   for (const entry of listed) {
     console.log(
-      `${entry.offered ? 'offered' : 'DIMMED '}  ${entry.name?.padEnd(32)} ${entry.offered ? entry.verbs.join(' | ') : entry.why}`,
+      `${entry.offered ? 'offered' : 'DIMMED '} ${entry.drags ? 'drags' : '     '}  ${entry.name?.padEnd(32)} ${entry.offered ? entry.verbs.join(' | ') : entry.why}`,
     )
   }
   await shot('fr01-folder-listed')

@@ -199,6 +199,11 @@ describe('a connected bucket', () => {
     ])
     expect(verbs('loops.tsv')[0]).toBe('Add loops.tsv to this tab, as a track.')
     expect(verbs('session.json')).toEqual(['Open session.json — a saved session — as its own tab.'])
+    // …and the workspace does not drag, as a store's workspace row does not:
+    // it is tabs, with nowhere a drop could aim them.
+    const draggable = (name: string): boolean =>
+      all<HTMLElement>(el, '.folder-entry-file').find((node) => node.textContent?.includes(name))?.draggable ?? false
+    expect([draggable('model.pdb'), draggable('loops.tsv'), draggable('session.json')]).toEqual([true, true, false])
   })
 
   it('offers a BAM, and explains the index sitting beside it', async () => {

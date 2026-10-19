@@ -101,17 +101,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   (`.json`), text tables (`.txt`, `.tsv`, `.tab`, compressed or not) and anything bgzipped as `.bgz`
   dimmed — *not a format this viewer opens* — though a drop opened every one of them, because the
   table that routes a name had never been taught them. They are offered now: a structure opens its
-  3D cell, a workspace's one mark appends its tabs without leaving an empty tab beside them, a text
-  table is read by its bytes as a dropped one is, and a `.bgz` is read as a `.gz` everywhere, its
-  `.tbi` included — which, for a gnomAD `.vcf.bgz` opened by URL, was never looked for. Every name
-  each reader takes is in `test/unit/browse-route.test.ts`. What stays dimmed says
-  what to do: a track hub's `hub.txt` opens from the stores drawer, and its `genomes.txt` and
-  `trackDb.txt` are read from it; a CSV is not a table any reader here takes; a `.bz2`, `.xz` or
-  `.zst` wants gzip; a `.gzi` is not used, a compressed FASTA being read whole; a `.crai` goes with
-  its CRAM. A workspace or a model in a Drive folder or a Dropbox, whose address is an id or a
-  temporary link, now goes by the name the folder lists it under — fetched as a workspace, or
-  opening a cell — instead of being taken for a track or a map; and a store row of a structure is
-  marked a genome file, no longer a contact map.
+  3D cell, a workspace's one mark appends its tabs without leaving an empty tab beside them (its row
+  does not drag, as a store's workspace row does not), a text table is read by its bytes as a
+  dropped one is, and a `.bgz` is read as a `.gz` everywhere, its `.tbi` included — which, for a
+  gnomAD `.vcf.bgz` opened by URL, was never looked for. Every name each reader takes is in
+  `test/unit/browse-route.test.ts`. What stays dimmed says what to do: a track hub's `hub.txt` opens
+  from the stores drawer, and its `genomes.txt` and `trackDb.txt` are read from it; a CSV is not a
+  table any reader here takes; a `.bz2`, `.xz` or `.zst` wants gzip; a `.gzi` is not used, a
+  compressed FASTA being read whole; a `.crai` goes with its CRAM. A workspace or a model in a Drive
+  folder or a Dropbox, whose address is an id or a temporary link, now goes by the name the folder
+  lists it under — fetched as a workspace, or opening a cell — instead of being taken for a track or
+  a map; and a store row of a structure is marked a genome file, no longer a contact map.
 
 - **A row pressed in the Files column opens on an empty tab, whatever it is (§20.5).** From a folder
   on this machine, only a map did: a bigWig, a BED, a model or a loop table pressed on an empty tab

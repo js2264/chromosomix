@@ -57,6 +57,8 @@ export interface FolderBrowseProps {
   rowExtras?(entry: FolderEntry, folder: ConnectedFolder): HTMLElement[]
   /** Make file rows draggable, and say what a drag carries. */
   onDragStart?(event: DragEvent, entry: FolderEntry, folder: ConnectedFolder): void
+  /** Whether a file row the folder offers can be dragged; every one, where this is absent. */
+  canDrag?(entry: FolderEntry): boolean
 }
 
 /**
@@ -243,7 +245,7 @@ export class FolderBrowseView {
     })
 
     const drag = this.props.onDragStart
-    if (drag !== undefined) {
+    if (drag !== undefined && (this.props.canDrag?.(entry) ?? true)) {
       row.draggable = true
       row.addEventListener('dragstart', (event) => drag(event, entry, folder))
     }
