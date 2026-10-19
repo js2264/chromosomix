@@ -9953,17 +9953,20 @@ folder first.
 
 Every file row in the application carries the same two marks, and only marks (`ui/rowVerbs.ts`): a
 `+` that **adds the file to the session in front** — a second map beside the one that is there,
-anything else drawn on top, an empty tab filled rather than added to, which is the routing a dropped
-file takes — and a window with a `+` where its corner was that **opens it in a session of its
-own**, the empty tab in front or a new one, leaving whatever was open as it is. The words are in
-the tooltips, which also say what *add* means for that kind of file. Both are offered whatever the
-tab holds: on an empty tab the two land in the same place and the tooltips say so, because a row
-with two marks in one store and one in the next is a row a reader has to think about. A workspace
-row has the second alone — it is tabs, not a file, and there is nothing it could be added to. The
-same pair stands on a store's rows (§24.2), on a folder's rows here and on the files under a gallery
-card, whose own head carries the second mark alone; with words beside the marks it is the tray under
-a portal, and the second mark is on a portal group's *open with its tracks*. Clicking a folder row's
-name is the first verb.
+anything else drawn on top, an empty tab filled rather than added to, which is the routing a
+dropped file takes — and a window with a `+` where its corner was that **opens it in a session of
+its own**, the empty tab in front or a new one, leaving whatever was open as it is. The words are
+in the tooltips, which also say what *add* means for that kind of file. Both are offered whatever
+the tab holds: on an empty tab the two land in the same place and the tooltips say so, because a
+row with two marks in one store and one in the next is a row a reader has to think about. **An
+empty tab is filled by a row of any kind**, as the landing page's drop zone fills it: a folder on
+this machine hands its file to the road a drop on the window takes, whose empty seat was a map's
+alone, so a bigWig pressed there — its `+` saying it would open in this tab — did nothing and said
+nothing. A workspace row has the second alone — it is tabs, not a file, and there is nothing it
+could be added to. The same pair stands on a store's rows (§24.2), on a folder's rows here and on
+the files under a gallery card, whose own head carries the second mark alone; with words beside the
+marks it is the tray under a portal, and the second mark is on a portal group's *open with its
+tracks*. Clicking a folder row's name is the first verb.
 
 Dragging a file lets the reader say *where*: onto the map's edge rectangles for a lane in a named
 stack (§8.9), onto the rectangle in the middle of a map for that map alone — an overlay's one target
@@ -10021,7 +10024,30 @@ file picked from a folder on this machine brings its index from beside it (`brow
 listing does leave out is a name beginning with a dot — `.DS_Store`, `.git` — which is somebody's
 tooling rather than a file. The route is the name's (`browse/route.ts`), so every name a format of
 §8 is published under has to be in it: a `.barChart`, a `.bigBarChart` and a cytoBand in the plural
-were drawn dimmed while the loader read all three.
+were drawn dimmed while the loader read all three — and so, until every name each reader takes was
+checked against the table (`test/unit/browse-route.test.ts` holds the list), were four kinds more.
+A **3D structure** (§25) — `.g3d`, `.3dg`, `.bed3d`, `.pdb` — is the genome door's, and the same
+name test makes its row a structure the moment it is begun, so its cell opens before a byte is
+read. A **saved workspace** is a `.json`, routed by the test the config road itself uses; its row
+carries the new-session mark alone, and pressed, its tabs are appended beside the window's as a
+store row's are, with no empty tab opened for them first. A **text table** — `.txt`, `.tsv`,
+`.tab`, compressed or not — says nothing by its name and is offered all the same, because it is
+what a §8 format is published under when its own suffix is not used (chromosight's `loops.tsv`, a
+GEO supplement's `peaks.txt.gz`), and the loader reads it by its bytes (§8.3) as it does a dropped
+one; one whose rows no reader takes — a page of notes — is refused as *text, but not a table this
+viewer reads*, saying what a table is read as, where it used to reach the contact map's door and be
+told it was not an HDF5 file. And **`.bgz`**, which is what `bgzip` is told to write for a file
+meant to be indexed — gnomAD's VCFs — is read everywhere a `.gz` is, its `.tbi` found beside it
+included.
+
+What stays dimmed says the one thing its reader needs. A track hub's `hub.txt` is a store, opened
+from the stores drawer (§24.10), and its `genomes.txt` and `trackDb.txt` are read from it rather
+than offered as tables; a CSV is comma-separated, and every table read here is tab- or
+space-separated; a `.bz2`, `.xz` or `.zst` is a compression this viewer cannot inflate, and gzip or
+bgzip is the way out; a `.gzi` is an index this viewer does not use, a compressed FASTA being read
+whole (§8.8); a `.crai` is refused with its CRAM. A name a folder's address does not carry decides
+as well: a Drive or Dropbox row is routed by the name the folder handed along (§24.9), a workspace
+and a model as well as a map and a track.
 
 ### 20.6 What a connected folder is, in privacy terms
 
@@ -11445,7 +11471,10 @@ sign in, until the reader does. A picked file is the API's
 media URL — the same address `canonicalUrl` gives a pasted share link — with its name carried
 beside it, and **the name is what routes it**: the address ends in an id, which says nothing about
 what the file is, so `routeFor` lets the name choose the door the address cannot, and the loading
-screen and the tab say the name rather than the address. Where nobody gave a name — a share link
+screen and the tab say the name rather than the address. That holds for the two kinds a door is
+not a matter of map or track: a `session.json` is fetched as a workspace and its tabs appended, and
+a `model.pdb` opens a 3D cell of its own (§25.3), where by its address alone the first was taken
+for a track and the second for a map. Where nobody gave a name — a share link
 pasted into the URL box, a `view=browser` link, a track added by address — **Drive is asked for
 it first** (`browse/driveName.ts`): one `files.get` with `fields=name`, on the same key or
 token the read will carry, memoised by id for the page, and never in the way — a refusal, a site
@@ -11780,9 +11809,12 @@ used to write to one slot, so a deck of two views came back from a reload as the
 named by a URL, or computed, and *every* one of them where several land together, where only the
 last of a batch used to get a picture and the others sat on the card as rows with nothing drawn,
 which is the one state a reader reads as *it did not work*. It opens beside whatever was there
-rather than taking it over. It used to be one cell per deck, which made two models something a
-reader could only compare by swapping back and forth, and made a reconstruction landing destroy the
-model it was to be judged against — the commonest way to lose a picture in this application.
+rather than taking it over, and it opens **one**: a model dropped on a map, named by a URL or
+picked from a folder opened two, a cell for the file's name and another for the row's arrival; the
+watch on the store that every road ends in is the one that opens it now. It used to be one cell per
+deck, which made two models something a reader could only compare by swapping back and forth, and
+made a reconstruction landing destroy the model it was to be judged against — the commonest way to
+lose a picture in this application.
 **A model that opens the session on its own is drawn alone.** A structure file dropped on an empty
 window names a genome — its beads are on sequences — so the session it opens is a browser of that
 genome, and the browser has nothing to draw: a structure is a row and a cell, never a lane. It used

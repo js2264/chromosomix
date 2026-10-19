@@ -82,6 +82,7 @@ import {
   type SessionConfig,
 } from '../state/SessionConfig'
 import { fileMemoryKey } from '../state/UiMemory'
+import { routeFor } from '../browse/route'
 import {
   WORKSPACE_VERSION,
   buildWorkspaceFile,
@@ -433,9 +434,12 @@ export class App implements SessionHost {
       // A session of its own: the empty tab in front, or a new one — the
       // same choice a store row makes ({@link openStoreEntry}), and through
       // `addPicked` so that an empty tab is *filled* by the same road a
-      // dropped file takes, index and name included.
+      // dropped file takes, index and name included. Except a workspace,
+      // which is tabs of its own appended beside these, as a store row's is:
+      // a new tab opened for it first was left empty beside them.
       onOpenNew: (picked) => {
-        const session = this.tabEmpty() ? this.current : this.newSession()
+        const tabs = routeFor(picked.uri, picked.name) === 'workspace'
+        const session = this.tabEmpty() || tabs ? this.current : this.newSession()
         void session?.addPicked(picked)
       },
       tabEmpty: () => this.tabEmpty(),

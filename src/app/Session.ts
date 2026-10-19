@@ -125,14 +125,13 @@ import type {
 } from '../worker/protocol'
 import type { WireSource } from '../annotations/worker/protocol'
 import type { PickedFile } from '../browse/folder'
-import { routeFor, routeOf, type FileRoute } from '../browse/route'
+import { isTextTableName, routeFor, routeOf, type FileRoute } from '../browse/route'
 import { driveFileName } from '../browse/driveName'
 import { connectDirectory, subscribeFolders } from '../browse/connected'
 import { adoptFolders, hasLocation, missingFolderOf } from '../state/locations'
 import type { AssemblyResult } from '../annotations/worker/protocol'
 import { isHicProMatrix, splitBinsFragment, splitIndexFragment } from '../annotations/sidecar'
 import { readFileDrag } from '../ui/fileDrag'
-import { isStructureName } from '../annotations/g3d'
 import {
   assemblyOf,
   findContig,
@@ -1880,26 +1879,31 @@ export class Session {
    * after this line, which is the property worth having and the reason there is
    * no second door.
    */
-  async openConfigUrl(rawUrl: string): Promise<void> {
+  async openConfigUrl(
+    rawUrl: string,
+    /** What to call it where its address says only an id: a Drive file's name (§24.9). */
+    label?: string,
+  ): Promise<void> {
     // A wait for the picture the workspace describes, from the moment it is
     // asked for (`perf/rendered.ts`): the fetch comes before anything opens.
     const end = begin()
     try {
-      await this.openConfigUrlNow(rawUrl)
+      await this.openConfigUrlNow(rawUrl, label)
     } finally {
       end()
     }
   }
 
   /** What {@link openConfigUrl} does. */
-  private async openConfigUrlNow(rawUrl: string): Promise<void> {
+  private async openConfigUrlNow(rawUrl: string, label?: string): Promise<void> {
     // `?config=` is the other road a URL arrives on — a link, not a box — so the
     // rewrite table runs here the way it runs in `inferSource` for `#uri=`
     // (SPECS §24.5). A workspace published on Drive or named `gs://` is fetched
     // from the address that serves it, and the names inside it are then resolved
     // against that address by `resolveConfig`, which canonicalises them too.
     const url = canonicalUrl(rawUrl)
-    this.showContent(loading(`Reading ${fileLabel(url)}`))
+    const name = label ?? fileLabel(url)
+    this.showContent(loading(`Reading ${name}`))
     this.host.sessionChanged(this)
     try {
       // Signed when a bucket entry covers it, unsigned otherwise. A published
@@ -1922,14 +1926,14 @@ export class Session {
       })
       if (!response.ok) {
         throw new Error(
-          `${fileLabel(url)} could not be read: the host answered ${response.status} ` +
+          `${name} could not be read: the host answered ${response.status} ` +
             `${response.statusText}${credential === null ? '' : ' to a signed request'}.`,
         )
       }
       if (this.destroyed) return
       // …and the same hop for a published one, with the URL it was found at, so
       // the relative names inside it resolve against that folder.
-      this.host.openWorkspaceFile(await response.text(), fileLabel(url), url)
+      this.host.openWorkspaceFile(await response.text(), name, url)
     } catch (err) {
       if (!this.destroyed) this.showError(err)
     } finally {
@@ -2188,9 +2192,12 @@ export class Session {
     // is *before* the map door is tried, because that door's failure is dear:
     // HDF5 hunts for a superblock at doubling offsets, a megabyte chunk at
     // each, through the whole of a file that is not one. The question costs
-    // one small read (`openUnknown`), and a map answers it as a map.
+    // one small read (`openUnknown`), and a map answers it as a map. So is a
+    // `.json` that reached this door rather than the config road: it is a
+    // workspace only there ({@link openWithConfig}), and here a file like any
+    // other, asked before it is refused.
     let sniffed = false
-    if (route === 'unknown' && binning === undefined) {
+    if ((route === 'unknown' || route === 'workspace') && binning === undefined) {
       sniffed = true
       if (await this.openUnknown(uri, source, carry, label)) {
         named()
@@ -2569,6 +2576,16 @@ export class Session {
       // clear it for the same reason.
       this.opening = null
       if (route === 'unknown' && !sniffed && (await this.openUnknown(uri, source, carry, label))) return
+      // A text table's name whose bytes no reader took — they were asked above —
+      // is refused as the text it is. The map door's refusal, *not an HDF5
+      // file*, is true of a `notes.txt` and says nothing a reader can act on;
+      // the door is still tried, for a `.pairs` saved under a name like that.
+      const text = isTextTableName(uri) || (label !== undefined && isTextTableName(label))
+      if (sniffed && text && err instanceof ViewerError && err.code === 'not-hdf5') {
+        const name = label ?? fileLabel(uri)
+        this.showError(new ViewerError('not-a-table', `${name} is text, and no reader here took its rows as a table.`), uri, source)
+        return
+      }
       this.showError(err, uri, source)
     } finally {
       this.opening = null
@@ -3622,6 +3639,16 @@ export class Session {
    */
   async dropFiles(files: readonly File[]): Promise<void> {
     if (files.length === 0) return
+    // An empty tab is filled by the road the landing page's drop zone takes
+    // ({@link openFiles}): a map takes the seat, and anything else opens the
+    // browser its genome makes. The seat below is a map's alone, so a bigWig
+    // pressed in the Files column on an empty tab — whose `+` says it opens
+    // there — reached `dropped` with no tracks to join and did nothing at all.
+    // Not while a file is opening: that tab is not empty, only not yet full.
+    if (this.file === null && this.assembly === null && this.opening === null) {
+      await this.openFiles(files)
+      return
+    }
     const maps = files.filter(
       (file) => !looksLikeConfig(file.name) && this.routeOf(file.name) === 'map',
     )
@@ -3777,6 +3804,14 @@ export class Session {
     // A Drive address pasted here says only its id; Drive says the rest (§24.9).
     if (label === undefined) label = (await this.driveName(uri, source)) ?? undefined
     if (this.destroyed) return
+    // …and a workspace whose address does not say so, by the name it was
+    // given: a Drive file is addressed by an id and a Dropbox one by a
+    // temporary link, so the folder that listed it is what knows it is a
+    // `session.json`. By its address alone it was taken for a track.
+    if (label !== undefined && looksLikeConfig(label)) {
+      await this.openConfigUrl(path, label)
+      return
+    }
     // An empty tab takes the file's name as its own: a tab that read
     // `1pq7NDWo…` for a file the folder called `ATAC_rep2.bw` was the one
     // place in the application the name did not reach.
@@ -3824,7 +3859,6 @@ export class Session {
     const held = this.annotations
     const before = new Set(held.store.entries.map((entry) => entry.id))
     held.loader.addUrl(path, label, placement)
-    this.openStructureCell(path)
     if (map !== undefined && map !== LEAD_MAP) {
       for (const entry of held.store.entries) {
         if (before.has(entry.id)) continue
@@ -3901,7 +3935,6 @@ export class Session {
     // here without being asked *here* — see the hook's own comment for why it
     // is not a line at this call site.
     held.loader.addFiles(index === undefined ? [file] : [file, index], placement)
-    this.openStructureCell(file.name)
     // Everything `begin` just created belongs to the map it was dropped on. The
     // import itself is the session's, as it always was — only the placement
     // moves, so the track is in the one list with every other and simply drawn
@@ -3916,30 +3949,19 @@ export class Session {
   }
 
   /**
-   * A structure file arrived: open a cell for it beside the map (§25.3).
+   * A structure arrived: open its cell beside the map (§25.3).
    *
-   * By the file's *name*, because this runs the moment the file is handed to
-   * the loader and before anything has read it, so the cell is on screen while
-   * the file is read; a structure this test misses gets its cell when its row
-   * arrives, from {@link watchStructureRows}. A cell **per model**: a new cell
-   * draws the model no other cell is drawing, so a second g3d opens beside the
-   * first rather than taking its picture. Nothing where this view cannot hold a
-   * deck ({@link SessionDeck.possible}).
-   */
-  private openStructureCell(name: string): void {
-    if (!isStructureName(name)) return
-    if (!this.deck.possible) return
-    this.deck.ensure().add({ kind: 'structure' })
-  }
-
-  /**
-   * The other road a structure arrives by: a row the Tracks card made itself,
-   * from its URL box or its file chooser, which never passes through
-   * {@link dropped} or {@link addRemote}. Watched on the store rather than
-   * hooked into the card, so every road agrees: a structure row that was not
-   * there a moment ago opens its cell. The rows already in the list when the
-   * watch begins — a restored session's — are noted and not opened, since
-   * their deck is the link's to rebuild ({@link noteRestoredStructures}).
+   * Every road one arrives by — dropped, named by a URL, picked from a folder,
+   * made by the Tracks card's own box or chooser, landed by a reconstruction —
+   * ends in a row of the store, so it is watched there rather than hooked into
+   * each road, and every road agrees: a structure row that was not there a
+   * moment ago opens its cell. The moment the loader begins it where its name
+   * says structure, so the cell is on screen while the file is read; once read
+   * where only its bytes do. The drop and the URL roads used to open a cell by
+   * the file's name as well, and between the two every dropped model was drawn
+   * twice. The rows already in the list when the watch begins — a restored
+   * session's — are noted and not opened, since their deck is the link's to
+   * rebuild ({@link noteRestoredStructures}).
    */
   private watchStructureRows(store: AnnotationStore): void {
     const seen = this.knownStructures

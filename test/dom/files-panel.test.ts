@@ -153,18 +153,52 @@ describe('a connected bucket', () => {
    * one thing it is for.
    */
   it('draws what it cannot open, dimmed, with the reason on it', async () => {
-    serve(listing([], [['collections/notes.txt', 10], ['collections/map.mcool', 10]]))
+    serve(listing([], [['collections/notes.md', 10], ['collections/map.mcool', 10]]))
     writeScopes([scope()])
     const { el } = card()
 
     await vi.waitFor(() => expect(all(el, '.folder-entry')).toHaveLength(2))
     const inert = all(el, '.folder-entry-inert')
     expect(inert).toHaveLength(1)
-    expect(inert[0].textContent).toContain('notes.txt')
+    expect(inert[0].textContent).toContain('notes.md')
     expect(inert[0].getAttribute('title')).toContain('Not a format this viewer opens')
     // No verbs on a row that cannot be loaded: a verb offered and refused is
     // worse than no verb.
     expect(all(inert[0], '.row-verb')).toHaveLength(0)
+  })
+
+  /**
+   * And offers what it can, the kinds the router had not been taught among
+   * them: a model, a loop table whose name says only `.tsv`, and a workspace —
+   * which is tabs rather than a file, so its row carries the new-session mark
+   * and nothing to add it to.
+   */
+  it('offers a model, a text table and a workspace, each with its verbs', async () => {
+    serve(
+      listing(
+        [],
+        [
+          ['collections/model.pdb', 10],
+          ['collections/loops.tsv', 10],
+          ['collections/session.json', 10],
+        ],
+      ),
+    )
+    writeScopes([scope()])
+    const { el } = card()
+
+    await vi.waitFor(() => expect(all(el, '.folder-entry')).toHaveLength(3))
+    expect(all(el, '.folder-entry-inert')).toHaveLength(0)
+    const verbs = (name: string): string[] => {
+      const row = all<HTMLElement>(el, '.folder-entry-file').find((node) => node.textContent?.includes(name))
+      return all<HTMLButtonElement>(row!, '.row-verb').map((node) => node.title)
+    }
+    expect(verbs('model.pdb')).toEqual([
+      'Add model.pdb to this tab, as a 3D model in a cell of its own.',
+      'Open model.pdb in a new tab — the one in front is left as it is.',
+    ])
+    expect(verbs('loops.tsv')[0]).toBe('Add loops.tsv to this tab, as a track.')
+    expect(verbs('session.json')).toEqual(['Open session.json — a saved session — as its own tab.'])
   })
 
   it('offers a BAM, and explains the index sitting beside it', async () => {

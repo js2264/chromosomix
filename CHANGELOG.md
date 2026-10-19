@@ -81,6 +81,36 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A connected folder offers every file the app opens, and says why of the rest (§20.5, §24.9).**
+  The Files column drew 3D structures (`.g3d`, `.3dg`, `.bed3d`, `.pdb`), saved workspaces
+  (`.json`), text tables (`.txt`, `.tsv`, `.tab`, compressed or not) and anything bgzipped as `.bgz`
+  dimmed — *not a format this viewer opens* — though a drop opened every one of them, because the
+  table that routes a name had never been taught them. They are offered now: a structure opens its
+  3D cell, a workspace's one mark appends its tabs without leaving an empty tab beside them, a text
+  table is read by its bytes as a dropped one is, and a `.bgz` is read as a `.gz` everywhere, its
+  `.tbi` included — which, for a gnomAD `.vcf.bgz` opened by URL, was never looked for. Every name
+  each reader takes is in `test/unit/browse-route.test.ts`. What stays dimmed says
+  what to do: a track hub's `hub.txt` opens from the stores drawer, and its `genomes.txt` and
+  `trackDb.txt` are read from it; a CSV is not a table any reader here takes; a `.bz2`, `.xz` or
+  `.zst` wants gzip; a `.gzi` is not used, a compressed FASTA being read whole; a `.crai` goes with
+  its CRAM. A workspace or a model in a Drive folder or a Dropbox, whose address is an id or a
+  temporary link, now goes by the name the folder lists it under — fetched as a workspace, or
+  opening a cell — instead of being taken for a track or a map; and a store row of a structure is
+  marked a genome file, no longer a contact map.
+
+- **A row pressed in the Files column opens on an empty tab, whatever it is (§20.5).** From a folder
+  on this machine, only a map did: a bigWig, a BED, a model or a loop table pressed on an empty tab
+  went to the road a drop on an open map takes, found no tracks to join and did nothing, under a
+  `+` that said it would open there. So did a file dropped on an empty window outside the landing
+  page's zone. Both now take the landing page's road. And a text file the column offers whose rows
+  no reader takes is refused as *text, but not a table this viewer reads*, with what a table is
+  read as, rather than as a contact map that is not an HDF5 file.
+
+- **A model dropped beside a map opens one cell, not two (§25.3).** A structure dropped on a map,
+  named by a URL or picked from a folder was given a cell for its name and another for its row's
+  arrival, so every model was drawn twice, and a second model's spare cell fell back to the first.
+  The watch on the store, which every road ends in, is now the only one that opens a cell.
+
 - **A page asking for a map's file starts the reader while the file is found (§6.1).** The picker
   starts the reader's worker and h5wasm once the page is idle, so the first file dropped on it does
   not wait for them — but the picker a workspace or a restored tab puts up to ask for a map on this

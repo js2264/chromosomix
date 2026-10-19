@@ -169,6 +169,14 @@ describe('finding a remembered sidecar', () => {
     expect(indexNamesFor('genes.gtf.gz')).toEqual(['genes.gtf.gz.tbi'])
   })
 
+  it('reads `.bgz` as `.gz`, which is what bgzip is told to write for an indexable file', () => {
+    // gnomAD's spelling. A folder offers the row (`browse/route.ts`), and a
+    // row whose `.tbi` was not found beside it is a VCF of gigabytes read whole.
+    expect(indexNamesFor('gnomad.chr21.vcf.bgz')).toEqual(['gnomad.chr21.vcf.bgz.tbi'])
+    expect(indexNamesFor('lib.pairs.bgz')).toEqual(['lib.pairs.bgz.px2'])
+    expect(guessedIndexUrl('https://h/gnomad.chr21.vcf.bgz')).toBe('https://h/gnomad.chr21.vcf.bgz.tbi')
+  })
+
   it('offers the faidx name for a FASTA, and guesses the same three suffixes for a URL', () => {
     expect(indexNamesFor('genome.fa')).toEqual(['genome.fa.fai'])
     expect(indexNamesFor('genome.fna')).toEqual(['genome.fna.fai'])

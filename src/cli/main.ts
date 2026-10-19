@@ -1042,7 +1042,7 @@ async function openForTask(
  * reader must not have to know which convention produced the pair they have.
  */
 async function openPairsIndex(path: string): Promise<ByteSource | null> {
-  for (const candidate of [`${path}.px2`, `${path.replace(/\.gz$/i, '')}.px2`]) {
+  for (const candidate of [`${path}.px2`, `${path.replace(/\.b?gz$/i, '')}.px2`]) {
     if (!existsSync(candidate)) continue
     try {
       return await LocalFileSource.fromPath(candidate)

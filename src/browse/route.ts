@@ -8,7 +8,20 @@
  * with a second regular expression somewhere else is how a `.bedpe` comes to be
  * loadable by dropping and greyed out in a list.
  *
- * So the rule moved here and the session calls it. One table, three answers.
+ * So the rule moved here and the session calls it. One table, four answers.
+ *
+ * ## What it was not told
+ *
+ * The table is only as right as the list of names it was taught, and it was
+ * taught them one format at a time — so every format that arrived after it had
+ * to be added, and four kinds never were. A **structure** (§25) and a **saved
+ * workspace** were drawn dimmed in a folder although a drop opened both; and so
+ * were the text tables a §8 format is routinely published under — a loop table
+ * from chromosight is `loops.tsv`, a GEO supplement is `peaks.txt.gz` — and every
+ * `.bgz`, which is gnomAD's suffix for a VCF. An audit of every name each reader
+ * accepts against this table is what found them; `test/unit/browse-route.test.ts`
+ * holds the whole list, so the next format is checked against it rather than
+ * found dimmed.
  *
  * ## Why a name and not the bytes
  *
@@ -20,18 +33,31 @@
  * and the format detection that *does* read bytes (§3.1) runs after, where it
  * can refuse with a message.
  *
- * `unknown` is therefore "this app has no route for that name", not "this file is
- * broken". A row saying so is more use than a row that is absent: a reader
- * looking at a directory wants to see the directory, and a `.cram` sitting there
- * unhighlighted answers *why is nothing happening when I click it* before it is
- * asked.
+ * `unknown` is therefore "this name does not say", not "this file is broken" —
+ * and a name that does not say is not always one with nothing behind it. A
+ * `yeast.txt` is a table of something, and what it is is the loader's question
+ * (§8.3): `Session.open` asks its bytes before it tries a door, and a folder
+ * offers it for the same reason a drop takes it ({@link unroutableNote}). What a
+ * folder draws dimmed is a name this app has no road for at all, and a row
+ * saying so is more use than a row that is absent: a reader looking at a
+ * directory wants to see the directory, and a `.cram` sitting there unhighlighted
+ * answers *why is nothing happening when I click it* before it is asked.
  */
 
 import { splitUri } from '../ui/labels'
 import { devFeature } from '../state/devFeatures'
+import { looksLikeConfig } from '../state/SessionConfig'
+import { isStructureName } from '../annotations/g3d'
+import { looksLikeHubUrl } from '../state/hub'
 
-/** Which of the app's two front doors a name belongs to, or neither. */
-export type FileRoute = 'map' | 'genome' | 'unknown'
+/**
+ * Which of the app's front doors a name belongs to, or that it does not say.
+ *
+ * `workspace` is the third door and not a kind of file: a saved session is the
+ * tabs it was saved from, opened by the config road whatever the tab in front
+ * holds, which is why a row of one carries the new-session mark alone (§20.5).
+ */
+export type FileRoute = 'map' | 'genome' | 'workspace' | 'unknown'
 
 /**
  * Route a URI or a bare file name.
@@ -57,11 +83,11 @@ export function routeFor(uri: string, label?: string): FileRoute {
 }
 
 export function routeOf(uri: string): FileRoute {
-  // The last path segment, with the query and the fragment taken off it.
-  // Neither is part of a name, and both reach here: a bucket URL carries a
-  // query string, and a HiC-Pro pair names its bin file in a `#bins=` fragment
-  // (§3.9) — which ends in `.bed`, and routed the *matrix* to the genome door.
-  const name = (splitUri(uri).path.split(/[\\/]/).pop() ?? uri).split(/[?#]/)[0]
+  const name = nameOf(uri)
+  // A saved workspace, before anything asks what file it is, as `Session.dropped`
+  // asks: by the one test the config road uses, so a folder and a drop cannot
+  // disagree about which `.json` is a session.
+  if (looksLikeConfig(name)) return 'workspace'
   // The multi-genome containers only while they are read (§29): switched off
   // they are names this viewer does not open, and the row says so in the
   // sentence every other such name gets.
@@ -70,14 +96,19 @@ export function routeOf(uri: string): FileRoute {
   // A `.pairs` is a contact list rather than a matrix, and it still belongs at
   // the map's door: what comes out of it is a map, after one question the file
   // cannot answer for itself (§3.7). Routing is about which front door a name
-  // belongs to, and this one's is not the browser's.
-  if (/\.pairs(\.gz)?$/i.test(name)) return 'map'
+  // belongs to, and this one's is not the browser's. Bgzipped under either
+  // suffix: the reader knows a pairs file by its `## pairs format` line.
+  if (/\.pairs(\.b?gz)?$/i.test(name)) return 'map'
   // A HiC-Pro matrix, which is a contact map made of two text files (§3.9). The
   // `.bed` beside it stays on the genome door: it is a valid BED as well as a
   // bin grid, and which of the two it is depends on what it was dropped with.
   if (/\.matrix(\.gz)?$/i.test(name)) return 'map'
+  // `.bgz` beside `.gz` throughout: it is what `bgzip` is told to write when
+  // the name should say the file is indexable — gnomAD publishes its VCFs as
+  // `.vcf.bgz` — and the loader knows gzip and BGZF by their magic, not their
+  // suffix. And `.bg`, which is bedtools' own name for a bedGraph.
   if (
-    /\.(bw|bigwig|bb|bigbed|chrom\.sizes|sizes|genome|fai|fa|fasta|fna|fas|gtf|gff3?|bed|bedpe|narrowPeak|broadPeak|gappedPeak|vcf|bdg|bedgraph|wig)(\.gz)?$/i.test(
+    /\.(bw|bigwig|bb|bigbed|chrom\.sizes|sizes|genome|fai|fa|fasta|fna|fas|gtf|gff3?|bed|bedpe|narrowPeak|broadPeak|gappedPeak|vcf|bdg|bedgraph|bg|wig)(\.b?gz)?$/i.test(
       name,
     )
   ) {
@@ -95,10 +126,10 @@ export function routeOf(uri: string): FileRoute {
   // them, and a router that insisted on a suffix would go on greying out
   // exactly the gene models this release exists to open.
   if (
-    /\.(interact|biginteract|longrange|longtabix|genepred|genepredext|refflat|bedmethyl|bigmethyl|barchart|bigbarchart|2bit)(\.txt)?(\.gz)?$/i.test(
+    /\.(interact|biginteract|longrange|longtabix|genepred|genepredext|refflat|bedmethyl|bigmethyl|barchart|bigbarchart|2bit)(\.txt)?(\.b?gz)?$/i.test(
       name,
     ) ||
-    /(^|[._-])(refflat|refgene|ncbirefseq|knowngene)\.txt(\.gz)?$/i.test(name)
+    /(^|[._-])(refflat|refgene|ncbirefseq|knowngene)\.txt(\.b?gz)?$/i.test(name)
   ) {
     return 'genome'
   }
@@ -115,9 +146,39 @@ export function routeOf(uri: string): FileRoute {
   // browser opens from — under the plural as well, which is what a file named
   // for its bands rather than for UCSC's table is called, the demo's own
   // `Yeast_cytobands.txt` among them.
-  if (/cytoband(s|ideo)?(\.txt)?(\.gz)?$/i.test(name)) return 'genome'
-  if (/(sj\.out\.tab|\.junc)(\.gz)?$/i.test(name)) return 'genome'
+  if (/cytoband(s|ideo)?(\.txt)?(\.b?gz)?$/i.test(name)) return 'genome'
+  if (/(sj\.out\.tab|\.junc)(\.b?gz)?$/i.test(name)) return 'genome'
+  // A 3D structure (§25): the genome door, because a model is a row of the
+  // annotation store whose every bead is an interval — dropped on an empty tab
+  // it opens a browser over the sequences its beads cover, with the model in a
+  // cell of its own — by the same name test that makes its row a structure the
+  // moment the loader begins it, on the Structures card and in a cell before a
+  // byte is read (`annotations/g3d.ts`).
+  if (isStructureName(name)) return 'genome'
   return 'unknown'
+}
+
+/**
+ * The last path segment, with the query and the fragment taken off it.
+ *
+ * Neither is part of a name, and both reach here: a bucket URL carries a query
+ * string, and a HiC-Pro pair names its bin file in a `#bins=` fragment (§3.9) —
+ * which ends in `.bed`, and routed the *matrix* to the genome door.
+ */
+function nameOf(uri: string): string {
+  return (splitUri(uri).path.split(/[\\/]/).pop() ?? uri).split(/[?#]/)[0]
+}
+
+/**
+ * Whether a name is a text table's — `.txt`, `.tsv`, `.tab`, compressed or not —
+ * which says only that its rows will say what it is (§8.3).
+ *
+ * Such a name routes `unknown` and is offered all the same ({@link
+ * unroutableNote}); the session asks its bytes, and refuses one no reader took
+ * as the text it is rather than as a contact map that is not one.
+ */
+export function isTextTableName(uri: string): boolean {
+  return /\.(txt|tsv|tab)(\.b?gz)?$/i.test(nameOf(uri))
 }
 
 /**
@@ -125,9 +186,25 @@ export function routeOf(uri: string): FileRoute {
  *
  * Written where the routing is, so the list and the router cannot come to
  * disagree about which names do nothing.
+ *
+ * A name the router cannot place is still offered when it is a text table —
+ * `.txt`, `.tsv`, `.tab`, compressed or not — because those are the names §8's
+ * formats are published under when their own suffix is not used, and the
+ * loader reads them by their bytes (§8.3): dropped, a `loops.tsv` opens as the
+ * BEDPE it is. Dimming it said a file the app opens was one it did not.
  */
 export function unroutableNote(name: string): string | null {
   if (routeOf(name) !== 'unknown') return null
+  // A track hub's files end in `.txt` too, and none of them is a table: a hub
+  // opens as a store, from its address, and its other files are read from it.
+  // Asked before the text tables below, which would offer them.
+  if (looksLikeHubUrl(name)) {
+    return 'A UCSC track hub, which opens as a store: paste its address into the stores drawer.'
+  }
+  if (/(^|[\\/])(genomes|trackdb)\.txt$/i.test(name)) {
+    return 'Part of a UCSC track hub, which opens as a store from its hub.txt.'
+  }
+  if (isTextTableName(name)) return null
   if (/\.tbi$/i.test(name)) {
     return 'A tabix index. Load the file it indexes and this is picked up with it.'
   }
@@ -140,8 +217,17 @@ export function unroutableNote(name: string): string | null {
   if (/\.px2$/i.test(name)) {
     return 'A pairix index. Load the .pairs.gz it indexes and this is picked up with it.'
   }
-  if (/\.cram$/i.test(name)) {
+  if (/\.(cram|crai)$/i.test(name)) {
     return 'CRAM needs its exact reference genome, which this viewer will not fetch. Convert it with `samtools view -b`.'
+  }
+  if (/\.gzi$/i.test(name)) {
+    return 'A bgzip index, which this viewer does not use: a compressed FASTA is read whole.'
+  }
+  if (/\.csv(\.b?gz)?$/i.test(name)) {
+    return 'Comma-separated text, which no reader here takes: the tables this viewer reads are tab- or space-separated.'
+  }
+  if (/\.(bz2|xz|zst)$/i.test(name)) {
+    return 'Compressed with bzip2, xz or zstd, which this viewer cannot inflate. Recompress it with gzip, or bgzip to index it.'
   }
   return 'Not a format this viewer opens.'
 }

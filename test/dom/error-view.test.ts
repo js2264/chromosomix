@@ -433,6 +433,7 @@ describe('with the multi-genome format switched off (§29)', () => {
 
   it.each([
     ['not-hdf5', 'This is not an HDF5 file'],
+    ['not-a-table', 'Text, but not a table this viewer reads'],
     ['not-a-cooler', 'HDF5, but not a contact map'],
     ['variable-bins', 'Variable-bin file'],
     ['unknown-label', 'Unknown sequence'],

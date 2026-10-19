@@ -65,7 +65,7 @@ const INTERACT_COLUMNS = 18
 const ENOUGH_ROWS = 4
 
 /** A name that says the format, which waives the tests a name has answered. */
-const INTERACT_NAME = /\.(biginteract|interact)(\.gz)?$/i
+const INTERACT_NAME = /\.(biginteract|interact)(\.b?gz)?$/i
 
 function isNumber(value: string | undefined): boolean {
   return value !== undefined && value !== '' && Number.isFinite(Number(value))
