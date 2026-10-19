@@ -84,7 +84,7 @@ function context(uri: string): AnalysisContext {
   }
 }
 
-const TASK = { id: 'coverage', title: 'Coverage and marginals' } as unknown as AnalysisTask
+const TASK = { id: 'coverage', title: 'Coverage and marginals', params: [] } as unknown as AnalysisTask
 
 /**
  * The seam the runner calls when a task finishes.

@@ -539,9 +539,11 @@ Not a new algorithm, and that is the point. A composite of things that already e
 
 Stated so they are decisions rather than omissions, and mirrored into `SPECS.md` §13 and §18.9:
 
-- **No loop or dot calling.** HiCCUPS-class calling needs FDR control over several local backgrounds, and
+- ~~**No loop or dot calling.** HiCCUPS-class calling needs FDR control over several local backgrounds, and
   a half-good caller inside a viewer is a liability that gets cited. *Scoring* an existing loop set is
-  5.8, and that is the honest version of this.
+  5.8, and that is the honest version of this.~~ **Narrowed since**: no caller of this app's own
+  invention, SPECS §18.9 — Pattern detection ports chromosight and Loop calling ports `cooltools.dots`,
+  each held to its package's own output.
 - ~~**No contig reordering or scaffolding from contacts.** It would only be useful if the app could write
   the reordered file back, and it will not (below).~~ **Reversed since**: the reference editor, SPECS §27
   and §18.9 — an edit is a lens over the file, written out as new files, never back into it.

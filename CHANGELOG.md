@@ -14,10 +14,28 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Loop calling, a 2D task of its own, just before Pattern detection (§18.8, §18.9).** It answers
+  the one question *where are the loops*, where Pattern detection matches a template of which a loop
+  is one of five. Every pixel is tested against four neighbourhoods of its own — a donut about it, a
+  bar through it each way and the square below and left of it — each giving the pixel a local
+  expected, in raw counts; pixels of a like expected are corrected together, in 40 log-spaced
+  λ-chunks at an FDR of 0.1, kernel by kernel; a pixel that passes all four is enriched, enriched
+  pixels within 20 kb are one loop, called at its brightest, and a filter keeps the loops that stand
+  1.5–2× over their neighbourhoods. The calls land on the map as rings and leave as BEDPE; beside
+  them, a table of every call with its four expecteds and q-values, the loop spectrum, and the count
+  each λ-chunk asked of a pixel. The kernel's two half-widths are filled in for bins of 4 to 28 kb
+  (`w 7, p 4` at 5 kb, `5, 2` at 10 kb, `3, 1` at 25 kb); on a map outside that range the boxes are
+  empty and the run is refused, saying why, until they are filled. A balanced map only. On the
+  command line it is `chromosomix loops`. It reproduces HiCCUPS as `cooltools.dots` 0.7.1 computes it,
+  with its Python API's defaults: held to that package's own output stage by stage over the demo
+  cooler (`test/golden/analysis/hiccups.json`), and genome-wide on a mouse Hi-C map at 10 kb in the
+  validation notebook's new § 19, where the same 236 loops are called with the same counts, clusters,
+  expecteds and q-values, in 48 s of CPU on one thread where cooltools takes 11 minutes over four.
+
 - **Every number the validation's figures draw, in one table (§18.10).** `notebooks/validation.qmd`
   writes `validation.txt` beside its page — <https://chromosomix.app/validation/validation.txt>, and
   `validation-<tag>.txt` among each release's assets — a tidy table with a row for every mark its
-  nineteen figures draw: each point, each vertex of a line, each hexagon of a density with its count,
+  twenty figures draw: each point, each vertex of a line, each hexagon of a density with its count,
   each cell of a picture, each bar, band and line across a panel, each tick that names something and
   each text, with the figure's label, the panel's letter and axes, and what the mark stands for. It
   is read off each figure as the page shows it, so any figure can be drawn again from it alone. A
@@ -84,6 +102,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **Pattern detection's own words name no package (§18.8).** Its row reads *Find loops, borders,
+  hairpins, centromeres or stripes by template matching*, its thresholds are *the template's own
+  numbers, tuned for it and published with it*, and the note on a file with no weights speaks of
+  *the published method*. Its keywords no longer take *loop calling* or *call loops*, which find
+  Loop calling first; its command is still `chromosomix chromosight`.
+
 - **The package is published without a token (§22.3).** The release workflow publishes to npm by
   trusted publishing: npm takes the upload only from this repository's `release.yml`, by the
   short-lived identity GitHub gives the run, and publishes it with provenance, so each version on
@@ -107,6 +131,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   it was 222 MiB.
 
 ### Fixed
+
+- **A number the map decides still follows the map after a run (§18.2).** A run is handed every
+  such number answered, so that its record says what it read, and that answer was what the form
+  remembered: after a run, Base composition's and Signal by group's bin size stayed at the rung the
+  run was on instead of following the next. The form now remembers a run as it was asked, the
+  number left to the map unless the reader typed one.
+
+- **A log axis draws its first and last ticks (§18.13).** Where the figure gives an axis its own
+  ticks, at 1, 2 and 5 or every digit of a decade, the library hid the first and the last of them
+  whenever the axis's fitted end went unlabelled, grid lines and all: a loop spectrum from 10.9 kb had
+  no tick below 30 kb. An end goes unlabelled now only where a tick sits on it.
 
 - **A 1D task is one Run, deck or not (§18.1, §18.4).** The 1D tasks read the loaded tracks and
   sequences and never a map, yet a deck offered them *run on ★* and *run on all N maps*: the batch

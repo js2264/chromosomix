@@ -77,7 +77,7 @@ function context(): AnalysisContext {
   }
 }
 
-const TASK = { id: 'composition', title: 'Base composition' } as unknown as AnalysisTask
+const TASK = { id: 'composition', title: 'Base composition', params: [] } as unknown as AnalysisTask
 
 /** The seam the runner calls when a task finishes, as `analysis-metacool-lanes` reaches it. */
 function finish(workspace: AnalysisWorkspace, result: TaskResult): void {
