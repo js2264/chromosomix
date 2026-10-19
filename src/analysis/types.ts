@@ -1542,3 +1542,19 @@ export interface AnalysisTask {
   dev?: DevFeature
   estimate(context: AnalysisContext, params: Params): CostEstimate
 }
+
+/**
+ * Whether a task reads a contact map, or only the tracks and sequences loaded.
+ *
+ * Every task in the annotations venue is the second kind (§18.3): its runner is
+ * handed the loaded entries and a framing and has no matrix to read, which is
+ * the whole of what puts it in that worker. So a deck changes nothing about it.
+ * Four maps on screen are four answers to a P(s) and one answer to a metaplot,
+ * and the drawer offers it one Run rather than *run on ★* and *run on all four*
+ * (§18.1), which queued the same tracks four times and filed four copies of one
+ * lane under four maps' names. `mapless` says it outright for the one task that
+ * reads no map even in its framing (§28); the venue says it for the rest.
+ */
+export function readsMap(task: Pick<AnalysisTask, 'venue' | 'mapless'>): boolean {
+  return task.venue === 'analysis' && task.mapless !== true
+}

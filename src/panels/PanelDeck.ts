@@ -776,8 +776,9 @@ export class PanelDeck {
    *
    * **Or none**, `null`: the reader pressed the filled star. Then the card sets
    * every map at once — the first map's card, its changes copied onto every
-   * companion ({@link mirrorLead}) — and no task can run, since there is no file
-   * for one to run against (§18.1).
+   * companion ({@link mirrorLead}) — and no task that reads a map can run, since
+   * there is no file for one to run against (§18.1). The 1D tasks read only the
+   * tracks, and run as before.
    */
   private starred: MapId | null = LEAD_MAP
   /**

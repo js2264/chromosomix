@@ -19,7 +19,7 @@
 
 import { buildAnalysisContext } from '../analysis/context'
 import type { RunTarget } from '../analysis/runner'
-import type { AnalysisContext, AnalysisFraming } from '../analysis/types'
+import { readsMap, type AnalysisContext, type AnalysisFraming, type AnalysisTask } from '../analysis/types'
 import type { AnalysisWorkspace, AnalysisWorkspaceHost } from '../analysis/workspace'
 import { LEAD_MAP } from '../annotations/placement'
 import { browsingBinsize } from '../genome/assembly'
@@ -31,11 +31,13 @@ import type { Session } from './Session'
 
 /**
  * What the Analysis column says while a deck has no map starred (§18.1): one
- * sentence, above every greyed row and in Run's refusal.
+ * sentence, above every greyed row and in Run's refusal. The 1D tasks read no
+ * map, so they are the ones left to run, and the sentence says so rather than
+ * leaving a reader to wonder why one card is not greyed.
  */
 const NO_STAR_TASKS =
-  'No map is starred, so no task can run: a task reads one map, and the star is how it is named. ' +
-  'Star a map in its heading to run tasks on it.'
+  'No map is starred, so only the 1D tasks can run: every other task reads one map, and the star ' +
+  'is how it is named. Star a map in its heading to run them.'
 
 /**
  * A framing with the reader's circular declarations attached.
@@ -197,8 +199,8 @@ export class SessionAnalysis {
   /** The callbacks `AnalysisWorkspace` reads the session through. */
   private workspaceHost(): AnalysisWorkspaceHost {
     return {
-      source: () => {
-        const starred = this.starredFacts()
+      source: (task) => {
+        const starred = this.starredFacts(task)
         if (starred !== null) {
           return {
             uri: starred.uri,
@@ -245,7 +247,7 @@ export class SessionAnalysis {
           ? null
           : { uri: assembly.uri, source }
       },
-      context: () => this.context(),
+      context: (task) => this.context(task),
       // Read fresh on every call rather than cached: `Run` takes the framing at
       // the instant it is pressed, and a cached one would be a record of
       // wherever the reader happened to be when the drawer opened.
@@ -296,7 +298,8 @@ export class SessionAnalysis {
       // The star, so a measurement lands on the picture it was measured from.
       targetMap: () => this.session.deck.grid?.starredMap ?? LEAD_MAP,
       // A deck the reader has left with no map starred has no file for a task
-      // to run against, and none is guessed for them (§18.1).
+      // that reads a map to run against, and none is guessed for them (§18.1).
+      // The 1D tasks read only the tracks, and the column and drawer let them by.
       blocked: () => {
         const deck = this.session.deck.grid
         return deck !== null && deck.starredMap === null ? NO_STAR_TASKS : null
@@ -360,8 +363,8 @@ export class SessionAnalysis {
         this.session.carriedAnalysis = null
         return rows
       },
-      contigs: () =>
-        (this.context()?.contigs ?? []).map((contig) => ({
+      contigs: (task) =>
+        (this.context(task)?.contigs ?? []).map((contig) => ({
           name: contig.name,
           startBin: contig.startBin,
           bins: contig.bins,
@@ -387,8 +390,15 @@ export class SessionAnalysis {
    * Analysis column reads as "no context" for the frame or two it takes — the
    * honest answer, since the alternative is pricing a task against the lead
    * under a star that says otherwise.
+   *
+   * And `null` for a task that reads no map, whichever map is starred (§18.1).
+   * A 1D task reads the session's tracks, and is framed, priced and laid out on
+   * the session's own map: with the star's, moving the star changed the
+   * sequences it offered and the grid its lanes were cut on — two answers to
+   * one question, under a Run that says the star is nothing to it.
    */
-  private starredFacts(): AnalysisFacts | null {
+  private starredFacts(task?: AnalysisTask): AnalysisFacts | null {
+    if (task !== undefined && !readsMap(task)) return null
     return this.session.deck.grid?.starredPanel?.analysisFacts() ?? null
   }
 
@@ -498,8 +508,11 @@ export class SessionAnalysis {
    * Rebuilt per call rather than held, and cheaply: it is a walk over the contig
    * table, and the alternative is a cached object that is wrong every time a
    * track is loaded or the map is panned. `analysis/context.ts` does the work.
+   *
+   * The starred map's, or — for a `task` that reads no map — the session's own
+   * ({@link starredFacts}).
    */
-  private context(): AnalysisContext | null {
+  private context(task?: AnalysisTask): AnalysisContext | null {
     const file = this.session.file
     // **A session with no contact map still has a panel.** Three tasks run
     // entirely on loaded tracks — metaplot, track correlation, interval overlap
@@ -562,7 +575,7 @@ export class SessionAnalysis {
     // against the picture it points at, and the lead only answers when it is
     // itself the starred map. `entries` stays the session's, because the tracks
     // are the session's however many maps are on screen.
-    const starred = this.starredFacts()
+    const starred = this.starredFacts(task)
     const starredPanel = this.session.deck.grid?.starredPanel ?? null
     const info = starred?.info ?? file.info
     const uri = starred?.uri ?? file.uri

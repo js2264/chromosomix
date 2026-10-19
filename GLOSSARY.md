@@ -463,11 +463,11 @@ lock; the other two are told the lead's window as loci and never report one back
 
 Which map of a deck the Analysis column reads (§18.1), the Aesthetics column's *Map* card sets and
 the General column's *File* card describes (§16.5). It starts on the lead; a filled star pressed
-leaves **no map starred**, in which state the card sets every map at once and no task can run
-(§18.1). A structure cell has a star of its own, saying which cell the *3D structure* card sets — or,
-with none filled, that it sets them all (§25.3). A feature set's row on the Tracks card has a third,
-of another kind: which set the feature search reads, and the one a task's parameter defaults to
-(§5.8, §18.2).
+leaves **no map starred**, in which state the card sets every map at once and no task that reads a
+map can run — the 1D tasks, which read only tracks, still do (§18.1). A structure cell has a star of
+its own, saying which cell the *3D structure* card sets — or, with none filled, that it sets them
+all (§25.3). A feature set's row on the Tracks card has a third, of another kind: which set the
+feature search reads, and the one a task's parameter defaults to (§5.8, §18.2).
 
 ### lock, chain
 
