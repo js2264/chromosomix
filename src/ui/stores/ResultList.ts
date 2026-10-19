@@ -207,7 +207,7 @@ function kindTitle(kind: StoreEntry['kind']): string {
     ? 'A contact map'
     : kind === 'workspace'
       ? 'A saved session: a file with its tracks placed'
-      : 'A genome file: a track, a sequence or an annotation'
+      : 'A genome file: a track, a sequence, an annotation or a 3D model'
 }
 
 /**

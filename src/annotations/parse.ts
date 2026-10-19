@@ -181,9 +181,9 @@ export function sniffFormat(text: string, fileName = ''): TextFormat {
   const row = firstRow(text)
   if (row === null) {
     // Nothing to read: fall back to the name, which at least says what was meant.
-    return /\.(gtf|gff3?)(\.gz)?$/i.test(fileName)
+    return /\.(gtf|gff3?)(\.b?gz)?$/i.test(fileName)
       ? 'gtf'
-      : /\.(bedpe|pairs)(\.gz)?$/i.test(fileName)
+      : /\.(bedpe|pairs)(\.b?gz)?$/i.test(fileName)
         ? 'bedpe'
         : 'bed'
   }
@@ -312,9 +312,9 @@ type PeakFlavour = 'narrow' | 'broad' | 'gapped'
  * and the suffix is no longer the only thing that can spot one.
  */
 function peakFlavour(text: string, fileName: string): PeakFlavour | null {
-  if (/\.narrowpeak(\.gz)?$/i.test(fileName)) return 'narrow'
-  if (/\.gappedpeak(\.gz)?$/i.test(fileName)) return 'gapped'
-  if (/\.broadpeak(\.gz)?$/i.test(fileName)) return 'broad'
+  if (/\.narrowpeak(\.b?gz)?$/i.test(fileName)) return 'narrow'
+  if (/\.gappedpeak(\.b?gz)?$/i.test(fileName)) return 'gapped'
+  if (/\.broadpeak(\.b?gz)?$/i.test(fileName)) return 'broad'
   const row = firstRow(text)
   if (row === null) return null
   if (row.length === 10 && isNumber(row[6]) && isNumber(row[7]) && isNumber(row[8])) {

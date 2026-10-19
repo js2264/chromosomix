@@ -21,7 +21,7 @@ chromosomix launches in about a second and reads your data where it lives, on yo
 - Support for all genomic data types: 
   - Supports 1D genomic formats: bigWig, bigBed, BED, bedGraph, wig, GTF/GFF3, FASTA (+`.fai`), `.2bit`, BAM, VCF, barChart/bigBarChart, genePred/refFlat/bigGenePred, bedMethyl/bigMethyl, chrom.sizes, ...
   - Supports 2D genomic formats: `.*cool`, `.hic`, HiC-Pro, `pairs(.gz)`, ..., at every resolution the file stores. Also supports interaction formats: BEDPE, and UCSC's `interact`/`bigInteract` and `longrange`/longTabix — drawn as arcs over the contact map and as their own lane in the 1D browser.
-  - Supports 3D genomic formats: WashU's g3d (text or binary), `.3dg`, and `bed3d`, drawn in 3D and synchronized with the maps and tracks view. 
+  - Supports 3D genomic formats: WashU's g3d (text or binary), `.3dg`, and `bed3d`, drawn in 3D and synchronized with the maps and tracks view. Every model also leaves as a PDB for PyMOL, ChimeraX and the other molecular viewers, a chain per chromosome and bonds along the fibre, and reads back here. 
 
 - Perform analyses directly in the browser:
   - 1D analysis tasks: peak calling from a coverage track (yapc, with IDR between replicates), motif search, base composition and GC skew, the origin and terminus of replication, metaplots, track correlation, FRiP over a feature set, signal by group, interval overlap with a shuffle null, ...
@@ -534,7 +534,8 @@ chromosomix circular ecoli.mcool::/resolutions/5000
 chromosomix interarm ecoli.mcool::/resolutions/5000 --circular NC_000913.3 \
   --origin NC_000913.3:3925744 --out results/
 
-# A 3D model built from the map, written as a bed3d the viewer opens beside it.
+# A 3D model built from the map, written as a bed3d the viewer opens beside it,
+# and as a PDB for PyMOL.
 chromosomix reconstruct3d ecoli.mcool::/resolutions/20000 --out results/
 
 # What the session set from the picture, as flags: the score column a

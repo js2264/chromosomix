@@ -175,8 +175,8 @@ export function indexNamesFor(base: string): string[] {
   // A pairs file takes a `.px2` and never a `.tbi`; everything else bgzipped
   // takes a `.tbi` and never a `.px2`. Offering both for either would mean a
   // restored row fetching an index that cannot exist.
-  if (/\.pairs\.gz$/i.test(base)) return [`${base}.px2`]
-  if (/\.gz$/i.test(base)) return [`${base}.tbi`]
+  if (/\.pairs\.b?gz$/i.test(base)) return [`${base}.px2`]
+  if (/\.b?gz$/i.test(base)) return [`${base}.tbi`]
   // `samtools faidx genome.fa` writes `genome.fa.fai`, and nothing else does.
   if (FASTA_NAME.test(base)) return [`${base}.fai`]
   return []
@@ -185,19 +185,20 @@ export function indexNamesFor(base: string): string[] {
 /**
  * The sidecar URL for a remote file, guessed from its name.
  *
- * `<url>.tbi` for anything gzipped, `<url>.bai` for a BAM and `<url>.fai` for
- * a FASTA: the spellings `tabix`, `samtools index` and `samtools faidx` write,
- * which is what every bucket that publishes an index publishes it as. Guessed
- * optimistically and never probed — a `HEAD` to find out costs the same round
- * trip the miss does, and §12 does not have a request to spend on finding out
- * that a file has no index. What a miss costs differs by format, and each
- * reader says so where it falls back; what is the same for all three is that
- * `#index=<url>` on the file's own URL always wins over this guess, because a
- * presigned URL or one carrying a query string can never usefully have a
- * suffix appended to it (§8.13).
+ * `<url>.tbi` for anything gzipped — as `.gz` or as `.bgz`, which is gnomAD's
+ * spelling — `<url>.bai` for a BAM and `<url>.fai` for a FASTA: the spellings
+ * `tabix`, `samtools index` and `samtools faidx` write, which is what every
+ * bucket that publishes an index publishes it as. Guessed optimistically and
+ * never probed — a `HEAD` to find out costs the same round trip the miss does,
+ * and §12 does not have a request to spend on finding out that a file has no
+ * index. What a miss costs differs by format, and each reader says so where it
+ * falls back; what is the same for all three is that `#index=<url>` on the
+ * file's own URL always wins over this guess, because a presigned URL or one
+ * carrying a query string can never usefully have a suffix appended to it
+ * (§8.13).
  */
 export function guessedIndexUrl(url: string): string | undefined {
-  if (/\.gz$/i.test(url)) return `${url}.tbi`
+  if (/\.b?gz$/i.test(url)) return `${url}.tbi`
   if (/\.bam$/i.test(url)) return `${url}.bai`
   if (FASTA_NAME.test(url)) return `${url}.fai`
   return undefined
@@ -270,7 +271,7 @@ export function pairIndexes(files: readonly File[]): PairedDrop[] {
  */
 export function leadOf(
   paired: readonly PairedDrop[],
-  route: (name: string) => 'map' | 'genome' | 'unknown',
+  route: (name: string) => 'map' | 'genome' | 'workspace' | 'unknown',
 ): PairedDrop | undefined {
   return (
     paired.find((pair) => route(pair.file.name) === 'map') ??

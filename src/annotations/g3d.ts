@@ -61,18 +61,24 @@ export const G3D_FIELD_HAPLOTYPE = 'haplotype'
  * reaches here as a path or as a URL, so the directories are dropped and a
  * `?query` or `#fragment` is cut off first — `model.bed3d?token=1` is a
  * bed3d, and the anchored suffix test alone would have said it was not.
+ *
+ * A `.pdb` is named here too, though no row of it is read by this module
+ * (`annotations/pdb.ts`): the name is what sends it to the Structures card,
+ * where the PDB reader either places its beads or says why it cannot.
  */
-function structureNameLayout(name: string): StructureLayout | null {
+function structureNameLayout(name: string): StructureLayout | 'pdb' | null {
   const last = name.split(/[\\/]/).pop() ?? name
   const bare = last.split(/[?#]/)[0] ?? last
   if (/\.(g3d|3dg)(\.txt)?(\.gz)?$/i.test(bare)) return 'g3d'
   if (/\.bed3d(\.txt)?(\.gz)?$/i.test(bare)) return 'bed3d'
+  if (/\.pdb(\.gz)?$/i.test(bare)) return 'pdb'
   return null
 }
 
 /**
  * Whether a file **name** says it is a structure — `.g3d`, the text g3dtools
- * takes or the container it writes, a `.3dg`, or a `.bed3d`, gzipped or not.
+ * takes or the container it writes, a `.3dg`, a `.bed3d` or a `.pdb`, gzipped
+ * or not.
  *
  * By name only, which is what a road that has not read the file yet can ask:
  * the deck routing a drop to its structure cell, the session deciding to open
@@ -81,6 +87,11 @@ function structureNameLayout(name: string): StructureLayout | null {
  */
 export function isStructureName(name: string): boolean {
   return structureNameLayout(name) !== null
+}
+
+/** Whether a file **name** says it is a PDB, by the same reading as {@link isStructureName}. */
+export function isPdbName(name: string): boolean {
+  return structureNameLayout(name) === 'pdb'
 }
 
 /**

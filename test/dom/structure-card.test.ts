@@ -157,7 +157,74 @@ describe('the Structures card', () => {
     expect(card.el.querySelector<HTMLButtonElement>('.ann-eye')?.disabled).toBe(true)
     const bed3d = card.el.querySelector<HTMLButtonElement>('.structure-bed3d')
     expect(bed3d?.disabled).toBe(true)
+    expect(card.el.querySelector<HTMLButtonElement>('.structure-pdb')?.disabled).toBe(true)
     expect(card.el.querySelector('.ann-row')?.textContent).toMatch(/reading…/)
+  })
+
+  /**
+   * **PDB** beside bed3d (§25.7): the same model for PyMOL, its TITLE saying
+   * what the bed3d's `#` line says, run date and all. A model whose chain is
+   * longer than a PDB's four columns of residue number can count has the
+   * button disabled, with that reason on it, rather than a file whose numbers
+   * have run into the next column.
+   */
+  it('writes the model as a PDB, dated as its bed3d is, and says when its columns cannot hold it', async () => {
+    const written: Blob[] = []
+    const names: string[] = []
+    const scope = window as unknown as { showSaveFilePicker?: unknown }
+    scope.showSaveFilePicker = (options: { suggestedName: string }) => {
+      names.push(options.suggestedName)
+      return Promise.resolve({
+        name: options.suggestedName,
+        createWritable: () =>
+          Promise.resolve({
+            write: (blob: Blob) => {
+              written.push(blob)
+              return Promise.resolve()
+            },
+            close: () => Promise.resolve(),
+          }),
+      })
+    }
+    try {
+      const { store, card } = make({
+        createdAt: (entry) => (entry.source.kind === 'computed' ? '2026-08-08T14:52:33' : undefined),
+      })
+      seed(store, 'analysis:reconstruct3d:reconstructed-model', COMPUTED)
+      const pdb = card.el.querySelector<HTMLButtonElement>('.structure-pdb')
+      expect(pdb?.textContent).toBe('PDB')
+      expect(pdb?.disabled).toBe(false)
+      expect(pdb?.title).toMatch(/PyMOL/)
+      pdb?.click()
+      for (let turn = 0; turn < 20 && written.length === 0; turn++) {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      }
+      expect(names[0]).toMatch(/\.pdb$/)
+      const text = await written[0].text()
+      // The TITLE record and its continuations, read back as the one line they
+      // fold: the first from column 11, each continuation from column 12.
+      const title = text
+        .split('\n')
+        .filter((line) => line.startsWith('TITLE'))
+        .map((line, at) => line.slice(at === 0 ? 10 : 11))
+        .join(' ')
+      expect(title).toBe(
+        'chromosomix analysis:reconstruct3d:reconstructed-model from chr1:1-30,000 at 5 kb on 2026-08-08T14:52:33',
+      )
+      expect(text.split('\n').filter((line) => line.startsWith('HETATM'))).toHaveLength(6)
+
+      const long = Array.from({ length: 10_000 }, (_, i) => `chrL\t${i * 100}\t${i}\t0\t0`).join('\n')
+      seed(store, 'long.g3d', { kind: 'detached', name: 'long.g3d' })
+      store.update('long.g3d', { payload: { kind: 'features', data: parseG3d(long) } })
+      const row = card.el.querySelector('.ann-row[data-id="long.g3d"]')
+      const refused = row?.querySelector<HTMLButtonElement>('.structure-pdb')
+      expect(refused?.disabled).toBe(true)
+      expect(refused?.title).toMatch(/no chain can be longer than 9,999 beads and chrL has 10,000/)
+      // …and the bed3d beside it, which holds any length, is still there to press.
+      expect(row?.querySelector<HTMLButtonElement>('.structure-bed3d')?.disabled).toBe(false)
+    } finally {
+      delete scope.showSaveFilePicker
+    }
   })
 
   /**

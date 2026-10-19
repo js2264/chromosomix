@@ -196,7 +196,7 @@ const AUDIT = () => {
   // 5. A button label that is not lowercase (§26.4). Format names, proper nouns
   //    and the zoom steps are the stated exceptions, so they are listed rather
   //    than guessed at.
-  const PROPER = /^(PDF|PNG|SVG|TSV|CSV|BED|BEDPE|BEDGRAPH|bedGraph|bigWig|bigBed|GTF|VCF|BAM|FASTA|JSON|O\/E|3D|bed3d|g3d|IGV|UCSC|ENCODE|4DN|DNA Zoo|Google Drive|Dropbox|RSG|Roadmap|WashU|Chromosight|Spearman|Pearson|SD|N|GC|MAG|K groups|\d+×|\d+ dpi|.*\(BED\)|.*\(BEDPE\)|.*\(image\)|.*\(vector\))/
+  const PROPER = /^(PDF|PNG|SVG|TSV|CSV|BED|BEDPE|BEDGRAPH|bedGraph|bigWig|bigBed|GTF|VCF|BAM|FASTA|JSON|O\/E|3D|bed3d|g3d|PDB|IGV|UCSC|ENCODE|4DN|DNA Zoo|Google Drive|Dropbox|RSG|Roadmap|WashU|Chromosight|Spearman|Pearson|SD|N|GC|MAG|K groups|\d+×|\d+ dpi|.*\(BED\)|.*\(BEDPE\)|.*\(image\)|.*\(vector\))/
   // Only the buttons whose content is a *label*. A crumb, a sequence row, a
   // column tab, a store tile and a task row are buttons whose content is data —
   // a file's name, a chromosome's name, a section's name — and §26.4 is about

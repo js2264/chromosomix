@@ -533,7 +533,9 @@ A **structure** is a file of beads with a place in space (g3d, bed3d, §25) and 
 the Structures card — a row that is also a feature set, since every bead is an interval, and that is
 never a lane. A model can also be *made* from the map (§25.6). A **model** is one set of coordinates; a **chain** is the beads of one sequence and one
 haplotype in genomic order; a **bead** is one row of the file, whose **width** is the spacing the
-file was modelled at, inferred from its starts and independent of the map's bin size.
+file was modelled at, inferred from its starts and independent of the map's bin size. A model
+written as a PDB (§25.7) keeps both words: each chain is a PDB chain, lettered A, B, C… in the
+scene's order, and each bead one atom of it.
 
 ### telomere *(on a model)*
 

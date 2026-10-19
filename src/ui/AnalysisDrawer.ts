@@ -104,6 +104,7 @@ import type { RunTarget } from '../analysis/runner'
 const ALL_MAPS = '\u0000all-maps' as const
 import { formatIntervals } from '../annotations/export'
 import { writeBed3d } from '../annotations/g3d'
+import { pdbRefusal, writePdb } from '../annotations/pdb'
 import { recallParams, rememberParams } from '../analysis/memory'
 import { durationText, stopPromise } from './AnalysisPanelCard'
 import { runClock } from '../units'
@@ -1584,6 +1585,9 @@ export class AnalysisDrawer {
           { class: 'plot-icon-row' },
           el('span', { class: 'analysis-elsewhere-name', text: output.label, title: output.label }),
           ...(output.kind === 'intervals' ? [this.bedButton(output, provenance)] : []),
+          ...(output.kind === 'intervals' && output.entryKind === 'structure'
+            ? [this.pdbButton(output, provenance)]
+            : []),
           this.tsvButton(output, provenance),
         ),
       ).flatMap((row, i) => {
@@ -1661,6 +1665,39 @@ export class AnalysisDrawer {
     void downloadBlob(
       new Blob([text], { type: 'text/plain' }),
       exportName(output, provenance, stamp, suffix),
+    )
+  }
+
+  /**
+   * A computed model as a PDB, for PyMOL (§25.7) — beside its bed3d, as the
+   * Structures card has it, with the same `#`-line facts in its TITLE. Disabled,
+   * with the format's own reason, for a model past what a PDB's columns number.
+   */
+  private pdbButton(output: IntervalsOutput, provenance: Provenance): HTMLButtonElement {
+    const payload = output.payload
+    const refusal = payload.kind === 'features' ? pdbRefusal(payload.data) : 'This output holds no model.'
+    const node = button('PDB', () => this.savePdb(output, provenance), {
+      class: 'btn',
+      title:
+        refusal ??
+        'The model as a PDB — an atom per bead, a chain per sequence, bonds along the fibre — which ' +
+          'PyMOL and ChimeraX open and this app reads back',
+    })
+    node.disabled = refusal !== null
+    return node
+  }
+
+  private savePdb(output: IntervalsOutput, provenance: Provenance): void {
+    const payload = output.payload
+    if (payload.kind !== 'features') return
+    const text = writePdb(payload.data, {
+      label: output.label,
+      file: provenance.framing.label,
+      created: provenance.createdAt,
+    })
+    void downloadBlob(
+      new Blob([text], { type: 'text/plain' }),
+      exportName(output, provenance, fileStamp(new Date()), 'pdb'),
     )
   }
 

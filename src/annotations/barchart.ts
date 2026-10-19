@@ -103,7 +103,7 @@ const ENOUGH_ROWS = 4
  * whose chart column was never mentioned.
  */
 export function sniffBarChart(text: string, fileName = ''): boolean {
-  const named = /\.(bigbarchart|barchart)(\.gz)?$/i.test(fileName)
+  const named = /\.(bigbarchart|barchart)(\.b?gz)?$/i.test(fileName)
   let rows = 0
   let index = 0
   const length = text.length

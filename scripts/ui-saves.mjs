@@ -11,7 +11,9 @@
  * asked it after the moment a browser would still open one, is a line here.
  *
  * Presses the map's Export card, the Manual annotations card's save (after
- * typing a line), the deck's own save once a structure has made a deck, and
+ * typing a line), the dropped structure's bed3d and PDB from its row on the
+ * Structures card — the PDB kept as `x2b-model.pdb`, for
+ * `scripts/check_pdb_pymol.py` — the deck's own save once that structure has made a deck, and
  * the Export card again with the deck up — which must write the deck's figure;
  * then, with the model zoomed past its cell, the deck's figure as a small PNG,
  * which it writes out as `x4-deck-figure.png` so the figure itself — the model
@@ -61,13 +63,16 @@ await context.addInitScript(() => {
       name: record.chosen,
       createWritable: async () => ({
         write: async (blob) => {
-          // A picture is kept whole, so the figure itself can be looked at.
+          // A picture is kept whole, so the figure itself can be looked at; a
+          // text file too, so a model's PDB can be handed to PyMOL.
           if (blob.type === 'image/png') {
             record.data = await new Promise((resolve) => {
               const reader = new FileReader()
               reader.onload = () => resolve(reader.result)
               reader.readAsDataURL(blob)
             })
+          } else if (blob.type.startsWith('text/')) {
+            record.text = await blob.text()
           }
           record.bytes = blob.size
         },
@@ -139,11 +144,31 @@ try {
   }, `${BASE}/demo/yeast/Yeast_structure.g3d.gz`)
   await page.waitForSelector('.deck-structure', { timeout: 60000 })
   await sleep(6000)
+
+  // The model out from its row on the Structures card (§25.7): the bed3d, then
+  // the PDB, each through the dialog — the PDB written out whole as
+  // `x2b-model.pdb`, the file `scripts/check_pdb_pymol.py` hands to PyMOL.
+  const structures = page.locator('.structure-card').first()
+  await structures.scrollIntoViewIfNeeded()
+  await structures.locator('.structure-bed3d').first().click()
+  console.log('model as bed3d:', JSON.stringify(await lastSave(3)))
+  await structures.locator('.structure-pdb').first().click()
+  console.log('model as PDB:', JSON.stringify(await lastSave(4)))
+  const pdb = await page.evaluate(() => window.__saves.at(-1)?.text ?? null)
+  if (typeof pdb === 'string') {
+    writeFileSync(`${OUT}/x2b-model.pdb`, pdb)
+    console.log('wrote x2b-model.pdb:', pdb.split('\n').filter((line) => line.startsWith('HETATM')).length, 'atoms,', pdb.split('\n').filter((line) => line.startsWith('CONECT')).length, 'bonded')
+  } else {
+    console.log('no PDB came back from the Structures card')
+  }
+  await sleep(500)
+  await shot('x2b-model-saved-as-pdb')
+
   await fold('Fold the Annotations panel')
   await page.locator('.deck-save').first().click()
-  console.log('deck, from its bar:', JSON.stringify(await lastSave(3)))
+  console.log('deck, from its bar:', JSON.stringify(await lastSave(5)))
   await exportSave().click()
-  const fromCard = await lastSave(4)
+  const fromCard = await lastSave(6)
   console.log('deck, from the Export card:', JSON.stringify(fromCard), '· the deck’s figure:', /^deck-/.test(fromCard?.suggested ?? ''))
   await sleep(500)
   await shot('x3-deck-saved-from-card')
@@ -158,11 +183,13 @@ try {
     await page.mouse.move(5, 5)
     await sleep(1200)
   }
-  await exportCard().locator('select').filter({ has: page.locator('option[value="96"]') }).first().selectOption('96')
+  // The format first: the card opens on PDF (vector), which hides the
+  // resolution (§25.7), so the resolution can only be chosen once PNG is.
   await exportCard().locator('select').filter({ has: page.locator('option[value="png"]') }).first().selectOption('png')
+  await exportCard().locator('select').filter({ has: page.locator('option[value="96"]') }).first().selectOption('96')
   await sleep(300)
   await exportSave().click()
-  const figure = await lastSave(5)
+  const figure = await lastSave(7)
   console.log('deck figure:', JSON.stringify(figure))
   const data = await page.evaluate(() => window.__saves.at(-1)?.data ?? null)
   if (typeof data === 'string' && data.startsWith('data:image/png;base64,')) {

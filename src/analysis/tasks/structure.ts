@@ -38,9 +38,10 @@ import { typedLocusToRegion } from '../../genome/assembly'
  * bed3d — for this to read the model from*: two formats where the Structures
  * card offers three, so a Dip-C reader holding a `.3dg` was told their file
  * would not do, and a trailing clause that is not a sentence and explains what
- * the blurb above it already says.
+ * the blurb above it already says. The card reads a fourth now, the PDB it
+ * writes, and so this names it.
  */
-const NEEDS_STRUCTURE = 'Load a structure (g3d, .3dg or bed3d).'
+const NEEDS_STRUCTURE = 'Load a structure (g3d, .3dg, bed3d or PDB).'
 
 function structureReady(context: AnalysisContext): boolean {
   return context.entries.some((entry) => entry.kind === 'structure' && entry.status === 'ready')

@@ -11,6 +11,7 @@ import { pyList } from './format'
 
 export type ErrorCode =
   | 'not-hdf5'
+  | 'not-a-table'
   | 'not-a-cooler'
   | 'mmetacool-root'
   | 'mcool-root'

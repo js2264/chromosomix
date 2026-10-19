@@ -151,6 +151,15 @@ function elOf(slot: Slot): HTMLElement | undefined {
 }
 
 /**
+ * Whether a picked file is a structure: by its address, or by the name its
+ * folder gave it where the address is an id — a `model.pdb` in a Drive folder
+ * (§24.9), which by its address alone was taken for a map and refused as one.
+ */
+function isStructurePick(picked: PickedFile): boolean {
+  return isStructureName(picked.uri) || (picked.name !== undefined && isStructureName(picked.name))
+}
+
+/**
  * What the deck's shared window counts in, for one panel (`panels/lock.ts`).
  *
  * Base pairs at bin level and everywhere nothing has been read yet, which is
@@ -2781,7 +2790,7 @@ export class PanelDeck {
   private fill(slot: Slot, picked: PickedFile): void {
     // The same routing {@link addPicked} does, into *this* cell: a g3d dropped
     // on an empty card is the reader saying where the structure goes.
-    if (isStructureName(picked.uri)) {
+    if (isStructurePick(picked)) {
       if (picked.source.kind === 'local') this.props.structure?.onDrop(picked.source.file)
       else this.props.structure?.onDropUrl(picked.uri)
       this.occupy(slot, { kind: 'structure' })
@@ -2871,7 +2880,7 @@ export class PanelDeck {
     // A structure is a *track* to the session and a *cell* to the deck: the
     // file goes to the store by the session's road, and the cell that draws
     // the store's structure row opens here (§25.3).
-    if (isStructureName(picked.uri)) {
+    if (isStructurePick(picked)) {
       if (picked.source.kind === 'local') this.props.structure?.onDrop(picked.source.file)
       else this.props.structure?.onDropUrl(picked.uri)
       this.add({ kind: 'structure' })

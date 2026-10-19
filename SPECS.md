@@ -9982,17 +9982,20 @@ folder first.
 
 Every file row in the application carries the same two marks, and only marks (`ui/rowVerbs.ts`): a
 `+` that **adds the file to the session in front** — a second map beside the one that is there,
-anything else drawn on top, an empty tab filled rather than added to, which is the routing a dropped
-file takes — and a window with a `+` where its corner was that **opens it in a session of its
-own**, the empty tab in front or a new one, leaving whatever was open as it is. The words are in
-the tooltips, which also say what *add* means for that kind of file. Both are offered whatever the
-tab holds: on an empty tab the two land in the same place and the tooltips say so, because a row
-with two marks in one store and one in the next is a row a reader has to think about. A workspace
-row has the second alone — it is tabs, not a file, and there is nothing it could be added to. The
-same pair stands on a store's rows (§24.2), on a folder's rows here and on the files under a gallery
-card, whose own head carries the second mark alone; with words beside the marks it is the tray under
-a portal, and the second mark is on a portal group's *open with its tracks*. Clicking a folder row's
-name is the first verb.
+anything else drawn on top, an empty tab filled rather than added to, which is the routing a
+dropped file takes — and a window with a `+` where its corner was that **opens it in a session of
+its own**, the empty tab in front or a new one, leaving whatever was open as it is. The words are
+in the tooltips, which also say what *add* means for that kind of file. Both are offered whatever
+the tab holds: on an empty tab the two land in the same place and the tooltips say so, because a
+row with two marks in one store and one in the next is a row a reader has to think about. **An
+empty tab is filled by a row of any kind**, as the landing page's drop zone fills it: a folder on
+this machine hands its file to the road a drop on the window takes, whose empty seat was a map's
+alone, so a bigWig pressed there — its `+` saying it would open in this tab — did nothing and said
+nothing. A workspace row has the second alone — it is tabs, not a file, and there is nothing it
+could be added to. The same pair stands on a store's rows (§24.2), on a folder's rows here and on
+the files under a gallery card, whose own head carries the second mark alone; with words beside the
+marks it is the tray under a portal, and the second mark is on a portal group's *open with its
+tracks*. Clicking a folder row's name is the first verb.
 
 Dragging a file lets the reader say *where*: onto the map's edge rectangles for a lane in a named
 stack (§8.9), onto the rectangle in the middle of a map for that map alone — an overlay's one target
@@ -10062,7 +10065,30 @@ the `.bam` without it (`LoadBox`'s `onPicked`). The one thing a local
 listing does leave out is a name beginning with a dot — `.DS_Store`, `.git` — which is somebody's
 tooling rather than a file. The route is the name's (`browse/route.ts`), so every name a format of
 §8 is published under has to be in it: a `.barChart`, a `.bigBarChart` and a cytoBand in the plural
-were drawn dimmed while the loader read all three.
+were drawn dimmed while the loader read all three — and so, until every name each reader takes was
+checked against the table (`test/unit/browse-route.test.ts` holds the list), were four kinds more.
+A **3D structure** (§25) — `.g3d`, `.3dg`, `.bed3d`, `.pdb` — is the genome door's, and the same
+name test makes its row a structure the moment it is begun, so its cell opens before a byte is
+read. A **saved workspace** is a `.json`, routed by the test the config road itself uses; its row
+carries the new-session mark alone, and pressed, its tabs are appended beside the window's as a
+store row's are, with no empty tab opened for them first. A **text table** — `.txt`, `.tsv`,
+`.tab`, compressed or not — says nothing by its name and is offered all the same, because it is
+what a §8 format is published under when its own suffix is not used (chromosight's `loops.tsv`, a
+GEO supplement's `peaks.txt.gz`), and the loader reads it by its bytes (§8.3) as it does a dropped
+one; one whose rows no reader takes — a page of notes — is refused as *text, but not a table this
+viewer reads*, saying what a table is read as, where it used to reach the contact map's door and be
+told it was not an HDF5 file. And **`.bgz`**, which is what `bgzip` is told to write for a file
+meant to be indexed — gnomAD's VCFs — is read everywhere a `.gz` is, its `.tbi` found beside it
+included.
+
+What stays dimmed says the one thing its reader needs. A track hub's `hub.txt` is a store, opened
+from the stores drawer (§24.10), and its `genomes.txt` and `trackDb.txt` are read from it rather
+than offered as tables; a CSV is comma-separated, and every table read here is tab- or
+space-separated; a `.bz2`, `.xz` or `.zst` is a compression this viewer cannot inflate, and gzip or
+bgzip is the way out; a `.gzi` is an index this viewer does not use, a compressed FASTA being read
+whole (§8.8); a `.crai` is refused with its CRAM. A name a folder's address does not carry decides
+as well: a Drive or Dropbox row is routed by the name the folder handed along (§24.9), a workspace
+and a model as well as a map and a track.
 
 ### 20.6 What a connected folder is, in privacy terms
 
@@ -11498,7 +11524,10 @@ sign in, until the reader does. A picked file is the API's
 media URL — the same address `canonicalUrl` gives a pasted share link — with its name carried
 beside it, and **the name is what routes it**: the address ends in an id, which says nothing about
 what the file is, so `routeFor` lets the name choose the door the address cannot, and the loading
-screen and the tab say the name rather than the address. Where nobody gave a name — a share link
+screen and the tab say the name rather than the address. That holds for the two kinds a door is
+not a matter of map or track: a `session.json` is fetched as a workspace and its tabs appended, and
+a `model.pdb` opens a 3D cell of its own (§25.3), where by its address alone the first was taken
+for a track and the second for a map. Where nobody gave a name — a share link
 pasted into the URL box, a `view=browser` link, a track added by address — **Drive is asked for
 it first** (`browse/driveName.ts`): one `files.get` with `fields=name`, on the same key or
 token the read will carry, memoised by id for the page, and never in the way — a refusal, a site
@@ -11746,10 +11775,26 @@ here (`annotations/g3dBinary.ts`, `annotations/msgpack.ts`) rather than a depend
 its finest resolution and names the others under the row. A version-1 container is refused by
 name, with the way out (`g3dtools` rewrites it).
 
-All four are sniffed by content before the BED family sees them — a five-column g3d read as a BED
+**PDB**, as this app writes it (§25.7), and no other (`annotations/pdb.ts`). A PDB says where each
+atom is in space and nothing about the genome — a residue number is four columns and a chain one
+character — so a model written here carries its loci in a table of REMARK 250 lines a viewer skips:
+each chain's sequence and haplotype by atom serial, each run of beads laid end to end as its first
+serial, count, start and width, and the centre and the factor its coordinates were written with,
+which the reader undoes so the model opens in its own units and reads back bead for bead. The first
+MODEL of several is read, since a row holds one model (§25.8). **Every other PDB is refused, with
+the reason.** pastis writes its beads in bin order — one chain, no residue numbers, no bonds, `nan`
+for a bead it could not place — and the other solvers that write a PDB say no more, so the only way
+to put such a file on the genome is to number its atoms against some map's bins, which is a guess
+drawn as a fact; the refusal says to write the coordinates beside the bins they were modelled at, as
+a bed3d. A PDB written here and saved again by PyMOL gets a sentence of its own: PyMOL keeps every
+atom and every bond and drops every REMARK, the table with them, so the file to open is the one this
+app wrote, or its bed3d. A PDB under a name that does not say so is told by its records — it opens on
+one a PDB opens on, and holds an atom — which nothing in the BED family can do.
+
+All five are sniffed by content before the BED family sees them — a five-column g3d read as a BED
 would be a lane of boxes whose *end* is a coordinate in space — and **a file that names its format
-is not sniffed at all**: `.g3d`, `.3dg`, `.bed3d`, gzipped or not, local or over HTTP, is read as
-the structure it says it is. The name is read **first**, before a single row, and read the way the
+is not sniffed at all**: `.g3d`, `.3dg`, `.bed3d`, `.pdb`, gzipped or not, local or over HTTP, is
+read as the structure it says it is. The name is read **first**, before a single row, and read the way the
 drop routing reads it: past any directories, with a `?query` or `#fragment` cut off, so a model
 published at a URL is as named as one on disk. A file whose name claims no format is asked two
 questions, and each exists to tell a structure from a BED whose columns happen to be numbers: are
@@ -11783,15 +11828,16 @@ location control, and skipped by every stack; its picture is the cell.
 (§25.6) — is a row of one card under the Tracks card, and of no other: the Tracks card leaves
 `structure` rows out, computed or not. Each row carries the head every row has (grip, colour, name,
 eye, close), what it holds (`2,412 beads · 5 kb · 16 sequences`), the task and the framing for a
-computed one, and **bed3d**, the model out (§25.7), after the word *export*. The **eye** in the row's
+computed one, and **bed3d** and **PDB**, the model out (§25.7), after the word *export* — the PDB
+disabled, with the format's reason as its tooltip, for a model past what its columns can number. The **eye** in the row's
 head is what shows and hides: it puts the model in **a cell of its own**, opening one beside whatever
 is already there, and takes it away again — from every cell drawing it (§25.3). The lit eye is the
 whole of the state — the row carried an accent bar down its left gutter as well, which was a second
 way of saying what the eye already says. There is no second control for that and no button
 labelled with what is already true (§26.3, §26.7) — a *shown in the deck* button beside the eye was
 two controls for one act, and a reader who pressed the lit one expecting it to un-show got nothing.
-The card's own load zone names the three formats and, like every other zone that asks for a file,
-says it takes a drop or a click.
+The card's own load zone names what it reads — the three formats, and a PDB this app wrote — and,
+like every other zone that asks for a file, says it takes a drop or a click.
 A computed row that came back from a reload is detached and offers **recompute**, which opens its
 recipe in the drawer, as a synthetic row on the Tracks card does (§18.5).
 
@@ -11816,9 +11862,12 @@ used to write to one slot, so a deck of two views came back from a reload as the
 named by a URL, or computed, and *every* one of them where several land together, where only the
 last of a batch used to get a picture and the others sat on the card as rows with nothing drawn,
 which is the one state a reader reads as *it did not work*. It opens beside whatever was there
-rather than taking it over. It used to be one cell per deck, which made two models something a
-reader could only compare by swapping back and forth, and made a reconstruction landing destroy the
-model it was to be judged against — the commonest way to lose a picture in this application.
+rather than taking it over, and it opens **one**: a model dropped on a map, named by a URL or
+picked from a folder opened two, a cell for the file's name and another for the row's arrival; the
+watch on the store that every road ends in is the one that opens it now. It used to be one cell per
+deck, which made two models something a reader could only compare by swapping back and forth, and
+made a reconstruction landing destroy the model it was to be judged against — the commonest way to
+lose a picture in this application.
 **A model that opens the session on its own is drawn alone.** A structure file dropped on an empty
 window names a genome — its beads are on sequences — so the session it opens is a browser of that
 genome, and the browser has nothing to draw: a structure is a row and a cell, never a lane. It used
@@ -12549,6 +12598,53 @@ TSV every output carries (§18.7), through this same writer — because the batc
 whose coordinates went missing is least likely to be noticed, and because a reconstruction is the
 one task whose whole result is the three columns BED has nowhere to put.
 
+**A model also leaves as a PDB, for PyMOL** and every other molecular viewer — from the **PDB**
+button beside the bed3d on its row, from the drawer's result beside the bed3d there, and from
+`reconstruct3d --out`, which writes it beside the bed3d — through one writer (`annotations/pdb.ts`),
+with a TITLE that says what the bed3d's `#` line says, in ASCII. pastis' own PDB is a list of atoms
+in bin order on one chain with no bonds, which PyMOL draws as a cloud joined by guesswork; this one
+is the file a viewer can draw as the fibre it is:
+
+- **One HETATM per bead**, a carbon `C` in a residue `BEA`: a bead is no amino acid and no
+  nucleotide, and HETATM is the record a non-standard group takes. A bead the model left unplaced is
+  no atom.
+- **One chain per sequence and haplotype**, the scene's chains in the scene's order, so colouring by
+  chain tells chromosomes apart and the homologues of a phased model apart, and residues numbered
+  along each chain from 1, so a rainbow by residue runs from one end of a chromosome to the other.
+  The chain letters are A–Z, a–z and 0–9, which PyMOL keeps apart by case; a model with more than
+  sixty-two chains — a metagenome's contigs — takes them round again, and every chain's segment
+  identifier is then its number, which PyMOL selects by too.
+- **CONECT between neighbouring beads and nowhere else**: a bond for every step of every run the
+  cell draws its tube along, none across a gap the model left and none between chains, each bonded
+  atom listing its neighbours both ways round. This is what keeps PyMOL from guessing, **measured
+  against PyMOL 3.2** rather than read in a manual: a file with CONECT records has distance-based
+  bonding switched off, so two beads 0.6 apart on different chains stay apart, where without them
+  every pair closer than about two units is joined and a model a unit per step comes out a lattice.
+  With them PyMOL loads exactly the bonds written — on the demo yeast, E. coli and mouse models,
+  atoms, chains and bonds all as declared, none between chains — and `cartoon_trace_atoms` draws a
+  tube through them that breaks where the model breaks. `scripts/check_pdb_pymol.py` repeats the
+  measurement on any PDB written here, with PyMOL as the judge.
+- **Coordinates the columns can hold.** A coordinate is eight columns with three decimals and a
+  model is in its solver's units — a unit sphere, where three decimals is a fortieth of a step, or
+  nanometres, where a nucleus overflows the column. So it is centred on its placed beads and
+  multiplied until the **median step between neighbours is 3.8**, a Cα trace's, which PyMOL's
+  spheres, sticks and cartoon trace are sized for; a model that would then overflow its columns is
+  drawn in until its furthest bead fits, with shorter steps rather than not at all. The centre, to a
+  thousandth of a step, and the factor are written in the table §25.2 reads, and nothing claims an
+  ångström.
+- **REMARK 250** says all of this in prose, gives the lines that draw the model in PyMOL as the cell
+  draws it — `set cartoon_trace_atoms, 1; set cartoon_tube_radius, r` then `as cartoon; util.cbc`,
+  or `set sphere_scale, s; as spheres; util.cbc` — with `r` and `s` the cell's default tube and bead
+  radii in this file's coordinates, on the cell's floored step, which is what keeps a bacterial ring
+  from being a hairline where PyMOL's own tube is half a unit whatever the model; and then the
+  placement table.
+
+What a PDB cannot number it does not write. **At most 99,999 beads**, its serial being five columns;
+**no chain longer than 9,999 beads**, its residue number being four, where wrapping the numbers was
+measured to scramble PyMOL's order along the chain and hybrid-36 is not read; and at most 9,999
+chains. Past any of them the row's and the drawer's button is disabled with that reason as its
+tooltip, and the shell writes the bed3d alone with the reason on stderr — the bed3d holds any model.
+
 ### 25.8 Refused, and not yet built
 
 - ~~**Inference** — computing a structure from the map.~~ Built as *Model from the map* (§25.6), as
@@ -12558,6 +12654,12 @@ one task whose whole result is the three columns BED has nowhere to put.
   model rather than the best of several local optima; **fitting α**, which is the reader's control
   and is what makes a model here comparable with one from either published tool; and pastis-NB's
   **alternation** between the dispersion and the structure, where the dispersion is estimated once.
+- **A PDB that does not say where its beads are on the genome** (§25.2) — pastis', and every
+  solver's that writes atoms in bin order and nothing else. Placing them would mean numbering the
+  atoms against a map's bins and trusting the count, which is the one claim a model beside a map
+  must never make; the refusal names the way out, a bed3d of the coordinates beside their bins. And
+  no **mmCIF** for a model past a PDB's columns: the bed3d holds it, and PyMOL is not where a
+  hundred thousand beads are looked at.
 - **Ensembles, frames, point clouds** (FOF-CT, `.cndb`, several models of one map): a row holds
   one model. The scene's shape does not close the door.
 - **A map beside a browser lead**: a companion needs a lead to follow, and a browser is not one

@@ -182,14 +182,14 @@ export function sniffJunctions(text: string, fileName = ''): JunctionFlavour | n
   const { rows, declared } = head(text)
   if (rows.length === 0) return null
   if (rows.every(looksLikeStar)) return 'star'
-  const named = /junc|(^|[._-])sj([._-]|$)/i.test(fileName.replace(/\.gz$/i, ''))
+  const named = /junc|(^|[._-])sj([._-]|$)/i.test(fileName.replace(/\.b?gz$/i, ''))
   const junctionNames = rows.every((columns) => /^JUNC/i.test(columns[3] ?? ''))
   if ((named || declared || junctionNames) && rows.every((columns) => anchorsOf(columns) !== null)) {
     return 'bed'
   }
   // A six-column BED is a peak set as often as not; only a file called `.junc`
   // is leafcutter's.
-  if (/\.junc(\.gz)?$/i.test(fileName) && rows.every(looksLikeJunc)) return 'junc'
+  if (/\.junc(\.b?gz)?$/i.test(fileName) && rows.every(looksLikeJunc)) return 'junc'
   return null
 }
 
