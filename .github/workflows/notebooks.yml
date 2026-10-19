@@ -58,12 +58,16 @@ name: Notebooks
 # deploy.yml to publish; the deploy copies them into `validation/` and
 # `timings/` on every run after that, so a push to `main` keeps them. Beside
 # each page: `rendered.json`, what the stamp at its top says (when, from which
-# commit and release, by which run, on what machine); `commands.json` and
-# `summary.tsv` beside the validation, every command it ran and every verdict;
+# commit and release, by which run, on what machine); `commands.json`,
+# `summary.tsv` and `validation.txt` beside the validation, every command it
+# ran, every verdict and every number its figures draw, one row a mark (about
+# 35 MB, most of it Boost-HiC's two maps of chr19 and the metaplot over two
+# tracks);
 # `timings.tsv` beside the timings, every timed run, one row each, and
 # `viewers.tsv`, every picture timed in a viewer. A release also gets the two
-# pages and the three tables as assets of its own — every verdict as
-# `validation-<tag>.tsv`, every timed run as `timings-<tag>.tsv` and every
+# pages and the four tables as assets of its own — every verdict as
+# `validation-<tag>.tsv`, every number its figures draw as
+# `validation-<tag>.txt`, every timed run as `timings-<tag>.tsv` and every
 # picture as `viewers-<tag>.tsv` — so a release's numbers outlive the next
 # release's pages. Every run keeps what it
 # rendered as an artifact for 90 days, even when it fails: the validation alone,
@@ -275,7 +279,7 @@ jobs:
             mkdir -p pages/validation
             cp notebooks/validation.html pages/validation/index.html
             cp "$work/rendered-validation.json" pages/validation/rendered.json
-            cp "$work/commands.json" "$work/summary.tsv" pages/validation/
+            cp "$work/commands.json" "$work/summary.tsv" "$work/validation.txt" pages/validation/
           fi
           if [ -f notebooks/timing.html ]; then
             mkdir -p pages/timings
@@ -330,6 +334,7 @@ jobs:
           cp pages/validation/index.html "assets/validation-${TAG}.html"
           cp pages/timings/index.html "assets/timings-${TAG}.html"
           cp pages/validation/summary.tsv "assets/validation-${TAG}.tsv"
+          cp pages/validation/validation.txt "assets/validation-${TAG}.txt"
           cp pages/timings/timings.tsv "assets/timings-${TAG}.tsv"
           cp pages/timings/viewers.tsv "assets/viewers-${TAG}.tsv"
           gh release upload "$TAG" assets/* --clobber --repo '${{ github.repository }}'
