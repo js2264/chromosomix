@@ -897,6 +897,16 @@ export class Session {
    */
   mapOnly = false
   /**
+   * Where the ideogram on screen was put up from (§5.10): a map — put down for
+   * it, with its tracks or without them ({@link mapOnly}) — or `null` for the
+   * browser. What putting it away brings back: a click on a chromosome, a drag
+   * along one or its switch leave it for the picture it replaced, so a reader
+   * who pressed `z` over a map is handed the map back, at the chromosome or the
+   * stretch they chose. Furniture, as {@link mapOnly} is, and not in a link: a
+   * map put down for an ideogram a link asks for is the map that comes back.
+   */
+  private ideogramOver: { mapOnly: boolean } | null = null
+  /**
    * The map view's Tracks card, told when the lanes are put away (`V`).
    *
    * @internal SessionDeck tells it when a tracks cell is renamed.
@@ -4268,19 +4278,31 @@ export class Session {
    * A map is a thing laid over a genome, like the tracks beside it; hiding one
    * should cost no more than hiding the other.
    *
+   * `asked` is the state that asked for the tracks, where one did — a Back to
+   * a picture of them, a link — and is then the state the browser opens on,
+   * window and all, rather than where the map was looking: navigating to
+   * another would push a new entry over the one Back arrived at, and the
+   * entries after it would be lost.
+   *
    * @internal SessionRouter puts the map down when a state asks for its tracks.
    */
-  hideMap(ideogram?: KaryotypeOrientation): void {
+  hideMap(ideogram?: KaryotypeOrientation, asked?: ViewState): void {
     const file = this.file
     const state = this.store.state
     if (file === null || state === null || !this.canHideMap) return
+    // Put down for the ideogram, the map is what putting the ideogram away
+    // brings back, with its tracks as they were (§5.10).
+    this.ideogramOver = ideogram === undefined ? null : { mapOnly: this.mapOnly }
     // A map put down while its tracks were away comes back with them: the point
     // of the browser is the tracks, so arriving there with none would be the
     // cycle's second stop showing nothing at all.
     this.mapOnly = false
     const assembly = this.assemblyOfFile(file)
     if (assembly === null) return
-    this.parkedMap = state
+    // The map's own state, to come back to. Where a state asked for the tracks
+    // — a Back, a link — the store already holds that one, and the map is what
+    // was mounted.
+    this.parkedMap = asked !== undefined && this.mounted !== null && this.mounted.view !== 'browser' ? this.mounted : state
     this.assembly = assembly
     // The browser steers its axis from the Sequences card, which is General's;
     // the Annotations column is untouched, because every card in it — the
@@ -4299,7 +4321,7 @@ export class Session {
     // the whole genome — which is that picture's own analogue of a whole map.
     const locus = this.current?.panel?.framedLocus()
     this.mounted = null
-    const target: ViewState = {
+    const target: ViewState = asked ?? {
       uri: file.uri,
       view: 'browser',
       ...(locus === undefined ? {} : { locus }),
@@ -4315,11 +4337,14 @@ export class Session {
 
   /**
    * Put the ideogram on, turn it, or put it away (§5.10) — one step in the view
-   * state, so Back comes back to it; with where the browser opens, where a click
-   * or a drag on a chromosome is what put it away.
+   * state, so Back comes back to it; with where to look, where a click or a drag
+   * on a chromosome is what put it away.
    *
    * Over a map, the map is put down first, as `v` puts it down: the ideogram is
-   * a picture of the tracks, and the map is not unloaded, so `v` brings it back.
+   * a picture of the tracks, and the map is not unloaded. **Put away, it gives
+   * back the picture it replaced**: the browser, at the chromosome or stretch
+   * named, or — where it was put up over a map ({@link ideogramOver}) — that
+   * map, on that chromosome or stretch, with its tracks as they were.
    *
    * @internal The browser asks through its prop; the command and its key run it.
    */
@@ -4327,10 +4352,35 @@ export class Session {
     const state = this.store.state
     if (state === null || !devFeature('ideogram')) return
     if (this.assembly !== null && state.view === 'browser') {
+      const over = this.ideogramOver
+      if (orientation === undefined && state.ideogram !== undefined && over !== null && this.canShowMap) {
+        this.mapOnly = over.mapOnly
+        this.showMap(locus === undefined ? undefined : this.regionOfLocus(locus))
+        return
+      }
+      // Put up from the browser, it gives the browser back.
+      if (orientation !== undefined && state.ideogram === undefined) this.ideogramOver = null
       this.store.patch({ ideogram: orientation, ...(locus === undefined ? {} : { locus }) })
       return
     }
     if (orientation !== undefined && this.canHideMap) this.hideMap(orientation)
+  }
+
+  /**
+   * A locus as the browser writes it, as the map's region string: the bare
+   * name for the whole of a sequence — how this application spells the whole
+   * of something everywhere else — and the 0-based half-open window otherwise,
+   * as the map's own box writes one (`typedLocusToRegion`). `undefined` where it
+   * names nothing on this genome, and the map is then left where it was.
+   */
+  private regionOfLocus(locus: string): string | undefined {
+    const assembly = this.assembly
+    if (assembly === null) return undefined
+    const range = parseLocus(locus, assembly)
+    if (range === null || range === 'whole') return undefined
+    const length = assembly.contigs.find((contig) => contig.name === range.contig)?.length
+    if (range.start <= 0 && length !== undefined && range.end >= length) return range.contig
+    return `${range.contig}:${range.start}-${range.end}`
   }
 
   /** Whether the ideogram is what is drawn: the browser, as one (§5.10). */
@@ -4447,11 +4497,22 @@ export class Session {
     return card.el
   }
 
-  /** Bring the parked map back, exactly where it was left. */
-  private showMap(): void {
-    const target = this.parkedMap
-    if (target === null || this.file === null) return
+  /**
+   * Bring the parked map back, exactly where it was left — or on `region`, the
+   * window an ideogram was put away on (§5.10), in the map's own presentation:
+   * one window on the diagonal, whatever block was in view before.
+   */
+  private showMap(region?: string): void {
+    const parked = this.parkedMap
+    if (parked === null || this.file === null) return
+    const target: ViewState = region === undefined ? parked : { ...parked, view: 'region', region }
+    if (region !== undefined) {
+      delete target.region2
+      delete target.focus
+      delete target.regions
+    }
     this.parkedMap = null
+    this.ideogramOver = null
     this.assembly = null
     this.browser = null
     // …and turned again on the way back, by the same call: it is a toggle, so
@@ -6434,6 +6495,12 @@ export class Session {
               void this.addPicked(picked, edge === null ? undefined : placementOn(edge), map)
             })
           },
+          // The ideogram's switch in the map's Tracks card (§5.10), as `z`: the
+          // session's own map only, whose tracks the ideogram draws, and only
+          // with the dev feature on (§29).
+          ...((map === undefined || map === LEAD_MAP) && devFeature('ideogram')
+            ? { ideogram: () => this.setIdeogram('vertical') }
+            : {}),
         }
   }
 

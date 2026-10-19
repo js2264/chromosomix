@@ -309,6 +309,7 @@ import { devFeature } from '../state/devFeatures'
 import { iscnName } from '../annotations/cytoband'
 import { contigIndexOf } from '../genome/naming'
 import { rampCss, TRACK_TINT_RAMP } from '../structure/colour'
+import { ideogramSwitch, pictureRow } from './ideogramSwitch'
 import { drawKey, KEY_METRICS, measureKey } from '../render/legend'
 import { colormapCss } from '../render/colormaps'
 
@@ -467,7 +468,8 @@ export interface BrowserViewProps {
   ideogram?: KaryotypeOrientation
   /**
    * How the ideogram draws its chromosomes, for this file — the session's, as
-   * {@link groups} is, so the Ideogram card and the picture hear one change.
+   * {@link groups} is, so the Tracks card's ideogram rows and the picture hear
+   * one change.
    */
   look?: IdeogramSettings
   /**
@@ -486,10 +488,11 @@ export interface BrowserViewProps {
  */
 interface KaryotypeFrame {
   /**
-   * What the ideogram draws: the genome, whatever the browser's window has
-   * ticked — less the sequences too short to be drawn, the longest
-   * {@link KARYOTYPE_MAX} of the rest — and the axis it is laid end to end on,
-   * in the browser's units and through its edit where there is one (§27.7).
+   * What the ideogram draws: the sequences the Sequences card has ticked, or
+   * the whole genome — less, there, the sequences too short to be drawn — and
+   * no more than the longest {@link KARYOTYPE_MAX}; and the axis it is laid
+   * end to end on, in the browser's units and through its edit where there is
+   * one (§27.7).
    */
   assembly: Assembly
   axis: LocusAxis
@@ -531,8 +534,17 @@ interface KaryotypeFrame {
   /** How many sequences are drawn, of how many the axis has. */
   shown: number
   of: number
+  /** Whether any were left out for being too short to draw (the whole genome only). */
+  floored: boolean
 }
 
+/** The ideogram's flip, as its switch says it. */
+const FLIP_HINT =
+  'Flip — the chromosomes lying in one column, each read left to right with its tracks above it. ' +
+  'Off, they stand in one row, each read downward with its tracks to its right'
+/** …and where there is one chromosome to draw, which lies either way. */
+const FLIP_ALONE_HINT =
+  'One chromosome is drawn lying, as the browser reads one — tick another on the Sequences card to stand them in a row'
 /** The scope the ideogram's samples are read under: the whole axis, apart from the browser's window. */
 const KARYOTYPE_SCOPE = 'karyotype'
 /** A chromosome's name, over it or before it. */
@@ -554,12 +566,13 @@ const BAND_NAMES_WIDTH = 18
 /**
  * The most sequences the ideogram draws: the longest, in the axis's order.
  *
- * Sixty, which is past every assembled karyotype — a dog's thirty-nine pairs, a
- * fern's are the outliers this is for — and short of a draft assembly's
- * forty thousand scaffolds, which as a row of pills a pixel long is not a
- * picture of anything. The key says how many were left out.
+ * Forty: a dog's karyotype — thirty-eight autosomes, X and Y — is forty, and a
+ * row of more is a row of pills too thin to read, its lanes at their floor and
+ * the picture scrolling. A draft assembly's forty thousand scaffolds are what
+ * this is for. The key says how many were left out, and ticking sequences on
+ * the Sequences card chooses which are drawn.
  */
-const KARYOTYPE_MAX = 60
+const KARYOTYPE_MAX = 40
 /**
  * A sequence under this fraction of the longest is left out of the ideogram:
  * at the longest view it draws it is a pixel or less — a human mitochondrion is
@@ -967,10 +980,13 @@ export class BrowserView {
     null
   /** Where on a chromosome the hand is, for the hairline across it. */
   private khover: { place: ChromosomePlace; along: number } | null = null
-  /** The bar's switch for the ideogram, where this view offers one. */
+  /** The Tracks card's switch for the ideogram, where this view offers one. */
   private readonly ideogramToggle: HTMLButtonElement | null
-  /** The Ideogram card, shown while the ideogram is drawn. */
-  private readonly ideogramCard: HTMLElement | null
+  /**
+   * The Tracks card, which carries the ideogram's rows as well as the lanes'
+   * (§5.10) and shows each set while its picture is drawn (`is-ideogram`).
+   */
+  private readonly tracksEl: HTMLElement
   /** Its flip, which turns the chromosomes from standing to lying. */
   private flipToggle: HTMLButtonElement | null = null
 
@@ -1038,22 +1054,12 @@ export class BrowserView {
     // becomes*, which is the region bar's grammar; `zoomBy` takes a
     // magnification, which is this view's — hence the reciprocal.
     this.zooms = ZOOM_STEPS.map((step) => zoomButton(step, () => this.zoomBy(1 / step.factor)))
-    // The ideogram's switch (§5.10): the session's own browser only, and only
-    // with the dev feature on (§29) — off is absent, not greyed. The standing
-    // chromosomes are the picture a press gives, as the turn's mark is.
+    // The ideogram's switch (§5.10), in the Tracks card's `picture` row: the
+    // session's own browser only, and only with the dev feature on (§29) — off
+    // is absent, not greyed. The standing chromosomes are the picture a press
+    // gives, as the turn's mark is.
     const offered = props.map === undefined && devFeature('ideogram')
-    this.ideogramToggle = offered
-      ? iconButton(
-          'align-start-horizontal',
-          withKey(
-            'Ideogram — every chromosome whole, side by side, with the tracks beside each. ' +
-              'Off draws the tracks along one axis again',
-            KEYS.ideogram,
-          ),
-          () => this.toggleIdeogram(),
-          { class: 'btn btn-icon btn-toggle', size: 15, pressed: false },
-        )
-      : null
+    this.ideogramToggle = offered ? ideogramSwitch(() => this.toggleIdeogram()) : null
 
     const head = el(
       'header',
@@ -1099,7 +1105,6 @@ export class BrowserView {
         // `RegionView` so there is one row of buttons and not a second copy of
         // it, and the group does not break between them.
         el('div', { class: 'zoom-steps' }, ...this.zooms),
-        ...(this.ideogramToggle === null ? [] : [this.ideogramToggle]),
         // The three lane-height marks are **not** here. They were, and they
         // were the same three the Tracks card draws a few inches to the right
         // — six identical glyphs on one screen, which makes a reader check
@@ -1155,18 +1160,8 @@ export class BrowserView {
       groups: props.groups,
       onChange: () => this.schedule(),
     })
-    // The Ideogram card under Export, where the Map card stands beside a map:
-    // it is about the shape of the picture, as that one is, and the Tracks card
-    // under it is about the lanes in either picture.
-    this.ideogramCard = offered ? this.ideogramCardFor() : null
-    this.sideEl = el(
-      'aside',
-      { class: 'side' },
-      this.exportCard(),
-      ...(this.ideogramCard === null ? [] : [this.ideogramCard]),
-      this.tracksCard(),
-      this.groupsCard.el,
-    )
+    this.tracksEl = this.tracksCard()
+    this.sideEl = el('aside', { class: 'side' }, this.exportCard(), this.tracksEl, this.groupsCard.el)
 
     // The two layers over the canvas. Both are handed the stage rather than
     // built into it, because beside a map the same two classes are given a layer
@@ -1240,8 +1235,9 @@ export class BrowserView {
         : new ResizeObserver(() => this.remeasure())
     this.observer?.observe(this.stage)
 
-    this.applyLocus(props.locus)
+    // The ideogram first, so a window it is drawn over ticks nothing.
     this.applyIdeogram(props.ideogram)
+    this.applyLocus(props.locus)
     this.syncIdeogram()
     requestAnimationFrame(() => this.remeasure())
   }
@@ -1624,6 +1620,10 @@ export class BrowserView {
    * to be what the box would accept, or a shared view opens somewhere else.
    */
   applyLocus(locus: string | undefined): void {
+    // While the ideogram is drawn the window is where the browser goes back
+    // to, and not a reason to tick a sequence: the ideogram draws the ticked
+    // ones (§5.10). Left unapplied, so the ideogram put away applies it.
+    if (this.karyotype !== null) return
     if (locus === this.reported) return
     this.reported = locus
     if (locus === undefined || locus === '') {
@@ -3860,8 +3860,23 @@ export class BrowserView {
     )
   }
 
-  /** The Tracks card: how the stack is sized, scaled and drawn. */
+  /**
+   * The Tracks card: how the stack is sized, scaled and drawn — and, where the
+   * ideogram is offered, which picture the tracks are drawn as (§5.10): its
+   * switch and its flip in a `picture` row at the top, as the Map card's own
+   * pictures are, and its rows under them while it is drawn. The controls
+   * about the browser's one axis — the whole genome fitted across it, the name
+   * column before it — step aside while the ideogram is drawn, which has
+   * neither.
+   */
   private tracksCard(): HTMLElement {
+    const gutter = this.optionToggle('gutter')
+    gutter.classList.add('axis-only')
+    const ideogram = this.ideogramToggle === null ? null : this.ideogramRows()
+    const picture =
+      ideogram === null || this.ideogramToggle === null
+        ? []
+        : [pictureRow(this.ideogramToggle, ideogram.flip), ...ideogram.rows]
     return el(
       'div',
       { class: 'controls-card' },
@@ -3871,6 +3886,7 @@ export class BrowserView {
       el(
         'div',
         { class: 'panel-controls' },
+        ...picture,
         // Marks rather than sentences. Each of these is a thing a reader does
         // repeatedly while reading — refit across, refit down, hand the value
         // axes back to the data, take the words off — and a column of full-width
@@ -3924,7 +3940,7 @@ export class BrowserView {
               'unfold-horizontal',
               withKey('Fit the whole genome across', KEYS.whole),
               () => this.fit(),
-              { class: 'btn btn-icon', size: 15 },
+              { class: 'btn btn-icon axis-only', size: 15 },
             ),
             // The name column's switch, here rather than at the end of the
             // overlays row below. It is about where the names stand rather than
@@ -3935,7 +3951,7 @@ export class BrowserView {
             // in a row that fits six: it wrapped to a line of its own at the
             // default column width, where one glyph alone reads as a different
             // kind of control.
-            this.optionToggle('gutter'),
+            gutter,
           ),
         ),
         // Told what the lanes are, as the box beside a map is. Built without
@@ -4992,12 +5008,15 @@ export class BrowserView {
     return this.karyotype !== null
   }
 
-  /** The bar's switch: the ideogram as it opens, standing, or the browser's own picture back. */
+  /**
+   * The Tracks card's switch: the ideogram as it opens, standing — or, put
+   * away, the picture it replaced (`Session.setIdeogram`).
+   */
   private toggleIdeogram(): void {
     this.props.onIdeogramChange?.(this.karyotype === null ? 'vertical' : undefined)
   }
 
-  /** The Ideogram card's flip: the chromosomes from standing in a row to lying in a column, and back. */
+  /** The Tracks card's flip: the chromosomes from standing in a row to lying in a column, and back. */
   private flipIdeogram(): void {
     if (this.karyotype === null) return
     this.props.onIdeogramChange?.(this.karyotype === 'vertical' ? 'horizontal' : 'vertical')
@@ -5008,27 +5027,30 @@ export class BrowserView {
     const on = this.karyotype !== null
     if (this.ideogramToggle !== null) setPressed(this.ideogramToggle, on)
     if (this.flipToggle !== null) setPressed(this.flipToggle, this.karyotype === 'horizontal')
-    this.ideogramCard?.classList.toggle('hidden', !on)
+    this.tracksEl.classList.toggle('is-ideogram', on)
     this.el.classList.toggle('is-ideogram', on)
     this.syncZoom()
   }
 
   /**
-   * The genome the ideogram draws, in the assembly's order.
+   * The sequences the ideogram draws, in the axis's order.
    *
-   * **Every sequence, whatever the browser has ticked.** The ticks are the
-   * browser's axis, and a browser opened on one chromosome — the ordinary case —
-   * has one ticked, as does any window a link or a click arrives at: an ideogram
-   * of that one would be the browser drawn worse, and the karyotype is what was
-   * asked for. Less the sequences under a {@link KARYOTYPE_FLOOR}th of the
-   * longest, which are a dot at any size this view draws — a mitochondrion
-   * beside a human chromosome — and the longest {@link KARYOTYPE_MAX} of the
-   * rest.
+   * **The Sequences card's**: the ticked ones — the browser's own axis — and
+   * the whole genome where none is ticked, as the browser draws it. No more
+   * than the longest {@link KARYOTYPE_MAX} of them; and, on the whole genome
+   * only, none under a {@link KARYOTYPE_FLOOR}th of the longest, which is a dot
+   * at any size this view draws — a mitochondrion beside a human chromosome, a
+   * draft's scaffolds beside its chromosomes. A sequence a reader ticked is
+   * drawn, dot or not: it was asked for by name. `floored` says whether any
+   * went for being too short, for the line that says what was left out.
    */
-  private karyotypeAssembly(): { assembly: Assembly; of: number } {
-    const whole = this.props.assembly
-    const longest = whole.contigs.reduce((most, contig) => Math.max(most, contig.length), 0)
-    const drawable = whole.contigs.filter((contig) => contig.length * KARYOTYPE_FLOOR >= longest)
+  private karyotypeAssembly(): { assembly: Assembly; of: number; floored: boolean } {
+    const chosen = this.view
+    const whole = chosen.contigs.length >= this.props.assembly.contigs.length
+    const longest = chosen.contigs.reduce((most, contig) => Math.max(most, contig.length), 0)
+    const drawable = whole
+      ? chosen.contigs.filter((contig) => contig.length * KARYOTYPE_FLOOR >= longest)
+      : chosen.contigs
     const kept = new Set(
       [...drawable]
         .sort((a, b) => b.length - a.length)
@@ -5036,10 +5058,12 @@ export class BrowserView {
         .map((contig) => contig.name),
     )
     const contigs = drawable.filter((contig) => kept.has(contig.name))
-    if (contigs.length === whole.contigs.length) return { assembly: whole, of: whole.contigs.length }
+    const floored = drawable.length < chosen.contigs.length
+    if (contigs.length === chosen.contigs.length) return { assembly: chosen, of: chosen.contigs.length, floored }
     return {
-      assembly: { ...whole, contigs, total: contigs.reduce((sum, contig) => sum + contig.length, 0) },
-      of: whole.contigs.length,
+      assembly: { ...chosen, contigs, total: contigs.reduce((sum, contig) => sum + contig.length, 0) },
+      of: chosen.contigs.length,
+      floored,
     }
   }
 
@@ -5069,6 +5093,13 @@ export class BrowserView {
     const room = Math.max(160, Math.floor(this.stageRoom() ?? 600))
     const frame = this.layoutIdeogram(ctx, width, room)
     this.karyo = frame
+    // One chromosome lies whichever way the flip says, as the browser reads
+    // one: greyed, with the reason, rather than a switch that does nothing.
+    if (this.flipToggle !== null) {
+      const alone = frame.shown <= 1
+      this.flipToggle.disabled = alone
+      this.flipToggle.title = alone ? FLIP_ALONE_HINT : FLIP_HINT
+    }
     // Where each chromosome went, on the view itself — a canvas has nothing to
     // query, and a test or a gallery aiming a pointer at chromosome IV has to
     // ask the picture where IV is, as `data-locus` says where the browser is.
@@ -5107,7 +5138,7 @@ export class BrowserView {
    */
   private layoutIdeogram(ctx: CanvasRenderingContext2D, width: number, room: number): KaryotypeFrame {
     const look = this.props.look?.get() ?? DEFAULT_IDEOGRAM_LOOK
-    const { assembly, of } = this.karyotypeAssembly()
+    const { assembly, of, floored } = this.karyotypeAssembly()
     const axis = assemblyAxis(assembly)
     const trackAxis = axisThroughEdit(axis, this.props.edited?.() ?? null) ?? axis
     const sequences: KaryotypeSequence[] = axis.segments.map((segment) => ({
@@ -5204,7 +5235,21 @@ export class BrowserView {
         chromosome.body.extent = extents.get(fill.entry.id) ?? null
       }
     }
-    return { assembly, axis, trackAxis, layout, slots, chromosomes, extents, bands, fill, key, shown: sequences.length, of }
+    return {
+      assembly,
+      axis,
+      trackAxis,
+      layout,
+      slots,
+      chromosomes,
+      extents,
+      bands,
+      fill,
+      key,
+      shown: sequences.length,
+      of,
+      floored,
+    }
   }
 
   /**
@@ -5576,7 +5621,8 @@ export class BrowserView {
       ctx.fillStyle = palette.labelColor
       ctx.textBaseline = 'alphabetic'
       ctx.fillText(
-        `${fmt.int(frame.shown)} of ${fmt.int(frame.of)} sequences — the longest, and none too short to draw`,
+        `${fmt.int(frame.shown)} of ${fmt.int(frame.of)} sequences — the longest` +
+          (frame.floored ? ', and none too short to draw' : ''),
         KARYOTYPE_PAD,
         frame.key.height - scaleLength(4),
       )
@@ -5929,23 +5975,25 @@ export class BrowserView {
   }
 
   /**
-   * The Ideogram card (§5.10): the flip, what fills the chromosomes and in what
-   * colour, how thick and how long they are and how far apart, and whether the
-   * lanes beside them are fitted to the window. Shown while the ideogram is
-   * drawn; every row writes the file's look (`state/ideogramLook.ts`), which the
-   * picture is subscribed to.
+   * The Tracks card's rows for the ideogram (§5.10), shown while it is drawn:
+   * what fills the chromosomes and in what colour, how thick and how long they
+   * are and how far apart, and whether the lanes beside them are fitted to the
+   * window — and the flip, which goes in the card's `picture` row beside the
+   * switch. One card for the tracks in either picture, each picture's rows
+   * shown while it is drawn: every row writes the file's look
+   * (`state/ideogramLook.ts`), which the picture is subscribed to.
    */
-  private ideogramCardFor(): HTMLElement {
+  private ideogramRows(): { flip: HTMLButtonElement; rows: HTMLElement[] } {
     const look = this.props.look
     const get = (): IdeogramLook => look?.get() ?? DEFAULT_IDEOGRAM_LOOK
     const set = (patch: Partial<IdeogramLook>): void => look?.set(patch)
-    this.flipToggle = iconButton(
+    const flip = iconButton(
       'align-start-vertical',
-      'Flip — the chromosomes lying in one column, each read left to right with its tracks above it. ' +
-        'Off, they stand in one row, each read downward with its tracks to its right',
+      FLIP_HINT,
       () => this.flipIdeogram(),
-      { class: 'btn btn-icon btn-toggle', size: 15, pressed: false },
+      { class: 'btn btn-icon btn-toggle ideogram-only', size: 15, pressed: false },
     )
+    this.flipToggle = flip
     const colourBy = el('select', { class: 'select', title: 'What a chromosome is filled with' })
     const colour = el('input', {
       class: 'ann-colour',
@@ -6017,32 +6065,20 @@ export class BrowserView {
         size: 15,
       }),
     )
-    const card = el(
-      'div',
-      { class: 'controls-card hidden' },
-      cardTitle('Ideogram', 'align-start-horizontal', 'controls-title'),
-      el(
-        'div',
-        { class: 'panel-controls' },
-        el(
-          'div',
-          { class: 'field field-block' },
-          el('span', { class: 'field-label', text: 'picture' }),
-          el('div', { class: 'plot-icon-row' }, this.flipToggle),
-        ),
-        el('label', { class: 'field ann-field' }, el('span', { class: 'field-label', text: 'colour by' }), colourBy),
-        el('label', { class: 'field ann-field' }, el('span', { class: 'field-label', text: 'colour' }), colour),
-        fieldPair(
-          number('width', 'How thick a chromosome is drawn', IDEOGRAM_WIDTH, () => get().width, (value) => set({ width: value })),
-          number('gap', 'The room between two chromosomes', IDEOGRAM_GAP, () => get().gap, (value) => set({ gap: value })),
-        ),
-        // Blank is the room's: the longest chromosome as long as the window
-        // allows, which is how the ideogram opens, and the mark beside the box
-        // puts it back there.
-        lengthField,
-        el('label', { class: 'field ann-field' }, el('span', { class: 'field-label', text: 'tracks' }), tracks),
+    const rows = [
+      el('label', { class: 'field ann-field' }, el('span', { class: 'field-label', text: 'colour by' }), colourBy),
+      el('label', { class: 'field ann-field' }, el('span', { class: 'field-label', text: 'colour' }), colour),
+      fieldPair(
+        number('width', 'How thick a chromosome is drawn', IDEOGRAM_WIDTH, () => get().width, (value) => set({ width: value })),
+        number('gap', 'The room between two chromosomes', IDEOGRAM_GAP, () => get().gap, (value) => set({ gap: value })),
       ),
-    )
+      // Blank is the room's: the longest chromosome as long as the window
+      // allows, which is how the ideogram opens, and the mark beside the box
+      // puts it back there.
+      lengthField,
+      el('label', { class: 'field ann-field' }, el('span', { class: 'field-label', text: 'tracks' }), tracks),
+    ]
+    for (const row of rows) row.classList.add('ideogram-only')
     const sync = (): void => {
       const now = get()
       if (colour.value !== now.colour) colour.value = now.colour
@@ -6051,7 +6087,7 @@ export class BrowserView {
     }
     sync()
     if (look !== undefined) this.unsubscribes.push(look.subscribe(sync))
-    return card
+    return { flip, rows }
   }
 
   // -------------------------------------------------------------------------

@@ -1,9 +1,10 @@
 /**
  * How the ideogram view draws its chromosomes (§5.10), for one open file.
  *
- * What a reader sets on the Ideogram card: how thick a chromosome is drawn, how
- * long the longest one is, the room between two, their colour, what fills them,
- * and whether the tracks beside them are fitted to the window. Which way they
+ * What a reader sets in the Tracks card's ideogram rows: how thick a
+ * chromosome is drawn, how long the longest one is, the room between two,
+ * their colour, what fills them, and whether the tracks beside them are fitted
+ * to the window. Which way they
  * run is not here — standing or lying is what is being looked at, and a link
  * carries it (`ideogram=` in the view state) — but how a chromosome is inked is
  * a choice about the picture of this file, kept with the file the way its

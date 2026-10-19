@@ -77,7 +77,7 @@ export class SessionCommands {
         group: 'View',
         title: 'Ideogram',
         hint: shown
-          ? 'Back to the tracks along one axis, where the browser was.'
+          ? 'Back to the picture the ideogram replaced — the browser, or the map it was put up over.'
           : 'Every chromosome whole, side by side, with the tracks beside each; a contact map is put down first, as V puts it down.',
         keys: KEYS.ideogram,
         state: shown ? 'on' : 'off',

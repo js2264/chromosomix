@@ -15,27 +15,30 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 ### Added
 
 - **An ideogram view: every chromosome whole, side by side, with the tracks beside each (§5.10), as
-  a dev feature (§29).** `z`, the palette's *Ideogram* or the switch at the end of the browser's bar
-  draws the genome as a karyotype on one scale — standing in a row, each read downward with its
-  tracks to its right, or, flipped on the new Ideogram card, lying in a column with its tracks above
-  it; one chromosome alone lies. Over a contact map `z` puts the map down first, as `v` does, and `v`
-  brings it back. Every lane of the browser's stack is drawn beside every chromosome by the
-  browser's own painters — area, line, bars, points, heatmap, ribbon, features, arcs — on one axis
-  per track over the whole genome, shrunk by one factor to fit the window and never past their
-  heights in the browser, down to four pixels, past which the picture scrolls. A cytoBand fills the
-  chromosomes with its bands by default; *colour by* fills them with one colour, a track (in its
-  lane's colours, white to its colour unless the lane is a heatmap, with the colour scale in the
-  key's corner) or a feature set's own colours. A pair set's pairs on one chromosome are its lane's
-  arcs and its pairs between two are curves leaving each chromosome straight across it, under every
-  lane, the strongest 4,000; a set with only those takes no lane. The reader's lines, boxes and
-  arrowheads are drawn across each chromosome; the pointer draws the hairline across one chromosome
-  and its lanes, and the card names the band and every track there; a click opens a chromosome whole
-  and a drag along one opens that stretch, in the browser's own picture, one step that Back undoes.
-  The key over the chromosomes is the browser's lane labels, names and ranges typed into as in a
-  lane. Width, gap, height, colour and fit are kept with the file and in a workspace
-  (`SessionConfig.ideogram`), the orientation in the link (`ideogram=vertical|horizontal`), and the
-  figure exports as PNG or PDF. `scripts/ui-ideogram-view.mjs` drives it on the yeast and
-  human demos.
+  a dev feature (§29).** The switch in the Tracks card's new `picture` row — the browser's, and a
+  map's — the palette's *Ideogram* or `z` draws the sequences ticked on the Sequences card, or the
+  whole genome where none is, as a karyotype on one scale: standing in a row, each read downward with
+  its tracks to its right, or, flipped, lying in a column with its tracks above it; one chromosome
+  alone lies; the longest forty at most. Over a contact map the switch or `z` puts the map down
+  first, as `v` does. Put away — the switch, `z`, a click on a chromosome or a drag along one — it
+  gives back the picture it replaced, the 1D browser or the map, on the chromosome or stretch the
+  click or the drag named, in one step that Back undoes. Every lane of the browser's stack is drawn
+  beside every chromosome by the browser's own painters — area, line, bars, points, heatmap, ribbon,
+  features, arcs — on one axis per track over every chromosome drawn, shrunk by one factor to fit the
+  window and never past their heights in the browser, down to four pixels, past which the picture
+  scrolls. A cytoBand fills the chromosomes with its bands by default; *colour by* fills them with
+  one colour, a track (in its lane's colours, white to its colour unless the lane is a heatmap, with
+  the colour scale in the key's corner) or a feature set's own colours. A pair set's pairs on one
+  chromosome are its lane's arcs and its pairs between two are curves leaving each chromosome
+  straight across it, under every lane, the strongest 4,000; a set with only those takes no lane. The
+  reader's lines, boxes and arrowheads are drawn across each chromosome; the pointer draws the
+  hairline across one chromosome and its lanes, and the card names the band and every track there.
+  The key over the chromosomes is the browser's lane labels, names and ranges typed into as in a lane.
+  The ideogram's settings are rows of the Tracks card while it is drawn — flip, colour by, colour,
+  width, gap, height and the tracks' fit — kept with the file and in a workspace
+  (`SessionConfig.ideogram`); the orientation is in the link (`ideogram=vertical|horizontal`), and
+  the figure exports as PNG or PDF. `scripts/ui-ideogram-view.mjs` drives it on the yeast and human
+  demos.
 
 - **Every number the validation's figures draw, in one table (§18.10).** `notebooks/validation.qmd`
   writes `validation.txt` beside its page — <https://chromosomix.app/validation/validation.txt>, and

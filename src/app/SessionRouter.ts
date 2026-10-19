@@ -177,8 +177,9 @@ export class SessionRouter {
       // the map down rather than closing and re-opening the file, which is both
       // slower and lossy.
       if (this.session.file?.uri === state.uri && this.session.canHideMap) {
-        // …as the ideogram, where that is what was asked for (§5.10).
-        this.session.hideMap(state.ideogram)
+        // …as the ideogram, where that is what was asked for (§5.10), and on
+        // the state that asked: a Back is not a new step.
+        this.session.hideMap(state.ideogram, state)
         return
       }
       if (this.session.opening !== null || this.resolving !== null) return

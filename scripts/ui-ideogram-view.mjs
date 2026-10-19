@@ -9,18 +9,25 @@
  * beside it — yeast centromeres cluster at the spindle pole, so these are the
  * trans contacts every yeast Hi-C map shows); the ATAC peaks and the genes
  * open but hidden, there to colour by; and three of the reader's marks: a
- * line, a box and an arrowhead between two chromosomes. Then: the browser as
- * it opens, with the switch in its bar; `z`, the chromosomes standing in a row
- * with their lanes beside them; the pointer on chromosome IV — the hairline
- * across it and the card — and close up; the Ideogram card; the view flipped,
- * lying in one column; coloured by ATAC, with its scale in the corner, and by
- * the ATAC peaks; wider and further apart; a drag along IV in the air, and the
- * browser it opens on that stretch; Back, and a click on XII opening it whole;
+ * line, a box and an arrowhead between two chromosomes. Then: the browser with
+ * the switch in its Tracks card's `picture` row; the switch pressed, the
+ * chromosomes standing in a row with their lanes beside them; the pointer on
+ * chromosome IV — the hairline across it and the card — and close up; the
+ * Tracks card with the ideogram's rows; the view flipped, lying in one
+ * column; coloured by ATAC, with its scale in the corner, and by the ATAC
+ * peaks; wider and further apart; four sequences ticked on the Sequences card,
+ * and the whole genome again; a drag along IV in the air, and the 1D browser
+ * it gives back on that stretch; Back, and a click on XII giving it back whole;
  * the figure saved as a PNG through a stand-in save dialog, and coloured by
- * ATAC as a PDF. Then the
- * human demo's hg19 karyotype; the yeast micro-C map with `z` putting the map
- * down and `v` bringing it back; and the dark theme. Prints what each step
- * found: the hash, the card's rows, the key, the readout.
+ * ATAC as a PDF. Then the yeast micro-C map: the switch in the map's Tracks
+ * card, pressed — the map put down and the one ticked chromosome drawn — the
+ * whole genome, a click on VII giving the **map** back on VII; Back, and the
+ * ideogram of what the Sequences card holds now — VII, which the map ticked —
+ * a drag along it giving the map back on that stretch, Back and the switch off
+ * giving it back where it was. Then the human demo's chrX alone and its whole
+ * karyotype, and the
+ * dark theme. Prints what each step found: the hash, the summary, the card's
+ * rows, the readout.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-ideogram-view.mjs [out-dir]
@@ -86,8 +93,18 @@ const fold = async (title) => {
   }
 }
 const hash = () => page.evaluate(() => decodeURIComponent(location.hash))
-const canvasBox = () => page.locator('.browser-canvas').first().boundingBox()
-const card = () => page.locator('.controls-card').filter({ has: page.locator('.controls-title', { hasText: /^Ideogram$/ }) }).first()
+/** The Tracks card on screen — the browser's, or the map's — which carries the ideogram's switch and rows. */
+const tracksCard = () => page.locator('.controls-card:visible').filter({ has: page.locator('.controls-title', { hasText: /^Tracks$/ }) }).first()
+const ideogramSwitch = () => tracksCard().locator('button[title^="Ideogram"]').first()
+const flipSwitch = () => tracksCard().locator('button[title^="Flip"]').first()
+const colourBy = () => tracksCard().locator('select[title="What a chromosome is filled with"]').first()
+const widthBox = () => tracksCard().locator('input[title="How thick a chromosome is drawn"]').first()
+const gapBox = () => tracksCard().locator('input[title="The room between two chromosomes"]').first()
+/** A sequence's tick on the Sequences card, by its exact name. */
+const tick = (name) =>
+  page.locator('.seq-row').filter({ has: page.locator('.seq-name', { hasText: new RegExp(`^\\s*${name}\\s*$`) }) }).locator('.seq-tick').first()
+const wholeGenome = () => page.locator('.seq-all:visible').first()
+const placed = () => page.evaluate(() => JSON.parse(document.querySelector('.view-browser')?.dataset.karyotype ?? '[]').map((place) => place.contig).join(' '))
 const exportCard = () => page.locator('.controls-card').filter({ has: page.locator('.controls-title', { hasText: /^Export$/ }) }).first()
 const readout = () => page.evaluate(() => document.querySelector('.status-readout, .readout')?.textContent?.trim() ?? '')
 const tip = () => page.evaluate(() => {
@@ -205,17 +222,17 @@ try {
   await fold('Fold the Annotations panel')
   await sleep(2500)
   await page.mouse.move(5, 5)
-  await shot('iv01-browser-with-the-switch')
-  const toggle = page.locator('.browser-bar button[aria-pressed]').last()
-  console.log('switch:', await toggle.getAttribute('title'), '· pressed', await toggle.getAttribute('aria-pressed'))
+  await shot('iv01-browser-switch-in-the-tracks-card')
+  console.log('switch:', await ideogramSwitch().getAttribute('title'), '· pressed', await ideogramSwitch().getAttribute('aria-pressed'))
+  console.log('a switch in the bar:', await page.locator('.browser-bar button[title^="Ideogram"]').count())
 
-  // z: the ideogram, standing.
-  await page.locator('.browser-canvas').first().click({ position: { x: 600, y: 600 } })
-  await page.keyboard.press('z')
+  // The switch, pressed: the ideogram, standing, of the whole genome (nothing ticked).
+  await ideogramSwitch().click()
   await sleep(5000)
   await page.mouse.move(5, 5)
   console.log('hash:', await hash())
   console.log('summary:', await summary())
+  console.log('drawn:', await placed())
   await shot('iv02-ideogram-standing')
 
   // The pointer on IV: the hairline across it and its lanes, and the card.
@@ -230,48 +247,62 @@ try {
   }
   await page.mouse.move(5, 5)
 
-  // The Ideogram card.
-  await card().screenshot({ path: `${OUT}/iv05-ideogram-card.png` })
-  console.log('shot iv05-ideogram-card')
-  console.log('colour by:', await card().locator('select').first().evaluate((s) => [...s.options].map((o) => o.text).join(' | ')))
+  // The Tracks card, with the ideogram's rows in it.
+  await tracksCard().screenshot({ path: `${OUT}/iv05-tracks-card-in-the-ideogram.png` })
+  console.log('shot iv05-tracks-card-in-the-ideogram')
+  console.log('cards:', await page.locator('.controls-card:visible .controls-title').allTextContents())
+  console.log('colour by:', await colourBy().evaluate((s) => [...s.options].map((o) => o.text).join(' | ')))
 
   // Flipped: lying in one column, tracks above each.
-  await card().locator('button[aria-pressed]').first().click()
+  await flipSwitch().click()
   await sleep(4000)
   console.log('flipped hash:', await hash())
   await shot('iv06-ideogram-lying')
   await page.locator('.browser-canvas').first().screenshot({ path: `${OUT}/iv07-lying-canvas.png` })
   console.log('shot iv07-lying-canvas')
-  await card().locator('button[aria-pressed]').first().click()
+  await flipSwitch().click()
   await sleep(3500)
   await page.mouse.move(5, 5)
 
   // Coloured by ATAC, then by its peaks.
-  await card().locator('select').first().selectOption({ label: 'ATAC' })
+  await colourBy().selectOption({ label: 'ATAC' })
   await sleep(3500)
   console.log('coloured:', await summary())
   await shot('iv08-coloured-by-atac')
-  await card().locator('select').first().selectOption({ label: 'ATAC peaks' })
+  await colourBy().selectOption({ label: 'ATAC peaks' })
   await sleep(3500)
   await shot('iv09-coloured-by-peaks')
-  await card().locator('select').first().selectOption({ label: 'bands' })
+  await colourBy().selectOption({ label: 'bands' })
   await sleep(1500)
 
   // Wider and further apart.
-  const steppers = card().locator('.field-stepper input')
-  await steppers.nth(0).fill('20')
-  await steppers.nth(0).press('Enter')
-  await steppers.nth(1).fill('24')
-  await steppers.nth(1).press('Enter')
+  await widthBox().fill('20')
+  await widthBox().press('Enter')
+  await gapBox().fill('24')
+  await gapBox().press('Enter')
   await sleep(3000)
+  await page.mouse.move(5, 5)
   await shot('iv10-wider-further-apart')
-  await steppers.nth(0).fill('12')
-  await steppers.nth(0).press('Enter')
-  await steppers.nth(1).fill('14')
-  await steppers.nth(1).press('Enter')
+  await widthBox().fill('12')
+  await widthBox().press('Enter')
+  await gapBox().fill('14')
+  await gapBox().press('Enter')
   await sleep(2500)
 
-  // A drag along IV, in the air, and the browser it opens.
+  // Four sequences ticked on the Sequences card: the ideogram draws those.
+  for (const name of ['I', 'III', 'V', 'VII']) {
+    await tick(name).click()
+    await sleep(400)
+  }
+  await sleep(3000)
+  await page.mouse.move(5, 5)
+  console.log('ticked:', await summary(), '·', await placed())
+  await shot('iv11-four-ticked')
+  await wholeGenome().click()
+  await sleep(3500)
+  console.log('whole genome again:', await placed())
+
+  // A drag along IV, in the air, and the 1D browser it gives back.
   const from = await pointOf('IV', 0.3)
   const to = await pointOf('IV', 0.45)
   if (from !== null && to !== null) {
@@ -280,15 +311,15 @@ try {
     await page.mouse.move(to.x, (from.y + to.y) / 2, { steps: 5 })
     await page.mouse.move(to.x, to.y, { steps: 5 })
     await sleep(500)
-    await shot('iv11-drag-along-iv')
+    await shot('iv12-drag-along-iv')
     await page.mouse.up()
     await sleep(4000)
     await page.mouse.move(5, 5)
     console.log('after the drag:', await hash())
-    await shot('iv12-opened-the-stretch')
+    await shot('iv13-the-stretch-in-the-browser')
   }
 
-  // Back to the ideogram, and a click on XII opening it whole.
+  // Back to the ideogram, and a click on XII giving it back whole.
   await page.goBack()
   await sleep(4000)
   console.log('back:', await hash())
@@ -300,21 +331,21 @@ try {
     await sleep(4000)
     await page.mouse.move(5, 5)
     console.log('after the click on XII:', await hash())
-    await shot('iv13-opened-xii-whole')
+    await shot('iv14-xii-whole-in-the-browser')
   }
 
-  // The figure, saved as a PNG.
+  // The figure, saved as a PNG…
   await page.goBack()
   await sleep(4000)
   await exportCard().locator('select.select-format').selectOption('png')
   await exportCard().locator('select.select-dpi').selectOption('150')
-  await saveAs('iv14-figure')
+  await saveAs('iv15-figure')
   // …and as a PDF, coloured by ATAC, so the scale in the key's corner goes onto the vector page too.
-  await card().locator('select').first().selectOption({ label: 'ATAC' })
+  await colourBy().selectOption({ label: 'ATAC' })
   await sleep(3000)
   await exportCard().locator('select.select-format').selectOption('pdf')
-  await saveAs('iv15-figure-coloured-by-atac', 'pdf')
-  await card().locator('select').first().selectOption({ label: 'bands' })
+  await saveAs('iv16-figure-coloured-by-atac', 'pdf')
+  await colourBy().selectOption({ label: 'bands' })
   await sleep(1000)
 } finally {
   rmSync(probe, { force: true })
@@ -322,45 +353,90 @@ try {
 }
 
 // ---------------------------------------------------------------------------
-// The human karyotype, a map put down by z, and the dark theme
+// Over a map: the switch in its Tracks card, and the map given back
+// ---------------------------------------------------------------------------
+page = await fresh()
+await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.chromosomix.json`)
+await page.waitForSelector('.heatmap-canvas', { timeout: 120000 })
+await sleep(8000)
+await page.mouse.move(5, 5)
+await shot('iv17-the-map-and-its-tracks-card')
+console.log('map switch:', await ideogramSwitch().getAttribute('title'))
+await ideogramSwitch().click()
+await sleep(6000)
+await page.mouse.move(5, 5)
+console.log('over the map:', await hash(), '·', await summary(), '·', await placed())
+await shot('iv18-over-the-map-the-ticked-chromosome')
+await wholeGenome().click()
+await sleep(5000)
+await page.mouse.move(5, 5)
+console.log('whole genome:', await placed())
+await shot('iv19-over-the-map-the-whole-genome')
+const vii = await pointOf('VII', 0.5)
+if (vii !== null) {
+  await page.mouse.click(vii.x, vii.y)
+  await sleep(7000)
+  await page.mouse.move(5, 5)
+  console.log('after the click on VII:', await hash())
+  await shot('iv20-click-on-vii-gives-the-map-back')
+}
+await page.goBack()
+await sleep(6000)
+await page.mouse.move(5, 5)
+// Back on the ideogram, of what the Sequences card holds now: the map ticked VII.
+console.log('back:', await hash(), '·', await summary(), '·', await placed())
+await shot('iv21-back-the-ideogram-of-the-ticked-chromosome')
+const s0 = await pointOf('VII', 0.25)
+const s1 = await pointOf('VII', 0.5)
+if (s0 !== null && s1 !== null) {
+  await page.mouse.move(s0.x, s0.y)
+  await page.mouse.down()
+  await page.mouse.move((s0.x + s1.x) / 2, s1.y, { steps: 5 })
+  await page.mouse.move(s1.x, s1.y, { steps: 5 })
+  await sleep(400)
+  await page.mouse.up()
+  await sleep(7000)
+  await page.mouse.move(5, 5)
+  console.log('after the drag along VII:', await hash())
+  await shot('iv22-drag-along-vii-gives-the-map-back')
+}
+await page.goBack()
+await sleep(6000)
+console.log('back again:', await hash())
+await ideogramSwitch().click()
+await sleep(6000)
+await page.mouse.move(5, 5)
+console.log('switched off:', await hash())
+await shot('iv23-the-switch-off-gives-the-map-back-where-it-was')
+
+// ---------------------------------------------------------------------------
+// The human karyotype, and the dark theme
 // ---------------------------------------------------------------------------
 page = await fresh()
 await page.goto(`${BASE}/?config=${BASE}/demo/human/Human_chrX_RNA.chromosomix.json`)
 await page.waitForSelector('.browser-canvas', { timeout: 120000 })
 await sleep(6000)
-await page.locator('.browser-canvas').first().click({ position: { x: 600, y: 600 } })
-await page.keyboard.press('z')
+await ideogramSwitch().click()
 await sleep(6000)
 await page.mouse.move(5, 5)
-console.log('human:', await summary())
-await shot('iv16-human-karyotype')
-
-page = await fresh()
-await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.chromosomix.json`)
-await page.waitForSelector('.heatmap-canvas', { timeout: 120000 })
-await sleep(8000)
-await page.locator('.heatmap-canvas').first().click({ position: { x: 5, y: 5 } }).catch(() => {})
-await page.keyboard.press('z')
+console.log('human, chrX ticked:', await summary(), '·', await placed())
+await shot('iv24-human-chrx-ticked')
+await wholeGenome().click()
 await sleep(6000)
 await page.mouse.move(5, 5)
-console.log('map put down:', await hash())
-await shot('iv17-map-put-down-for-the-ideogram')
-await page.locator('.browser-canvas').first().click({ position: { x: 5, y: 5 } })
-await page.keyboard.press('v')
-await sleep(6000)
-await page.mouse.move(5, 5)
-console.log('v:', await hash())
-await shot('iv18-v-brings-the-map-back')
+console.log('human, whole genome:', await summary())
+await shot('iv25-human-karyotype')
 
 page = await fresh('dark')
 await page.goto(`${BASE}/?config=${BASE}/demo/human/Human_chrX_RNA.chromosomix.json`)
 await page.waitForSelector('.browser-canvas', { timeout: 120000 })
 await sleep(6000)
-await page.locator('.browser-canvas').first().click({ position: { x: 600, y: 600 } })
-await page.keyboard.press('z')
+await wholeGenome().click()
+await sleep(2000)
+await ideogramSwitch().click()
 await sleep(6000)
 await page.mouse.move(5, 5)
-await shot('iv19-dark-theme')
+await shot('iv26-dark-theme')
 
 console.log('errors:', errors.length === 0 ? 'none' : errors.slice(0, 10))
 await browser.close()

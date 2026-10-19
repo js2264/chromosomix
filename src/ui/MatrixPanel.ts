@@ -41,6 +41,7 @@ import { AnnotationStore } from '../annotations/store'
 import { everyTrackOpacityField } from './AnnotationCard'
 import { KEYS, keyLabel, optionKey, shiftKey, withKey } from './commands'
 import { cardTitle, icon, iconButton } from './icons'
+import { ideogramSwitch, pictureRow } from './ideogramSwitch'
 import { LANE_EDGES, hasAMovableAxis, overlayShapeOf } from '../annotations/types'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { LABEL_MIN_SPAN_BP, MAX_CATEGORICAL_TICKS } from '../constants'
@@ -894,6 +895,14 @@ export interface AnnotationContext {
    * drop it will not answer is a target that eats the file.
    */
   pickOnEdge?(event: DragEvent, edge: LaneEdge | null): void
+  /**
+   * Draw these tracks as the ideogram (§5.10): the map put down, as `v` puts it
+   * down, and every chromosome whole with the tracks beside each. The switch in
+   * the Tracks card's `picture` row, the browser's own; absent where the
+   * ideogram is not offered — on a companion's map, and with the dev feature
+   * off (§29).
+   */
+  ideogram?(): void
 }
 
 /**
@@ -1610,6 +1619,13 @@ export class MatrixPanel {
       el(
         'div',
         { class: 'panel-controls' },
+        // Which picture the tracks are drawn as (§5.10): beside this map, or as
+        // the ideogram, which puts the map down to draw every chromosome whole
+        // with the tracks beside each — the browser's own switch, in the same
+        // row of the same card.
+        ...(options.annotations?.ideogram === undefined
+          ? []
+          : [pictureRow(ideogramSwitch(() => this.options.annotations?.ideogram?.()))]),
         // Marks rather than sentences, and the same marks the 1D browser's
         // Tracks card uses: these are the same actions, and a reader should not
         // have to learn them twice because there happens to be a matrix above

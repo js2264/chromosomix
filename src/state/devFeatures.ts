@@ -42,8 +42,8 @@ export const DEV_FEATURES = {
   dotplot: 'The dot plot is not validated yet.',
   /**
    * Every chromosome drawn whole, side by side, with the tracks beside each
-   * (§5.10): the browser's toggle, the Ideogram card, the command and its key,
-   * and the key it writes in a link.
+   * (§5.10): the Tracks cards' switch and the ideogram's rows, the command and
+   * its key, and the key it writes in a link.
    */
   ideogram: 'The ideogram view is not finished yet.',
 } as const
