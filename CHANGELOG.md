@@ -14,6 +14,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Every number the validation's figures draw, in one table (§18.10).** `notebooks/validation.qmd`
+  writes `validation.txt` beside its page — <https://chromosomix.app/validation/validation.txt>, and
+  `validation-<tag>.txt` among each release's assets — a tidy table with a row for every mark its
+  nineteen figures draw: each point, each vertex of a line, each hexagon of a density with its count,
+  each cell of a picture, each bar, band and line across a panel, each tick that names something and
+  each text, with the figure's label, the panel's letter and axes, and what the mark stands for. It
+  is read off each figure as the page shows it, so any figure can be drawn again from it alone. A
+  density is written as its hexagons rather than the millions of values behind it, a symmetric map's
+  cells once; and the metaplot's heatmaps, 35,034 transcripts in a picture a few hundred pixels high,
+  now draw each line as the mean of 100 transcripts, which is what the table holds. The P(s)
+  figure's four panels are lettered, as every other figure's are.
+
 - **A 3D model leaves as a PDB, for PyMOL, and a PDB this app wrote reads back (§25.2, §25.7).** A
   **PDB** button beside **bed3d** on every row of the Structures card and on the drawer's result for
   *Model from the map*, and a `.pdb` beside the `.bed3d` that `chromosomix reconstruct3d --out`

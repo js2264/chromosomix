@@ -9264,7 +9264,17 @@ replicates and a Hi-C insulation score cut to chr19, against pyBigWig's exact wi
 SciPy, a window any track lacks left out of every pair as deepTools leaves it, and against
 deepTools, whose zoom-level means are measured apart. Where a reference draws at random — a pileup's
 controls, an overlap's shuffles, IDR's ties — two distributions are compared, the reference's own
-spread from seed to seed the yardstick. It writes every command it ran to
+spread from seed to seed the yardstick. **Every number its figures draw is a line of one table**,
+`notebooks/work/validation/validation.txt`, read off each figure as it is shown rather than gathered
+beside it, so that the table and the picture cannot disagree and any figure can be drawn again from
+the table alone: a row a mark — a point, a vertex of a line, a hexagon of a density with its count, a
+cell of a picture, a bar, a band or a line across a panel, a tick that names something, a text — with
+the figure's label, the panel's letter and axes, what the mark stands for and where it is drawn, to
+ten significant digits. A density is the hexagons it draws, not the millions of values behind it,
+which are the outputs of the commands it prints; a symmetric map's numbers are written once, its
+upper triangle; and the metaplot's heatmaps, tens of thousands of transcripts in a picture a few
+hundred pixels high, draw each line as the mean of a hundred, which is what the table holds. It
+writes every command it ran to
 `notebooks/work/validation/commands.json`, and `notebooks/timing.qmd` runs them again, four times
 round robin, each a fresh process — all but the ones that would time a job twice or two different
 jobs: one seed of the shifted controls, the *Sox2* viewpoint of virtual 4C, Boost-HiC on chr1, and
@@ -9308,8 +9318,9 @@ yapc's in `requirements-yapc.txt` with IDR and yapc built at the commits the not
 Boost-HiC's checkout, Ubuntu's bedtools and seqkit, the app's build, the two viewers with Playwright's
 Chromium, and higlass-python's environment with libfuse — renders both notebooks, and publishes them at
 `<site>/validation/` and `<site>/timings/`, each a self-contained page with its tables beside it
-(`commands.json` and `summary.tsv`, every command and every verdict; `timings.tsv` and `viewers.tsv`);
-a release keeps its own copies of both pages and of the three tables as assets, and every run keeps
+(`commands.json`, `summary.tsv` and `validation.txt`, every command, every verdict and every number its
+figures draw; `timings.tsv` and `viewers.tsv`); a release keeps its own copies of both pages and of the
+four tables as assets, and every run keeps
 what it rendered as an artifact for 90 days, the validation alone, with the timing rounds it finished,
 when the timings fail. It runs when a release is published and on demand. Each page opens on a block
 saying when it was rendered, from which version, commit and release, by which run or by hand, and on
