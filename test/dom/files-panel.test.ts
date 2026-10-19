@@ -28,7 +28,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FilesCard } from '@/ui/FilesCard'
 import { connectSnapshot, disconnectFolder } from '@/browse/connected'
 import { writeScopes, type BucketScope } from '@/s3/credentials'
-import { FILE_DRAG_TYPE, readFileDrag } from '@/ui/fileDrag'
+import { FILE_DRAG_TYPE, readFileDrag, writePickedDrag } from '@/ui/fileDrag'
 import type { PickedFile } from '@/browse/folder'
 import { all, mounted, textsOf, setUpDom, type DomTeardown } from '../support/dom'
 
@@ -316,6 +316,58 @@ describe('dragging a row', () => {
     const drop = new window.Event('drop') as DragEvent
     Object.defineProperty(drop, 'dataTransfer', { value: { getData: () => '' } })
     expect(await readFileDrag(drop)).toBeNull()
+  })
+
+  /**
+   * A store row travels under the same type (§24.2), so every target that
+   * takes a Files row takes it — and by a token, never by its address, so a
+   * drag this window did not start opens nothing.
+   */
+  it('carries a store row by a token, resolved only for the drag this window started', async () => {
+    const transferOf = () => {
+      const data = new Map<string, string>()
+      return {
+        data,
+        transfer: {
+          effectAllowed: '',
+          setData: (type: string, value: string) => void data.set(type, value),
+          getData: (type: string) => data.get(type) ?? '',
+        },
+      }
+    }
+    const event = (type: string, transfer: unknown): DragEvent => {
+      const made = new window.Event(type) as DragEvent
+      Object.defineProperty(made, 'dataTransfer', { value: transfer })
+      return made
+    }
+    const picked: PickedFile = {
+      uri: 'https://data.example/a.bw',
+      source: { kind: 'remote', url: 'https://data.example/a.bw' },
+      name: 'HFF CTCF',
+    }
+    const first = transferOf()
+    let taken = 0
+    writePickedDrag(event('dragstart', first.transfer), picked, () => taken++)
+    expect(first.data.get(FILE_DRAG_TYPE) ?? '').not.toContain('data.example')
+    // The address is the plain-text half, for other applications.
+    expect(first.data.get('text/plain')).toBe(picked.uri)
+    // Nothing is noted for a drag still in the air…
+    expect(taken).toBe(0)
+    expect(await readFileDrag(event('drop', first.transfer))).toBe(picked)
+    // …and the row's shelf is, the moment a target takes it.
+    expect(taken).toBe(1)
+
+    // A payload naming a drag this window never started, or an address of its own.
+    const forged = (payload: object): DragEvent =>
+      event('drop', { getData: () => JSON.stringify(payload) })
+    expect(await readFileDrag(forged({ held: 'drag-999', name: 'x.cool' }))).toBeNull()
+    expect(await readFileDrag(forged({ held: 'x', uri: 'https://elsewhere.example/x.cool' }))).toBeNull()
+
+    // One hand: a second drag replaces the first, whose token then names nothing.
+    const second = transferOf()
+    writePickedDrag(event('dragstart', second.transfer), { ...picked, uri: 'https://data.example/b.bw' })
+    expect(await readFileDrag(event('drop', first.transfer))).toBeNull()
+    expect((await readFileDrag(event('drop', second.transfer)))?.uri).toBe('https://data.example/b.bw')
   })
 })
 
