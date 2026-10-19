@@ -102,6 +102,7 @@ interface Built {
   added: StoreEntry[]
   together: StoreEntry[][]
   views: StoreView[]
+  dragged: StoreEntry[]
 }
 
 function build(options: { view?: StoreView; empty?: boolean; front?: StoreFront } = {}): Built {
@@ -109,11 +110,13 @@ function build(options: { view?: StoreView; empty?: boolean; front?: StoreFront 
   const added: StoreEntry[] = []
   const together: StoreEntry[][] = []
   const views: StoreView[] = []
+  const dragged: StoreEntry[] = []
   const host: StoreHost = {
     open: (entry) => opened.push(entry),
     openWithTracks: (entry) => opened.push(entry),
     add: (entry) => added.push(entry),
     openTogether: (entries) => together.push([...entries]),
+    drag: (entry) => void dragged.push(entry),
     tabEmpty: () => options.empty ?? true,
   }
   const view = new PortalView({
@@ -124,7 +127,7 @@ function build(options: { view?: StoreView; empty?: boolean; front?: StoreFront 
     file: FILE,
   })
   document.body.appendChild(view.el)
-  return { view, el: view.el, opened, added, together, views }
+  return { view, el: view.el, opened, added, together, views, dragged }
 }
 
 /** The rows' names, top to bottom. */
@@ -187,6 +190,37 @@ describe('the rows', () => {
     expect(holding.opened.map((entry) => entry.label)).toEqual(['K562 map'])
     // Icons only: the words are in the tooltips.
     expect(adds[0].textContent).toBe('')
+  })
+
+  it('lets every file row be dragged, as a row of the Files column is, and no workspace (§24.2)', () => {
+    const { el, dragged } = build()
+    const rows = all<HTMLElement>(el, '.portal-row')
+    expect(rows.map((row) => row.draggable)).toEqual([true, true, true, true])
+    // The hand takes the row it began on, wherever on the row that was — the
+    // name, a chip — and the shell is what marks the drag (`ui/fileDrag.ts`).
+    const chip = rows[1].querySelector('.portal-name') as HTMLElement
+    chip.dispatchEvent(new window.Event('dragstart', { bubbles: true }))
+    expect(dragged.map((entry) => entry.label)).toEqual(['HFF CTCF'])
+
+    // A saved session is tabs, not a file: there is nowhere to aim one.
+    const sessions = new PortalView({
+      front: FRONT,
+      host: {
+        open: () => undefined,
+        openWithTracks: () => undefined,
+        add: () => undefined,
+        openTogether: () => undefined,
+        drag: () => undefined,
+        tabEmpty: () => true,
+      },
+      view: EMPTY_VIEW,
+      onView: () => undefined,
+      file: { ...FILE, entries: [...FILE.entries, SESSION] },
+    })
+    const row = all<HTMLElement>(sessions.el, '.portal-row').find(
+      (node) => node.querySelector('.portal-name')?.textContent === SESSION.label,
+    )
+    expect(row?.draggable).toBe(false)
   })
 })
 
@@ -335,6 +369,7 @@ describe('sessions', () => {
         openWithTracks: (entry) => opened.push(entry),
         add: () => undefined,
         openTogether: () => undefined,
+        drag: () => undefined,
         tabEmpty: () => true,
       },
       view: EMPTY_VIEW,

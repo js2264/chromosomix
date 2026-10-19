@@ -24,7 +24,7 @@ import { icon } from '../icons'
 import { withNewMark } from '../rowVerbs'
 import { valueOf } from '../../state/facets'
 import type { StoreColumn, StoreEntry } from '../../state/store'
-import { rowActions, type StoreHost } from './host'
+import { rowActions, rowDrag, type StoreHost } from './host'
 import { labelOf } from './FacetRail'
 
 /** How many rows are put in the document at once. */
@@ -180,16 +180,20 @@ export class ResultList {
       .map(([column, value]) =>
         el('span', { class: 'portal-chip portal-chip-dim', text: value, title: column.label }),
       )
-    return el(
-      'div',
-      { class: `portal-row${paint.selected.has(entry.uri) ? ' is-on' : ''}` },
-      box,
-      el('span', { class: `portal-kind portal-kind-${entry.kind}`, title: kindTitle(entry.kind) }, icon(kindIcon(entry.kind), { size: 12 })),
-      el('div', { class: 'portal-row-text' }, name, ...chips),
-      entry.size === undefined
-        ? null
-        : el('span', { class: 'portal-size', text: fmt.bytes(entry.size) }),
-      el('div', { class: 'portal-row-actions' }, ...rowActions(entry, this.props.host)),
+    return rowDrag(
+      el(
+        'div',
+        { class: `portal-row${paint.selected.has(entry.uri) ? ' is-on' : ''}` },
+        box,
+        el('span', { class: `portal-kind portal-kind-${entry.kind}`, title: kindTitle(entry.kind) }, icon(kindIcon(entry.kind), { size: 12 })),
+        el('div', { class: 'portal-row-text' }, name, ...chips),
+        entry.size === undefined
+          ? null
+          : el('span', { class: 'portal-size', text: fmt.bytes(entry.size) }),
+        el('div', { class: 'portal-row-actions' }, ...rowActions(entry, this.props.host)),
+      ),
+      entry,
+      this.props.host,
     )
   }
 }

@@ -15,7 +15,9 @@
  * misclick on a row. So **open** fills an empty tab and otherwise opens a new
  * one, and **add** joins the open tab — a map beside the map, anything else as
  * a track — which is the routing a dropped file takes. A workspace row is whole
- * tabs and opens as them, through the road `?config=` takes.
+ * tabs and opens as them, through the road `?config=` takes. A third road is
+ * the hand: a row dragged out of the drawer and let go somewhere says *where*,
+ * as a row of the Files column does ({@link rowDrag}).
  */
 
 import { rowVerbs } from '../rowVerbs'
@@ -41,8 +43,34 @@ export interface StoreHost {
    * it. The first map is the lead; with no map, the first entry is.
    */
   openTogether(entries: readonly StoreEntry[]): void
+  /**
+   * A row was taken hold of: mark the drag as carrying its file
+   * (`ui/fileDrag.ts`), so it can be let go wherever a row of the Files column
+   * can (§20.5) — the shell's, because the file a row names and the tracks it
+   * brings are what its two verbs open, and a third account of them here would
+   * be the one to drift.
+   */
+  drag(entry: StoreEntry, event: DragEvent): void
   /** Whether the tab in front holds nothing, which decides what the verbs say. */
   tabEmpty(): boolean
+}
+
+/**
+ * Make a store row draggable, as a row of the Files column is (§20.5, §24.2):
+ * let go on a map's edge or its middle, on a cell of the deck, on the Tracks
+ * card or on an analysis form's file box, the file opens there, and no list
+ * can be told from the other by where its rows land.
+ *
+ * Not a workspace's row. It is tabs and not a file, and there is nowhere one
+ * could be aimed — which is why a saved workspace is not a draggable row in a
+ * folder either.
+ */
+export function rowDrag(row: HTMLElement, entry: StoreEntry, host: StoreHost): HTMLElement {
+  if (entry.kind === 'workspace') return row
+  row.draggable = true
+  row.classList.add('is-draggable')
+  row.addEventListener('dragstart', (event) => host.drag(entry, event))
+  return row
 }
 
 /**

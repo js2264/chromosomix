@@ -42,6 +42,7 @@ function host(opened: StoreEntry[], empty = true): StoreHost {
     openWithTracks: (entry) => opened.push(entry),
     add: () => undefined,
     openTogether: () => undefined,
+    drag: () => undefined,
     tabEmpty: () => empty,
   }
 }

@@ -1019,6 +1019,7 @@ export class Session {
     this.picker = new FilePicker({
       onOpen: (uri, source) => void this.openWithConfig(uri, source),
       onOpenFiles: (files) => void this.openFiles(files, { fromLanding: true }),
+      onPicked: (picked) => this.openPickedHere(picked),
       // Neither door in an embed, whose landing page is *Load files* alone
       // (§21.2): the drawer a tile opens is not built there, and nor is the
       // Files column a place is connected into — so a tile pressed did
@@ -2110,6 +2111,30 @@ export class Session {
     const waiting = this.file === null ? this.store.state : null
     const named = waiting !== null && splitUri(waiting.uri).path === file.name ? waiting.uri : file.name
     await this.open(named, source, undefined, index)
+  }
+
+  /**
+   * A row out of the Files column or a store, let go on this tab's landing
+   * page (§20.5, §24.2): opened here with all the row carries — the index found
+   * beside it, the name a store gave it — where its address alone lost both. A
+   * file on this machine goes through {@link openFiles}, the door a dropped one
+   * takes, which is also what a workspace or a link waiting for its file
+   * answers to (§5.6); a page waiting for one takes a remote file by its own
+   * door, and an empty tab with nothing waiting fills as the row's `+` would
+   * fill it. Not counted as the landing page's own open: the Files column
+   * stays where it is, the reader having just been working in it.
+   */
+  private openPickedHere(picked: PickedFile): void {
+    if (picked.source.kind === 'local') {
+      const file = picked.source.file
+      void this.openFiles(picked.index === undefined ? [file] : [file, picked.index])
+      return
+    }
+    if (this.pendingConfig !== null) {
+      void this.openWithConfig(picked.uri, picked.source)
+      return
+    }
+    void this.addPicked(picked)
   }
 
   /** Tell the shell a landing-page open has produced a view, if it has. */

@@ -26,7 +26,7 @@ import { button, el } from '../dom'
 import { icon, iconButton } from '../icons'
 import { valueOf } from '../../state/facets'
 import type { StoreEntry, StoreFile } from '../../state/store'
-import { rowActions, type StoreHost } from './host'
+import { rowActions, rowDrag, type StoreHost } from './host'
 import type { StoreFront } from './registry'
 
 export interface GalleryViewProps {
@@ -143,21 +143,25 @@ export class GalleryView {
 
   private fileRow(entry: StoreEntry): HTMLElement {
     const format = valueOf(entry, 'format')
-    return el(
-      'div',
-      { class: 'portal-row' },
-      el(
-        'span',
-        { class: `portal-kind portal-kind-${entry.kind}` },
-        icon(entry.kind === 'map' ? 'grid-2x2' : 'dna', { size: 12 }),
-      ),
+    return rowDrag(
       el(
         'div',
-        { class: 'portal-row-text' },
-        button(entry.label, () => this.props.host.open(entry), { class: 'btn-link portal-name', title: entry.note ?? '' }),
-        format === '' ? null : el('span', { class: 'portal-chip portal-chip-dim', text: format }),
+        { class: 'portal-row' },
+        el(
+          'span',
+          { class: `portal-kind portal-kind-${entry.kind}` },
+          icon(entry.kind === 'map' ? 'grid-2x2' : 'dna', { size: 12 }),
+        ),
+        el(
+          'div',
+          { class: 'portal-row-text' },
+          button(entry.label, () => this.props.host.open(entry), { class: 'btn-link portal-name', title: entry.note ?? '' }),
+          format === '' ? null : el('span', { class: 'portal-chip portal-chip-dim', text: format }),
+        ),
+        el('div', { class: 'portal-row-actions' }, ...rowActions(entry, this.props.host)),
       ),
-      el('div', { class: 'portal-row-actions' }, ...rowActions(entry, this.props.host)),
+      entry,
+      this.props.host,
     )
   }
 }

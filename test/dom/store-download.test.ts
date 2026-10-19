@@ -96,6 +96,7 @@ function build(): StoreDrawer {
     openWithTracks: () => undefined,
     add: () => undefined,
     openTogether: () => undefined,
+    drag: () => undefined,
     tabEmpty: () => true,
   }
   const drawer = new StoreDrawer({ host })
