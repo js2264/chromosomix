@@ -31,6 +31,8 @@ const empty: TutorialHost = {
   tracks: () => null,
   square: () => null,
   consoleOpen: () => false,
+  marks: () => null,
+  saved: () => [],
 }
 
 beforeEach(() => {
@@ -93,7 +95,7 @@ describe('the tutorial’s steps', () => {
     expect(after('analysis-trackcorr')[0]).toBe('trackcorr')
   })
 
-  it('asks nothing about phasing, and ticks the four tracks in one step', () => {
+  it('asks nothing about phasing, and ticks every track in one step', () => {
     const ids = steps.map((step) => step.id)
     expect(ids.filter((id) => id.startsWith('phase'))).toEqual([])
     expect(ids.filter((id) => id.startsWith('tick'))).toEqual(['tick-tracks'])

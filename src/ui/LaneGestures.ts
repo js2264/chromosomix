@@ -49,6 +49,7 @@ import {
 import { CEILING_MODIFIER, CEILING_STEP, DRAG_SLACK } from './LaneControls'
 import type { LaneEditor } from './LaneEditor'
 import { EDGE_WORDS, laneMenuFeature, openLaneMenu } from './laneMenu'
+import { copyStretch } from './sequenceCopy'
 import type { MapReadout } from './MapReadout'
 import { isArmed } from './mapPick'
 import { marksMenu } from './marksMenu'
@@ -1149,6 +1150,7 @@ export class LaneGestures {
       canvas.releasePointerCapture(event.pointerId)
     }
 
+    const client = this.options.annotations?.client
     const onMenu = (event: MouseEvent): void => {
       const box = canvas.getBoundingClientRect()
       const x = event.clientX - box.left
@@ -1176,6 +1178,14 @@ export class LaneGestures {
         feature,
         copy,
         marksMenu(this.options.annotations?.manual, lanes.marksAt(edge, x, y, this.host.laneGeometry(), MARK_REACH)),
+        // The bases the lane shows (§8.8): beside a map the lane is its GC
+        // trace, which stands for them all the same.
+        hit.entry.kind === 'sequence' && client !== undefined
+          ? {
+              stretch: lanes.stretchOn(edge, hit.entry.id, this.host.laneGeometry()),
+              run: (stretch) => void copyStretch(client, hit.entry.id, stretch),
+            }
+          : null,
       )
     }
 

@@ -749,6 +749,36 @@ export class AnnotationStore {
     return entry
   }
 
+  /**
+   * A second row over the same track, straight after it — *Duplicate* on a
+   * lane's menu (§8.8).
+   *
+   * Everything the reader set comes with it — colour, limits, style, group —
+   * and it is drawn wherever the first one is, each lane with its own patch, so
+   * the copy lands on the picture as a twin to restyle rather than somewhere
+   * the reader has to go and find it. Its data is the same object, read once:
+   * a duplicate is a second way of drawing one file, not a second read of it.
+   * What makes a row unique stays with the first: the id, the search star and
+   * a BAM's link to its other row.
+   */
+  duplicate(id: string): AnnotationEntry | null {
+    const at = this.items.findIndex((entry) => entry.id === id)
+    if (at < 0) return null
+    const { partner: _partner, primary: _primary, ...original } = this.items[at]
+    const copy: AnnotationEntry = {
+      ...original,
+      id: mintAnnotationId(),
+      label: `${original.label} (copy)`,
+    }
+    this.items = [...this.items.slice(0, at + 1), copy, ...this.items.slice(at + 1)]
+    this.lanes = [
+      ...this.lanes,
+      ...this.lanes.filter((lane) => lane.track === id).map((lane) => ({ ...lane, track: copy.id })),
+    ]
+    this.changed()
+    return copy
+  }
+
   /** Merge a patch into one row. A patch for an id that has gone is a no-op. */
   update(id: string, patch: Partial<AnnotationEntry>): void {
     let hit = false

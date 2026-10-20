@@ -17,6 +17,7 @@
  */
 
 import { TICK_MIN_GAP_PX, chooseBpStep, formatBpTick } from './heatmap'
+import { laneCurve, laneMove, valueAcross, type LaneFrame } from './lane'
 import type { LocusAxis } from './locus'
 import type { Scale } from './scale'
 
@@ -569,10 +570,10 @@ export function drawBoundaries(
 /**
  * Loop calls, as arcs.
  *
- * The picture a 1D browser draws for a pair of loci, and the reason a BEDPE is
- * worth having here at all: an arc joining two anchors says *these two places
- * touch* in one glyph, at any zoom, without needing the second dimension a
- * contact map spends on saying the same thing.
+ * The picture a lane draws for a pair of loci, and the reason a BEDPE is worth
+ * having beside a map or in a 1D browser at all: an arc joining two anchors says
+ * *these two places touch* in one glyph, at any zoom, without needing the second
+ * dimension a contact map spends on saying the same thing.
  *
  * Height is the log of the span rather than the span itself, so a 2 kb loop and
  * a 2 Mb one in the same view are both visible — linear height would flatten
@@ -582,17 +583,14 @@ export function drawBoundaries(
  * A pair with both ends off screen is skipped; a pair with *one* end off screen
  * is drawn, because the arc leaving the view is exactly the information that
  * something over there is connected to something here.
+ *
+ * In lane coordinates, so one drawing serves every edge of a map and the 1D
+ * browser's lanes alike (§8.16): the arcs stand on the edge a signal's baseline
+ * is on and rise the way a signal grows, and a flip hangs them from the other.
  */
 export function drawArcs(
   ctx: CanvasRenderingContext2D,
-  frame: {
-    toPixel(unit: number): number
-    domain: readonly [number, number]
-    alongFrom: number
-    alongTo: number
-    acrossFrom: number
-    thickness: number
-  },
+  frame: LaneFrame,
   axis: LocusAxis,
   pairs: {
     length: number
@@ -604,13 +602,14 @@ export function drawArcs(
     start2: Int32Array
     end2: Int32Array
   },
-  paint: { colour: string; opacity: number },
+  paint: { colour: string; opacity: number; flip?: boolean },
 ): number {
   ctx.save()
   ctx.strokeStyle = paint.colour
   ctx.globalAlpha = paint.opacity * 0.75
   ctx.lineWidth = 1.25
-  const floor = frame.acrossFrom + frame.thickness
+  const at = (value: number): number => valueAcross(frame, paint.flip === true ? 1 - value : value)
+  const base = at(0)
   const span = Math.max(1, frame.domain[1] - frame.domain[0])
   let drawn = 0
   for (let i = 0; i < pairs.length; i++) {
@@ -626,12 +625,13 @@ export function drawArcs(
     // loop spanning the whole view reaches the top; one spanning a thousandth of
     // it still reaches a third of the way.
     const fraction = Math.min(1, (high - low) / span)
-    const height = frame.thickness * Math.min(1, 0.2 + 0.8 * (1 + Math.log10(Math.max(1e-4, fraction)) / 4))
+    const height = Math.min(1, 0.2 + 0.8 * (1 + Math.log10(Math.max(1e-4, fraction)) / 4))
+    const apex = at(height)
     ctx.beginPath()
-    ctx.moveTo(x0, floor)
+    laneMove(ctx, frame, x0, base)
     // A quadratic through a control point at twice the apex: the curve passes
     // through half of it, which puts the top of the arc where `height` says.
-    ctx.quadraticCurveTo((x0 + x1) / 2, floor - height * 2, x1, floor)
+    laneCurve(ctx, frame, (x0 + x1) / 2, base + 2 * (apex - base), x1, base)
     ctx.stroke()
     drawn++
   }

@@ -121,8 +121,9 @@ export class MapFigure {
     this.copyButton = row.parts.copy
     this.dpiSelect = row.parts.dpi
     this.syncExportRow()
-    // Under the row it qualifies: whether the saved figure says what it is.
-    row.body.append(captionField())
+    // On the line of the two buttons it qualifies: whether the saved figure
+    // says what it is.
+    row.parts.acts.append(captionField())
 
     // Its own card, and the first one, because saving the figure is not a
     // property of the picture — it is the thing a reader does *after* every

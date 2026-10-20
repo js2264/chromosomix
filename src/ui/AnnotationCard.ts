@@ -45,6 +45,7 @@ import { calledSetFields } from './calledSurfaces'
 import {
   framingOf,
   isSynthetic,
+  pairExports,
   recomputeNote,
   syntheticExports,
   syntheticMark,
@@ -177,6 +178,8 @@ export class AnnotationCard {
   private readonly open = new Set<string>()
   /** A rebuild that arrived while a control was being edited. */
   private pending = false
+  /** The focus is moving between two fields of the list; see the listeners in the constructor. */
+  private committing = false
   /** The row being dragged, while one is; see {@link grip}. */
   private dragging: string | null = null
   /** A control that should get the focus back after the next rebuild. */
@@ -262,6 +265,27 @@ export class AnnotationCard {
         if (this.pending) this.render()
       }, 0)
     })
+    // A commit made by *leaving* a field for another — Tab from one limit to
+    // the next, or a press on the next — is a `change` fired while the focus is
+    // between the two, on nobody: the check below saw no caret and rebuilt the
+    // row under the field being moved to, and the caret fell out of the card.
+    // So the move is marked, from the key or the press that starts it to the
+    // end of the task, when the focus has landed.
+    const moving = (): void => {
+      this.committing = true
+      setTimeout(() => {
+        this.committing = false
+      }, 0)
+    }
+    this.list.addEventListener('keydown', (event) => {
+      if (event.key === 'Tab') moving()
+    }, true)
+    this.list.addEventListener('pointerdown', (event) => {
+      const at = event.target
+      if (at instanceof HTMLInputElement || at instanceof HTMLSelectElement || at instanceof HTMLTextAreaElement) {
+        if (!(at instanceof HTMLInputElement && at.type === 'checkbox')) moving()
+      }
+    }, true)
 
     this.unsubscribe = props.store.subscribe(() => this.render())
     // A press on the lane itself asks for this row (`ui/revealTrack.ts`). The
@@ -378,6 +402,14 @@ export class AnnotationCard {
    */
   private holdsFocus(): boolean {
     const active = document.activeElement
+    // Between two fields of the list, on a commit made by leaving one: held, and
+    // the focusout above releases it once the focus has landed, or held on.
+    if (this.committing && (active === null || active === document.body)) {
+      setTimeout(() => {
+        if (this.pending) this.render()
+      }, 0)
+      return true
+    }
     if (!(active instanceof HTMLElement) || !this.list.contains(active)) return false
     if (active instanceof HTMLInputElement && active.type === 'checkbox') return false
     return (
@@ -1285,6 +1317,10 @@ export class AnnotationCard {
       const framing = framingOf(entry)
       if (framing !== null) out.push(el('p', { class: 'ann-origin', text: framing, title: framing }))
       return out
+    }
+    // A loaded set of pairs leaves as its anchors (§8.1); the pairs are the file.
+    if (entry.kind === 'pairs' && entry.payload?.kind === 'pairs' && this.props.onExport !== undefined) {
+      out.push(pairExports(entry, this.props.onExport))
     }
     out.push(this.origin(entry))
     return out

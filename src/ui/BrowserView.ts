@@ -46,7 +46,7 @@ import {
   searchesByName,
   translationOf,
 } from '../annotations/types'
-import { READING_FRAMES, codonAt, frameName } from '../annotations/codons'
+import { READING_FRAMES, codonAt, frameName, type ReadingFrame } from '../annotations/codons'
 import { ReadCache } from '../annotations/reads'
 import {
   packPile,
@@ -192,6 +192,7 @@ import {
   laneNote,
 } from '../render/tracks'
 import { button, el, fmt } from './dom'
+import { codonStretch, copyStretch, stretchBetween, type SequenceStretch } from './sequenceCopy'
 import { GroupsCard } from './GroupsCard'
 import {
   CEILING_MODIFIER,
@@ -240,7 +241,7 @@ import {
 import { locusText, type PickHandlers } from './mapPick'
 import { VectorPage } from './vector'
 import type { CellFigure } from '../panels/deckFigure'
-import { KEYS, optionKey, withKey } from './commands'
+import { KEYS, matchesKeys, optionKey, wantsTextCopy, withKey } from './commands'
 import { exportRow } from './exportRow'
 import { fitPlaceholder, locusPlaceholder, searchKey } from './SearchBox'
 // The map's own zoom steps and the button that draws one. §26.6: one bar shape
@@ -692,7 +693,18 @@ export class BrowserView {
       }
     | { mode: 'scale'; lane: Lane; members: AnnotationEntry[]; from: number }
     | { mode: 'press'; x0: number; y0: number; lane: Lane | null; onBorder: boolean }
+    // Across a sequence lane's letters, or one reading frame's: a stretch to copy (§8.8).
+    | { mode: 'residues'; entry: string; row: ResidueRow; x0: number; x: number }
     | null = null
+  /**
+   * A stretch of a sequence lane's residues, or of one reading frame's amino
+   * acids, dragged across to be copied (§8.8): in the file's coordinates,
+   * snapped to whole bases — or to whole codons of the frame — and drawn until a
+   * click elsewhere on the tracks or Escape puts it away.
+   */
+  private residueSelection: { entry: string; row: ResidueRow; stretch: SequenceStretch } | null = null
+  /** The selection's own copy button, over its far end while the pointer is on it. */
+  private readonly residueCopy: HTMLButtonElement
   /** A picking mode in progress; see {@link armPicking}. */
   private picking: (PickHandlers & {
     /** Called once when the mode ends, however it ends. */
@@ -787,7 +799,22 @@ export class BrowserView {
     this.scale = new Scale([0, Math.max(1, this.view.total)], 1)
 
     this.canvas = el('canvas', { class: 'browser-canvas', attrs: { tabindex: '0' } })
-    this.stage = el('div', { class: 'browser-stage' }, this.canvas, this.overlays, this.tooltip, this.reframeHint)
+    this.residueCopy = button('copy', () => this.copyResidues(), {
+      class: 'btn residue-copy hidden',
+      title: withKey('Copy the selected sequence as plain text', KEYS.copyPlot),
+    })
+    this.residueCopy.addEventListener('pointerleave', (event) => {
+      if (event.relatedTarget !== this.canvas) this.residueCopy.classList.add('hidden')
+    })
+    this.stage = el(
+      'div',
+      { class: 'browser-stage' },
+      this.canvas,
+      this.overlays,
+      this.tooltip,
+      this.reframeHint,
+      this.residueCopy,
+    )
     // The 1D browser's own, and only its own: a deck's tracks cell has the
     // cell's height bar under it (`panels/cellHeight.ts`), and beside a map the
     // lanes are the map's (§5.8).
@@ -2451,6 +2478,143 @@ export class BrowserView {
       ctx.restore()
       this.paintSelectionMarks(ctx, this.drag.x0, this.drag.x, height, palette)
     }
+    this.paintResidueSelection(ctx, palette)
+  }
+
+  /**
+   * The residues, or the row of one reading frame, under a point of a sequence
+   * lane drawn at base resolution — where a drag selects rather than pans (§8.8).
+   */
+  private residuesAt(y: number): { lane: Lane; row: ResidueRow } | null {
+    const hit = this.laneAt(y)
+    if (hit === null || hit.onBorder || hit.lane.entry.kind !== 'sequence') return null
+    const lane = hit.lane
+    const translation = lane.translation
+    const strip = translation?.sequence ?? lane.frame
+    if (lane.residues.length > 0 && y >= strip.acrossFrom && y < strip.acrossFrom + strip.thickness) {
+      return { lane, row: 'bases' }
+    }
+    if (translation === null || !codonsDrawn(translation.rung)) return null
+    const band = translation.band
+    if (y < band.acrossFrom || y >= band.acrossFrom + band.thickness) return null
+    const frame = frameAtAcross(y - band.acrossFrom, translation.row)
+    return frame === null ? null : { lane, row: frame }
+  }
+
+  /** The strip one row of a sequence lane is drawn in, while it is drawn at all. */
+  private residueRowFrame(lane: Lane, row: ResidueRow): LaneFrame | null {
+    const translation = lane.translation
+    if (row === 'bases') return lane.residues.length > 0 ? (translation?.sequence ?? lane.frame) : null
+    if (translation === null || !codonsDrawn(translation.rung)) return null
+    return frameRows(translation.band, translation.row)[READING_FRAMES.indexOf(row)] ?? null
+  }
+
+  /**
+   * A drag's two ends as the stretch it selects: every base it touches, or
+   * every codon of the frame — read the way the strand on screen runs, which on
+   * a reversed stretch of an edit is the other frame (§27.2).
+   */
+  private residueStretch(row: ResidueRow, x0: number, x1: number): SequenceStretch | null {
+    const stretch = stretchBetween(this.trackAxis, this.atUnit(Math.min(x0, x1)), this.atUnit(Math.max(x0, x1)))
+    if (stretch === null || row === 'bases') return stretch
+    return codonStretch(stretch, readFrameOf(row, stretch.reversed))
+  }
+
+  /** Put the selected letters on the clipboard: bases, or the frame's amino acids. */
+  private copyResidues(): void {
+    const held = this.residueSelection
+    if (held === null) return
+    const lane = this.lanes.find((each) => each.entry.id === held.entry)
+    const code = lane?.translation?.code ?? (lane === undefined ? 1 : translationOf(lane.entry.style).code)
+    void copyStretch(
+      this.props.client,
+      held.entry,
+      held.stretch,
+      held.row === 'bases' ? null : { frame: readFrameOf(held.row, held.stretch.reversed), code },
+    )
+  }
+
+  /**
+   * Show the selection's copy button while the pointer is over the selection —
+   * at its far end, just under the row, where the hand already is — and hide it when
+   * the pointer leaves for anywhere but the button itself.
+   */
+  private showResidueCopy(x: number, y: number): void {
+    const box = this.residueBox()
+    // The button's own strip under the row counts as over it, so the hand can reach it.
+    const over = box !== null && x >= box.left && x <= box.right + 32 && y >= box.top && y <= box.bottom + 24
+    this.residueCopy.classList.toggle('hidden', !over)
+    if (!over || box === null) return
+    // Under the row, at the far end: over it, the chips name the two ends.
+    this.residueCopy.style.left = `${Math.max(0, Math.min(box.right - 24, this.canvasWidth - 56))}px`
+    this.residueCopy.style.top = `${box.bottom + 2}px`
+  }
+
+  /** Where the held selection is drawn, in canvas pixels, or `null` where it is not on screen. */
+  private residueBox(): { left: number; right: number; top: number; bottom: number } | null {
+    const held = this.residueSelection
+    if (held === null) return null
+    const lane = this.lanes.find((each) => each.entry.id === held.entry)
+    const strip = lane === undefined ? null : this.residueRowFrame(lane, held.row)
+    if (strip === null) return null
+    const a = this.trackAxis.locusToUnit(held.stretch.contig, held.stretch.start)
+    const b = this.trackAxis.locusToUnit(held.stretch.contig, held.stretch.end)
+    if (a === null || b === null) return null
+    return {
+      left: strip.toPixel(Math.min(a, b)),
+      right: strip.toPixel(Math.max(a, b)),
+      top: strip.acrossFrom,
+      bottom: strip.acrossFrom + strip.thickness,
+    }
+  }
+
+  /**
+   * The selected letters, while they are dragged and after: a wash over the row
+   * and the drag-to-zoom's chips — both ends to the base, 1-based as the box
+   * takes them, and the length between, in bases or in amino acids (§8.8).
+   */
+  private paintResidueSelection(ctx: CanvasRenderingContext2D, palette: ReturnType<typeof readCanvasPalette>): void {
+    const drag = this.drag?.mode === 'residues' ? this.drag : null
+    const stretch = drag !== null ? this.residueStretch(drag.row, drag.x0, drag.x) : (this.residueSelection?.stretch ?? null)
+    const row = drag?.row ?? this.residueSelection?.row
+    const entry = drag?.entry ?? this.residueSelection?.entry
+    if (stretch === null || row === undefined || entry === undefined) return
+    const lane = this.lanes.find((each) => each.entry.id === entry)
+    const strip = lane === undefined ? null : this.residueRowFrame(lane, row)
+    if (strip === null) return
+    const a = this.trackAxis.locusToUnit(stretch.contig, stretch.start)
+    const b = this.trackAxis.locusToUnit(stretch.contig, stretch.end)
+    if (a === null || b === null) return
+    const left = strip.toPixel(Math.min(a, b))
+    const right = strip.toPixel(Math.max(a, b))
+    const top = strip.acrossFrom
+    ctx.save()
+    ctx.fillStyle = CROSSHAIR_COLOR
+    ctx.globalAlpha = 0.22
+    ctx.fillRect(left, top, Math.max(1, right - left), strip.thickness)
+    ctx.restore()
+    const backwards = drag !== null && drag.x < drag.x0
+    const first = formatPosition(stretch.contig, stretch.start)
+    const last = formatPosition(stretch.contig, stretch.end - 1)
+    const length = stretch.end - stretch.start
+    const chip = scaleLength(SELECTION_CHIP)
+    drawSelection(ctx, {
+      anchor: backwards ? right : left,
+      moving: backwards ? left : right,
+      start: backwards ? last : first,
+      end: backwards ? first : last,
+      span: row === 'bases' ? fmt.bp(length) : `${fmt.int(Math.round(length / 3))} aa`,
+      top,
+      bottom: top + strip.thickness,
+      chipTop: Math.max(this.rulerHeight, top - chip - 3),
+      width: this.canvasWidth,
+      dpr: this.dpr,
+      chipHeight: chip,
+      chipPad: scaleLength(SELECTION_PAD),
+      font: scaleFont(SELECTION_FONT),
+      colour: CROSSHAIR_COLOR,
+      halo: palette.labelHaloColor,
+    })
   }
 
   /**
@@ -2789,6 +2953,7 @@ export class BrowserView {
           outline: this.outline,
           baseline: this.baseline,
           flip: member.style.flip,
+          ...(member.style.centre === undefined ? {} : { centre: member.style.centre }),
           colormap: colormapOf(member.style, limits),
           // Overlaid tracks are translucent by necessity: two opaque areas in
           // one lane means the second hides the first, which is the opposite of
@@ -2897,6 +3062,7 @@ export class BrowserView {
       const drawn = drawArcs(ctx, frame, this.trackAxis, entry.payload.data, {
         colour: entry.style.colour,
         opacity: entry.style.opacity,
+        flip: entry.style.flip,
       })
       if (this.text) {
         label = {
@@ -3528,8 +3694,9 @@ export class BrowserView {
       class: 'export-row-flex',
     })
     row.note.replaceWith(this.exportStatus)
-    // Under the row it qualifies: whether the saved figure says what it is.
-    row.body.append(captionField())
+    // On the line of the two buttons it qualifies: whether the saved figure
+    // says what it is.
+    row.parts.acts.append(captionField())
     // A vector PDF has no resolution, so the resolution *goes* rather than
     // sitting there greyed out — which also gives the format the width it needs
     // to say "vector" on one line, the only line the row has.
@@ -3942,6 +4109,15 @@ export class BrowserView {
         this.drag = { mode: 'select', x0: x, x }
         return
       }
+      // Across a sequence lane's letters, or one of its reading frames: a
+      // stretch to copy, with no key held (§8.8). The view still pans from every
+      // other lane, the ruler, the wheel and the arrows; on the letters a drag
+      // is the selection every text a reader has ever copied answers to.
+      const residues = event.altKey || event.shiftKey ? null : this.residuesAt(y)
+      if (residues !== null) {
+        this.drag = { mode: 'residues', entry: residues.lane.entry.id, row: residues.row, x0: x, x }
+        return
+      }
       const hit = this.laneAt(y)
       // What is left once the handle has been ruled out: a lane's lower border
       // resizes it, and everything else is a pan (or a selection, with the key).
@@ -3978,7 +4154,10 @@ export class BrowserView {
         const onEdge = !onRuler && !onRange && !onGrip && this.onColumnEdge(x, y)
         const onLabel = !onRuler && !onRange && !onGrip && !onEdge && this.nameAt(x, y) !== null
         canvas.classList.toggle('is-grab', onGrip)
-        canvas.classList.toggle('is-text', onRange || onLabel)
+        // …and over letters a drag would select: the caret every text shows.
+        const onResidues = !onRuler && !onRange && !onGrip && !onEdge && !onLabel && this.residuesAt(y) !== null
+        canvas.classList.toggle('is-text', onRange || onLabel || onResidues)
+        this.showResidueCopy(x, y)
         // …and over the floor a lane is resized by, the double arrow every
         // application uses for exactly that, which is also what the map's own
         // box handles show. The drawn rule stays: it is what says *which* lane
@@ -4053,7 +4232,7 @@ export class BrowserView {
         drag.x = x
         return
       }
-      if (drag.mode === 'select') {
+      if (drag.mode === 'select' || drag.mode === 'residues') {
         drag.x = x
         this.schedule()
         return
@@ -4116,7 +4295,22 @@ export class BrowserView {
         endCarry()
       }
       const { x, y } = at(event)
+      if (drag.mode === 'residues') {
+        // A press that did not travel puts the selection away, and is a click.
+        const stretch = Math.abs(x - drag.x0) > 2 ? this.residueStretch(drag.row, drag.x0, x) : null
+        this.residueSelection = stretch === null ? null : { entry: drag.entry, row: drag.row, stretch }
+        if (stretch === null) this.clickAt(x, y)
+        this.showResidueCopy(x, y)
+        this.schedule()
+        return
+      }
       if (drag.mode === 'press') {
+        // A click anywhere else on the tracks puts a selection of letters away.
+        if (this.residueSelection !== null) {
+          this.residueSelection = null
+          this.residueCopy.classList.add('hidden')
+          this.schedule()
+        }
         // A press that did not travel, while a mode is on, is the mark it was
         // armed to place — reported now rather than through {@link clickAt},
         // which waits a quarter of a second for a second click that here would
@@ -4297,6 +4491,14 @@ export class BrowserView {
         feature,
         () => copyPicture('track', this.laneImage(id)),
         marks,
+        // The bases in view, on a sequence lane at any zoom (§8.8): a GC trace
+        // stands for them as much as the letters do.
+        hit.lane.entry.kind === 'sequence'
+          ? {
+              stretch: stretchBetween(this.trackAxis, hit.lane.frame.domain[0], hit.lane.frame.domain[1]),
+              run: (stretch) => void copyStretch(this.props.client, id, stretch),
+            }
+          : null,
       )
     }
 
@@ -4336,7 +4538,23 @@ export class BrowserView {
      * whatever the reader last clicked on.
      */
     const onAbort = (event: KeyboardEvent): void => {
+      // The copy key copies the letters selected, where there are any and the
+      // key is not meant for a text field — ahead of the window's own binding,
+      // which would otherwise copy the figure (§8.8).
+      if (this.residueSelection !== null && matchesKeys(event, KEYS.copyPlot) && !wantsTextCopy(event.target)) {
+        event.preventDefault()
+        event.stopPropagation()
+        this.copyResidues()
+        return
+      }
       if (event.key !== 'Escape') return
+      if (this.residueSelection !== null && this.drag === null) {
+        event.preventDefault()
+        this.residueSelection = null
+        this.residueCopy.classList.add('hidden')
+        this.schedule()
+        return
+      }
       // The way out of the *mode*, before the way out of the gesture inside it.
       // On the window rather than the canvas, and for the reason the whole
       // listener is: the mode is armed from a button in a side panel, so the
@@ -5201,4 +5419,17 @@ function windowMods(
   const codes = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([code]) => code)
   const code = asked !== '' ? asked : (codes[0] ?? '')
   return { code, codes, calls: totals.get(code) ?? 0 }
+}
+
+/** A sequence lane's row a drag can select along: its residues, or one reading frame as drawn. */
+type ResidueRow = 'bases' | ReadingFrame
+
+/** Whether a frames band is drawing codons a drag can select — boxes or letters, not ticks. */
+function codonsDrawn(rung: FramesRung): boolean {
+  return rung === 'letters' || rung === 'codons'
+}
+
+/** The frame a row reads in the file: the one shown, or its opposite on a reversed stretch (§27.2). */
+function readFrameOf(shown: ReadingFrame, reversed: boolean): ReadingFrame {
+  return (reversed ? -shown : shown) as ReadingFrame
 }

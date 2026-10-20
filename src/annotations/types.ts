@@ -1180,6 +1180,16 @@ export interface AnnotationStyle {
    * because only one member of the pair is flipped.
    */
   flip: boolean
+  /**
+   * The value a signal lane grows from — IGV's *center* — where it is not zero.
+   *
+   * Bars and areas grow up from it where the value is above and down where it
+   * is below, and the hairline that marks a signed track's origin is drawn at
+   * it: `1` on a ratio of two tracks is the line where one is over the other.
+   * Absent is zero, the lane's origin as it always was; a centre outside the
+   * limits in force grows from the near edge, as zero outside them does.
+   */
+  centre?: number
 }
 
 /**

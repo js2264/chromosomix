@@ -20,6 +20,8 @@
  * free of any dependency on the reader — the same rule `GenomicMapper` follows.
  */
 
+import { contigIndexOf } from '../genome/naming'
+
 /** One labelled run along an axis, as the reader reports it. */
 export interface AxisRun {
   label: string
@@ -145,6 +147,10 @@ export class LocusAxis {
   /** Ascending by `unitStart`, contiguous, non-overlapping. */
   readonly segments: readonly LocusSegment[]
   private readonly byContig = new Map<string, LocusSegment>()
+  /** Every name the axis carries, once each — the list a foreign spelling is matched against. */
+  private readonly names: string[]
+  /** A foreign spelling's answer, held: `null` for one this axis does not carry. */
+  private readonly spelled = new Map<string, string | null>()
 
   constructor(segments: LocusSegment[]) {
     this.segments = segments
@@ -155,6 +161,28 @@ export class LocusAxis {
       // first stretch is better than answering with whichever came last.
       if (!this.byContig.has(segment.contig)) this.byContig.set(segment.contig, segment)
     }
+    this.names = [...this.byContig.keys()]
+  }
+
+  /**
+   * This axis's own name for a sequence a file spells another way (§5.9) — `XIV`
+   * for a loop set's `chrXIV` — or `null` where the axis does not carry it.
+   *
+   * A track is read through `contigIndexOf` on its own side, so a deck's second
+   * map, which spells its sequences differently from the first, finds the
+   * track's values all the same. Everything drawn *at a place* — a loop set's
+   * rings, a mark, a rectangle — comes here instead, and asked by the exact
+   * name it went on finding nothing on that map. Exact first, which is every
+   * place on the map a set was loaded against and costs one probe.
+   */
+  ownName(contig: string): string | null {
+    if (this.byContig.has(contig)) return contig
+    const held = this.spelled.get(contig)
+    if (held !== undefined) return held
+    const at = contigIndexOf(this.names, contig)
+    const name = at < 0 ? null : this.names[at]
+    this.spelled.set(contig, name)
+    return name
   }
 
   get length(): number {
@@ -180,7 +208,8 @@ export class LocusAxis {
 
   /** The stretch a contig occupies on this axis, or `null` if it is not on it. */
   segmentOf(contig: string): LocusSegment | null {
-    return this.byContig.get(contig) ?? null
+    const own = this.ownName(contig)
+    return own === null ? null : (this.byContig.get(own) ?? null)
   }
 
   /**
@@ -192,7 +221,8 @@ export class LocusAxis {
    * why a renderer that places data asks this rather than {@link segmentOf}.
    */
   segmentsOf(contig: string): LocusSegment[] {
-    return this.segments.filter((segment) => segment.contig === contig)
+    const own = this.ownName(contig)
+    return own === null ? [] : this.segments.filter((segment) => segment.contig === own)
   }
 
   /**
@@ -258,7 +288,9 @@ export class LocusAxis {
    * rather than one that resolves a place.
    */
   locusToUnit(contig: string, bp: number): number | null {
-    const segment = this.holding(contig, bp) ?? this.byContig.get(contig)
+    const own = this.ownName(contig)
+    if (own === null) return null
+    const segment = this.holding(own, bp) ?? this.byContig.get(own)
     if (segment === undefined || segment.bpPerUnit <= 0) return null
     return unitAt(segment, bp)
   }
@@ -293,8 +325,10 @@ export class LocusAxis {
    */
   locusToUnits(contig: string, bp: number): number[] {
     const out: number[] = []
+    const own = this.ownName(contig)
+    if (own === null) return out
     for (const segment of this.segments) {
-      if (segment.contig !== contig || !(segment.bpPerUnit > 0)) continue
+      if (segment.contig !== own || !(segment.bpPerUnit > 0)) continue
       const [from, to] = stretchOf(segment)
       if (bp < from || bp > to) continue
       const unit = unitAt(segment, bp)

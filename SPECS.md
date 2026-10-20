@@ -935,7 +935,11 @@ typed (`annotations/search.ts`, shared with the browser's box, §5.8). A hit is 
 feature's **own** span, which is the number a reader copies into a primer tool or a paper; picking
 one opens the feature with a quarter of its length either side, put in the box in the display form,
 so it lands on the gene and not a base before it. The row used to print the start of that padded
-window, a coordinate the gene does not begin at.
+window, a coordinate the gene does not begin at. **What is read is wider than what is framed**: the
+block is that window and a hundred bins either side (`SEARCH_CONTEXT_BINS`, clipped to the sequence),
+opened framed on the window as a bookmark is (§8.10, `focus`), so the wheel and a drag back out find
+the gene's neighbourhood instead of the paper past a block cut to the gene. A gene is a place to
+stand, not a block asked for; coordinates typed into the box are still read exactly as typed.
 
 **Zoom is four buttons beside the box**, because what they change is the coordinate the box holds.
 The scroll wheel on the map is a zoom of the *picture* — the same block, drawn larger or smaller —
@@ -1129,7 +1133,7 @@ read as *this file, then this resolution, then these chromosomes* and put a cont
 constantly at the one end of the row they scroll past on the way to the box they type in.
 
 **Past the resolution, at the far end of the bar, the total the maps are drawn to** (§6.5): a box
-labelled *contacts*, empty and showing the map's own total in grey until a reader types one, and —
+labelled *contacts*, empty and showing a pale `e.g. 10M` until a reader clicks into it, and —
 with two maps or more on screen — two chevrons after it that type the shallowest map's total or the
 deepest's. It is on the bar rather than on a card for the reason the resolution is: it is a control
 over the whole picture, and over every task, not a step of the trail. It is one element for the life
@@ -1675,7 +1679,11 @@ for a sequence by the name **its** file writes. One track, three vocabularies, a
 ever have chosen one of them. So every place a held track is asked for a name resolves as well as the
 range does: the bigWig's refNames, a bedGraph's contigs, a FASTA's sequences, the feature sets the
 renderer walks, and — the one with no file behind it at all — a synthetic track's grid, which is laid
-out over the map the analysis was *computed on* and drawn beside every other.
+out over the map the analysis was *computed on* and drawn beside every other. **Everything drawn at a
+place resolves too**: a loop set's rings and arcs, a mark, a rectangle, a called set's corners are
+placed through the map's own axis (`LocusAxis.ownName`), which answers a spelling it does not write —
+`chrXIV` on a deck cell whose file writes `XIV` — through the same matcher. Asked by the exact name, a
+loop set lit on a second map spelled the other way drew nothing there, while its tracks beside it did.
 
 **It says so.** A panel that answered a name it does not itself write prints a line under its heading
 naming both spellings and the rule that joined them, and says separately when the two lengths
@@ -1841,8 +1849,11 @@ still do not, and `test/unit/bins-guard.test.ts` still proves it for every unbal
 ### 6.5 Drawn to a total — subsampled or oversampled
 
 **The last box on the breadcrumb is a number of contacts** (§5.5), labelled *contacts*. Empty, it
-shows the map's own total in grey — the `sum` that `cooler info` prints, 179,175,551 for the yeast
-micro-C — and every file is read as stored. A total typed into it draws **every map of the tab to
+shows `e.g. 10M` as its placeholder, paler than any number the box holds and gone as soon as the box
+is clicked, so it reads as *type a number here* and never as a value already in it; every file is
+then read as stored. The map's own total — the `sum` that `cooler info` prints, 179,175,551 for the
+yeast micro-C — is in the box's tooltip. (It was the placeholder once, and was read as a total
+already typed.) A total typed into it draws **every map of the tab to
 that many contacts, each on its own**: subsampled where a map holds more, oversampled where it holds
 fewer. It reads a total the way a methods section or `cooler info` prints one — `10M`,
 `23,000,000`, `2.5e7`, `500k`, `1.2G` — and refuses, in the box and with nothing redrawn, anything
@@ -2233,7 +2244,7 @@ itself are three different claims; a map read as stored says nothing, as it alwa
 Both are set in the axis labels' grey — the region at 11 px and weight 600, the rest at 10 px,
 before the text size is applied — because at 15 px and semibold in the page's ink the region was the
 largest type on the page and drew the eye away from the picture it names. Both Export cards carry a
-**caption** switch under the save row, on by default, for the reader who lays figures out with a
+**caption** switch on the save row, after the download and the clipboard it qualifies, on by default, for the reader who lays figures out with a
 legend of their own; off, the figure ends at its lowest track and keeps no room for the line. It is
 one preference, kept with the overlays' kind (`localStorage`), and shared: off beside the map is
 off in the 1D browser, and in the deck's figure, whose cells each read it (§16.5). The tracks'
@@ -2815,7 +2826,13 @@ a card of their own: whether a file is a lane or an overlay is a fact about its 
 bytes settle (§8.3), and not a shelf the reader has to put it on. Pairs — a BEDPE, an interact or a
 longrange file (§8.18), a loop set a task called — mark off-diagonal pairs as circles; an interval
 set a task called (§18.5) marks places on the diagonal as points or short markers across it, and
-extents as the corners of the squares they claim (§18.7); a BED the reader loads is a lane.
+extents as the corners of the squares they claim (§18.7); a BED the reader loads is a lane. **A set of
+pairs opens on the map and offers the other display too**, as a called set does: *arcs (1D track)*
+draws every pair as an arc from one anchor to the other along an edge of the map — the 1D browser's
+own picture of a BEDPE, on any edge, rising the way a signal grows and hung from the other edge when
+flipped — and *map overlay* puts the rings back. The row's card holds the choice (`linear` for a
+loaded file's track), so a reload keeps it. A loaded set of pairs exports one file, its **anchors**:
+both ends of every pair as a BED, each exact place once however many pairs share it.
 These answer a different question from a lane — not "what is on the sequence here" but "this pixel
 is a feature" — so every one is an outline, a rule or a glyph beside what it points at: an overlay
 must not hide the pixel it is about. A place's point is the one dot, and it sits on the diagonal, over
@@ -3291,6 +3308,25 @@ withheld the autoscale mark that is the way back. Yeast GC sits between 0.35 and
 the axis is the natural move and the reader was then stuck. `[0, 1]` survives as the default, which
 is what keeps two views of one genome matching until somebody deliberately changes one.
 
+**The limits are three boxes: foot, centre, head.** The first is the value drawn at the lane's foot
+— its bottom in the 1D browser — and the last the value at its head, so a **flipped** track shows its
+ceiling first and its floor last, and **a head typed under the foot is a flip**: the pair is stored
+in order and the track turned over, rather than refused as the inverted pair it was on paper. The same
+holds in the batch box (every ticked row turned together) and in the range typed under a lane's name.
+Two equal ends are still refused. **The centre between them is IGV's**: empty by default and with no
+placeholder, the lane grows from zero as it always has; a number there is the value bars and areas
+grow from — above it one way, below it the other — and where the hairline of a signed track's origin
+is drawn, so a linear ratio of two tracks centred on `1` reads at a glance as over- or under-enriched.
+A centre outside the limits in force grows from the near edge, as zero outside them does
+(`AnnotationStyle.centre`, kept with the track's other settings).
+
+**A lane's right-click menu ends with the track's own verbs**: *Hide* (or *Show*), *Remove*, and
+*Duplicate* under them — a second row straight after the first, named `… (copy)`, with every setting
+the first has and drawn on every lane the first is on, so the twin lands on the picture beside its
+original ready to be restyled: another colour, a log scale, another edge. It reads nothing again; the
+data is the first row's. The id, the search's star and a BAM row's link to its partner stay with the
+first.
+
 **A value axis is a fact about the data in the window, not about the lane's width.** Autoscale
 resolves over the values the file states inside the window, quantised by the file's own summary
 level, and a lane narrower than a thousand pixels is sampled as though it were that wide. Taken from
@@ -3387,6 +3423,24 @@ switch and the code are remembered with the row (§8.6) — the code with the fr
 fact about the genome — and a stored code NCBI never published is read as the standard one. Beside a
 map the lane is GC content and has no codons to read; the frames are drawn wherever the residues are,
 in the 1D browser and a deck's tracks cells, and in the figure saved from either.
+
+**A sequence's letters can be copied, two ways.** *Copy sequence* on a sequence lane's right-click
+menu, at any zoom it is drawn at — GC trace or letters, beside a map or in the 1D browser — puts the
+bases in view on the clipboard as plain text: no FASTA header, the file's case kept (a soft-masked
+repeat is lower-case for a reason), and read the way it is drawn, reverse-complemented on a reversed
+stretch of an edit (§27.2). Its hint is the length; it is greyed, saying why, where the view spans
+more than one sequence or more than ten megabases. And where the letters are drawn — the coloured
+bars, with or without their letters, and the codons of the six frames at either of their two closer
+rungs — **a drag across them selects**, with the caret every text shows over them: the drag-to-zoom's
+look (§8.9), a wash over the one row and its chips — both ends to the base, 1-based, and the length
+between, in bases or, on a frame, in amino acids — snapped to whole bases, or to whole codons of the
+frame dragged. On release the selection stays; **⌘C** (Ctrl+C) copies it ahead of the window's own
+binding, which would copy the figure, and a *copy* button stands at its far end while the pointer is
+over it. A frame's selection copies as its protein, read the way the strand runs. A click elsewhere on
+the tracks or Escape puts it away. A plain drag on the letters therefore selects rather than pans; the
+view still pans from every other lane, the ruler, the wheel and the arrows, and ⌥ or ⇧ with the drag is
+still a zoom. Beside a map there are no letters to drag (the lane is its GC trace there), so only the
+menu's copy is offered.
 
 **How the worker holds a FASTA is decided by its size, and the line is 64 MB.** Under it the file is
 read whole and held whole, `.fai` or no `.fai`: a yeast genome is twelve megabytes, a fly's a hundred
@@ -3572,7 +3626,10 @@ or in its place when the legend is off — a line or two of plain text, small an
 reader's own modifiers: *⌥ + drag to zoom into a region* and *⇧ + ⌥ + drag to zoom along the
 diagonal* on a Mac, *Alt* and *Shift* elsewhere. It says what a drag will do **now**: one line under
 the diagonal lock, where ⌥ alone already pins the box; *a stretch* under a turn, whose box is a
-stretch of the genome; and Shift's line only where there is a diagonal to pin a box to. Nobody finds
+stretch of the genome; and Shift's line only where there is a diagonal to pin a box to. **On a
+window of one sequence a last line says the way back out** — *click to see the whole of IV* — since
+a click on a cell there opens the sequence the window is on, and nothing else on the picture says
+so; not on a whole sequence, a pair of windows or a turned map. Nobody finds
 the gesture by panning and wheeling, and the shortcuts dialog is a place a reader goes once; the hint
 is where the hand already is, gone the moment it leaves the map, and drawn in no export. A halo of
 the page's colour keeps it legible over cells without covering them, and its ink is the picture's —
@@ -7610,6 +7667,11 @@ limits, autoscale, ceiling drag, four edges, reordering, autoscale groups, batch
 `source` is a new `computed` case carrying the task and its parameters, so the row can say what made
 it.
 
+**Every row one run returns wears one colour.** Insulation at four windows, its boundaries and its
+domains are one answer, and a colour each made them read as six files: they take the colour the run's
+rows already wear where it ran before, else the next free one, once. A colour a task chooses for its
+own rows — a group's members, a scalogram's bands — is still its own.
+
 **It is a row of the Tracks card.** Every synthetic row is listed there with the loaded ones, in the
 one list whose order is the lanes' order: a task's profile, its called interval set — one row, a 1D
 track with a feature lane's colouring and rows or an overlay with its look, radius and opacity, as its
@@ -7824,10 +7886,12 @@ score, the boundaries as segments one bin wide under it, and the domains as corn
   put it — and whichever surface the set opens on, so one put on the map and back is where it was. A
   map it was put on as an overlay (dropped on a map's face, lit in the maps field) gives it the row's
   edges when it becomes a track.
-- **A loop set's 1D track is its anchors**: both ends of every pair, each place once, under the name of
-  the first pair to reach it and the best score among them. It **opens on the map**, because a loop is
-  a pixel of the map and its anchors along one axis are a reading rather than the picture; the display
-  is there. It leaves as its BEDPE from either surface.
+- **A loop set's 1D track is its arcs**: every pair drawn from one anchor to the other along the
+  edge, as the 1D browser draws a BEDPE (§8.1). It was its anchors, two boxes with nothing joining
+  them, which said where the ends were and not which end went with which. It **opens on the map**,
+  because a loop is a pixel of the map; the display is there. It leaves as its BEDPE from either
+  surface, and as its **anchors** beside that — both ends of every pair as a BED, each exact place
+  once, under the name of the first pair to reach it and the best score among them.
 - **With no map there is no choice.** On the 1D browser demo a set is a track and its row offers no
   display, and in the 1D browser every called set is drawn as a track whatever its display beside a
   map: there is no map there for it to be on, as there is none for a loaded BEDPE (§8.1).
@@ -12937,6 +13001,14 @@ in `ui/styles.css` draws all of them. `test/unit/toggle-look.test.ts` holds the 
 refuses a second lit look. A toggle that has become unavailable is unavailable first: the lit rule
 stands down for `:disabled`.
 
+**A tickbox is the app's own**, one look wherever there is one — a sequence in the list, a row of
+the Tracks card, a form's switch, the caption: the fields' rounded corner and border at rest, a resting
+shadow as a button has, the border in the accent and a halo under the hand, and filled with the accent
+when ticked, its tick (or a dash, for *some*) in the colour text on the accent takes and grown in
+rather than switched on. One rule draws it (`:where(input)[type='checkbox']` in `ui/styles.css`), low
+enough that a card sizing a box for its own row still does; the engine's grey square, a different
+square in every browser and in no family with the controls round it, is not drawn anywhere.
+
 A **selection** is not a toggle. A chosen row, tile or folder carries a fill and a border and keeps
 its text colour, because its text is content — a file's name — rather than a label. A toggle's whole
 text is its label, so the label carries the state.
@@ -14316,43 +14388,52 @@ reader. A resume does not move the window (§30.6).
 
 ### 30.2 The data
 
-**4DNES4296C5Q** on the 4DN store: in situ Hi-C on IMR-90 lung fibroblasts, on GRCh38, with
-**1,067,738,237 contacts** — over a billion, so that domains are there to find at 10 kb, and not
-much more, so that a first session is not reading the deepest map on the shelf. Its map is
-`4DNFIJIP5BJF.mcool`, 7.8 GB on 4DN's bucket and read by range like any other (§12), and the set
-carries the three tracks 4DN's own pipeline computed from it: the compartment eigenvector at 250 kb
-(`4DNFIRL31X9M`), the insulation score at 10 kb (`4DNFIR2STZVV`) and the boundaries called on it.
-That is what makes the last step a fair comparison: the reader's own E1 at 250 kb and insulation at
-10 kb, computed in the page, against the consortium's at the same resolutions.
+**4DNESC23ZYOF** on the 4DN store: in situ Hi-C (DpnII) on K562 cells, on GRCh38 (Belaghzal et al.
+2021), with **186,956,649 contacts** — enough for domains and the loops at their corners at 5 kb, in a
+map a first session opens quickly. Its map is `4DNFIKI77KEM.mcool`, 1.9 GB on 4DN's bucket and read by
+range like any other (§12), and the set carries the three tracks 4DN's own pipeline computed from it:
+the compartment eigenvector at 250 kb (`4DNFI3OPG4RB`), the insulation score (`4DNFI4GZZC7Z`) and the
+boundaries called on it. That is what makes the last step a fair comparison: the reader's own E1 and
+insulation, computed in the page, against the consortium's.
 
-**chr13**, for every task. It shows both halves of the story on one screen: an acrocentric whose short
+**chr15**, for every task. It shows both halves of the story on one screen: an acrocentric whose short
 arm is empty — the blank square at its start is what a stretch with no unique sequence looks like on a
-map — and a long arm with broad, clean compartments. **41–45 Mb** of it is where domains are looked
-at: at 10 kb a run of clear squares along the diagonal, some inside others, reached from **35–55 Mb**
-at 250 kb, so that each of the two zooms is a drag across a square a hand can hit.
+map — and a long arm with broad, clean compartments. **chr15:38,100,001-50,025,000** is where domains
+are looked at: at 5 kb a run of squares along the diagonal, nested in bigger ones, reached from
+**30–60 Mb** at 250 kb, so that each of the two zooms is a drag across a square a hand can hit. In it
+the domain from **45.66 to 48.32 Mb** is closed by a **loop** between its two borders —
+`chr15:45,662,501 × chr15:48,312,501`, the dot at its corner, on two of 4DN's *Strong* boundaries —
+and split into two subTADs by **one weak border at chr15:47,215,001**: the one dip the insulation's
+widest window (400 kb) finds inside the domain, a fifth as deep as the domain's own borders, where
+4DN's call is *Weak* and every narrower window dips deeply. Those two places are the marks the reader
+draws (§30.3), and the second is the four scales' whole point.
 
-Every task is run **with its defaults but one**, chr13 alone aside: the tutorial teaches where things
-are, and a parameter it chose would be one the reader took for the app's. The one is Compartments'
-gene model, and the tutorial **sets it itself** rather than asking for it: left to itself the form
-takes the first set of intervals loaded for one, which on this session is 4DN's boundaries, and a sign
-decided by those is a coin toss — the saddle says *phasing r 0.01*. Set to none, through the form's
-own `change`, on the steps before the run. Nothing else phases E1 — no track, no sequence — so the
-drawer says the sign is arbitrary, the saddle's text is written to hold either way round, and the last
-part says that an E1 can match 4DN's upside down, at −1.
+Every task is run **with its defaults but two**, chr15 alone aside: the tutorial teaches where things
+are, and a parameter it chose would be one the reader took for the app's. The first is insulation's
+**scales, 4** — the window of 10 bins, 50 kb at 5 kb, doubled three times to 100, 200 and 400 kb — which
+the reader types, with *set it for me* beside the step, because the scales *are* the TAD hierarchy:
+the narrow window dips at every small domain's edge, the wide one only at the big ones', so a border
+all four see is high in the hierarchy and one only the narrow ones see is a subTAD's. The second is
+Compartments' gene model, and the tutorial **sets it itself** rather than asking for it: left to itself
+the form takes the first set of intervals loaded for one, which on this session is 4DN's boundaries,
+and a sign decided by those is a coin toss. Set to none, through the form's own `change`, on the steps
+before the run. Nothing else phases E1 — no track, no sequence — so the drawer says the sign is
+arbitrary, the saddle's text is written to hold either way round, and the last part says that an E1 can
+match 4DN's upside down, at −1.
 
 ### 30.3 The steps
 
-Fifty, in ten parts, each part's name printed over its steps' titles. The welcome and the end
+Fifty-eight, in twelve parts, each part's name printed over its steps' titles. The welcome and the end
 are a card each in the middle of the window, and between them every step lights one thing:
 
 - **Welcome** — what the tutorial is, in two sentences, with its parts listed under them and *let's
   go*.
 - **The 4DN store** — open the store drawer from its header button, on the lab's store; switch it to
-  4DN's; find `4DNES4296C5Q` in its search box, the accession set in colour on the card with a button
+  4DN's; find `4DNESC23ZYOF` in its search box, the accession set in colour on the card with a button
   beside it that copies it, and *type it for me* beside the step for a reader who would rather not
   type twelve characters at all; open the set with its tracks, one press.
 - **The map** — a step that is only read, lighting the General column: the file, its sequences, its
-  metadata; pick 250 kb; open chr13 from the Chromosomes table, scrolled to its row when the table has
+  metadata; pick 250 kb; open chr15 from the Chromosomes table, scrolled to its row when the table has
   not drawn it; a step that is only read, about the map, and how to scroll, drag and double-click on
   it; and one lighting the Aesthetics column, which a map brings — the Map card, the Tracks card and
   Export.
@@ -14360,25 +14441,35 @@ are a card each in the middle of the window, and between them every step lights 
   screen before the number that summarises it, and a step that is only read, about the plaid; open
   the Analysis panel, and three steps that are only read, lighting its groups one by one — the 2D
   tasks, which read the map; the 3D tasks, which model it; the 1D tasks, which read tracks; choose
-  Compartments; untick every sequence; tick chr13; run (§30.2 for the gene model); a step that is only
+  Compartments; untick every sequence; tick chr15; run (§30.2 for the gene model); a step that is only
   read, about the saddle the run drew; close the drawer; and a step that is only read, the reader's E1
   and A/B calls beside 4DN's.
 - **Zooming in** — set the score back to *balanced*, since domains are a matter of how often
   stretches touch rather than how alike they are; hold Shift and Option and drag across the lit
-  square of 35–55 Mb, the keys named as the map's corner names them, Shift and Alt off a Mac (§8.9);
-  switch to 10 kb; drag across the lit square of 41–45 Mb; a step that is only read, about the
-  domains; turn on O/E; set smoothing to *3 × 3*; and a step that is only read, about domains and
-  compartments on one picture. Both drags have *zoom for me* beside them, which types the stretch into
-  the map's locus box. Neither O/E nor smoothing changes what a task reads — the drawer's heading still
-  says *balanced* — so they are left on.
+  square of 30–60 Mb, the keys named as the map's corner names them, Shift and Alt off a Mac (§8.9);
+  switch to 5 kb; drag across the lit square of chr15:38,100,001-50,025,000; a step that is only read,
+  about the domains, nested in bigger ones; turn on O/E; set smoothing to *3 × 3*; and a step that is
+  only read, about domains and compartments on one picture. Both drags have *zoom for me* beside them,
+  which types the stretch into the map's locus box. Neither O/E nor smoothing changes what a task
+  reads — the drawer's heading still says *balanced* — so they are left on.
 - **Insulation** — open the Analysis panel; choose Diamond insulation; untick every sequence; tick
-  chr13; run; close the drawer; and a step that is only read.
-- **Tracks** — open the Annotations panel; unfold the Insulation domains row; choose *1D track* for
-  its display; press its bottom edge, then its left one, so the lane is drawn under the map and not
-  beside it.
-- **Track correlation** — open the Analysis panel; choose Track correlation; tick its four tracks —
-  4DN's insulation and E1 and the reader's — in one step, the list lit whole; run; and a step that is
-  only read, which lights the figure.
+  chr15; set scales to 4 (§30.2); run, which counts only at 5 kb and four scales; close the drawer; and
+  a step that is only read, about the four tracks and the hierarchy they read.
+- **Marks** — open the Annotations panel; mark the loop as an arrowhead, its two loci typed into the
+  Manual annotations card's Arrowheads form, each set in colour with a copy button; mark the weak
+  border with a vertical line, typed into its Lines form; and a step that is only read: the same place
+  on the four insulation tracks left of the map, a deep dip at 50 kb and barely one at 400 kb — the
+  hierarchy read off one bin. Each has *mark it for me*, and a mark counts within five bins of its place, either way round.
+- **Tracks** — unfold the first insulation row's settings and press its **bigWig**: a computed track
+  saved as the file IGV and deepTools open, written in the page (the step is done when the window has
+  saved a `.bw`); unfold the Insulation domains row; choose *1D track* for its display; press its
+  bottom edge, then its left one, so the lane is drawn under the map and not beside it.
+- **The figure** — in the Export card, choose *PDF (vector)*, then press its download: the map, the
+  marks and every track as one figure, done when the window has saved a `.pdf`.
+- **Track correlation** — open the Analysis panel; choose Track correlation; tick **every** track —
+  4DN's insulation and E1, the reader's E1 and the reader's insulation at all four scales — in one
+  step, the list lit whole and *tick them for me* beside it; run; and a step that is only read, which
+  lights the figure: the reader's against 4DN's, and the four scales against each other.
 - **The console** — open it: every file opened and every run made is a line to paste into a
   terminal.
 - **Done** — what the reader did, in one sentence, and where the tutorial is when it is wanted again.
@@ -14386,7 +14477,7 @@ are a card each in the middle of the window, and between them every step lights 
 ### 30.4 How a step moves on
 
 **A step is done by a state, never by a click.** It moves on when what it asks for holds — the drawer
-open on the 4DN store, the map at 250 kb, a run of the task on chr13 alone — however the reader got
+open on the 4DN store, the map at 250 kb, a run of the task on chr15 alone — however the reader got
 there: by the lit control, a key, the palette or a road the tutorial does not mention. A tour that
 waited for one click on one element would be stuck the moment somebody took the shortcut it was about
 to teach. The state is read on a tick and again just after anything the reader does, and the card
@@ -14404,7 +14495,7 @@ finishes after its drawer was closed is still a run that finished.
 **A step that waits on the reader offers to be skipped**, quietly — *skip step*, in the quiet style,
 saying the steps after it may need it — and a step that is only read is gone on from with *next*,
 filled. When a step's control has not been on screen for a second and a half, the card says so and
-what to do: *Not on screen — scroll the table to chr13*, *Not in the list — empty the box over it if a
+what to do: *Not on screen — scroll the table to chr15*, *Not in the list — empty the box over it if a
 word is typed there*. Not on a step already done, reached by *back*: doing it often takes its control
 away — the drawer it closed — and that control is not missing.
 

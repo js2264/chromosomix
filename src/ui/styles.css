@@ -264,6 +264,73 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* **One tickbox, drawn by the app** (§26.3). The engine's own was a flat grey
+   square that sat in no family with the buttons, fields and toggles around it,
+   and was a different square in every browser. This one is the fields'
+   rounding and border, a resting shadow like a button's, and the accent when
+   ticked, with a white tick (the page's ink in the dark theme) that grows in
+   rather than blinking on. Under `:where`, so every card that sizes a box for
+   its own row — the Tracks card's tick, a form's switch — still does. */
+:where(input)[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
+  place-content: center;
+  flex: 0 0 auto;
+  width: 0.95rem;
+  height: 0.95rem;
+  margin: 0;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-1);
+  vertical-align: -0.15em;
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms, box-shadow 120ms;
+}
+
+:where(input)[type='checkbox']::before {
+  content: '';
+  width: 0.62rem;
+  height: 0.62rem;
+  background: var(--on-accent);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.2 6.4l2.4 2.4 5.2-5.6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.2 6.4l2.4 2.4 5.2-5.6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  transform: scale(0);
+  transition: transform 120ms ease-out;
+}
+
+:where(input)[type='checkbox']:indeterminate::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 6h6' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 6h6' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+:where(input)[type='checkbox']:checked,
+:where(input)[type='checkbox']:indeterminate {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+:where(input)[type='checkbox']:checked::before,
+:where(input)[type='checkbox']:indeterminate::before {
+  transform: scale(1);
+}
+
+:where(input)[type='checkbox']:hover:not(:disabled) {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+:where(input)[type='checkbox']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+:where(input)[type='checkbox']:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 #app {
   display: flex;
   flex-direction: column;
@@ -1233,6 +1300,26 @@ p {
 .browser-stage {
   position: relative;
   width: 100%;
+}
+
+/* The copy button a selection of letters wears at its far end while the
+   pointer is over it (§8.8): small, raised off the letters it covers, and in
+   the selection's own blue so it reads as part of it. Over the readout, which
+   follows the same hand to the same place. */
+.btn.residue-copy {
+  position: absolute;
+  z-index: 11;
+  padding: 0.05rem 0.45rem;
+  font-size: var(--step--2);
+  line-height: 1.4;
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-2);
+}
+
+.btn.residue-copy.hidden {
+  display: none;
 }
 
 .browser-canvas {
@@ -2756,8 +2843,10 @@ p {
 
 /* Wide enough for a total in the hundreds of millions, grouped; its numbers
    right-aligned and in the stops' face, so a total and a bin size are read the
-   same way along the row. The file's own total is the placeholder, in the grey
-   the origin column's `1` is in: shown, and not yet a choice. */
+   same way along the row. The placeholder is an example, `e.g. 10M`, paler
+   than any number the box holds and gone the moment the box is clicked, so it
+   is never read as a value already typed; the file's own total is in the
+   tooltip. */
 .input.contacts-input {
   width: 7.2rem;
   padding: 0.1rem 0.35rem;
@@ -2768,7 +2857,12 @@ p {
 }
 
 .input.contacts-input::placeholder {
-  color: var(--text-dim);
+  color: var(--text-faint);
+  opacity: 0.7;
+}
+
+.input.contacts-input:focus::placeholder {
+  color: transparent;
 }
 
 /* A number in force: every map on screen is drawn to it, and nothing on the
@@ -4694,6 +4788,15 @@ canvas.is-frozen {
   display: flex;
   flex: 0 0 auto;
   gap: 0.3rem;
+}
+
+/* The caption's switch rides the buttons' line, after them: it qualifies what
+   they write, and a line of its own under the row read as a separate setting. */
+.export-row > .export-acts > .field-check {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0 0 0 0.4rem;
 }
 
 /* The Manual card is not a `.controls-card`, so its `.panel-controls` is the
@@ -9068,9 +9171,15 @@ body.is-carrying-card * {
    scoping their appearance to one container is what let a frame come back on
    the copies in the other two — and on a row that was still reading, where the
    eye is drawn the same and framed differently for no reason a reader could
-   name. Written against the control rather than against where it is standing. */
+   name. Written against the control rather than against where it is standing —
+   and against its *pressed* state too: the toggles' lit look above puts an
+   accent border on every `[aria-pressed='true']` icon, and only a loaded row's
+   own rule outranked it, so the eye of a row waiting to be recomputed and the
+   eyes of the Annotations card's marks came back framed. */
 .btn.ann-eye,
-.btn.ann-more {
+.btn.ann-more,
+.btn.ann-eye[aria-pressed],
+.btn.ann-more[aria-expanded] {
   border-color: transparent;
 }
 
@@ -9329,7 +9438,12 @@ body.is-carrying-card * {
   padding: 0.2rem 0.3rem;
 }
 
-.ann-detached {
+/* The note under a row whose data did not come back — the words and the one
+   button that brings it back. Written against the *note*: a row waiting for
+   its file carries `ann-detached` as its status too, and the bare class laid
+   that row out on the baseline, so its head no longer stretched to the card
+   and a long name pushed the eye and the × out past the column's edge. */
+.ann-note.ann-detached {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
@@ -9497,6 +9611,13 @@ body.is-carrying-card * {
      never stepped — the useful step for a track limit is not 1. */
   appearance: textfield;
   -webkit-appearance: textfield;
+}
+
+/* The centre between the two ends: empty by default and narrower than they
+   are, since what goes in it is a round number — 0, 1 — rather than a limit
+   read off the data. */
+.ann-limits > .input-centre {
+  flex: 0.7 1 0;
 }
 
 .ann-limits > .input-num::-webkit-outer-spin-button,
