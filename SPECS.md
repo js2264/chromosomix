@@ -14457,9 +14457,9 @@ are a card each in the middle of the window, and between them every step lights 
   a step that is only read, about the four tracks and the hierarchy they read.
 - **Marks** — open the Annotations panel; mark the loop as an arrowhead, its two loci typed into the
   Manual annotations card's Arrowheads form, each set in colour with a copy button; mark the weak
-  border with a vertical line, typed into its Lines form; and a step that is only read: the line
-  crosses the four insulation tracks, deep at 50 kb and shallow at 400 kb — the hierarchy read off one
-  bin. Each has *mark it for me*, and a mark counts within five bins of its place, either way round.
+  border with a vertical line, typed into its Lines form; and a step that is only read: the same place
+  on the four insulation tracks left of the map, a deep dip at 50 kb and barely one at 400 kb — the
+  hierarchy read off one bin. Each has *mark it for me*, and a mark counts within five bins of its place, either way round.
 - **Tracks** — unfold the first insulation row's settings and press its **bigWig**: a computed track
   saved as the file IGV and deepTools open, written in the page (the step is done when the window has
   saved a `.bw`); unfold the Insulation domains row; choose *1D track* for its display; press its

@@ -1077,9 +1077,9 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       chapter: 'Marks',
       title: 'A loop and a subTAD border',
       text:
-        'The arrowhead points at the loop closing the big domain, and the line crosses the map and every track ' +
-        'at the border inside it. Follow the line down your four insulation tracks: deep at 50 kb, shallow at ' +
-        '400 kb — that is the hierarchy, read off one bin.',
+        'The arrowhead points at the loop closing the big domain, and the line marks the border inside it. ' +
+        'Find the same place on your four insulation tracks, left of the map: a deep dip at 50 kb, barely one ' +
+        'at 400 kb — that is the hierarchy, read off one bin.',
       target: mapPicture,
     },
 
