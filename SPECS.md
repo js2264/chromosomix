@@ -9028,7 +9028,7 @@ in its coordinates. It is **written as new files** — an AGP, a Juicebox `.asse
 FASTA, lifted tracks — each of which is authoring an output, which §13 never refused. And it is
 **re-applied** from the AGP or the `.assembly` to the same library's other files. What stays refused
 is what the rule was protecting: the file that was opened is never modified. The editor is a dev
-feature (§29.3), drawn only once the switch in *About* is on.
+feature (§29.3), drawn only while the dev features are on.
 
 **No writing of a `.cool`, `.mcool` or `.metacool` this app derived.** ~~No writing of `.cool`,
 `.mcool` or `.metacool`.~~ The original rule was the second sentence, and its reason still stands: a
@@ -10527,6 +10527,31 @@ upstream that is not an npm package, a text committed verbatim under `licenses/`
 off the generated file's own header where it records one, so the notice names what the material came
 from rather than what is installed today. A test holds every such file to existing, since renaming
 one would drop its upstream's licence without a word.
+
+**So is code ported from a reference implementation.** §18.9 holds an analysis to the numbers its
+reference gives, and some of them get there by following that code function for function, in its
+order — a translation, which is a copy in another language and owes what a copy owes. Each is named
+by the files that hold it, beside the material above: cooltools' HiCCUPS and peak prominence (MIT),
+cooler's region parsing (BSD-3-Clause), chromosight's detection functions (MIT, with its kernels),
+the cephes functions SciPy's `xsf` carries and SciPy's `fminbound` (BSD-3-Clause), NumPy's pairwise
+sum and its two samplers (BSD-3-Clause, and NCSA or BSD-3-Clause for `numpy.random`), scikit-learn's
+BIRCH (BSD-3-Clause), Boost-HiC (MIT) and fdlibm's `erf` (Sun's notice). An implementation written
+from a paper and checked against a tool's output owes that tool nothing, and is not listed.
+
+**chromosomix's own licence leads the texts**, because the desktop's asar and the standalone page
+carry no `LICENSE` beside them. **A package that ships no licence text** — `generic-filehandle2`,
+which declares MIT and has no text of it in its tarball or its repository — has the licence it
+declares, naming the author it names, committed under `licenses/` and reproduced in its place.
+
+**About names them too**, under *Licences*: chromosomix's own licence, then one line per project —
+its name linking to its home, what it does in this viewer, and its licence — with a dependency folded
+in beside what pulls it in, and a link to the build's own `THIRD-PARTY-NOTICES.txt` (the site's, from
+the desktop and the standalone page, which have none a link can open). The list is
+`src/licences.ts`, and `test/unit/licences.test.ts` holds it to every package the source imports and
+everything those pull in, to every entry the notices name as copied or ported, and to the README's
+*Licence* section. Then one line on the marks of the stores and services the interface shows. The
+dialog is wider than a plain one for its three columns, and taller, so the build stamp under them is
+on screen on a laptop.
 
 Each check asserts the notices are there — the package's (§22.3), the archived pin's (§21), the
 desktop renderer's (§15) and the standalone page's (§19) — because a notice that stopped being
@@ -12906,12 +12931,6 @@ in `ui/styles.css` draws all of them. `test/unit/toggle-look.test.ts` holds the 
 refuses a second lit look. A toggle that has become unavailable is unavailable first: the lit rule
 stands down for `:disabled`.
 
-**One toggle is drawn as a slider** — *dev features* in *About* (§29.1), a track and a knob, because a
-switch that reloads the window should look like the switch it is rather than like one more button in
-a dialog of facts. It is still a `button` with `aria-pressed`, lit by the same rule as every other
-toggle; the knob is `currentColor`, so *lit* is the knob in the accent, moved across. The slider is how
-it is drawn, never a second way of saying it is on.
-
 A **selection** is not a toggle. A chosen row, tile or folder carries a fill and a border and keeps
 its text colour, because its text is content — a file's name — rather than a label. A toggle's whole
 text is its label, so the label carries the state.
@@ -13179,8 +13198,8 @@ stage's map and snapped to, placed finer than the picture's cell, and answered i
 (§27.5, §27.6), with the sequence's own evidence, its telomeres and its gaps of `N` (§27.5); the
 exports, and an AGP or `.assembly` read back as an edit (§27.8); and the stage on one genome of a
 metagenome (§27.10). There is not yet the rest of the evidence beyond the map, nor the command line
-(§27.13). It is a **dev feature** (§29) throughout: on `main`, and invisible until the switch in
-*About* is on. The design it was written from — the method in full, the architecture with the
+(§27.13). It is a **dev feature** (§29) throughout: on `main`, and invisible until the dev
+features are on. The design it was written from — the method in full, the architecture with the
 code it lands in, the alternatives weighed, the order it is built in — is `docs/reference-editing.md`.
 
 It reverses two of §18.9's refusals and narrows a third, each in its own paragraph there: contact-based
@@ -14173,22 +14192,21 @@ writes none, which the note ends by saying in those words.
 ## 29. Dev features
 
 A feature on `main` — built, specified, tested and released like any other — that a reader **does not
-see at all** until they turn it on. What it is for is the stretch between *it works* and *it is
+see at all** unless the page asked for it. What it is for is the stretch between *it works* and *it is
 finished*: long enough that a branch would rot, and too unfinished for a reader who did not ask for it.
 **Built**: the switch, the registry (`state/devFeatures.ts`), and all three gates below — `metacool`'s,
 and `edit`'s and `dotplot`'s over as much of §27 and §28 as is built, each gated from its first line.
 
 ### 29.1 One switch
 
-In *About*, under the version: **dev features**, a switch, off by default. It is a **preference**,
-kept in `localStorage` — a fact about this browser, not about a file or a tab (the persistence tiers'
-dividing line) — and it is the **only** trace a dev feature leaves anywhere a reader looks. Turning it
-on or off **reloads the window**, which keeps its tabs: every surface is then built from scratch with
-the new answer, so no card, task list, worker or cached command list can disagree with it — which a
-live re-render of every surface could not promise. The answer is read once per page for the same
-reason. The price is the reload's: a file dropped without a handle comes back as a name to drop again,
-as it does after any reload (§20). A worker has no `localStorage`, so the answer is stamped on every
-open the page sends it — once, in the client, where the credentials are.
+Off by default, and **on no surface a reader sees**: no control in *About* or anywhere else, no
+sentence in the app, and nothing in the README or this document says how a page turns it on — that is
+in `state/devFeatures.ts` and nowhere else. Nothing about it is kept in the browser, so no line of
+*What this browser is remembering* names it. The answer is read **once per page**: every surface is
+built once with it, so no card, task list, worker or cached command list can disagree with it — which
+a live re-render of every surface could not promise. A worker cannot see what the page was asked, so
+the answer is stamped on every open the page sends it — once, in the client, where the credentials
+are.
 
 **The registry is one file**, each entry a name and the reason it is not public yet, and the names are
 a type: making a feature public is deleting its line, and the compiler then names every gate it left
@@ -14238,8 +14256,7 @@ never the reason a session is lost.
 
 ### 29.5 Where the switch is not
 
-- **Never in an embed** (§21): an embedded page has no *About*, and a host page is not a developer's
-  browser.
+- **Never in an embed** (§21): a host page is not a developer's browser.
 - **Not on the command line**: `chromosomix` is a developer's tool, lists every task and runs every
   one.
 - **Not in the static text** around the app — the page's title and description, the description a

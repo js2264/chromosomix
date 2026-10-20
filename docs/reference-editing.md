@@ -9,7 +9,7 @@
 > the contract, and each subsection there says *built* as it lands; this note is the design they were
 > written from — the method in full, the architecture with the code it lands in, the alternatives
 > weighed, and the order it will be built in. Both features are **dev features** (§29): on `main`,
-> invisible to a reader until the switch in *About* is on.
+> invisible to a reader who has not asked for them.
 >
 > Where the build went another way than this note: the stage draws **its own picture** rather than
 > moving the map's panel onto it (§3.1 below) — the picture is finer than a panel's and in the file's
@@ -70,7 +70,7 @@ Every line below was put to the author as a question on 2026-09-29 and is their 
 | Validation | **Simulated rearrangements** |
 | Command line | **Full auto mode** in `chromosomix` |
 | Dot plot | **Computed in the browser**; **its own map-like view** and **a figure in the drawer** |
-| Dev features | A new app-wide mechanism: dev features are **invisible** except for a switch in *About*. The editor, the dot plot and **everything `.metacool`** are dev features |
+| Dev features | A new app-wide mechanism: dev features are **invisible** to a reader who has not asked for them. The editor, the dot plot and **everything `.metacool`** are dev features |
 | The app's name | **Stays (meta)cooler** — since renamed **chromosomix** |
 | A `.metacool` with dev off | **Refused like an unknown file** |
 | The CLI and dev features | **No gate**: the CLI shows everything |
@@ -698,8 +698,7 @@ chromosome-scale structure, and says so.
 A mechanism the app did not have: a feature on `main`, built and tested like any other, that a reader
 **does not see at all** until a switch is on.
 
-- **One switch**, in *About*: `dev features`, off by default, a preference kept in `localStorage`
-  (a fact about this browser, not about a file). It is the only trace a dev feature leaves.
+- **One switch**, off by default and on no surface a reader sees (SPECS §29.1), read once per page.
 - **Off means absent**, not greyed — §8.5's doctrine at its strictest, and stated as its own rule
   because the corrected form of §8.5 (*list it, grey it, say what to load*) would otherwise apply:
   there is something the reader could do, and they are deliberately not told.

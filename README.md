@@ -590,13 +590,19 @@ The log is kept in your own browser for seven days or five hundred lines, whiche
 
 chromosomix is released under the MIT licence (`LICENSE`).
 
-Every build also carries the work of other projects, each under its own licence. The libraries compiled into the bundles are echarts (Apache-2.0), zrender (BSD-3-Clause), three.js (MIT), h5wasm (NIST's notice, with the BSD-style licence of the HDF5 library inside it), and `@gmod/bbi` with its dependencies (MIT). The source also holds material copied from Lucide (ISC), Simple Icons (CC0), chromosight (MIT), matplotlib (the Matplotlib licence) and ColorBrewer (Apache-2.0). Each build lists what it carries and reproduces every one of those licences in full in `THIRD-PARTY-NOTICES.txt`, beside its `index.html`:
+Every build also carries the work of other projects, each under its own licence, and the app names them in **About → Licences**:
+
+- **Libraries compiled into the bundles:** three.js (MIT); echarts (Apache-2.0) with zrender (BSD-3-Clause) and tslib (0BSD); h5wasm (NIST's notice, with the BSD-style licence of the HDF5 library inside it); and `@gmod/bbi` with its dependencies `generic-filehandle2`, `@gmod/abortable-promise-cache` and `@jbrowse/quick-lru` (all MIT).
+- **Code ported from reference implementations**, where an analysis follows its reference function for function so that it gives the same numbers: cooltools (MIT) for loop calling and insulation's peak prominence; cooler (BSD-3-Clause) for region strings; chromosight (MIT) for pattern detection; SciPy (BSD-3-Clause) with the cephes functions its `xsf` carries for the Poisson tail and `fminbound`; NumPy (BSD-3-Clause, and NCSA or BSD-3-Clause for `numpy.random`) for its pairwise sums and its binomial and hypergeometric samplers; scikit-learn (BSD-3-Clause) for BIRCH; Boost-HiC (MIT); and fdlibm (Sun Microsystems' notice) for the error function.
+- **Material copied into the source by a generator:** Lucide (ISC), Simple Icons (CC0), chromosight's kernels (MIT), matplotlib's colour tables (the Matplotlib licence) and ColorBrewer's schemes (Apache-2.0).
+
+Each build lists what it carries and reproduces every one of those licences in full, after chromosomix's own, in `THIRD-PARTY-NOTICES.txt`, beside its `index.html`:
 
 - the web app: <https://chromosomix.app/THIRD-PARTY-NOTICES.txt>;
 - the npm package: `dist/` for the viewer, `dist-cli/` for the command;
-- the desktop app: inside the application;
+- the desktop app: inside the application, beside the licences of Electron and Chromium that every installer ships;
 - the standalone HTML page: in a comment at the end of the file.
 
-The upstream texts that are not in an npm package are kept under [`licenses/`](licenses/).
+The upstream texts that are not in an npm package are kept under [`licenses/`](licenses/), and so is the MIT licence `generic-filehandle2` declares but does not ship.
 
 **Trademarks.** The logos on the data store tiles (IGV, 4DN, ENCODE, DNA Zoo, UCSC and Roadmap Epigenomics) are those projects' own published marks, and the GitHub, Google Drive and Dropbox marks in the interface are their owners' trademarks. Each is shown only to name the store or service it stands for. None of them is covered by chromosomix's licence or by the notices above, and their use implies no endorsement of chromosomix by their owners.

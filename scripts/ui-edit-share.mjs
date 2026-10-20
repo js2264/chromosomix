@@ -47,8 +47,9 @@ await shot('s02-share')
 const other = await g.browser.newContext({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 1 })
 const recipient = await other.newPage()
 recipient.on('pageerror', (e) => console.log('recipient error:', String(e)))
-await recipient.goto(`${g.base}/`)
-await recipient.evaluate(() => localStorage.setItem('chromosomix:dev-features', 'on'))
+// The link is written over the sender's address, which asked for the dev
+// features, so it asks for them too.
+console.log('link asks for the dev features:', /[?&]dev(&|#|$)/.test(link))
 await recipient.goto(link)
 for (let i = 0; i < 60; i++) {
   await sleep(500)

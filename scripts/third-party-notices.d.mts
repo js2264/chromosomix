@@ -13,7 +13,7 @@ export declare const NOTICES_FILE: string
 /** How the text opens — what a shape check looks for. */
 export declare const NOTICES_TITLE: string
 
-/** Material a generator copied into `src/`, and where its licence is. */
+/** Material copied or ported into `src/`, and where its licence is. */
 export interface VendoredEntry {
   name: string
   files: string[]
@@ -24,8 +24,8 @@ export interface VendoredEntry {
   version?: RegExp
   /** The installed package the generator read, whose licence files are quoted. */
   from?: string
-  /** A licence text under `licenses/`, for an upstream that is not an npm package. */
-  text?: string
+  /** Licence texts under `licenses/`, one or several, for an upstream that is not an npm package. */
+  text?: string | readonly string[]
 }
 
 export declare const VENDORED: readonly VendoredEntry[]
@@ -46,6 +46,8 @@ export interface NoticeEntry {
   what?: string
   files?: string[]
   texts: Array<{ name: string; text: string }>
+  /** The texts are the one committed under `licenses/` for a package that ships none. */
+  substitute?: boolean
 }
 
 /** The directory of the package a module belongs to, or `null` for one of ours. */
@@ -58,6 +60,8 @@ export declare function collect(bundle: Record<string, unknown>, into?: Carried)
 export declare function renderNotices(input: {
   version: string
   repository: string
+  /** chromosomix's own LICENSE, reproduced ahead of the others. */
+  own?: string
   packages: NoticeEntry[]
   vendored: NoticeEntry[]
 }): string

@@ -13,7 +13,8 @@ import { versionPicker } from './VersionPicker'
 import { el } from './dom'
 import { groupRank, isMac, keyCap, optionKey, shiftKey, stateChip, type Command } from './commands'
 import { buildLine } from '../version'
-import { devFeature, devFeaturesOn, setDevFeatures } from '../state/devFeatures'
+import { LICENSED, noticesUrl } from '../licences'
+import { devFeature } from '../state/devFeatures'
 import type { TourProgress } from '../state/tour'
 import { tutorialButtons } from './tutorialOffer'
 
@@ -239,6 +240,10 @@ export function openAbout(
     // Titled for what it is, like every other dialog, rather than for the
     // brand, which `.modal-title` would shout in capitals.
     title: 'About this viewer',
+    // Wider and taller than a plain dialog, for the licences' three columns:
+    // at 34rem each project's line broke in two, and the build stamp under
+    // them was a scroll away.
+    variant: 'modal-about',
     ...(onClose === undefined ? {} : { onClose }),
     body: (close) =>
       el(
@@ -284,6 +289,7 @@ export function openAbout(
           'Source, issues and the format specification: ',
           el('a', { href: repoUrl, text: repoUrl, class: 'link' }),
         ),
+        licences(repoUrl),
         // Last, small, and selectable: it is the first thing to ask for in a
         // bug report about a page that has no server to interrogate, and the
         // last thing anyone reads for pleasure.
@@ -294,11 +300,6 @@ export function openAbout(
         // on the desktop target, where an installer is versioned by being an
         // installer and there is no site to hold the other builds.
         versionPicker(),
-        // The one trace a dev feature leaves anywhere a reader looks (§29), and
-        // the only way to them: under the version, because a developer who
-        // wants the unfinished half of a build asks for it where they ask
-        // which build this is.
-        devSwitch(),
         // The runtime, read from `process.versions` at preload time rather than
         // written down anywhere: Electron's Chromium and Node move within a
         // major, and a number pinned in the repository would be wrong within a
@@ -331,6 +332,63 @@ export function openAbout(
 }
 
 /**
+ * Whose work this is, and on what terms: chromosomix's own licence, the
+ * projects it is built with (`licences.ts`), and where each licence is
+ * reproduced in full.
+ *
+ * Above the version rather than under it, because it is read and the stamp is
+ * copied. Each project is named by what it does here, since "zrender" says
+ * nothing to a reader and "draws the analysis charts" does.
+ */
+function licences(repoUrl: string): HTMLElement {
+  const outside = { target: '_blank', rel: 'noopener noreferrer' }
+  return el(
+    'section',
+    { class: 'about-licences', attrs: { 'aria-labelledby': 'about-licences-title' } },
+    el('h3', { class: 'about-heading', text: 'Licences', attrs: { id: 'about-licences-title' } }),
+    el(
+      'p',
+      {},
+      'chromosomix is free and open-source software, under the ',
+      el('a', { text: 'MIT licence', class: 'about-link', attrs: { href: `${repoUrl}/blob/main/LICENSE`, ...outside } }),
+      '. It is built with, and in places ported from, the work of these projects, each under its own licence:',
+    ),
+    el(
+      'ul',
+      { class: 'about-licence-list' },
+      ...LICENSED.map((entry) =>
+        el(
+          'li',
+          { class: 'about-licence-row' },
+          el(
+            'span',
+            { class: 'about-licence-name' },
+            el('a', { text: entry.name, class: 'about-link', attrs: { href: entry.url, ...outside } }),
+            ...(entry.with === undefined ? [] : [' ', el('span', { class: 'about-licence-with', text: entry.with })]),
+          ),
+          el('span', { class: 'about-licence-what', text: entry.what }),
+          el('span', { class: 'about-licence-id', text: entry.licence }),
+        ),
+      ),
+    ),
+    el(
+      'p',
+      {},
+      'Every build carries each of those licences in full, in ',
+      el('a', { text: 'THIRD-PARTY-NOTICES.txt', class: 'link about-notices', attrs: { href: noticesUrl(), ...outside } }),
+      '.',
+    ),
+    el('p', {
+      class: 'about-fine',
+      text:
+        'The logos of the data stores, and the GitHub, Google Drive and Dropbox marks, are their ' +
+        'owners’ trademarks, shown only to name what they stand for. Their use implies no ' +
+        'endorsement of this viewer.',
+    }),
+  )
+}
+
+/**
  * The guided tutorial (§30): one sentence on what it is, and the button that
  * plays it — or carries it on from the step the reader left it at, with the way
  * back to its start beside it (`ui/tutorialOffer.ts`, which the landing page
@@ -358,38 +416,5 @@ function tutorialOffer(tutorial: AboutTutorial, close: () => void): HTMLElement 
         { class: 'about-tutorial-play' },
       ),
     ),
-  )
-}
-
-/**
- * The *dev features* switch (§29.1): a slider, lit when on, and one sentence.
- *
- * A `button` with `aria-pressed` rather than a checkbox, so that the one rule
- * that lights every toggle in the application lights this one too (§26.3) —
- * the slider is how it is drawn, not a second way of saying it is on. Pressing
- * it rebuilds the window, which is why the sentence says so: a switch whose
- * press reloads the page without warning reads as a crash.
- */
-function devSwitch(): HTMLElement {
-  const on = devFeaturesOn()
-  const toggle = el(
-    'button',
-    {
-      class: 'btn btn-switch',
-      type: 'button',
-      title: on ? 'Turn dev features off' : 'Turn dev features on',
-      attrs: { 'aria-pressed': String(on), 'aria-label': 'dev features' },
-      on: { click: () => setDevFeatures(!on) },
-    },
-    el('span', { class: 'btn-switch-knob', attrs: { 'aria-hidden': 'true' } }),
-  )
-  return el(
-    'div',
-    { class: 'about-dev' },
-    el('label', { class: 'about-dev-row' }, toggle, el('span', { text: 'dev features' })),
-    el('p', {
-      class: 'about-dev-hint',
-      text: 'Shows what is still being built, and reloads the window to do it, keeping its tabs.',
-    }),
   )
 }
