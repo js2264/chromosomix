@@ -625,7 +625,7 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
     report: say,
     cancelled: () => cancelled.has(request.id),
     // The page's dev features switch (§29), carried on each open because a
-    // worker has no `localStorage` of its own to read it from.
+    // worker cannot read the page's address to learn it.
     ...(request.metacool === undefined ? {} : { metacool: request.metacool }),
   }
   let mc: MetaCooler

@@ -6,7 +6,7 @@
 [![npm](https://img.shields.io/npm/v/chromosomix?logo=npm)](https://www.npmjs.com/package/chromosomix)
 [![Release](https://img.shields.io/github/v/release/js2264/chromosomix?logo=github)](https://github.com/js2264/chromosomix/releases)
 [![Validation](https://img.shields.io/badge/validation-vs%20reference%20tools-2ea44f)](https://chromosomix.app/validation/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
 
 **A unified genome browser for multi-dimensional genomic data.** Chromatin contact maps, genome tracks and 3D models, side by side, straight from your files.
 
@@ -588,15 +588,25 @@ The log is kept in your own browser for seven days or five hundred lines, whiche
 
 ## Licence
 
-chromosomix is released under the MIT licence (`LICENSE`).
+Copyright © 2026 Jacques Serizay.
 
-Every build also carries the work of other projects, each under its own licence. The libraries compiled into the bundles are echarts (Apache-2.0), zrender (BSD-3-Clause), three.js (MIT), h5wasm (NIST's notice, with the BSD-style licence of the HDF5 library inside it), and `@gmod/bbi` with its dependencies (MIT). The source also holds material copied from Lucide (ISC), Simple Icons (CC0), chromosight (MIT), matplotlib (the Matplotlib licence) and ColorBrewer (Apache-2.0). Each build lists what it carries and reproduces every one of those licences in full in `THIRD-PARTY-NOTICES.txt`, beside its `index.html`:
+chromosomix is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License, in [`LICENSE`](LICENSE), for more details.
+
+It is under the GPL because its peak calling is ported from yapc (GPL-3.0) and the IDR test it runs across replicates from IDR (GPL-2.0 or later), and a translation of GPL code can only be distributed under the GPL.
+
+Every build also carries the work of other projects, each under its own licence, and the app names them in **About → Licences**:
+
+- **Libraries compiled into the bundles:** three.js (MIT); echarts (Apache-2.0) with zrender (BSD-3-Clause) and tslib (0BSD); h5wasm (NIST's notice, with the BSD-style licence of the HDF5 library inside it); and `@gmod/bbi` with its dependencies `generic-filehandle2`, `@gmod/abortable-promise-cache` and `@jbrowse/quick-lru` (all MIT).
+- **Code ported from reference implementations**, where an analysis follows its reference function for function so that it gives the same numbers: yapc (GPL-3.0) and IDR (GPL-2.0 or later) for peak calling; cooltools (MIT) for loop calling and insulation's peak prominence; cooler (BSD-3-Clause) for region strings; chromosight (MIT) for pattern detection; SciPy (BSD-3-Clause) with the cephes functions its `xsf` carries for the Poisson tail and `fminbound`; NumPy (BSD-3-Clause, and NCSA or BSD-3-Clause for `numpy.random`) for its pairwise sums and its binomial and hypergeometric samplers; scikit-learn (BSD-3-Clause) for BIRCH; Boost-HiC (MIT); and fdlibm (Sun Microsystems' notice) for the error function.
+- **Material copied into the source by a generator:** Lucide (ISC), Simple Icons (CC0), chromosight's kernels (MIT), matplotlib's colour tables (the Matplotlib licence) and ColorBrewer's schemes (Apache-2.0).
+
+All of them are compatible with version 3 of the GPL. Each build lists what it carries and reproduces every one of those licences in full, after chromosomix's own, in `THIRD-PARTY-NOTICES.txt`, beside its `index.html`:
 
 - the web app: <https://chromosomix.app/THIRD-PARTY-NOTICES.txt>;
 - the npm package: `dist/` for the viewer, `dist-cli/` for the command;
-- the desktop app: inside the application;
+- the desktop app: inside the application, beside the licences of Electron and Chromium that every installer ships;
 - the standalone HTML page: in a comment at the end of the file.
 
-The upstream texts that are not in an npm package are kept under [`licenses/`](licenses/).
+The upstream texts that are not in an npm package are kept under [`licenses/`](licenses/), and so is the MIT licence `generic-filehandle2` declares but does not ship.
 
 **Trademarks.** The logos on the data store tiles (IGV, 4DN, ENCODE, DNA Zoo, UCSC and Roadmap Epigenomics) are those projects' own published marks, and the GitHub, Google Drive and Dropbox marks in the interface are their owners' trademarks. Each is shown only to name the store or service it stands for. None of them is covered by chromosomix's licence or by the notices above, and their use implies no endorsement of chromosomix by their owners.

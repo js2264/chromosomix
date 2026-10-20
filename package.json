@@ -33,7 +33,7 @@
     "url": "https://github.com/js2264/chromosomix/issues"
   },
   "author": "Jacques Serizay",
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "main": "dist-electron/main/main.cjs",
   "files": [
     "dist",

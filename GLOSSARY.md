@@ -98,7 +98,7 @@ Five tiers, each with a rule. The rules are the design, not an implementation de
 | **UiMemory** | `sessionStorage`, key `sessionId\|path` | one file in one tab | tracks, marks, bookmarks, ticked sequences, table filters, circles and origins |
 | **sessions** | `sessionStorage` | the window | which tabs exist, and which was active |
 | **workspace** | IndexedDB | survives closing the browser | every tab as a full `SessionConfig` |
-| **preferences** | `localStorage` | the browser profile | theme, column folds and widths, card arrangement, bucket keys, dismissals, the dev-features switch |
+| **preferences** | `localStorage` | the browser profile | theme, column folds and widths, card arrangement, bucket keys, dismissals |
 
 The dividing lines:
 
@@ -1036,12 +1036,11 @@ than the guess, and can override it: the refusal offers *load anyway*.
 
 ### dev feature
 
-A feature on `main` that a reader **does not see at all** until the *dev features* switch in *About*
-is on (§29) — built, specified and tested like any other, and absent rather than greyed while the
-switch is off, which is the one place §8.5's corrected form does not apply. The switch is a
-preference, in `localStorage`, and turning it reloads the window, which keeps its tabs; the registry
-of what is dev is one file (`src/state/devFeatures.ts`); making a feature public is deleting its
-line. Today: `metacool` (everything `.metacool`), `edit` (the reference editor) and `dotplot`. A
+A feature on `main` that a reader **does not see at all** unless the page asked for it (§29) —
+built, specified and tested like any other, and absent rather than greyed while the switch is off,
+which is the one place §8.5's corrected form does not apply. The switch is on no surface a reader
+sees and is read once per page; the registry of what is dev is one file
+(`src/state/devFeatures.ts`); making a feature public is deleting its line. Today: `metacool` (everything `.metacool`), `edit` (the reference editor) and `dotplot`. A
 session that carries one while the switch is off keeps it, unapplied (§29.4). Never in an embed; not
 in the CLI, which shows everything.
 

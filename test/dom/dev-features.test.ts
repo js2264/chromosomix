@@ -1,17 +1,16 @@
 // @vitest-environment jsdom
 /**
- * Dev features (§29): one switch, off by default, kept per browser, never in an
- * embed, and the one trace a dev feature leaves — the switch in *About*.
+ * Dev features (§29): off unless the page's address asks for them, read once
+ * per page, never in an embed, and no trace of them in *About*.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   DEV_FEATURES,
-  DEV_FEATURES_KEY,
   devFeature,
   devFeaturesOn,
+  readDevFeatures,
   resetDevFeatures,
-  setDevFeatures,
 } from '../../src/state/devFeatures'
 import { resetMounting } from '../../src/embed'
 import { openAbout } from '../../src/ui/dialogs'
@@ -26,83 +25,79 @@ function at(search: string): void {
 describe('the switch', () => {
   beforeEach(() => {
     setUpDom()
-    window.localStorage.clear()
     at('')
   })
-  afterEach(() => {
-    window.localStorage.clear()
-    at('')
-  })
+  afterEach(() => at(''))
 
-  it('is off until it is turned on', () => {
+  it('is off unless the address asks', () => {
     expect(devFeaturesOn()).toBe(false)
     for (const name of Object.keys(DEV_FEATURES) as Array<keyof typeof DEV_FEATURES>) {
       expect(devFeature(name)).toBe(false)
     }
   })
 
-  it('is kept in this browser, and read once per page', () => {
-    window.localStorage.setItem(DEV_FEATURES_KEY, 'on')
-    resetDevFeatures()
+  it('is on for a key that is present, and off for the three spellings of no', () => {
+    for (const on of ['?dev', '?dev=1', '?dev=on', '?dev=true', '?config=a.json&dev']) {
+      expect(readDevFeatures(on)).toBe(true)
+    }
+    for (const off of ['', '?dev=0', '?dev=false', '?dev=off', '?devel=1', '?embed=1']) {
+      expect(readDevFeatures(off)).toBe(false)
+    }
+  })
+
+  it('is read from the address once per page', () => {
+    at('?dev')
     expect(devFeaturesOn()).toBe(true)
     expect(devFeature('metacool')).toBe(true)
     // Read once: a page built with one answer is not changed under it.
-    window.localStorage.removeItem(DEV_FEATURES_KEY)
+    window.history.replaceState(null, '', '/')
     expect(devFeaturesOn()).toBe(true)
   })
 
-  it('is never on in an embed, whatever the browser holds', () => {
-    window.localStorage.setItem(DEV_FEATURES_KEY, 'on')
-    at('?embed=1')
+  it('keeps nothing in the browser', () => {
+    window.localStorage.clear()
+    at('?dev')
+    expect(devFeaturesOn()).toBe(true)
+    expect(window.localStorage.length).toBe(0)
+    at('')
     expect(devFeaturesOn()).toBe(false)
   })
 
-  it('writes the preference and rebuilds the window when it is turned', () => {
-    const reload = vi.fn()
-    setDevFeatures(true, reload)
-    expect(window.localStorage.getItem(DEV_FEATURES_KEY)).toBe('on')
-    expect(reload).toHaveBeenCalledTimes(1)
-    setDevFeatures(false, reload)
-    expect(window.localStorage.getItem(DEV_FEATURES_KEY)).toBeNull()
-    expect(reload).toHaveBeenCalledTimes(2)
+  it('is never on in an embed, whatever the address asks', () => {
+    at('?embed=1&dev')
+    expect(devFeaturesOn()).toBe(false)
   })
 })
 
 describe('About', () => {
   beforeEach(() => {
     setUpDom()
-    window.localStorage.clear()
     at('')
   })
   afterEach(() => {
     document.body.replaceChildren()
-    window.localStorage.clear()
     at('')
   })
 
-  function openedText(): { text: string; toggle: HTMLButtonElement | null } {
+  function openedText(): string {
     const modal = openAbout('https://example.org/repo')
-    const body = document.querySelector('.about-body')
-    const text = body?.textContent ?? ''
-    const toggle = document.querySelector<HTMLButtonElement>('.about-dev .btn-switch')
+    const text = document.querySelector('.about-body')?.textContent ?? ''
     modal.close()
-    return { text, toggle }
+    return text
   }
 
-  it('carries the switch, off, and says nothing of .metacool', () => {
-    const { text, toggle } = openedText()
-    expect(toggle).not.toBeNull()
-    expect(toggle?.getAttribute('aria-pressed')).toBe('false')
-    expect(text).toContain('dev features')
+  it('carries no switch and says nothing of dev features or .metacool', () => {
+    const text = openedText()
+    expect(document.querySelector('.btn-switch')).toBeNull()
+    expect(text).not.toMatch(/\bdev\b/i)
     expect(text).not.toMatch(/metacool/i)
     expect(text).not.toMatch(/multi-genome/i)
   })
 
-  it('names .metacool once the switch is on, and shows it lit', () => {
-    window.localStorage.setItem(DEV_FEATURES_KEY, 'on')
-    resetDevFeatures()
-    const { text, toggle } = openedText()
-    expect(toggle?.getAttribute('aria-pressed')).toBe('true')
+  it('names .metacool once the page asked for the dev features, and still no switch', () => {
+    at('?dev')
+    const text = openedText()
     expect(text).toMatch(/\.metacool multi-genome/)
+    expect(text).not.toMatch(/\bdev\b/i)
   })
 })

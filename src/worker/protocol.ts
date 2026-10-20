@@ -875,7 +875,7 @@ export type WorkerRequest =
       /**
        * Whether the multi-genome containers are read — the page's *dev
        * features* switch (§29), stamped on every open by the client, since a
-       * worker cannot read `localStorage`. Absent reads them.
+       * worker cannot read the page's address. Absent reads them.
        */
       metacool?: boolean
       /**
