@@ -215,10 +215,10 @@
   "pulls": [
     {
       "number": 122,
-      "commit": "183447d",
+      "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
       "branch": "js/nifty-cori-oe9zx1",
-      "date": "2026-10-20T17:35:43Z"
+      "date": "2026-10-20T22:36:17Z"
     },
     {
       "number": 107,
