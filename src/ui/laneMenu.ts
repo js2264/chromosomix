@@ -284,6 +284,9 @@ export function openLaneMenu(
       run: () => store.update(entry.id, { visible: !entry.visible }),
     },
     { label: 'Remove', run: (): void => store.remove(entry.id) },
+    // A twin to restyle — another colour, a log scale, another edge — drawn
+    // where this one is.
+    { label: 'Duplicate', run: (): void => void store.duplicate(entry.id) },
     ...marks,
   )
   openMenu(x, y, items)

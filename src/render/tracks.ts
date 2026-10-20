@@ -476,6 +476,8 @@ export interface TrackPaint {
   outline: boolean
   /** Draw the value axis upside down — see `AnnotationStyle.flip`. */
   flip: boolean
+  /** The value the lane grows from, where it is not zero — see `AnnotationStyle.centre`. */
+  centre?: number
   /**
    * A rule along the lane's own floor.
    *
@@ -508,7 +510,7 @@ export interface TrackPaint {
  * Draw one value track into its lane.
  *
  * The baseline is where **zero** is whenever zero is inside the limits, and the
- * near edge otherwise. That is the line an area fills to and bars grow from, and
+ * near edge otherwise — or where the reader's centre is, in place of zero. That is the line an area fills to and bars grow from, and
  * putting it anywhere else would draw a ChIP log-ratio track as a solid block
  * with its interesting half below the floor.
  */
@@ -524,7 +526,9 @@ export function drawTrack(
   // line — is expressed through `norm`, so an inverted track is drawn by the
   // same code rather than by a mirrored copy of it.
   const norm = paint.flip ? (value: number) => 1 - linear(value) : linear
-  const zero = paint.limits.min <= 0 && paint.limits.max >= 0 ? norm(0) : paint.flip ? 1 : 0
+  const origin = paint.centre ?? 0
+  const zero =
+    paint.limits.min <= origin && paint.limits.max >= origin ? norm(origin) : paint.flip ? 1 : 0
   const baseAcross = valueAcross(frame, zero)
   const slots = profile.mean.length
 

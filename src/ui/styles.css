@@ -9593,6 +9593,13 @@ body.is-carrying-card * {
   -webkit-appearance: textfield;
 }
 
+/* The centre between the two ends: empty by default and narrower than they
+   are, since what goes in it is a round number — 0, 1 — rather than a limit
+   read off the data. */
+.ann-limits > .input-centre {
+  flex: 0.7 1 0;
+}
+
 .ann-limits > .input-num::-webkit-outer-spin-button,
 .ann-limits > .input-num::-webkit-inner-spin-button {
   appearance: none;

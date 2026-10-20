@@ -1544,6 +1544,7 @@ export class AnnotationLanes {
             outline,
             baseline,
             flip: member.style.flip,
+            ...(member.style.centre === undefined ? {} : { centre: member.style.centre }),
           }
           if (dragged === null || !hasAMovableAxis(member.kind)) {
             drawTrack(ctx, laneFrame, profile, paint)

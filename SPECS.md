@@ -3298,6 +3298,25 @@ withheld the autoscale mark that is the way back. Yeast GC sits between 0.35 and
 the axis is the natural move and the reader was then stuck. `[0, 1]` survives as the default, which
 is what keeps two views of one genome matching until somebody deliberately changes one.
 
+**The limits are three boxes: foot, centre, head.** The first is the value drawn at the lane's foot
+— its bottom in the 1D browser — and the last the value at its head, so a **flipped** track shows its
+ceiling first and its floor last, and **a head typed under the foot is a flip**: the pair is stored
+in order and the track turned over, rather than refused as the inverted pair it was on paper. The same
+holds in the batch box (every ticked row turned together) and in the range typed under a lane's name.
+Two equal ends are still refused. **The centre between them is IGV's**: empty by default and with no
+placeholder, the lane grows from zero as it always has; a number there is the value bars and areas
+grow from — above it one way, below it the other — and where the hairline of a signed track's origin
+is drawn, so a linear ratio of two tracks centred on `1` reads at a glance as over- or under-enriched.
+A centre outside the limits in force grows from the near edge, as zero outside them does
+(`AnnotationStyle.centre`, kept with the track's other settings).
+
+**A lane's right-click menu ends with the track's own verbs**: *Hide* (or *Show*), *Remove*, and
+*Duplicate* under them — a second row straight after the first, named `… (copy)`, with every setting
+the first has and drawn on every lane the first is on, so the twin lands on the picture beside its
+original ready to be restyled: another colour, a log scale, another edge. It reads nothing again; the
+data is the first row's. The id, the search's star and a BAM row's link to its partner stay with the
+first.
+
 **A value axis is a fact about the data in the window, not about the lane's width.** Autoscale
 resolves over the values the file states inside the window, quantised by the file's own summary
 level, and a lane narrower than a thousand pixels is sampled as though it were that wide. Taken from
@@ -7619,6 +7638,11 @@ limits, autoscale, ceiling drag, four edges, reordering, autoscale groups, batch
 1D browser and vector figure — because it is the same implementation and not a second one. Its
 `source` is a new `computed` case carrying the task and its parameters, so the row can say what made
 it.
+
+**Every row one run returns wears one colour.** Insulation at four windows, its boundaries and its
+domains are one answer, and a colour each made them read as six files: they take the colour the run's
+rows already wear where it ran before, else the next free one, once. A colour a task chooses for its
+own rows — a group's members, a scalogram's bands — is still its own.
 
 **It is a row of the Tracks card.** Every synthetic row is listed there with the loaded ones, in the
 one list whose order is the lanes' order: a task's profile, its called interval set — one row, a 1D

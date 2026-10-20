@@ -2789,6 +2789,7 @@ export class BrowserView {
           outline: this.outline,
           baseline: this.baseline,
           flip: member.style.flip,
+          ...(member.style.centre === undefined ? {} : { centre: member.style.centre }),
           colormap: colormapOf(member.style, limits),
           // Overlaid tracks are translucent by necessity: two opaque areas in
           // one lane means the second hides the first, which is the opposite of
