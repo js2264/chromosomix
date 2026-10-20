@@ -107,14 +107,24 @@ export class SessionCommands {
     const chip = (on: boolean): 'on' | 'off' => (on ? 'on' : 'off')
     const expected = this.session.current?.panel?.expectedLit ?? null
     if (this.session.assembly !== null) {
+      // Over the ideogram (§5.10) the whole genome is its camera at rest —
+      // every chromosome whole again — and the browser's window, which is where
+      // it goes back to when the ideogram is put away, is left where it was.
+      const ideogram = this.session.ideogramShown
+      const whole = (): void => {
+        if (ideogram) this.session.browser?.fitIdeogram()
+        else this.session.store.patch({ locus: undefined })
+      }
       return [
         {
           id: 'browser-whole',
           group: 'Go',
           title: 'Whole genome',
-          hint: 'Every sequence, end to end. Also the 0 key, and a double click on the tracks.',
+          hint: ideogram
+            ? 'Every chromosome whole again, as the ideogram opens. Also the 0 key.'
+            : 'Every sequence, end to end. Also the 0 key, and a double click on the tracks.',
           keys: KEYS.whole,
-          run: () => this.session.store.patch({ locus: undefined }),
+          run: whole,
         },
         // `0` is the map's refit, and the browser's whole genome is what a refit
         // is here: the same key in both, so a reader who learnt it on one picture
@@ -123,9 +133,11 @@ export class SessionCommands {
           id: 'browser-fit',
           group: 'View',
           title: 'Fit the view',
-          hint: 'The whole genome across, as W and a double click on the tracks do.',
+          hint: ideogram
+            ? 'Every chromosome whole in the window, as W does.'
+            : 'The whole genome across, as W and a double click on the tracks do.',
           keys: KEYS.fit,
-          run: () => this.session.store.patch({ locus: undefined }),
+          run: whole,
         },
         // The same two keys a map has, walking the same list. They were left out
         // of this branch, which made the browser the one view where the plainest

@@ -10,7 +10,9 @@
  * longest forty at most, and a window applied under it ticks nothing. A click
  * on a chromosome puts the ideogram away with that chromosome named, which the
  * session turns into the browser or the map it replaced (`Session.setIdeogram`,
- * driven end to end by `scripts/ui-ideogram-view.mjs`).
+ * driven end to end by `scripts/ui-ideogram-view.mjs`). The wheel magnifies it
+ * about the pointer and back, a sideways scroll and a drag move it, and Shift
+ * makes a drag a stretch again once a drag moves the picture.
  *
  * Read off `data-karyotype`, which says where each chromosome went: jsdom draws
  * nothing, and the stub context lets the layout run.
@@ -95,9 +97,15 @@ async function mount(
   })
   built.push(view)
   document.body.append(view.el, view.sideEl)
+  // A window as wide as a screen's: jsdom lays nothing out, and the ideogram
+  // is drawn through the window its stage is.
+  const stage = view.el.querySelector<HTMLElement>('.browser-stage')
+  if (stage !== null) Object.defineProperty(stage, 'clientWidth', { value: WIDTH, configurable: true })
   await frame(view)
   return { view, selection, asked }
 }
+
+const WIDTH = 1000
 
 /** One frame drawn. */
 async function frame(view: BrowserView): Promise<void> {
@@ -106,8 +114,49 @@ async function frame(view: BrowserView): Promise<void> {
 }
 
 /** Where each chromosome went, as the view says. */
-function places(view: BrowserView): Array<{ contig: string; along0: number; along1: number; vertical: boolean; body: number }> {
+function places(
+  view: BrowserView,
+): Array<{ contig: string; along0: number; along1: number; vertical: boolean; body: number; visible: boolean }> {
   return JSON.parse(view.el.dataset.karyotype ?? '[]') as ReturnType<typeof places>
+}
+
+/** One chromosome's place, by name. */
+function placeOf(view: BrowserView, contig: string): ReturnType<typeof places>[number] {
+  const place = places(view).find((each) => each.contig === contig)
+  if (place === undefined) throw new Error(`${contig} not drawn`)
+  return place
+}
+
+/** How far the ideogram is magnified, as the view says. */
+const zoomOf = (view: BrowserView): number => Number(view.el.dataset.karyotypeZoom ?? Number.NaN)
+
+/** The canvas, with the pointer capture jsdom does not have. */
+function canvasOf(view: BrowserView): HTMLCanvasElement {
+  const canvas = view.el.querySelector<HTMLCanvasElement>('.browser-canvas')
+  if (canvas === null) throw new Error('no canvas')
+  canvas.setPointerCapture = () => {}
+  canvas.releasePointerCapture = () => {}
+  canvas.hasPointerCapture = () => false
+  return canvas
+}
+
+/** A press, a drag through to a point and a release, on the canvas. */
+function drag(
+  canvas: HTMLCanvasElement,
+  from: { clientX: number; clientY: number },
+  to: { clientX: number; clientY: number },
+  keys: { shiftKey?: boolean } = {},
+): void {
+  const at = (point: { clientX: number; clientY: number }) => ({ bubbles: true, cancelable: true, button: 0, ...keys, ...point })
+  canvas.dispatchEvent(new MouseEvent('pointerdown', at(from)))
+  canvas.dispatchEvent(new MouseEvent('pointermove', at({ clientX: (from.clientX + to.clientX) / 2, clientY: (from.clientY + to.clientY) / 2 })))
+  canvas.dispatchEvent(new MouseEvent('pointermove', at(to)))
+  canvas.dispatchEvent(new MouseEvent('pointerup', at(to)))
+}
+
+/** The wheel, once, over a point of the canvas. */
+function wheel(canvas: HTMLCanvasElement, point: { clientX: number; clientY: number }, delta: { deltaX?: number; deltaY?: number }): void {
+  canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, ...point, ...delta }))
 }
 
 const drawn = (view: BrowserView): string[] => places(view).map((place) => place.contig)
@@ -232,16 +281,88 @@ describe('what the ideogram draws', () => {
 describe('putting the ideogram away', () => {
   it('names the chromosome a click landed on, whole', async () => {
     const { view, asked } = await mount(YEAST, { ideogram: 'vertical' })
-    const canvas = view.el.querySelector<HTMLCanvasElement>('.browser-canvas')
-    if (canvas === null) throw new Error('no canvas')
-    canvas.setPointerCapture = () => {}
-    canvas.releasePointerCapture = () => {}
-    canvas.hasPointerCapture = () => false
-    const iii = places(view).find((place) => place.contig === 'III')
-    if (iii === undefined) throw new Error('III not drawn')
+    const canvas = canvasOf(view)
+    const iii = placeOf(view, 'III')
     const point = { clientX: iii.body, clientY: (iii.along0 + iii.along1) / 2 }
     canvas.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, ...point }))
     canvas.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, cancelable: true, button: 0, ...point }))
     expect(asked).toEqual([[undefined, 'III:1-316,620']])
+  })
+})
+
+describe('the camera over the ideogram', () => {
+  /**
+   * The ideogram of the yeast five, standing, the wheel turned towards the
+   * reader over II's middle — far enough from the picture's edges that the
+   * picture can move as far as holding it there takes.
+   */
+  async function magnified(): Promise<Mounted & { canvas: HTMLCanvasElement; point: { clientX: number; clientY: number } }> {
+    const mounted = await mount(YEAST, { ideogram: 'vertical' })
+    const canvas = canvasOf(mounted.view)
+    const ii = placeOf(mounted.view, 'II')
+    const point = { clientX: ii.body, clientY: (ii.along0 + ii.along1) / 2 }
+    wheel(canvas, point, { deltaY: -400 })
+    await frame(mounted.view)
+    return { ...mounted, canvas, point }
+  }
+
+  it('opens at rest, and the wheel magnifies it about the pointer — the chromosome there staying there', async () => {
+    const { view, point } = await magnified()
+    expect(zoomOf(view)).toBeGreaterThan(2)
+    const ii = placeOf(view, 'II')
+    expect(ii.body).toBeCloseTo(point.clientX, 0)
+    expect(ii.along0).toBeLessThan(point.clientY)
+    expect(ii.along1).toBeGreaterThan(point.clientY)
+    // Its neighbours, further out on either side.
+    expect(placeOf(view, 'I').body).toBeLessThan(0)
+  })
+
+  it('goes back to every chromosome whole, and no further, and so does W', async () => {
+    const { view, canvas, point } = await magnified()
+    wheel(canvas, point, { deltaY: 5000 })
+    await frame(view)
+    expect(zoomOf(view)).toBe(1)
+    const rest = places(view)
+    wheel(canvas, point, { deltaY: -400 })
+    await frame(view)
+    view.fitIdeogram()
+    await frame(view)
+    expect(zoomOf(view)).toBe(1)
+    expect(places(view)).toEqual(rest)
+  })
+
+  it('moves the chromosomes sideways with a sideways scroll', async () => {
+    const { view, canvas, point } = await magnified()
+    const before = placeOf(view, 'II').body
+    wheel(canvas, point, { deltaX: 30 })
+    await frame(view)
+    expect(placeOf(view, 'II').body).toBeCloseTo(before - 30, 0)
+  })
+
+  it('moves the picture with a drag once magnified, and a press that does not travel still opens', async () => {
+    const { view, canvas, point, asked } = await magnified()
+    const before = placeOf(view, 'II')
+    drag(canvas, point, { clientX: point.clientX + 25, clientY: point.clientY - 20 })
+    await frame(view)
+    const after = placeOf(view, 'II')
+    expect(after.body - before.body).toBeCloseTo(25, 0)
+    expect(after.along0 - before.along0).toBeCloseTo(-20, 0)
+    expect(asked).toEqual([])
+    const on = { clientX: after.body, clientY: point.clientY }
+    canvas.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, ...on }))
+    canvas.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, cancelable: true, button: 0, ...on }))
+    expect(asked).toEqual([[undefined, 'II:1-813,184']])
+  })
+
+  it('takes a drag with Shift held, magnified, as a stretch to open', async () => {
+    const { view, canvas, point, asked } = await magnified()
+    const before = placeOf(view, 'II')
+    drag(canvas, point, { clientX: point.clientX, clientY: point.clientY + 15 }, { shiftKey: true })
+    expect(asked).toHaveLength(1)
+    const [[orientation, locus]] = asked
+    expect(orientation).toBeUndefined()
+    expect(locus).toMatch(/^II:\d/)
+    // Chosen, not moved.
+    expect(placeOf(view, 'II')).toEqual(before)
   })
 })

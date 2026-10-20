@@ -76,7 +76,9 @@ import type {
   FeatureSet,
   ReadPile,
   ReadWindow,
+  TrackSampleSet,
 } from '../annotations/types'
+import { combineSamples } from '../annotations/derived'
 import {
   assemblyAxis,
   findContig,
@@ -243,7 +245,7 @@ import {
 import { locusText, type PickHandlers } from './mapPick'
 import { VectorPage } from './vector'
 import type { CellFigure } from '../panels/deckFigure'
-import { KEYS, optionKey, withKey } from './commands'
+import { KEYS, optionKey, shiftKey, withKey } from './commands'
 import { exportRow } from './exportRow'
 import { fitPlaceholder, locusPlaceholder, searchKey } from './SearchBox'
 // The map's own zoom steps and the button that draws one. §26.6: one bar shape
@@ -279,6 +281,7 @@ import { setReadout } from './readout'
 import { Surface } from '../perf/rendered'
 import {
   alongOf,
+  cameraOf,
   drawBodyAnchor,
   drawChromosome,
   drawChromosomeNames,
@@ -286,14 +289,21 @@ import {
   drawRuleAcross,
   drawTransArcs,
   drawWashAcross,
+  drawWindowPlace,
   KARYOTYPE_PAD,
   laneIndexAt,
   layoutKaryotype,
+  middleOf,
   onSequence,
+  panBy,
   placeAt,
+  REST_CAMERA,
+  zoomAbout,
   type ChromosomePaint,
   type ChromosomePlace,
+  type KaryotypeCamera,
   type KaryotypeLayout,
+  type KaryotypeOptions,
   type KaryotypeOrientation,
   type KaryotypeSequence,
 } from '../render/karyotype'
@@ -498,6 +508,12 @@ interface KaryotypeFrame {
   axis: LocusAxis
   trackAxis: LocusAxis
   layout: KaryotypeLayout
+  /**
+   * What was laid out, and how, less the camera: what a magnification lays out
+   * again to find where the point under the pointer goes.
+   */
+  sequences: KaryotypeSequence[]
+  options: KaryotypeOptions
   /** The stack's slots, in order: every chromosome has a lane of each. */
   slots: Array<StackSlot<AnnotationEntry>>
   chromosomes: Array<{
@@ -538,6 +554,18 @@ interface KaryotypeFrame {
   floored: boolean
 }
 
+/**
+ * What a lane's samples are read for, where it is not the browser's window: the
+ * scope they are held under, the stretch of the axis and the pixels it is drawn
+ * across — and the scope whose samples stand in while these are on their way.
+ */
+interface Sampling {
+  scope: string
+  domain: readonly [number, number]
+  pixels: number
+  fallback?: string
+}
+
 /** The ideogram's flip, as its switch says it. */
 const FLIP_HINT =
   'Flip — the chromosomes lying in one column, each read left to right with its tracks above it. ' +
@@ -547,6 +575,26 @@ const FLIP_ALONE_HINT =
   'One chromosome is drawn lying, as the browser reads one — tick another on the Sequences card to stand them in a row'
 /** The scope the ideogram's samples are read under: the whole axis, apart from the browser's window. */
 const KARYOTYPE_SCOPE = 'karyotype'
+/**
+ * …and one chromosome's stretch in view, magnified, under a scope of its own —
+ * the name written so a `:` or a `|` in it cannot be read as the cache's own
+ * separator (`SampleCache.prune` takes a key's last `:` for its end).
+ */
+const karyotypeScope = (contig: string): string => `${KARYOTYPE_SCOPE}@${encodeURIComponent(contig)}`
+/**
+ * How far the ideogram is magnified before each chromosome in view is read for
+ * its own stretch rather than drawn from the read of the whole axis: twice,
+ * which is the first magnification a finer level of a file comes back at (the
+ * cache rounds a resolution to a power of two). Under it the whole axis's read
+ * is the right one, and a read per chromosome is forty for nothing.
+ */
+const KARYOTYPE_WINDOWED = 2
+/** The wheel's magnification per pixel it scrolls — the browser's own, so the two feel like one hand. */
+const KARYOTYPE_WHEEL = 0.002
+/** …and per line, where a wheel counts in lines: a notch of three lines a step a little under a fifth. */
+const KARYOTYPE_WHEEL_LINE = 0.05
+/** One press of `+` or `−` over the ideogram, and the bar's inner pair of buttons: three, as in the browser. */
+const KARYOTYPE_STEP = 3
 /** A chromosome's name, over it or before it. */
 const CHROMOSOME_FONT = '600 11px system-ui, sans-serif'
 /** The row the standing chromosomes' names are written in. */
@@ -980,6 +1028,31 @@ export class BrowserView {
     null
   /** Where on a chromosome the hand is, for the hairline across it. */
   private khover: { place: ChromosomePlace; along: number } | null = null
+  /**
+   * Where the ideogram is looked at from (§5.10): magnified by the wheel about
+   * the pointer and moved by a drag or a sideways scroll. At rest as the
+   * ideogram opens, and again when it is flipped or draws other chromosomes;
+   * held through anything else that lays it out again — a look, a track, the
+   * window's size — by the point of the picture in the middle of the window.
+   */
+  private kcam: KaryotypeCamera = { ...REST_CAMERA }
+  /** The chromosomes the camera was set over, which it is put back to rest for leaving. */
+  private kdrawn = ''
+  /**
+   * A press that moves the ideogram under the window when it travels — on the
+   * paper, or on a chromosome while it is magnified — and, on a chromosome,
+   * opens it when it does not.
+   */
+  private kpan: { x0: number; y0: number; from: KaryotypeLayout; place: ChromosomePlace | null; moved: boolean } | null =
+    null
+  /**
+   * Where the pointer last was over the ideogram, and whether it held a key
+   * that makes a drag a stretch: read again once the camera has moved the
+   * picture under a pointer that did not move.
+   */
+  private kpointer: { x: number; y: number; clientX: number; clientY: number; choosing: boolean } | null = null
+  /** Whether the next frame reads {@link kpointer} again: the wheel moved the picture under it. */
+  private kreread = false
   /** The Tracks card's switch for the ideogram, where this view offers one. */
   private readonly ideogramToggle: HTMLButtonElement | null
   /**
@@ -1560,8 +1633,11 @@ export class BrowserView {
    * is past the window where its chromosomes could not fit in one (§5.10).
    */
   private figureSize(): { width: number; height: number } {
-    if (this.karyotype !== null && this.karyo !== null) {
-      return { width: Math.ceil(this.karyo.layout.width), height: Math.ceil(this.karyo.layout.height) }
+    const frame = this.karyo
+    if (this.karyotype !== null && frame !== null) {
+      // Magnified, the window as the reader framed it (§5.10).
+      if (frame.layout.zoom > 1) return { width: frame.options.width, height: frame.options.height }
+      return { width: Math.ceil(frame.layout.width), height: Math.ceil(frame.layout.height) }
     }
     return { width: Math.max(this.canvasWidth, this.gutter + this.scale.pixels), height: this.heightOf(this.lanes) }
   }
@@ -2037,6 +2113,11 @@ export class BrowserView {
   }
 
   private zoomBy(factor: number, atPixel?: number): void {
+    // The bar's buttons over the ideogram magnify it about the window's middle.
+    if (this.karyotype !== null) {
+      this.zoomKaryotype(factor)
+      return
+    }
     this.scale.zoomAt((atPixel ?? this.gutter + this.scale.pixels / 2) - this.gutter, factor)
     this.afterMove(true)
   }
@@ -2053,11 +2134,19 @@ export class BrowserView {
     ZOOM_STEPS.forEach((step, at) => {
       const node = this.zooms[at]
       if (node === undefined) return
-      // The ideogram draws every chromosome whole: a chromosome is opened, by a
-      // click on it, and not magnified (§5.10).
+      // The ideogram's camera (§5.10): magnified about the middle of the
+      // window, from every chromosome whole to a base a pixel.
       if (this.karyotype !== null) {
-        node.disabled = true
-        node.title = 'The ideogram draws every chromosome whole — click one to open it, or drag along it for a stretch'
+        const layout = this.karyo?.layout
+        const zoom = layout?.zoom ?? 1
+        const most = layout?.most ?? 1
+        node.disabled = step.out ? zoom <= 1 : zoom >= most * 0.999
+        node.title = node.disabled
+          ? step.out
+            ? 'Every chromosome is whole on screen — there is nothing further out to go to'
+            : 'The ideogram is magnified to a base a pixel — open a chromosome to go further'
+          : `${step.out ? 'Shrink' : 'Magnify'} the ideogram ${step.label} about the middle of the window` +
+            (step.factor === 3 || step.factor === 1 / 3 ? ` — or ${step.out ? '−' : '+'} with it focused` : '')
         return
       }
       node.disabled = !this.zoomChanges(1 / step.factor)
@@ -2550,7 +2639,8 @@ export class BrowserView {
     this.baseline = options.baseline
     this.crosshair = options.crosshair
     if (this.karyotype !== null) {
-      this.paintKaryotype(ctx, chrome)
+      const frame = chrome ? this.karyo : this.karyotypeFigure()
+      if (frame !== null) this.paintKaryotype(ctx, frame, chrome)
       return
     }
     const palette = readCanvasPalette(this.canvas)
@@ -3609,7 +3699,7 @@ export class BrowserView {
      * chromosomes (§5.10), under a scope of its own — one read for every
      * chromosome, which each lane then places on its own stretch.
      */
-    sampling?: { scope: string; domain: readonly [number, number]; pixels: number },
+    sampling?: Sampling,
   ): void {
     // The reading frames first, from the same cache and under the same key as
     // the residues: they want the same bases, from further out — up to
@@ -3692,19 +3782,20 @@ export class BrowserView {
         continue
       }
       if (!drawnFromSamples(member.kind)) continue
-      const samples = this.cache.samplesFor({
-        entry: member.id,
-        scope: sampling?.scope ?? 'browser',
-        axis,
-        domain: sampling?.domain ?? lane.frame.domain,
-        // The lead's width where a cell was given one — see
-        // {@link BrowserViewProps.sampleWidth}.
-        pixels: sampling?.pixels ?? this.props.sampleWidth?.() ?? this.scale.pixels,
-        ...(member.derivedFrom === undefined ? {} : { derived: member.derivedFrom }),
-        ...(member.kind === 'alignments'
-          ? { reads: readsOf(member.style), reference: this.referenceKey() }
-          : {}),
-      })
+      const samples =
+        this.cache.samplesFor({
+          entry: member.id,
+          scope: sampling?.scope ?? 'browser',
+          axis,
+          domain: sampling?.domain ?? lane.frame.domain,
+          // The lead's width where a cell was given one — see
+          // {@link BrowserViewProps.sampleWidth}.
+          pixels: sampling?.pixels ?? this.props.sampleWidth?.() ?? this.scale.pixels,
+          ...(member.derivedFrom === undefined ? {} : { derived: member.derivedFrom }),
+          ...(member.kind === 'alignments'
+            ? { reads: readsOf(member.style), reference: this.referenceKey() }
+            : {}),
+        }) ?? (sampling?.fallback === undefined ? null : this.heldSamples(member, sampling.fallback))
       // The codes a fraction-modified depth met, for the card's picker.
       if (samples?.mods !== undefined) noteModCodes(member.id, samples.mods.codes)
       lane.profiles.push({
@@ -3715,6 +3806,17 @@ export class BrowserView {
       })
       lane.pending = this.cache.pendingOf(member.id, sampling?.scope ?? 'browser') ?? lane.pending
     }
+  }
+
+  /**
+   * What is held for a row under another scope, asking for nothing — a
+   * computed row's from what is held of the two it is computed from, as
+   * {@link SampleCache.samplesFor} combines them.
+   */
+  private heldSamples(member: AnnotationEntry, scope: string): TrackSampleSet | null {
+    const derived = member.derivedFrom
+    if (derived === undefined) return this.cache.peek(member.id, scope)
+    return combineSamples(this.cache.peek(derived.a, scope), this.cache.peek(derived.b, scope), derived.op)
   }
 
   /**
@@ -4504,6 +4606,7 @@ export class BrowserView {
     const forget = (): void => {
       this.hover = null
       this.khover = null
+      this.kpointer = null
       this.publishHover(null)
       this.gripping = null
       this.onColumn = false
@@ -4545,11 +4648,12 @@ export class BrowserView {
     }
 
     const onWheel = (event: WheelEvent): void => {
-      // The ideogram has no zoom of its own — a chromosome is opened, not
-      // magnified (§5.10) — so the wheel is the page's, and scrolls a picture
-      // taller than the window.
-      if (this.karyotype !== null) return
       const { x, y } = at(event)
+      // The ideogram's own camera: up and down magnify it, sideways moves it.
+      if (this.karyotype !== null) {
+        this.karyotypeWheel(event, x, y)
+        return
+      }
       // ⌘-scroll over a lane is this view's own gesture: it raises or lowers
       // *that track's* ceiling, which in a genome browser is the adjustment a
       // reader makes constantly and which no map has an analogue for.
@@ -4653,6 +4757,7 @@ export class BrowserView {
       }
       this.drag = null
       this.kdrag = null
+      this.kpan = null
       this.scaling = null
       canvas.classList.remove('grabbing')
       this.schedule()
@@ -4693,6 +4798,14 @@ export class BrowserView {
       if (this.kdrag !== null) {
         event.preventDefault()
         event.stopPropagation()
+        onCancel()
+        return
+      }
+      // A move of the ideogram is rewound, as a pan of the browser is.
+      if (this.kpan !== null) {
+        event.preventDefault()
+        event.stopPropagation()
+        if (this.kpan.moved) this.kcam = cameraOf(this.kpan.from)
         onCancel()
         return
       }
@@ -4937,8 +5050,10 @@ export class BrowserView {
     const zoomKeys = this.props.zoomKeys !== false
     const onKey = (event: KeyboardEvent): void => {
       if (event.metaKey || event.ctrlKey || event.altKey) return
-      // The ideogram has no window to pan or zoom: every chromosome is whole.
-      if (this.karyotype !== null) return
+      if (this.karyotype !== null) {
+        this.karyotypeKey(event, zoomKeys)
+        return
+      }
       const step = (this.scale.domain[1] - this.scale.domain[0]) * 0.2
       switch (event.key) {
         case 'ArrowLeft':
@@ -4975,6 +5090,48 @@ export class BrowserView {
     this.unsubscribes.push(() => this.canvas.removeEventListener('keydown', onKey))
   }
 
+  /**
+   * The browser's keys over the ideogram, on its camera (§5.10): the arrows
+   * move the picture a fifth of the window, `+` and `−` magnify it three times
+   * about the middle and back, and `0` is every chromosome whole again.
+   */
+  private karyotypeKey(event: KeyboardEvent, zoomKeys: boolean): void {
+    const frame = this.karyo
+    if (frame === null) return
+    const step = { x: frame.options.width / 5, y: frame.options.height / 5 }
+    switch (event.key) {
+      case 'ArrowLeft':
+        this.kcam = panBy(frame.layout, step.x, 0)
+        break
+      case 'ArrowRight':
+        this.kcam = panBy(frame.layout, -step.x, 0)
+        break
+      case 'ArrowUp':
+        this.kcam = panBy(frame.layout, 0, step.y)
+        break
+      case 'ArrowDown':
+        this.kcam = panBy(frame.layout, 0, -step.y)
+        break
+      case '+':
+      case '=':
+        if (!zoomKeys) return
+        this.zoomKaryotype(KARYOTYPE_STEP)
+        break
+      case '-':
+      case '_':
+        if (!zoomKeys) return
+        this.zoomKaryotype(1 / KARYOTYPE_STEP)
+        break
+      case '0':
+        this.kcam = { ...REST_CAMERA }
+        break
+      default:
+        return
+    }
+    event.preventDefault()
+    this.schedule()
+  }
+
   // -------------------------------------------------------------------------
   // The ideogram (§5.10)
   // -------------------------------------------------------------------------
@@ -4994,11 +5151,18 @@ export class BrowserView {
     this.karyotype = next
     this.karyo = null
     this.kdrag = null
+    this.kpan = null
     this.khover = null
+    // Every chromosome whole, as the ideogram opens: a camera kept from the
+    // last time it was drawn would be over a picture laid out another way.
+    this.kcam = { ...REST_CAMERA }
+    this.kdrawn = ''
+    this.kpointer = null
     if (next === null) delete this.el.dataset.karyotype
     this.editor.close()
     this.tooltip.classList.add('hidden')
-    this.canvas.classList.remove('is-link', 'is-span', 'is-text')
+    this.canvas.classList.remove('is-link', 'is-span', 'is-text', 'is-grab', 'grabbing')
+    if (next === null) delete this.el.dataset.karyotypeZoom
     this.syncIdeogram()
     this.schedule()
   }
@@ -5090,9 +5254,15 @@ export class BrowserView {
     this.placeStackBar(0)
     const ctx = this.canvas.getContext('2d')
     if (ctx === null) return
+    // The window, down to the foot of the column: the picture is looked at
+    // through it, the wheel magnifying and a drag moving it, rather than the
+    // page scrolling a picture taller than the window.
     const room = Math.max(160, Math.floor(this.stageRoom() ?? 600))
-    const frame = this.layoutIdeogram(ctx, width, room)
+    const frame = this.layoutIdeogram(ctx, width, room, this.kcam)
     this.karyo = frame
+    // The point in the middle as the picture held it, so a drag that ran into
+    // its edge starts back from the edge and not from where the hand went on to.
+    if (this.kcam.centre !== null) this.kcam = cameraOf(frame.layout)
     // One chromosome lies whichever way the flip says, as the browser reads
     // one: greyed, with the reason, rather than a switch that does nothing.
     if (this.flipToggle !== null) {
@@ -5103,6 +5273,7 @@ export class BrowserView {
     // Where each chromosome went, on the view itself — a canvas has nothing to
     // query, and a test or a gallery aiming a pointer at chromosome IV has to
     // ask the picture where IV is, as `data-locus` says where the browser is.
+    // In the window's pixels, and how far it is magnified beside them.
     const vertical = frame.layout.orientation === 'vertical'
     this.el.dataset.karyotype = JSON.stringify(
       frame.layout.places.map((place) => ({
@@ -5111,32 +5282,58 @@ export class BrowserView {
         along1: place.along1,
         vertical,
         body: place.body.acrossFrom + (vertical ? 1 : -1) * (place.body.thickness / 2),
+        visible: place.visible,
       })),
     )
-    // As wide as the chromosomes need where they could not fit, and as tall as
-    // the column at least, so the whole column is still something to point at.
-    const canvasWidth = Math.max(width, Math.ceil(frame.layout.width))
-    const height = Math.max(room, Math.ceil(frame.layout.height))
-    this.canvas.style.width = `${canvasWidth}px`
-    this.canvas.style.height = `${height}px`
-    const wantWidth = Math.max(1, Math.round(canvasWidth * this.dpr))
-    const wantHeight = Math.max(1, Math.round(height * this.dpr))
+    this.el.dataset.karyotypeZoom = String(Math.round(frame.layout.zoom * 1000) / 1000)
+    this.canvas.style.width = `${width}px`
+    this.canvas.style.height = `${room}px`
+    const wantWidth = Math.max(1, Math.round(width * this.dpr))
+    const wantHeight = Math.max(1, Math.round(room * this.dpr))
     if (this.canvas.width !== wantWidth) this.canvas.width = wantWidth
     if (this.canvas.height !== wantHeight) this.canvas.height = wantHeight
+    // Under a pointer that stayed where it was while the wheel moved the
+    // picture: what is under it now, before the frame is painted.
+    if (this.kreread) {
+      this.kreread = false
+      if (this.kdrag === null && this.kpan === null) this.karyotypeHover(frame)
+    }
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
-    ctx.clearRect(0, 0, canvasWidth, height)
-    this.paintKaryotype(ctx, true)
+    ctx.clearRect(0, 0, width, room)
+    this.paintKaryotype(ctx, frame, true)
     this.controls.sync(this.marks, NO_OFFSET)
     this.zoomNote.textContent = this.zoomPhrase()
+    this.syncZoom()
+  }
+
+  /**
+   * The ideogram as a figure: the window as the reader framed it, magnified;
+   * at rest the whole picture, past the window where it does not fit in one,
+   * laid out again without a camera.
+   */
+  private karyotypeFigure(): KaryotypeFrame | null {
+    const frame = this.karyo
+    if (frame === null || frame.layout.zoom > 1) return frame
+    const ctx = this.canvas.getContext('2d')
+    return ctx === null ? frame : this.layoutIdeogram(ctx, frame.options.width, frame.options.height, null)
   }
 
   /**
    * Place every chromosome, cut a lane of each slot beside it, and read every
    * lane — through {@link fill}, the browser's own, at the ideogram's
    * resolution: one read for the whole axis, each chromosome's lanes placing it
-   * on their own stretch.
+   * on their own stretch; magnified, a read of each chromosome's stretch in
+   * view, and nothing at all for one out of it.
+   *
+   * Through `camera` on screen — the window's pixels, every lane cut to what is
+   * in view — and without one for a figure of the whole picture.
    */
-  private layoutIdeogram(ctx: CanvasRenderingContext2D, width: number, room: number): KaryotypeFrame {
+  private layoutIdeogram(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    room: number,
+    camera: KaryotypeCamera | null,
+  ): KaryotypeFrame {
     const look = this.props.look?.get() ?? DEFAULT_IDEOGRAM_LOOK
     const { assembly, of, floored } = this.karyotypeAssembly()
     const axis = assemblyAxis(assembly)
@@ -5148,6 +5345,14 @@ export class BrowserView {
     }))
     // One chromosome is read along its length, as the browser reads it: lying.
     const orientation: KaryotypeOrientation = sequences.length <= 1 ? 'horizontal' : (this.karyotype ?? 'vertical')
+    // Other chromosomes, or the same ones turned, are another picture: the
+    // camera's point in it would be somewhere else, and it opens at rest.
+    const drawnKey = `${orientation}\n${sequences.map((sequence) => sequence.contig).join('\n')}`
+    if (camera !== null && drawnKey !== this.kdrawn) {
+      this.kdrawn = drawnKey
+      this.kcam = { ...REST_CAMERA }
+      camera = this.kcam
+    }
     const slots = this.karyotypeSlots()
     const bands = this.karyotypeBands(look)
     const fill = this.karyotypeFill(look, bands)
@@ -5156,7 +5361,7 @@ export class BrowserView {
     ctx.font = scaleFont(CHROMOSOME_FONT)
     const widest = sequences.reduce((most, sequence) => Math.max(most, ctx.measureText(sequence.contig).width), 0)
     ctx.restore()
-    const layout = layoutKaryotype(sequences, {
+    const options: KaryotypeOptions = {
       orientation,
       width,
       height: room,
@@ -5168,12 +5373,30 @@ export class BrowserView {
       lanes: slots.map((slot) => (betweenOnly(slot) ? 0 : slot.thickness)),
       fit: look.tracks === 'fit',
       length: look.length,
-    })
-    // As many pixels as the chromosomes are long together, so a lane is read
-    // at the resolution it is drawn at, as the browser's are.
-    const pixels = layout.places.reduce((sum, place) => sum + Math.max(1, place.along1 - place.along0), 0)
-    const sampling = { scope: KARYOTYPE_SCOPE, domain: [0, Math.max(1, assembly.total)] as const, pixels }
-    const chromosomes = layout.places.map((place) => {
+    }
+    const layout = layoutKaryotype(sequences, camera === null ? options : { ...options, camera })
+    // As many pixels as the chromosomes are long together at rest, so a lane
+    // is read at the resolution it is drawn at, as the browser's are — and the
+    // same read at every magnification short of a finer one.
+    const pixels =
+      layout.places.reduce((sum, place) => sum + Math.max(1, place.along1 - place.along0), 0) / layout.zoom
+    const whole = { scope: KARYOTYPE_SCOPE, domain: [0, Math.max(1, assembly.total)] as const, pixels }
+    // Magnified, each chromosome in view is read for its own stretch at the
+    // resolution it is now drawn at — the body's stretch, which holds its
+    // lanes' — and drawn from the whole axis's read until that lands.
+    const windowed = layout.zoom >= KARYOTYPE_WINDOWED
+    const samplingOf = (place: ChromosomePlace): Sampling =>
+      windowed
+        ? {
+            scope: karyotypeScope(place.contig),
+            domain: place.body.domain,
+            pixels: Math.max(1, place.body.alongTo - place.body.alongFrom),
+            fallback: KARYOTYPE_SCOPE,
+          }
+        : whole
+    // A chromosome out of the window is neither read nor drawn.
+    const chromosomes = layout.places.filter((place) => place.visible).map((place) => {
+      const sampling = samplingOf(place)
       const lanes: Lane[] = slots.map((slot, at) => ({
         entry: slot.host,
         overlaid: slot.overlaid,
@@ -5240,6 +5463,8 @@ export class BrowserView {
       axis,
       trackAxis,
       layout,
+      sequences,
+      options,
       slots,
       chromosomes,
       extents,
@@ -5374,15 +5599,17 @@ export class BrowserView {
   }
 
   /**
-   * Everything the ideogram puts on the canvas, from the layout the last
-   * {@link drawKaryotype} made: the key, the names, every chromosome and the
-   * lanes beside it, the curves between two, the reader's marks, and — on
-   * screen only (`chrome`) — the hand's hairline, another surface's, and a
-   * stretch being dragged out.
+   * Everything the ideogram puts on the canvas, from a layout {@link
+   * layoutIdeogram} made: the key, the names, every chromosome and the lanes
+   * beside it, the curves between two, the reader's marks, and — on screen
+   * only (`chrome`) — the hand's hairline, another surface's, and a stretch
+   * being dragged out.
+   *
+   * Through a camera the key stays where it is, the names are held at the
+   * window's edge under it, and the chromosomes move under both, cut to the
+   * window past them.
    */
-  private paintKaryotype(ctx: CanvasRenderingContext2D, chrome: boolean): void {
-    const frame = this.karyo
-    if (frame === null) return
+  private paintKaryotype(ctx: CanvasRenderingContext2D, frame: KaryotypeFrame, chrome: boolean): void {
     const palette = readCanvasPalette(this.canvas)
     const look = this.props.look?.get() ?? DEFAULT_IDEOGRAM_LOOK
     const { layout } = frame
@@ -5394,14 +5621,6 @@ export class BrowserView {
     this.gripRows.clear()
     const groups = this.karyotypeGroups(frame)
     if (this.text) this.paintKey(ctx, frame, groups, palette)
-    drawChromosomeNames(
-      ctx,
-      layout,
-      scaleFont(CHROMOSOME_FONT),
-      palette.labelColor,
-      chrome ? (this.khover?.place.contig ?? this.kdrag?.place.contig ?? null) : null,
-      CROSSHAIR_COLOR,
-    )
 
     // What fills a chromosome, resolved once for all of them.
     const fill = frame.fill
@@ -5448,6 +5667,8 @@ export class BrowserView {
             return featureColouring(fill.set, fill.entry.kind, features.colourBy, fill.entry.style.colour, features.nameColours)
           })()
         : null
+    // As thick as the chromosomes are drawn, which the camera thickens.
+    const thickness = layout.places[0]?.body.thickness ?? look.width
     const bandPaint = {
       colour: look.colour,
       guideColour: palette.labelColor,
@@ -5457,8 +5678,33 @@ export class BrowserView {
       // A band's name inside it only where the chromosome is drawn wide enough
       // to hold a line of it: at the twelve pixels it opens at, a name turned
       // along a standing chromosome is a smear over the stains it names.
-      labels: this.text && look.width >= scaleLength(BAND_NAMES_WIDTH),
+      labels: this.text && thickness >= scaleLength(BAND_NAMES_WIDTH),
       outline: true,
+    }
+
+    ctx.save()
+    // Through a camera, the key stays put and everything else is cut to the
+    // window under it: the names, held at its edge…
+    const view = layout.view
+    if (view !== null) {
+      const { top, width, height } = frame.options
+      ctx.beginPath()
+      ctx.rect(0, top, width, Math.max(0, height - top))
+      ctx.clip()
+    }
+    drawChromosomeNames(
+      ctx,
+      layout,
+      scaleFont(CHROMOSOME_FONT),
+      palette.labelColor,
+      chrome ? (this.khover?.place.contig ?? this.kdrag?.place.contig ?? this.kpan?.place?.contig ?? null) : null,
+      CROSSHAIR_COLOR,
+    )
+    // …and the chromosomes, moving under them, to the window past them.
+    if (view !== null) {
+      ctx.beginPath()
+      ctx.rect(view.x, view.y, view.width, view.height)
+      ctx.clip()
     }
     // The pairs between two chromosomes first, under every body and lane they
     // cross: a curve is the faintest thing on the page, and drawn last it
@@ -5497,14 +5743,24 @@ export class BrowserView {
         ink: palette.labelColor,
         opacity: 1,
       }
-      drawChromosome(ctx, chromosome.place.body, paint)
+      drawChromosome(ctx, chromosome.place, paint)
       // The browser's own lane painter, on the chromosome's frames: the name
       // and range are the key's, so each lane is drawn bare.
       for (const lane of chromosome.lanes) this.paintLane(ctx, lane, groups, palette, true, chromosome.place.contig)
     }
     this.paintKaryotypeMarks(ctx, frame)
-    if (!chrome) return
-    if (this.crosshair && this.khover !== null && this.kdrag === null) {
+    if (chrome) this.paintKaryotypeChrome(ctx, frame, palette)
+    ctx.restore()
+  }
+
+  /** What the ideogram shows on screen only: the hand's hairline, another surface's, and a stretch being dragged out. */
+  private paintKaryotypeChrome(
+    ctx: CanvasRenderingContext2D,
+    frame: KaryotypeFrame,
+    palette: ReturnType<typeof readCanvasPalette>,
+  ): void {
+    const { layout } = frame
+    if (this.crosshair && this.khover !== null && this.kdrag === null && this.kpan?.moved !== true) {
       drawRuleAcross(ctx, layout, this.khover.place, this.khover.along, CROSSHAIR_COLOR, this.dpr)
     }
     // Another surface's pointer — a bead, a cell of a map — on its chromosome,
@@ -5538,6 +5794,9 @@ export class BrowserView {
         dpr: this.dpr,
       })
     }
+    // Where the window is over a picture larger than it, as a scrollbar would
+    // say: there is more of it, and a drag or a sideways scroll goes there.
+    drawWindowPlace(ctx, layout, frame.options, palette.labelColor)
   }
 
   /**
@@ -5577,7 +5836,16 @@ export class BrowserView {
         hiColor: colour(1),
         ramp: Array.from({ length: KEY_METRICS.ramp }, (_, i) => colour(i / (KEY_METRICS.ramp - 1))),
       },
-      { font: SCALE_FONT, textColor: palette.labelColor, background: FIGURE_BACKGROUND, borderColor: palette.labelColor },
+      // No box: on paper beside the chromosomes rather than over a picture,
+      // the scale is a title, a ramp and its two numbers, as the lane labels
+      // left of it are words with no frame round them.
+      {
+        font: SCALE_FONT,
+        textColor: palette.labelColor,
+        background: FIGURE_BACKGROUND,
+        borderColor: palette.labelColor,
+        box: false,
+      },
     )
     ctx.restore()
   }
@@ -5715,7 +5983,11 @@ export class BrowserView {
     const total = frame?.assembly.total ?? this.props.assembly.total
     const fill = frame?.fill
     const by = fill?.kind === 'track' || fill?.kind === 'features' ? ` · coloured by ${laneLabelOf(fill.entry)}` : ''
-    return `ideogram · ${counted} · ${fmt.bp(total)}${perPixel === null ? '' : ` · ${fmt.bp(perPixel)} per pixel`}${by}`
+    // How far the wheel has magnified it, once it has: the per-pixel figure
+    // alone does not say the picture is no longer every chromosome whole.
+    const zoom = frame?.layout.zoom ?? 1
+    const magnified = zoom > 1 ? ` · magnified ${fmt.num(zoom < 10 ? Math.round(zoom * 10) / 10 : Math.round(zoom))}×` : ''
+    return `ideogram · ${counted} · ${fmt.bp(total)}${perPixel === null ? '' : ` · ${fmt.bp(perPixel)} per pixel`}${magnified}${by}`
   }
 
   /**
@@ -5731,24 +6003,59 @@ export class BrowserView {
     const place = placeAt(frame.layout, x, y)
     if (place === null) return null
     const along = alongOf(frame.layout, x, y)
-    if (!onSequence(place, along)) return null
+    // Not under the names, where a chromosome moved past them is hidden.
+    if (!onSequence(place, along) || this.inNames(frame.layout, place, x, y)) return null
     const locus = frame.trackAxis.unitToLocus(place.body.toUnit(along))
     return locus === null ? null : { place, along, contig: locus.contig, bp: locus.bp }
   }
 
-  /** A press over the ideogram: on a chromosome, the start of a click or of a drag along it. */
+  /**
+   * Whether a point in a chromosome's column is on its name: before where the
+   * chromosome starts — where the window starts showing chromosomes, through
+   * a camera, the names being held at its edge.
+   */
+  private inNames(layout: KaryotypeLayout, place: ChromosomePlace, x: number, y: number): boolean {
+    const vertical = layout.orientation === 'vertical'
+    const start = layout.view === null ? place.along0 : vertical ? layout.view.y : layout.view.x
+    return alongOf(layout, x, y) < start
+  }
+
+  /**
+   * A press over the ideogram. On a chromosome at rest — or magnified, with
+   * Shift or Option held, as a stretch is chosen in the browser, or while a
+   * mark is being placed — the start of a click or of a drag along it.
+   * Anywhere else the picture can be moved — magnified, everywhere; at rest,
+   * on the paper of a picture larger than the window — the start of a move,
+   * which on a chromosome is a click when it never travels.
+   */
   private karyotypeDown(event: PointerEvent, x: number, y: number): void {
     const frame = this.karyo
     if (frame === null) return
-    const place = placeAt(frame.layout, x, y)
+    const { layout } = frame
+    const column = placeAt(layout, x, y)
     // The paper past a short chromosome's end is nobody's: its column is the
     // chromosome, its name and its lanes, not the room the longest one needs.
-    if (place === null || alongOf(frame.layout, x, y) > place.along1 + 2) return
+    const place = column !== null && alongOf(layout, x, y) <= column.along1 + 2 ? column : null
+    const choosing = layout.zoom <= 1 || event.shiftKey || event.altKey || this.picking !== null
+    if (place !== null && choosing) {
+      this.canvas.setPointerCapture(event.pointerId)
+      this.canvas.focus({ preventScroll: true })
+      this.tooltip.classList.add('hidden')
+      const along = Math.max(place.along0, Math.min(place.along1, alongOf(layout, x, y)))
+      this.kdrag = { place, from: along, to: along, x0: x, y0: y, moved: false }
+      return
+    }
+    // The paper moves the picture, under the key: the key itself does not move.
+    if (place === null && (y < frame.options.top || !this.karyotypeMovable(frame))) return
     this.canvas.setPointerCapture(event.pointerId)
     this.canvas.focus({ preventScroll: true })
-    this.tooltip.classList.add('hidden')
-    const along = Math.max(place.along0, Math.min(place.along1, alongOf(frame.layout, x, y)))
-    this.kdrag = { place, from: along, to: along, x0: x, y0: y, moved: false }
+    this.kpan = { x0: x, y0: y, from: layout, place, moved: false }
+  }
+
+  /** Whether the ideogram can be moved under the window: magnified, or larger than it at rest. */
+  private karyotypeMovable(frame: KaryotypeFrame): boolean {
+    const { layout, options } = frame
+    return layout.zoom > 1 || layout.width > options.width + 0.5 || layout.height > options.height + 0.5
   }
 
   /**
@@ -5760,26 +6067,65 @@ export class BrowserView {
   private karyotypeMove(event: PointerEvent, x: number, y: number): void {
     const frame = this.karyo
     if (frame === null) return
+    const { layout } = frame
+    const pan = this.kpan
+    if (pan !== null) {
+      if (!pan.moved && Math.abs(x - pan.x0) + Math.abs(y - pan.y0) < DRAG_SLACK) return
+      if (!pan.moved) {
+        pan.moved = true
+        this.khover = null
+        this.tooltip.classList.add('hidden')
+        this.canvas.classList.remove('is-grab', 'is-span', 'is-link', 'is-text')
+        this.canvas.classList.add('grabbing')
+      }
+      // The picture follows the hand from where it was when the press began.
+      this.kcam = panBy(pan.from, x - pan.x0, y - pan.y0)
+      this.schedule()
+      return
+    }
     const drag = this.kdrag
     if (drag !== null) {
-      const along = Math.max(drag.place.along0, Math.min(drag.place.along1, alongOf(frame.layout, x, y)))
+      const along = Math.max(drag.place.along0, Math.min(drag.place.along1, alongOf(layout, x, y)))
       if (!drag.moved && Math.abs(x - drag.x0) + Math.abs(y - drag.y0) < DRAG_SLACK) return
       drag.moved = true
       drag.to = along
       this.schedule()
       return
     }
+    this.kpointer = { x, y, clientX: event.clientX, clientY: event.clientY, choosing: event.shiftKey || event.altKey }
+    this.karyotypeHover(frame)
+    this.schedule()
+  }
+
+  /**
+   * The pointer resting over the ideogram — where it last moved to, which a
+   * magnification or a scroll moves the picture under — read again: the
+   * hairline, the card and the readout, and what a press there would do.
+   */
+  private karyotypeHover(frame: KaryotypeFrame): void {
+    const pointer = this.kpointer
+    if (pointer === null) return
+    const { layout } = frame
+    const { x, y } = pointer
     const hit = this.karyotypeAt(x, y)
     this.khover = hit === null ? null : { place: hit.place, along: hit.along }
     const named = this.nameAt(x, y) !== null || this.rangeAt(x, y) !== null
     // A chromosome is a link to itself and a stretch to drag out, as the
     // browser's ruler is: the I-beam over it, the pointing hand over its name.
-    const column = placeAt(frame.layout, x, y)
-    const onName = hit === null && !named && column !== null && alongOf(frame.layout, x, y) < column.along0
+    // Magnified, a drag moves the picture, and the open hand says so — over
+    // the chromosomes too, unless Shift or Option says the drag is a stretch.
+    const column = placeAt(layout, x, y)
+    const onName = hit === null && !named && column !== null && this.inNames(layout, column, x, y)
+    const choosing = layout.zoom <= 1 || pointer.choosing
+    const below = y >= frame.options.top
     this.canvas.classList.toggle('is-text', named)
-    this.canvas.classList.toggle('is-span', hit !== null && !named)
+    this.canvas.classList.toggle('is-span', hit !== null && !named && choosing)
     this.canvas.classList.toggle('is-link', onName)
-    this.describeKaryotype(hit, x, y, event.clientX, event.clientY)
+    this.canvas.classList.toggle(
+      'is-grab',
+      below && !named && !onName && (hit === null || !choosing) && this.karyotypeMovable(frame),
+    )
+    this.describeKaryotype(hit, x, y, pointer.clientX, pointer.clientY)
     if (hit === null) {
       if (this.published) setHoverPlace(null)
       this.published = false
@@ -5787,7 +6133,6 @@ export class BrowserView {
       this.published = true
       setHoverPlace({ loci: [{ contig: hit.contig, bp: hit.bp }], source: this.props.hoverSource ?? 'browser' })
     }
-    this.schedule()
   }
 
   /**
@@ -5799,9 +6144,18 @@ export class BrowserView {
    */
   private karyotypeUp(event: PointerEvent): void {
     const drag = this.kdrag
+    const pan = this.kpan
     const frame = this.karyo
     this.kdrag = null
+    this.kpan = null
+    this.canvas.classList.remove('grabbing')
     if (this.canvas.hasPointerCapture(event.pointerId)) this.canvas.releasePointerCapture(event.pointerId)
+    // A move that never travelled, begun on a chromosome, is a click on it.
+    if (pan !== null) {
+      if (!pan.moved && pan.place !== null) this.openChromosome(pan.place.contig)
+      else this.schedule()
+      return
+    }
     if (drag === null || frame === null) return
     const toUnit = (along: number): number => drag.place.body.toUnit(along)
     if (!drag.moved) {
@@ -5815,10 +6169,7 @@ export class BrowserView {
         this.schedule()
         return
       }
-      const whole = this.props.assembly.contigs.find((contig) => contig.name === drag.place.contig)
-      if (whole !== undefined) {
-        this.props.onIdeogramChange?.(undefined, formatLocus({ contig: whole.name, start: 0, end: whole.length }))
-      }
+      this.openChromosome(drag.place.contig)
       return
     }
     const from = toUnit(Math.min(drag.from, drag.to))
@@ -5839,6 +6190,60 @@ export class BrowserView {
     }
     this.copyBand(from, to, frame.axis)
     this.props.onIdeogramChange?.(undefined, formatLocus(range))
+  }
+
+  /** Put the ideogram away for one chromosome, whole, in the browser's own picture (§5.10). */
+  private openChromosome(contig: string): void {
+    const whole = this.props.assembly.contigs.find((each) => each.name === contig)
+    if (whole === undefined) return
+    this.props.onIdeogramChange?.(undefined, formatLocus({ contig: whole.name, start: 0, end: whole.length }))
+  }
+
+  /**
+   * The wheel over the ideogram (§5.10). Up and down magnify it about the
+   * pointer — the chromosome under it longer and wider, its neighbours leaving
+   * the window on either side — and down again to every chromosome whole.
+   * Sideways, or with Shift, it moves the chromosomes left and right.
+   */
+  private karyotypeWheel(event: WheelEvent, x: number, y: number): void {
+    const frame = this.karyo
+    if (frame === null) return
+    event.preventDefault()
+    const lines = event.deltaMode === 1
+    const sideways = Math.abs(event.deltaX) > Math.abs(event.deltaY)
+    if (sideways || event.shiftKey) {
+      // A line is a line of text's height, which is what the page would scroll.
+      const delta = (sideways ? event.deltaX : event.deltaY) * (lines ? 16 : 1)
+      this.kcam = panBy(frame.layout, -delta, 0)
+      this.kreread = true
+      this.schedule()
+      return
+    }
+    // Exponential in the delta, so a trackpad's many small events and a
+    // wheel's few large ones compose to the same total, as in the browser.
+    this.zoomKaryotype(Math.exp(-event.deltaY * (lines ? KARYOTYPE_WHEEL_LINE : KARYOTYPE_WHEEL)), x, y)
+  }
+
+  /** Magnify the ideogram by a factor about a point of the window — its middle, from a button or a key. */
+  private zoomKaryotype(factor: number, x?: number, y?: number): void {
+    const frame = this.karyo
+    if (frame === null) return
+    const middle = middleOf(frame.layout)
+    this.kcam = zoomAbout(frame.layout, x ?? middle.x, y ?? middle.y, frame.layout.zoom * factor, (zoom) =>
+      layoutKaryotype(frame.sequences, { ...frame.options, camera: { zoom, centre: null } }),
+    )
+    this.kreread = true
+    this.schedule()
+  }
+
+  /**
+   * The ideogram as it opens — every chromosome whole in the window — from
+   * wherever the camera was: `W` and `0`, as the browser's whole genome is.
+   */
+  fitIdeogram(): void {
+    if (this.karyotype === null) return
+    this.kcam = { ...REST_CAMERA }
+    this.schedule()
   }
 
   /**
@@ -5942,10 +6347,15 @@ export class BrowserView {
         )
       }
     }
+    // What a press does here, which a magnification changes: a drag moves the
+    // picture, and a stretch is chosen with Shift held, as in the browser.
     rows.push(
       el('div', { class: 'cell-tip-row' }, el('span', {
         class: 'hint',
-        text: 'click to open this chromosome · drag along it for a stretch',
+        text:
+          frame.layout.zoom > 1
+            ? `click to open this chromosome · drag to move · ${shiftKey()} + drag along it for a stretch`
+            : 'click to open this chromosome · drag along it for a stretch · scroll to zoom in',
       })),
     )
     setReadout(`${head}${parts.length === 0 ? '' : `   ${parts.join('   ·   ')}`}`)

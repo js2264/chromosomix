@@ -214,7 +214,20 @@ export function drawKey(
   right: number,
   top: number,
   content: KeyContent,
-  options: { font: string; textColor: string; background: string; borderColor: string },
+  options: {
+    font: string
+    textColor: string
+    background: string
+    borderColor: string
+    /**
+     * The box round the key, its ground and its edge: on by default, as a key
+     * over a map's cells needs one to be read against them. Off for a key on
+     * paper that is not over a picture — the ideogram's colour scale (§5.10) —
+     * where a box is a frame round nothing; the ramp keeps its own edge, which
+     * is what shows its white end on white paper.
+     */
+    box?: boolean
+  },
 ): { x: number; y: number; width: number; height: number } {
   const m = KEY_METRICS
   ctx.save()
@@ -230,8 +243,10 @@ export function drawKey(
   ctx.fillStyle = options.background
   ctx.strokeStyle = options.borderColor
   ctx.lineWidth = 1
-  ctx.fillRect(x, y, width, height)
-  ctx.strokeRect(x + 0.5, y + 0.5, width - 1, height - 1)
+  if (options.box !== false) {
+    ctx.fillRect(x, y, width, height)
+    ctx.strokeRect(x + 0.5, y + 0.5, width - 1, height - 1)
+  }
 
   ctx.fillStyle = options.textColor
   ctx.font = `${m.titleSize}px ${options.font}`

@@ -25,10 +25,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   click or the drag named, in one step that Back undoes. Every lane of the browser's stack is drawn
   beside every chromosome by the browser's own painters — area, line, bars, points, heatmap, ribbon,
   features, arcs — on one axis per track over every chromosome drawn, shrunk by one factor to fit the
-  window and never past their heights in the browser, down to four pixels, past which the picture
-  scrolls. A cytoBand fills the chromosomes with its bands by default; *colour by* fills them with
-  one colour, a track (in its lane's colours, white to its colour unless the lane is a heatmap, with
-  the colour scale in the key's corner) or a feature set's own colours. A pair set's pairs on one
+  window and never past their heights in the browser, down to four pixels. The wheel magnifies the
+  picture gradually about the pointer, both ways at once — the chromosome under it longer, thicker
+  and its lanes wider, its neighbours leaving the window on either side — to a base a pixel, and back
+  to every chromosome whole; a sideways scroll or, magnified, a drag moves it, Shift-drag chooses a
+  stretch, the zoom buttons, `+` and `−` magnify it about the middle, and `W` and `0` put it back. The
+  key stays put, the names are held at the window's edge, and a thin bar at its foot and right edge
+  says which part of a picture larger than the window is shown; magnified, each chromosome in the
+  window is read for its own stretch there. A cytoBand fills the chromosomes with its bands by
+  default; *colour by* fills them with one colour, a track (in its lane's colours, white to its
+  colour unless the lane is a heatmap, with its colour scale, unboxed, in the key's corner) or a
+  feature set's own colours. A pair set's pairs on one
   chromosome are its lane's arcs and its pairs between two are curves leaving each chromosome
   straight across it, under every lane, the strongest 4,000; a set with only those takes no lane. The
   reader's lines, boxes and arrowheads are drawn across each chromosome; the pointer draws the
@@ -37,8 +44,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   The ideogram's settings are rows of the Tracks card while it is drawn — flip, colour by, colour,
   width, gap, height and the tracks' fit — kept with the file and in a workspace
   (`SessionConfig.ideogram`); the orientation is in the link (`ideogram=vertical|horizontal`), and
-  the figure exports as PNG or PDF. `scripts/ui-ideogram-view.mjs` drives it on the yeast and human
-  demos.
+  the figure exports as PNG or PDF — the whole picture at rest, the window as framed when magnified.
+  `scripts/ui-ideogram-view.mjs` drives it on the yeast and human demos.
 
 - **Licences, in *About* (§22.4).** Under the tutorial and the source link: chromosomix's own
   licence, the GPL, then one line per project it is built with or ported from — three.js, Apache

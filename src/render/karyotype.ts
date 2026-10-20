@@ -31,6 +31,20 @@
  * for all of them, the longest filling the room — because a karyotype whose
  * chromosomes were each stretched to the same length would be a list of
  * sequences, not a picture of a genome.
+ *
+ * ## The camera
+ *
+ * On screen the picture is looked at through a {@link KaryotypeCamera}: magnified
+ * about a point and moved under the window. Magnified, it grows **both ways**
+ * from one factor — along, every chromosome longer on the one scale; across,
+ * every column wider, the chromosome thicker and its lanes with it — so the
+ * chromosome under the pointer fills the window while its neighbours leave it
+ * on either side. Across stops once one column is the whole room, since a
+ * column wider than the window is a lane nobody can see the far side of; along
+ * stops at a base a pixel. A point is held under the pointer by its
+ * {@link KaryotypePoint}, the picture's own coordinates — base pairs down the
+ * chromosomes, and columns across them counted in their parts as they are at
+ * rest — which no magnification changes.
  */
 
 import type { FeatureSet, PairSet } from '../annotations/types'
@@ -81,6 +95,49 @@ export const KARYOTYPE_LANE_FLOOR = 4
 /** The shortest the longest chromosome is drawn, whatever the room. */
 const MIN_LENGTH = 40
 
+/**
+ * The most a chromosome is thickened by the camera: twice. A body grows with
+ * its column to say it is the one being looked at, and is then thick enough to
+ * write its bands' names in; past that a chromosome is a slab, and the room is
+ * better spent on the lanes beside it, which have something to show at a width.
+ */
+export const BODY_ZOOM = 2
+
+/** The finest the camera magnifies a chromosome to: a pixel a unit of the axis — a base, unedited. */
+export const KARYOTYPE_FINEST = 1
+
+/**
+ * A point of the picture in its own terms, which no camera changes: units of
+ * the axis down the chromosomes from their first base, and columns across from
+ * the first one's edge — a column counted in its parts as they are at rest, so
+ * a point on a chromosome's body, or a third of the way into its second lane,
+ * is there at any magnification however unevenly the parts grow. The point a
+ * camera is held on, or the one under a pointer, stays the same place on the
+ * same chromosome whatever the picture is laid out at.
+ */
+export interface KaryotypePoint {
+  along: number
+  across: number
+}
+
+/**
+ * Where the picture is looked at from, on screen (§5.10): how far it is
+ * magnified, and the point of it in the middle of the window.
+ */
+export interface KaryotypeCamera {
+  /** One draws every chromosome whole in the room; more magnifies along and across. */
+  zoom: number
+  /**
+   * The point of the picture in the middle of the window, held to what the
+   * picture can show there — or `null` for the picture in the window's
+   * corner, as it is laid out at rest.
+   */
+  centre: KaryotypePoint | null
+}
+
+/** The camera at rest: the whole picture, from its corner. */
+export const REST_CAMERA: KaryotypeCamera = { zoom: 1, centre: null }
+
 export interface KaryotypeOptions {
   orientation: KaryotypeOrientation
   /**
@@ -121,6 +178,17 @@ export interface KaryotypeOptions {
   fit: boolean
   /** The longest chromosome's length on screen, or `null` for what the room allows. */
   length: number | null
+  /**
+   * The window the picture is drawn through, on screen. Absent, the layout is
+   * the whole picture in its own pixels — a saved figure. Present, it is in the
+   * window's pixels: magnified and moved by the camera, the names held at the
+   * window's edge while the chromosomes move under them (the key over them is
+   * the caller's, and does not move), and every lane cut to the stretch in
+   * view, so nothing is read or drawn for what is not on screen.
+   * {@link KaryotypeOptions.width} and {@link KaryotypeOptions.height} are the
+   * window's.
+   */
+  camera?: KaryotypeCamera
 }
 
 /** Where one chromosome went, and the frames everything on it is drawn in. */
@@ -131,10 +199,16 @@ export interface ChromosomePlace {
   /** Where it runs along its own axis, in canvas pixels: down the page standing, across it lying. */
   along0: number
   along1: number
-  /** The chromosome itself, as a lane as thick as the chromosome is drawn. */
+  /**
+   * The chromosome itself, as a lane as thick as the chromosome is drawn —
+   * through a camera, cut to the stretch in view and a body's thickness
+   * either side, so an end just out of the window still rounds into it.
+   */
   body: LaneFrame
-  /** One frame per lane, outward from the chromosome. */
+  /** One frame per lane, outward from the chromosome — through a camera, cut to the stretch in view. */
   lanes: LaneFrame[]
+  /** Whether any of it is in the window: always, without a camera. */
+  visible: boolean
   /**
    * The two ends of a rule across it, in canvas pixels on the axis across the
    * chromosome — from the anchors' strip to the far edge of its last lane: what
@@ -143,8 +217,12 @@ export interface ChromosomePlace {
   across: [number, number]
   /** Everything this chromosome owns on the canvas — its column, or its row — for the hit test. */
   box: { x: number; y: number; width: number; height: number }
-  /** Where its name is written. */
-  name: { x: number; y: number; align: 'center' | 'right'; width: number }
+  /**
+   * Where its name is written — and, through a camera, the stretch across the
+   * window its column holds, which the name slides along to stay in sight
+   * while any of the column is.
+   */
+  name: { x: number; y: number; align: 'center' | 'right'; width: number; span?: [number, number] }
 }
 
 export interface KaryotypeLayout {
@@ -156,9 +234,33 @@ export interface KaryotypeLayout {
   factor: number
   /** Pixels per axis unit — per base pair, on the browser's axis — for every chromosome. */
   perUnit: number
-  /** The picture's own extent, past the room where it could not fit. */
+  /** The picture's own extent, past the room where it could not fit — magnified, through a camera. */
   width: number
   height: number
+  /** How far it is magnified, along and across: across stops where one column is the room. */
+  zoom: number
+  across: number
+  /** The most it can be magnified: a pixel a unit along ({@link KARYOTYPE_FINEST}). */
+  most: number
+  /** From one chromosome's column to the next's, across. */
+  pitch: number
+  /**
+   * One column's parts across, in the canvas's order — the half gap before
+   * it, the anchors' strip, the chromosome and each lane with the gap before
+   * it, and what is left of the column — as drawn, and at rest: what a
+   * {@link KaryotypePoint} counts a column in.
+   */
+  columns: { drawn: number[]; rest: number[] }
+  /** Where the picture's own coordinates start, in its pixels: the chromosomes' first base, and the first column's edge. */
+  origin: { along: number; across: number }
+  /** How far it was moved under the window: the camera's, held to the picture. */
+  pan: { x: number; y: number }
+  /**
+   * Where the chromosomes are seen through a camera — the window less the key
+   * over them and the names beside them, which stay put while the chromosomes
+   * move — and `null` without one, the whole picture being drawn.
+   */
+  view: { x: number; y: number; width: number; height: number } | null
 }
 
 /**
@@ -167,7 +269,8 @@ export interface KaryotypeLayout {
  * The lanes are fitted **across** — beside a standing chromosome they take the
  * row's width, above a lying one the column's height — and the chromosomes are
  * fitted **along**: the longest fills the room it runs in, and the rest are
- * drawn to its scale.
+ * drawn to its scale. Through a camera, that picture is then magnified both ways
+ * and moved under the window ({@link KaryotypeOptions.camera}).
  */
 export function layoutKaryotype(
   sequences: readonly KaryotypeSequence[],
@@ -191,31 +294,130 @@ export function layoutKaryotype(
   const factor = fitted(laneGap)
   // Whole pixels, so two lanes' shared edge is one edge and not two blurred
   // ones; and never under the floor, past which the picture is better wider.
-  const lanes = options.lanes.map((size) =>
+  const fitting = options.lanes.map((size) =>
     size <= 0 ? 0 : factor >= 1 ? size : Math.max(KARYOTYPE_LANE_FLOOR, Math.floor(size * factor)),
   )
-  const extent = KARYOTYPE_GUTTER + options.body + lanes.reduce((sum, size) => sum + (size > 0 ? size + laneGap : 0), 0)
+  const extentOf = (body: number, lanes: readonly number[]): number =>
+    KARYOTYPE_GUTTER + body + lanes.reduce((sum, size) => sum + (size > 0 ? size + laneGap : 0), 0)
 
   const longest = sequences.reduce((most, sequence) => Math.max(most, sequence.unitEnd - sequence.unitStart), 0)
   const alongStart = vertical ? options.top + options.names : KARYOTYPE_PAD + options.names
   const alongRoom =
     options.length ??
     (vertical ? options.height - alongStart - KARYOTYPE_PAD : options.width - alongStart - KARYOTYPE_PAD)
-  const length = Math.max(MIN_LENGTH, alongRoom)
+  const resting = Math.max(MIN_LENGTH, alongRoom)
+
+  // The camera's magnification. Along, to a base a pixel. Across, until one
+  // column is the whole room: past that a column is wider than the window, and
+  // the far side of its last lane is somewhere nobody can see.
+  const camera = options.camera
+  const most = Math.max(1, (KARYOTYPE_FINEST * Math.max(1, longest)) / resting)
+  const zoom = Math.min(most, Math.max(1, camera?.zoom ?? 1))
+  const restPitch = extentOf(options.body, fitting) + options.gap
+  const across = Math.max(1, Math.min(zoom, (room + options.gap) / restPitch))
+  const pitch = restPitch * across
+  // The chromosome thickens with its column, to {@link BODY_ZOOM}; the lanes
+  // take the rest of the column, each its share of what they had at rest.
+  const bodyWidth = across > 1 ? Math.round(options.body * Math.min(across, BODY_ZOOM)) : options.body
+  const held = fitting.reduce((sum, size) => sum + size, 0)
+  const spare = pitch - options.gap - KARYOTYPE_GUTTER - bodyWidth - laneGap * drawn
+  const lanes =
+    across > 1 && held > 0
+      ? fitting.map((size) => (size <= 0 ? 0 : Math.max(size, Math.floor((size * spare) / held))))
+      : fitting
+  const extent = extentOf(bodyWidth, lanes)
+  const length = resting * zoom
   const perUnit = length / Math.max(1, longest)
-  const crossTotal = count * extent + (count - 1) * options.gap
+  const crossTotal = count * pitch - options.gap
+  const width = vertical ? 2 * KARYOTYPE_PAD + crossTotal : alongStart + length + KARYOTYPE_PAD
+  const height = vertical ? alongStart + length + KARYOTYPE_PAD : options.top + 2 * KARYOTYPE_PAD + crossTotal
+
+  // The window, through a camera: everything under the key, and the
+  // chromosomes in the part of it past their names.
+  const under = { x: 0, y: options.top, width: options.width, height: Math.max(0, options.height - options.top) }
+  const view =
+    camera === undefined
+      ? null
+      : vertical
+        ? { x: 0, y: alongStart, width: options.width, height: Math.max(0, options.height - alongStart) }
+        : { x: alongStart, y: options.top, width: Math.max(0, options.width - alongStart), height: under.height }
+  const origin = {
+    along: alongStart,
+    across: (vertical ? KARYOTYPE_PAD : options.top + KARYOTYPE_PAD) - options.gap / 2,
+  }
+  const partsOf = (body: number, sizes: readonly number[], step: number): number[] => {
+    const inner = [KARYOTYPE_GUTTER, body]
+    for (const size of sizes) if (size > 0) inner.push(laneGap, size)
+    // Lying, the lanes are over the chromosome and the strip under it.
+    const ordered = vertical ? inner : inner.reverse()
+    const used = options.gap / 2 + ordered.reduce((sum, size) => sum + size, 0)
+    return [options.gap / 2, ...ordered, Math.max(0, step - used)]
+  }
+  const columns = { drawn: partsOf(bodyWidth, lanes, pitch), rest: partsOf(options.body, fitting, restPitch) }
+  // The camera's point in the middle of the window, moved no further than the
+  // picture goes. Magnified, a picture smaller than the window may also move
+  // about inside it, so the point under the pointer stays there; at rest it
+  // sits in the window's corner, as it is laid out.
+  const centre = camera?.centre ?? null
+  const wanted = { x: 0, y: 0 }
+  if (view !== null && centre !== null) {
+    const along = origin.along + centre.along * perUnit
+    const acrossAt = origin.across + acrossPixel(columns, pitch, centre.across)
+    wanted.x = (vertical ? acrossAt : along) - (view.x + view.width / 2)
+    wanted.y = (vertical ? along : acrossAt) - (view.y + view.height / 2)
+  }
+  const hold = (pan: number, picture: number, window: number): number =>
+    Math.max(zoom > 1 ? Math.min(0, picture - window) : 0, Math.min(Math.max(0, picture - window), pan))
+  const pan = { x: hold(wanted.x, width, options.width), y: hold(wanted.y, height, options.height) }
+  const panAlong = vertical ? pan.y : pan.x
+  const panAcross = vertical ? pan.x : pan.y
+  const boxOf = (box: ChromosomePlace['box']): ChromosomePlace['box'] => {
+    if (camera === undefined) return box
+    const x0 = Math.max(box.x, under.x)
+    const y0 = Math.max(box.y, under.y)
+    const x1 = Math.min(box.x + box.width, under.x + under.width)
+    const y1 = Math.min(box.y + box.height, under.y + under.height)
+    return { x: x0, y: y0, width: Math.max(0, x1 - x0), height: Math.max(0, y1 - y0) }
+  }
+
+  // A column's stretch of the window, which its name keeps to.
+  const spanOf = (from: number, low: number, high: number): [number, number] => [
+    Math.max(from, low),
+    Math.max(Math.max(from, low), Math.min(from + pitch, high)),
+  ]
 
   const places = sequences.map((sequence, index): ChromosomePlace => {
-    const cross = (vertical ? KARYOTYPE_PAD : options.top + KARYOTYPE_PAD) + index * (extent + options.gap)
-    const along0 = alongStart
+    const cross = (vertical ? KARYOTYPE_PAD : options.top + KARYOTYPE_PAD) + index * pitch - panAcross
+    const along0 = alongStart - panAlong
     const along1 = along0 + (sequence.unitEnd - sequence.unitStart) * perUnit
-    const frameOf = (acrossFrom: number, thickness: number): LaneFrame => ({
+    // What of it the window shows, along — the lanes are cut to it, and the
+    // body to it and its own thickness either side — and whether it shows any.
+    const seen0 = view === null ? along0 : Math.max(along0, vertical ? view.y : view.x)
+    const seen1 =
+      view === null
+        ? along1
+        : Math.max(seen0, Math.min(along1, vertical ? view.y + view.height : view.x + view.width))
+    const reach = view === null ? 0 : bodyWidth
+    const body0 = Math.max(along0, Math.min(seen0, along1) - reach)
+    const body1 = Math.max(body0, Math.min(along1, seen1 + reach))
+    const visible =
+      view === null ||
+      (seen1 > seen0 &&
+        (vertical
+          ? cross + extent > view.x && cross < view.x + view.width
+          : cross + extent > view.y && cross < view.y + view.height))
+    const toPixel = (unit: number): number => along0 + (unit - sequence.unitStart) * perUnit
+    const toUnit = (pixel: number): number => sequence.unitStart + (pixel - along0) / perUnit
+    // A frame's ends exactly, where it runs to the chromosome's.
+    const unitAt = (pixel: number): number =>
+      pixel <= along0 ? sequence.unitStart : pixel >= along1 ? sequence.unitEnd : toUnit(pixel)
+    const frameOf = (acrossFrom: number, thickness: number, from: number, to: number): LaneFrame => ({
       orientation: vertical ? 'right' : 'top',
-      toPixel: (unit) => along0 + (unit - sequence.unitStart) * perUnit,
-      toUnit: (pixel) => sequence.unitStart + (pixel - along0) / perUnit,
-      domain: [sequence.unitStart, sequence.unitEnd],
-      alongFrom: along0,
-      alongTo: along1,
+      toPixel,
+      toUnit,
+      domain: [unitAt(from), unitAt(to)],
+      alongFrom: from,
+      alongTo: to,
       acrossFrom,
       thickness,
     })
@@ -224,11 +426,11 @@ export function layoutKaryotype(
       // right of the one before — `acrossFrom` is a lane's edge nearest the
       // chromosome, and across runs rightward from it.
       const near = cross + KARYOTYPE_GUTTER
-      const body = frameOf(near, options.body)
-      let at = near + options.body
+      const body = frameOf(near, bodyWidth, body0, body1)
+      let at = near + bodyWidth
       const frames = lanes.map((thickness) => {
         if (thickness > 0) at += laneGap
-        const frame = frameOf(at, thickness)
+        const frame = frameOf(at, thickness, seen0, seen1)
         at += thickness
         return frame
       })
@@ -240,29 +442,33 @@ export function layoutKaryotype(
         along1,
         body,
         lanes: frames,
+        visible,
         across: [cross, cross + extent],
-        box: {
+        box: boxOf({
           x: cross - options.gap / 2,
           y: options.top,
-          width: extent + options.gap,
-          height: options.names + length,
-        },
+          width: pitch,
+          height: options.names + length - panAlong,
+        }),
+        // Over its column, and held there — at the window's top — while the
+        // chromosomes move under it.
         name: {
-          x: near + options.body / 2,
+          x: near + bodyWidth / 2,
           y: options.top + options.names / 2,
           align: 'center',
-          width: extent + options.gap - 2,
+          width: pitch - 2,
+          ...(view === null ? {} : { span: spanOf(cross - options.gap / 2, view.x, view.x + view.width) }),
         },
       }
     }
     // Lying: the lanes above, the chromosome under them, the anchors' strip
     // under it — `acrossFrom` is a lane's lower edge, and across runs upward.
     const floor = cross + extent - KARYOTYPE_GUTTER
-    const body = frameOf(floor, options.body)
-    let at = floor - options.body
+    const body = frameOf(floor, bodyWidth, body0, body1)
+    let at = floor - bodyWidth
     const frames = lanes.map((thickness) => {
       if (thickness > 0) at -= laneGap
-      const frame = frameOf(at, thickness)
+      const frame = frameOf(at, thickness, seen0, seen1)
       at -= thickness
       return frame
     })
@@ -274,18 +480,22 @@ export function layoutKaryotype(
       along1,
       body,
       lanes: frames,
+      visible,
       across: [cross, cross + extent],
-      box: {
+      box: boxOf({
         x: 0,
         y: cross - options.gap / 2,
-        width: Math.max(options.width, alongStart + length + KARYOTYPE_PAD),
-        height: extent + options.gap,
-      },
+        width: Math.max(options.width, alongStart + length - panAlong + KARYOTYPE_PAD),
+        height: pitch,
+      }),
+      // Before its row, and held there — at the window's left — while the
+      // chromosomes move under it.
       name: {
         x: KARYOTYPE_PAD + options.names - NAME_PAD,
-        y: floor - options.body / 2,
+        y: floor - bodyWidth / 2,
         align: 'right',
         width: Math.max(0, options.names - NAME_PAD),
+        ...(view === null ? {} : { span: spanOf(cross - options.gap / 2, view.y, view.y + view.height) }),
       },
     }
   })
@@ -296,9 +506,48 @@ export function layoutKaryotype(
     lanes,
     factor,
     perUnit,
-    width: vertical ? 2 * KARYOTYPE_PAD + crossTotal : alongStart + length + KARYOTYPE_PAD,
-    height: vertical ? alongStart + length + KARYOTYPE_PAD : options.top + 2 * KARYOTYPE_PAD + crossTotal,
+    width,
+    height,
+    zoom,
+    across,
+    most,
+    pitch,
+    columns,
+    origin,
+    pan,
+    view,
   }
+}
+
+/**
+ * A point within one column carried from one set of its parts to another: as
+ * far into the same part, in proportion. The last part takes whatever is past
+ * the rest.
+ */
+function remap(from: readonly number[], to: readonly number[], offset: number): number {
+  let a = 0
+  let b = 0
+  for (let i = 0; i < from.length; i++) {
+    const size = from[i]
+    if (offset < a + size || i === from.length - 1) return b + (size > 0 ? ((offset - a) / size) * to[i] : 0)
+    a += size
+    b += to[i]
+  }
+  return b
+}
+
+/** How far across a column count is drawn, from the first column's edge. */
+function acrossPixel(columns: KaryotypeLayout['columns'], pitch: number, across: number): number {
+  const column = Math.floor(across)
+  const rest = columns.rest.reduce((sum, size) => sum + size, 0)
+  return column * pitch + remap(columns.rest, columns.drawn, (across - column) * rest)
+}
+
+/** …and the column count a distance across is, from the first column's edge. */
+function acrossCount(columns: KaryotypeLayout['columns'], pitch: number, pixel: number): number {
+  const column = Math.floor(pixel / pitch)
+  const rest = columns.rest.reduce((sum, size) => sum + size, 0)
+  return column + remap(columns.drawn, columns.rest, pixel - column * pitch) / Math.max(1e-9, rest)
 }
 
 /** Between a lying chromosome's name and the chromosome. */
@@ -311,22 +560,38 @@ const NAME_PAD = 8
 /**
  * Trace a chromosome with no bands to draw it by: a bar rounded at both
  * telomeres, as thick as its frame, as long as its sequence — a pill, and the
- * shape every ideogram draws a sequence its cytoBand does not cover.
+ * shape every ideogram draws a sequence its cytoBand does not cover. An end the
+ * frame was cut short of (`ends`) is left square, out of the window, where the
+ * chromosome carries on.
  */
-export function tracePill(ctx: CanvasRenderingContext2D, frame: LaneFrame): void {
+export function tracePill(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  ends: { start: boolean; end: boolean } = { start: true, end: true },
+): void {
   const half = frame.thickness / 2
   const a0 = frame.alongFrom
   const a1 = frame.alongTo
   // A cap is half the thickness, or half the length where the sequence is
   // shorter than it is thick: a plasmid at genome zoom is a dot, not a knot.
   const cap = Math.max(0, Math.min(half, (a1 - a0) / 2))
-  laneMove(ctx, frame, a0 + cap, 0)
-  laneLine(ctx, frame, a1 - cap, 0)
-  laneCurve(ctx, frame, a1, 0, a1, half)
-  laneCurve(ctx, frame, a1, frame.thickness, a1 - cap, frame.thickness)
-  laneLine(ctx, frame, a0 + cap, frame.thickness)
-  laneCurve(ctx, frame, a0, frame.thickness, a0, half)
-  laneCurve(ctx, frame, a0, 0, a0 + cap, 0)
+  const c0 = ends.start ? cap : 0
+  const c1 = ends.end ? cap : 0
+  laneMove(ctx, frame, a0 + c0, 0)
+  laneLine(ctx, frame, a1 - c1, 0)
+  if (c1 > 0) {
+    laneCurve(ctx, frame, a1, 0, a1, half)
+    laneCurve(ctx, frame, a1, frame.thickness, a1 - c1, frame.thickness)
+  } else {
+    laneLine(ctx, frame, a1, frame.thickness)
+  }
+  laneLine(ctx, frame, a0 + c0, frame.thickness)
+  if (c0 > 0) {
+    laneCurve(ctx, frame, a0, frame.thickness, a0, half)
+    laneCurve(ctx, frame, a0, 0, a0 + c0, 0)
+  } else {
+    laneLine(ctx, frame, a0, 0)
+  }
   ctx.closePath()
 }
 
@@ -377,18 +642,22 @@ export interface ChromosomePaint {
  * Its cytoBand's where one covers it and the fill is the bands — the same
  * `drawIdeogram` the karyotype lane is drawn by, at the frame's whole
  * thickness. Otherwise the fill is clipped to the outline, the cytoBand's or
- * the pill's, and the outline edged once over it in the plot's ink.
+ * the pill's, and the outline edged once over it in the plot's ink. In its
+ * body's frame, which a camera cuts to the window: an end cut off is out of
+ * view, and is not rounded.
  */
-export function drawChromosome(ctx: CanvasRenderingContext2D, frame: LaneFrame, paint: ChromosomePaint): void {
+export function drawChromosome(ctx: CanvasRenderingContext2D, place: ChromosomePlace, paint: ChromosomePaint): void {
+  const frame = place.body
   const bands = paint.bands
   if (paint.fill.kind === 'bands' && bands !== null && bands.layout.placements.length > 0) {
     drawIdeogram(ctx, frame, bands.set, bands.layout, bands.paint, frame.thickness)
     return
   }
+  const ends = { start: frame.alongFrom <= place.along0, end: frame.alongTo >= place.along1 }
   const trace = (): void => {
     ctx.beginPath()
     const traced = bands === null ? 0 : traceIdeogramOutline(ctx, frame, bands.set, bands.layout, frame.thickness)
-    if (traced === 0) tracePill(ctx, frame)
+    if (traced === 0) tracePill(ctx, frame, ends)
   }
   ctx.save()
   ctx.globalAlpha = paint.opacity
@@ -417,7 +686,12 @@ export function drawChromosome(ctx: CanvasRenderingContext2D, frame: LaneFrame, 
       ctx.fillStyle = ink
       ctx.beginPath()
       for (let i = 0; i < alongs.length; i += 2) {
-        const [bx, by, bw, bh] = laneRect(frame, alongs[i], alongs[i + 1], 0, frame.thickness)
+        // To the frame, which a feature as long as a chromosome arm runs far
+        // past at a high magnification.
+        const from = Math.max(alongs[i], frame.alongFrom)
+        const to = Math.min(alongs[i + 1], frame.alongTo)
+        if (!(to >= from)) continue
+        const [bx, by, bw, bh] = laneRect(frame, from, to, 0, frame.thickness)
         ctx.rect(bx, by, bw, bh)
       }
       ctx.fill()
@@ -482,6 +756,16 @@ export function drawTransArcs(
     chosen.length = TRANS_CAP
   }
   const vertical = layout.orientation === 'vertical'
+  // Through a camera, a curve that cannot cross the window is not drawn: its
+  // control points share their ends' coordinates, so it stays inside the box
+  // its two ends span, and a box that misses the window is a curve that does.
+  const view = layout.view
+  const misses = (a: { x: number; y: number }, b: { x: number; y: number }): boolean =>
+    view !== null &&
+    (Math.max(a.x, b.x) < view.x ||
+      Math.min(a.x, b.x) > view.x + view.width ||
+      Math.max(a.y, b.y) < view.y ||
+      Math.min(a.y, b.y) > view.y + view.height)
   ctx.save()
   ctx.strokeStyle = paint.colour
   ctx.globalAlpha = paint.opacity * 0.5
@@ -491,7 +775,7 @@ export function drawTransArcs(
   for (const i of chosen) {
     const a = pointOn(byContig.get(pairs.contigs[pairs.contig1[i]]), axis, pairs.contigs[pairs.contig1[i]], (pairs.start1[i] + pairs.end1[i]) / 2)
     const b = pointOn(byContig.get(pairs.contigs[pairs.contig2[i]]), axis, pairs.contigs[pairs.contig2[i]], (pairs.start2[i] + pairs.end2[i]) / 2)
-    if (a === null || b === null) continue
+    if (a === null || b === null || misses(a, b)) continue
     ctx.moveTo(a.x, a.y)
     if (vertical) {
       const mid = (a.x + b.x) / 2
@@ -628,9 +912,24 @@ export function drawChromosomeNames(
   ctx.save()
   ctx.font = font
   ctx.textBaseline = 'middle'
+  // Half a line, for a lying chromosome's name kept inside its row.
+  const half = (Number.parseFloat(/(\d+(?:\.\d+)?)px/.exec(font)?.[1] ?? '11') * 0.6)
   for (const place of layout.places) {
-    const { x, y, align, width } = place.name
+    const { align, width, span } = place.name
+    let { x, y } = place.name
     if (width < 4) continue
+    // Through a camera, slid along its column's stretch of the window to stay
+    // in sight while any of the column is: the lanes still say whose they are
+    // once the chromosome itself has gone past the edge. A chromosome nothing
+    // of which is in the window — a short one ended above it — is not named
+    // over the paper it left.
+    if (span !== undefined) {
+      if (!place.visible) continue
+      const reach = layout.orientation === 'vertical' ? Math.min(ctx.measureText(place.contig).width, width) / 2 : half
+      if (span[1] - span[0] < 2 * reach) continue
+      if (layout.orientation === 'vertical') x = Math.max(span[0] + reach, Math.min(span[1] - reach, x))
+      else y = Math.max(span[0] + reach, Math.min(span[1] - reach, y))
+    }
     ctx.textAlign = align
     ctx.fillStyle = place.contig === lit ? accent : colour
     ctx.fillText(place.contig, x, y, width)
@@ -700,19 +999,69 @@ export function drawKaryotypeSelection(
   const high = Math.max(anchor, moving)
   const [first, last] = anchor <= moving ? [selection.start, selection.end] : [selection.end, selection.start]
   const h = selection.chipHeight
+  // Through a camera, inside the window: a magnified column runs past its
+  // edges, and a chip written where the column ends is written nowhere.
+  const view = layout.view
+  const inX = (x: number, width: number): number =>
+    view === null ? x : Math.max(view.x + 2, Math.min(view.x + view.width - width - 2, x))
+  const inY = (y: number): number => (view === null ? y : Math.max(view.y + 2, Math.min(view.y + view.height - h - 2, y)))
   if (layout.orientation === 'vertical') {
     // Right of the chromosome's last lane, each chip level with its own end:
     // the low end's above its rule, the high end's below its own.
-    const x = place.across[1] + 4
-    chip(first, x, low - h - 2)
-    chip(last, x, high + 2)
-    if (high - low > 2 * h + 6) chip(selection.span, x, (low + high) / 2 - h / 2)
+    const widest = Math.max(widthOf(first), widthOf(last), widthOf(selection.span))
+    const x = inX(place.across[1] + 4, widest)
+    chip(first, x, inY(low - h - 2))
+    chip(last, x, inY(high + 2))
+    if (high - low > 2 * h + 6) chip(selection.span, x, inY((low + high) / 2 - h / 2))
   } else {
     // Over the chromosome's lanes, each chip outside its own end.
-    const y = place.across[0] - h - 3
-    chip(first, low - widthOf(first) - 3, y)
-    chip(last, high + 3, y)
-    if (high - low > widthOf(selection.span) + 8) chip(selection.span, (low + high) / 2 - widthOf(selection.span) / 2, y - h - 3)
+    const y = inY(place.across[0] - h - 3)
+    chip(first, inX(low - widthOf(first) - 3, widthOf(first)), y)
+    chip(last, inX(high + 3, widthOf(last)), y)
+    if (high - low > widthOf(selection.span) + 8) {
+      chip(selection.span, inX((low + high) / 2 - widthOf(selection.span) / 2, widthOf(selection.span)), inY(y - h - 3))
+    }
+  }
+  ctx.restore()
+}
+
+/**
+ * Where the window is over a picture larger than it, on screen: a thin bar
+ * along the window's foot for the picture's width, and one down its right edge
+ * for its height — a scrollbar's thumb, drawn, which says there is more of the
+ * picture than the window shows and which part of it is shown. Nothing where
+ * the picture fits, and nothing without a camera.
+ */
+export function drawWindowPlace(
+  ctx: CanvasRenderingContext2D,
+  layout: KaryotypeLayout,
+  window: { width: number; height: number },
+  colour: string,
+): void {
+  const view = layout.view
+  if (view === null) return
+  const bar = 3
+  const inset = 2
+  ctx.save()
+  ctx.fillStyle = colour
+  ctx.globalAlpha = 0.35
+  const thumb = (x: number, y: number, width: number, height: number): void => {
+    ctx.beginPath()
+    if (ctx.roundRect === undefined) ctx.rect(x, y, width, height)
+    else ctx.roundRect(x, y, width, height, bar / 2)
+    ctx.fill()
+  }
+  if (layout.width > window.width + 0.5) {
+    const span = view.width - 2 * inset
+    const from = (Math.max(0, layout.pan.x) / layout.width) * span
+    const to = (Math.min(layout.width, layout.pan.x + window.width) / layout.width) * span
+    thumb(view.x + inset + from, view.y + view.height - bar - inset, Math.max(bar, to - from), bar)
+  }
+  if (layout.height > window.height + 0.5) {
+    const span = view.height - 2 * inset
+    const from = (Math.max(0, layout.pan.y) / layout.height) * span
+    const to = (Math.min(layout.height, layout.pan.y + window.height) / layout.height) * span
+    thumb(view.x + view.width - bar - inset, view.y + inset + from, bar, Math.max(bar, to - from))
   }
   ctx.restore()
 }
@@ -760,4 +1109,74 @@ export function laneIndexAt(layout: KaryotypeLayout, place: ChromosomePlace, x: 
   if (within(place.body)) return -1
   const index = place.lanes.findIndex(within)
   return index < 0 ? null : index
+}
+
+// ---------------------------------------------------------------------------
+// The camera
+// ---------------------------------------------------------------------------
+
+/** The point of the picture at a point of the window (or of the picture, laid out without a camera). */
+export function pointAt(layout: KaryotypeLayout, x: number, y: number): KaryotypePoint {
+  const vertical = layout.orientation === 'vertical'
+  const along = (vertical ? y + layout.pan.y : x + layout.pan.x) - layout.origin.along
+  const across = (vertical ? x + layout.pan.x : y + layout.pan.y) - layout.origin.across
+  return { along: along / layout.perUnit, across: acrossCount(layout.columns, layout.pitch, across) }
+}
+
+/** Where a point of the picture is drawn: in the window (or in the picture, laid out without a camera). */
+export function pixelOf(layout: KaryotypeLayout, point: KaryotypePoint): { x: number; y: number } {
+  const along = layout.origin.along + point.along * layout.perUnit
+  const across = layout.origin.across + acrossPixel(layout.columns, layout.pitch, point.across)
+  return layout.orientation === 'vertical'
+    ? { x: across - layout.pan.x, y: along - layout.pan.y }
+    : { x: along - layout.pan.x, y: across - layout.pan.y }
+}
+
+/** The middle of the window the chromosomes are seen in — of the whole picture, laid out without a camera. */
+export function middleOf(layout: KaryotypeLayout): { x: number; y: number } {
+  const view = layout.view ?? { x: 0, y: 0, width: layout.width, height: layout.height }
+  return { x: view.x + view.width / 2, y: view.y + view.height / 2 }
+}
+
+/** The camera a layout was drawn through, its point in the middle as the picture held it. */
+export function cameraOf(layout: KaryotypeLayout): KaryotypeCamera {
+  const middle = middleOf(layout)
+  return { zoom: layout.zoom, centre: pointAt(layout, middle.x, middle.y) }
+}
+
+/**
+ * The camera that magnifies the picture to `zoom` about a point of the window,
+ * what is under that point staying there (§5.10). `layout` is the picture on
+ * screen, and `relayout` lays the same picture out at another magnification.
+ * The zoom is held to what the picture allows — one at the least, a base a
+ * pixel at the most — and the point in the middle to what it can show there
+ * when it is laid out.
+ */
+export function zoomAbout(
+  layout: KaryotypeLayout,
+  x: number,
+  y: number,
+  zoom: number,
+  relayout: (zoom: number) => KaryotypeLayout,
+): KaryotypeCamera {
+  const point = pointAt(layout, x, y)
+  const next = Math.min(layout.most, Math.max(1, zoom))
+  // Magnified from its corner, the point is somewhere in the picture: moved
+  // so it is back under the pointer, the window's middle is over the point
+  // the camera is to be held on.
+  const magnified = relayout(next)
+  const at = pixelOf(magnified, point)
+  const moved = { ...magnified, pan: { x: magnified.pan.x + at.x - x, y: magnified.pan.y + at.y - y } }
+  const middle = middleOf(moved)
+  return { zoom: next, centre: pointAt(moved, middle.x, middle.y) }
+}
+
+/**
+ * The camera moved by a drag of `(dx, dy)` pixels, or a scroll: the picture
+ * follows the hand, so the point now in the middle is the one that was that
+ * far the other way.
+ */
+export function panBy(layout: KaryotypeLayout, dx: number, dy: number): KaryotypeCamera {
+  const middle = middleOf(layout)
+  return { zoom: layout.zoom, centre: pointAt(layout, middle.x - dx, middle.y - dy) }
 }

@@ -26,8 +26,15 @@
  * a drag along it giving the map back on that stretch, Back and the switch off
  * giving it back where it was. Then the human demo's chrX alone and its whole
  * karyotype, and the
- * dark theme. Prints what each step found: the hash, the summary, the card's
- * rows, the readout.
+ * dark theme. Then the camera, `iz…`: the wheel over IV magnifying it in
+ * steps — the neighbours leaving the window, the names held at its top — IV
+ * coloured by ATAC close up, with the colour scale in the corner and no box
+ * round it, a drag moving the picture, a sideways scroll, Shift-drag choosing a
+ * stretch while magnified, the figure saved as the window frames it, the wheel
+ * back to every chromosome whole, the lying picture magnified about VII, and
+ * the human karyotype magnified about chromosome 7. Prints what each step
+ * found: the hash, the summary, the card's rows, the readout, the
+ * magnification and the cursor.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-ideogram-view.mjs [out-dir]
@@ -134,6 +141,23 @@ const pointOf = (contig, fraction) =>
       ? { x: canvas.left + place.body, y: canvas.top + along }
       : { x: canvas.left + along, y: canvas.top + place.body }
   }, { contig, fraction })
+/** The wheel, turned over a point: negative towards the reader, magnifying. */
+const wheel = async (point, deltaY, times = 1, deltaX = 0) => {
+  await page.mouse.move(point.x, point.y)
+  for (let i = 0; i < times; i++) {
+    await page.mouse.wheel(deltaX, deltaY)
+    await sleep(60)
+  }
+}
+const zoomOf = () => page.evaluate(() => document.querySelector('.view-browser')?.dataset.karyotypeZoom ?? '')
+const cursor = () => page.evaluate(() => getComputedStyle(document.querySelector('.browser-canvas')).cursor)
+const inWindow = () =>
+  page.evaluate(() =>
+    JSON.parse(document.querySelector('.view-browser')?.dataset.karyotype ?? '[]')
+      .filter((place) => place.visible)
+      .map((place) => place.contig)
+      .join(' '),
+  )
 const saveAs = async (name, extension = 'png') => {
   const before = await page.evaluate(() => window.__files.length)
   await exportCard().locator('.export-acts button').first().click()
@@ -346,6 +370,118 @@ try {
   await saveAs('iv16-figure-coloured-by-atac', 'pdf')
   await colourBy().selectOption({ label: 'bands' })
   await sleep(1000)
+
+  // -------------------------------------------------------------------------
+  // The camera: the wheel magnifies about the pointer, a drag moves
+  // -------------------------------------------------------------------------
+  await page.mouse.move(5, 5)
+  await sleep(1500)
+  const atIv = await pointOf('IV', 0.62)
+  if (atIv !== null) {
+    console.log('rest:', await zoomOf(), '· in the window:', await inWindow(), '· cursor on IV', await (async () => {
+      await page.mouse.move(atIv.x, atIv.y)
+      await sleep(300)
+      return cursor()
+    })())
+    await wheel(atIv, -100, 3)
+    await sleep(3000)
+    console.log('three notches:', await zoomOf(), '· in the window:', await inWindow(), '· cursor', await cursor(), '·', await summary())
+    await shot('iz01-three-notches-over-iv')
+    await wheel(atIv, -100, 5)
+    await sleep(3000)
+    console.log('eight notches:', await zoomOf(), '· in the window:', await inWindow())
+    console.log('card:', await tip())
+    await shot('iz02-eight-notches-iv-and-its-neighbours-leaving')
+    await wheel(atIv, -100, 6)
+    await sleep(3500)
+    console.log('fourteen notches:', await zoomOf(), '· in the window:', await inWindow(), '·', await summary())
+    await shot('iz03-fourteen-notches-iv-fills-the-window')
+
+    // Coloured by ATAC, close up: the fill read at the resolution it is drawn at, the scale unboxed.
+    await colourBy().selectOption({ label: 'ATAC' })
+    await sleep(3500)
+    await page.mouse.move(atIv.x, atIv.y)
+    await sleep(500)
+    await shot('iz04-iv-coloured-by-atac-close-up')
+    await page.screenshot({ path: `${OUT}/iz05-the-colour-scale-unboxed.png`, clip: { x: 1060, y: 205, width: 240, height: 70 } })
+    console.log('shot iz05-the-colour-scale-unboxed')
+    await colourBy().selectOption({ label: 'bands' })
+    await sleep(2500)
+
+    // A drag moves the picture: the hand closed while it is held.
+    await page.mouse.move(atIv.x, atIv.y)
+    await page.mouse.down()
+    await page.mouse.move(atIv.x - 120, atIv.y - 160, { steps: 6 })
+    await sleep(400)
+    console.log('cursor while dragging:', await cursor())
+    await shot('iz06-a-drag-moves-the-picture')
+    await page.mouse.up()
+    await sleep(3000)
+    console.log('after the drag:', await zoomOf(), '· in the window:', await inWindow(), '·', await hash())
+
+    // A sideways scroll moves the chromosomes left and right.
+    await wheel(atIv, 0, 4, -90)
+    await sleep(3000)
+    await page.mouse.move(atIv.x, atIv.y + 20)
+    await sleep(500)
+    console.log('after the sideways scroll:', await inWindow())
+    await shot('iz07-a-sideways-scroll')
+
+    // Shift-drag along IV, magnified: a stretch, opened in the browser.
+    const s0 = await pointOf('IV', 0.6)
+    const s1 = await pointOf('IV', 0.64)
+    if (s0 !== null && s1 !== null) {
+      await page.keyboard.down('Shift')
+      await page.mouse.move(s0.x, s0.y)
+      await page.mouse.down()
+      await page.mouse.move(s1.x, (s0.y + s1.y) / 2, { steps: 4 })
+      await page.mouse.move(s1.x, s1.y, { steps: 4 })
+      await sleep(400)
+      await shot('iz08-shift-drag-chooses-a-stretch')
+      await page.mouse.up()
+      await page.keyboard.up('Shift')
+      await sleep(4000)
+      await page.mouse.move(5, 5)
+      console.log('after the shift-drag:', await hash())
+      await shot('iz09-the-stretch-in-the-browser')
+      await page.goBack()
+      await sleep(4000)
+      console.log('back:', await zoomOf(), '·', await hash())
+    }
+
+    // Magnified again, and saved as the window frames it.
+    const again = await pointOf('IV', 0.62)
+    if (again !== null) {
+      await wheel(again, -100, 10)
+      await sleep(3500)
+      await page.mouse.move(5, 5)
+      await exportCard().locator('select.select-format').selectOption('png')
+      await saveAs('iz10-figure-of-the-window')
+      // The zoom bar's buttons over the ideogram, and the wheel back to every chromosome whole.
+      console.log('zoom buttons:', await page.locator('.zoom-steps button').evaluateAll((nodes) => nodes.map((node) => `${node.disabled ? 'off' : 'on'}: ${node.title}`).join(' | ')))
+      await wheel(again, 100, 40)
+      await sleep(3000)
+      await page.mouse.move(5, 5)
+      console.log('wheel back:', await zoomOf(), '· in the window:', await inWindow())
+      console.log('zoom buttons at rest:', await page.locator('.zoom-steps button').evaluateAll((nodes) => nodes.map((node) => (node.disabled ? 'off' : 'on')).join(' ')))
+      await shot('iz11-back-to-every-chromosome-whole')
+    }
+
+    // Lying, magnified about VII.
+    await flipSwitch().click()
+    await sleep(3500)
+    const lying = await pointOf('VII', 0.4)
+    if (lying !== null) {
+      await wheel(lying, -100, 9)
+      await sleep(3500)
+      await page.mouse.move(lying.x, lying.y)
+      await sleep(500)
+      console.log('lying, magnified:', await zoomOf(), '· in the window:', await inWindow())
+      await shot('iz12-lying-magnified-about-vii')
+    }
+    await flipSwitch().click()
+    await sleep(2500)
+  }
 } finally {
   rmSync(probe, { force: true })
   rmSync(transFile, { force: true })
@@ -425,6 +561,22 @@ await sleep(6000)
 await page.mouse.move(5, 5)
 console.log('human, whole genome:', await summary())
 await shot('iv25-human-karyotype')
+// The human karyotype magnified about chromosome 7: its neighbours leave the window on either side.
+const chr7 = await pointOf('chr7', 0.45)
+if (chr7 !== null) {
+  await wheel(chr7, -100, 6)
+  await sleep(4000)
+  await page.mouse.move(chr7.x, chr7.y)
+  await sleep(500)
+  console.log('human, magnified:', await zoomOf(), '· in the window:', await inWindow())
+  await shot('iz13-human-magnified-about-chr7')
+  await wheel(chr7, -100, 8)
+  await sleep(4000)
+  await page.mouse.move(chr7.x, chr7.y)
+  await sleep(500)
+  console.log('human, closer:', await zoomOf(), '· in the window:', await inWindow(), '·', await tip())
+  await shot('iz14-human-chr7-close')
+}
 
 page = await fresh('dark')
 await page.goto(`${BASE}/?dev&config=${BASE}/demo/human/Human_chrX_RNA.chromosomix.json`)

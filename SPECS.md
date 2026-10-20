@@ -1754,10 +1754,13 @@ area, line, bars, points, heatmap, ribbon — a gene model, a peak set, a juncti
 set's arcs. A lane right of a standing chromosome is the right-hand stack beside a map, and a lane
 above a lying one is the top stack: two of the four edges §8.9 already covers. Every lane is read
 through the browser's own fill at the resolution it is drawn at — one read of the whole axis, at as
-many pixels as the chromosomes are long together — and every track has **one axis over every
-chromosome**: a peak on chromosome 1 and one on chromosome 21 are drawn against the same ceiling,
-which is ideogram.js's *absolute* histogram scaling and the only reading under which two chromosomes
-can be compared. Groups are resolved over every chromosome too (§8.8).
+many pixels as the chromosomes are long together; magnified twice or more (below), a read of each
+chromosome in the window for its own stretch there, at the pixels it is drawn across, the whole
+axis's read standing in until it lands, and nothing for a chromosome out of the window — and every
+track has **one axis over every chromosome** on screen: a peak on chromosome 1 and one on chromosome
+21 are drawn against the same ceiling, which is ideogram.js's *absolute* histogram scaling and the
+only reading under which two chromosomes can be compared. Groups are resolved over every chromosome
+too (§8.8).
 
 **Fitted to the window, and never past the browser's heights.** *Tracks — fitted to the window*, the
 default, shrinks every lane by **one factor** until the row (or the column) fits the room, and never
@@ -1765,8 +1768,8 @@ grows one past its height in the browser, which is the height its reader chose. 
 keep a pixel between them rather than the gap they have at their own heights — three pixels of air
 beside a lane four wide is most of the row — and no lane is drawn under **four pixels**, where a
 heatmap is still a colour and a profile still a shape: past that the picture is wider than the room
-and the stage **scrolls**, which beats a row of hairlines that only say a track is there. *As tall as
-in the browser* keeps every lane's height and lets the picture run past the room.
+and is **moved under the window** (below), which beats a row of hairlines that only say a track is
+there. *As tall as in the browser* keeps every lane's height and lets the picture run past the room.
 
 **The key** is over the chromosomes: a line for each slot, left to right and onto a second row where
 the first is full, written by the lane label the browser writes beside a lane — the names, the chip
@@ -1788,7 +1791,10 @@ it is the card's **colour by**:
   of a chromosome nearly black. The key's top-right corner then holds the **colour scale** — the
   map's own key (`drawKey`, §7.1), at the pictures' text size, the track's name over its two limits and
   the ramp between them, turned where the track is flipped — so a figure says what a colour on a
-  chromosome means, as one of a map does; and the summary ends `· coloured by ATAC`;
+  chromosome means, as one of a map does. With **no box** round it: a map's key is boxed to be read
+  over the cells under it, and this one is on paper beside the lane labels, which are words with no
+  frame; the ramp keeps its own edge, which is what shows its white end on white paper. The summary
+  ends `· coloured by ATAC`;
 - **a feature set**, shown or not: its features in their own colours (§8.16) over the plain colour —
   compartments, chromatin states, a peak set.
 
@@ -1830,9 +1836,39 @@ axis, or its block of the map; a drag along it draws the browser's selection tur
 chromosome — a wash, a rule at each end, a chip naming each end and the span between them — held to
 the chromosome the drag began on, and the release opens that stretch. Either is **one step** in the
 view state, the ideogram put away and the window named together, so Back comes back to the ideogram.
-The zoom buttons are greyed with the reason — the ideogram draws every chromosome whole — and a locus
-typed in the box opens it the same way. While a mark is being placed (§8.1), the press is its place
-and the drag its box, as in the browser.
+A locus typed in the box opens it the same way. While a mark is being placed (§8.1), the press is its
+place and the drag its box, as in the browser.
+
+**The wheel magnifies, a drag moves.** Up and down, the wheel magnifies the picture **about the
+pointer**, gradually, and **both ways from one factor**: along, every chromosome longer on the one
+scale; across, every column wider — the chromosome thicker, to twice its width, which is thick enough
+to name its bands in, and its lanes taking the rest of the column, each its share of what it had — so
+the chromosome under the pointer grows into the window while its neighbours leave it on either side.
+What is under the pointer stays under it: the same base, on the same part of the same chromosome —
+its body, a third of the way into its second lane — however unevenly those parts grow, short of the
+picture's edge, past which the picture is not moved. Across stops once one column is the whole room,
+since a column wider than the window is a lane whose far side nobody can see; along stops at a base a
+pixel, past which a chromosome is opened rather than magnified; and back down, the wheel stops at
+every chromosome whole. Sideways, or with Shift, the wheel moves the chromosomes left and right.
+Magnified, a **drag moves the picture** — the open hand over it, closed while it is held — and a press
+that does not travel still opens the chromosome under it; a stretch is chosen with **Shift or Option**
+held, as in the browser (§5.8). At rest a drag on a chromosome chooses its stretch, as above, and a
+drag on the paper moves a picture larger than the window. The **key stays put** and the **names are
+held at the window's edge** — over the columns standing, before the rows lying — while the
+chromosomes move under them, each name sliding along its column's stretch of the window to stay in
+sight while any of its column is, and left off where none of its chromosome is in the window. Where
+the picture is larger than the window — magnified, or at rest with more chromosomes than it holds — a
+thin bar along the window's foot and one down its right edge say which part of it is shown, as a
+scrollbar's thumb does; the chips naming a stretch's ends are kept inside the window. The
+bar's zoom buttons, `+` and `−` with the picture focused, magnify it about the middle of the window —
+greyed at either end, with the reason — the arrows move it a fifth of the window, and `0`, `W` and the
+palette's *Whole genome* put every chromosome whole again, leaving the browser's window where it was.
+The summary over the picture says how far it is magnified: `ideogram · 16 sequences · 12.11 Mb · 148
+bp per pixel · magnified 16×`. Magnified, the card's last line says what a press does there: `click to
+open this chromosome · drag to move · Shift + drag along it for a stretch`. The camera is the window's, not the link's: the ideogram
+opens at rest, flipped or drawing other chromosomes it starts again at rest, and through anything
+else that lays it out again — a look, a track, the window's size — it is held by the point of the
+picture in the middle of the window.
 
 **One card: the Tracks card.** There is no card of the ideogram's own: the Tracks card carries its
 rows, as a picture's card carries the rows of each picture it can draw, each set shown while its
@@ -1851,9 +1887,10 @@ memory, and in a saved workspace (`SessionConfig.ideogram`, read field by field,
 bounds, optional so an older workspace opens unchanged).
 
 **The figure** is the ideogram: the Export card's PNG and PDF draw the key, the names, the
-chromosomes, their lanes, the curves and the marks, at the picture's own extent — wider than the
-window where it scrolls — without the hairline and the drag, under the caption the browser's export
-writes (§7.2).
+chromosomes, their lanes, the curves and the marks — at rest at the picture's own extent, wider than
+the window where it does not fit in one, and magnified the window as the reader framed it — without
+the hairline, the drag and the window's bars, under the caption the browser's export writes (§7.2),
+which carries the summary's magnification where there is one.
 
 ---
 

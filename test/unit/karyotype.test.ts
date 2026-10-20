@@ -16,16 +16,26 @@ import { describe, expect, it } from 'vitest'
 
 import type { PairSet } from '@/annotations/types'
 import {
+  BODY_ZOOM,
   KARYOTYPE_GUTTER,
   KARYOTYPE_LANE_FLOOR,
   KARYOTYPE_PAD,
+  REST_CAMERA,
   TRANS_CAP,
   alongOf,
+  cameraOf,
   drawTransArcs,
   laneIndexAt,
   layoutKaryotype,
   onSequence,
+  panBy,
+  pixelOf,
   placeAt,
+  pointAt,
+  drawWindowPlace,
+  tracePill,
+  zoomAbout,
+  type KaryotypeCamera,
   type KaryotypeOptions,
   type KaryotypeSequence,
 } from '@/render/karyotype'
@@ -256,6 +266,221 @@ describe('pointing at a chromosome', () => {
     const place = squeezed.places[0]
     const edge = place.body.acrossFrom + place.body.thickness
     expect(laneIndexAt(squeezed, place, edge + 0.5, place.along0 + 10)).not.toBe(0)
+  })
+})
+
+describe('the camera', () => {
+  /** The three a thousand times longer — a megabase, a half and a quarter — room for a magnification. */
+  const LONG: KaryotypeSequence[] = SEQUENCES.map((sequence) => ({
+    ...sequence,
+    unitStart: sequence.unitStart * 1000,
+    unitEnd: sequence.unitEnd * 1000,
+  }))
+  /** …laid out in a window 400 wide through a camera at this magnification and point. */
+  const through = (camera: KaryotypeCamera, over: Partial<KaryotypeOptions> = {}) =>
+    layoutKaryotype(LONG, options({ width: 400, camera, ...over }))
+  const rest = through(REST_CAMERA)
+
+  it('lays the picture out at rest as it is laid out without one', () => {
+    const bare = layoutKaryotype(LONG, options({ width: 400 }))
+    expect(rest.places.map((place) => [place.along0, place.along1, place.body.acrossFrom])).toEqual(
+      bare.places.map((place) => [place.along0, place.along1, place.body.acrossFrom]),
+    )
+    expect(rest.zoom).toBe(1)
+    expect(rest.pan).toEqual({ x: 0, y: 0 })
+    expect(rest.places.every((place) => place.visible)).toBe(true)
+  })
+
+  it('magnifies both ways from one factor: longer on the one scale, every column wider and the chromosome thicker', () => {
+    const twice = through({ zoom: 2, centre: null })
+    expect(twice.perUnit).toBeCloseTo(rest.perUnit * 2)
+    expect(twice.pitch).toBeCloseTo(rest.pitch * 2)
+    expect(twice.places[0].body.thickness).toBe(12 * BODY_ZOOM)
+    // The lanes take the rest of the column, each its share of what it had.
+    const [wide, narrow] = twice.lanes
+    expect(wide).toBeGreaterThan(rest.lanes[0] * 2)
+    expect(wide / narrow).toBeCloseTo(rest.lanes[0] / rest.lanes[1], 1)
+    expect(twice.width).toBeGreaterThan(rest.width * 1.9)
+  })
+
+  it('stops widening a column once it is the whole room, and lengthening one at a base a pixel', () => {
+    const far = through({ zoom: 1e9, centre: null })
+    expect(far.zoom).toBe(far.most)
+    expect(far.perUnit).toBeCloseTo(1)
+    // 400 less the padding is the room a column may take, gap and all.
+    expect(far.pitch).toBeCloseTo(400 - 2 * KARYOTYPE_PAD + 14)
+    expect(far.across).toBeLessThan(far.zoom)
+    expect(far.places[0].body.thickness).toBe(12 * BODY_ZOOM)
+  })
+
+  it('holds what is under the pointer there — the same base, on the same part of the same chromosome', () => {
+    const two = rest.places[1]
+    // On II's body, two thirds of the way down it.
+    const x = two.body.acrossFrom + two.body.thickness / 2
+    const y = two.along0 + (two.along1 - two.along0) * (2 / 3)
+    let layout = rest
+    for (const zoom of [1.5, 4, 30]) {
+      const camera = zoomAbout(layout, x, y, zoom, (next) => through({ zoom: next, centre: null }))
+      layout = through(camera)
+      const place = placeAt(layout, x, y)
+      expect(place?.contig).toBe('II')
+      expect(laneIndexAt(layout, place!, x, y)).toBe(-1)
+      expect(place!.body.toUnit(alongOf(layout, x, y))).toBeCloseTo(two.body.toUnit(y), 0)
+    }
+    // …and in a lane: a third of the way into II's first, the first it stays in.
+    const lane = rest.places[1].lanes[0]
+    const lx = lane.acrossFrom + lane.thickness / 3
+    const ly = rest.places[1].along0 + 30
+    const camera = zoomAbout(rest, lx, ly, 6, (next) => through({ zoom: next, centre: null }))
+    const six = through(camera)
+    const held = placeAt(six, lx, ly)
+    expect(held?.contig).toBe('II')
+    expect(laneIndexAt(six, held!, lx, ly)).toBe(0)
+    expect((lx - held!.lanes[0].acrossFrom) / held!.lanes[0].thickness).toBeCloseTo(1 / 3, 2)
+  })
+
+  it('holds the picture to the window where the point is near its edge, rather than show past it', () => {
+    // The last chromosome's far lane, magnified: the picture's right edge stops at the window's.
+    const lane = rest.places[2].lanes[1]
+    const camera = zoomAbout(rest, lane.acrossFrom + lane.thickness - 1, 200, 3, (next) =>
+      through({ zoom: next, centre: null }),
+    )
+    const layout = through(camera)
+    expect(layout.pan.x).toBeCloseTo(layout.width - 400)
+  })
+
+  it('takes a point of the picture to the window and back', () => {
+    const layout = through({ zoom: 5, centre: { along: 600, across: 1.4 } })
+    const point = pointAt(layout, 123, 345)
+    const back = pixelOf(layout, point)
+    expect(back.x).toBeCloseTo(123)
+    expect(back.y).toBeCloseTo(345)
+    expect(cameraOf(through(cameraOf(layout))).centre?.along).toBeCloseTo(cameraOf(layout).centre?.along ?? 0)
+  })
+
+  it('moves the picture under the window with the hand, and no further than the picture goes', () => {
+    const layout = through({ zoom: 4, centre: null })
+    const moved = through(panBy(layout, -50, -80))
+    expect(moved.pan.x - layout.pan.x).toBeCloseTo(50)
+    expect(moved.pan.y - layout.pan.y).toBeCloseTo(80)
+    const far = through(panBy(layout, -1e7, -1e7))
+    expect(far.pan.x).toBeCloseTo(far.width - 400)
+    expect(far.pan.y).toBeCloseTo(far.height - 600)
+    // At rest a picture that fits stays in its corner, wherever the hand goes.
+    expect(through(panBy(rest, 200, 200)).pan).toEqual({ x: 0, y: 0 })
+  })
+
+  it('cuts every lane to the window, holds the names at its edge, and says which chromosomes are out of it', () => {
+    const layout = through(panBy(through({ zoom: 6, centre: null }), 0, -400))
+    const view = layout.view!
+    expect(view.y).toBe(40 + 20)
+    for (const place of layout.places) {
+      // Over the column, at the window's top, however far the chromosomes moved.
+      expect(place.name.y).toBe(40 + 10)
+      for (const lane of place.lanes) {
+        expect(lane.alongFrom).toBeGreaterThanOrEqual(view.y)
+        expect(lane.alongTo).toBeLessThanOrEqual(view.y + view.height)
+      }
+    }
+    expect(layout.places.some((place) => !place.visible)).toBe(true)
+    const shown = layout.places.find((place) => place.visible)!
+    expect(shown.along0).toBeLessThan(view.y)
+    // The body runs a thickness past the window, so an end just out of it still rounds into it.
+    expect(shown.body.alongFrom).toBeGreaterThanOrEqual(shown.along0)
+    expect(shown.body.alongFrom).toBeLessThan(view.y)
+  })
+
+  it('holds a lying chromosome’s name at the window’s left while it moves along under it', () => {
+    const lying = { orientation: 'horizontal' as const, names: 60, height: 900, width: 1000 }
+    const magnified = layoutKaryotype(LONG, options({ ...lying, camera: { zoom: 3, centre: null } }))
+    const moved = layoutKaryotype(LONG, options({ ...lying, camera: panBy(magnified, -500, 0) }))
+    expect(moved.pan.x).toBeGreaterThan(0)
+    for (const place of moved.places) expect(place.name.x).toBe(KARYOTYPE_PAD + 60 - 8)
+    expect(moved.view?.x).toBe(KARYOTYPE_PAD + 60)
+  })
+})
+
+describe('where the window is over the picture', () => {
+  /** A context that records every rectangle a thumb is filled as. */
+  function thumbs(): { ctx: CanvasRenderingContext2D; drawn: number[][] } {
+    const drawn: number[][] = []
+    const target = {
+      roundRect: (...box: number[]) => {
+        drawn.push(box.slice(0, 4))
+      },
+    } as unknown as CanvasRenderingContext2D
+    const ctx = new Proxy(target, {
+      get(base, key) {
+        const held = Reflect.get(base, key)
+        return held !== undefined ? held : () => undefined
+      },
+      set() {
+        return true
+      },
+    })
+    return { ctx, drawn }
+  }
+  const LONG: KaryotypeSequence[] = SEQUENCES.map((sequence) => ({
+    ...sequence,
+    unitStart: sequence.unitStart * 1000,
+    unitEnd: sequence.unitEnd * 1000,
+  }))
+  const window = { width: 400, height: 600 }
+
+  it('says nothing where the picture fits the window', () => {
+    const { ctx, drawn } = thumbs()
+    drawWindowPlace(ctx, layoutKaryotype(LONG, options({ ...window, camera: REST_CAMERA })), window, '#000')
+    expect(drawn).toEqual([])
+  })
+
+  it('draws a thumb along the foot and down the edge as long as the part shown, where the part shown is', () => {
+    const magnified = layoutKaryotype(LONG, options({ ...window, camera: { zoom: 4, centre: null } }))
+    const moved = layoutKaryotype(LONG, options({ ...window, camera: panBy(magnified, -100, -300) }))
+    const { ctx, drawn } = thumbs()
+    drawWindowPlace(ctx, moved, window, '#000')
+    expect(drawn).toHaveLength(2)
+    const [across, along] = drawn
+    const view = moved.view!
+    // A share of the foot as large as the window's share of the picture, as far along as the window is.
+    expect(across[2] / (view.width - 4)).toBeCloseTo(400 / moved.width, 2)
+    expect((across[0] - view.x - 2) / (view.width - 4)).toBeCloseTo(moved.pan.x / moved.width, 2)
+    expect(along[3] / (view.height - 4)).toBeCloseTo(600 / moved.height, 2)
+    expect((along[1] - view.y - 2) / (view.height - 4)).toBeCloseTo(moved.pan.y / moved.height, 2)
+  })
+
+  it('says nothing for a figure, which is the whole picture', () => {
+    const { ctx, drawn } = thumbs()
+    drawWindowPlace(ctx, layoutKaryotype(LONG, options({ width: 120 })), { width: 120, height: 600 }, '#000')
+    expect(drawn).toEqual([])
+  })
+})
+
+describe('a chromosome cut by the window', () => {
+  /** A context that counts the curves a path is traced with. */
+  function curveCounter(): { ctx: CanvasRenderingContext2D; curves: () => number } {
+    let count = 0
+    const target = {
+      quadraticCurveTo: () => {
+        count++
+      },
+    } as unknown as CanvasRenderingContext2D
+    const ctx = new Proxy(target, {
+      get(base, key) {
+        const held = Reflect.get(base, key)
+        return held !== undefined ? held : () => undefined
+      },
+    })
+    return { ctx, curves: () => count }
+  }
+
+  it('rounds the ends it has, and leaves square the one the window cut off', () => {
+    const frame = layoutKaryotype(SEQUENCES, options()).places[0].body
+    const whole = curveCounter()
+    tracePill(whole.ctx, frame)
+    expect(whole.curves()).toBe(4)
+    const cut = curveCounter()
+    tracePill(cut.ctx, frame, { start: false, end: true })
+    expect(cut.curves()).toBe(2)
   })
 })
 
