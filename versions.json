@@ -1,6 +1,13 @@
 {
-  "latest": "4509797",
+  "latest": "a332f8f",
   "versions": [
+    {
+      "commit": "a332f8f",
+      "version": "0.15.0",
+      "date": "2026-10-20T19:38:35+02:00",
+      "subject": "Tutorial on K562 map with sequence copy and manual marks (#123)",
+      "tag": ""
+    },
     {
       "commit": "4509797",
       "version": "0.15.0",
@@ -132,13 +139,6 @@
       "version": "0.13.0",
       "date": "2026-10-07T17:01:01+02:00",
       "subject": "Move a region half a window either way, and put back, forward, link, save and console after the panels (§5.4, §5.5, §23) (#96)",
-      "tag": ""
-    },
-    {
-      "commit": "2764a8f",
-      "version": "0.13.0",
-      "date": "2026-10-07T16:50:15+02:00",
-      "subject": "Light a model's PDF as its PNG is: shaded beads and tubes (§25.7) (#94)",
       "tag": ""
     },
     {
