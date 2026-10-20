@@ -233,6 +233,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   name ran past the card and pushed the eye, the arrow and the × off the edge: the row's status
   class was also the class of the note under it, and laid the row out on the baseline.
 
+- **Tab from one box of a track's settings to the next keeps the caret (§8.8).** The commit a Tab
+  makes fires with the focus on nobody, and the row was rebuilt under the box being tabbed to: typing
+  a floor, Tab, Tab and a ceiling put the ceiling nowhere. A move between two fields now holds the
+  rebuild until the focus has landed, as a caret in a field always did.
+
 - **An eye has no border, wherever it is (§26.3).** The lit look drew one round a pressed eye
   everywhere but on a loaded track's row — on a row waiting to be recomputed, on the manual marks,
   over a figure's series.
