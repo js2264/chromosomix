@@ -594,6 +594,18 @@ export interface ViewState {
    * one. Absent means the whole genome, which is where a browser opens.
    */
   locus?: string
+  /**
+   * The `browser` view drawn as an **ideogram** (§5.10): every chromosome whole,
+   * standing in a row (`vertical`) or lying in a column (`horizontal`), with the
+   * tracks beside each. Absent is the browser's own picture, one axis across.
+   *
+   * Part of what is being looked at, as the turn is (`flip`), so a link
+   * carries it; ignored by every view but the browser, and by the browser while
+   * the dev feature is off — kept, and not applied (§29.4). {@link locus} stays
+   * beside it: it is where the browser was, and where it goes back to when the
+   * ideogram is put away.
+   */
+  ideogram?: 'vertical' | 'horizontal'
   transform?: Transform
   colormap?: string
   /**

@@ -162,7 +162,12 @@ export class SessionRouter {
         this.session.breadcrumbHost.replaceChildren(this.session.breadcrumb?.el ?? el('div'))
         this.session.mounted = state
         if (this.session.browser === null) this.session.mountBrowser(state)
-        else this.session.browser.applyLocus(state.locus)
+        else {
+          // The ideogram first (§5.10): a click on a chromosome puts it away and
+          // names the window in one step, and the window is the browser's own.
+          this.session.browser.applyIdeogram(state.ideogram)
+          this.session.browser.applyLocus(state.locus)
+        }
         this.session.host.activity(this.session)
         return
       }
@@ -172,7 +177,9 @@ export class SessionRouter {
       // the map down rather than closing and re-opening the file, which is both
       // slower and lossy.
       if (this.session.file?.uri === state.uri && this.session.canHideMap) {
-        this.session.hideMap()
+        // …as the ideogram, where that is what was asked for (§5.10), and on
+        // the state that asked: a Back is not a new step.
+        this.session.hideMap(state.ideogram, state)
         return
       }
       if (this.session.opening !== null || this.resolving !== null) return

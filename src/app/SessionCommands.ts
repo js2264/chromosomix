@@ -62,6 +62,31 @@ export class SessionCommands {
     }
   }
 
+  /**
+   * The ideogram (§5.10), `Z`: every chromosome whole, side by side, with the
+   * tracks beside each — from the browser, or from a map, which is put down as
+   * `v` puts it down. A switch titled by its noun and wearing its state
+   * (§26.4); a dev feature (§29), so absent while the switch is off.
+   */
+  private ideogram(): Command[] {
+    if (!devFeature('ideogram')) return []
+    const shown = this.session.ideogramShown
+    return [
+      {
+        id: 'ideogram',
+        group: 'View',
+        title: 'Ideogram',
+        hint: shown
+          ? 'Back to the picture the ideogram replaced — the browser, or the map it was put up over.'
+          : 'Every chromosome whole, side by side, with the tracks beside each; a contact map is put down first, as V puts it down.',
+        keys: KEYS.ideogram,
+        state: shown ? 'on' : 'off',
+        enabled: this.session.assembly !== null || this.session.canHideMap,
+        run: () => this.session.toggleIdeogram(),
+      },
+    ]
+  }
+
   private own(): Command[] {
     const state = this.session.store.state
     const file = this.session.file
@@ -82,14 +107,24 @@ export class SessionCommands {
     const chip = (on: boolean): 'on' | 'off' => (on ? 'on' : 'off')
     const expected = this.session.current?.panel?.expectedLit ?? null
     if (this.session.assembly !== null) {
+      // Over the ideogram (§5.10) the whole genome is its camera at rest —
+      // every chromosome whole again — and the browser's window, which is where
+      // it goes back to when the ideogram is put away, is left where it was.
+      const ideogram = this.session.ideogramShown
+      const whole = (): void => {
+        if (ideogram) this.session.browser?.fitIdeogram()
+        else this.session.store.patch({ locus: undefined })
+      }
       return [
         {
           id: 'browser-whole',
           group: 'Go',
           title: 'Whole genome',
-          hint: 'Every sequence, end to end. Also the 0 key, and a double click on the tracks.',
+          hint: ideogram
+            ? 'Every chromosome whole again, as the ideogram opens. Also the 0 key.'
+            : 'Every sequence, end to end. Also the 0 key, and a double click on the tracks.',
           keys: KEYS.whole,
-          run: () => this.session.store.patch({ locus: undefined }),
+          run: whole,
         },
         // `0` is the map's refit, and the browser's whole genome is what a refit
         // is here: the same key in both, so a reader who learnt it on one picture
@@ -98,9 +133,11 @@ export class SessionCommands {
           id: 'browser-fit',
           group: 'View',
           title: 'Fit the view',
-          hint: 'The whole genome across, as W and a double click on the tracks do.',
+          hint: ideogram
+            ? 'Every chromosome whole in the window, as W does.'
+            : 'The whole genome across, as W and a double click on the tracks do.',
           keys: KEYS.fit,
-          run: () => this.session.store.patch({ locus: undefined }),
+          run: whole,
         },
         // The same two keys a map has, walking the same list. They were left out
         // of this branch, which made the browser the one view where the plainest
@@ -194,6 +231,7 @@ export class SessionCommands {
           keys: KEYS.find,
           run: () => this.session.browser?.focusSearch(),
         },
+        ...this.ideogram(),
         {
           id: 'show-map',
           group: 'View',
@@ -274,6 +312,7 @@ export class SessionCommands {
         enabled: this.session.canHideMap,
         run: () => this.session.cycleView(),
       },
+      ...this.ideogram(),
       {
         id: 'map-export',
         group: 'File',

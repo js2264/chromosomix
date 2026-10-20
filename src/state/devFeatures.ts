@@ -38,6 +38,12 @@ export const DEV_FEATURES = {
   edit: 'Editing the reference is not validated yet.',
   /** Two sequences on two axes (§28). */
   dotplot: 'The dot plot is not validated yet.',
+  /**
+   * Every chromosome drawn whole, side by side, with the tracks beside each
+   * (§5.10): the Tracks cards' switch and the ideogram's rows, the command and
+   * its key, and the key it writes in a link.
+   */
+  ideogram: 'The ideogram view is not finished yet.',
 } as const
 
 export type DevFeature = keyof typeof DEV_FEATURES

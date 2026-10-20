@@ -198,6 +198,16 @@ export const KEYS = {
    */
   mapToggle: 'v',
   /**
+   * The ideogram view (§5.10): every chromosome whole, side by side, with the
+   * tracks beside each — and back to the browser's own picture.
+   *
+   * `z`, one of the three letters the single-key space had left, and on the
+   * row `v` is on, beside the map's switch: the two are the keys that change
+   * which picture of the genome is drawn. Pressed over a map it puts the map
+   * down first, as `v` does, so the ideogram is the tracks and nothing else.
+   */
+  ideogram: 'z',
+  /**
    * The diagonal lock (§7.2): onto the diagonal at the zoom the map is at, and
    * held there — the toggle beside the turn.
    *

@@ -441,6 +441,13 @@ export interface TrackPaint {
    * and the caller is the one that has resolved those.
    */
   colormap?: string
+  /**
+   * A `heatmap`'s colour at `t` in `0..1`, in place of `colormap`, for a ramp
+   * whose top end is not a table's: a chromosome coloured by a line track is
+   * drawn from white to the track's own colour (§5.10), as a 3D model can be
+   * (`TRACK_TINT_RAMP`, §25.5).
+   */
+  ramp?: (t: number) => string
   limits: { min: number; max: number }
   /** Grid and axis-label colour; the page's, so it follows the theme. */
   guideColour: string
@@ -547,11 +554,12 @@ export function drawTrack(
   // flipping an axis means when the axis is a ramp.
   if (paint.mode === 'heatmap') {
     const map = paint.colormap ?? DEFAULT_COLORMAP
+    const ramp = paint.ramp ?? ((t: number) => colormapCss(map, t))
     for (let slot = 0; slot < slots; slot++) {
       const value = profile.mean[slot]
       if (!Number.isFinite(value)) continue
       const along = profile.from + slot
-      ctx.fillStyle = colormapCss(map, norm(value))
+      ctx.fillStyle = ramp(norm(value))
       const [x, y, width, height] = laneRect(frame, along, along + 1, 0, frame.thickness)
       ctx.fillRect(x, y, width, height)
     }

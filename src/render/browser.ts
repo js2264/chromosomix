@@ -586,7 +586,13 @@ export function drawBoundaries(
  *
  * In lane coordinates, so one drawing serves every edge of a map and the 1D
  * browser's lanes alike (§8.16): the arcs stand on the edge a signal's baseline
- * is on and rise the way a signal grows, and a flip hangs them from the other.
+ * is on and rise the way a signal grows, and a flip hangs them from the other —
+ * and beside a standing chromosome in the ideogram view they bow out to its
+ * right (§5.10). `only` keeps the pairs with both ends on that one sequence:
+ * the ideogram view draws a chromosome's own loops in its lane and the pairs
+ * between two chromosomes as curves across the picture, so a lane that drew
+ * those too would draw each of them twice, the second time as an arc cut off at
+ * the chromosome's end.
  */
 export function drawArcs(
   ctx: CanvasRenderingContext2D,
@@ -603,6 +609,7 @@ export function drawArcs(
     end2: Int32Array
   },
   paint: { colour: string; opacity: number; flip?: boolean },
+  only?: string,
 ): number {
   ctx.save()
   ctx.strokeStyle = paint.colour
@@ -613,8 +620,11 @@ export function drawArcs(
   const span = Math.max(1, frame.domain[1] - frame.domain[0])
   let drawn = 0
   for (let i = 0; i < pairs.length; i++) {
-    const a = axis.locusToUnit(pairs.contigs[pairs.contig1[i]], (pairs.start1[i] + pairs.end1[i]) / 2)
-    const b = axis.locusToUnit(pairs.contigs[pairs.contig2[i]], (pairs.start2[i] + pairs.end2[i]) / 2)
+    const one = pairs.contigs[pairs.contig1[i]]
+    const two = pairs.contigs[pairs.contig2[i]]
+    if (only !== undefined && (one !== only || two !== only)) continue
+    const a = axis.locusToUnit(one, (pairs.start1[i] + pairs.end1[i]) / 2)
+    const b = axis.locusToUnit(two, (pairs.start2[i] + pairs.end2[i]) / 2)
     if (a === null || b === null) continue
     const low = Math.min(a, b)
     const high = Math.max(a, b)

@@ -180,6 +180,12 @@ const LUCIDE = [
   // locus box's `go` (§5.4).
   'move-left',
   'move-right',
+  // The ideogram view (§5.10), as the turn's two marks are its two pictures:
+  // chromosomes standing from one line, of different lengths, for the view as
+  // it opens — and lying from one, for the view flipped. Each is the picture a
+  // press would give.
+  'align-start-horizontal',
+  'align-start-vertical',
 ]
 
 /**

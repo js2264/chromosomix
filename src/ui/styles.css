@@ -4372,6 +4372,21 @@ p {
   opacity: 1;
 }
 
+/* The ideogram's gestures are its own — the wheel magnifies, a drag moves or
+   chooses a stretch — and the card under the pointer says them (§5.10). */
+.view-browser.is-ideogram .browser-hint {
+  display: none;
+}
+
+/* The Tracks card carries the ideogram's rows as well as the lanes' (§5.10),
+   each set shown while its picture is drawn — as the Map card's rows for the
+   square and the circle are — and the controls about the browser's one axis
+   step aside while the ideogram, which has none, is. */
+.controls-card:not(.is-ideogram) .ideogram-only,
+.controls-card.is-ideogram .axis-only {
+  display: none;
+}
+
 @media (hover: none) {
   .map-hint,
   .browser-hint {
