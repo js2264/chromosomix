@@ -82,6 +82,7 @@ import {
 } from '../render/laneLabel'
 import { formatLocus } from '../genome/assembly'
 import { drawArcs } from '../render/browser'
+import { stretchBetween, type SequenceStretch } from './sequenceCopy'
 import { stretchOf, unitSpan, type LocusAxis } from '../render/locus'
 import { barLimitsOf } from '../render/barchart'
 import { drawSashimi, junctionsOfSamples } from '../render/sashimi'
@@ -1240,6 +1241,16 @@ export class AnnotationLanes {
    * it is asking one question — which way across this lane is more — and
    * `valueAcross` needs the whole frame to answer it.
    */
+  /**
+   * The stretch of one sequence a lane shows, in the file's coordinates — what
+   * *Copy sequence* copies (§8.8) — or `null` where it shows several, or none.
+   */
+  stretchOn(edge: LaneEdge, id: string, geometry: LaneGeometry): SequenceStretch | null {
+    const frame = this.frameFor(edge, id, geometry)
+    const axis = this.axisFor(edge)
+    return frame === null || axis === null ? null : stretchBetween(axis, frame.domain[0], frame.domain[1])
+  }
+
   frameFor(edge: LaneEdge, id: string, geometry: LaneGeometry): LaneFrame | null {
     const slot = this.slotsFor(edge).find((each) => each.entry.id === id)
     return slot === undefined ? null : this.frameOf(edge, slot, geometry)

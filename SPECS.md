@@ -3424,6 +3424,24 @@ fact about the genome — and a stored code NCBI never published is read as the 
 map the lane is GC content and has no codons to read; the frames are drawn wherever the residues are,
 in the 1D browser and a deck's tracks cells, and in the figure saved from either.
 
+**A sequence's letters can be copied, two ways.** *Copy sequence* on a sequence lane's right-click
+menu, at any zoom it is drawn at — GC trace or letters, beside a map or in the 1D browser — puts the
+bases in view on the clipboard as plain text: no FASTA header, the file's case kept (a soft-masked
+repeat is lower-case for a reason), and read the way it is drawn, reverse-complemented on a reversed
+stretch of an edit (§27.2). Its hint is the length; it is greyed, saying why, where the view spans
+more than one sequence or more than ten megabases. And where the letters are drawn — the coloured
+bars, with or without their letters, and the codons of the six frames at either of their two closer
+rungs — **a drag across them selects**, with the caret every text shows over them: the drag-to-zoom's
+look (§8.9), a wash over the one row and its chips — both ends to the base, 1-based, and the length
+between, in bases or, on a frame, in amino acids — snapped to whole bases, or to whole codons of the
+frame dragged. On release the selection stays; **⌘C** (Ctrl+C) copies it ahead of the window's own
+binding, which would copy the figure, and a *copy* button stands at its far end while the pointer is
+over it. A frame's selection copies as its protein, read the way the strand runs. A click elsewhere on
+the tracks or Escape puts it away. A plain drag on the letters therefore selects rather than pans; the
+view still pans from every other lane, the ruler, the wheel and the arrows, and ⌥ or ⇧ with the drag is
+still a zoom. Beside a map there are no letters to drag (the lane is its GC trace there), so only the
+menu's copy is offered.
+
 **How the worker holds a FASTA is decided by its size, and the line is 64 MB.** Under it the file is
 read whole and held whole, `.fai` or no `.fai`: a yeast genome is twelve megabytes, a fly's a hundred
 and forty, and holding one is what makes every zoom draw GC content, every pan free and the motif

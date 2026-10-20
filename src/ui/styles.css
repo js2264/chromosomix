@@ -1302,6 +1302,26 @@ p {
   width: 100%;
 }
 
+/* The copy button a selection of letters wears at its far end while the
+   pointer is over it (§8.8): small, raised off the letters it covers, and in
+   the selection's own blue so it reads as part of it. Over the readout, which
+   follows the same hand to the same place. */
+.btn.residue-copy {
+  position: absolute;
+  z-index: 11;
+  padding: 0.05rem 0.45rem;
+  font-size: var(--step--2);
+  line-height: 1.4;
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-2);
+}
+
+.btn.residue-copy.hidden {
+  display: none;
+}
+
 .browser-canvas {
   display: block;
   width: 100%;
