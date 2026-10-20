@@ -73,7 +73,7 @@ import type { TutorialHost } from '../ui/tutorial'
 import { button, dragHasFiles, el } from '../ui/dom'
 import { filesFrom } from '../ui/chooseFiles'
 import { icon, iconButton } from '../ui/icons'
-import { downloadBlob, fileStamp } from '../ui/export'
+import { downloadBlob, fileStamp, savedFiles } from '../ui/export'
 import {
   applyConfig,
   isRefusal,
@@ -2745,6 +2745,8 @@ export class App implements SessionHost {
       tracks: () => this.current?.annotations?.store ?? null,
       square: (stretch) => this.current?.squareOnScreen(stretch) ?? null,
       consoleOpen: () => this.consolePanel?.isOpen === true,
+      marks: () => this.current?.annotations?.manual.marks ?? null,
+      saved: () => savedFiles(),
     }
   }
 

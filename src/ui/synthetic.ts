@@ -41,7 +41,11 @@ import { laneStartsFlipped } from '../render/lane'
 import { button, el } from './dom'
 
 /** The formats a computed row can leave the app as (§18.7). */
-export type SyntheticFormat = 'bigwig' | 'bedgraph' | 'bed' | 'tsv'
+/**
+ * What a row can be written as. `anchors` is a set of pairs' anchors as a BED —
+ * each place once, however many pairs share it (§18.7).
+ */
+export type SyntheticFormat = 'bigwig' | 'bedgraph' | 'bed' | 'anchors' | 'tsv'
 
 /**
  * Whether a row is one this app made rather than one the reader loaded.
@@ -97,7 +101,41 @@ export function syntheticNote(entry: AnnotationEntry): string | null {
 }
 
 /**
- * Three formats for a track, one for a called set, and TSV for both.
+ * A set of pairs' anchors as a BED: both ends of every pair, each exact place
+ * once — the file a reader asking *where are the loop anchors* would write, for
+ * a motif scan or an overlap with peaks.
+ */
+function anchorsButton(
+  entry: AnnotationEntry,
+  onExport: (entry: AnnotationEntry, format: SyntheticFormat) => void,
+): HTMLElement {
+  return button('anchors', () => onExport(entry, 'anchors'), {
+    class: 'btn btn-quiet',
+    title:
+      'Both ends of every pair as a BED, each place once however many pairs share it — the ' +
+      'anchors, for a motif scan or an overlap with peaks.',
+  })
+}
+
+/**
+ * A loaded set of pairs' one export: its anchors (§8.1). The pairs themselves
+ * are the file the reader loaded, and need no writing out.
+ */
+export function pairExports(
+  entry: AnnotationEntry,
+  onExport: (entry: AnnotationEntry, format: SyntheticFormat) => void,
+): HTMLElement {
+  return el(
+    'div',
+    { class: 'ann-inline ann-exports' },
+    el('span', { class: 'field-label', text: 'export' }),
+    anchorsButton(entry, onExport),
+  )
+}
+
+/**
+ * Three formats for a track, two for a called set of pairs, one for any other
+ * called set, and TSV for all of them.
  *
  * What a row can be written as depends on what it *is*. A per-bin track has a
  * value everywhere and goes out as the two formats a browser opens; a called
@@ -124,6 +162,7 @@ export function syntheticExports(
             class: 'btn btn-quiet',
             title: `The called intervals as a ${bed} — what bedtools reads, and what this app reads back.`,
           }),
+          ...(bed === 'BEDPE' ? [anchorsButton(entry, onExport)] : []),
         ]
       : [
           button('bigWig', () => onExport(entry, 'bigwig'), {
@@ -166,7 +205,7 @@ export function recomputeNote(
   return el(
     'p',
     { class: 'ann-note ann-detached' },
-    'the values were not carried across the reload · ',
+    'values not kept over the reload · ',
     run,
   )
 }

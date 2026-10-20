@@ -679,7 +679,7 @@ export class AnnotationLoader {
           if (this.store.byId(id)?.status === 'loading') this.store.update(id, { progress: { done, total } })
         },
       )
-      const card = cardFor(result.format)
+      const fresh = cardFor(result.format)
       // What a *file* of this format is, which for a BAM is its depth — and the
       // row's own kind wins where the row is the second one over that file. A
       // pile is a BAM read a second way (§8.13), so re-deriving its kind from
@@ -687,11 +687,16 @@ export class AnnotationLoader {
       // on every restore and every reattach.
       const already = this.store.byId(id)?.kind
       const kind =
-        card === null
+        fresh === null
           ? null
           : already === 'reads' && result.format === 'bam'
             ? 'reads'
-            : kindFor(card, result.format)
+            : kindFor(fresh, result.format)
+      // A pair set the reader made a track of — arcs along an edge rather than
+      // rings on the map (§8.1) — keeps that display through a reload or a
+      // reattach: the row's card is where the choice is held.
+      const card =
+        fresh === 'overlay' && kind === 'pairs' && this.store.byId(id)?.card === 'linear' ? 'linear' : fresh
       if (card === null || kind === null) {
         this.store.update(id, { status: 'error', error: refusal(result.format), progress: undefined })
         this.client.drop(id)

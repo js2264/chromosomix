@@ -570,10 +570,10 @@ export function drawBoundaries(
 /**
  * Loop calls, as arcs.
  *
- * The picture a 1D browser draws for a pair of loci, and the reason a BEDPE is
- * worth having here at all: an arc joining two anchors says *these two places
- * touch* in one glyph, at any zoom, without needing the second dimension a
- * contact map spends on saying the same thing.
+ * The picture a lane draws for a pair of loci, and the reason a BEDPE is worth
+ * having beside a map or in a 1D browser at all: an arc joining two anchors says
+ * *these two places touch* in one glyph, at any zoom, without needing the second
+ * dimension a contact map spends on saying the same thing.
  *
  * Height is the log of the span rather than the span itself, so a 2 kb loop and
  * a 2 Mb one in the same view are both visible — linear height would flatten
@@ -584,15 +584,15 @@ export function drawBoundaries(
  * is drawn, because the arc leaving the view is exactly the information that
  * something over there is connected to something here.
  *
- * Through the lane's own coordinates, so an arc stands on whichever edge the
- * lane's values grow from, on any of the four (`render/lane.ts`): under the
- * browser's ruler it rises from the floor as it always did, and beside a
- * standing chromosome in the ideogram view it bows out to the right (§5.10).
- * `only` keeps the pairs with both ends on that one sequence: the ideogram
- * view draws a chromosome's own loops in its lane and the pairs between two
- * chromosomes as curves across the picture, so a lane that drew those too
- * would draw each of them twice, the second time as an arc cut off at the
- * chromosome's end.
+ * In lane coordinates, so one drawing serves every edge of a map and the 1D
+ * browser's lanes alike (§8.16): the arcs stand on the edge a signal's baseline
+ * is on and rise the way a signal grows, and a flip hangs them from the other —
+ * and beside a standing chromosome in the ideogram view they bow out to its
+ * right (§5.10). `only` keeps the pairs with both ends on that one sequence:
+ * the ideogram view draws a chromosome's own loops in its lane and the pairs
+ * between two chromosomes as curves across the picture, so a lane that drew
+ * those too would draw each of them twice, the second time as an arc cut off at
+ * the chromosome's end.
  */
 export function drawArcs(
   ctx: CanvasRenderingContext2D,
@@ -608,16 +608,15 @@ export function drawArcs(
     start2: Int32Array
     end2: Int32Array
   },
-  paint: { colour: string; opacity: number },
+  paint: { colour: string; opacity: number; flip?: boolean },
   only?: string,
 ): number {
   ctx.save()
   ctx.strokeStyle = paint.colour
   ctx.globalAlpha = paint.opacity * 0.75
   ctx.lineWidth = 1.25
-  // The edge the values grow from, and the one they grow towards.
-  const base = valueAcross(frame, 0)
-  const tip = valueAcross(frame, 1)
+  const at = (value: number): number => valueAcross(frame, paint.flip === true ? 1 - value : value)
+  const base = at(0)
   const span = Math.max(1, frame.domain[1] - frame.domain[0])
   let drawn = 0
   for (let i = 0; i < pairs.length; i++) {
@@ -636,12 +635,13 @@ export function drawArcs(
     // loop spanning the whole view reaches the top; one spanning a thousandth of
     // it still reaches a third of the way.
     const fraction = Math.min(1, (high - low) / span)
-    const reach = Math.min(1, 0.2 + 0.8 * (1 + Math.log10(Math.max(1e-4, fraction)) / 4))
+    const height = Math.min(1, 0.2 + 0.8 * (1 + Math.log10(Math.max(1e-4, fraction)) / 4))
+    const apex = at(height)
     ctx.beginPath()
     laneMove(ctx, frame, x0, base)
     // A quadratic through a control point at twice the apex: the curve passes
-    // through half of it, which puts the top of the arc where `reach` says.
-    laneCurve(ctx, frame, (x0 + x1) / 2, base + (tip - base) * reach * 2, x1, base)
+    // through half of it, which puts the top of the arc where `height` says.
+    laneCurve(ctx, frame, (x0 + x1) / 2, base + 2 * (apex - base), x1, base)
     ctx.stroke()
     drawn++
   }

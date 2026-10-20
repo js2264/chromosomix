@@ -35,9 +35,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   window is read for its own stretch there. A cytoBand fills the chromosomes with its bands by
   default; *colour by* fills them with one colour, a track (in its lane's colours, white to its
   colour unless the lane is a heatmap, with its colour scale, unboxed, in the key's corner) or a
-  feature set's own colours. A pair set's pairs on one
-  chromosome are its lane's arcs and its pairs between two are curves leaving each chromosome
-  straight across it, under every lane, the strongest 4,000; a set with only those takes no lane. The
+  feature set's own colours. A pair set's pairs on one chromosome are its lane's arcs and its pairs
+  between two are curves leaving each chromosome straight across it, under every lane, the strongest
+  4,000; a set with only those takes no lane. The
   reader's lines, boxes and arrowheads are drawn across each chromosome; the pointer draws the
   hairline across one chromosome and its lanes, and the card names the band and every track there.
   The key over the chromosomes is the browser's lane labels, names and ranges typed into as in a lane.
@@ -47,6 +47,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the figure exports as PNG or PDF — the whole picture at rest, the window as framed when magnified.
   `scripts/ui-ideogram-view.mjs` drives it on the yeast and human demos.
 
+## [0.16.0] - 2026-10-20
+
+### Added
+
 - **Licences, in *About* (§22.4).** Under the tutorial and the source link: chromosomix's own
   licence, the GPL, then one line per project it is built with or ported from — three.js, Apache
   ECharts, h5wasm, `@gmod/bbi`, cooltools, chromosight, yapc with IDR, SciPy, NumPy, scikit-learn,
@@ -55,6 +59,37 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   marks. The dialog is wider and taller to hold it, so the build stamp is still on screen on a
   laptop. The README's *Licence* section names the same projects, and a test holds the two to the
   source.
+
+- **A set of pairs is arcs along a track, or rings on the map (§8.1, §18.7).** A loaded BEDPE,
+  longrange or interact file now offers the display a called set has: *arcs (1D track)* draws every
+  pair as an arc from one anchor to the other along any edge of the map — the 1D browser's own
+  picture of a BEDPE, flipped with the lane — and *map overlay* puts the rings back; a reload keeps
+  the choice. A loop set a task called is its arcs as a track too, where it was its anchors: two
+  boxes per loop with nothing to say which went with which.
+
+- **A set of pairs leaves as its anchors (§8.1, §18.7).** Beside a called loop set's BEDPE and TSV,
+  and on a loaded BEDPE's settings, *anchors* writes both ends of every pair as a BED, each exact
+  place once however many pairs share it.
+
+- **A sequence's letters are copied (§8.8).** *Copy sequence* on a sequence lane's right-click menu
+  puts the bases in view on the clipboard as plain text, at any zoom and beside a map as in the 1D
+  browser, greyed where the view spans several sequences or more than 10 Mb. Where the letters are
+  drawn, a drag across them — or across one reading frame's codons — selects, with the caret over
+  them, a wash and the drag-to-zoom's chips: both ends to the base and the length, in bases or amino
+  acids. ⌘C (Ctrl+C) copies the selection, as does the *copy* button at its end; a frame copies as
+  its protein. A click elsewhere or Escape puts it away.
+
+- **A track's centre, and a flip by typing (§8.8).** The limits are three boxes — foot, centre,
+  head. The centre, empty by default, is IGV's: the value bars and areas grow from, above it one way
+  and below the other, so a ratio of two tracks centred on 1 reads at a glance. A head typed under
+  the foot flips the track rather than being refused, and a flipped track shows its ceiling first —
+  in the settings, in the batch box and in the range typed under a lane's name.
+
+- **Duplicate, on every lane's right-click menu (§8.8)**, under Hide and Remove: a second row named
+  `… (copy)` with every setting of the first, drawn wherever the first is, ready to be restyled.
+
+- **A window says how to leave it (§8.9).** Under the two lines on how to zoom, a map on a window of
+  one sequence says *click to see the whole of IV* — which a click on a cell there already did.
 
 - **Loop calling, a 2D task of its own, just before Pattern detection (§18.8, §18.9).** It answers
   the one question *where are the loops*, where Pattern detection matches a template of which a loop
@@ -152,6 +187,32 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   `GPL-3.0-or-later`, and the README, *About*, `llms.txt` and every build's notices say so.
   Everything else the builds carry was already under a licence compatible with it.
 
+- **A gene found from the map's box opens with its neighbourhood (§5.4).** The block read is the
+  gene's window and a hundred bins either side, opened framed on the gene as a bookmark is, so the
+  wheel and a drag back out find what is around it; it was the gene alone, with paper past its
+  edges. Coordinates typed are still read as typed.
+
+- **Every row one run returns wears one colour (§18.5)** — insulation's four windows, its
+  boundaries and its domains — where each took the next free colour and read as files of their own.
+
+- **The guided tutorial is on 4DNESC23ZYOF (§30).** K562 in situ Hi-C from 4DN, 187 million
+  contacts in 1.9 GB, on chr15 down to chr15:38,100,001-50,025,000 at 5 kb. Insulation runs at four
+  scales, and the tutorial says what they are: the TAD hierarchy, a border every window finds being
+  high in it and one only the narrow windows see a subTAD's. New steps mark the loop at
+  chr15:45,662,501 × chr15:48,312,501 with an arrowhead and the weak border at chr15:47,215,001
+  between the two subTADs inside it with a line, save an insulation track as a bigWig, and save the
+  figure as a PDF; the correlation ticks every track. Fifty-eight steps in twelve parts.
+
+- **The contacts box shows `e.g. 10M` (§5.5, §6.5)**, paler than a number and gone once the box is
+  clicked; the map's own total, which was its placeholder and read as a total already typed, is in
+  its tooltip.
+
+- **One tickbox, the app's own (§26.3)**: the fields' corner and border, a resting shadow, the
+  accent and a white tick when ticked, a halo under the hand — in place of the engine's grey square.
+
+- **The caption switch is on the Export card's save row (§7.2)**, after the download and the
+  clipboard it qualifies.
+
 - **Pattern detection's own words name no package (§18.8).** Its row reads *Find loops, borders,
   hairpins, centromeres or stripes by template matching*, its thresholds are *the template's own
   numbers, tuned for it and published with it*, and the note on a file with no weights speaks of
@@ -199,6 +260,24 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   chromosomix's own licence first, which the desktop app and the standalone page carried nowhere,
   and the MIT licence `generic-filehandle2` declares but does not ship, where they said only that
   it had none.
+
+- **A loop set, a mark or a rectangle lands on a map that spells its sequences another way
+  (§5.9).** Lit on a deck's second map writing `XIV` where the set says `chrXIV`, a loop set drew
+  nothing there while the tracks beside it resolved the name; everything drawn at a place now
+  resolves it through the map's own axis.
+
+- **A computed row waiting to be recomputed is laid out as the others (§18.5).** After a reload its
+  name ran past the card and pushed the eye, the arrow and the × off the edge: the row's status
+  class was also the class of the note under it, and laid the row out on the baseline.
+
+- **Tab from one box of a track's settings to the next keeps the caret (§8.8).** The commit a Tab
+  makes fires with the focus on nobody, and the row was rebuilt under the box being tabbed to: typing
+  a floor, Tab, Tab and a ceiling put the ceiling nowhere. A move between two fields now holds the
+  rebuild until the focus has landed, as a caret in a field always did.
+
+- **An eye has no border, wherever it is (§26.3).** The lit look drew one round a pressed eye
+  everywhere but on a loaded track's row — on a row waiting to be recomputed, on the manual marks,
+  over a figure's series.
 
 - **A number the map decides still follows the map after a run (§18.2).** A run is handed every
   such number answered, so that its record says what it read, and that answer was what the form

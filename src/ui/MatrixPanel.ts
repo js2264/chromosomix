@@ -507,6 +507,14 @@ export interface MatrixPanelOptions {
    * deck — where the summary is the only place the window is written.
    */
   headingLocus?(): string | null
+
+  /**
+   * What a plain click on the map does, said as the reframe hint's last line
+   * (§7.2) — `click to see the whole of IV` on a window of one sequence, where a
+   * click opens the sequence it is a window on. `null`, or absent, where a click
+   * does not go anywhere worth saying.
+   */
+  clickHint?(): string | null
 }
 
 /**
@@ -2539,7 +2547,8 @@ export class MatrixPanel {
    * when the question is asked. In the reader's own modifiers, and saying what a
    * drag will do *now*: under the diagonal lock Option alone draws on the
    * diagonal, under a turn the box is a stretch of the genome, and Shift's line
-   * only where there is a diagonal for it to pin a box to.
+   * only where there is a diagonal for it to pin a box to. On a window of one
+   * sequence a third line says how to leave it: a click opens the whole sequence.
    */
   private paintReframeHint(turned: boolean = this.turned !== null): void {
     const opt = optionKey()
@@ -2550,6 +2559,10 @@ export class MatrixPanel {
         : diagonalLocked()
           ? [`${opt} + drag to zoom along the diagonal`]
           : [`${opt} + drag to zoom into a region`, `${shiftKey()} + ${opt} + drag to zoom along the diagonal`]
+    // The way back out, under the two ways in: a window has no other control on
+    // the picture that says a click leaves it.
+    const click = turned ? null : (this.options.clickHint?.() ?? null)
+    if (click !== null) lines.push(click)
     this.reframeHint.replaceChildren(...lines.map((text) => el('div', { text })))
   }
 
