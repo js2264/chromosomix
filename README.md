@@ -30,8 +30,6 @@ chromosomix launches in about a second and reads your data where it lives, on yo
 
 - Serverless browser & CLI-based: there is no upload, no required preprocessing step and no backend of any kind — the viewer is static files that read standard genome-wide formats directly. Every analysis can be run **interactively**, in the browser, or **programmatically**, with the `chromosomix` command line in a script or a pipeline: the same tasks, with the same parameters, producing the same results. A bottom Console panel in the browser records every run and reports the `chromosomix` command that repeats it.
 
-- Side by side: contact maps, 1D browsers and 3D models open as the cells of a deck, panned and zoomed together, and several sessions stay open at once, one tab each.
-
 - Dedicated browser panels, four around the picture:
   - General panel: the file itself — its attributes, its chromosomes (or a metagenome's genomes and contigs), a minimap of the genome and the metadata it stores.
   - Aesthetics panel: to customize scales, color map, normalization, track layout, grouping, ...
@@ -42,13 +40,15 @@ chromosomix launches in about a second and reads your data where it lives, on yo
   - Cloud-based file access: Open files directly from any object store that serves byte ranges with CORS (e.g. S3, Cloudflare R2, Google Cloud Storage, or any HTTP server that supports range requests), from Dropbox and Google Drive share links, and private Google Drive folder or Dropbox.
   - Stores: several pre-configured remote data stores are available — the lab's own figures, IGV's genomes, 4DN open data, ENCODE, DNA Zoo and Roadmap — and so is any UCSC track hub with a `hub.txt` file. The user can also setup their own store by providing a structured JSON file describing the store and its data.
 
+- Side by side: contact maps, 1D browsers and 3D models open as the cells of a deck, panned and zoomed together, and several sessions stay open at once, one tab each.
+
 ## Philosophy
 
 1. **No backend or install of any kind.** No tile server, no specific process on a host, no accounts. The viewer is static files; the data are objects on a bucket, or a file on your disk. This is what makes the app free to run and free to archive.
 
-1. **Nothing is uploaded.** A local file is handed to an air-gapped worker by reference and read in place through the Emscripten filesystem. Nothing crosses the network, which is why there is no account system, no storage, no hosting cost and nothing to review for GDPR. You can open unpublished patient-derived genomic data on a laptop with the network cable out.
+2. **Nothing is uploaded.** A local file is handed to an air-gapped worker by reference and read in place through the Emscripten filesystem. Nothing crosses the network, which is why there is no account system, no storage, no hosting cost and nothing to review for GDPR. You can open unpublished patient-derived genomic data on a laptop with the network cable out.
 
-1. **No pre-parsing of genomic files is required.** Contact maps and 1D genomic files are read in bounded reads, and the rest is pure canvas transforms with **zero** further I/O. That is the central difference from HiGlass, which needs a tile server, a tile cache and a tile compositor to stream contact maps. 
+3. **No pre-parsing of genomic files is required.** Contact maps and 1D genomic files are read in bounded reads, and the rest is pure canvas transforms with **zero** further I/O. That is the central difference from HiGlass, which needs a tile server, a tile cache and a tile compositor to stream contact maps. 
 
 ## Using chromosomix
 
@@ -96,17 +96,9 @@ A minimal version of the viewer can be added to any HTML page as an `<iframe>`. 
 
 Paste it into a page and it works (not rendered here though because GitHub does not allow `<iframe>`). The `src` URL is the same as the one you would use to open the viewer in a browser, with the addition of `?embed=1` to tell it to hide the header and tab strip. 
 
-The text below is a live version of the above `<iframe>` (it will not work on GitHub, but it would work on any HTML page):
-
-<iframe
-  src="https://chromosomix.app/?embed=1#uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&transform=log10&balance=true"
-  width="100%"
-  height="640"
-></iframe>
-
 ## Using the chromosomix analysis CLI
 
-Thirty-two analysis tasks can be executed programatically through the CLI, with the same parameters and producing the same results as the Analysis panel interactively. This can be used in a pipeline or a script.
+Over thirty analysis tasks can be executed programatically through the CLI, with the same parameters and producing the same results as the Analysis panel interactively. This can be used in a pipeline or a script.
 
 ### Installing the CLI
 
