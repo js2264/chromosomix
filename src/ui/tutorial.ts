@@ -233,11 +233,14 @@ function oeToggle(): HTMLElement | null {
   return null
 }
 
-/** A number box of the drawer's form, by the words beside it. */
+/**
+ * A number box of the drawer's form, by the words beside it — a row of its own,
+ * or a block with a slider under its word, whose box is the number.
+ */
 function formInput(word: string): HTMLInputElement | null {
-  for (const label of drawer()?.querySelectorAll('label.param-field') ?? []) {
-    if (words(label.querySelector('.field-label')) !== word) continue
-    const input = label.querySelector('input')
+  for (const field of drawer()?.querySelectorAll('.param-field') ?? []) {
+    if (words(field.querySelector('.field-label')) !== word) continue
+    const input = field.querySelector('input[type="number"]') ?? field.querySelector('input:not([type="range"])')
     return input instanceof HTMLInputElement ? input : null
   }
   return null

@@ -346,8 +346,9 @@ const ACT = {
   'insulation-sequence': () => clickSequence('chr15'),
   'insulation-scales': async () => {
     const box = page
-      .locator('.analysis-drawer label.param-field', { has: page.locator('.field-label', { hasText: /^scales$/ }) })
-      .locator('input')
+      .locator('.analysis-drawer .param-field', { has: page.locator('.field-label', { hasText: /^scales$/ }) })
+      .locator('input[type="number"]')
+      .first()
     await box.fill('4')
     await box.press('Enter')
     await box.dispatchEvent('change')
