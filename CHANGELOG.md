@@ -10,7 +10,7 @@ The deployed site at <https://chromosomix.app/> is built from `main` on every pu
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
-## [Unreleased]
+## [0.16.0] - 2026-10-20
 
 ### Added
 
