@@ -283,6 +283,9 @@ async function markBorder() {
   await form.locator('input').first().fill('chr15:47,215,001')
   await form.locator('button', { hasText: /^add$/ }).click()
 }
+/** The Export card — not the Manual annotations card's own export row. */
+const exportCard = () =>
+  page.locator('.controls-card', { has: page.locator('.controls-title', { hasText: /^Export$/ }) }).first()
 /** The first insulation row's settings, and its bigWig. */
 const insulationRow = '.annotation-card .ann-row[data-id^="analysis:insulation-w"]'
 
@@ -365,8 +368,8 @@ const ACT = {
     await page.locator(`${insulationRow} .ann-more`).first().click()
   },
   'insulation-bigwig': () => page.locator(`${insulationRow} .ann-exports button`, { hasText: /^bigWig$/ }).first().click(),
-  'export-format': () => page.locator('.export-row select.select-format >> visible=true').first().selectOption('pdf'),
-  'export-save': () => page.locator('.export-row .export-acts button >> visible=true').first().click(),
+  'export-format': () => exportCard().locator('select.select-format').selectOption('pdf'),
+  'export-save': () => exportCard().locator('.export-acts button').first().click(),
   domains: () => page.click(`${domains} .ann-more`),
   'domains-display': () => page.selectOption(`${domains} select[data-display]`, 'lane'),
   'domains-bottom': () => clickPlace('bottom'),

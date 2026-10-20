@@ -280,9 +280,18 @@ function addButton(form: HTMLElement | null): HTMLButtonElement | null {
   return null
 }
 
-/** The Export card's format select and its download button, wherever the card is. */
+/**
+ * The Export card's row — its format and its download — wherever the card has
+ * been carried. Found by the card's title: the Manual annotations card has an
+ * export row of its own, which writes marks rather than the figure.
+ */
 function exportRow(): HTMLElement | null {
-  return first('.panel-aesthetics .export-row') ?? first('.export-row')
+  for (const card of document.querySelectorAll('.controls-card')) {
+    if (laidOut(card) && words(card.querySelector('.controls-title')) === 'Export') {
+      return card.querySelector<HTMLElement>('.export-row')
+    }
+  }
+  return null
 }
 
 /** A select of the drawer's form, by the words beside it. */
@@ -1161,7 +1170,7 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       chapter: 'The figure',
       title: 'Save the figure',
       text: 'Press the download button beside it.',
-      target: () => exportRow()?.querySelector<HTMLElement>('.export-acts button') ?? null,
+      target: () => exportRow()?.querySelector<HTMLElement>('.export-acts button') ?? columnDoor('aesthetics'),
       done: () => savedAny('.pdf'),
       needs: {
         holds: () => (exportRow()?.querySelector('select.select-format') as HTMLSelectElement | null)?.value === 'pdf',
