@@ -7903,9 +7903,14 @@ export class Session {
       // names a stretch of somewhere the reader is no longer looking. Left in, a
       // selection drawn on a bookmarked chromosome opened the new block and then
       // yanked it back to the old bookmark.
-      onChangeRegion: (region, region2) => {
+      onChangeRegion: (region, region2, focus) => {
         const { region2: _dropped, focus: _left, ...rest } = state
-        this.navigate({ ...rest, region, ...(region2 === undefined ? {} : { region2 }) })
+        this.navigate({
+          ...rest,
+          region,
+          ...(region2 === undefined ? {} : { region2 }),
+          ...(focus === undefined ? {} : { focus }),
+        })
       },
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
       onOpenGenome: (genome) => this.navigate({ uri: state.uri, view: 'genome', genome }),

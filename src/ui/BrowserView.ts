@@ -3528,8 +3528,9 @@ export class BrowserView {
       class: 'export-row-flex',
     })
     row.note.replaceWith(this.exportStatus)
-    // Under the row it qualifies: whether the saved figure says what it is.
-    row.body.append(captionField())
+    // On the line of the two buttons it qualifies: whether the saved figure
+    // says what it is.
+    row.parts.acts.append(captionField())
     // A vector PDF has no resolution, so the resolution *goes* rather than
     // sitting there greyed out — which also gives the format the width it needs
     // to say "vector" on one line, the only line the row has.

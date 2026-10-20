@@ -2,8 +2,9 @@
  * The breadcrumb's *contacts* box (§6.5): the total every map of the tab is
  * drawn to.
  *
- * Empty, it shows the map's own total in grey — the number `cooler info` prints
- * as `sum` — and every file is read as stored. A number typed into it (`10M`,
+ * Empty, it shows a pale `e.g. 10M`, gone the moment the box is clicked, and
+ * every file is read as stored; the map's own total — the number `cooler info`
+ * prints as `sum` — is in its tooltip. A number typed into it (`10M`,
  * `23,000,000`) draws each map to that many contacts on its own: subsampled
  * where the map holds more, oversampled through Boost-HiC where it holds fewer.
  * Every picture and every task then reads the drawn maps.
@@ -33,7 +34,7 @@ export interface MapTotal {
 export interface ContactsBoxProps {
   /** The total in force, or `null` for every file as stored. */
   value(): number | null
-  /** The contacts of the map the trail describes — the grey placeholder. */
+  /** The contacts of the map the trail describes — said in the tooltip. */
   own(): number | null
   /** Every map on screen; two or more put the chevrons up. */
   maps(): readonly MapTotal[]
@@ -145,7 +146,7 @@ export class ContactsBox {
   sync(force = false): void {
     const value = this.props.value()
     const own = this.props.own()
-    this.input.placeholder = own === null ? 'as stored' : contactsText(own)
+    this.input.placeholder = 'e.g. 10M'
     if (force || document.activeElement !== this.input) {
       if (this.typed === null) this.input.value = value === null ? '' : contactsText(value)
     }

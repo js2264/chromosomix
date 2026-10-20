@@ -62,7 +62,14 @@ export interface ExportRow {
   /** The chosen resolution, or 96 where the row offers none. */
   dpi(): number
   /** Reach the parts a card has to enable, disable or hide itself. */
-  parts: { dpi: HTMLSelectElement | null; format: HTMLSelectElement; save: HTMLButtonElement; copy: HTMLButtonElement | null }
+  parts: {
+    dpi: HTMLSelectElement | null
+    format: HTMLSelectElement
+    save: HTMLButtonElement
+    copy: HTMLButtonElement | null
+    /** The box the save and the clipboard share, for a switch that belongs on their line. */
+    acts: HTMLElement
+  }
 }
 
 export function exportRow(options: ExportRowOptions): ExportRow {
@@ -111,6 +118,7 @@ export function exportRow(options: ExportRowOptions): ExportRow {
           { class: 'btn btn-icon', size: 15 },
         )
 
+  const acts = el('div', { class: 'export-acts' }, save, ...(copy === null ? [] : [copy]))
   const row = el(
     'div',
     { class: options.class === undefined ? 'export-row' : `export-row ${options.class}` },
@@ -121,7 +129,7 @@ export function exportRow(options: ExportRowOptions): ExportRow {
     // and not for the clipboard, so the row broke into three lines with one
     // button alone on the last — which reads as an afterthought rather than as
     // the other half of a pair. They are the same figure going to two places.
-    el('div', { class: 'export-acts' }, save, ...(copy === null ? [] : [copy])),
+    acts,
   )
   const note = el('span', { class: 'clip-note export-note' })
   return {
@@ -130,6 +138,6 @@ export function exportRow(options: ExportRowOptions): ExportRow {
     body: el('div', { class: 'panel-controls' }, row, note),
     format: () => formatSelect.value,
     dpi: chosenDpi,
-    parts: { dpi: dpiSelect, format: formatSelect, save, copy },
+    parts: { dpi: dpiSelect, format: formatSelect, save, copy, acts },
   }
 }

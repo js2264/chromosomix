@@ -47,8 +47,11 @@ export interface SearchBoxOptions {
   value?: string
   /** Extra classes for the input, for the views that size their own. */
   inputClass?: string
-  /** Enter was pressed, or the `go` button beside it was clicked. */
-  onSubmit(text: string): void
+  /**
+   * Enter was pressed, or the `go` button beside it was clicked — with the hit
+   * it took, where it took one rather than the text as typed.
+   */
+  onSubmit(text: string, hit?: Suggestion): void
   /** Every keystroke, for a box that answers as you type. */
   onInput?(text: string): void
   /**
@@ -118,7 +121,7 @@ export class SearchBox {
     if (first !== undefined) {
       this.input.value = first.value
       this.close()
-      this.options.onSubmit(first.value)
+      this.options.onSubmit(first.value, first)
       return
     }
     this.close()
@@ -146,7 +149,7 @@ export class SearchBox {
           () => {
             this.input.value = hit.value
             this.close()
-            this.options.onSubmit(hit.value)
+            this.options.onSubmit(hit.value, hit)
           },
           { class: 'search-hit' },
         ),

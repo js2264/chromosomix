@@ -935,7 +935,11 @@ typed (`annotations/search.ts`, shared with the browser's box, §5.8). A hit is 
 feature's **own** span, which is the number a reader copies into a primer tool or a paper; picking
 one opens the feature with a quarter of its length either side, put in the box in the display form,
 so it lands on the gene and not a base before it. The row used to print the start of that padded
-window, a coordinate the gene does not begin at.
+window, a coordinate the gene does not begin at. **What is read is wider than what is framed**: the
+block is that window and a hundred bins either side (`SEARCH_CONTEXT_BINS`, clipped to the sequence),
+opened framed on the window as a bookmark is (§8.10, `focus`), so the wheel and a drag back out find
+the gene's neighbourhood instead of the paper past a block cut to the gene. A gene is a place to
+stand, not a block asked for; coordinates typed into the box are still read exactly as typed.
 
 **Zoom is four buttons beside the box**, because what they change is the coordinate the box holds.
 The scroll wheel on the map is a zoom of the *picture* — the same block, drawn larger or smaller —
@@ -1129,7 +1133,7 @@ read as *this file, then this resolution, then these chromosomes* and put a cont
 constantly at the one end of the row they scroll past on the way to the box they type in.
 
 **Past the resolution, at the far end of the bar, the total the maps are drawn to** (§6.5): a box
-labelled *contacts*, empty and showing the map's own total in grey until a reader types one, and —
+labelled *contacts*, empty and showing a pale `e.g. 10M` until a reader clicks into it, and —
 with two maps or more on screen — two chevrons after it that type the shallowest map's total or the
 deepest's. It is on the bar rather than on a card for the reason the resolution is: it is a control
 over the whole picture, and over every task, not a step of the trail. It is one element for the life
@@ -1841,8 +1845,11 @@ still do not, and `test/unit/bins-guard.test.ts` still proves it for every unbal
 ### 6.5 Drawn to a total — subsampled or oversampled
 
 **The last box on the breadcrumb is a number of contacts** (§5.5), labelled *contacts*. Empty, it
-shows the map's own total in grey — the `sum` that `cooler info` prints, 179,175,551 for the yeast
-micro-C — and every file is read as stored. A total typed into it draws **every map of the tab to
+shows `e.g. 10M` as its placeholder, paler than any number the box holds and gone as soon as the box
+is clicked, so it reads as *type a number here* and never as a value already in it; every file is
+then read as stored. The map's own total — the `sum` that `cooler info` prints, 179,175,551 for the
+yeast micro-C — is in the box's tooltip. (It was the placeholder once, and was read as a total
+already typed.) A total typed into it draws **every map of the tab to
 that many contacts, each on its own**: subsampled where a map holds more, oversampled where it holds
 fewer. It reads a total the way a methods section or `cooler info` prints one — `10M`,
 `23,000,000`, `2.5e7`, `500k`, `1.2G` — and refuses, in the box and with nothing redrawn, anything
@@ -2233,7 +2240,7 @@ itself are three different claims; a map read as stored says nothing, as it alwa
 Both are set in the axis labels' grey — the region at 11 px and weight 600, the rest at 10 px,
 before the text size is applied — because at 15 px and semibold in the page's ink the region was the
 largest type on the page and drew the eye away from the picture it names. Both Export cards carry a
-**caption** switch under the save row, on by default, for the reader who lays figures out with a
+**caption** switch on the save row, after the download and the clipboard it qualifies, on by default, for the reader who lays figures out with a
 legend of their own; off, the figure ends at its lowest track and keeps no room for the line. It is
 one preference, kept with the overlays' kind (`localStorage`), and shared: off beside the map is
 off in the 1D browser, and in the deck's figure, whose cells each read it (§16.5). The tracks'
@@ -3572,7 +3579,10 @@ or in its place when the legend is off — a line or two of plain text, small an
 reader's own modifiers: *⌥ + drag to zoom into a region* and *⇧ + ⌥ + drag to zoom along the
 diagonal* on a Mac, *Alt* and *Shift* elsewhere. It says what a drag will do **now**: one line under
 the diagonal lock, where ⌥ alone already pins the box; *a stretch* under a turn, whose box is a
-stretch of the genome; and Shift's line only where there is a diagonal to pin a box to. Nobody finds
+stretch of the genome; and Shift's line only where there is a diagonal to pin a box to. **On a
+window of one sequence a last line says the way back out** — *click to see the whole of IV* — since
+a click on a cell there opens the sequence the window is on, and nothing else on the picture says
+so; not on a whole sequence, a pair of windows or a turned map. Nobody finds
 the gesture by panning and wheeling, and the shortcuts dialog is a place a reader goes once; the hint
 is where the hand already is, gone the moment it leaves the map, and drawn in no export. A halo of
 the page's colour keeps it legible over cells without covering them, and its ink is the picture's —
@@ -12936,6 +12946,14 @@ The state is read from the ARIA attribute the control already needs — `aria-pr
 in `ui/styles.css` draws all of them. `test/unit/toggle-look.test.ts` holds the selector list and
 refuses a second lit look. A toggle that has become unavailable is unavailable first: the lit rule
 stands down for `:disabled`.
+
+**A tickbox is the app's own**, one look wherever there is one — a sequence in the list, a row of
+the Tracks card, a form's switch, the caption: the fields' rounded corner and border at rest, a resting
+shadow as a button has, the border in the accent and a halo under the hand, and filled with the accent
+when ticked, its tick (or a dash, for *some*) in the colour text on the accent takes and grown in
+rather than switched on. One rule draws it (`:where(input)[type='checkbox']` in `ui/styles.css`), low
+enough that a card sizing a box for its own row still does; the engine's grey square, a different
+square in every browser and in no family with the controls round it, is not drawn anywhere.
 
 A **selection** is not a toggle. A chosen row, tile or folder carries a fill and a border and keeps
 its text colour, because its text is content — a file's name — rather than a label. A toggle's whole

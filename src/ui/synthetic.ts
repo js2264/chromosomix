@@ -166,7 +166,7 @@ export function recomputeNote(
   return el(
     'p',
     { class: 'ann-note ann-detached' },
-    'the values were not carried across the reload · ',
+    'values not kept over the reload · ',
     run,
   )
 }
