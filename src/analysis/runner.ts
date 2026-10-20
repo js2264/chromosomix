@@ -41,6 +41,7 @@ import { abortError, idParam, listParam, runnerParams } from './job'
 import { taskById } from './registry'
 import {
   defaultParams,
+  readsMap,
   type AnalysisContext,
   type AnalysisFraming,
   type AnalysisTask,
@@ -102,8 +103,13 @@ export type JobState =
  * second job.
  */
 export interface RunnerHost {
-  context(): AnalysisContext | null
-  source(): {
+  /**
+   * The context a task is priced and framed against: the starred map's, or —
+   * asked about a `task` that reads no map — the session's own, whichever map
+   * is starred (§18.1). {@link source} and {@link contigLengths} answer alike.
+   */
+  context(task?: AnalysisTask): AnalysisContext | null
+  source(task?: AnalysisTask): {
     uri: string
     source: SourceSpec
     cells?: readonly string[]
@@ -116,7 +122,10 @@ export interface RunnerHost {
     /** What the reader calls this map (§16.10), which its results are named by. */
     label?: string
   } | null
-  /** Which map a plain Run files its results against — the star (§18.2). */
+  /**
+   * Which map a plain Run files its results against — the star (§18.2), for a
+   * task that reads one; a task that reads only tracks is filed on the lead.
+   */
   targetMap?(): MapId
   /** Every map on screen, in reading order, for {@link AnalysisRunner.runAll}. */
   allTargets?(): readonly RunTarget[]
@@ -138,7 +147,7 @@ export interface RunnerHost {
    */
   annotations?(): AnnotationClient | null
   /** The assembly, so a task in the other venue can clamp a window (§18.3). */
-  contigLengths?(): Record<string, number>
+  contigLengths?(task?: AnalysisTask): Record<string, number>
   /**
    * What a chosen entry is called, for the outputs that name one.
    *
@@ -570,11 +579,27 @@ export class AnalysisRunner {
    * The result for one task on one map; the host's own map when none is named.
    *
    * The default is what every existing caller wants and is why they needed no
-   * change: a drawer showing one figure is showing the starred map's.
+   * change: a drawer showing one figure is showing the starred map's — or, for a
+   * task that reads no map, the one result it has ({@link homeOf}).
    */
   resultOf(taskId: string, map?: MapId): TaskResult | null {
-    const where = map ?? this.host.targetMap?.() ?? LEAD_MAP
+    const where = map ?? this.homeOf(taskId)
     return this.results.get(resultKey(where, taskId)) ?? null
+  }
+
+  /**
+   * The map a task's results are filed under when nobody names one.
+   *
+   * The star's, for a task that reads a map: it measured the starred picture.
+   * The session's own for a task that reads only the tracks and sequences
+   * (`readsMap`), which is where {@link queueOne} files it whichever map is
+   * starred — so moving the star neither hides its result nor makes the next
+   * Run a second copy of it filed under another map.
+   */
+  private homeOf(taskId: string): MapId {
+    const task = this.host.task?.(taskId) ?? taskById(taskId)
+    if (task !== undefined && !readsMap(task)) return LEAD_MAP
+    return this.host.targetMap?.() ?? LEAD_MAP
   }
 
   /**
@@ -588,7 +613,7 @@ export class AnalysisRunner {
    * "never run" from "run once" before it can count.
    */
   runsOf(taskId: string, map?: MapId): TaskResult[] {
-    const where = map ?? this.host.targetMap?.() ?? LEAD_MAP
+    const where = map ?? this.homeOf(taskId)
     const key = resultKey(where, taskId)
     const current = this.results.get(key)
     const older = this.history.get(key) ?? []
@@ -670,8 +695,18 @@ export class AnalysisRunner {
    * The targets are the caller's, in the order they should run: the session
    * hands the lead first and then the deck in reading order, which is what a
    * reader looking at the grid would expect the progress to follow.
+   *
+   * **A task that reads no map is one run, however many maps there are.** Its
+   * runner reads the session's tracks and sequences and never a matrix, so five
+   * jobs against five maps were five computations of one answer, filed as five
+   * identical lanes each named after a map it never read. The drawer offers it
+   * no batch (§18.1); this is the same rule where a batch is queued.
    */
   runAll(task: AnalysisTask, params: Params, targets: readonly RunTarget[]): void {
+    if (!readsMap(task)) {
+      this.queueOne(task, params, null)
+      return
+    }
     if (targets.length === 0) return
     if (targets.length === 1) {
       this.queueOne(task, params, null, targets[0])
@@ -693,7 +728,9 @@ export class AnalysisRunner {
     target?: RunTarget,
   ): void {
     if (this.destroyed) return
-    const context = this.host.context()
+    // Asked about this task: one that reads no map is framed by the session's
+    // own map, whichever is starred, so its sequences and its grid hold still.
+    const context = this.host.context(task)
     if (context === null) {
       this.refuse(task, batch, 'nothing is open')
       return
@@ -712,7 +749,14 @@ export class AnalysisRunner {
       this.refuse(task, batch, 'this view has no contact map to run against')
       return
     }
-    const where = target ?? this.hostTarget(framing)
+    // A task that reads no map is filed with the session's tracks, on the lead,
+    // whichever map is starred: what it measures does not move with the star,
+    // so a press after the star moved is this same run again — collapsed below,
+    // or kept as the run before — rather than a second copy of one lane filed
+    // under another map's name.
+    const where = readsMap(task)
+      ? (target ?? this.hostTarget(framing, task))
+      : { ...this.hostTarget(framing, task), map: LEAD_MAP }
     // A second press while the same task is already on the worker is a reader
     // wondering whether the first one registered, not a request for two runs of
     // it. A press while it is still *queued* is a change of mind about the
@@ -808,10 +852,11 @@ export class AnalysisRunner {
    * of what a track task needed: the framing is what it is a measurement of, and
    * a genome browser has one of those without having a contact map. Where the
    * host does answer with a file — which is every session with a map, and the
-   * starred one in a deck — that file is what the target names.
+   * starred one in a deck, or the session's own for a task that reads none —
+   * that file is what the target names.
    */
-  private hostTarget(framing: AnalysisFraming): RunTarget {
-    const source = this.host.source()
+  private hostTarget(framing: AnalysisFraming, task: AnalysisTask): RunTarget {
+    const source = this.host.source(task)
     return {
       map: this.host.targetMap?.() ?? LEAD_MAP,
       uri: source?.uri ?? framing.uri,
@@ -1030,7 +1075,7 @@ export class AnalysisRunner {
               runDraft({
                 task: job.task,
                 provenance: this.recordable(job, result.provenance),
-                context: this.host.context(),
+                context: this.host.context(job.task),
                 where: targetLabel(job.target),
               }),
             ),
@@ -1105,7 +1150,7 @@ export class AnalysisRunner {
     const draft = runDraft({
       task: job.task,
       provenance: this.recordable(job, provisionalProvenance(job.task, job.params, job.framing)),
-      context: this.host.context(),
+      context: this.host.context(job.task),
       where: targetLabel(job.target),
     })
     return logAction({ ...draft, status: 'running' })
@@ -1458,7 +1503,8 @@ export class AnalysisRunner {
     // on a metagenome it is four thousand entries the analysis worker would
     // never read.
     if (step.task.venue === 'annotations') {
-      const lengths = this.host.contigLengths?.()
+      // The job's, as its framing is: for a 1D task, the session's own map's.
+      const lengths = this.host.contigLengths?.(job.task)
       if (lengths !== undefined) inputs.contigLengths = lengths
     }
     if (Object.keys(vectors).length > 0) inputs.vectors = vectors

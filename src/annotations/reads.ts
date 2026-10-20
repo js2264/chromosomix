@@ -218,10 +218,19 @@ export class ReadCache {
         // for as long as it takes a cancelled one to reject, and an
         // unconditional delete here removes the *replacement's* entry — which
         // is what lets the next frame issue a third without even cancelling.
-        if (this.inflight.get(key) === slot) this.inflight.delete(key)
+        if (this.inflight.get(key) !== slot) return
+        this.inflight.delete(key)
+        // A failed read asked for no frame, and the lane is done waiting on it
+        // (`SampleCache`'s own `finally` says why that matters).
+        if (!this.disposed) this.onChange()
       })
 
     return cached?.window ?? null
+  }
+
+  /** Whether a pile is on its way for any lane, as `SampleCache.busy` says of samples. */
+  get busy(): boolean {
+    return this.inflight.size > 0
   }
 
   /** What is held for one lane, without asking for more. */

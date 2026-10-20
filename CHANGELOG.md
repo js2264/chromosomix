@@ -68,6 +68,314 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   rings, or one ring when it is drawn in one lane. `node scripts/ui-circle.mjs` drives it on the
   mock community, and `node scripts/ui-lines.mjs` the reader's order and the two lines.
 
+- **Licences, in *About* (§22.4).** Under the tutorial and the source link: chromosomix's own
+  licence, the GPL, then one line per project it is built with or ported from — three.js, Apache
+  ECharts, h5wasm, `@gmod/bbi`, cooltools, chromosight, yapc with IDR, SciPy, NumPy, scikit-learn,
+  Boost-HiC, fdlibm, matplotlib, Lucide and Simple Icons — each with what it does here and its
+  licence, a link to the build's `THIRD-PARTY-NOTICES.txt`, and a line on the store and service
+  marks. The dialog is wider and taller to hold it, so the build stamp is still on screen on a
+  laptop. The README's *Licence* section names the same projects, and a test holds the two to the
+  source.
+
+- **Loop calling, a 2D task of its own, just before Pattern detection (§18.8, §18.9).** It answers
+  the one question *where are the loops*, where Pattern detection matches a template of which a loop
+  is one of five. Every pixel is tested against four neighbourhoods of its own — a donut about it, a
+  bar through it each way and the square below and left of it — each giving the pixel a local
+  expected, in raw counts; pixels of a like expected are corrected together, in 40 log-spaced
+  λ-chunks at an FDR of 0.1, kernel by kernel; a pixel that passes all four is enriched, enriched
+  pixels within 20 kb are one loop, called at its brightest, and a filter keeps the loops that stand
+  1.5–2× over their neighbourhoods. The calls land on the map as rings and leave as BEDPE; beside
+  them, a table of every call with its four expecteds and q-values, the loop spectrum, and the count
+  each λ-chunk asked of a pixel. The kernel's two half-widths are filled in for bins of 4 to 28 kb
+  (`w 7, p 4` at 5 kb, `5, 2` at 10 kb, `3, 1` at 25 kb); on a map outside that range the boxes are
+  empty and the run is refused, saying why, until they are filled. A balanced map only. On the
+  command line it is `chromosomix loops`. It reproduces HiCCUPS as `cooltools.dots` 0.7.1 computes it,
+  with its Python API's defaults: held to that package's own output stage by stage over the demo
+  cooler (`test/golden/analysis/hiccups.json`), and genome-wide on a mouse Hi-C map at 10 kb in the
+  validation notebook's new § 19, where the same 236 loops are called with the same counts, clusters,
+  expecteds and q-values, in 48 s of CPU on one thread where cooltools takes 11 minutes over four.
+
+- **Every number the validation's figures draw, in one table (§18.10).** `notebooks/validation.qmd`
+  writes `validation.txt` beside its page — <https://chromosomix.app/validation/validation.txt>, and
+  `validation-<tag>.txt` among each release's assets — a tidy table with a row for every mark its
+  twenty figures draw: each point, each vertex of a line, each hexagon of a density with its count,
+  each cell of a picture, each bar, band and line across a panel, each tick that names something and
+  each text, with the figure's label, the panel's letter and axes, and what the mark stands for. It
+  is read off each figure as the page shows it, so any figure can be drawn again from it alone. A
+  density is written as its hexagons rather than the millions of values behind it, a symmetric map's
+  cells once; and the metaplot's heatmaps, 35,034 transcripts in a picture a few hundred pixels high,
+  now draw each line as the mean of 100 transcripts, which is what the table holds. The P(s)
+  figure's four panels are lettered, as every other figure's are.
+
+- **A 3D model leaves as a PDB, for PyMOL, and a PDB this app wrote reads back (§25.2, §25.7).** A
+  **PDB** button beside **bed3d** on every row of the Structures card and on the drawer's result for
+  *Model from the map*, and a `.pdb` beside the `.bed3d` that `chromosomix reconstruct3d --out`
+  writes. One HETATM per bead, one chain per sequence and haplotype with its residues numbered along
+  it, and CONECT between neighbouring beads and nowhere else — none across a gap the model left,
+  none between chains — which is what stops PyMOL joining beads by distance; coordinates centred
+  and scaled so neighbouring beads are 3.8 apart, drawn in further where a model would overflow its
+  columns, with the centre and the factor written down. Its REMARK 250 block gives the PyMOL lines
+  that draw the model as the cell does — a cartoon trace at the cell's tube radius, or beads — and a
+  table of where each atom is on the genome, which is what lets the Structures card, the deck and
+  `--features`/`--structure` read the file back bead for bead. A PDB from anywhere else says nothing
+  about the genome — pastis' lists its beads in bin order on one chain — and is refused with that
+  reason and the way out, a bed3d of the coordinates beside their bins; so is one of these saved
+  again by PyMOL, which drops every REMARK. A model past a PDB's columns (99,999 beads, 9,999 in a
+  chain) has its button disabled with the reason, and the shell says it on stderr. Checked against
+  PyMOL 3.2 on the demo yeast, E. coli and mouse models; `scripts/check_pdb_pymol.py` repeats it.
+
+- **A `+` before back, for one more file in this tab (§5.5).** It opens the landing page's first
+  section, *Load files*, in a dialog: the drop area that is also the file chooser, and the URL box
+  under it. A map comes up beside the one open and a track is drawn on it, as a dropped file is; on
+  an empty tab the file opens there, and the tooltip and the dialog's title say which. A tab opened
+  by dropping a file has no Files column, nothing being connected, and no landing page any more, so
+  a second file held at an address had no door but the palette's *Add a file to this tab*.
+
+- **A store's rows are dragged as the Files column's are (§20.5, §24.2).** Every row that is a
+  file — in a portal's list, under the lab's figures and under IGV's genomes — can be let go on a
+  map's edge or its middle, on a cell of the deck, on the Tracks card, on an analysis form's file
+  box or on the landing page, and opens there with the name the store gives it and the tracks it
+  brings. The two verbs on a row say *add here* and *open in a tab of its own*, and neither could say
+  *under the third map*. A saved workspace's row does not drag, being tabs rather than a file. The
+  drag carries a token for the row, never its address, so a drag from another page opens nothing.
+
+- **The page says when a picture is finished, and at what resolution (§12, §21.4).** Once a view has
+  been routed, opened, read and painted — its map's block, the windows its lanes asked for, any
+  track on it still opening, a smoothing or a finer block being read — and a frame has passed with
+  nothing new begun, the window reports it once: a `performance` mark named `chromosomix:rendered`
+  at the moment the last of it ended, a `chromosomix:rendered` event on `window`, and, in an embed,
+  a `chromosomix:rendered` message to the host. The report gives each map on screen with the rung
+  its block was read from, the bins pooled into a cell and the resolution that makes, the lanes
+  drawn, the view state, and `drawn`, `gated` (the whole-genome read waiting for its button) or
+  `error` with the refusal. A repaint alone reports nothing, and the census and circularity reads
+  that follow a view hold nothing back. What a script screenshots on, or times — the viewer timings
+  (`notebooks/timing.qmd`) wait on it.
+
+- **The timings page opens on the time to a picture (§18.10).** `notebooks/timing.qmd` now first
+  times chromosomix against juicebox.js (on a `.hic`) and HiGlass (on an `.mcool`, served by
+  higlass-python's own tile server): one map and one track, of yeast, chicken and mouse, each seen
+  whole, one chromosome, a region and a locus, from disk and from the bucket it is published in, in a
+  fresh browser context — each viewer's page loaded empty and left two seconds, as a reader's is
+  while they find their file — from handing each viewer the files to the viewer saying its picture is
+  finished. Every view is at one resolution the plan names — never the viewer's choice — and a view a
+  viewer cannot draw at it, a rung the file lacks or juicebox.js's whole genome, is reported rather
+  than drawn some other way; a picture drawn in part, as juicebox.js draws a whole chromosome with a
+  track beside it, says how much. Every run is a line of `viewers.tsv`, published beside
+  `timings.tsv` and attached to each release.
+
+### Changed
+
+- **chromosomix is now under the GNU General Public License, version 3 or later, in place of MIT
+  (§22.4, §18.9).** Peak calling is ported from yapc (GPL-3.0) and the IDR test it thresholds by
+  from IDR (GPL-2.0 or later), and a translation of GPL code can only be distributed under the GPL.
+  Version 3 is the one that admits both of them and echarts' Apache-2.0 together. Both ports shipped
+  in 0.15.0, which was labelled MIT. `LICENSE` is the GPL's text, `package.json` says
+  `GPL-3.0-or-later`, and the README, *About*, `llms.txt` and every build's notices say so.
+  Everything else the builds carry was already under a licence compatible with it.
+
+- **Pattern detection's own words name no package (§18.8).** Its row reads *Find loops, borders,
+  hairpins, centromeres or stripes by template matching*, its thresholds are *the template's own
+  numbers, tuned for it and published with it*, and the note on a file with no weights speaks of
+  *the published method*. Its keywords no longer take *loop calling* or *call loops*, which find
+  Loop calling first; its command is still `chromosomix chromosight`.
+
+- **The package is published without a token (§22.3).** The release workflow publishes to npm by
+  trusted publishing: npm takes the upload only from this repository's `release.yml`, by the
+  short-lived identity GitHub gives the run, and publishes it with provenance, so each version on
+  npm says which commit and which run built it. The `NPM_TOKEN` secret is no longer read — 0.15.0
+  needed it, because npm trusts a workflow only with a package that already exists — and
+  `docs/deploy.md` says how to configure the package on npmjs.com and retire the token. A fork's
+  release skips the registry rather than failing on it, where a missing token used to be the test.
+
+- **The whole genome of a `.hic` is read in fewer requests, more of them at once, and a dropped one
+  without a megabyte of the disk round each read (§3.6, §6.5).** A walk across chromosome pairs — a whole-genome picture, the
+  census — read pair by pair, a record's head and then its blocks, four pairs at a time: the 4DN
+  chicken map's 630 pairs at 2.5 Mb were 1,258 requests, a minute and a half from its bucket. A walk
+  is now planned before it reads, every place it reads being known: the records' heads together,
+  each with the 4 KiB past its record's end, where Juicer puts the coarse blocks, as the stretches of
+  the file they make within 64 KiB of one another, and the blocks left over together after them. The
+  same picture is 427 requests, read six at a time; the yeast map of the demo store, whose records
+  lie end to end, 72 where it was 130; the 4DN mouse map, whose records are megabytes apart, 453
+  read six at a time where 460 were read four. Pixels are handed over as they were, in the same
+  order, and a plan holds no more than 24 MiB of them. A dropped `.hic` is walked the same way, in
+  exact reads, where each read paid a 1 MiB slice of the disk: 11 MB for that chicken genome, where
+  it was 222 MiB.
+
+### Removed
+
+- **The *dev features* switch in *About* (§29.1, §26.3).** It sat under the version, and it was the
+  one control in a dialog of facts and the one trace anywhere on screen of what is still being
+  built. *About* now carries none: nothing a reader sees names the switch or what it hides. The
+  slider it was drawn as, the one toggle in the application with a track and a knob, goes with it.
+
+### Fixed
+
+- **Every build's notices name the code ported into it (§22.4).** Analyses that follow a
+  reference implementation function for function — cooltools' HiCCUPS and peak prominence, cooler's
+  region parsing, chromosight's detection functions, yapc's peak calling and IDR's fit, SciPy's
+  cephes and `fminbound`, NumPy's pairwise sum and samplers, scikit-learn's BIRCH, Boost-HiC and
+  fdlibm's `erf` — owed their
+  upstreams' licences as any copy does, and `THIRD-PARTY-NOTICES.txt` named none of them. Each is
+  now listed, its licence committed verbatim under `licenses/`. The notices also reproduce
+  chromosomix's own licence first, which the desktop app and the standalone page carried nowhere,
+  and the MIT licence `generic-filehandle2` declares but does not ship, where they said only that
+  it had none.
+
+- **A number the map decides still follows the map after a run (§18.2).** A run is handed every
+  such number answered, so that its record says what it read, and that answer was what the form
+  remembered: after a run, Base composition's and Signal by group's bin size stayed at the rung the
+  run was on instead of following the next. The form now remembers a run as it was asked, the
+  number left to the map unless the reader typed one.
+
+- **A log axis draws its first and last ticks (§18.13).** Where the figure gives an axis its own
+  ticks, at 1, 2 and 5 or every digit of a decade, the library hid the first and the last of them
+  whenever the axis's fitted end went unlabelled, grid lines and all: a loop spectrum from 10.9 kb had
+  no tick below 30 kb. An end goes unlabelled now only where a tick sits on it.
+
+- **A 1D task is one Run, deck or not (§18.1, §18.4).** The 1D tasks read the loaded tracks and
+  sequences and never a map, yet a deck offered them *run on ★* and *run on all N maps*: the batch
+  read the same tracks once per map and filed as many identical lanes, each named after a map it
+  never read, and a plain Run filed its lane on whichever map was starred, so moving the star and
+  pressing Run again made a second copy of it. A 1D task's button now reads plain *run*, with no
+  batch beside it, and the star is nothing to it: it is priced, framed and laid out on the first
+  map's sequences and grid, where its form followed the star's — a deck of two assemblies offered
+  sixteen sequences or seventeen by which map was starred — and what it makes is filed with the
+  session's tracks, on the first map, so a second press after the star moved is the run already
+  going, or the next run of the same one. Its heading says it reads the loaded tracks, not the map,
+  and a pan no longer marks its result stale and offers to *recompute here* the same answer. A deck
+  with no map starred greys only the tasks that read a map, and says *only the 1D tasks can run*,
+  where it greyed the 1D card too under a sentence about a map.
+
+- **A connected folder offers every file the app opens, and says why of the rest (§20.5, §24.9).**
+  The Files column drew 3D structures (`.g3d`, `.3dg`, `.bed3d`, `.pdb`), saved workspaces
+  (`.json`), text tables (`.txt`, `.tsv`, `.tab`, compressed or not) and anything bgzipped as `.bgz`
+  dimmed — *not a format this viewer opens* — though a drop opened every one of them, because the
+  table that routes a name had never been taught them. They are offered now: a structure opens its
+  3D cell, a workspace's one mark appends its tabs without leaving an empty tab beside them (its row
+  does not drag, as a store's workspace row does not), a text table is read by its bytes as a
+  dropped one is, and a `.bgz` is read as a `.gz` everywhere, its `.tbi` included — which, for a
+  gnomAD `.vcf.bgz` opened by URL, was never looked for. Every name each reader takes is in
+  `test/unit/browse-route.test.ts`. What stays dimmed says what to do: a track hub's `hub.txt` opens
+  from the stores drawer, and its `genomes.txt` and `trackDb.txt` are read from it; a CSV is not a
+  table any reader here takes; a `.bz2`, `.xz` or `.zst` wants gzip; a `.gzi` is not used, a
+  compressed FASTA being read whole; a `.crai` goes with its CRAM. A workspace or a model in a Drive
+  folder or a Dropbox, whose address is an id or a temporary link, now goes by the name the folder
+  lists it under — fetched as a workspace, or opening a cell — instead of being taken for a track or
+  a map; and a store row of a structure is marked a genome file, no longer a contact map.
+
+- **A row pressed in the Files column opens on an empty tab, whatever it is (§20.5).** From a folder
+  on this machine, only a map did: a bigWig, a BED, a model or a loop table pressed on an empty tab
+  went to the road a drop on an open map takes, found no tracks to join and did nothing, under a
+  `+` that said it would open there. So did a file dropped on an empty window outside the landing
+  page's zone. Both now take the landing page's road. And a text file the column offers whose rows
+  no reader takes is refused as *text, but not a table this viewer reads*, with what a table is
+  read as, rather than as a contact map that is not an HDF5 file.
+
+- **A model dropped beside a map opens one cell, not two (§25.3).** A structure dropped on a map,
+  named by a URL or picked from a folder was given a cell for its name and another for its row's
+  arrival, so every model was drawn twice, and a second model's spare cell fell back to the first.
+  The watch on the store, which every road ends in, is now the only one that opens a cell.
+
+- **A file let go on a cell of the deck goes into that cell (§16.9).** A companion's map took a file
+  only on its five rectangles, and a tracks cell on none, so a track dropped on the lanes under the
+  second map, on its heading or anywhere on a tracks cell — off the disk or out of the Files column —
+  was drawn under the first map. The whole cell is the target now: on a map it means *on this map*,
+  a track on its usual edge and an overlay on its face; on a tracks cell, a track drawn in it. The
+  cell is outlined while the file is over it, and the map's own rectangles keep their finer aim.
+
+- **A row let go on the landing page opens with what it carries (§20.5, §24.2).** A row of the Files
+  column dropped on *Load files* was opened by its address alone, so a `.bam` came without the
+  `.bai` its folder had found beside it and was refused for want of one. It opens as a dropped file
+  does now, index and all — and a store's row, which can be dragged there too, under the store's
+  name for it.
+
+- **A page asking for a map's file starts the reader while the file is found (§6.1).** The picker
+  starts the reader's worker and h5wasm once the page is idle, so the first file dropped on it does
+  not wait for them — but the picker a workspace or a restored tab puts up to ask for a map on this
+  machine did not, and the file dropped there waited for a reader to be made. From disk, a
+  chromosome or a locus of the three maps the timings draw took 1.18 s from that page and takes
+  0.96 s, medians of eleven pictures. A genome, which reads through no reader, starts none.
+
+- **A file dropped on the page waiting for it opens the map the link or workspace named inside it
+  (§5.6).** A tab naming `map.mcool::/resolutions/25000` or a `.hic` at 4 kb that has to be given the
+  file asks for it to be dropped, and promises its view back; dropped, the file was opened by its
+  path alone, so an `.mcool` landed on a rung of its own choosing and on its Chromosomes table, and a
+  map dropped with a track beside it opened as a stranger to the view that asked for it. Both now
+  open at the resolution named, on the view named, the track joining it.
+
+## [0.15.0] - 2026-10-17
+
+**There is no 0.14.0.** A `v0.14.0` tag and a GitHub release for it were made by hand, on the commit
+that merged #114, before `npm version` had bumped `package.json`: that build calls itself 0.13.0, its
+release carries no installers, and nothing was published to npm. Everything below is 0.15.0, cut the
+usual way, and the first version of the package on npm.
+
+### Added
+
+- **The site describes itself to language models and crawlers (§11).** `chromosomix.app/llms.txt`,
+  in the shape llmstxt.org gives one: what the app is, the formats it opens, how to write a link that
+  opens a file at a place — every hash key a model is likely to want, with a map's `region` 0-based
+  and the 1D browser's `locus` as displayed — how to embed it, how to run the command line, and where
+  the documentation is. A test holds what it says to the app: each example link through the hash's
+  own reader, each value it lists against its list, each task against the registry and each store
+  against the shelf, and it names no dev feature (§29.5). Beside it, `llms-full.txt` is the README as
+  one file, generated at build time with its links made absolute; `robots.txt` welcomes every crawler
+  but keeps the archived pins and pull-request previews out of search; and `sitemap.xml` lists the
+  app and its validation and timing notebooks. New Open Graph tags give a pasted link a card to
+  unfurl with.
+
+- **chromosomix.app is written to be found by a search (§11).** The page's title and description
+  now name what the app is searched by — *genome browser for Hi-C, tracks and 3D models*; Hi-C and
+  Micro-C, `.cool`, `.mcool` and `.hic` — short enough for a results page to print whole, where the
+  title said *cool files, in the browser*. And the app no longer writes its bare name over that
+  title the moment it mounts: a search engine indexes the page as it stands after the script has
+  run, so no title the page was given had ever reached one. On the web a tab with nothing open keeps
+  the page's title; with a file open it is still the file's name and the app's. A canonical link
+  lists every address of the app — `?store=`, `?config=`, `?embed=1` — under the root; the
+  `<noscript>` says what the app is, what it reads and where its source and `llms.txt` are, for a
+  reader or a crawler without JavaScript, at the top of the page — it said only that JavaScript was
+  needed, a screen's height down a blank page, under the empty space the app mounts into; and the npm
+  package's description and keywords name the data and the analyses rather than *metagenomics* and
+  *metacool*, a dev feature's (§29.5).
+
+- **`chromosomix --version` (§23).** The first line is `chromosomix` and the version, with the
+  commit the build was made from — the words every file the command writes opens with, so `head -1`
+  is what a pipeline records. Then the Node it runs on, with the platform, and the `h5wasm` and
+  `@gmod/bbi` installed beside it, which read every map and track: both are ranges in `package.json`,
+  settled at install, so two installs of one version can read a file through two builds of either.
+  Answered wherever on the line it is written, as `--help` is. It printed the usage until now.
+
+- **Every build carries the licences of what it compiles in (§22.4).** `THIRD-PARTY-NOTICES.txt`
+  beside the site's, an archived pin's, the desktop renderer's and the package's `index.html`, and
+  beside the command in `dist-cli/`; a comment at the end of the standalone page, which may not be two
+  files. It lists what the build carries — read off the bundle, workers included, so the CLI's
+  external `h5wasm` and `@gmod/bbi` are not listed and echarts' `zrender` is — and reproduces each
+  licence in full: echarts' NOTICE and the d3 licence it embeds, HDF5's inside h5wasm's, and the
+  material generators copied into the source from Lucide, Simple Icons, chromosight, matplotlib and
+  ColorBrewer, whose upstream texts that are not npm packages are committed under `licenses/`. Every
+  build's check refuses one without them. Minifying had dropped every notice but three.js's, and a
+  tarball carried chromosomix's own LICENSE alone. The README's licence section says where each
+  build keeps them.
+
+- **A guided tutorial, from the landing page and About (§30).** *play the tutorial*, on the landing
+  page beside *Load files* and in About, walks a newcomer through a first session on a real map, one
+  step at a time, with the window lightly greyed and the one control the step is about lit: the
+  store drawer, opened from its header button on the lab's store, then switched to 4DN's; the IMR-90
+  Hi-C set `4DNES4296C5Q` (a billion contacts), its accession in colour with a copy button, blinking
+  when something else is typed; the set opened with its tracks, the General and Aesthetics columns
+  shown, 250 kb and chr13; the map drawn as a correlation to show its plaid; the Analysis panel's
+  2D, 3D and 1D tasks shown one group at a time, then Compartments run on chr13 alone, and its
+  saddle; back to balanced, two Shift-Option drags across the squares the tutorial lights, down to a
+  few domains at 10 kb, seen with O/E and 3 × 3 smoothing; Diamond insulation on chr13; the domains
+  drawn as a lane under the map; Track correlation of the reader's E1 and insulation against 4DN's,
+  the four ticked in one step; and the console. Each step moves on when what it asks for is done,
+  however it was done, and shows a tick first. The card points at what to press, glides to the next
+  thing, says what the step asks with an icon, and carries a progress bar cut into the tutorial's
+  ten parts, *back*, *skip step* and *skip tutorial*; ← and → step through it, and a press on the
+  grey shows where to press instead. Skipped half way, the landing page and About offer to resume at
+  the part the reader left; finished, to play it again. Also in the palette as *Guided tutorial*.
+  Nothing opens by itself.
+
 - **Tab goes on to the next field of its kind (§26.8).** In any field edited in place, Tab now takes
   what was typed, as Enter does, and puts the caret in the next field of the same kind — Shift+Tab
   the one before — and past the last lets it go: a track's name to the next track's, down the
@@ -89,13 +397,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   and on another machine its note names the folder to connect, with a button that does. The desktop
   app now lets its own page re-read what the user chose, and nothing else.
 
-- **The tracks' names beside the map, in its corners (§8.8).** Each stack's names now stand in the
-  corner that follows it clockwise — left of the tracks under the map, below the ones on its right,
-  above the ones on its left, right of the ones above it — instead of over the start of each track,
-  where a name and its range covered the first stretch of the signal. A short name sits in the margin
-  beside the map's own labels and a long one runs out over the corner, which grows to fit (wrapping a
-  name past 150 px); the range sits under its name, and a press on either still opens its caret, a
-  right click the lane's menu. Figures saved from the map carry them where the screen does.
+- **The tracks' names beside the map, in its corners, with the name column on (§8.8).** The 1D
+  browser's *name column* switch (`u`) is now at the end of the *all tracks* row of the map's Tracks
+  card too, and moves the names beside a map as well: on, each stack's names stand in the corner that
+  follows it clockwise — left of the tracks under the map, below the ones on its right, above the ones
+  on its left, right of the ones above it — rather than over the start of each track, where a name and
+  its range cover the first stretch of the signal. A short name sits in the margin beside the map's
+  own labels and a long one runs out over the corner, which grows to fit (wrapping a name past
+  150 px); the range sits under its name, and a press on either still opens its caret, a right click
+  the lane's menu. Figures saved from the map carry them where the screen does. The switch is **off**
+  to begin with, so the names are written over the tracks as they always were; for a while the
+  corners were the only place they went, with no switch on the map's card to put them back.
 
 - **Each cell of the deck can be on a sequence of its own (§16.3).** Every map's heading now says
   which sequence it shows, as a quiet picker beside its name: pick `V` on one cell and that map
@@ -1111,6 +1423,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   as a sequence of its own, last, as the file reads it, selected and framed to be moved into place.
 
 ### Changed
+
+- **An install of the package downloads what the command runs, and no more (§22.2).** `echarts` and
+  `three` are devDependencies now: both are compiled into `dist/`, and the command line loads
+  neither, so as dependencies they and `zrender` under them were 90 MB of the 116 MB that
+  `npm install -g chromosomix` put on disk. What is left is the three the CLI's bundle leaves
+  external, and a test holds `dependencies` to exactly those. The README installs the CLI from npm —
+  `npm install -g chromosomix`, or `npx chromosomix@<version>` for a pinned release — and keeps the
+  clone and `npm link` for trying a change before it is released.
 
 - **Compartments finds its components by Lanczos iteration, in a third of the time (§18.8).** Each
   component was found by power iteration, which converges at the ratio of the two largest
@@ -2516,6 +2836,31 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that collides never reaches that refusal.
 
 ### Fixed
+
+- **A release tag that is not the package's version builds and publishes nothing (§22.3).** The
+  release workflow's first job now refuses a `v*` tag unless it is `v` and the version `package.json`
+  carries, and every other job waits on it. `v0.14.0`, made by hand with GitHub's release form on a
+  commit still versioned 0.13.0, had the workflow set about 0.13.0 installers and pack
+  `chromosomix@0.13.0` for npm, which only a refused token kept off the registry for good. A release
+  body that would be too long for GitHub — this one's changelog section is 290 kB — is posted as each
+  entry's bold lead with a link to the section in full, rather than failing the release at its last
+  step. And `docs/deploy.md` no longer tells anyone to create a release by hand: it still said the
+  installers were built by `gh release create`, which the workflow stopped waiting on when it moved
+  to the tag; it now says what a tag sets off, and what the npm token needs.
+
+- **A reader that stops reading no longer kills the command (§23).** `chromosomix tasks | head -1`,
+  or a `less` quit early, closed the pipe under the command, and Node's report of the next write —
+  `EPIPE`, `EOF` on Windows — went unheard: a stack trace and exit 1 the moment `head` had its line,
+  and under `insulation map.cool 2>&1 | head -1`, where the progress on stderr is what closes, a task
+  that died before writing a single file. Both streams now let the reader go; what was left to print
+  is dropped and the command finishes what it was doing — all seven of that run's files, identical to
+  an unpiped run's — and exits with the status it would have had.
+
+- **A track still reading goes with the map to another resolution (§8.6).** A change of resolution
+  carried a map's tracks to the new one only once they had loaded: picking another resolution in the
+  second or two after a store's session opened, while its tracks were still being read, lost every
+  one of them, there and for good. A track on its way is now carried too, and read again at the new
+  resolution.
 
 - **A box is washed over the tracks beside a map, as it is in the 1D browser (§8.1).** A stretch
   highlighted in the browser — a rectangle drawn on the tracks — showed there as a wash over every

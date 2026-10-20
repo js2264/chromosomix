@@ -542,7 +542,7 @@ async function handleExportLifted(id: number, edit: ReferenceEdit): Promise<Lift
     },
   )
   if (bytes === null) throw abortError()
-  const stem = (parseUri(active.mc.uri).path.split('/').pop() ?? 'map').replace(/\.(m?m?(meta)?cool|hic|pairs(\.gz)?)$/i, '')
+  const stem = (parseUri(active.mc.uri).path.split('/').pop() ?? 'map').replace(/\.(m?m?(meta)?cool|hic|pairs(\.b?gz)?)$/i, '')
   // One genome's edit is that genome's map alone, and says whose.
   const genome = edit.original.genome === undefined ? '' : `.${edit.original.genome}`
   return { bytes, filename: `${stem}${genome}.edited.mcool`, rungs, contacts: finest.sum, skipped }
@@ -625,7 +625,7 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
     report: say,
     cancelled: () => cancelled.has(request.id),
     // The page's dev features switch (§29), carried on each open because a
-    // worker has no `localStorage` of its own to read it from.
+    // worker cannot read the page's address to learn it.
     ...(request.metacool === undefined ? {} : { metacool: request.metacool }),
   }
   let mc: MetaCooler

@@ -24,6 +24,8 @@ const pkg = JSON.parse(readFileSync(new URL('package.json', root), 'utf8')) as {
   version: string
   private?: boolean
   files?: string[]
+  dependencies?: Record<string, string>
+  devDependencies?: Record<string, string>
   bin?: Record<string, string>
   scripts?: Record<string, string>
   license?: string
@@ -66,11 +68,23 @@ describe('the package', () => {
     }
   })
 
+  it('installs what the command imports when it runs, and nothing a bundle compiled in', () => {
+    // `dependencies` is what every `npm install -g chromosomix` downloads, so it
+    // is the three the CLI's bundle leaves external (vite.cli.config.ts) and no
+    // more. `echarts` and `three` were here, and were 90 MB of every install for
+    // a command line that loads neither: `dist/` carries both, compiled.
+    expect(Object.keys(pkg.dependencies ?? {}).sort()).toEqual(['@gmod/bbi', 'generic-filehandle2', 'h5wasm'])
+    expect(pkg.devDependencies).toHaveProperty('echarts')
+    expect(pkg.devDependencies).toHaveProperty('three')
+  })
+
   it('carries the licence it claims', () => {
-    // npm shows a package's licence, and a tarball that declares MIT without
-    // the text is asking to be taken on trust.
-    expect(pkg.license).toBe('MIT')
-    expect(readFileSync(new URL('LICENSE', root), 'utf8')).toContain('MIT License')
+    // npm shows a package's licence, and a tarball that declares the GPL
+    // without the text is asking to be taken on trust.
+    expect(pkg.license).toBe('GPL-3.0-or-later')
+    const text = readFileSync(new URL('LICENSE', root), 'utf8')
+    expect(text).toContain('GNU GENERAL PUBLIC LICENSE')
+    expect(text).toContain('Version 3, 29 June 2007')
   })
 
   it('says where it lives and what it needs', () => {

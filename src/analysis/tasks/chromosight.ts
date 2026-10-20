@@ -1,5 +1,6 @@
 /**
- * Pattern detection, as a descriptor — the one task that *calls* something.
+ * Pattern detection, as a descriptor — one of the two tasks that *call* something on
+ * the map, beside Loop calling (`tasks/hiccups.ts`), which looks for loops alone.
  *
  * SPECS §18.9 said no loop calling, and gave a reason worth restating before
  * reversing it: a HiCCUPS-class caller needs false-discovery control across
@@ -180,7 +181,7 @@ const PARAMS: readonly ParamSpec[] = [
       {
         value: 'preset',
         label: 'from the pattern',
-        hint: 'chromosight’s own numbers for the template above — what chromosight detect uses.',
+        hint: 'The template’s own numbers, tuned for it and published with it.',
       },
       {
         value: 'custom',
@@ -443,8 +444,8 @@ function availability(context: AnalysisContext): TaskAvailability {
 export const CHROMOSIGHT_TASK: AnalysisTask = {
   id: 'chromosight',
   title: 'Pattern detection',
-  blurb: 'Find loops, borders, hairpins, centromeres or stripes by template matching (chromosight).',
-  keywords: ['loop calling', 'dots', 'call loops', 'borders', 'stripes'],
+  blurb: 'Find loops, borders, hairpins, centromeres or stripes by template matching.',
+  keywords: ['template', 'borders', 'stripes', 'hairpins', 'centromeres'],
   group: '2d',
   venue: 'analysis',
   version: 1,

@@ -19,6 +19,7 @@
  */
 
 import { ViewerError } from '../errors'
+import { begin, RENDERED, type RenderedReport } from '../perf/rendered'
 import { parseViewState, serialiseViewState, viewStateEquals } from '../state/ViewState'
 import { HistoryJournal } from '../state/historyJournal'
 import { historyItems } from '../ui/historyMenu'
@@ -45,7 +46,7 @@ import {
 } from '../ui/SidePanel'
 import { CardArranger } from '../ui/cardLayout'
 import { FilesCard } from '../ui/FilesCard'
-import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
+import { dragHasFileRow, readFileDrag, writePickedDrag } from '../ui/fileDrag'
 import { connectedFolders, hydrateFolders, subscribeFolders } from '../browse/connected'
 import type { PickedFile } from '../browse/folder'
 import '../browse/backends'
@@ -66,6 +67,9 @@ import {
 } from '../ui/commands'
 import { learnKey, readLayout } from '../ui/keyboardLayout'
 import { openAbout, openShortcuts } from '../ui/dialogs'
+import { readTourProgress, setTourRunning, writeTourProgress } from '../state/tour'
+import type { Tour } from '../ui/Tour'
+import type { TutorialHost } from '../ui/tutorial'
 import { button, dragHasFiles, el } from '../ui/dom'
 import { filesFrom } from '../ui/chooseFiles'
 import { icon, iconButton } from '../ui/icons'
@@ -78,6 +82,7 @@ import {
   type SessionConfig,
 } from '../state/SessionConfig'
 import { fileMemoryKey } from '../state/UiMemory'
+import { routeFor } from '../browse/route'
 import {
   WORKSPACE_VERSION,
   buildWorkspaceFile,
@@ -109,7 +114,7 @@ import {
 import { refineEnabled, toggleRefine } from '../ui/refine'
 import { RING_COLUMN_HINT, circleOnScreen, ringColumn, setRingColumn } from '../ui/circlePrefs'
 import { embedded, mounting } from '../embed'
-import { IS_STANDALONE } from '../version'
+import { IS_STANDALONE, TARGET } from '../version'
 import { Session, reserveSessionIds, type SessionHost } from './Session'
 import { EmbedChannel, embedChannel } from './EmbedChannel'
 import { TabStrip } from './TabStrip'
@@ -118,7 +123,7 @@ import { highestId, readSessions, writeSessions, type SessionSnapshot } from './
 /** Where "source" points, from the about dialog and the header. */
 const REPO_URL = 'https://github.com/js2264/chromosomix'
 
-/** The document title with nothing open; the file name is prefixed to it. */
+/** The app's name: what a tab's title ends with, after the file's, and the embed's brand. */
 const APP_TITLE = 'chromosomix'
 
 /**
@@ -132,6 +137,12 @@ const APP_TITLE = 'chromosomix'
  */
 const ADD_FILE_HINT =
   'A second map comes up beside the one open, and anything else is drawn on top.'
+
+/** The header's `+` with something open: the command's title and its hint, as one sentence (§26.4). */
+const ADD_FILE_TITLE = 'Add a file to this tab — a second map comes up beside the one open, anything else on top'
+
+/** …and on an empty tab, which there is nothing to add to: it opens, as the landing page does. */
+const OPEN_FILE_TITLE = 'Open a file in this tab — dropped, chosen or by its URL'
 
 /**
  * What the header's plug promises, read by its tooltip and by its command.
@@ -167,6 +178,15 @@ const chipOf = (on: boolean): 'on' | 'off' => (on ? 'on' : 'off')
 
 export class App implements SessionHost {
   private readonly sessions: Session[] = []
+  /**
+   * The document title with nothing open (§11). On the web it is the page's
+   * own, the one `index.html` gives it: a search engine indexes the page as it
+   * stands once the app has run, so a title the app replaced with its bare name
+   * was a page listed under its name alone, with none of the words it is
+   * searched by. The desktop window and the single file are found by no search,
+   * and keep the name.
+   */
+  private readonly landingTitle: string = TARGET === 'web' && document.title !== '' ? document.title : APP_TITLE
   private active = 0
 
   private readonly content: HTMLElement
@@ -297,6 +317,14 @@ export class App implements SessionHost {
   private readonly status: StatusBar | null
   /** At most one dialog at a time; it owns the keyboard while it is up. */
   private modal: Modal | null = null
+  /**
+   * The guided tutorial while it is on screen (§30), or `null`.
+   *
+   * Loaded by the press that plays it, as a chunk of its own: a reader who
+   * never asks for it pays for one `localStorage` read when About opens and for
+   * nothing else.
+   */
+  private tour: Tour | null = null
   /** Set while this class is the one moving the hash, so it ignores the echo. */
   private writingHash = false
   /**
@@ -334,6 +362,15 @@ export class App implements SessionHost {
   private readonly backButton: HTMLButtonElement = iconButton('undo-2', 'Go back', () =>
     window.history.back(),
   )
+  /**
+   * One more file in this tab, from wherever the reader is: the `+` before
+   * back (§5.5), opening the landing page's *Load files* in a dialog
+   * ({@link addFileDialog}). Its tooltip follows the tab ({@link syncAdd}),
+   * because on an empty one there is nothing to add to and it opens instead.
+   */
+  private readonly addButton: HTMLButtonElement = iconButton('plus', ADD_FILE_TITLE, () => this.addFileDialog(), {
+    class: 'btn btn-icon head-add',
+  })
   private readonly forwardButton: HTMLButtonElement = iconButton('redo-2', 'Go forward', () =>
     window.history.forward(),
   )
@@ -413,9 +450,12 @@ export class App implements SessionHost {
       // A session of its own: the empty tab in front, or a new one — the
       // same choice a store row makes ({@link openStoreEntry}), and through
       // `addPicked` so that an empty tab is *filled* by the same road a
-      // dropped file takes, index and name included.
+      // dropped file takes, index and name included. Except a workspace,
+      // which is tabs of its own appended beside these, as a store row's is:
+      // a new tab opened for it first was left empty beside them.
       onOpenNew: (picked) => {
-        const session = this.tabEmpty() ? this.current : this.newSession()
+        const tabs = routeFor(picked.uri, picked.name) === 'workspace'
+        const session = this.tabEmpty() || tabs ? this.current : this.newSession()
         void session?.addPicked(picked)
       },
       tabEmpty: () => this.tabEmpty(),
@@ -477,6 +517,10 @@ export class App implements SessionHost {
               void this.openStoreEntries(entries)
               this.storeDrawer?.close()
             },
+            // The file *add* opens, with its shelf noted when a target takes
+            // it. The drawer stays up, as it does for *add*: the reader is
+            // aiming at something beside it.
+            drag: (entry, event) => writePickedDrag(event, this.pickedFrom(entry), () => this.noteShelf(entry)),
             tabEmpty: () => this.tabEmpty(),
           },
           onLayout: relayout,
@@ -551,15 +595,11 @@ export class App implements SessionHost {
           { class: 'head-files' },
           // The stores first — somebody else's shelf, in a drawer, and the
           // door most readers arrive through — then the Files column, the
-          // reader's own places. Nothing else: the two buttons that stood
-          // here, a plug that connected a place and a `+` that added a file,
-          // were the Files column's own *connect a local or remote folder* and the
-          // file crumb's *Open a file* said a second time, one row up, and a
-          // header with three doors to a file reads as three different
-          // things. Dropping is still the gesture the app is opened with and
-          // the whole content area still takes it (see {@link addFileDialog}
-          // for why a drop *adds* rather than replaces), and both verbs stay
-          // in the palette.
+          // reader's own places. Nothing else: the plug that stood here was
+          // the Files column's own *connect a local or remote folder* said a
+          // second time, one row up, and stays in the palette. The `+` that
+          // stood beside it is past the second divider now, before back:
+          // see there.
           ...(this.storeDrawer === null ? [] : [this.storeDrawer.toggle]),
           this.filesPanel.toggle,
         ),
@@ -582,6 +622,15 @@ export class App implements SessionHost {
         el(
           'div',
           { class: 'head-history' },
+          // **One more file in this tab, first** (§5.5): the landing page's
+          // *Load files* — a drop area that is the file chooser too, and a box
+          // for a URL — in a dialog. It is back for the tab a file was dropped
+          // into: nothing there is connected, so there is no Files column, and
+          // the landing page and its URL box have gone, so a second file at an
+          // address had no door but the palette. Dropping still adds (see
+          // {@link addFileDialog}); this is the door for a file that is not on
+          // the screen to be dragged.
+          this.addButton,
           this.backButton,
           this.historyButton,
           this.forwardButton,
@@ -590,10 +639,10 @@ export class App implements SessionHost {
           // being looked at* (§5.5) and there is one of those on screen,
           // while a file is the window.
           //
-          // Nothing here *opens* a file, and the doors that do are elsewhere:
-          // the file crumb's *Open a file* adds one to this tab, and the
-          // brand — whose hover says so — goes back to the picker and
-          // replaces.
+          // The `+` adds a file to this tab, and the doors to another one are
+          // elsewhere: the file crumb's *Open a file*, which replaces this
+          // tab's, and the brand — whose hover says so — which goes back to
+          // the picker in a new tab.
           //
           // Held, because it is the one header button whose promise depends
           // on the tab: with nothing open there is no view to put in a link,
@@ -888,6 +937,13 @@ export class App implements SessionHost {
       ) {
         return
       }
+      // A fourth answers for the whole of itself: a companion's cell, or a
+      // tracks cell, takes a file let go anywhere on it (`PanelDeck`'s
+      // `watchFileDrops`, §16.9), where it used to fall through to here and
+      // load onto the first map. It has no class to be told apart by — it is
+      // the cell, and whether it took the file depends on what it holds — so
+      // it says so the way a handler can: by preventing the drop's default.
+      if (event.defaultPrevented) return
       // A row out of the Files panel, which carries a name rather than bytes.
       // Read before `filesFrom`, because it is the only branch that can be told
       // apart cheaply and a drag is never both.
@@ -941,8 +997,19 @@ export class App implements SessionHost {
       })
     }
 
+    // The window's first picture is routed and drawn under this, so the first
+    // report of a finished picture the page makes is of it (`perf/rendered.ts`)
+    // — the picker, a restored tab or a seeded workspace — and a host is told
+    // of each one after that.
+    const booting = begin()
     this.restore()
     this.channel?.start()
+    if (this.channel !== null) {
+      window.addEventListener(RENDERED, (event) => {
+        this.channel?.rendered((event as CustomEvent<RenderedReport>).detail)
+      })
+    }
+    booting()
   }
 
   /**
@@ -1487,7 +1554,7 @@ export class App implements SessionHost {
     this.paintNotice()
     // The tab's own name where it has one (a Drive file's, a store row's), the
     // file's otherwise — the same line the tab strip shows.
-    document.title = session.state === null ? APP_TITLE : `${session.label} — ${APP_TITLE}`
+    document.title = session.state === null ? this.landingTitle : `${session.label} — ${APP_TITLE}`
   }
 
   private applyPanels(session: Session): void {
@@ -1543,6 +1610,7 @@ export class App implements SessionHost {
       this.sessions.length < MAX_SESSIONS,
     )
     this.syncShare()
+    this.syncAdd()
   }
 
   /**
@@ -1583,6 +1651,18 @@ export class App implements SessionHost {
       : 'Share this tab as a link — open a file first'
     this.shareButton.title = title
     this.shareButton.setAttribute('aria-label', title)
+  }
+
+  /**
+   * What the `+` says it does, which is what {@link addFileDialog} will do:
+   * add to this tab, or — on an empty one, where there is nothing to add to —
+   * open in it. Live in both, unlike the link beside it, because both keep the
+   * promise.
+   */
+  private syncAdd(): void {
+    const title = this.tabEmpty() ? OPEN_FILE_TITLE : ADD_FILE_TITLE
+    this.addButton.title = title
+    this.addButton.setAttribute('aria-label', title)
   }
 
   /**
@@ -1766,15 +1846,17 @@ export class App implements SessionHost {
     if (session !== this.current) return
     // The tab's own name where it has one (a Drive file's, a store row's), the
     // file's otherwise — the same line the tab strip shows.
-    document.title = session.state === null ? APP_TITLE : `${session.label} — ${APP_TITLE}`
+    document.title = session.state === null ? this.landingTitle : `${session.label} — ${APP_TITLE}`
   }
 
   stateChanged(session: Session, options: { replace: boolean }): void {
     this.remember()
     if (session !== this.current) return
     // A navigation is how a tab comes to hold something, or stops holding it,
-    // so it is also when the link button becomes available or goes.
+    // so it is also when the link button becomes available or goes, and when
+    // the `+` stops opening and starts adding.
     this.syncShare()
+    this.syncAdd()
     this.writeHash(session.state, options)
     // The other bar, for a window that has one. `moved` is silent until a host
     // has asked to be told, so an embed nobody is driving posts nothing at all
@@ -2002,6 +2084,18 @@ export class App implements SessionHost {
    * @returns `true` when a session was found and opened.
    */
   private async openSharedHash(): Promise<boolean> {
+    // A wait for the picture the link describes (`perf/rendered.ts`): the
+    // payload is inflated before anything opens.
+    const end = begin()
+    try {
+      return await this.openSharedHashNow()
+    } finally {
+      end()
+    }
+  }
+
+  /** What {@link openSharedHash} does. */
+  private async openSharedHashNow(): Promise<boolean> {
     const payload = readShareHash(window.location.hash)
     if (payload === null) return false
     const read = await decodeShare(payload)
@@ -2474,6 +2568,23 @@ export class App implements SessionHost {
         hint: 'Everything this computer has kept, with a button that clears all of it.',
         run: () => void this.openStoredDataDialog(),
       },
+      // Absent where About does not offer it either, and for its reason: the
+      // first step is a store, and the single file has none (§30).
+      ...(IS_STANDALONE
+        ? []
+        : [
+            {
+              id: 'tutorial',
+              group: 'Help',
+              title: 'Guided tutorial',
+              hint: tutorialHint(),
+              enabled: this.storeDrawer !== null,
+              run: () => {
+                const kept = readTourProgress()
+                void this.playTutorial(kept !== null && !kept.finished ? 'resume' : 'start')
+              },
+            },
+          ]),
       { id: 'about', group: 'Help', title: 'About this viewer', run: () => this.openAboutDialog() },
       {
         id: 'source',
@@ -2551,9 +2662,100 @@ export class App implements SessionHost {
     if (this.modal !== null) return
     // `desktop()?.platform` rather than a flag: on the website there is no
     // bridge and the dialog says exactly what it says today.
-    this.modal = openAbout(REPO_URL, desktop()?.platform ?? null, () => {
-      this.modal = null
+    this.modal = openAbout(
+      REPO_URL,
+      desktop()?.platform ?? null,
+      () => {
+        this.modal = null
+      },
+      // Offered wherever a store can be opened, which is where its first step
+      // is: not in an embed, which has no drawer, nor in the single file, which
+      // offers this machine alone (§19, §21.2).
+      this.storeDrawer === null
+        ? null
+        : { progress: readTourProgress(), play: (from) => void this.playTutorial(from) },
+    )
+  }
+
+  /** The landing page's tutorial button (§30), as a session hands it up. */
+  startTutorial(from: 'start' | 'resume'): void {
+    void this.playTutorial(from)
+  }
+
+  /**
+   * Put the guided tutorial on screen (§30), from its start or from where the
+   * reader left it.
+   *
+   * From the start, it begins on the landing page, under the header button its
+   * first step lights: a tab that holds something is left as it is and a new
+   * one is opened beside it, as the brand does (`goHome`), rather than emptied.
+   * And the store drawer is put down and aimed at the lab's store, not opened:
+   * opening it is the reader's first step, and what that press opens is a
+   * store to *switch* from — so the switch to 4DN's is a press that is always
+   * there to make, where a drawer left on 4DN by an earlier visit, or by a
+   * link, made it one that had already happened. A resume lands on the first
+   * step of the part the reader left, and the steps whose state still holds go
+   * by on their own (`ui/Tour.ts`).
+   */
+  private async playTutorial(from: 'start' | 'resume'): Promise<void> {
+    if (this.storeDrawer === null || this.tour !== null) return
+    this.modal?.close()
+    const [{ Tour, resumeIndex }, { tutorialSteps }] = await Promise.all([
+      import('../ui/Tour'),
+      import('../ui/tutorial'),
+    ])
+    if (this.tour !== null) return
+    const steps = tutorialSteps(this.tutorialHost())
+    const kept = readTourProgress()
+    const start = from === 'resume' && kept !== null && !kept.finished ? resumeIndex(steps, kept.step) : 0
+    // Any view at all, opened or not: a tab restored from a reload names its
+    // file before it has opened it, and is about to cover the landing page.
+    if (start === 0 && (this.current?.state ?? null) !== null) this.newSession()
+    if (start === 0) {
+      this.storeDrawer.close()
+      this.storeDrawer.aim('rsg')
+    }
+    const keep = (index: number, finished: boolean): void =>
+      writeTourProgress({ step: steps[index].id, index, total: steps.length, finished })
+    this.tour = new Tour({
+      steps,
+      start,
+      onStep: (_step, index) => keep(index, false),
+      onEnd: (how, index) => {
+        this.tour = null
+        // Skipped keeps the step it was left on, which is what the landing
+        // page and About offer to resume; finished says so, and they offer to
+        // play it again.
+        if (how === 'finished') keep(index, true)
+        setTourRunning(false)
+      },
+      // Any dialog: About's own, a refusal, the palette. The tour waits under
+      // it rather than talking over it.
+      yielding: () => this.modal !== null || document.querySelector('.modal-backdrop') !== null,
     })
+    setTourRunning(true)
+    this.tour.start()
+  }
+
+  /** The window, as the tutorial's steps ask about it (`ui/tutorial.ts`). */
+  private tutorialHost(): TutorialHost {
+    return {
+      view: () => this.current?.state ?? null,
+      binsize: () => this.current?.binsize ?? null,
+      score: () => this.current?.scoreInForce ?? null,
+      file: () => this.current?.fileUri ?? null,
+      sequences: () => this.current?.contigNames() ?? null,
+      store: () => this.storeDrawer?.storeId ?? null,
+      panelOpen: (panel) =>
+        ({ analysis: this.analysisPanel, annotations: this.annotationsPanel, aesthetics: this.aestheticsPanel })[panel]
+          .isOpen,
+      task: () => this.current?.analysis.workspace?.openTask ?? null,
+      runs: (task) => this.current?.analysis.workspace?.runsOf(task) ?? [],
+      running: (task) => this.current?.analysis.workspace?.isRunning(task) ?? false,
+      tracks: () => this.current?.annotations?.store ?? null,
+      square: (stretch) => this.current?.squareOnScreen(stretch) ?? null,
+      consoleOpen: () => this.consolePanel?.isOpen === true,
+    }
   }
 
   /**
@@ -2606,6 +2808,14 @@ export class App implements SessionHost {
 
 /** Re-exported so the bootstrap can name the one error type it may see. */
 export { ViewerError }
+
+/** What the palette's *Guided tutorial* row will do, from where the reader left it (§30). */
+function tutorialHint(): string {
+  const kept = readTourProgress()
+  if (kept === null) return 'A first session on a 4DN Hi-C map, one step at a time.'
+  if (kept.finished) return 'The first session on a 4DN Hi-C map again, from the store.'
+  return `Carry on from step ${kept.index + 1} of ${kept.total}, where you left it.`
+}
 
 /** This window's `sessionStorage`, or `null` where the browser refuses it. */
 function sessionStorageOrNull(): Storage | null {

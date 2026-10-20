@@ -48,6 +48,7 @@ import base from './vite.config'
 import { cspMeta } from './scripts/csp.mjs'
 import { stripPwaTags } from './scripts/pwa-tags.mjs'
 import { shellIcon } from './scripts/shell-icon.mjs'
+import { thirdPartyNotices } from './scripts/third-party-notices.mjs'
 
 /**
  * Where this copy will be served from, passed in by the deploy workflow.
@@ -88,7 +89,7 @@ export default defineConfig({
   publicDir: false,
   // The site's policy, which an archived copy keeps: it is the same page,
   // served from the same origin a few directories down (`scripts/csp.mjs`).
-  plugins: [stripPwaTags(), shellIcon('chromosomix-pinned-shell-icon'), cspMeta()],
+  plugins: [stripPwaTags(), shellIcon('chromosomix-pinned-shell-icon'), cspMeta(), thirdPartyNotices()],
   define: {
     ...base.define,
     // `__DEMO_BASE__` is deliberately *not* overridden. It used to be

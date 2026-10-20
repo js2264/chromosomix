@@ -252,10 +252,11 @@ const isUpper = (ch: string): boolean => ch >= 'A' && ch <= 'Z'
 /**
  * A column to align the block in, when the surface has one: the browser's
  * gutter, and beside a map the stack's margin running on into the corner
- * beside it (§8.8).
+ * beside it (§8.8) — both while the reader has the *name column* on.
  *
  * `null` draws the block over the data, starting at the lane's near end, which
- * is what a surface with neither does — the assembly editor's stage.
+ * is what both surfaces do with the name column off, the default, and what the
+ * assembly editor's stage always does.
  */
 export interface LaneLabelColumn {
   /**

@@ -6,8 +6,10 @@ name: Notebooks
 #   https://chromosomix.app/validation/   notebooks/validation.qmd — every
 #                                         analysis run twice, by chromosomix and
 #                                         by its reference, and lined up
-#   https://chromosomix.app/timings/      notebooks/timing.qmd — every command of
-#                                         the first, run again and timed
+#   https://chromosomix.app/timings/      notebooks/timing.qmd — a map and a
+#                                         track drawn by chromosomix, juicebox.js
+#                                         and HiGlass, timed; then every command
+#                                         of the first, run again and timed
 #
 # **When.** On every release, once it is published — release.yml makes the
 # release a draft from the tag and a person publishes it, and that act is what
@@ -27,20 +29,27 @@ name: Notebooks
 # section of scripts/make_analysis_golden.py does. Boost-HiC is a checkout;
 # bedtools and seqkit are Ubuntu 24.04's own packages, which are the versions
 # the notebook was written against. Quarto comes with the reference
-# environment, as the `quarto-cli` package.
+# environment, as the `quarto-cli` package. The viewers the timings open on are
+# pinned in `notebooks/viewers/package.json` (juicebox.js, HiGlass and the
+# Playwright that drives Chromium for all three), and HiGlass's tile server in
+# `notebooks/requirements-higlass.txt`, higlass-python's environment, with
+# Ubuntu's libfuse 2 for the files it reads from a bucket.
 #
 # **What it costs.** About 6 GB of public data (4DN's, UCSC's mm10 through
 # iGenomes, and GEO's yeast Micro-C, each from where it was published) is
-# fetched on every run rather than cached: a cache that size would evict the
-# repository's npm and Electron caches, and the
-# buckets answer a runner at hundreds of megabytes a second. From nothing, the
-# validation renders in about an hour on a standard runner (4 cores, 16 GB —
-# the heaviest reference peaks at about 4 GB), every reference run for the
-# first time, and the timings in about twenty minutes a run, so four runs fit
-# the six hours a job may take with room to spare — four, an even number, so
-# that each side of a pair goes first in as many rounds as the other
-# (timing.qmd's `round_of`). Every runner is a different machine, which is why
-# the timings page says which one it ran on.
+# fetched on every run rather than cached, and 15 GB more for the viewers (4DN's
+# chicken and mouse maps in both formats, the mouse's 13 GB of it, and the
+# app's yeast demo): a cache that size would evict the repository's npm and
+# Electron caches, and the buckets answer a runner at hundreds of megabytes a
+# second. From nothing, the validation renders in about an hour on a standard
+# runner (4 cores, 16 GB — the heaviest reference peaks at about 4 GB), every
+# reference run for the first time; the viewers' pictures in about twenty
+# minutes a round, and the timings in about twenty minutes a run, so four of
+# each fit the six hours a job may take — four, an even number, so that each
+# side of a pair goes first in as many rounds as the other (timing.qmd's
+# `round_of`), and as many as there are viewers, so that each goes first once
+# a picture. Every runner is a different machine, which is why the timings page
+# says which one it ran on.
 #
 # **Where it is published, and why through a branch.** Pages replaces the
 # whole site on every deployment and only deploy.yml deploys it, so this
@@ -49,12 +58,17 @@ name: Notebooks
 # deploy.yml to publish; the deploy copies them into `validation/` and
 # `timings/` on every run after that, so a push to `main` keeps them. Beside
 # each page: `rendered.json`, what the stamp at its top says (when, from which
-# commit and release, by which run, on what machine); `commands.json` and
-# `summary.tsv` beside the validation, every command it ran and every verdict;
-# `timings.tsv` beside the timings, every timed run, one row each. A release
-# also gets the two pages and both tables as assets of its own — every verdict
-# as `validation-<tag>.tsv` and every timed run as `timings-<tag>.tsv` — so a
-# release's numbers outlive the next release's pages. Every run keeps what it
+# commit and release, by which run, on what machine); `commands.json`,
+# `summary.tsv` and `validation.txt` beside the validation, every command it
+# ran, every verdict and every number its figures draw, one row a mark (33 MB,
+# most of it Boost-HiC's two maps of chr19 and the metaplot over two tracks);
+# `timings.tsv` beside the timings, every timed run, one row each, and
+# `viewers.tsv`, every picture timed in a viewer. A release also gets the two
+# pages and the four tables as assets of its own — every verdict as
+# `validation-<tag>.tsv`, every number its figures draw as
+# `validation-<tag>.txt`, every timed run as `timings-<tag>.tsv` and every
+# picture as `viewers-<tag>.tsv` — so a release's numbers outlive the next
+# release's pages. Every run keeps what it
 # rendered as an artifact for 90 days, even when it fails: the validation alone,
 # and the timing rounds it finished, when the timings are what failed.
 
@@ -65,6 +79,10 @@ on:
     inputs:
       runs:
         description: 'Timed runs of each command (timing.qmd); even, so each side of a pair goes first equally often'
+        type: number
+        default: 4
+      viewer_runs:
+        description: 'Rounds of the viewers’ pictures (timing.qmd); four, so each viewer goes first once a picture'
         type: number
         default: 4
       publish:
@@ -96,15 +114,19 @@ jobs:
       actions: write
     env:
       TIMING_RUNS: ${{ inputs.runs || 4 }}
+      VIEWER_RUNS: ${{ inputs.viewer_runs || 4 }}
       PUBLISH: ${{ github.event_name == 'release' || inputs.publish }}
     steps:
-      # The data, their outputs and two Python environments need about 15 GB,
-      # and a fresh runner has about that free. Toolchains this job never uses
-      # are what make the room.
+      # The data, their outputs and three Python environments need about 15 GB,
+      # and the viewers' files 15 GB more; a fresh runner has about half of
+      # that free. Toolchains and browsers this job never uses are what make
+      # the room — the viewers run in Playwright's own Chromium.
       - name: Make room
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
-            /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/share/swift
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/share/swift \
+            /usr/local/share/powershell /opt/microsoft /opt/google /usr/lib/jvm /opt/az \
+            /usr/local/julia* /usr/local/share/chromium
           sudo docker image prune --all --force > /dev/null || true
           df -h /
 
@@ -139,16 +161,29 @@ jobs:
 
       - run: npm ci
 
-      # The command-line form of the app's Analysis panel, typechecked first.
+      # The command-line form of the app's Analysis panel, typechecked first, and
+      # the app itself, which the viewers' timings serve from dist/.
       - name: Build chromosomix
-        run: npm run build:cli
+        run: |
+          npm run build:cli
+          npm run build
 
-      - name: bedtools and seqkit
+      # libfuse 2, which higlass-python's FUSE mount (fusepy) loads to serve a
+      # file from a bucket, with its fusermount.
+      - name: bedtools, seqkit and FUSE
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends bedtools seqkit
+          sudo apt-get install -y -q --no-install-recommends bedtools seqkit fuse libfuse2t64
           bedtools --version
           seqkit version
+          fusermount -V
+
+      # juicebox.js, HiGlass and Playwright at the versions the timings name, and
+      # the Chromium that Playwright drives, with what it needs from Ubuntu.
+      - name: The viewers and their browser
+        run: |
+          npm ci --prefix notebooks/viewers
+          npx --prefix notebooks/viewers playwright install --with-deps chromium
 
       # yapc's first, so that the reference environment's 3.13 is the one left
       # on the PATH.
@@ -171,6 +206,7 @@ jobs:
             echo "QUARTO_PYTHON=$RUNNER_TEMP/refs/bin/python"
             echo "YAPC_PYTHON=$RUNNER_TEMP/yapc-env/bin/python"
             echo "BOOSTHIC_DIR=$RUNNER_TEMP/Boost-HiC"
+            echo "HIGLASS_PYTHON=$RUNNER_TEMP/higlass-env/bin/python"
           } >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/refs/bin" >> "$GITHUB_PATH"
 
@@ -199,6 +235,16 @@ jobs:
           "$pip" install --quiet --no-deps 'git+https://github.com/jurgjn/yapc@cf2ea62694f082fc282a979057d44b5e5b0fb41a'
           "$RUNNER_TEMP/yapc-env/bin/yapc" --help > /dev/null
 
+      # HiGlass's tile server, as higlass-python starts one, in an environment of
+      # its own: its pins (numpy 2, a newer h5py) are not the references'.
+      - name: higlass-python, in an environment of its own
+        run: |
+          set -euo pipefail
+          '${{ steps.python313.outputs.python-path }}' -m venv "$RUNNER_TEMP/higlass-env"
+          "$RUNNER_TEMP/higlass-env/bin/pip" install --quiet -r notebooks/requirements-higlass.txt
+          "$RUNNER_TEMP/higlass-env/bin/pip" check
+          "$HIGLASS_PYTHON" -c 'import higlass, clodius, simple_httpfs, fuse'
+
       - name: Boost-HiC
         run: |
           git clone --quiet https://github.com/LeopoldC/Boost-HiC "$BOOSTHIC_DIR"
@@ -212,7 +258,7 @@ jobs:
           NOTEBOOKS_SITE: ${{ steps.site.outputs.url }}
         run: quarto render notebooks/validation.qmd
 
-      - name: Render the timings, ${{ env.TIMING_RUNS }} runs of each command
+      - name: Render the timings, ${{ env.VIEWER_RUNS }} rounds of pictures and ${{ env.TIMING_RUNS }} runs of each command
         env:
           NOTEBOOKS_SITE: ${{ steps.site.outputs.url }}
         run: quarto render notebooks/timing.qmd
@@ -232,17 +278,19 @@ jobs:
             mkdir -p pages/validation
             cp notebooks/validation.html pages/validation/index.html
             cp "$work/rendered-validation.json" pages/validation/rendered.json
-            cp "$work/commands.json" "$work/summary.tsv" pages/validation/
+            cp "$work/commands.json" "$work/summary.tsv" "$work/validation.txt" pages/validation/
           fi
           if [ -f notebooks/timing.html ]; then
             mkdir -p pages/timings
             cp notebooks/timing.html pages/timings/index.html
             cp "$work/rendered-timing.json" pages/timings/rendered.json
           fi
-          if [ -f "$work/timings.tsv" ]; then
-            mkdir -p pages/timings
-            cp "$work/timings.tsv" pages/timings/
-          fi
+          for table in timings.tsv viewers.tsv; do
+            if [ -f "$work/$table" ]; then
+              mkdir -p pages/timings
+              cp "$work/$table" pages/timings/
+            fi
+          done
           if [ -d pages ]; then du -ah pages; else echo 'Neither notebook rendered.'; fi
 
       - uses: actions/upload-artifact@v4
@@ -285,7 +333,9 @@ jobs:
           cp pages/validation/index.html "assets/validation-${TAG}.html"
           cp pages/timings/index.html "assets/timings-${TAG}.html"
           cp pages/validation/summary.tsv "assets/validation-${TAG}.tsv"
+          cp pages/validation/validation.txt "assets/validation-${TAG}.txt"
           cp pages/timings/timings.tsv "assets/timings-${TAG}.tsv"
+          cp pages/timings/viewers.tsv "assets/viewers-${TAG}.tsv"
           gh release upload "$TAG" assets/* --clobber --repo '${{ github.repository }}'
 
       # The publisher of the site, as stores.yml asks it. A run dispatched by the

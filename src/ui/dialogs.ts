@@ -13,7 +13,10 @@ import { versionPicker } from './VersionPicker'
 import { el } from './dom'
 import { groupRank, isMac, keyCap, optionKey, shiftKey, stateChip, type Command } from './commands'
 import { buildLine } from '../version'
-import { devFeature, devFeaturesOn, setDevFeatures } from '../state/devFeatures'
+import { LICENSED, noticesUrl } from '../licences'
+import { devFeature } from '../state/devFeatures'
+import type { TourProgress } from '../state/tour'
+import { tutorialButtons } from './tutorialOffer'
 
 /**
  * The modifier a gesture actually wants, on the machine reading the dialog.
@@ -218,17 +221,31 @@ export interface AboutPlatform {
   signed: boolean
 }
 
+/**
+ * The guided tutorial, as *About* offers it (§30): where the reader got to,
+ * and the one call that plays it.
+ */
+export interface AboutTutorial {
+  progress: TourProgress | null
+  play(from: 'start' | 'resume'): void
+}
+
 export function openAbout(
   repoUrl: string,
   platform?: AboutPlatform | null,
   onClose?: () => void,
+  tutorial?: AboutTutorial | null,
 ): Modal {
   return new Modal({
     // Titled for what it is, like every other dialog, rather than for the
     // brand, which `.modal-title` would shout in capitals.
     title: 'About this viewer',
+    // Wider and taller than a plain dialog, for the licences' three columns:
+    // at 34rem each project's line broke in two, and the build stamp under
+    // them was a scroll away.
+    variant: 'modal-about',
     ...(onClose === undefined ? {} : { onClose }),
-    body: () =>
+    body: (close) =>
       el(
         'div',
         { class: 'about-body' },
@@ -261,12 +278,18 @@ export function openAbout(
             'own computer. Remote files are read the same way over HTTP range requests, so ' +
             'opening a map on a bucket costs a few requests rather than a download.',
         }),
+        // Straight after what the viewer is, because it is the answer to the
+        // question a reader who has just read that asks next — *so how do I
+        // start* — and it is the one way in to the tutorial a newcomer will
+        // find without being told where to look (§30).
+        ...(tutorial === undefined || tutorial === null ? [] : [tutorialOffer(tutorial, close)]),
         el(
           'p',
           {},
           'Source, issues and the format specification: ',
           el('a', { href: repoUrl, text: repoUrl, class: 'link' }),
         ),
+        licences(repoUrl),
         // Last, small, and selectable: it is the first thing to ask for in a
         // bug report about a page that has no server to interrogate, and the
         // last thing anyone reads for pleasure.
@@ -277,11 +300,6 @@ export function openAbout(
         // on the desktop target, where an installer is versioned by being an
         // installer and there is no site to hold the other builds.
         versionPicker(),
-        // The one trace a dev feature leaves anywhere a reader looks (§29), and
-        // the only way to them: under the version, because a developer who
-        // wants the unfinished half of a build asks for it where they ask
-        // which build this is.
-        devSwitch(),
         // The runtime, read from `process.versions` at preload time rather than
         // written down anywhere: Electron's Chromium and Node move within a
         // major, and a number pinned in the repository would be wrong within a
@@ -314,34 +332,93 @@ export function openAbout(
 }
 
 /**
- * The *dev features* switch (§29.1): a slider, lit when on, and one sentence.
+ * Whose work this is, and on what terms: chromosomix's own licence, the
+ * projects it is built with (`licences.ts`), and where each licence is
+ * reproduced in full.
  *
- * A `button` with `aria-pressed` rather than a checkbox, so that the one rule
- * that lights every toggle in the application lights this one too (§26.3) —
- * the slider is how it is drawn, not a second way of saying it is on. Pressing
- * it rebuilds the window, which is why the sentence says so: a switch whose
- * press reloads the page without warning reads as a crash.
+ * Above the version rather than under it, because it is read and the stamp is
+ * copied. Each project is named by what it does here, since "zrender" says
+ * nothing to a reader and "draws the analysis charts" does.
  */
-function devSwitch(): HTMLElement {
-  const on = devFeaturesOn()
-  const toggle = el(
-    'button',
-    {
-      class: 'btn btn-switch',
-      type: 'button',
-      title: on ? 'Turn dev features off' : 'Turn dev features on',
-      attrs: { 'aria-pressed': String(on), 'aria-label': 'dev features' },
-      on: { click: () => setDevFeatures(!on) },
-    },
-    el('span', { class: 'btn-switch-knob', attrs: { 'aria-hidden': 'true' } }),
+function licences(repoUrl: string): HTMLElement {
+  const outside = { target: '_blank', rel: 'noopener noreferrer' }
+  return el(
+    'section',
+    { class: 'about-licences', attrs: { 'aria-labelledby': 'about-licences-title' } },
+    el('h3', { class: 'about-heading', text: 'Licences', attrs: { id: 'about-licences-title' } }),
+    el(
+      'p',
+      {},
+      'chromosomix is free software, under the ',
+      el('a', {
+        text: 'GNU General Public License, version 3 or later',
+        class: 'about-link',
+        attrs: { href: `${repoUrl}/blob/main/LICENSE`, ...outside },
+      }),
+      '. It is built with, and in places ported from, the work of these projects, each under its own licence:',
+    ),
+    el(
+      'ul',
+      { class: 'about-licence-list' },
+      ...LICENSED.map((entry) =>
+        el(
+          'li',
+          { class: 'about-licence-row' },
+          el(
+            'span',
+            { class: 'about-licence-name' },
+            el('a', { text: entry.name, class: 'about-link', attrs: { href: entry.url, ...outside } }),
+            ...(entry.with === undefined ? [] : [' ', el('span', { class: 'about-licence-with', text: entry.with })]),
+          ),
+          el('span', { class: 'about-licence-what', text: entry.what }),
+          el('span', { class: 'about-licence-id', text: entry.licence }),
+        ),
+      ),
+    ),
+    el(
+      'p',
+      {},
+      'Every build carries each of those licences in full, in ',
+      el('a', { text: 'THIRD-PARTY-NOTICES.txt', class: 'link about-notices', attrs: { href: noticesUrl(), ...outside } }),
+      '.',
+    ),
+    el('p', {
+      class: 'about-fine',
+      text:
+        'The logos of the data stores, and the GitHub, Google Drive and Dropbox marks, are their ' +
+        'owners’ trademarks, shown only to name what they stand for. Their use implies no ' +
+        'endorsement of this viewer.',
+    }),
   )
+}
+
+/**
+ * The guided tutorial (§30): one sentence on what it is, and the button that
+ * plays it — or carries it on from the step the reader left it at, with the way
+ * back to its start beside it (`ui/tutorialOffer.ts`, which the landing page
+ * draws too).
+ */
+function tutorialOffer(tutorial: AboutTutorial, close: () => void): HTMLElement {
   return el(
     'div',
-    { class: 'about-dev' },
-    el('label', { class: 'about-dev-row' }, toggle, el('span', { text: 'dev features' })),
+    { class: 'about-tutorial' },
     el('p', {
-      class: 'about-dev-hint',
-      text: 'Shows what is still being built, and reloads the window to do it, keeping its tabs.',
+      class: 'about-tutorial-text',
+      text:
+        'New here? The guided tutorial walks through a first session on a real map from 4DN — ' +
+        'the store, a chromosome, its compartments and domains — one step at a time.',
     }),
+    el(
+      'div',
+      { class: 'about-tutorial-actions' },
+      ...tutorialButtons(
+        tutorial.progress,
+        (from) => {
+          close()
+          tutorial.play(from)
+        },
+        { class: 'about-tutorial-play' },
+      ),
+    ),
   )
 }

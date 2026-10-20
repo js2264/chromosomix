@@ -22,6 +22,16 @@ function playwright() {
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
+/** A path or an address with the dev features asked for (§29): `?config=…` → `?dev&config=…`. */
+export function withDev(address) {
+  const at = address.indexOf('?')
+  if (at === -1) {
+    const hash = address.indexOf('#')
+    return hash === -1 ? `${address}?dev` : `${address.slice(0, hash)}?dev${address.slice(hash)}`
+  }
+  return `${address.slice(0, at)}?dev&${address.slice(at + 1)}`
+}
+
 /** A browser, a page at the gallery's size, and the helpers bound to it. */
 export async function gallery(out, { width = 1600, height = 1000 } = {}) {
   const { chromium } = playwright()
@@ -104,11 +114,10 @@ export async function gallery(out, { width = 1600, height = 1000 } = {}) {
   async function openWithDev(path) {
     await page.goto(`${base}/`)
     await page.evaluate(() => {
-      localStorage.setItem('chromosomix:dev-features', 'on')
       sessionStorage.clear()
       for (const key of Object.keys(localStorage)) if (key.includes(':map:edit')) localStorage.removeItem(key)
     })
-    await page.goto(`${base}/${path}`)
+    await page.goto(`${base}/${withDev(path)}`)
     await page.reload()
   }
   async function close() {

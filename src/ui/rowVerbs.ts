@@ -21,6 +21,7 @@
  */
 
 import { icon, iconButton } from './icons'
+import { isStructureName } from '../annotations/g3d'
 
 export interface RowVerbs {
   /** What the row names, for the two tooltips. */
@@ -60,8 +61,13 @@ export function withNewMark(node: HTMLButtonElement): HTMLButtonElement {
 
 function addTitle(verbs: RowVerbs): string {
   if (verbs.tabEmpty) return `Open ${verbs.label} in this tab, which is empty.`
-  return verbs.kind === 'map'
-    ? `Add ${verbs.label} to this tab, beside the map in front as a panel of the deck.`
+  if (verbs.kind === 'map') {
+    return `Add ${verbs.label} to this tab, beside the map in front as a panel of the deck.`
+  }
+  // A model is a row of the tracks too, but what a reader sees arrive is the
+  // cell that draws it (§25.3), so that is what *add* says it does.
+  return isStructureName(verbs.label)
+    ? `Add ${verbs.label} to this tab, as a 3D model in a cell of its own.`
     : `Add ${verbs.label} to this tab, as a track.`
 }
 

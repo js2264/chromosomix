@@ -94,6 +94,7 @@ function build(view: StoreView = EMPTY_VIEW): { view: PortalView; opened: StoreE
     openWithTracks: (entry) => opened.push(entry),
     add: () => undefined,
     openTogether: () => undefined,
+    drag: () => undefined,
     tabEmpty: () => true,
   }
   const made = new PortalView({ front: FRONT, host, view, onView: (next) => views.push(next) })

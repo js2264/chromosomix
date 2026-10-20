@@ -137,6 +137,10 @@ export class FilesCard {
       onDragStart: (event, entry, folder) => {
         writeFileDrag(event, folder.id, entry.path, entry.name)
       },
+      // Not a workspace's row, as a store's is not (`ui/stores/host.ts`): it is
+      // tabs and not a file, and there is nowhere one could be aimed. It was
+      // inert while the router drew it dimmed, and offered it drags nowhere.
+      canDrag: (entry) => routeOf(entry.name) !== 'workspace',
     })
 
     this.el = el(

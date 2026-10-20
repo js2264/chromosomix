@@ -27,6 +27,7 @@ import { defineConfig } from 'vite'
 import base from './vite.config'
 import { stripPwaTags } from './scripts/pwa-tags.mjs'
 import { shellIcon } from './scripts/shell-icon.mjs'
+import { thirdPartyNotices } from './scripts/third-party-notices.mjs'
 
 export default defineConfig({
   ...base,
@@ -54,7 +55,7 @@ export default defineConfig({
   // before this one shipped. The pinned config had solved the same problem
   // privately; the plugin now lives in one place so the next config to switch
   // `publicDir` off inherits the fix instead of the bug.
-  plugins: [stripPwaTags(), shellIcon('chromosomix-desktop-shell-icon')],
+  plugins: [stripPwaTags(), shellIcon('chromosomix-desktop-shell-icon'), thirdPartyNotices()],
   define: {
     ...base.define,
     __APP_TARGET__: JSON.stringify('desktop'),

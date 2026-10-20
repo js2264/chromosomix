@@ -69,6 +69,7 @@ function build(): { drawer: StoreDrawer; opened: StoreEntry[]; layouts: number }
     openWithTracks: (entry) => opened.push(entry),
     add: () => undefined,
     openTogether: () => undefined,
+    drag: () => undefined,
     tabEmpty: () => true,
   }
   const drawer = new StoreDrawer({
@@ -160,6 +161,23 @@ describe('opening', () => {
     expect(drawer.storeId).toBe('igv')
     drawer.toggle.click()
     expect(drawer.isOpen).toBe(false)
+  })
+
+  it('can be aimed at a store without opening, for the header button to land on (§30)', () => {
+    // The tutorial's first step is that button, and what it opens has to be
+    // the lab's store whatever the browser remembers from an earlier visit.
+    const earlier = build()
+    earlier.drawer.open('4dn')
+    earlier.drawer.destroy()
+    const { drawer } = build()
+    drawer.toggle.click()
+    expect(drawer.storeId).toBe('4dn')
+    drawer.close()
+    drawer.aim('rsg')
+    drawer.aim('not-a-store')
+    expect(drawer.isOpen).toBe(false)
+    drawer.toggle.click()
+    expect(drawer.storeId).toBe('rsg')
   })
 
   it('says what the header button opens without a list of stores to go stale', () => {

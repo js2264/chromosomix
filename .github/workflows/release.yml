@@ -28,6 +28,15 @@ name: Release artefacts
 # A `v*` tag here has already been through both, so it *is* a release. If a tag
 # ever should not build installers, exclude it by name in `tags:` below.
 #
+# That holds for a tag `npm version` made, and for no other. `v0.14.0` was made
+# by hand, with GitHub's release form — which makes a tag for any name typed
+# into it — on a commit whose `package.json` still said 0.13.0. This workflow
+# set about building 0.13.0 installers for it and packed `chromosomix@0.13.0`
+# for npm, and only the registry refusing the token kept that version from
+# being published under the wrong tag for good. So the first job, `version`, refuses a tag that
+# is not `v` and the version `package.json` carries, before anything is built
+# or published, and every other job waits on it.
+#
 # A re-run for an existing tag is `workflow_dispatch`. It is careful in a way
 # the automatic path need not be: the release it attaches to may already be
 # published, so it changes neither that state nor the body. See `collect`.
@@ -66,8 +75,33 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The tag is the version, or nothing here runs (see the header). Checked out
+  # at the tag for the reason every job below gives, and read with the Node the
+  # runner image already carries: one field of one file needs no `npm ci`.
+  version:
+    name: the tag is package.json's version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+
+      - name: Refuse a tag npm version did not make
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error title=Not a release tag::$TAG is on a commit whose package.json says $version. Cut a release with npm version, which bumps package.json, runs the checks, names the changelog section and makes the tag; then push with --follow-tags."
+            exit 1
+          fi
+          echo "$TAG is package.json's version" >> "$GITHUB_STEP_SUMMARY"
+
   build:
     name: ${{ matrix.id }}
+    needs: version
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -206,6 +240,7 @@ jobs:
   # unsigned binary gets a file they double-click instead.
   standalone:
     name: standalone HTML
+    needs: version
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -250,11 +285,19 @@ jobs:
           # its size. Worth the seconds on an artefact this large.
           compression-level: 9
 
+  # Published by npm's trusted publishing: no secret anywhere. GitHub gives
+  # this job a short-lived OIDC identity (`id-token: write`), and npm exchanges
+  # it for a one-off credential because the package names this repository and
+  # this file as its trusted publisher (configured on npmjs.com, docs/deploy.md).
+  # 0.15.0, the first version, went up with a token: npm will only trust a
+  # workflow with a package that already exists.
   npm:
     name: publish to npm
+    needs: version
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -267,24 +310,28 @@ jobs:
           # nothing to carry.
           ref: ${{ inputs.tag || github.ref_name }}
 
+      # No `registry-url`: that writes an `.npmrc` that authenticates with
+      # NODE_AUTH_TOKEN, and setup-node fills that with a placeholder when it is
+      # unset. The default registry is npm's, and the credential is the OIDC one.
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: npm
-          # What makes `npm publish` authenticate with NODE_AUTH_TOKEN below
-          # rather than with whatever is in a runner's `.npmrc`, which is
-          # nothing.
-          registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing needs npm 11.5.1 or later, and the npm a Node 24
+      # release carries has been older (24.0 shipped 11.3). The 11 line rather
+      # than `latest`, so a new major cannot change a release on its own.
+      - name: An npm that publishes through OIDC
+        run: npm install -g npm@11 && npm --version
 
       - run: npm ci
 
       # Two ways this job should do nothing, and neither is a failure.
       #
-      # **No token.** Publishing needs a secret only the repository owner can
-      # add, and a fork, or this repository before anyone has added one, must
-      # not turn a green release into a red one over a channel it was never
-      # set up for. `secrets` cannot be read in an `if:`, so it comes through
-      # the environment, where it can.
+      # **Not the repository npm trusts.** npm takes an upload only from the
+      # repository configured as the package's trusted publisher, which is the
+      # one `package.json` names. A fork's release would be refused with a 403,
+      # turning a green release red over a channel it was never set up for.
       #
       # **Already published.** A version on npm is immutable, so a
       # `workflow_dispatch` re-run of a tag — which is the documented way to
@@ -292,11 +339,10 @@ jobs:
       # invocation, every time, for doing exactly what it was asked to do.
       - name: Should this publish?
         id: decide
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if [ -z "$NPM_TOKEN" ]; then
-            echo "no NPM_TOKEN secret — skipping the registry" >> "$GITHUB_STEP_SUMMARY"
+          trusted=$(node -p "require('./package.json').repository.url.replace(/^git\+https:\/\/github\.com\//, '').replace(/\.git$/, '')")
+          if [ "$trusted" != "$GITHUB_REPOSITORY" ]; then
+            echo "npm trusts $trusted, and this is $GITHUB_REPOSITORY — skipping the registry" >> "$GITHUB_STEP_SUMMARY"
             echo "publish=no" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -315,12 +361,13 @@ jobs:
       # site build's absolute asset URLs and a version that can never be
       # corrected. `--access public` is stated rather than assumed: the default
       # for an unscoped name is already public, and saying so is what keeps this
-      # working if the package is ever moved under a scope.
+      # working if the package is ever moved under a scope. `--provenance`
+      # records with the version which commit and which run built it; trusted
+      # publishing is documented to add it unasked, and asking costs nothing in
+      # a public repository (a private one cannot have it).
       - name: Publish
         if: steps.decide.outputs.publish == 'yes'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public
+        run: npm publish --access public --provenance
 
   collect:
     name: attach to the release
@@ -364,6 +411,30 @@ jobs:
             found
           ' CHANGELOG.md > notes.md
           test -s notes.md || { echo "::error::CHANGELOG.md has no section for ${TAG#v}"; exit 1; }
+          # A section as long as 0.15.0's (290 kB) risks GitHub's limit on a
+          # release body, and a refused body fails the release at its last step.
+          # Past 120 kB the body is each entry's bold lead, with a link to the
+          # section in full; a shorter section is posted as written.
+          if [ "$(wc -c < notes.md)" -gt 120000 ]; then
+            awk '
+              function flush() {
+                if (entry == "") return
+                if (match(entry, /^- \*\*([^*]|\*[^*])+\*\*/)) print substr(entry, RSTART, RLENGTH)
+                else print entry
+                entry = ""
+              }
+              /^- / { flush(); entry = $0; next }
+              /^  / {
+                if (entry != "" && entry !~ /^- \*\*([^*]|\*[^*])+\*\*/) { sub(/^ +/, " "); entry = entry $0 }
+                next
+              }
+              { flush(); print }
+              END { flush() }
+            ' notes.md > leads.md
+            printf '\nEvery entry in full is in [CHANGELOG.md](%s/%s/blob/%s/CHANGELOG.md).\n' \
+              "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$TAG" >> leads.md
+            mv leads.md notes.md
+          fi
           cat >> notes.md <<'NOTE'
 
           ---

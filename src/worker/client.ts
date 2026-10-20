@@ -178,7 +178,7 @@ export function isCancellation(err: unknown): boolean {
  *
  * Here for the reason credentials are stamped here: an open is issued from half
  * a dozen places — a tab, a deck's cell, the compare card — and a worker cannot
- * read `localStorage`, so the one road every open takes is where the answer
+ * read the page's address, so the one road every open takes is where the answer
  * joins it. Only `open` carries it; every later request is about a map that
  * already passed.
  */

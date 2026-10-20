@@ -12,7 +12,8 @@
  * CLI reads whatever the app reads: nothing here mentions the container.
  */
 
-import { existsSync, readdirSync } from 'node:fs'
+import { EventEmitter } from 'node:events'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, readdir, rm, truncate, writeFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -26,6 +27,7 @@ import { TASKS, taskById } from '@/analysis/registry'
 import { paramDerived, type AnalysisContext, type AnalysisTask, type Params } from '@/analysis/types'
 import { writeBigWig } from '@/analysis/write/bigwig'
 import {
+  ignoreClosedPipe,
   main,
   parseCommandLine,
   readFeatureText,
@@ -157,6 +159,40 @@ describe('the surface', () => {
     reset()
     expect(await main([])).toBe(0)
     expect(said()).toMatch(/chromosomix circular/)
+  })
+
+  it('says which build it is, and what it runs on', async () => {
+    reset()
+    expect(await main(['--version'])).toBe(0)
+    const lines = said().trimEnd().split('\n')
+    // The fallback stamp: vitest applies no `define` block (`version.test.ts`).
+    expect(lines[0]).toBe('chromosomix 0.0.0-dev')
+    expect(lines[1]).toBe(`node ${process.versions.node} on ${process.platform}-${process.arch}`)
+    // Read off the copies installed beside the command, which here are the repository's own.
+    const installed = (name: string): string =>
+      (JSON.parse(readFileSync(new URL(`../../node_modules/${name}/package.json`, import.meta.url), 'utf8')) as {
+        version: string
+      }).version
+    expect(lines.slice(2)).toEqual([`h5wasm ${installed('h5wasm')}`, `@gmod/bbi ${installed('@gmod/bbi')}`])
+    expect(complained()).toBe('')
+  })
+
+  it('answers --version wherever it is written, before the rest is checked', async () => {
+    reset()
+    expect(await main(['nonesuch', 'x.cool', '--version'])).toBe(0)
+    expect(said()).toMatch(/^chromosomix 0\.0\.0-dev\n/)
+    expect(complained()).toBe('')
+  })
+
+  it('lets a reader stop reading, and still throws anything else', () => {
+    // `chromosomix tasks | head -1`: the pipe closes under the command, and Node
+    // reports the next write as an error on the stream — EPIPE, or EOF on Windows.
+    const stream = new EventEmitter() as unknown as NodeJS.WritableStream
+    ignoreClosedPipe(stream)
+    const failure = (code: string): Error => Object.assign(new Error(`write ${code}`), { code })
+    expect(() => stream.emit('error', failure('EPIPE'))).not.toThrow()
+    expect(() => stream.emit('error', failure('EOF'))).not.toThrow()
+    expect(() => stream.emit('error', failure('ENOSPC'))).toThrow('write ENOSPC')
   })
 })
 
@@ -560,6 +596,21 @@ describe('running a task', () => {
     }
     // A file of zeroes would satisfy every check above and hold no model.
     expect(moved).toBeGreaterThan(0)
+    // …and as a PDB beside it, for PyMOL, through the drawer's own writer: a
+    // HETATM per bead, and the same beads back when this app reads it.
+    expect(files).toContain('sample.reconstruct3d.reconstructed-model.pdb')
+    const pdbPath = join(out, 'sample.reconstruct3d.reconstructed-model.pdb')
+    const pdb = await readFile(pdbPath, 'utf8')
+    expect(pdb.split('\n').filter((line) => line.startsWith('HETATM'))).toHaveLength(rows.length)
+    const fromPdb = readFeatureText(pdb, pdbPath)
+    const fromBed3d = readFeatureText(text, 'model.bed3d')
+    if (!('features' in fromPdb) || !('features' in fromBed3d)) throw new Error('not a feature set')
+    expect(Array.from(fromPdb.features.start)).toEqual(Array.from(fromBed3d.features.start))
+    expect(Array.from(fromPdb.features.end)).toEqual(Array.from(fromBed3d.features.end))
+    expect(fromPdb.features.contigs).toEqual(fromBed3d.features.contigs)
+    for (let i = 0; i < fromPdb.features.length; i++) {
+      expect(fromPdb.features.model?.x[i]).toBeCloseTo(fromBed3d.features.model?.x[i] ?? Number.NaN, 3)
+    }
   })
 
   it('reads a model it wrote back in as a structure, for the tasks that read one', async () => {
@@ -578,6 +629,14 @@ describe('running a task', () => {
     ).toBe(0)
     expect(complained()).not.toMatch(/not a structure/)
     expect((await readdir(where)).some((name) => /structure-radial.*\.tsv$/.test(name))).toBe(true)
+    // The PDB written beside it is the same model to every task that reads one.
+    const fromPdb = join(directory, 'spatial-pdb')
+    const pdb = join(where, 'sample.reconstruct3d.reconstructed-model.pdb')
+    expect(
+      await main(['spatialtracks', sample, '--features', pdb, '--structure', pdb, '--out', fromPdb, '--quiet']),
+    ).toBe(0)
+    expect(complained()).not.toMatch(/not a structure/)
+    expect((await readdir(fromPdb)).some((name) => /structure-radial.*\.tsv$/.test(name))).toBe(true)
   })
 
   it('takes the `::` resolution its own refusal tells a reader to write', async () => {

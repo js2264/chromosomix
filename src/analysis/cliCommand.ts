@@ -562,5 +562,5 @@ function isRemote(uri: string): boolean {
 
 /** Whether a URI names a `.pairs` — the one input a shell has to be told a bin size for. */
 function isPairsFile(uri: string): boolean {
-  return /\.pairs(\.gz)?$/i.test(uri.split('::')[0].split(/[?#]/)[0])
+  return /\.pairs(\.b?gz)?$/i.test(uri.split('::')[0].split(/[?#]/)[0])
 }

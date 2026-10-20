@@ -26,6 +26,7 @@ import {
   preloadProblems,
   rendererFileProblems,
 } from './desktop-shape.mjs'
+import { NOTICES_FILE } from './third-party-notices.mjs'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const RENDERER = join(ROOT, 'dist-electron', 'renderer')
@@ -61,6 +62,11 @@ if (!files.includes('index.html')) {
   problems.push('index.html is missing — the renderer build produced no document')
 } else {
   problems.push(...indexHtmlProblems(readFileSync(join(RENDERER, 'index.html'), 'utf8')))
+}
+
+// The licences of what the renderer compiles in, which an installer is a copy of.
+if (!files.includes(NOTICES_FILE)) {
+  problems.push(`${NOTICES_FILE} is missing — thirdPartyNotices() did not run (scripts/third-party-notices.mjs)`)
 }
 
 // Every emitted chunk, not only the entry: Vite may split the `new Worker`

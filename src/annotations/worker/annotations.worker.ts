@@ -25,6 +25,7 @@ import {
 import { parseVcf, samplesIn, sniffVcf, vcfContigs } from '../vcf'
 import { barChartSummary, isBarChartSchema, parseBarChart, sniffBarChart } from '../barchart'
 import { g3dSummary, parseBed3d, parseG3d, sniffBed3d, sniffG3d } from '../g3d'
+import { parsePdb, sniffPdb } from '../pdb'
 import { g3dBinaryNote, isG3dBinary, readG3dHeader, readG3dModel, type G3dHeader } from '../g3dBinary'
 import { DEFAULT_EXCLUDE, FLAG, isBam, readHeader, type BamHeader } from '../bam/format'
 import { chunksFor, forecastBytes, parseBamIndex, type BamIndex, type ByteSpan as BamByteSpan } from '../bam/index'
@@ -1045,8 +1046,12 @@ async function assemblyOf(source: WireSource, report: Report): Promise<AssemblyR
     for (let i = 0; i < data.length; i++) note(ends, data.contigs[data.contig[i]], data.end[i])
     return { format: 'structure', contigs: contigsOf(ends), origin: 'features', exact: false }
   }
-  if (sniffG3d(text, source.name) || sniffBed3d(text, source.name)) {
-    const data = sniffG3d(text, source.name) ? parseG3d(text, source.name) : parseBed3d(text, source.name)
+  if (sniffPdb(text, source.name) || sniffG3d(text, source.name) || sniffBed3d(text, source.name)) {
+    const data = sniffPdb(text, source.name)
+      ? parsePdb(text, source.name)
+      : sniffG3d(text, source.name)
+        ? parseG3d(text, source.name)
+        : parseBed3d(text, source.name)
     const ends = new Map<string, number>()
     for (let i = 0; i < data.length; i++) note(ends, data.contigs[data.contig[i]], data.end[i])
     return { format: 'structure', contigs: contigsOf(ends), origin: 'features', exact: false }
@@ -1642,7 +1647,10 @@ async function load(
   // a five-column g3d read as a BED is a lane of boxes whose "end" is a
   // coordinate in space. It cannot capture a VCF (eight columns, a non-integer
   // in column 2) and nothing below it can capture a g3d (five or six columns,
-  // three coordinates where a BED has an integer end).
+  // three coordinates where a BED has an integer end). A PDB is asked first: it
+  // is named so or opens on a PDB record, which no row of the others begins
+  // with, and the reader either places its beads or says why it cannot.
+  if (sniffPdb(text, source.name)) return loadG3d(text, source.name, mapContigs, parsePdb)
   if (sniffG3d(text, source.name)) return loadG3d(text, source.name, mapContigs)
   if (sniffBed3d(text, source.name)) return loadG3d(text, source.name, mapContigs, parseBed3d)
 

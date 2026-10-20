@@ -65,26 +65,26 @@ const PROGRESS_EVERY_MS = 250
  * the wrong height is a row that jumps when it lands.
  */
 function guessOf(name: string): { card: AnnotationCard; kind: AnnotationKind } {
-  if (/\.bedpe(\.gz)?$/i.test(name)) return { card: 'overlay', kind: 'pairs' }
-  if (/\.(interact|biginteract|longrange|longtabix)(\.gz)?$/i.test(name)) {
+  if (/\.bedpe(\.b?gz)?$/i.test(name)) return { card: 'overlay', kind: 'pairs' }
+  if (/\.(interact|biginteract|longrange|longtabix)(\.b?gz)?$/i.test(name)) {
     return { card: 'overlay', kind: 'pairs' }
   }
-  if (/\.(bw|bigwig)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'track' }
-  if (/\.(bdg|bedgraph|wig)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'track' }
-  if (/\.(bedmethyl|bigmethyl)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'track' }
-  if (/\.(fa|fasta|fna|fas)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'sequence' }
+  if (/\.(bw|bigwig)(\.b?gz)?$/i.test(name)) return { card: 'linear', kind: 'track' }
+  if (/\.(bdg|bedgraph|wig)(\.b?gz)?$/i.test(name)) return { card: 'linear', kind: 'track' }
+  if (/\.(bedmethyl|bigmethyl)(\.b?gz)?$/i.test(name)) return { card: 'linear', kind: 'track' }
+  if (/\.(fa|fasta|fna|fas)(\.b?gz)?$/i.test(name)) return { card: 'linear', kind: 'sequence' }
   if (/\.2bit$/i.test(name)) return { card: 'linear', kind: 'sequence' }
-  if (/\.(gtf|gff3?)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'gtf' }
-  if (/\.(genepred|genepredext|refflat)(\.txt)?(\.gz)?$/i.test(name)) {
+  if (/\.(gtf|gff3?)(\.b?gz)?$/i.test(name)) return { card: 'linear', kind: 'gtf' }
+  if (/\.(genepred|genepredext|refflat)(\.txt)?(\.b?gz)?$/i.test(name)) {
     return { card: 'linear', kind: 'gtf' }
   }
-  if (/\.vcf(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'variants' }
-  if (/\.(bigbarchart|barchart)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'barchart' }
+  if (/\.vcf(\.b?gz)?$/i.test(name)) return { card: 'linear', kind: 'variants' }
+  if (/\.(bigbarchart|barchart)(\.b?gz)?$/i.test(name)) return { card: 'linear', kind: 'barchart' }
   // UCSC publishes both as a bare `.txt.gz`, so the name is the tell (§8.22) —
   // in the plural too, as `browse/route.ts` reads it: `Yeast_cytobands.txt`.
-  if (/cytoband(s|ideo)?(\.txt)?(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'ideogram' }
+  if (/cytoband(s|ideo)?(\.txt)?(\.b?gz)?$/i.test(name)) return { card: 'linear', kind: 'ideogram' }
   // STAR's table, a junctions BED, leafcutter's `.junc` (§8.23).
-  if (/(sj\.out\.tab|junctions?\.bed|\.junc)(\.gz)?$/i.test(name)) {
+  if (/(sj\.out\.tab|junctions?\.bed|\.junc)(\.b?gz)?$/i.test(name)) {
     return { card: 'linear', kind: 'junctions' }
   }
   if (/\.bam$/i.test(name)) return { card: 'linear', kind: 'alignments' }

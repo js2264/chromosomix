@@ -1,6 +1,6 @@
 ---
 title: "chromosomix against reference implementations"
-subtitle: "Eighteen analyses on public data, each run by chromosomix and by the package it reproduces"
+subtitle: "Nineteen analyses on public data, each run by chromosomix and by the package it reproduces"
 format:
   html:
     toc: true
@@ -27,8 +27,9 @@ from rendered import Render
 
 R = Render('validation')
 print(R.head(also=f"Every command below, run again and timed: {R.anchor('timing', 'the timings')}. "
-                  f"Beside this page: {R.download('commands.json')}, every command as it ran, and "
-                  f"{R.download('summary.tsv')}, every verdict."))
+                  f"Beside this page: {R.download('commands.json')}, every command as it ran; "
+                  f"{R.download('summary.tsv')}, every verdict; and {R.download('validation.txt')}, every "
+                  "number its figures draw."))
 ```
 
 Each analysis is run on the same public file twice: by **`chromosomix`**, the command-line form of
@@ -36,6 +37,16 @@ the app's Analysis panel (the same code), and by the **reference package** it re
 its authors intend. The two outputs are matched bin by bin or call by call. Every command is printed
 as it ran, from `notebooks/work/validation/`, and written to `commands.json` there, from which
 `{python} R.link('timing')` runs each again and times it.
+
+Every number a figure draws is one line of **`validation.txt`**, beside `commands.json`: a tidy table,
+one row per mark — a point, a vertex of a line, a hexagon of a density and its count, a cell of a
+picture, a bar, a band or a line across a panel, a named tick, a text — with the figure's label and the
+panel's letter, the panel's axes, what the mark stands for (`series`, as the legend names it) and where
+it is drawn. It is read off each figure as it is shown, so any figure below can be drawn again from it
+alone. A density is the hexagons it draws, not the millions of values behind it, which are the outputs
+of the commands printed above it; a symmetric map's numbers are written once, its upper triangle; and
+the metaplot's heatmaps, tens of thousands of transcripts in a few hundred pixels, draw each line as
+the mean of 100, which is what is written.
 
 | § | Analysis | Data | Reference |
 |---|---|---|---|
@@ -57,6 +68,7 @@ as it ran, from `notebooks/work/validation/`, and written to `commands.json` the
 | 16 | Base composition | mm10, 10 kb | `bioframe.frac_gc`, Biopython `GC_skew` |
 | 17 | Motif search | mm10, chr19 | `seqkit locate` |
 | 18 | Track correlation | mouse ATAC-seq, two replicates, and insulation, chr19, 100 bp to 10 kb | pyBigWig and SciPy; deepTools `multiBigwigSummary`, `plotCorrelation` |
+| 19 | Loop calling | mouse Hi-C, 10 kb | `cooltools.dots` |
 
 **To render.** `npm run build:cli` at the repository root builds this checkout's `chromosomix`.
 yapc needs an environment of its own (numpy < 1.24; the recipe is in the yapc section of
@@ -129,7 +141,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pyBigWig
+from matplotlib.axis import Axis
+from matplotlib.collections import PathCollection, PolyCollection
 from matplotlib.colors import LinearSegmentedColormap, LogNorm
+from matplotlib.image import AxesImage
+from matplotlib.legend import Legend
+from matplotlib.lines import Line2D
+from matplotlib.patches import Rectangle, StepPatch
+from matplotlib.spines import Spine
+from matplotlib.text import Text
+from matplotlib.ticker import FixedLocator
 from scipy import stats
 
 warnings.filterwarnings('ignore')
@@ -341,7 +362,7 @@ plt.rcParams.update({
 
 
 def identity(ax, lo, hi):
-    ax.plot([lo, hi], [lo, hi], color=INK2, lw=1, ls=(0, (4, 3)), zorder=3)
+    ax.plot([lo, hi], [lo, hi], color=INK2, lw=1, ls=(0, (4, 3)), zorder=3, gid='identity')
 
 
 def agreement(ax, x, y, xlabel, ylabel, title, scale='linear'):
@@ -381,6 +402,132 @@ def record(task, data, reference_, agreement_, verdict, apps, refs):
                     'Reference': reference_,
                     'Reference command': commands([f'$ {REFS[name]["shown"]}' for name in refs]),
                     'Agreement': agreement_, 'Verdict': verdict})
+
+
+#: Every number each figure draws, by the figure's label on this page: the rows of validation.txt.
+DRAWN = {}
+#: validation.txt's columns, in order: the figure and its panel, the panel's axes, what is drawn, where,
+#: and what it says.
+DRAWN_COLUMNS = ['figure', 'panel', 'x_axis', 'y_axis', 'series', 'mark', 'x', 'x_end', 'y', 'value', 'text']
+
+
+def words(text):
+    """A label or a text on one line, as a cell of a table holds it."""
+    return ' '.join(str(text).split())
+
+
+def floats(values):
+    """Values as floats, NaN where a masked array hides one: a copy, never the figure's own array."""
+    return np.ma.filled(np.ma.array(values, dtype=float, copy=True), np.nan)
+
+
+def marks(ax):
+    """What one panel draws, a frame for each thing drawn: see `drawn`."""
+    # A histogram is one thing drawn as many bars, and named once: on its first bar, for the legend.
+    held = {}
+    for container in ax.containers:
+        given = [n for n in (container.get_label(), *(bar.get_label() for bar in container)) if n and n[0] != '_']
+        held.update(dict.fromkeys(container, given[0] if given else ''))
+    texts = set(ax.texts)
+
+    def name(artist):
+        given = artist.get_gid() or held.get(artist) or artist.get_label() or ''
+        return '' if given.startswith('_') else words(given)
+
+    def frame(mark, series, **columns):
+        arrays = {k: v for k, v in columns.items() if np.ndim(v)}
+        out = pd.DataFrame(arrays) if arrays else pd.DataFrame(index=[0])
+        return out.assign(mark=mark, series=series, **{k: v for k, v in columns.items() if not np.ndim(v)})
+
+    def unread(artist):
+        return TypeError(f'validation.txt cannot read the {type(artist).__name__} a figure draws: teach marks() to, '
+                         'or the table is no longer every number the figures draw.')
+
+    out = []
+    for artist in ax.get_children():
+        if isinstance(artist, Line2D):
+            x, y = floats(artist.get_xdata()), floats(artist.get_ydata())
+            where = artist.get_transform()
+            if where == ax.transData:
+                out.append(frame('line', name(artist), x=x, y=y))
+            elif where == ax.get_yaxis_transform():
+                out.append(frame('rule', name(artist), y=y[0]))
+            elif where == ax.get_xaxis_transform():
+                out.append(frame('rule', name(artist), x=x[0]))
+            else:
+                raise unread(artist)
+        elif isinstance(artist, PolyCollection) and artist.get_array() is not None:
+            # hexbin's centres are in log10 along a log axis.
+            centre = floats(artist.get_offsets())
+            for k, scale in enumerate((ax.get_xscale(), ax.get_yscale())):
+                if scale == 'log':
+                    centre[:, k] = 10 ** centre[:, k]
+            out.append(frame('hexagon', name(artist), x=centre[:, 0], y=centre[:, 1],
+                             value=floats(artist.get_array())))
+        elif isinstance(artist, PathCollection):
+            at = floats(artist.get_offsets()).reshape(-1, 2)
+            out.append(frame('point', name(artist), x=at[:, 0], y=at[:, 1]))
+        elif isinstance(artist, AxesImage):
+            values = floats(artist.get_array())
+            i, j = np.indices(values.shape)
+            keep = np.ones(values.shape, bool)
+            if values.shape[0] == values.shape[1] and np.array_equal(values, values.T, equal_nan=True):
+                keep &= i <= j
+            if artist.cmap.get_bad()[3] == 0:
+                keep &= np.isfinite(values)
+            left, right, bottom, top = artist.get_extent()
+            first, last = (top, bottom) if artist.origin == 'upper' else (bottom, top)
+            out.append(frame('cell', name(artist), x=left + (j[keep] + 0.5) * (right - left) / values.shape[1],
+                             y=first + (i[keep] + 0.5) * (last - first) / values.shape[0], value=values[keep]))
+        elif isinstance(artist, StepPatch):
+            steps, edges, _ = artist.get_data()
+            out.append(frame('step', name(artist), x=floats(edges[:-1]), x_end=floats(edges[1:]),
+                             y=floats(steps)))
+        elif isinstance(artist, Rectangle) and artist is not ax.patch:
+            where, x = artist.get_data_transform(), artist.get_x()
+            if where == ax.transData:
+                out.append(frame('bar', name(artist), x=x, x_end=x + artist.get_width(),
+                                 y=artist.get_y() + artist.get_height()))
+            elif where == ax.get_xaxis_transform():
+                out.append(frame('band', name(artist), x=x, x_end=x + artist.get_width()))
+            else:
+                raise unread(artist)
+        elif artist in texts:
+            out.append(frame('text', name(artist), text=words(artist.get_text())))
+        # What is left draws no number — the axes themselves, their titles, the legend, the background —
+        # or draws numbers this does not know how to read, which is not to be passed over in silence.
+        elif not isinstance(artist, (Axis, Legend, Spine, Text)) and artist is not ax.patch:
+            raise unread(artist)
+    # Ticks placed by hand are the ones that name something: a chromosome, a pileup, a track.
+    for axis, key in ((ax.xaxis, 'x'), (ax.yaxis, 'y')):
+        if isinstance(axis.get_major_locator(), FixedLocator):
+            at = axis.get_ticklocs()
+            out.append(frame('tick', '', **{key: floats(at)},
+                             text=[words(t) for t in axis.get_major_formatter().format_ticks(at)]))
+    return out
+
+
+def drawn(label):
+    """Show the figure just drawn, and keep every number it draws under `label`, its label on this page:
+    validation.txt, a row a mark, panel by panel in the order drawn.
+
+    A mark is a `point`; a vertex of a `line`, in order, a gap where it has no y; a `hexagon` of a
+    density, at its centre, its count the value; a `cell` of a picture, at its centre, its number the
+    value — a symmetric map's upper triangle only, as it draws each of those numbers twice, and no cell it
+    leaves transparent; a `bar` or a `step`, from x to x_end, y high; a `band` from x to x_end, and a
+    `rule` at x or at y, across the panel; a `tick` naming a place on an axis; and a `text` written in
+    the panel. Its series is what it stands for: the legend's name for it, or the name the code gives it
+    (`gid`)."""
+    frames = []
+    for ax in plt.gcf().axes:
+        if ax.get_label() == '<colorbar>':
+            continue
+        title = ax.get_title('left') or ax.get_title()
+        letter = re.match(r'([a-z]) {2}', title)
+        frames += [part.assign(figure=label, panel=letter.group(1) if letter else words(title),
+                               x_axis=words(ax.get_xlabel()), y_axis=words(ax.get_ylabel())) for part in marks(ax)]
+    DRAWN[label] = pd.concat(frames, ignore_index=True).reindex(columns=DRAWN_COLUMNS)
+    plt.show()
 ```
 
 ## Data and versions
@@ -567,12 +714,12 @@ lo, _ = clr10.extent('chr11')
 stretch = slice(lo + 3_000, lo + 4_000)
 x = bins10['start'].to_numpy()[stretch] / 1e6
 for pos in x[~np.isfinite(bins10['weight'].to_numpy(float)[stretch])]:
-    ax.axvspan(pos, pos + 0.01, color=MISSING, lw=0, zorder=0)
+    ax.axvspan(pos, pos + 0.01, color=MISSING, lw=0, zorder=0, gid='dropped bin')
 ax.plot(x, b_ins[stretch], color=REF, lw=3, label='cooltools')
 ax.plot(x, a_ins[stretch], color=APP_COLOUR, lw=1.2, label='chromosomix')
 ax.set(xlabel='chr11 (Mb)', ylabel='insulation (log2)', title='c  chr11, 30–40 Mb')
 ax.legend(loc='lower left', ncols=2)
-plt.show()
+drawn('fig-insulation')
 ```
 
 Over `{python} TEXT['ins_n']` bins the largest difference is `{python} TEXT['ins_max']` (float32); the
@@ -648,7 +795,7 @@ ax.plot(x, a_di[stretch], color=APP_COLOUR, lw=1.2, label='chromosomix')
 ax.axhline(0, color=INK2, lw=0.8)
 ax.set(xlabel='chr2 (Mb)', ylabel='directionality index', title='b  chr2, 40–70 Mb')
 ax.legend(loc='lower left', ncols=2)
-plt.show()
+drawn('fig-di')
 ```
 
 Over `{python} TEXT['di_n']` bins the relative difference is at most `{python} TEXT['di_max']`
@@ -761,7 +908,7 @@ ax.plot(xs, app_vec[1][s], color=APP_COLOUR, lw=1.2, label='chromosomix')
 ax.axhline(0, color=INK2, lw=0.8)
 ax.set(xlabel='chr1 (Mb)', ylabel='E1', title='b  E1 along chr1')
 ax.legend(loc='lower left', ncols=2)
-plt.show()
+drawn('fig-compartments')
 ```
 
 On `{python} TEXT['cmp_subject']`, E1 correlates at r ≥ `{python} TEXT['cmp_min_r']`, eigenvalues
@@ -857,7 +1004,7 @@ show(pd.DataFrame([{'map': k, 'points': len(v['x']), 'first diagonal': v['first'
 
 ```{python}
 #| label: fig-ps
-#| fig-cap: "P(s), chromosomix against cooltools.expected_cis pooled over the same bands. Top, the curves; bottom, the relative difference at every point."
+#| fig-cap: "P(s), chromosomix against cooltools.expected_cis pooled over the same bands. a, b, the curves; c, d, the relative difference at every point."
 TEXT['ps_max'] = f"{max(v['rel'].max() for v in ps.values()):.1e}"
 TEXT['ps_points'] = f"{sum(len(v['x']) for v in ps.values())}"
 
@@ -866,13 +1013,13 @@ for col, (label, v) in enumerate(ps.items()):
     ax = axes[0, col]
     ax.plot(v['x'], v['ref'], color=REF, lw=3, label='cooltools, pooled')
     ax.scatter(v['x'], v['app'], s=14, color=APP_COLOUR, zorder=3, label='chromosomix')
-    ax.set(xscale='log', yscale='log', ylabel='mean balanced contact per bin pair', title=label)
+    ax.set(xscale='log', yscale='log', ylabel='mean balanced contact per bin pair', title=f"{'ab'[col]}  {label}")
     ax.legend(loc='lower left')
     ax = axes[1, col]
     ax.scatter(v['x'], np.maximum(v['rel'], 1e-9), s=10, color=APP_COLOUR)
     ax.set(xscale='log', yscale='log', ylim=(1e-9, 1e-3), xlabel='separation (bp)',
-           ylabel='|chromosomix / cooltools − 1|')
-plt.show()
+           ylabel='|chromosomix / cooltools − 1|', title=f"{'cd'[col]}  relative difference")
+drawn('fig-ps')
 ```
 
 Over `{python} TEXT['ps_points']` points, from two bins to the longest chromosome, the relative
@@ -1011,7 +1158,7 @@ agreement(axes[0], np.r_[shared['cond_rep1_score'], shared['cond_rep2_score']],
           np.r_[shared['curvature0'], shared['curvature1']], 'yapc 0.1', 'chromosomix', 'a  curvature')
 agreement(axes[1], idr['cond_globalIDR'].to_numpy(float), idr['score'].to_numpy(float), 'yapc 0.1',
           'chromosomix', 'b  −log10 IDR, called peaks')
-plt.show()
+drawn('fig-yapc')
 ```
 
 The same `{python} TEXT['yapc_n']` regions go to IDR, with the same summits and curvatures within the
@@ -1079,7 +1226,7 @@ px, py = -np.log10(readable['pvalue']), -np.log10(readable['p'])
 ax.scatter(px, py, s=8, color=APP_COLOUR, alpha=0.6, lw=0)
 identity(ax, min(px.min(), py.min()), max(px.max(), py.max()))
 ax.set(xlabel='chromosight, −log10 p', ylabel='chromosomix, −log10 p', title='b  p-values')
-plt.show()
+drawn('fig-loops')
 ```
 
 `{python} TEXT['loops_n']` loops at the same bin pairs (`{python} TEXT['loops_only']` in one only);
@@ -1160,10 +1307,10 @@ ax.set_aspect('equal')
 ax = axes[1]
 ax.hist(scc_diff * 1e5, bins=np.linspace(-6, 6, 49), color=APP_COLOUR)
 for edge in (-5, 5):
-    ax.axvline(edge, color=INK2, lw=1, ls=(0, (4, 3)))
+    ax.axvline(edge, color=INK2, lw=1, ls=(0, (4, 3)), gid='the rounding of four decimals')
 ax.set(xlabel='chromosomix − hicrep (×10⁻⁵)', ylabel='pairs × chromosomes',
        title='b  difference; dashed, the rounding of four decimals')
-plt.show()
+drawn('fig-hicrep')
 ```
 
 Over `{python} TEXT['hr_n']` values the two differ by at most `{python} TEXT['hr_max']`, the rounding
@@ -1297,11 +1444,11 @@ for col, metric in enumerate(('within chromosomes, Spearman ρ', 'between chromo
     for offset, frame, colour, label in ((-0.12, cross, APP_COLOUR, 'chromosomix vs pastis'),
                                          (0.12, selfs, REF, 'pastis vs pastis')):
         ax.scatter(np.full(len(frame), col + offset), frame[metric], s=36, color=colour,
-                   label=label if col == 0 else None, zorder=3)
+                   label=label if col == 0 else None, zorder=3, gid=label)
 ax.set_xticks([0, 1], ['within chromosomes', 'between chromosomes'])
 ax.set(xlim=(-0.5, 1.5), ylim=(0, 1.02), ylabel='Spearman ρ of pairwise distances', title='b  how alike two runs are')
 ax.legend(loc='lower left')
-plt.show()
+drawn('fig-pastis')
 ```
 
 On `{python} TEXT['p3_beads']` beads, distances within chromosomes correlate with pastis' at
@@ -1425,7 +1572,7 @@ ax.plot(x, raw['total'][stretch], color=REF, lw=3, label='cooltools less the dia
 ax.plot(x, raw['app']['total'][stretch], color=APP_COLOUR, lw=1.2, label='chromosomix')
 ax.set(xlabel='chr11 (Mb)', ylabel='contacts', title='c  chr11, 30–40 Mb, raw total')
 ax.legend(loc='upper left', ncols=3)
-plt.show()
+drawn('fig-coverage')
 ```
 
 Raw, cis and total are `{python} TEXT['cov_same']` on the `{python} TEXT['cov_n']` bins (largest
@@ -1522,7 +1669,7 @@ axes[0].legend(loc='upper left')
 agreement(axes[3], np.concatenate([v['ref'][v['both']] for v in profiles.values()]),
           np.concatenate([v['app'][v['both']] for v in profiles.values()]), 'cooltools', 'chromosomix',
           'd  every bin', scale='log')
-plt.show()
+drawn('fig-virtual4c')
 ```
 
 On the `{python} TEXT['v4c_n']` bins cooltools reports, the two agree within
@@ -1717,7 +1864,7 @@ bar.minorticks_off()
 ax = axes[1]
 for k, key in enumerate(CUTS):
     values = np.maximum(cut_rel[key], 1e-9)
-    ax.scatter(k + np.linspace(-0.25, 0.25, values.size), values, s=6, color=APP_COLOUR, lw=0)
+    ax.scatter(k + np.linspace(-0.25, 0.25, values.size), values, s=6, color=APP_COLOUR, lw=0, gid=CUTS[key][0])
 ax.set(yscale='log', ylim=(1e-9, 1e-3), ylabel='|chromosomix / coolpuppy − 1|',
        title='b  every cell, six pileups')
 ax.set_xticks(range(len(CUTS)), ['raw', 'O/E', 'raw,\nevery\nloop', 'O/E,\nevery\nloop', 'diagonal,\nraw',
@@ -1725,11 +1872,12 @@ ax.set_xticks(range(len(CUTS)), ['raw', 'O/E', 'raw,\nevery\nloop', 'O/E,\nevery
 ax = axes[2]
 for k, (name, stack, colour) in enumerate((('chromosomix', controls_app, APP_COLOUR), ('coolpuppy', controls_ref, REF))):
     ax.scatter(np.full(len(stack), 0 + (k - 0.5) * 0.25), stack[:, centre, centre], s=30, color=colour, label=name, zorder=3)
-    ax.scatter(np.full(len(stack), 1 + (k - 0.5) * 0.25), [p2ll(p) for p in stack], s=30, color=colour, zorder=3)
+    ax.scatter(np.full(len(stack), 1 + (k - 0.5) * 0.25), [p2ll(p) for p in stack], s=30, color=colour, zorder=3,
+               gid=name)
 ax.set_xticks([0, 1], ['centre', 'P2LL'])
 ax.set(xlim=(-0.6, 1.6), ylabel='over shifted controls', title='c  five seeds each')
 ax.legend(loc='upper right')
-plt.show()
+drawn('fig-apa')
 ```
 
 Raw and over the expected, at coolpuppy's defaults and with every loop, and on the diagonal both
@@ -1813,7 +1961,7 @@ ax = axes[2]
 ax.scatter(paired['score_ref'], paired['score_app'], s=5, color=APP_COLOUR, alpha=0.5, lw=0, rasterized=True)
 identity(ax, np.nanmin(paired['score_ref']), np.nanmax(paired['score_ref']))
 ax.set(xlabel='chromosight quantify', ylabel='chromosomix', title='c  every loop’s score')
-plt.show()
+drawn('fig-chromosight-quantify')
 ```
 
 The same `{python} TEXT['csq_n']` loops are scored, every score within `{python} TEXT['csq_score']`,
@@ -1888,7 +2036,7 @@ square(axes[1], v['app'], 'b  chr19, boosted (chromosomix)', norm=LogNorm(), lab
 agreement(axes[2], np.concatenate([b['ref'].ravel() for b in boosted.values()]),
           np.concatenate([b['app'].ravel() for b in boosted.values()]), 'Boost-HiC', 'chromosomix',
           'c  every cell', scale='log')
-plt.show()
+drawn('fig-boost')
 ```
 
 `{python} TEXT['bh_kept']`, and over the `{python} TEXT['bh_cells']` cells of the chromosomes where they
@@ -1991,12 +2139,21 @@ measures({
 
 ```{python}
 #| label: fig-metaplot
-#| fig-cap: "ATAC-seq about RefSeq TSS. a, the profile; b, chromosomix's rows, strongest first; c, every cell of every row against deepTools' row paired with it."
+#| fig-cap: "ATAC-seq about RefSeq TSS. a, the profile; b, chromosomix's rows, strongest first, each line the mean of 100; c, every cell of every row against deepTools' row paired with it."
 TEXT['mp_n'] = f'{len(rows_app):,}'
 TEXT['mp_profile'] = f'{profile_rel:.1e}'
 TEXT['mp_cells'] = f'{int((row_excess > 0).sum()):,}'
 METAPLOT_OK = int((row_excess > 0).sum()) == 0 and len(set(match)) == len(rows_ref)
 TEXT['mp_rows'] = ('every one of the' if METAPLOT_OK else 'not every one of the')
+#: How many of a heatmap's rows each line of its picture is the mean of. A picture a few hundred pixels
+#: high shows tens of thousands of rows only by leaving most of them out; it draws their means instead.
+POOL = 100
+
+
+def pictured(rows):
+    """A heatmap as its picture draws it: each run of POOL rows, in order, as their mean."""
+    return np.array([np.nanmean(rows[k:k + POOL], axis=0) for k in range(0, len(rows), POOL)])
+
 
 fig, axes = plt.subplots(1, 3, figsize=(12, 3.9), layout='constrained', width_ratios=[1.2, 0.8, 1])
 ax = axes[0]
@@ -2005,13 +2162,13 @@ ax.plot(offsets, profile_app, color=APP_COLOUR, lw=1.2, label='chromosomix')
 ax.set(xlabel='from the TSS (bp)', ylabel='mean ATAC signal', title='a  profile')
 ax.legend(loc='upper left')
 ax = axes[1]
-ax.imshow(rows_app, aspect='auto', cmap=DENSITY, norm=LogNorm(0.05, np.nanpercentile(rows_app, 99.5)),
+ax.imshow(pictured(rows_app), aspect='auto', cmap=DENSITY, norm=LogNorm(0.05, np.nanpercentile(rows_app, 99.5)),
           interpolation='nearest', extent=[offsets[0] - 25, offsets[-1] + 25, len(rows_app), 0])
 ax.set(xlabel='from the TSS (bp)', ylabel='transcripts, strongest first', title='b  every transcript')
 ax.grid(False)
 agreement(axes[2], rows_ref[match].ravel(), rows_app.ravel(), 'deepTools computeMatrix', 'chromosomix',
           'c  every bin of every row', scale='log')
-plt.show()
+drawn('fig-metaplot')
 ```
 
 The profiles agree within `{python} TEXT['mp_profile']`, the six digits written, and
@@ -2093,7 +2250,7 @@ measures({
 
 ```{python}
 #| label: fig-metaplot-two
-#| fig-cap: "Both replicates about RefSeq TSS. a, each one's profile; b and c, chromosomix's two heatmaps, one row per transcript and the same transcript on a row in both; d, each row's mean over both tracks, top to bottom, in chromosomix's order and in plotHeatmap's."
+#| fig-cap: "Both replicates about RefSeq TSS. a, each one's profile; b and c, chromosomix's two heatmaps, the transcripts in one order in both, each line the mean of 100; d, each row's mean over both tracks, top to bottom, in chromosomix's order and in plotHeatmap's."
 TEXT['mp2_profiles'] = f'{profiles_rel:.1e}'
 TEXT['mp2_cells'] = f'{int((two_excess > 0).sum()):,}'
 TEXT['mp2_uncovered'] = f'{uncovered:,}'
@@ -2103,12 +2260,14 @@ METAPLOT_TWO_OK = int((two_excess > 0).sum()) == 0 and len(set(match_two)) == le
 fig, axes = plt.subplots(1, 4, figsize=(12, 3.9), layout='constrained', width_ratios=[1.2, 0.6, 0.6, 1])
 ax = axes[0]
 for i, (mine, theirs) in enumerate(zip(profiles_app, profiles_ref)):
-    ax.plot(offsets, theirs, color=REF, lw=3, label='deepTools plotProfile' if i == 0 else None)
-    ax.plot(offsets, mine, color=APP_COLOUR, lw=1.2, label='chromosomix' if i == 0 else None)
+    ax.plot(offsets, theirs, color=REF, lw=3, label='deepTools plotProfile' if i == 0 else None,
+            gid=f'deepTools plotProfile, replicate {i + 1}')
+    ax.plot(offsets, mine, color=APP_COLOUR, lw=1.2, label='chromosomix' if i == 0 else None,
+            gid=f'chromosomix, replicate {i + 1}')
 ax.set(xlabel='from the TSS (bp)', ylabel='mean ATAC signal', title='a  profiles')
 ax.legend(loc='upper left')
 for ax, rows, title in zip(axes[1:3], heatmaps, ('b  replicate 1', 'c  replicate 2')):
-    ax.imshow(rows, aspect='auto', cmap=DENSITY, norm=LogNorm(0.05, np.nanpercentile(rows, 99.5)),
+    ax.imshow(pictured(rows), aspect='auto', cmap=DENSITY, norm=LogNorm(0.05, np.nanpercentile(rows, 99.5)),
               interpolation='nearest', extent=[offsets[0] - 25, offsets[-1] + 25, len(rows), 0])
     ax.set(xlabel='from the TSS (bp)', title=title)
     ax.grid(False)
@@ -2119,7 +2278,7 @@ ax.plot(key_ref[~none_ref], color=REF, lw=3, label="plotHeatmap's order")
 ax.plot(key_app[~none_app], color=APP_COLOUR, lw=1.2, label="chromosomix's")
 ax.set(yscale='log', xlabel='row, top to bottom', ylabel='mean over both tracks', title='d  the order')
 ax.legend(loc='upper right')
-plt.show()
+drawn('fig-metaplot-two')
 ```
 
 Both profiles agree within `{python} TEXT['mp2_profiles']`; every row of the two heatmaps has its pair
@@ -2218,12 +2377,12 @@ for ax, (letter, (measure, column)) in zip(axes, zip('ab', NULLS.items())):
     ax.hist(null_ref[column], bins=40, color=REF, alpha=0.7, label='bedtools, 1,000 shuffles')
     mean_app = float(null_app.loc[measure, 'expected'])
     sd_app = (float(null_app.loc[measure, 'observed']) - mean_app) / float(null_app.loc[measure, 'z'])
-    ax.axvspan(mean_app - sd_app, mean_app + sd_app, color=APP_COLOUR, alpha=0.15, lw=0)
+    ax.axvspan(mean_app - sd_app, mean_app + sd_app, color=APP_COLOUR, alpha=0.15, lw=0, gid='chromosomix, ± sd')
     ax.axvline(mean_app, color=APP_COLOUR, lw=2, label='chromosomix, mean ± sd')
     ax.axvline(observed_app[column], color=INK, lw=1.2, ls=(0, (4, 3)), label='observed')
     ax.set(xlabel=measure.lower(), ylabel='shuffles', title=f'{letter}  {measure.lower()}')
 axes[0].legend(loc='upper center')
-plt.show()
+drawn('fig-overlap')
 ```
 
 The two tools `{python} TEXT['ov_count']`: `{python} TEXT['ov_shared']` bases shared of
@@ -2291,7 +2450,7 @@ ax.plot(along['start'] / 1e6, along['GC'], color=REF, lw=3, label='bioframe')
 ax.plot(along['start'] / 1e6, along['gc_app'], color=APP_COLOUR, lw=1.2, label='chromosomix')
 ax.set(xlabel='chr11 (Mb)', ylabel='GC content', title='c  chr11, 30–40 Mb')
 ax.legend(loc='upper left', ncols=2)
-plt.show()
+drawn('fig-composition')
 ```
 
 Over the `{python} TEXT['comp_n']` bins with sequence in them the GC content agrees within
@@ -2365,7 +2524,7 @@ for ax, (letter, (pattern, v)) in zip(axes, zip('ab', found.items())):
     ax.stairs(np.histogram(v['app']['start'], edges)[0], edges / 1e6, color=APP_COLOUR, lw=1.2, label='chromosomix')
     ax.set(xlabel='chr19 (Mb)', ylabel='sites per Mb', title=f'{letter}  {pattern}')
 axes[0].legend(loc='lower center', ncols=2)
-plt.show()
+drawn('fig-motif')
 ```
 
 The two find the same `{python} TEXT['motif_sites']` sites, each on the same strand,
@@ -2521,7 +2680,7 @@ identity(ax, exact_all.min(), exact_all.max())
 ax.set(xlabel='exact window means, pyBigWig and SciPy', ylabel='the tool’s coefficient',
        title='b  every pair, both methods, three window sizes')
 ax.legend(loc='upper left')
-plt.show()
+drawn('fig-trackcorr')
 ```
 
 All `{python} TEXT['tc_n']` coefficients from chromosomix agree with the exact reference within
@@ -2547,6 +2706,128 @@ record('Track correlation', 'mouse ATAC-seq, two replicates, and insulation, chr
              *[f'plotcorrelation-{size}-{method}' for size in SIZES for method in METHODS]])
 ```
 
+## 19 · Loop calling (cooltools)
+
+HiCCUPS as `cooltools.dots` computes it, with its Python API's defaults in both, over every chromosome
+of the map: a pixel is tested against four neighbourhoods of its own, each pixel's chunk of like local
+expected corrected on its own, and the pixels that pass are clustered and filtered. Calls matched by bin
+pair; the four locally adjusted expecteds and q-values of each compared to the digits chromosomix writes
+— four decimals, and six significant digits for a q below 10⁻⁴.
+
+| | chromosomix | cooltools |
+|---|---|---|
+| kernel | the one for the map's bins (w 5, p 2 at 10 kb) | `recommend_kernels(10_000)` |
+| expected | the map's own, the first two diagonals left out | `expected_cis(ignore_diags=2)` |
+| furthest from the diagonal | 1,000 bins, 10 Mb (default) | `max_loci_separation=10_000_000` |
+| λ-chunks, FDR | `--lambdaBins 40`, `--fdr 0.1` (defaults) | `n_lambda_bins=40`, `lambda_bin_fdr=0.1` |
+| clusters | `--clusteringRadius` 2 bins, 20 kb, and the filter (defaults) | `clustering_radius=20_000`, `cluster_filtering=True` |
+
+```{python}
+LC = WORK / 'loopcalling'
+mr('loops', MOUSE_10K, out=LC / 'app', name='loops', analysis='Loop calling')
+reference('cooltools-dots', 'Loop calling', 'cooltools',
+          [PYTHON, script('cooltools_dots'), MOUSE_10K, OUT, THREADS], out=LC / 'cooltools.tsv', threads=THREADS)
+
+#: Each kernel by cooltools' name, with the word chromosomix's table spells its q-value column with.
+KERNELS = {'donut': 'Donut', 'vertical': 'Vertical', 'horizontal': 'Horizontal', 'lowleft': 'Lowleft'}
+#: And as the figures name it.
+KERNEL_NAMES = {'donut': 'donut', 'vertical': 'vertical', 'horizontal': 'horizontal', 'lowleft': 'lower-left'}
+ref_dots = pd.read_csv(LC / 'cooltools.tsv', sep='\t').rename(columns={'chrom1': 'sequence'})
+app_dots = table(one(LC / 'app', '*.loops-table.tsv'))
+dots = app_dots.merge(ref_dots, on=['sequence', 'start1', 'start2'], how='outer', indicator=True,
+                      suffixes=('_app', '_ref'))
+both_dots = dots[dots['_merge'] == 'both']
+lam_app = np.concatenate([both_dots[k].to_numpy(float) for k in KERNELS])
+lam_ref = np.concatenate([both_dots[f'la_exp.{k}.value'].to_numpy(float) for k in KERNELS])
+q_app = np.concatenate([both_dots[f'q{K}'].to_numpy(float) for K in KERNELS.values()])
+q_ref = np.concatenate([both_dots[f'la_exp.{k}.qval'].to_numpy(float) for k in KERNELS])
+# chromosomix writes a q to four decimals, and one below 1e-4 to six significant digits.
+fixed, small = q_ref >= 1e-4, (q_ref < 1e-4) & (q_ref > 0)
+lc_lam = np.abs(lam_app - lam_ref).max()
+lc_q = np.abs(q_app[fixed] - q_ref[fixed]).max()
+lc_q_small = np.abs(q_app[small] / q_ref[small] - 1).max()
+lc_zero = int((q_ref == 0).sum())
+LC_EXACT = (len(both_dots) == len(app_dots) == len(ref_dots)
+            and (both_dots['count_app'] == both_dots['count_ref']).all()
+            and (both_dots['cluster'] == both_dots['c_size']).all()
+            and lc_lam <= 5.0001e-5 and lc_q <= 5.0001e-5 and lc_q_small <= 5.0001e-6
+            and (q_app[q_ref == 0] == 0).all())
+measures({
+    'loops, chromosomix / cooltools': f'{len(app_dots):,} / {len(ref_dots):,}',
+    'same bin pair; in one only': f"{len(both_dots):,}; {int((dots['_merge'] != 'both').sum())}",
+    'contacts, the same at every pair': f"{int((both_dots['count_app'] == both_dots['count_ref']).sum()):,}",
+    'cluster size, the same at every pair': f"{int((both_dots['cluster'] == both_dots['c_size']).sum()):,}",
+    f'λ, max |difference| ({len(lam_ref):,}, four to a loop)': f'{lc_lam:.1e}',
+    f'q ≥ 1e-4, max |difference| ({int(fixed.sum()):,})': f'{lc_q:.1e}',
+    f'q < 1e-4, max relative difference ({int(small.sum()):,})': f'{lc_q_small:.1e}',
+    'q of 0 in cooltools, 0 in chromosomix': f"{int((q_app[q_ref == 0] == 0).sum())} of {lc_zero}",
+    'chromosomix, as it noted': ' '.join(NOTES['loops'][2:]),
+})
+```
+
+```{python}
+#| label: fig-loopcalling
+#| fig-cap: "Loop calling, mouse Hi-C at 10 kb. a, the four locally adjusted expecteds of every loop both call; b, their q-values; c, the 2 Mb stretch that holds the most of them, with 100 kb either side, both call sets over the balanced map."
+TEXT['lc_n'] = f'{len(both_dots):,}'
+TEXT['lc_only'] = f"{int((dots['_merge'] != 'both').sum())}"
+TEXT['lc_lam'] = f'{lc_lam:.1e}'
+TEXT['lc_q'] = f'{lc_q:.1e}'
+TEXT['lc_q_small'] = f'{lc_q_small:.1e}'
+
+fig = plt.figure(figsize=(11, 7.6), layout='constrained')
+grid = fig.add_gridspec(2, 2, height_ratios=[1, 1.25])
+ax = fig.add_subplot(grid[0, 0])
+for k, colour in zip(KERNELS, (APP_COLOUR, REF, INK2, '#7c56c2')):
+    ax.scatter(both_dots[f'la_exp.{k}.value'], both_dots[k], s=7, color=colour, alpha=0.6, lw=0,
+               label=KERNEL_NAMES[k])
+identity(ax, lam_ref.min(), lam_ref.max())
+ax.set(xscale='log', yscale='log', xlabel='cooltools, λ (raw counts)', ylabel='chromosomix, λ (raw counts)',
+       title='a  locally adjusted expected')
+ax.legend(loc='upper left', markerscale=2)
+ax = fig.add_subplot(grid[0, 1])
+seen = q_ref > 0
+ax.scatter(-np.log10(q_ref[seen]), -np.log10(q_app[seen]), s=7, color=APP_COLOUR, alpha=0.6, lw=0)
+identity(ax, -np.log10(q_ref[seen].max()), -np.log10(q_ref[seen].min()))
+ax.set(xscale='log', yscale='log', xlabel='cooltools, −log10 q', ylabel='chromosomix, −log10 q',
+       title='b  q-values, four kernels')
+# The 2 Mb that hold the most loops both call, from one of them.
+LC_SPAN = 2_000_000
+busiest = max(((chrom, start) for chrom, start in both_dots[['sequence', 'start1']].itertuples(index=False)),
+              key=lambda at: ((both_dots['sequence'] == at[0]) & (both_dots['start1'] >= at[1])
+                              & (both_dots['start2'] < at[1] + LC_SPAN)).sum())
+chrom, first = busiest
+# Drawn with 100 kb either side, so that no loop sits on the frame.
+lo, hi = max(0, first - 100_000), min(int(clr10.chromsizes[chrom]), first + LC_SPAN + 100_000)
+held = clr10.matrix(balance=True).fetch(f'{chrom}:{lo}-{hi}')
+ax = fig.add_subplot(grid[1, :])
+ax.imshow(np.where(held > 0, held, np.nan), cmap=DENSITY, norm=LogNorm(), interpolation='nearest',
+          extent=(lo / 1e6, hi / 1e6, hi / 1e6, lo / 1e6))
+ax.grid(False)
+inside = lambda frame: frame[(frame['sequence'] == chrom) & (frame['start1'] >= lo) & (frame['start2'] < hi)]
+mine, theirs = inside(app_dots), inside(ref_dots)
+ax.scatter((mine['start2'] + 5_000) / 1e6, (mine['start1'] + 5_000) / 1e6, s=90, facecolors='none',
+           edgecolors=APP_COLOUR, lw=1.4, label='chromosomix')
+ax.scatter((theirs['start2'] + 5_000) / 1e6, (theirs['start1'] + 5_000) / 1e6, s=18, marker='x', color=REF,
+           lw=1.2, label='cooltools')
+ax.set(xlabel=f'{chrom} (Mb)', ylabel=f'{chrom} (Mb)', title=f'c  {chrom}, {lo / 1e6:.2f}–{hi / 1e6:.2f} Mb')
+ax.set_aspect('equal')
+ax.legend(loc='lower left')
+drawn('fig-loopcalling')
+```
+
+`{python} TEXT['lc_n']` loops at the same bin pairs (`{python} TEXT['lc_only']` in one only), with
+the same contacts and the same cluster sizes; the locally adjusted expecteds within
+`{python} TEXT['lc_lam']` and the q-values within `{python} TEXT['lc_q']` — and, below 10⁻⁴, within
+`{python} TEXT['lc_q_small']` of their own size — which is the rounding of the digits chromosomix
+writes.
+
+```{python}
+record('Loop calling', 'mouse Hi-C, 10 kb, every chromosome', f"cooltools {VERSIONS['cooltools']}",
+       f"{TEXT['lc_n']} loops, the same bin pairs, contacts and clusters; λ within {TEXT['lc_lam']}, q within "
+       f"{TEXT['lc_q']}, the digits written",
+       'Identical (to the digits written)' if LC_EXACT else 'Differs', apps=['loops'], refs=['cooltools-dots'])
+```
+
 ## Summary
 
 Commands as run, from `notebooks/work/validation/`: `chromosomix` is this checkout's
@@ -2562,6 +2843,10 @@ summary = pd.DataFrame(SUMMARY)[list(WIDTHS)]
 VERDICTS_TSV = WORK / 'summary.tsv'
 summary.drop(columns=['chromosomix command', 'Reference command']).replace(r'<[^>]+>', '', regex=True).to_csv(
     VERDICTS_TSV, sep='\t', index=False)
+# And every number the figures draw, a row a mark (`drawn`), published beside it too: to ten significant
+# digits, as many as chromosomix writes its finest table to (`boost`) and more than any figure shows.
+DRAWN_TXT = WORK / 'validation.txt'
+pd.concat(DRAWN.values(), ignore_index=True).to_csv(DRAWN_TXT, sep='\t', index=False, float_format='%.10g')
 summary.style.hide(axis='index').set_table_styles([
     {'selector': '', 'props': [('table-layout', 'fixed'), ('width', '100%'), ('font-size', '0.85em')]},
     {'selector': 'td, th', 'props': [('vertical-align', 'top'), ('text-align', 'left')]},
@@ -2595,7 +2880,9 @@ def manifest():
 MANIFEST.write_text(json.dumps(manifest(), indent=1, ensure_ascii=False))
 listed = json.loads(MANIFEST.read_text())['commands']
 measures({'commands written for timing.qmd': f"{len(listed)} ({sum(c['bench'] for c in listed)} timed)",
-          'to': rel(MANIFEST), 'verdicts to': rel(VERDICTS_TSV)})
+          'to': rel(MANIFEST), 'verdicts to': rel(VERDICTS_TSV),
+          'numbers the figures draw': f"{sum(map(len, DRAWN.values())):,} rows from {len(DRAWN)} figures, "
+                                      f"{DRAWN_TXT.stat().st_size / 1e6:.1f} MB, to {rel(DRAWN_TXT)}"})
 ```
 
 ```{python}

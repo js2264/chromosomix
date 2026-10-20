@@ -102,7 +102,13 @@ export class HicStore implements PixelStore {
     // pan comes back to; a window across chromosomes — the whole genome at a
     // coarse rung, at its widest — is a walk, and reads exactly (`HicFile`).
     const sparse = pairs.length > 1
-    return this.walk(pairs, (a, b) => this.file.pairRecords(a, b, rows, cols, sparse), onChunk, options)
+    return this.walk(
+      pairs,
+      (a, b) => this.file.pairRecords(a, b, rows, cols, sparse),
+      onChunk,
+      options,
+      () => [rows, cols],
+    )
   }
 
   /**
@@ -125,17 +131,22 @@ export class HicStore implements PixelStore {
     const whole: Extent = [0, this.file.nBins]
     const pairs = this.file.indexedPairs().filter(([a]) => touched.has(a))
     const sparse = pairs.length > 1
+    // The row window is the bands clipped to `a`; the column window is the file.
+    // Passing the union of the bands rather than one band at a time is what keeps
+    // a pair visited once when two bands land on one chromosome.
+    const windowOf = (a: number): readonly [Extent, Extent] | null => {
+      const extent = this.clipTo(a, bands)
+      return extent === null ? null : [extent, whole]
+    }
     return this.walk(
       pairs,
       (a, b) => {
-        // The row window is the bands clipped to `a`; the column window is the
-        // file. Passing the union of the bands rather than one band at a time is
-        // what keeps a pair visited once when two bands land on one chromosome.
-        const extent = this.clipTo(a, bands)
-        return extent === null ? Promise.resolve(null) : this.file.pairRecords(a, b, extent, whole, sparse)
+        const window = windowOf(a)
+        return window === null ? Promise.resolve(null) : this.file.pairRecords(a, b, window[0], window[1], sparse)
       },
       onChunk,
       options,
+      windowOf,
     )
   }
 
@@ -181,6 +192,7 @@ export class HicStore implements PixelStore {
       },
       undefined,
       options.pause,
+      () => [whole, whole],
     )
   }
 
@@ -233,6 +245,7 @@ export class HicStore implements PixelStore {
     read: (a: number, b: number) => Promise<PixelChunk | null>,
     onChunk: (chunk: PixelChunk) => void,
     options: SpanScanOptions,
+    windowOf: (a: number, b: number) => readonly [Extent, Extent] | null,
   ): Promise<boolean> {
     return this.inOrder(
       pairs,
@@ -243,6 +256,8 @@ export class HicStore implements PixelStore {
         return true
       },
       () => options.cancelled?.() === true,
+      undefined,
+      windowOf,
     )
   }
 
@@ -260,11 +275,15 @@ export class HicStore implements PixelStore {
    * waits on that instead, which is how the census stands aside for as long as
    * a view is reading rather than for one turn of the loop (§12).
    *
-   * **And a walk across pairs keeps several in flight.** Its reads are exact
-   * ones that do not hold the worker (`HicFile`), and they are round trips and
-   * little else, so up to `HicFile.walkAhead` pairs are read at once. The
-   * pixels are still handed over one pair at a time and in order, so a
-   * consumer sees exactly what a one-at-a-time walk would give it.
+   * **And a walk across pairs reads them a plan at a time.** Its reads are
+   * exact ones that do not hold the worker (`HicFile`), and they are round trips
+   * and little else, so the pairs are cut into plans (`HicFile.walkPlans`) and
+   * each plan's records and blocks are read together (`HicFile.prefetchWalk`),
+   * by the first of its pairs the walk reaches, before any of them is read —
+   * which then finds them held. Up to `HicFile.walkAhead` pairs are read at
+   * once, so the next plan is being read while the last of this one's pairs are
+   * handed over. The pixels are still handed over one pair at a time and in
+   * order, so a consumer sees exactly what a one-at-a-time walk would give it.
    */
   private async inOrder(
     pairs: ReadonlyArray<[number, number]>,
@@ -272,8 +291,10 @@ export class HicStore implements PixelStore {
     take: (records: PixelChunk | null, done: number) => boolean,
     cancelled?: () => boolean,
     pause?: () => Promise<void>,
+    windowOf?: (a: number, b: number) => readonly [Extent, Extent] | null,
   ): Promise<boolean> {
     const ahead = pairs.length > 1 ? this.file.walkAhead() : 1
+    const planned = this.planned(pairs, cancelled, pause, windowOf)
     const queue: Array<Promise<PixelChunk | null>> = []
     let next = 0
     let done = 0
@@ -282,8 +303,9 @@ export class HicStore implements PixelStore {
       if (cancelled?.() === true) return false
       while (queue.length < ahead && next < pairs.length) {
         const [a, b] = pairs[next]
+        // A plan a cancel stopped is read no further; the loop stops at its next turn.
+        const reading = planned(next).then((ready) => (ready ? read(a, b) : null))
         next += 1
-        const reading = read(a, b)
         // A read the walk stops before reaching is left to finish unawaited,
         // and its failure is nobody's to report. The one awaited below still
         // throws.
@@ -295,6 +317,40 @@ export class HicStore implements PixelStore {
       if (!take(records, done)) return false
     }
     return true
+  }
+
+  /**
+   * The plan each pair of a walk belongs to, read once, by the first of its
+   * pairs that asks: a function from a pair's place in the walk to whether its
+   * plan was read — `false` when a cancel stopped it.
+   *
+   * A walk of one pair, or one that does not say which rectangle of each pair
+   * it reads, is not planned, and each pair is read as it comes.
+   */
+  private planned(
+    pairs: ReadonlyArray<[number, number]>,
+    cancelled: (() => boolean) | undefined,
+    pause: (() => Promise<void>) | undefined,
+    windowOf: ((a: number, b: number) => readonly [Extent, Extent] | null) | undefined,
+  ): (at: number) => Promise<boolean> {
+    if (pairs.length < 2 || windowOf === undefined) return () => Promise.resolve(true)
+    const plans = this.file.walkPlans(pairs)
+    const planOf: number[] = []
+    plans.forEach((plan, index) => plan.forEach(() => planOf.push(index)))
+    const reads = new Map<number, Promise<boolean>>()
+    return (at) => {
+      const index = planOf[at]
+      let reading = reads.get(index)
+      if (reading === undefined) {
+        const walk = plans[index].flatMap(([a, b]) => {
+          const window = windowOf(a, b)
+          return window === null ? [] : [{ a, b, rows: window[0], cols: window[1] }]
+        })
+        reading = this.file.prefetchWalk(walk, { pause, cancelled })
+        reads.set(index, reading)
+      }
+      return reading
+    }
   }
 
   /**

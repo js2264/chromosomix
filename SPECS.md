@@ -373,10 +373,23 @@ the block index of every resolution the pair was written at — 725 KB for chr1 
 map written at thirteen — so it is read only as far as the resolution open, which for the coarse ones
 Juicer writes first is a record's first few dozen bytes. A window inside a chromosome reads through
 the source's chunks, which a pan comes back to. A walk across the pairs — a whole-genome picture, the
-census of §6.5 — lands a few hundred bytes a pair in places megabytes apart and never comes back, so
-it reads exactly those bytes, leaves the chunks to the windows, and keeps four pairs in flight, since
-round trips are then nearly all it costs — fewer, down to one, at a rung where the pairs in flight
-could hold more than 64 MiB of pixels between them, since a pair is decoded whole.
+census of §6.5 — lands a few hundred bytes a pair in places megabytes apart and never comes back, so it
+reads exactly those bytes and leaves the chunks to the windows, a dropped file's as well as a remote
+one's. **And a walk is planned, because round trips are then nearly all it costs.** Every place it
+reads is known before it reads: the master index gives each record's, and Juicer writes each pair's
+blocks just past its record, coarsest rung first. So the heads of the records are read together,
+each with the 4 KiB past its record's end, as the stretches of the file they make where they lie
+within 64 KiB of one another; the blocks those bytes brought are decoded from them; and the blocks
+left over are read together after, the same way. A picture's walk keeps six reads in flight, every
+connection a browser opens to one host; the census, behind the views, four. Pair by pair — a record's
+head, then its blocks — the whole genome of the 4DN chicken map 4DNFIRKUYKP4 at 2.5 Mb was 1,258
+requests; planned, it is 427, and a dropped copy of it reads 11 MB of the disk where its 1 MiB slices
+were 222 MiB. The gap read through is a window's on purpose: a wider one saves round trips only on a
+link whose round trips cost more than its bytes, and read through 256 KiB the 4DN mouse map's whole
+genome is 17 MB for 369 requests, which a home connection — 5 MB/s, 50 ms a round trip — would read
+more slowly than the 460 of the walk pair by pair. A plan holds its pairs' pixels until they are handed over, so it ends where its
+pairs could hold more than 24 MiB of them; at a rung where one pair could hold 64 MiB, each pair is a
+plan of its own, read one at a time, since a pair is decoded whole.
 
 **Three things are translated, and nothing else.**
 
@@ -1031,13 +1044,13 @@ read — an array is not stringified into a name, and a string the URI encoder w
 its key rather than the tab — and every state this application writes comes back unchanged, which a
 test holds for every published demo workspace.
 
-**Back and forward are in the header**, past a divider after the four panels' toggles, as Lucide's
-*undo* and *redo* arrows: the browser's own back and forward, as buttons, so they walk exactly the
-entries every navigation here writes — a crumb, a typed locus, a zoom or pan step, a sequence
-stepped — and nothing that does not write one, such as a wheel or a drag on the map. Where the
-browser says whether there is anywhere to go (Chromium's Navigation API) a button greys when there
-is not; elsewhere both stay live, and a press with nowhere to go does nothing, as the browser's own
-does.
+**Back and forward are in the header**, past a divider after the four panels' toggles and a `+`
+(below), as Lucide's *undo* and *redo* arrows: the browser's own back and forward, as buttons, so
+they walk exactly the entries every navigation here writes — a crumb, a typed locus, a zoom or pan
+step, a sequence stepped — and nothing that does not write one, such as a wheel or a drag on the
+map. Where the browser says whether there is anywhere to go (Chromium's Navigation API) a button
+greys when there is not; elsewhere both stay live, and a press with nowhere to go does nothing, as
+the browser's own does.
 
 **Back has its list of steps**, a chevron butted against it as the second half of one control, the
 shape every browser gives its own back button: pressed, it lists every step behind the one on
@@ -1053,7 +1066,19 @@ reload says where the record stands; the record is the window's, in `sessionStor
 steps at most. An entry it did not write — an address typed into the bar — is a new step after the
 one on screen, as the browser takes it. The chevron greys while there is no step behind.
 
-After them in the same group, in this order, are the three that take the work out of the
+**Before back, a `+`: one more file in this tab.** It opens the landing page's first section,
+*Load files*, in a dialog — the drop area that is also the file chooser, and the URL box under it
+behind *or a URL* (`ui/LoadBox.ts`, §24.2) — and nothing else: no folders to connect, no stores. What
+it does is what dropping on the window does (§16.9): a contact map comes up beside the one open, a
+track is drawn on it, an empty tab is filled rather than added to; its tooltip says which, *add a
+file to this tab* or *open a file in this tab*, and so does the dialog's title. It is for the tab a
+file was dropped into: nothing is connected there, so there is no Files column, and the landing page
+and its URL box have gone — a second file held at an address had no door but the palette's *Add a
+file to this tab*, which it is the button for. A `+` stood beside the stores' toggle once and was
+taken away as a second *Open a file* (§24.2), which it was not: the file crumb's *Open a file*
+replaces the tab's file, and this adds to it.
+
+After back and forward in the same group, in this order, are the three that take the work out of the
 window: *Share this tab as a link*, *Save every tab as a file* and the console (§23). They used to
 sit on the far side of the command bar, away from the controls a reader's hand is already among; the
 far right is now only about the window itself — theme, shortcuts, source, about. Where the header
@@ -1180,7 +1205,10 @@ and make the back button walk a history interleaving three files. The rest of th
 and its view state come back, its worker does not, and clicking it is what reads the file. A tab that
 named a local file comes back to the picker with §11's explanation — unless this browser kept a
 grant for that file (`state/handles.ts`, where the platform hands one over with the file), and then
-a click reopens it as it would a remote one.
+a click reopens it as it would a remote one. The file dropped there opens **the map the tab named
+inside it** — the `.mcool`'s rung, the `.hic`'s resolution — on the view the tab was showing, alone
+or with tracks dropped beside it, which join it: a dropped file is named by its path, and opened at
+its root it landed on a rung of its own choosing and on its Chromosomes table instead.
 
 **A closed browser is offered its tabs back, never given them.** Beside the strip, every tab's whole
 config — tracks, marks, filters — is kept in IndexedDB (`state/workspace.ts`) and read only when
@@ -1721,13 +1749,15 @@ read of the weights between two pixel chunks does not start it again. A miss far
 recent — an index, a header, another sequence — fetches what it asks for and nothing more, so
 opening a file costs what it did, and a source opened to read in small pieces (§3.8's `fine`) never
 reads ahead. The same chromosome is now 34 requests. A walk across a `.hic`'s chromosome pairs reads
-the other way, exactly and not through the chunks at all (§3.6).
+the other way, exactly and not through the chunks at all, planned so its reads are few (§3.6).
 
 **The reader is started before it is asked for anything.** Its worker fetches and compiles h5wasm the
 moment it exists, and it used to exist only once a file was opened, so every first open waited for
 the runtime between the click and the first byte: 2.6 of the 3.2 seconds a 1 GB `.mcool` dropped on a
 fresh tab took to land. It is made when the picker is on screen and the page is idle, and the same
-drop lands in 0.3 s.
+drop lands in 0.3 s — the picker a workspace or a restored tab puts up to ask for a map on this
+machine included, where a file dropped used to wait for a reader: a chromosome or a locus of the
+timings' three maps (§18.10) took 1.18 s to draw from it, and takes 0.96 s.
 
 ### 6.2 Decoding requirements
 
@@ -1908,10 +1938,12 @@ in the fewest pixels), and the box shows them when they land.
 thread every view reads through, so it reads nothing before a request already waiting has been
 answered — on an open, the loading screen's — and it walks the file the way §3.6 walks one across
 chromosome pairs: each pair's matrix record read only as far as the coarsest rung, which is the
-record's first few dozen bytes, and that rung's one block, both as exact ranges, four pairs in
-flight. On the 5 GB 4DN map of mouse granule neurons (4DNFI916JQ1Y, thirteen rungs, 231 pairs) that
-is 456 requests and under 1 MB. Reading each record whole first — the block index of all thirteen
-rungs, 70 MB, in 1 MiB chunks — was 500 MiB, and held the loading screen for a minute and a half.
+record's first few dozen bytes, and that rung's blocks, all as exact ranges planned together, four
+reads in flight. On the 5 GB 4DN map of mouse granule neurons (4DNFI916JQ1Y, thirteen rungs, 231
+pairs) that was 456 requests and under 1 MB pair by pair; on the 4DN chicken map 4DNFIRKUYKP4 (630
+pairs) it is 419 requests where pair by pair it was 1,258. Reading each record whole first — the
+block index of all thirteen rungs, 70 MB, in 1 MiB chunks — was 500 MiB, and held the loading screen
+for a minute and a half.
 And **it stands aside for as long as a view is reading**, not for one turn: between pairs it waits
 until no view's request has run for a quarter of a second (§12), so a chromosome clicked while it
 counts is read as if it were not counting. A resample waiting on the census ends the wait, since the
@@ -3156,7 +3188,8 @@ which a deck closed after *no map* leaves it, and then it is the one mark that p
 rectangle, *on this map*, lit with the four strips at its edges while a file or a row is dragged —
 and **alone** while an overlay's row is, since the strips name stacks and an overlay has none. A
 file dropped there opens onto that map only, an overlay on its face and a track on its usual edge,
-where a file dropped in the middle of a companion used to land on the first map; a row of the Tracks
+where a file dropped in the middle of a companion used to land on the first map — and so does one
+let go anywhere else on a companion's cell, its strips aside (§16.9); a row of the Tracks
 card dropped there is drawn on that map **as well** as wherever it was, as the marks put it. An
 overlay's row let go on a strip is taken the same way, and given no edge. A lane carried by its
 grip is not offered the face: that gesture is about an edge.
@@ -3491,6 +3524,12 @@ that fails gives its room back. Download progress reaches a row at most four tim
 tick was a write of every row to session storage and a rebuild of the card, forty a second for two
 large files, on the thread the map is panned on.
 
+**A row still reading goes with the file to another resolution**, and is read again there. The
+tracks a change of resolution carries were the loaded ones alone, and a row is remembered only once
+it has loaded, so a row on its way was in neither list while the old file's worker was put down
+under it: a reader who picked another resolution in the second or two after a store's session opened
+lost every one of its tracks.
+
 ### 8.7 bigBed
 
 Read whole, and parsed as the BED it holds. Not a windowed source like a bigWig: a `FeatureSet` lives
@@ -3519,39 +3558,51 @@ and its text nine; a lane in the browser is ninety and its name is what identifi
 under it are the contents: at one size and one weight, `genes` read as the first item in a row of
 gene names.
 
-**Beside a map, the names are in its corners.** Each stack's names stand in the corner of the map that
-follows the stack clockwise — left of the bottom stack, above the left one, right of the top one, below
-the right one — so each corner holds one stack's whichever edges have lanes, and no name is written
-over a track. The column is the stack's own margin running on into that corner, and the block is set
-flush with the end beside the data: ending against the handle a bottom lane hangs before it, starting
-past the group bars beyond a top one, and on the two vertical stacks, whose text reads up the page,
-ending under the right stack's handles and starting over the left stack's bars. The name is on the
-first line and the range on the next, in reading order on all four sides; on a lane too thin to stack
-them the range goes beside the name and inside the column all the same. A short name stands in the
-margin the heatmap's own labels leave; a longer one runs out over the corner, which opens as wide as the
-widest block wants past that margin — measured off the names the paint wrote and applied a frame later,
-as the browser's column is, which cannot oscillate because a block reports its text's natural width —
-up to 150 pixels at the default text size, past which a name wraps onto a second line or is cut in the
-middle. The corner widens its side of the map in the panel's grid, in a deck's alignment of its maps
-and in every figure saved from the map, which writes the names where the screen does. They are pointed
-at as they were on the lane: a press on a name or an end of the range opens its caret there, a right
-click opens the lane's menu, the chip is the lane's colour. With *track text* off there are no names and
-no corners. They used to be written over the lane — a canvas under the map cannot grow backwards into
-the margin before it — which is what the next paragraph was about; the corners are the room that was
-there all along, and a canvas of their own each reaches it.
+**Beside a map, the names are written over the tracks, or in its corners with the *name column*
+on.** The switch is the 1D browser's own — *name column*, `u` — at the end of the *all tracks* row of
+both Tracks cards, and it is one preference with one meaning on both surfaces: the names beside the
+tracks rather than over them, in the browser's column there and in the map's corners here. It is **off**
+to begin with: each name is written over the start of its lane, on a plate (next paragraph), where the
+eye already is, and the map keeps the room. The corners take room from the map to give the names a
+place of their own, which is the reader's call to make. A press moves a mounted map's names at once and
+another folds the corners and gives their room back, in the grid, a deck's alignment and the figures
+alike.
 
-**Written over the data, the block sits on a plate** — on the one surface that still writes it there,
-the assembly editor's stage, whose stacks have no corners. In the browser it has a column of its own;
-beside a map the block was drawn over the lane and a halo around each glyph was the whole of the
-protection. On a sixteen-pixel peak lane the label *is* the lane: `ATAC peaks` came out with orange
-bars through every letter and `230 features in view` lay across a density block. A plate in the halo
-colour at 0.85 keeps the argued placement and makes the words readable — the lane under it stays
-visible as a shape, because the first eighty pixels of a peak set are data a reader may be counting.
-A name longer than its lane is **cut in the middle** there as it is in a column, since a clipped name
-is a different name: a track called `Distance to IV:1000000` was drawn as `Distance to IV:100000`,
-which is a wrong coordinate stated as a fact. And a lane whose signal lives where a stacked range
-line would land — the sequence lane, a fraction on a fixed `0 – 1` axis — keeps its range beside the
-name on one line rather than under it.
+With it on, each stack's names stand in the corner of the map that follows the stack clockwise —
+left of the bottom stack, above the left one, right of the top one, below the right one — so each
+corner holds one stack's whichever edges have lanes, and no name is written over a track. The column
+is the stack's own margin running on into that corner, and the block is set flush with the end
+beside the data: ending against the handle a bottom lane hangs before it, starting past the group
+bars beyond a top one, and on the two vertical stacks, whose text reads up the page, ending under
+the right stack's handles and starting over the left stack's bars. The name is on the first line and
+the range on the next, in reading order on all four sides; on a lane too thin to stack them the
+range goes beside the name and inside the column all the same. A short name stands in the margin the
+heatmap's own labels leave; a longer one runs out over the corner, which opens as wide as the widest
+block wants past that margin — measured off the names the paint wrote and applied a frame later, as
+the browser's column is, which cannot oscillate because a block reports its text's natural width —
+up to 150 pixels at the default text size, past which a name wraps onto a second line or is cut in
+the middle. The corner widens its side of the map in the panel's grid, in a deck's alignment of its
+maps and in every figure saved from the map, which writes the names where the screen does. They are
+pointed at as they were on the lane: a press on a name or an end of the range opens its caret there,
+a right click opens the lane's menu, the chip is the lane's colour. With *track text* off there are
+no names and no corners. A canvas under the map cannot grow backwards into the margin before it,
+which is why the names beside a map were only ever written over the lane; the corners are the room
+that was there all along, and a canvas of their own each reaches it. For a while they were the only
+place the names went, with no switch to put them back over the tracks; the switch is that way back,
+and the default.
+
+**Written over the data, the block sits on a plate** — on every surface with the name column off,
+beside a map and in the browser, and always on the assembly editor's stage, whose stacks have no
+corners. A halo around each glyph was once the whole of the protection over the lane. On a
+sixteen-pixel peak lane the label *is* the lane: `ATAC peaks` came out with orange bars through
+every letter and `230 features in view` lay across a density block. A plate in the halo colour at
+0.85 keeps the argued placement and makes the words readable — the lane under it stays visible as a
+shape, because the first eighty pixels of a peak set are data a reader may be counting. A name
+longer than its lane is **cut in the middle** there as it is in a column, since a clipped name is a
+different name: a track called `Distance to IV:1000000` was drawn as `Distance to IV:100000`, which
+is a wrong coordinate stated as a fact. And a lane whose signal lives where a stacked range line
+would land — the sequence lane, a fraction on a fixed `0 – 1` axis — keeps its range beside the name
+on one line rather than under it.
 
 **The last lane on an edge is given the room its name needs.** The block is written at the reader's
 text size and the lane is the height the reader gave it, and the two need not agree: at the default
@@ -3564,8 +3615,8 @@ alike. So the stack leaves room past its last lane for whatever its block reache
 (`labelReach`, `AnnotationLanes.thicknessOf`), and a loop's anchors are drawn past that
 room rather than into the name; the lane keeps its height and the writing its size. A stack whose
 last lane holds its block is the size it was, and so is one with *track text* off, which writes no
-names to make room for — and so is every stack beside a map, whose names are in a corner. On screen
-the room comes out of the map's share of its cell, as a lane's own height does.
+names to make room for — and so is a stack beside a map with the name column on, whose names are in
+a corner. On screen the room comes out of the map's share of its cell, as a lane's own height does.
 
 **Where the pointer is, is written one way on both surfaces and in the browser's status line**: the
 base, 1-based and grouped, while one pixel is worth less than a kilobase, and a unit form above that.
@@ -5879,6 +5930,40 @@ no policy, since it injects every stylesheet as a `<style>` and talks to the pag
 — a map, a figure hovered, the 1D browser from a second origin — and fails on any refusal the page
 did not ask for, and on a map or a lane left without its data.
 
+**The site describes itself to crawlers and to language models, in files beside the app.** Its
+`public/` puts three at the root. `llms.txt` is a summary in the shape llmstxt.org gives one: what
+the app is, the formats it opens, how to write a link that opens a file at a place — the hash of
+§5.5, with a map's `region` in the machine form and the browser's `locus` in the display form
+(§26.1) — how to embed one (§21), how to run the command line (§23), and links to the README, the
+validation and timing notebooks, the changelog and this specification. `robots.txt` lets every
+crawler in, those of language models included, keeps the archived pins and the pull-request
+previews (`/v/`, `/pr/`) out of search — each is a copy of the app at the root, kept for links that
+must not change — and names `sitemap.xml`, which lists the app and its two notebooks. The site
+build adds a fourth, `llms-full.txt`: the README as one file, its repository-relative links made
+absolute (`scripts/llms.mjs`), for a tool that reads a single document rather than following links.
+**`llms.txt` is written by hand and held to the app by a test**, because a model acts on it — writes
+a link from it, runs a command from it — and nothing reading it can tell a summary that has drifted:
+each example link goes through the hash's own reader, each value it lists through the list it is
+drawn from, each task through the registry and each store through the shelf. None of these four
+files is in the pinned, desktop or package builds.
+
+**The page is written for a search engine too, which reads it after the app has run.** Its title,
+*chromosomix – genome browser for Hi-C, tracks and 3D models*, and its description name what the
+app is searched by — Hi-C and Micro-C, a genome browser, `.cool`, `.mcool` and `.hic` — inside the
+sixty and the hundred and sixty characters a results page prints whole, and the description is the
+one a pasted link unfurls with, beside the Open Graph tags. **On the web the app leaves that title
+alone while nothing is open** (`App.landingTitle`): a search engine indexes the page as it stands
+once the script has run, and the app used to write its bare name over the title the moment it
+mounted, so none of the words in it reached an index. A tab with a file open is still
+`<file> — chromosomix`, and the desktop window and the single file, which no search finds, say the
+name alone. A `<link rel="canonical">` names `https://chromosomix.app/` as the page's one address,
+whatever query a link to it carries — `?store=`, `?config=`, `?embed=1` — so that a link to any of
+them counts for the root; a pinned copy carries it too, behind `robots.txt`. The `<noscript>` says
+what the app is, the formats it reads and where its source and `llms.txt` are, for a reader without
+JavaScript and for a crawler that runs none, which reads nothing else of the page. It comes ahead of
+`#app`, which is a window tall even empty: after it, the line it used to hold was a screen's height
+down a blank page. The package's description and keywords say the same to npm's search (§22).
+
 ---
 
 ## 12. Performance budgets
@@ -5906,7 +5991,7 @@ whole-genome picture, and the census §6.5 takes on every open:
 
 | Operation | Budget |
 |---|---|
-| A read across chromosome pairs (remote), at a rung inside a record's first 4 KiB | ≤ 2 exact range requests a pair — its record's head, its blocks — and no chunk of the cache spent on either; four pairs in flight |
+| A read across chromosome pairs (remote), at a rung inside a record's first 4 KiB | ≤ 2 exact range requests a pair — its record's head, its blocks — and one for many where they lie within 64 KiB of one another, the blocks just past a record read with its head; no chunk of the cache spent on any; six in flight for a picture, four for the census |
 | The census, started beside an open | **0** reads before a request already queued has been answered |
 | The census or the circularity check, while a view is reading | **0** steps started until no view request has run for 250 ms; at most the one step already in flight |
 
@@ -6036,6 +6121,43 @@ by its bytes rather than by what its counts claim:
 |---|---|
 | Open and read a binary file whose counts, offsets or compressed data are corrupt — `.hic`, BAM with BAI or CSI, `.2bit`, binary g3d | an answer or a refusal; **never more than 16× the file's size read** in one open, never one typed array past 64 MiB, never 1.5 s. `test/unit/fuzz-readers.test.ts` holds every reader to this over 1,140 seeded corruptions of files the repository's own writers made; the worst reads 4× its file and allocates 30 KB, and the slowest takes a tenth of a second |
 | An inflate of any kind | stopped as soon as its output passes its cap, at most one 64 KiB slice of input later (§10) |
+
+**A picture says when it is finished** (`perf/rendered.ts`). A view mounting, its map's first paint
+and the picture being finished are three moments: the lanes ask for their windows once the map is
+laid out, a track still opening asks for its own when it lands, and a smoothing replaces the map it
+was computed from. Nothing outside the page could tell them apart. A script timing the app waited
+for the network to go quiet, which it never does here while the census and the circularity check
+read behind a view (§6.5, §8.15), and a screenshot taken on the first paint had lanes reading
+*fetching…*. So everything that can still change the picture says so while it can — a navigation
+being routed, a file, a workspace or a shared link being opened, a map's veil (a read, a smoothing,
+a correlation), a paint asked for and not yet made, a lane's window, residues or pile in flight, a
+track on screen still opening, a finer block being read for a frozen map — and once the last of it
+has ended and a frame has passed with nothing new begun, the window says so, once:
+
+| Where | What |
+|---|---|
+| `performance.getEntriesByName('chromosomix:rendered')` | a mark whose `startTime` is the moment the last wait ended — the end of the frame the picture was finished in — on the clock the page's own navigation timing is on |
+| `window`, event `chromosomix:rendered` | the same report, as the event's `detail` |
+| the host of an embed, message `chromosomix:rendered` | the same report, under §21.4's rules |
+
+The report carries `seq`, counting from 1; `at`, the mark's time; `status` — `drawn`, `gated` for a
+whole-genome read waiting for its button (§7.3), or `error` for a refusal on screen in place of the
+picture, with the refusal as `note`; `state`, the view state as the address bar carries it; `maps`,
+one per map on screen, every cell of a deck, each with its title, the bin size of the rung its block
+was read from, the bins pooled into one cell, and their product as `resolution`; and `lanes`, the
+track lanes drawn. **It says what was drawn, not what was asked for.** A whole-genome view reads the
+coarsest rung that fits (§7.3) and a wide window may pool its cells (§7.2), so a link naming 5 kb can
+be on screen at 25 kb, and a script holding viewers to one resolution has to be told so rather than
+time a different picture.
+
+**A repaint alone is not a new picture.** Pointing at the map repaints it once a frame, and a report
+per frame would bury the one a script is waiting for: a paint keeps a picture unfinished but never
+starts one. A report follows every navigation — a colour change is one — and every read a picture
+waits on, a pan past the lanes' padding included. **What it does not wait for**: the side columns,
+the status bar and the console, which describe the picture rather than being it; an analysis task,
+whose result is waited for when it arrives as a track; the census and the circularity check, which
+change nothing on screen; and anything that has left the page — a tab in the background, a view torn
+down without saying so — which is looked for four times a second while something waits, and dropped.
 
 ---
 
@@ -6597,8 +6719,9 @@ the micro-C file's bin size as the map they had just chosen.
 column shows the first map's card with *every map — all N* under its title, in the warn colour: a
 setting changed there is made to **every map of the deck at once**, one moved setting at a time, so
 picking a ramp does not also flatten each map's clip onto the first one's. That is also the state in
-which no task can run (§18.1). *None* holds for as long as the deck does, and a deck put down leaves
-the next one starred on its first map, which is where every deck starts.
+which no task that reads a map can run, and the 1D tasks, which read none, still do (§18.1). *None*
+holds for as long as the deck does, and a deck put down leaves the next one starred on its first
+map, which is where every deck starts.
 
 A companion's settings used to ride **on its picture**: a button in the bottom-left corner of the map
 opening a menu upward over it, with the score, the transform, the ramp and the clip, while the Map
@@ -6822,6 +6945,22 @@ the first cell the press opened, either: a press below a short last row squares 
 arriving by any other road — the bar's URL box, the file chooser, the command palette — takes the
 first empty cell instead, because those name no position and the empty cells are the reader's own
 instruction about where the next map goes.
+
+**A file let go on a filled cell is that cell's too, wherever on it the hand lets go**
+(`PanelDeck`'s `watchFileDrops`). On a companion's map it means what the rectangle in the map's
+middle means, *on this map* (§8.1): a track drawn on that map on its usual edge, an overlay on its
+face. On a tracks cell it is a track drawn in that cell, at its foot, where every track on one is
+drawn. A row dragged out of the Files column or out of a store (§20.5, §24.2) is aimed the same way
+as a file off the disk. What a file *is* is still decided by its name, where every drop's is: a
+contact map let go on a map is a map, beside it — the first empty cell, or a new one — and a
+structure opens a cell of its own (§25.3), which a structure cell, answering for itself, does too.
+The map's own rectangles keep their drop, being aimed more finely, and so does an empty cell. While
+the file is in the air the cell that will take it is outlined, as a cell a map is carried to is, and
+the outline goes while the hand is over one of the map's rectangles, which then say where. A
+companion used to take a file on its rectangles alone and a tracks cell on nothing, so a track let go
+on the lanes under the second map, on its heading or anywhere on a tracks cell was loaded under the
+first map — the content area's answer to a drop nothing else took, and still the answer on the first
+map's own cell, which is the session's.
 
 **Rows of the Tracks and Structures cards take the edges too.** A Tracks card row dropped on a `+`
 opens the cells with a tracks cell drawing that track in the one nearest the edge — *placed*, as on
@@ -7444,16 +7583,20 @@ or not the sentence is printed under it.
 The distinction is not *can this run now* but *can what the reader does next make it run*, and
 `TaskAvailability` is the three answers: `ready`, `waiting` with a sentence, `absent`.
 
-**Every task is greyed while a deck has no map starred.** A task reads one map and the star is how
-that map is named (§16.5), so a deck the reader has left with no star filled has no file for any
-task to run against — and none is guessed for them, the first map least of all, which would be the
-star's old default passed off as a choice. The column says so once, above its cards, in the warn
-colour: *no map is starred, so no task can run*; every row is greyed with that sentence in its
-tooltip and without the per-group and per-row lines, which would print it twenty times; and the
-drawer's Run and *run on all* refuse with it in the price's place. It is every task, the 1D tasks
-that read only tracks and sequences included, because the rule a reader is given is *a task runs on
-the starred map* and a column in which some run and some do not under no star is a rule with
-exceptions to learn. Starring any map puts every task back.
+**Every task that reads a map is greyed while a deck has no map starred.** Such a task reads one map
+and the star is how that map is named (§16.5), so a deck the reader has left with no star filled has
+no file for it to run against — and none is guessed for them, the first map least of all, which
+would be the star's old default passed off as a choice. The column says so once, above its cards, in
+the warn colour: *no map is starred, so only the 1D tasks can run*; every row that reads a map is
+greyed with that sentence in its tooltip and without the per-group and per-row lines, which would
+print it twenty times; and the drawer's Run and *run on all* refuse with it in the price's place.
+**The 1D tasks are not greyed.** They read only tracks and sequences (§18.3), so there is no map for
+the star to name and nothing for its absence to stop: they keep their own answers — ready, or waiting
+on a file — and run. They were greyed too at first, because the rule a reader is given is *a task
+runs on the starred map* and a column in which some run and some do not looked like a rule with
+exceptions to learn. But a 1D task does not run on the starred map — its button says *run*, not *run
+on ★* (below) — and greying it under a sentence about a map was the exception. Starring any map puts
+every task back.
 
 **The column is asked again whenever the deck's maps change** — a companion's file opening, a cell
 moving to another rung, a cell closing — as it is when the star moves: which tasks apply is a question
@@ -7491,13 +7634,25 @@ one.
 a job runs and the price after the pair, progress, results, exports. On a deck the button reads
 *run on ★*, with the starred map named in its tooltip, and what a plain Run makes — its tab, its
 lanes, its name — is that map's; *run on all N maps* beside it runs the task once per map, in the
-grid's order (§16.9), and is not there on a single map. The row's controls are ordinary bordered
-buttons like everything else in a bar (§5.4), and so are the exports under the results: the control
-that stops a forty-second scan and the ones that get the numbers out of the application are the two a
-reader most needs to find, and drawn borderless they read as captions. It is anchored to the right of
-the body, full height — down to the console's top edge while the console is up (§23.4) — resizable by
-its left edge with its width remembered, and it overlays the content and the two right columns rather
-than squeezing them — at three quarters of the window there is nothing left to squeeze.
+grid's order (§16.9), and is not there on a single map. **A 1D task is one plain *run*, deck or
+not**, with no *run on all N maps* beside it: it reads the loaded tracks and sequences and never a
+map (§18.3), so four maps on screen are one answer and not four. It was offered both once; the batch
+read the same tracks once per map and filed as many identical lanes, each named after a map it never
+read, and a plain Run filed its lane on whichever map was starred, so moving the star and pressing
+Run again made a second copy of one lane rather than a second run. It is the session's task, so the
+star is nothing to it: it is priced, framed and laid out on the first map's sequences and grid,
+whichever map is starred — with the star's, moving the star changed the sequences its form offered
+and the bins its lanes were cut on — and what it makes is filed with the session's tracks, on the
+first map: its lanes take no map's name, its results have one history (§18.4) and no tabs, and a
+press after the star moved is the run already going, or the next run of the same one. The runner
+holds the same rule where a batch is queued, so nothing offers it one. The row's controls are
+ordinary bordered buttons like everything else in a bar (§5.4), and so are the exports under the
+results: the control that stops a forty-second scan and the ones that get the numbers out of the
+application are the two a reader most needs to find, and drawn borderless they read as captions. It
+is anchored to the right of the body, full height — down to the console's top edge while the console
+is up (§23.4) — resizable by its left edge with its width remembered, and it overlays the content
+and the two right columns rather than squeezing them — at three quarters of the window there is
+nothing left to squeeze.
 
 **It is deliberately not a modal.** The dialogs in §5 are questions; this is a place to work. A modal
 here would take the keyboard (which is how the app is driven), would dismiss on a stray click outside
@@ -7578,11 +7733,15 @@ Parameters are remembered per file and per task, and travel in an exported sessi
 a figure is opening the session and pressing Run.
 
 **A number can take its default from the file.** Base composition's bin size, and *Signal by group*'s,
-is the open map's resolution until the reader types another, and 10 kb where no map is open (§18.8).
-The form shows what that comes to on the file in front of it and follows a change of resolution,
-because the answer is still *the map's*; the run is handed the number itself, and its record, its
-command line and a replay carry that number. A `chromosomix` line with no such flag gets the same
-rule from the map it names, or 10 kb with none.
+is the open map's resolution until the reader types another, and 10 kb where no map is open; *Loop
+calling*'s kernel is the one for the open map's bins, and its scan's reach and clustering radius are
+10 Mb and 20 kb in them (§18.8). The form shows what that comes to on the file in front of it and
+follows a change of resolution, because the answer is still *the map's*; the run is handed the number
+itself, and its record, its command line and a replay carry that number. **After a run as before
+one**: what the form remembers of a run is what it was asked, so a number the reader left to the map
+is still the map's, and a run on the 1 kb rung does not leave the 10 kb rung's form holding 1 kb's
+answer — ten times the reach it meant. A `chromosomix` line with no such flag gets the same rule from
+the map it names, or 10 kb with none.
 
 **A locus parameter is in the typed form of §26.1** — 1-based and inclusive, digits grouped or not,
 `IV:1,000,001-1,400,000` — wherever it is held: in the form, in a result's provenance and the
@@ -7750,9 +7909,13 @@ against the new one. This is the discipline the on-the-fly 4C lane never kept �
 whatever block happened to be loaded, which is one of the reasons it is gone (§8.9) — and it is why
 the genome-wide 4C **task** (§18.8) is a different object from that **lane** rather than a bigger
 version of it. The panel is what makes the two obviously different, which is a good reason for the
-panel to exist. **A task that reads no map** — two sequence sets against each other (§28) — has no
-framing to name or to leave: its heading says it reads the sequences chosen, not the map, its result
-is never stale for a view that moved, and its provenance is of the sequences.
+panel to exist. **A task that reads no map** — two sequence sets against each other (§28), and every
+1D task, which reads the loaded tracks — has no framing to name or to leave: its heading says it
+reads the sequences chosen, or the loaded tracks, not the map; its result is never stale for a view
+that moved, or a star that did, and so it offers no *recompute here*, which would be the same run
+again. The dot plot's provenance is of the sequences; a 1D task's records the first map's framing,
+whichever map is starred, for the bin size its lanes are laid out on and the circles and origins it
+reads (§8.15).
 
 **Provenance travels with the numbers.** Every result carries its task and task version, every
 parameter, the framing snapshot, the file URI, the app's version and commit, and a timestamp. It is
@@ -7774,13 +7937,13 @@ a finished result makes it cheap to produce again: a pileup over forty thousand 
 range requests, and a reader who lost it by pressing Run lost the minute. What people actually do with
 this catalogue is run a thing, change one number, run it again, and then want the two side by side —
 or, more often, discover that the previous answer was the one worth keeping. So the runner keeps the
-latest run of each task **on each map** and the **eight** before it, newest first, and the drawer
-offers `older` / `newer` / `latest` over them with the run's own clock time and, in its tooltip,
-*which parameter differs from the latest* — the reason the two pictures are two pictures, which
-nothing else on screen states. Everything downstream follows the run on screen: the framing line,
-**recompute here**, the CLI command, the TSV and the vector export are all that run's, because a
-result is a record and stepping back to one means stepping back to all of it. Bounded because these
-hold typed arrays, and not
+latest run of each task **on each map** — a 1D task's on the first map, the one it is filed on
+(§18.1) — and the **eight** before it, newest first, and the drawer offers `older` / `newer` /
+`latest` over them with the run's own clock time and, in its tooltip, *which parameter differs from
+the latest* — the reason the two pictures are two pictures, which nothing else on screen states.
+Everything downstream follows the run on screen: the framing line, **recompute here**, the CLI
+command, the TSV and the vector export are all that run's, because a result is a record and stepping
+back to one means stepping back to all of it. Bounded because these hold typed arrays, and not
 persisted for the reason the framing is a snapshot: a history restored against a file that has since
 been re-binned would be a list of figures that no longer describe anything.
 
@@ -8180,7 +8343,7 @@ exact stamp is that line's tooltip, so it is one hover from the words and identi
 
 ### 18.8 The catalogue
 
-Thirty-one tasks, in **four cards — 2D, 3D, 1D and Metagenome**, headed *2D tasks*, *3D tasks*,
+Thirty-two tasks, in **four cards — 2D, 3D, 1D and Metagenome**, headed *2D tasks*, *3D tasks*,
 *1D tasks* and *Metagenome*. The build order is in `docs/TASKS_PLAN.md`; what follows is what each
 one must be.
 
@@ -8203,14 +8366,14 @@ because a reader with no structure loaded has exactly one thing to do in it; *fi
 the other from a track. Five tasks are **dev features** (§29.3), absent rather than greyed while the
 switch is off and in every embed: the four metagenome tasks (`metacool`), and their card with them,
 and the 1D card's last, *Two sequences against each other* (`dotplot`); `chromosomix` lists and
-runs all thirty-one (§29.5). The 3D card's three — *Model from the map*, *Model versus map* and
+runs all thirty-two (§29.5). The 3D card's three — *Model from the map*, *Model versus map* and
 *Spatial tracks* — are specified beside the structures they make and read (§25.6), and the dot plot
 beside the view it draws (§28); every other task is below.
 
 **Which card each sits on**, in the registry's order: *2D tasks* — coverage and marginals, cis and
 trans per sequence, per-cell contact QC, P(s), the scalogram, the 4C profile, diamond insulation, the
-directionality index, the HiC score, compartments, inter-arm alignment, pattern detection,
-reproducibility and aggregate peak analysis; *3D tasks* — model from the map, model versus map and
+directionality index, the HiC score, compartments, inter-arm alignment, loop calling, pattern
+detection, reproducibility and aggregate peak analysis; *3D tasks* — model from the map, model versus map and
 spatial tracks; *1D tasks* — find a motif, peak calling, base composition, origin and terminus, the
 metaplot, track correlation, FRiP, signal by group, interval set overlap and the dot plot;
 *Metagenome* — MAG contact QC, the inter-MAG network, MAG purity and split-MAG detection. The entries
@@ -8634,6 +8797,37 @@ should: 3.1–3.2× on *P. aeruginosa* PAK from 2 to 16 kb, reaching 3.0 of its 
 *E. coli* MG1655 from 2 to 20 kb, whose arms are not aligned; and after detrend PAK's is 0.93–0.97×.
 Each square is read whole, so a sequence past Compartments' 8,192-bin gate is left out and named. Absent on a metacool,
 whose MAGs have no declared origins.
+*Loop calling* — the one question *where are the loops*, which Pattern detection answers as one of
+five shapes it can be handed: HiCCUPS (Rao et al. 2014) as `cooltools.dots` computes it, ported with
+its Python API's defaults. Every pixel the scan reaches is tested against four **neighbourhoods** of
+its own — the donut about it, a bar through it each way and the square below and left of it, out to
+the kernel's outer half-width `w` and with the square of half-width `p` about the pixel left out —
+whose **locally adjusted expected** is the distance decay at the pixel times what the neighbourhood
+holds over what the decay says it should, on the balanced map, scaled back to the pixel's raw count
+by its two weights so that a raw count is tested against a Poisson tail. The pixels are put in
+**λ-chunks** of like expected, 40 by default, log-spaced by 2^⅓, and Benjamini–Hochberg runs within
+each chunk, kernel by kernel, to the count a pixel of that chunk must reach; a pixel that reaches all
+four is **enriched**, enriched pixels within the **clustering radius** of each other are one loop,
+called at its brightest — clustered by BIRCH, as `dots` clusters them — and the **enrichment
+filter** keeps a loop at 1.5× its vertical and horizontal expecteds, 1.75× its donut and lower-left
+ones and 2× one of those two, and a cluster of one pixel only at q-values summing to 0.02 or less.
+**The kernel is the one setting with no default.** cooltools has kernels for 4 to 28 kb bins —
+`w 7, p 4` from 4 kb, `5, 2` from 8 kb, `3, 1` from 18 kb, Rao et al.'s — and refuses any other
+resolution unless it is handed one; so the two half-widths are seeded from that table, and on a map
+outside it the boxes are empty and the run is refused, saying why, until the reader fills them.
+Every other default is `dots()`'s, in the map's bins where it is a distance: 10 Mb from the
+diagonal, a 20 kb radius, an FDR of 0.1 — where cooltools' command line has 2 Mb, 39 kb and 0.02 —
+and like Base composition's bin size they follow a change of resolution until typed (§18.2). Four
+outputs: the **loop set**, a BEDPE that lands on the map as rings the moment the run finishes; a
+**table** of every call with its four expecteds and q-values; the **loop spectrum**, each loop's
+enrichment over its donut against separation (below); and **the contacts each λ-chunk asked of a
+pixel**, kernel by kernel against the line where a pixel merely meets its expected — the
+correction drawn, which is where a sparse map shows it was held to thresholds nothing in it could
+reach. A balanced map only: the expected is the balanced map's, so a file with no weights waits,
+saying to run `cooler balance`. **The task's own words name no package**: its row, its form, its
+notes, its figures and its command, `chromosomix loops`, say *loop calling*, and Pattern
+detection's row, form and notes name none either; the package each is a port of is named here, in
+§18.9 and §18.10, and in the validation notebook, where what is claimed for it is checked.
 *Pattern detection*, which is chromosight — loops, borders, hairpins, centromeres and stripes, by
 normalised cross-correlation against a template, over a map detrended by its own distance law, with
 neighbour suppression and a Benjamini-Hochberg q-value on every call. **The pattern is a parameter
@@ -8669,9 +8863,10 @@ a log axis, for the reason every distance plot here is. Drawn only off the diago
 separation to plot against; thinned by rank in separation past a couple of thousand marks, never
 truncated, so it stays the same picture. The same plot comes back from the chromosight **pileup**
 (where the scores are per anchor rather than per call) and from the ordinary APA over a loop set,
-where the quantity on the ordinate is each anchor's own P2LL. This is the one task whose
+where the quantity on the ordinate is each anchor's own P2LL, and from *Loop calling*, where it is
+each loop's count over its donut's expected. This and *Loop calling* are the two 2D tasks whose
 output is a *claim about the data* rather than a summary of it, which is why §18.9's paragraph
-against loop calling is answered in that section rather than here, and why its golden is the
+against loop calling is answered in that section rather than here, and why each one's golden is its
 package's own output rather than a re-derivation (§18.10).
 *Reproducibility* is the one task in the catalogue whose unit is a **pair of files**, and it is a
 port: HiCRep's stratum-adjusted correlation (Yang et al. 2017), which smooths both maps with a 2D
@@ -9158,7 +9353,18 @@ functions and its `main()` loaded as they are, IDR's fit at the commit yapc cite
 for region, summit for summit and cut for cut (§18.10). A cut of this app's own devising is still
 refused: a single track is reported as a ranked candidate list with no significance claimed, rather
 than cut at a valley in its histogram or at a score that looked about right, because yapc's cut is
-IDR and nobody published another.
+IDR and nobody published another. A port of either is a translation of GPL code — yapc is GPL-3.0,
+IDR GPL-2.0 or later — and is why chromosomix itself is under the GPL, version 3 or later (§22.4).
+
+**Loop calling is the third, and the one the original rule named.** *Loop calling* is HiCCUPS as
+`cooltools.dots` 0.7.1 computes it — the Python API's defaults, a kernel from cooltools' own table
+or the reader's — and its golden is that package's own output over `demo/yeast/`, stage by stage, in
+two configurations, the API's and the command line's (`test/golden/analysis/hiccups.json`). The port
+does not improve on it here either. The λ-chunk labels pandas rounds to three decimals are the λ the
+Poisson test and the q-values are taken at, and a pixel a hair past the last rounded label is
+dropped, as `dots` drops it; the tail is SciPy's `pdtrc`, Temme's asymptotic series included; and the
+clusters are sklearn's BIRCH down to the roundings the BLAS beneath it fuses, without which a pixel
+equidistant from two subclusters joins the other one.
 
 **Contact-based reordering and scaffolding: the reference editor (§27).** ~~No contact-based contig
 reordering or scaffolding. It would only be useful if the reordering could be written back into a
@@ -9170,7 +9376,7 @@ in its coordinates. It is **written as new files** — an AGP, a Juicebox `.asse
 FASTA, lifted tracks — each of which is authoring an output, which §13 never refused. And it is
 **re-applied** from the AGP or the `.assembly` to the same library's other files. What stays refused
 is what the rule was protecting: the file that was opened is never modified. The editor is a dev
-feature (§29.3), drawn only once the switch in *About* is on.
+feature (§29.3), drawn only while the dev features are on.
 
 **No writing of a `.cool`, `.mcool` or `.metacool` this app derived.** ~~No writing of `.cool`,
 `.mcool` or `.metacool`.~~ The original rule was the second sentence, and its reason still stands: a
@@ -9297,9 +9503,9 @@ are floats rather than counts:
 
 - **`scripts/make_golden.py` gains an analysis section**, guarded so that a machine without the extra
   packages still produces every existing golden. The new developer-side Python dependencies are
-  **cooltools** (expected, insulation, eigenvectors, saddle), **coolpuppy** (pileups),
-  **chromosight** (detection and quantification), **deeptools** (`computeMatrix`, for the 1D
-  metaplots) and **pyBigWig** (the writer cross-check).
+  **cooltools** (expected, insulation, eigenvectors, saddle, dots), **scikit-learn** (the clustering
+  `dots` calls), **coolpuppy** (pileups), **chromosight** (detection and quantification),
+  **deeptools** (`computeMatrix`, for the 1D metaplots) and **pyBigWig** (the writer cross-check).
 - **The tolerance is recorded per task in the golden file**, not written into the test, so it is data
   that can be tightened: relative `1e-6` for anything that is a sum or a ratio of sums, `2e-6` where
   numpy's float64 is held to arithmetic over the `Float32Array` a block reaches a task as, `1e-4` for
@@ -9374,6 +9580,19 @@ the residue lands as `3.2e-8` **absolute** on coefficients of a few ten-thousand
 orders below the 0.15–0.3 a call has to reach, which is why the calls compare exactly and the map
 compares against an absolute floor.
 
+**The loop caller's golden is staged the same way, for the same reason.** `dots` is the definition of
+what it calls, so its golden is its own functions called in its own order over the demo cooler — the
+expected `expected_cis` hands it, the kernels, the λ-chunk edges and the labels pandas cuts by, the
+chunk every scored pixel of a tile falls in and its four expecteds, the four histograms whole, the
+thresholds, every enriched pixel with its expecteds and q-values, the clusters with their centroids,
+and the calls — and then `dots()` itself, asserted equal to the staged calls before anything is
+written, in two configurations: the API's defaults at `w 5, p 2`, and the command line's at `w 3,
+p 1`. The thresholds, the histograms, the clusters and the calls compare exactly; the expecteds to
+`1e-13` and the q-values to `1e-11`, relative, since the expected is summed in a different order and
+the tail is a series. Beside it, the tail at 2,950 points over fifty λ against SciPy's own, exactly
+zero where SciPy's is, and BIRCH on two point sets whose nodes split and whose distances tie, chosen
+because a plain rounding of them clusters otherwise.
+
 **And one golden is against R rather than Python, for the curve the panel actually draws.**
 `HiContacts::distanceLaw()` is P(s) as a *probability density* — the share of all cis contacts at a
 separation, per base pair — where cooltools' `expected-cis`, goldened above, is P(s) as a *mean per bin
@@ -9436,14 +9655,14 @@ takes the same coordinate-ascent fallback, with SciPy's bounded Brent ported bes
 the same 1,615 to 1,630 peaks at the six thresholds.
 
 **And beside the goldens, two notebooks at full size.** `notebooks/validation.qmd`, rendered with
-Quarto, runs eighteen analyses twice over public data, each file named by its accession and fetched
+Quarto, runs nineteen analyses twice over public data, each file named by its accession and fetched
 from where it was published (4DN's; GEO's yeast Micro-C; and UCSC's mm10 sequence and RefSeq genes
 as Illumina iGenomes distributes them) — once through `chromosomix`, once through the package each
 reproduces, called as it is meant to be called and never re-implemented — and lines the two up bin
 by bin or call by call: insulation, compartments, P(s), coverage and virtual 4C against cooltools;
 the directionality index against `domaincaller`; peak calling with IDR on two replicates against
 yapc 0.1; loops against chromosight 1.6.3, and the pileup's chromosight score against `chromosight
-quantify`; pileups — raw, over the expected and over distance-matched controls, off the diagonal and
+quantify`; loop calling, genome-wide on a mouse map at 10 kb, against `cooltools.dots`; pileups — raw, over the expected and over distance-matched controls, off the diagonal and
 on it — against coolpuppy; reproducibility against `hicrep` 0.2.6; the 3D model against pastis;
 Boost-HiC against its own Python, through `chromosomix boost` (§6.5); the metaplot against
 deepTools, over one track and over two, its heatmaps in `plotHeatmap`'s order; interval overlap and its shuffled null against bedtools; base composition against
@@ -9452,7 +9671,17 @@ replicates and a Hi-C insulation score cut to chr19, against pyBigWig's exact wi
 SciPy, a window any track lacks left out of every pair as deepTools leaves it, and against
 deepTools, whose zoom-level means are measured apart. Where a reference draws at random — a pileup's
 controls, an overlap's shuffles, IDR's ties — two distributions are compared, the reference's own
-spread from seed to seed the yardstick. It writes every command it ran to
+spread from seed to seed the yardstick. **Every number its figures draw is a line of one table**,
+`notebooks/work/validation/validation.txt`, read off each figure as it is shown rather than gathered
+beside it, so that the table and the picture cannot disagree and any figure can be drawn again from
+the table alone: a row a mark — a point, a vertex of a line, a hexagon of a density with its count, a
+cell of a picture, a bar, a band or a line across a panel, a tick that names something, a text — with
+the figure's label, the panel's letter and axes, what the mark stands for and where it is drawn, to
+ten significant digits. A density is the hexagons it draws, not the millions of values behind it,
+which are the outputs of the commands it prints; a symmetric map's numbers are written once, its
+upper triangle; and the metaplot's heatmaps, tens of thousands of transcripts in a picture a few
+hundred pixels high, draw each line as the mean of a hundred, which is what the table holds. It
+writes every command it ran to
 `notebooks/work/validation/commands.json`, and `notebooks/timing.qmd` runs them again, four times
 round robin, each a fresh process — all but the ones that would time a job twice or two different
 jobs: one seed of the shifted controls, the *Sox2* viewpoint of virtual 4C, Boost-HiC on chr1, and
@@ -9465,24 +9694,48 @@ always `chromosomix`'s. Every run is one line of the tidy table
 and every version — and each `chromosomix` command's speed is a fold over the reference commands it is
 paired with, a side's commands summed where there are several (deepTools' `computeMatrix` and then
 `plotProfile` against one metaplot, and `plotHeatmap` as well against one over two tracks).
-They are documents, not tests: they need the data (about 6 GB), the reference packages and yapc's
-own environment, and nothing in the suite runs them.
+
+**The timings open on the time to a picture.** Before the analyses, `notebooks/timing.qmd` times
+chromosomix against the two viewers most used for the same thing — juicebox.js on a `.hic`, and
+HiGlass on an `.mcool`, served by higlass-python's own tile server, at the versions
+`notebooks/viewers/package.json` and `notebooks/requirements-higlass.txt` pin — and chromosomix on both
+formats. Every picture is one map and one track: yeast, chicken and mouse (4DN's 7 GB mouse map), each
+seen whole, one chromosome, a region and a locus, every view at one resolution the plan names, of a
+window of three to five hundred bins on a side. **No viewer chooses the resolution**: chromosomix is
+handed a workspace naming the map's rung, juicebox.js an explicit state, HiGlass the window and the
+rung as its `maxZoom`; each answers with the resolution it drew, and a picture drawn at another
+resolution, or of part of the window, is kept as what it was, never as a time for the one asked for. A
+view a viewer cannot draw at that resolution — a rung its file does not store, or a whole genome in
+juicebox.js, which draws one only from the `.hic`'s own whole-genome matrix — is not run but reported,
+with why. Each picture is read from disk, the page cache emptied first where the runner allows, and
+from the bucket it is published in, and timed in a fresh browser context, the viewer's empty page
+loaded first and kept apart, then left two seconds as a reader's is while they find their file, from
+the moment the viewer is handed the files to the moment it says the picture is finished: chromosomix by its own report (§12, *A picture says when it is finished*),
+juicebox.js by its last repaint covering the state asked for and its track's tiles, HiGlass by every
+tile in view fetched and drawn. Four rounds, the viewers taking turns to go first; every run, and
+every cell refused, is one line of `notebooks/work/validation/viewers.tsv`, with the requests and
+bytes the page asked for, the machine and every version.
+They are documents, not tests: they need the data (about 6 GB for the analyses and 15 GB for the
+viewers), the reference packages, yapc's own environment and higlass-python's, and the two viewers, and
+nothing in the suite runs them.
 
 **They are published with every release.** `.github/workflows/notebooks.yml` installs all of it on a
 fresh runner — the reference environment pinned package by package in `notebooks/requirements.txt`,
 yapc's in `requirements-yapc.txt` with IDR and yapc built at the commits the notebook cites,
-Boost-HiC's checkout, Ubuntu's bedtools and seqkit — renders both notebooks, and publishes them at
+Boost-HiC's checkout, Ubuntu's bedtools and seqkit, the app's build, the two viewers with Playwright's
+Chromium, and higlass-python's environment with libfuse — renders both notebooks, and publishes them at
 `<site>/validation/` and `<site>/timings/`, each a self-contained page with its tables beside it
-(`commands.json` and `summary.tsv`, every command and every verdict; `timings.tsv`); a release keeps
-its own copies of both pages and both tables as assets, and every run keeps what it rendered as an
-artifact for 90 days, the validation alone, with the timing rounds it finished, when the timings
-fail. It runs when a release is published and on demand. Each page opens on a block saying when it
-was rendered, from which version, commit and release, by which run or by hand, and on what machine,
-and closes on how long it took; the two link to each other there and on a reader's disk alike. The
-pages are no build of the app, so the service worker leaves those two addresses to the network, as
-it does `v/` and `pr/`, and the app, from this version on, finding itself at either unregisters its
-worker and reloads once (`recoverPinnedNavigation`), as at `v/`; a worker from before answers there
-with its own app until its reader takes the update it offers.
+(`commands.json`, `summary.tsv` and `validation.txt`, every command, every verdict and every number its
+figures draw; `timings.tsv` and `viewers.tsv`); a release keeps its own copies of both pages and of the
+four tables as assets, and every run keeps
+what it rendered as an artifact for 90 days, the validation alone, with the timing rounds it finished,
+when the timings fail. It runs when a release is published and on demand. Each page opens on a block
+saying when it was rendered, from which version, commit and release, by which run or by hand, and on
+what machine, and closes on how long it took; the two link to each other there and on a reader's disk
+alike. The pages are no build of the app, so the service worker leaves those two addresses to the
+network, as it does `v/` and `pr/`, and the app, from this version on, finding itself at either
+unregisters its worker and reloads once (`recoverPinnedNavigation`), as at `v/`; a worker from before
+answers there with its own app until its reader takes the update it offers.
 
 ### 18.11 A set of scales is one picture
 
@@ -9747,7 +10000,10 @@ of them, about six to the axis — the library's own step there is ten decades, 
 drawn as violins, and a step handed to it is counted from the axis's end, which on a fitted axis
 is no decade (`1.2e-10`, `1.2e-8`); and with fewer than three decades inside, where the library
 labels only decades, at 1, 2 and 5 of each, then at every digit, then on a linear ladder — a P(s)
-zoomed to 221 kb – 783 kb had no label at all.
+zoomed to 221 kb – 783 kb had no label at all. **And every one of those ticks is drawn**: the library
+hides the first and the last of the ticks it is handed where an axis's end label is left bare, wherever
+they fall, so a loop spectrum fitted from 10.9 kb lost its 20 kb tick, and the grid line with it; an
+end's label is left bare only where the first or the last tick is that end.
 
 **A legend down the right is beside the plot, never over it.** Its room was a fixed 132 pixels, and
 a series named after its file — `T4dNDD-infection.10min.mcool::5000`, as a map in a deck is — ran
@@ -9968,8 +10224,10 @@ kept one `<script src>` paints its shell and stops, with nothing on a console no
 a page that kept the module worker format looks completely normal until a file is dropped on it.
 `scripts/standalone-shape.mjs` holds the rules — one file, within a size band (4 MB to 24 MB), no
 external script or stylesheet, no root-absolute reference, no PWA tag, no `{type:"module"}` worker
-construction, the blob-URL construction present, the target's own name in the page, and a policy
-naming exactly the scripts and stylesheet the page holds, recomputed over the file it reads — and
+construction, the blob-URL construction present, the target's own name in the page, a policy
+naming exactly the scripts and stylesheet the page holds, recomputed over the file it reads, and
+the third-party notices every other build writes beside its page, which this one carries as a
+comment ahead of `</html>` because it may not be two files (§22.4) — and
 `check-standalone-build.mjs` runs them over the directory as the last step of
 `npm run build:standalone`. The lower size bound is as load-bearing as the upper: a build whose
 inlining silently did nothing produces a small, tidy, entirely broken file.
@@ -10166,26 +10424,33 @@ folder first.
 
 Every file row in the application carries the same two marks, and only marks (`ui/rowVerbs.ts`): a
 `+` that **adds the file to the session in front** — a second map beside the one that is there,
-anything else drawn on top, an empty tab filled rather than added to, which is the routing a dropped
-file takes — and a window with a `+` where its corner was that **opens it in a session of its
-own**, the empty tab in front or a new one, leaving whatever was open as it is. The words are in
-the tooltips, which also say what *add* means for that kind of file. Both are offered whatever the
-tab holds: on an empty tab the two land in the same place and the tooltips say so, because a row
-with two marks in one store and one in the next is a row a reader has to think about. A workspace
-row has the second alone — it is tabs, not a file, and there is nothing it could be added to. The
-same pair stands on a store's rows (§24.2), on a folder's rows here and on the files under a gallery
-card, whose own head carries the second mark alone; with words beside the marks it is the tray under
-a portal, and the second mark is on a portal group's *open with its tracks*. Clicking a folder row's
-name is the first verb.
+anything else drawn on top, an empty tab filled rather than added to, which is the routing a
+dropped file takes — and a window with a `+` where its corner was that **opens it in a session of
+its own**, the empty tab in front or a new one, leaving whatever was open as it is. The words are
+in the tooltips, which also say what *add* means for that kind of file. Both are offered whatever
+the tab holds: on an empty tab the two land in the same place and the tooltips say so, because a
+row with two marks in one store and one in the next is a row a reader has to think about. **An
+empty tab is filled by a row of any kind**, as the landing page's drop zone fills it: a folder on
+this machine hands its file to the road a drop on the window takes, whose empty seat was a map's
+alone, so a bigWig pressed there — its `+` saying it would open in this tab — did nothing and said
+nothing. A workspace row has the second alone — it is tabs, not a file, and there is nothing it
+could be added to. The same pair stands on a store's rows (§24.2), on a folder's rows here and on
+the files under a gallery card, whose own head carries the second mark alone; with words beside the
+marks it is the tray under a portal, and the second mark is on a portal group's *open with its
+tracks*. Clicking a folder row's name is the first verb.
 
 Dragging a file lets the reader say *where*: onto the map's edge rectangles for a lane in a named
 stack (§8.9), onto the rectangle in the middle of a map for that map alone — an overlay's one target
-(§8.1) — onto a companion for a track on that map (§16), onto the Tracks card, onto a deck's edge or
-an empty cell for a cell of its own (§16.9), onto a 3D cell for the model it draws (§25.3), onto the
-Contact maps card's *Load a map into the lower triangle* for the second file in the square (§5.7),
-onto an analysis form's file box as the run's input rather than as anything opened (§18.8), onto the content
-area, onto the landing page's drop zone — which replaces, because that is what the landing page has
-always meant.
+(§8.1) — onto a companion, anywhere on its cell, for a track on that map, and onto a tracks cell for
+a track drawn in it (§16.9), onto the Tracks card, onto a deck's edge or an empty cell for a cell of
+its own (§16.9), onto a 3D cell for the model it draws (§25.3), onto the Contact maps card's *Load a
+map into the lower triangle* for the second file in the square (§5.7), onto an analysis form's file
+box as the run's input rather than as anything opened (§18.8), onto the content area, onto the
+landing page's drop zone — which replaces, because that is what the landing page has always meant.
+**A store's row is dragged the same way, to the same places** (§24.2): every row that is a file,
+in the drawer's lists and under its cards, as every file row here is — and not a saved workspace's,
+which is tabs rather than a file and has nowhere to be aimed, as a workspace in a folder is a row
+that does not drag.
 
 **The Files column is the only door onto a connected place.** Its folder view lists every place the
 window is connected to — a directory on this machine included — and a row hands back the file with
@@ -10220,21 +10485,52 @@ nothing under it.
 
 A dragged row carries a **folder id and a path**, never bytes: the file behind it is fetched at the
 drop, once, by the target that accepted it. The path alone would be ambiguous the moment two folders
-are connected. Everything ends at `Session.addPicked`, which decides nothing — it hands a local file
-to the same door a dropped one takes and a remote one to the door a typed URL takes. A third routing
-table is how a `.cool` picked from a folder would come to open somewhere a `.cool` dropped on the
-window does not.
+are connected. A store's row carries **neither, and not its address either**: it travels under the
+same type, so every target that takes a folder's row takes it, and what the type carries is a token
+naming the drag, the row's file being held by the page that started it (`writePickedDrag`). An
+address in the payload would let any page have this one open any URL by dragging something across
+it with the right label on; a token, like a folder id, resolves only to what this window is holding,
+and the tracks the row brings (§24.3) are noted when a target takes it, not when the hand picks it
+up. Everything ends at `Session.addPicked`, which decides nothing — it hands a local file to the
+same door a dropped one takes and a remote one to the door a typed URL takes. A third routing table
+is how a `.cool` picked from a folder would come to open somewhere a `.cool` dropped on the window
+does not.
 
 **A file the viewer has no route for is drawn, dimmed and inert, with the reason in its tooltip.**
 Hiding it would make the folder view disagree with the folder, which is the one thing it is for; a
 `.cram` sitting there unhighlighted answers *why is nothing happening when I click it* before it is
 asked. An index is one of them, and its tooltip says it is picked up with the file it indexes: a
 file picked from a folder on this machine brings its index from beside it (`browse/folder.ts`'s
-`PickedFile.index`), so a `.bam` whose `.bai` is one row down opens with it. The one thing a local
+`PickedFile.index`), so a `.bam` whose `.bai` is one row down opens with it — wherever the row is
+let go, the landing page's *Load files* included, which took a row by its address alone and opened
+the `.bam` without it (`LoadBox`'s `onPicked`). The one thing a local
 listing does leave out is a name beginning with a dot — `.DS_Store`, `.git` — which is somebody's
 tooling rather than a file. The route is the name's (`browse/route.ts`), so every name a format of
 §8 is published under has to be in it: a `.barChart`, a `.bigBarChart` and a cytoBand in the plural
-were drawn dimmed while the loader read all three.
+were drawn dimmed while the loader read all three — and so, until every name each reader takes was
+checked against the table (`test/unit/browse-route.test.ts` holds the list), were four kinds more.
+A **3D structure** (§25) — `.g3d`, `.3dg`, `.bed3d`, `.pdb` — is the genome door's, and the same
+name test makes its row a structure the moment it is begun, so its cell opens before a byte is
+read. A **saved workspace** is a `.json`, routed by the test the config road itself uses; its row
+carries the new-session mark alone, and pressed, its tabs are appended beside the window's as a
+store row's are, with no empty tab opened for them first. A **text table** — `.txt`, `.tsv`,
+`.tab`, compressed or not — says nothing by its name and is offered all the same, because it is
+what a §8 format is published under when its own suffix is not used (chromosight's `loops.tsv`, a
+GEO supplement's `peaks.txt.gz`), and the loader reads it by its bytes (§8.3) as it does a dropped
+one; one whose rows no reader takes — a page of notes — is refused as *text, but not a table this
+viewer reads*, saying what a table is read as, where it used to reach the contact map's door and be
+told it was not an HDF5 file. And **`.bgz`**, which is what `bgzip` is told to write for a file
+meant to be indexed — gnomAD's VCFs — is read everywhere a `.gz` is, its `.tbi` found beside it
+included.
+
+What stays dimmed says the one thing its reader needs. A track hub's `hub.txt` is a store, opened
+from the stores drawer (§24.10), and its `genomes.txt` and `trackDb.txt` are read from it rather
+than offered as tables; a CSV is comma-separated, and every table read here is tab- or
+space-separated; a `.bz2`, `.xz` or `.zst` is a compression this viewer cannot inflate, and gzip or
+bgzip is the way out; a `.gzi` is an index this viewer does not use, a compressed FASTA being read
+whole (§8.8); a `.crai` is refused with its CRAM. A name a folder's address does not carry decides
+as well: a Drive or Dropbox row is routed by the name the folder handed along (§24.9), a workspace
+and a model as well as a map and a track.
 
 ### 20.6 What a connected folder is, in privacy terms
 
@@ -10426,10 +10722,11 @@ those four things would be asking a reader to trust a picture with no provenance
 
 ### 21.4 The channel
 
-An embed that can only be linked to is a picture. `postMessage` is the other half, and it is four
+An embed that can only be linked to is a picture. `postMessage` is the other half, and it is five
 messages (`app/EmbedChannel.ts`). Out: `chromosomix:ready`, once, carrying the protocol version and
-the build and **nothing about the session**; and `chromosomix:state`, the view state as the hash is
-written from. In: `chromosomix:where`, answered with the state; and `chromosomix:navigate`, a **patch**
+the build and **nothing about the session**; `chromosomix:state`, the view state as the hash is
+written from; and `chromosomix:rendered`, the report of a finished picture (§12), which is what a
+host takes a screenshot on. In: `chromosomix:where`, answered with the state; and `chromosomix:navigate`, a **patch**
 laid over what is on screen — `{ locus: … }` moves the browser without the host knowing what else is
 in the state, a key sent as `null` is removed, and `state: null` is the picker.
 
@@ -10496,7 +10793,11 @@ is ~6 MB unpacked, 1.7 MB compressed.
 demo data: npm's default is everything not ignored by git. `dist-cli/` is there so the declared `bin`
 resolves inside the package — `npx chromosomix` then works against a published version with no
 clone, which is what makes `h5wasm`, `@gmod/bbi` and `generic-filehandle2` — the three the CLI's
-bundle leaves external — runtime dependencies rather than dev ones.
+bundle leaves external — runtime dependencies rather than dev ones. They are the only ones, because
+`dependencies` is what every install downloads. Everything a bundle compiles in is a devDependency —
+`echarts` and `three` among them, which `dist/` already carries and the command line never loads.
+Declared as dependencies, those two and `zrender` under them were 90 MB of the 116 MB an install of
+the package put on disk.
 
 npm **force-includes the file `main` names**, ahead of `files` and ahead of a negation. `main` is the
 Electron entry point (§15) and cannot be dropped without breaking `electron .`, so a pack run in a
@@ -10508,10 +10809,11 @@ why publishing happens from CI, on a clean checkout, where the directory does no
 
 `prepack` runs the build, so `npm pack` and `npm publish` both fill `dist/` from source at that
 moment rather than shipping whatever was there — and `dist-cli/` too, which `build:package` builds
-first. Then `check-package-build.mjs` refuses the result if it is wrong — no `index.html` or
-`icon-192.png`, no module script under `./assets/`, a root-absolute reference, a service worker or a
-web manifest, a source map, a data file, more than 12 MB in all, or a page without the site's
-policy (§11), which a copy carries in the page because no server it lands on will send it — and the
+first. Then `check-package-build.mjs` refuses the result if it is wrong — no `index.html`,
+`icon-192.png` or `THIRD-PARTY-NOTICES.txt`, no module script under `./assets/`, a root-absolute
+reference, a service worker or a web manifest, a source map, a data file, more than 12 MB in all, a
+page without the site's policy (§11), which a copy carries in the page because no server it lands on
+will send it, or a `dist-cli/` without the command `bin` names or its notices (§22.4) — and the
 rules are held by a test (`package-shape.mjs`, `test/unit/package-shape.test.ts`) in the arrangement
 §15 and §21's archived build both use.
 
@@ -10522,6 +10824,91 @@ other artifact in this repository, **a published version cannot be corrected**: 
 rebuilt over on the next push and a deployment is redeployed, while a tarball is on the registry for
 ever, mirrored by every CDN that has seen it and pinned in the lockfile of whoever installed it that
 week. The pack is the last moment any of it is cheap to notice.
+
+**The version is asserted before the pack, too.** The release workflow publishes on a `v*` tag, and
+its first job refuses a tag that is not `v` and the version `package.json` carries, before anything
+is built or published: npm takes the number from `package.json`, not from the tag. `v0.14.0` was
+made by hand, on a commit still versioned 0.13.0, and the workflow packed `chromosomix@0.13.0` for
+it — published, it would have been 0.13.0 for ever with 0.14.0's code in it. Only a tag `npm version`
+made has been through the checks (`preversion`) and named its changelog section, and only that tag
+agrees with the file. There is no 0.14.0: the next release was 0.15.0.
+
+**And it publishes without a secret.** The workflow publishes by npm's trusted publishing: npm takes
+the upload only from this repository's `release.yml`, by the short-lived identity GitHub gives that
+run, and publishes it with provenance, so a version on the registry says which commit and which run
+built it. There is no token to leak or let expire — 0.15.0, the first version, needed one, because
+npm trusts a workflow only with a package that already exists. A run in any other repository, a
+fork's, skips the registry rather than being refused by it.
+
+### 22.4 The notices: what every build owes what it carries
+
+chromosomix is under the **GNU General Public License, version 3 or (at your option) any later
+version** — `LICENSE`, and `GPL-3.0-or-later` in `package.json`. It was MIT until peak calling was
+ported from yapc (GPL-3.0) and IDR (GPL-2.0 or later, §18.9): a translation of GPL code can only be
+distributed under the GPL, and version 3 is the one that admits both of them and echarts' Apache-2.0
+at once. Everything else it carries is permissive and compatible with it — but each of those licences
+is a condition on every copy, and a bundle is a copy. echarts is Apache-2.0, which asks for its licence
+and its NOTICE to travel with the work; zrender, and the HDF5 inside h5wasm, are BSD-style and ask
+for their notices in any redistribution in binary form; every MIT and ISC licence asks for its
+copyright line in all copies or substantial portions. Minifying drops the comments that carried
+them: three.js's two were the only notices that reached `dist/`, and a tarball carried chromosomix's
+own LICENSE and nobody else's.
+
+So **every build writes `THIRD-PARTY-NOTICES.txt` beside what it built** — the site and an archived
+pin at their roots, the desktop renderer in its asar, the package in `dist/` and, beside the command,
+in `dist-cli/` — listing what it carries and then reproducing each licence in full. The standalone
+page may not be two files and carries the same text as a comment ahead of `</html>` (§19).
+
+**What is listed is read off the bundle, not off `package.json`** (`scripts/third-party-notices.mjs`),
+because a dependency is not a copy and a copy need not be a dependency: the CLI leaves `h5wasm` and
+`@gmod/bbi` external, so npm installs each with its own licence and the command's notices owe them
+nothing, while `zrender` is nobody's dependency here but echarts' and is in every page that draws a
+figure. Every module that put code into an output is filed under its package by the `node_modules/`
+in its path, and the package's licence, copying and notice files are quoted as installed — echarts'
+`licenses/` too, which holds the licence of the d3 it embeds. Vite builds each worker with a Rollup
+of its own whose plugins the page's never see, and the readers, the kernels and h5wasm are all in
+workers, so a collector in `worker.plugins` reports into the same record the page's plugin writes
+from.
+
+**Material a generator copied into `src/` is carried too, and named by the file that holds it**: the
+interface icons from Lucide (ISC) and the brand marks from Simple Icons (CC0), chromosight's preset
+kernels (MIT), matplotlib's colour tables (the Matplotlib licence, which asks a derivative to say
+what it changed: sampled at 256 entries and stored as RGB) and ColorBrewer's schemes behind `Reds` and
+`RdBu_r` (Apache-2.0). Each licence is the installed devDependency the generator read or, for an
+upstream that is not an npm package, a text committed verbatim under `licenses/`; the version is read
+off the generated file's own header where it records one, so the notice names what the material came
+from rather than what is installed today. A test holds every such file to existing, since renaming
+one would drop its upstream's licence without a word.
+
+**So is code ported from a reference implementation.** §18.9 holds an analysis to the numbers its
+reference gives, and some of them get there by following that code function for function, in its
+order — a translation, which is a copy in another language and owes what a copy owes. Each is named
+by the files that hold it, beside the material above: yapc's peak calling (GPL-3.0) and IDR's fit
+(GPL-2.0 or later), cooltools' HiCCUPS and peak prominence (MIT),
+cooler's region parsing (BSD-3-Clause), chromosight's detection functions (MIT, with its kernels),
+the cephes functions SciPy's `xsf` carries and SciPy's `fminbound` (BSD-3-Clause), NumPy's pairwise
+sum and its two samplers (BSD-3-Clause, and NCSA or BSD-3-Clause for `numpy.random`), scikit-learn's
+BIRCH (BSD-3-Clause), Boost-HiC (MIT) and fdlibm's `erf` (Sun's notice). An implementation written
+from a paper and checked against a tool's output owes that tool nothing, and is not listed.
+
+**chromosomix's own licence leads the texts**, because the desktop's asar and the standalone page
+carry no `LICENSE` beside them. **A package that ships no licence text** — `generic-filehandle2`,
+which declares MIT and has no text of it in its tarball or its repository — has the licence it
+declares, naming the author it names, committed under `licenses/` and reproduced in its place.
+
+**About names them too**, under *Licences*: chromosomix's own licence, the GPL, then one line per project —
+its name linking to its home, what it does in this viewer, and its licence — with a dependency folded
+in beside what pulls it in, and a link to the build's own `THIRD-PARTY-NOTICES.txt` (the site's, from
+the desktop and the standalone page, which have none a link can open). The list is
+`src/licences.ts`, and `test/unit/licences.test.ts` holds it to every package the source imports and
+everything those pull in, to every entry the notices name as copied or ported, and to the README's
+*Licence* section. Then one line on the marks of the stores and services the interface shows. The
+dialog is wider than a plain one for its three columns, and taller, so the build stamp under them is
+on screen on a laptop.
+
+Each check asserts the notices are there — the package's (§22.3), the archived pin's (§21), the
+desktop renderer's (§15) and the standalone page's (§19) — because a notice that stopped being
+written leaves a build that looks exactly like one that succeeded.
 
 ## 23. The console: what this window has done
 
@@ -10549,7 +10936,8 @@ log that outlives the result, the tab and the browser session. That log is the c
 
 The record is written by `AnalysisRunner.execute`, which is the one place that knows a **job** from
 a button: `runAll` queues one job per map, so a batch over six maps is six lines, each naming its
-own file and each carrying its own command. Nothing else can produce that — the drawer holds one
+own file and each carrying its own command — and a 1D task, which reads no map, is one job and one
+line however many maps there are (§18.1). Nothing else can produce that — the drawer holds one
 result, the panel row holds one state per task, and both are per session.
 
 It is also the only place that sees a run which produced nothing. A **failure** and a **Stop** leave
@@ -10628,8 +11016,8 @@ cooler's 0-based numbers, `chrIV:100000-200000`, which the shell read as written
 and the one locus in the console a base away from the same window everywhere else on the screen.
 
 **The line is read by what the command takes.** A task's descriptor says which of its parameters
-are switches, and the shell's own flags are known — `--quiet`, `--no-balance` and `--help` are
-switches, and `--out`, `--window`, `--features` and the rest take a value. So a switch never takes
+are switches, and the shell's own flags are known — `--quiet`, `--no-balance`, `--help` and
+`--version` are switches, and `--out`, `--window`, `--features` and the rest take a value. So a switch never takes
 the word after it: `--stranded` turns one on, and `--stranded=false` or `--no-stranded` turns it off
 (`--no-balance` stays the shell's own, the raw counts, and is never coverage's `--balance=false`). A
 flag took the next word unless that word began with `--`, so `coverage a.cool --no-balance b.hic` ran
@@ -10649,6 +11037,29 @@ a task. `replay` takes the files named after the workspace as it takes those aft
 `--over data/*.hic` as a shell expands it replays every file rather than the first alone. The console
 writes a switch as itself or as `--key=false`, the one spelling read alike before and after, and a
 test reads every task's line back through the parser.
+
+**`--version` names the build, and what it runs on.** The first line is `chromosomix` and the
+version, with the commit the bundle was built from where it was built in a repository —
+`chromosomix 0.13.0 (7a6fea2)` — the words every file the command writes opens with
+(`# chromosomix 0.13.0 cli`), so `head -1` is the line a pipeline records. The lines after it are
+what a version does not fix: the Node it runs on, with the platform, and the `h5wasm` and
+`@gmod/bbi` that every map and track is read through. Those two are ranges in `package.json`,
+settled when the package is installed and not when it was built, so two installs of one version can
+read a file through two builds of either; their numbers are read off the copies installed beside the
+command for that reason, never baked in. npm is not listed: it installs the command and takes no
+part in a run. Like `--help` it is answered wherever on the line it is written, before anything else
+is checked, with exit 0. `chromosomix --version` printed the usage until now — an answer to a
+question nobody had asked, and none to the one a pipeline's record of its tools asks.
+
+**A reader that stops reading is no failure of the command.** `chromosomix tasks | head -1` closes
+the pipe under the command, and Node reports the next write as an error on the stream — `EPIPE`, or
+`EOF` on Windows — which, unheard, killed the command with a stack trace and exit 1 the moment `head`
+had its line, and killed a task piped as `insulation map.cool 2>&1 | head -1` before it had written a
+single file. Both streams now let the reader go: what was left to print is dropped, and the command
+finishes what it was doing and exits with the status it would have had. It does not exit on the
+spot, which is the usual answer, because progress and notes go to stderr: that task would have
+stopped with its files half written under an exit code that said nothing was wrong. Any other error
+on a stream is thrown, as before (`ignoreClosedPipe`).
 
 **A value is one the form could have held.** A choice is one of the options its descriptor lists, a
 switch is on or off — `true`, `yes`, `on` or `1`, or their opposites, after an `=` — and a number is
@@ -10922,7 +11333,8 @@ which is what lets a generator add a column before a viewer knows it.
 
 **The landing page has three things on it, and they are named.** *Load files* is one drop area with
 the URL box under it behind a rule reading *or a URL* (`ui/LoadBox.ts`), which the file crumb's
-*Open a file* reuses in a dialog with the other verb behind it. There is no *choose files* button:
+*Open a file* and the header's `+` reuse in a dialog, each with its own verb behind it — the crumb
+replaces the tab's file, the `+` adds one (§5.5). There is no *choose files* button:
 a click on the target opens the same file dialog, and the same action drawn twice is a choice a
 reader has to make between two controls that do one thing. The target says both things it does —
 drop, or click — and no more; what opens as what is stated once, in **About**, whose first sentence
@@ -11040,8 +11452,9 @@ and the two lists kept beside it named four stores while seven shipped. Opened t
 by a tile, it lands on the store it was last on — in this page,
 else the last one this browser opened, else the lab's — and its dragged width is kept the same way,
 in `localStorage`; whether it is open is the address bar's to say (below). The header holds
-nothing else on that side: the plug and the `+` that stood there were the Files column's own
-*connect a local or remote folder* and the file crumb's *Open a file* said a second time.
+nothing else on that side: the plug that stood there was the Files column's own *connect a local or
+remote folder* said a second time, and the `+` beside it is before back now, adding a file to the tab
+(§5.5).
 
 **A store row carries its name with it.** A 4DN file is called by its accession on the bucket —
 `4DNFI24F7GRY.mcool` — and by *Hi-C on HFF cells, protocol variations* on the shelf, and the second is
@@ -11049,6 +11462,16 @@ what a reader picked it by. So the row's line goes with the file through the sam
 by a Drive folder takes (`PickedFile.name`, §24.9): onto the map it becomes, onto the track it
 becomes (`addRemote`'s label, and `relabelTrack` for the file that opened a browser and was seated
 under its URL before the name could reach it), and onto the tab a row opens in a session of its own.
+
+**A store row is dragged as a row of the Files column is** (§20.5), and goes where it is let go: on
+a map's edge or its middle, on a cell of the deck (§16.9), on the Tracks card, on an analysis form's
+file box, on the landing page. The two verbs say *add here* and *open in a tab of its own*; neither
+says *which map*, *which edge* or *which cell*, and a reader narrowing a catalogue beside a deck of
+four had no way to put a bigWig under the third map but to add it under the first and carry its lane
+across. Every row that is a file drags, in the portal lists and under the gallery cards alike, and
+it carries what *add* would: the file, the row's name and the tracks it brings, noted when it lands.
+A saved workspace's row does not, being tabs rather than a file. The drawer stays up after a drop, as
+it does after *add*: the reader was aiming at something beside it.
 
 **The two galleries are one shape of card** (`GalleryView.ts`, `GenomesView.ts`): the name and the
 card's one verb on the first line — the new-session mark, icon only, its words in the tooltip — the
@@ -11574,7 +11997,10 @@ sign in, until the reader does. A picked file is the API's
 media URL — the same address `canonicalUrl` gives a pasted share link — with its name carried
 beside it, and **the name is what routes it**: the address ends in an id, which says nothing about
 what the file is, so `routeFor` lets the name choose the door the address cannot, and the loading
-screen and the tab say the name rather than the address. Where nobody gave a name — a share link
+screen and the tab say the name rather than the address. That holds for the two kinds a door is
+not a matter of map or track: a `session.json` is fetched as a workspace and its tabs appended, and
+a `model.pdb` opens a 3D cell of its own (§25.3), where by its address alone the first was taken
+for a track and the second for a map. Where nobody gave a name — a share link
 pasted into the URL box, a `view=browser` link, a track added by address — **Drive is asked for
 it first** (`browse/driveName.ts`): one `files.get` with `fields=name`, on the same key or
 token the read will carry, memoised by id for the page, and never in the way — a refusal, a site
@@ -11822,10 +12248,26 @@ here (`annotations/g3dBinary.ts`, `annotations/msgpack.ts`) rather than a depend
 its finest resolution and names the others under the row. A version-1 container is refused by
 name, with the way out (`g3dtools` rewrites it).
 
-All four are sniffed by content before the BED family sees them — a five-column g3d read as a BED
+**PDB**, as this app writes it (§25.7), and no other (`annotations/pdb.ts`). A PDB says where each
+atom is in space and nothing about the genome — a residue number is four columns and a chain one
+character — so a model written here carries its loci in a table of REMARK 250 lines a viewer skips:
+each chain's sequence and haplotype by atom serial, each run of beads laid end to end as its first
+serial, count, start and width, and the centre and the factor its coordinates were written with,
+which the reader undoes so the model opens in its own units and reads back bead for bead. The first
+MODEL of several is read, since a row holds one model (§25.8). **Every other PDB is refused, with
+the reason.** pastis writes its beads in bin order — one chain, no residue numbers, no bonds, `nan`
+for a bead it could not place — and the other solvers that write a PDB say no more, so the only way
+to put such a file on the genome is to number its atoms against some map's bins, which is a guess
+drawn as a fact; the refusal says to write the coordinates beside the bins they were modelled at, as
+a bed3d. A PDB written here and saved again by PyMOL gets a sentence of its own: PyMOL keeps every
+atom and every bond and drops every REMARK, the table with them, so the file to open is the one this
+app wrote, or its bed3d. A PDB under a name that does not say so is told by its records — it opens on
+one a PDB opens on, and holds an atom — which nothing in the BED family can do.
+
+All five are sniffed by content before the BED family sees them — a five-column g3d read as a BED
 would be a lane of boxes whose *end* is a coordinate in space — and **a file that names its format
-is not sniffed at all**: `.g3d`, `.3dg`, `.bed3d`, gzipped or not, local or over HTTP, is read as
-the structure it says it is. The name is read **first**, before a single row, and read the way the
+is not sniffed at all**: `.g3d`, `.3dg`, `.bed3d`, `.pdb`, gzipped or not, local or over HTTP, is
+read as the structure it says it is. The name is read **first**, before a single row, and read the way the
 drop routing reads it: past any directories, with a `?query` or `#fragment` cut off, so a model
 published at a URL is as named as one on disk. A file whose name claims no format is asked two
 questions, and each exists to tell a structure from a BED whose columns happen to be numbers: are
@@ -11859,15 +12301,16 @@ location control, and skipped by every stack; its picture is the cell.
 (§25.6) — is a row of one card under the Tracks card, and of no other: the Tracks card leaves
 `structure` rows out, computed or not. Each row carries the head every row has (grip, colour, name,
 eye, close), what it holds (`2,412 beads · 5 kb · 16 sequences`), the task and the framing for a
-computed one, and **bed3d**, the model out (§25.7), after the word *export*. The **eye** in the row's
+computed one, and **bed3d** and **PDB**, the model out (§25.7), after the word *export* — the PDB
+disabled, with the format's reason as its tooltip, for a model past what its columns can number. The **eye** in the row's
 head is what shows and hides: it puts the model in **a cell of its own**, opening one beside whatever
 is already there, and takes it away again — from every cell drawing it (§25.3). The lit eye is the
 whole of the state — the row carried an accent bar down its left gutter as well, which was a second
 way of saying what the eye already says. There is no second control for that and no button
 labelled with what is already true (§26.3, §26.7) — a *shown in the deck* button beside the eye was
 two controls for one act, and a reader who pressed the lit one expecting it to un-show got nothing.
-The card's own load zone names the three formats and, like every other zone that asks for a file,
-says it takes a drop or a click.
+The card's own load zone names what it reads — the three formats, and a PDB this app wrote — and,
+like every other zone that asks for a file, says it takes a drop or a click.
 A computed row that came back from a reload is detached and offers **recompute**, which opens its
 recipe in the drawer, as a synthetic row on the Tracks card does (§18.5).
 
@@ -11892,9 +12335,12 @@ used to write to one slot, so a deck of two views came back from a reload as the
 named by a URL, or computed, and *every* one of them where several land together, where only the
 last of a batch used to get a picture and the others sat on the card as rows with nothing drawn,
 which is the one state a reader reads as *it did not work*. It opens beside whatever was there
-rather than taking it over. It used to be one cell per deck, which made two models something a
-reader could only compare by swapping back and forth, and made a reconstruction landing destroy the
-model it was to be judged against — the commonest way to lose a picture in this application.
+rather than taking it over, and it opens **one**: a model dropped on a map, named by a URL or
+picked from a folder opened two, a cell for the file's name and another for the row's arrival; the
+watch on the store that every road ends in is the one that opens it now. It used to be one cell per
+deck, which made two models something a reader could only compare by swapping back and forth, and
+made a reconstruction landing destroy the model it was to be judged against — the commonest way to
+lose a picture in this application.
 **A model that opens the session on its own is drawn alone.** A structure file dropped on an empty
 window names a genome — its beads are on sequences — so the session it opens is a browser of that
 genome, and the browser has nothing to draw: a structure is a row and a cell, never a lane. It used
@@ -12115,7 +12561,9 @@ is still in the air, and the cell's hint offers both.
 
 **The tracks cell** is the session's own browser over the lead file's sequences — the same store,
 client, groups and marks — drawing only the tracks **placed on it**: the location control lists
-it beside the maps, with its one edge live and the other three greyed and saying why. It follows
+it beside the maps, with its one edge live and the other three greyed and saying why, and a track
+file let go anywhere on it — off the disk, out of the Files column or a store — is drawn in it, at
+its foot (§16.9). It follows
 the maps and the maps follow it without joining the lock, whose currency is cells of a block: the
 deck hands the cell the lead's window as loci, one way and never reported back, and a pan in the
 cell takes the lead's *column* axis there (`MatrixPanel.showLocusOnColumns`), which the lock
@@ -12623,6 +13071,53 @@ TSV every output carries (§18.7), through this same writer — because the batc
 whose coordinates went missing is least likely to be noticed, and because a reconstruction is the
 one task whose whole result is the three columns BED has nowhere to put.
 
+**A model also leaves as a PDB, for PyMOL** and every other molecular viewer — from the **PDB**
+button beside the bed3d on its row, from the drawer's result beside the bed3d there, and from
+`reconstruct3d --out`, which writes it beside the bed3d — through one writer (`annotations/pdb.ts`),
+with a TITLE that says what the bed3d's `#` line says, in ASCII. pastis' own PDB is a list of atoms
+in bin order on one chain with no bonds, which PyMOL draws as a cloud joined by guesswork; this one
+is the file a viewer can draw as the fibre it is:
+
+- **One HETATM per bead**, a carbon `C` in a residue `BEA`: a bead is no amino acid and no
+  nucleotide, and HETATM is the record a non-standard group takes. A bead the model left unplaced is
+  no atom.
+- **One chain per sequence and haplotype**, the scene's chains in the scene's order, so colouring by
+  chain tells chromosomes apart and the homologues of a phased model apart, and residues numbered
+  along each chain from 1, so a rainbow by residue runs from one end of a chromosome to the other.
+  The chain letters are A–Z, a–z and 0–9, which PyMOL keeps apart by case; a model with more than
+  sixty-two chains — a metagenome's contigs — takes them round again, and every chain's segment
+  identifier is then its number, which PyMOL selects by too.
+- **CONECT between neighbouring beads and nowhere else**: a bond for every step of every run the
+  cell draws its tube along, none across a gap the model left and none between chains, each bonded
+  atom listing its neighbours both ways round. This is what keeps PyMOL from guessing, **measured
+  against PyMOL 3.2** rather than read in a manual: a file with CONECT records has distance-based
+  bonding switched off, so two beads 0.6 apart on different chains stay apart, where without them
+  every pair closer than about two units is joined and a model a unit per step comes out a lattice.
+  With them PyMOL loads exactly the bonds written — on the demo yeast, E. coli and mouse models,
+  atoms, chains and bonds all as declared, none between chains — and `cartoon_trace_atoms` draws a
+  tube through them that breaks where the model breaks. `scripts/check_pdb_pymol.py` repeats the
+  measurement on any PDB written here, with PyMOL as the judge.
+- **Coordinates the columns can hold.** A coordinate is eight columns with three decimals and a
+  model is in its solver's units — a unit sphere, where three decimals is a fortieth of a step, or
+  nanometres, where a nucleus overflows the column. So it is centred on its placed beads and
+  multiplied until the **median step between neighbours is 3.8**, a Cα trace's, which PyMOL's
+  spheres, sticks and cartoon trace are sized for; a model that would then overflow its columns is
+  drawn in until its furthest bead fits, with shorter steps rather than not at all. The centre, to a
+  thousandth of a step, and the factor are written in the table §25.2 reads, and nothing claims an
+  ångström.
+- **REMARK 250** says all of this in prose, gives the lines that draw the model in PyMOL as the cell
+  draws it — `set cartoon_trace_atoms, 1; set cartoon_tube_radius, r` then `as cartoon; util.cbc`,
+  or `set sphere_scale, s; as spheres; util.cbc` — with `r` and `s` the cell's default tube and bead
+  radii in this file's coordinates, on the cell's floored step, which is what keeps a bacterial ring
+  from being a hairline where PyMOL's own tube is half a unit whatever the model; and then the
+  placement table.
+
+What a PDB cannot number it does not write. **At most 99,999 beads**, its serial being five columns;
+**no chain longer than 9,999 beads**, its residue number being four, where wrapping the numbers was
+measured to scramble PyMOL's order along the chain and hybrid-36 is not read; and at most 9,999
+chains. Past any of them the row's and the drawer's button is disabled with that reason as its
+tooltip, and the shell writes the bed3d alone with the reason on stderr — the bed3d holds any model.
+
 ### 25.8 Refused, and not yet built
 
 - ~~**Inference** — computing a structure from the map.~~ Built as *Model from the map* (§25.6), as
@@ -12632,6 +13127,12 @@ one task whose whole result is the three columns BED has nowhere to put.
   model rather than the best of several local optima; **fitting α**, which is the reader's control
   and is what makes a model here comparable with one from either published tool; and pastis-NB's
   **alternation** between the dispersion and the structure, where the dispersion is estimated once.
+- **A PDB that does not say where its beads are on the genome** (§25.2) — pastis', and every
+  solver's that writes atoms in bin order and nothing else. Placing them would mean numbering the
+  atoms against a map's bins and trusting the count, which is the one claim a model beside a map
+  must never make; the refusal names the way out, a bed3d of the coordinates beside their bins. And
+  no **mmCIF** for a model past a PDB's columns: the bed3d holds it, and PyMOL is not where a
+  hundred thousand beads are looked at.
 - **Ensembles, frames, point clouds** (FOF-CT, `.cndb`, several models of one map): a row holds
   one model. The scene's shape does not close the door.
 - **A map beside a browser lead**: a companion needs a lead to follow, and a browser is not one
@@ -12782,12 +13283,6 @@ The state is read from the ARIA attribute the control already needs — `aria-pr
 in `ui/styles.css` draws all of them. `test/unit/toggle-look.test.ts` holds the selector list and
 refuses a second lit look. A toggle that has become unavailable is unavailable first: the lit rule
 stands down for `:disabled`.
-
-**One toggle is drawn as a slider** — *dev features* in *About* (§29.1), a track and a knob, because a
-switch that reloads the window should look like the switch it is rather than like one more button in
-a dialog of facts. It is still a `button` with `aria-pressed`, lit by the same rule as every other
-toggle; the knob is `currentColor`, so *lit* is the knob in the accent, moved across. The slider is how
-it is drawn, never a second way of saying it is on.
 
 A **selection** is not a toggle. A chosen row, tile or folder carries a fill and a border and keeps
 its text colour, because its text is content — a file's name — rather than a label. A toggle's whole
@@ -13056,8 +13551,8 @@ stage's map and snapped to, placed finer than the picture's cell, and answered i
 (§27.5, §27.6), with the sequence's own evidence, its telomeres and its gaps of `N` (§27.5); the
 exports, and an AGP or `.assembly` read back as an edit (§27.8); and the stage on one genome of a
 metagenome (§27.10). There is not yet the rest of the evidence beyond the map, nor the command line
-(§27.13). It is a **dev feature** (§29) throughout: on `main`, and invisible until the switch in
-*About* is on. The design it was written from — the method in full, the architecture with the
+(§27.13). It is a **dev feature** (§29) throughout: on `main`, and invisible until the dev
+features are on. The design it was written from — the method in full, the architecture with the
 code it lands in, the alternatives weighed, the order it is built in — is `docs/reference-editing.md`.
 
 It reverses two of §18.9's refusals and narrows a third, each in its own paragraph there: contact-based
@@ -14050,7 +14545,7 @@ writes none, which the note ends by saying in those words.
 ## 29. Dev features
 
 A feature on `main` — built, specified, tested and released like any other — that a reader **does not
-see at all** until they turn it on. What it is for is the stretch between *it works* and *it is
+see at all** unless the page asked for it. What it is for is the stretch between *it works* and *it is
 finished*: long enough that a branch would rot, and too unfinished for a reader who did not ask for it.
 **Built**: the switch, the registry (`state/devFeatures.ts`), and all four gates below — `metacool`'s,
 `edit`'s and `dotplot`'s over as much of §27 and §28 as is built, and `circle`'s over §7.6, each gated
@@ -14058,15 +14553,14 @@ from its first line.
 
 ### 29.1 One switch
 
-In *About*, under the version: **dev features**, a switch, off by default. It is a **preference**,
-kept in `localStorage` — a fact about this browser, not about a file or a tab (the persistence tiers'
-dividing line) — and it is the **only** trace a dev feature leaves anywhere a reader looks. Turning it
-on or off **reloads the window**, which keeps its tabs: every surface is then built from scratch with
-the new answer, so no card, task list, worker or cached command list can disagree with it — which a
-live re-render of every surface could not promise. The answer is read once per page for the same
-reason. The price is the reload's: a file dropped without a handle comes back as a name to drop again,
-as it does after any reload (§20). A worker has no `localStorage`, so the answer is stamped on every
-open the page sends it — once, in the client, where the credentials are.
+Off by default, and **on no surface a reader sees**: no control in *About* or anywhere else, no
+sentence in the app, and nothing in the README or this document says how a page turns it on — that is
+in `state/devFeatures.ts` and nowhere else. Nothing about it is kept in the browser, so no line of
+*What this browser is remembering* names it. The answer is read **once per page**: every surface is
+built once with it, so no card, task list, worker or cached command list can disagree with it — which
+a live re-render of every surface could not promise. A worker cannot see what the page was asked, so
+the answer is stamped on every open the page sends it — once, in the client, where the credentials
+are.
 
 **The registry is one file**, each entry a name and the reason it is not public yet, and the names are
 a type: making a feature public is deleting its line, and the compiler then names every gate it left
@@ -14123,11 +14617,226 @@ never the reason a session is lost.
 
 ### 29.5 Where the switch is not
 
-- **Never in an embed** (§21): an embedded page has no *About*, and a host page is not a developer's
-  browser.
+- **Never in an embed** (§21): a host page is not a developer's browser.
 - **Not on the command line**: `chromosomix` is a developer's tool, lists every task and runs every
   one.
-- **Not in the static text** around the app — the page's title and description, the install
-  prompt's name and description — which cannot follow a switch, so it names nothing that is dev:
-  *chromosomix – cool files, in the browser*, where both titles once said *(multi-genome) cool
-  files*. The name is **chromosomix**.
+- **Not in the static text** around the app — the page's title and description, the description a
+  pasted link unfurls with, what the page says without JavaScript, the install prompt's name and
+  description, the `llms.txt` the site serves to language models (§11), and the package's description
+  and keywords on npm — which cannot follow a switch, so it names nothing that is dev, metagenomics
+  included: *chromosomix – genome browser for Hi-C, tracks and 3D models*, where both titles once said
+  *(multi-genome) cool files* and the package's keywords *metagenomics* and *metacool*. The name is
+  **chromosomix**.
+
+## 30. The guided tutorial
+
+A first session, played on the live window one step at a time: the window greyed, the one control the
+step is about lit through a hole in the grey, and a card beside it saying what to do with it and what
+it is for. The tutorial is **the app itself, used, on real data** — not a slideshow about it and not a
+sandbox beside it. Every step points at a real control on a real file and the reader presses it; the
+tour only watches. **Built**: all of it — the engine (`ui/Tour.ts`), the steps (`ui/tutorial.ts`),
+the place kept (`state/tour.ts`), the offer on the landing page and in *About* and the palette's row,
+and `scripts/ui-tutorial.mjs`, which plays it to the end on 4DN's data and shoots every step.
+
+### 30.1 Where it is offered
+
+**On the landing page, beside *Load files*** — a blue button under *New here?* and one line, in the
+margin left of the page's three ways in where the column is wide enough to have one, and as a row
+above *Load files* where it is not. It is the reader with none of the three yet, and no idea which,
+that the tutorial is for, and the landing page is where that reader is. **Never a dialog that opens by
+itself**: a reader who came to open a file is not asked first whether they would like a lesson. It
+says what *About* says (below), and steps out of sight while a tour is on screen, since under the grey
+an offer to play the tutorial is one more thing to read.
+
+**In *About*, straight after what the viewer is** — the answer to the question a reader who has just
+read that asks next, and the one way in a newcomer finds without being told where to look. One
+sentence, and one filled button that says what it will do: *play the tutorial* for a reader who has
+not begun it, *resume at step 32 of 50* for one who left it, with a quiet *start over* beside it, and
+*play the tutorial again* for one who finished it. The palette has it too, as *Guided tutorial* under
+Help, its hint saying which of the three a press will do.
+
+**Only where its first step is.** It opens on a store, so it is offered wherever the store drawer is:
+on the site and in the desktop app. An embed (§21) has no drawer, and its *About* says nothing of the
+tutorial; nor does the single file (§19), which offers this machine alone. Absent rather than greyed,
+since nothing the reader could do there would make it work.
+
+**From the start, it begins on the landing page**, under a card that says what the tutorial is and
+lists its parts. Nothing opens behind it: the store drawer is put down if it was open and **aimed at
+the lab's store**, so that the reader's first press, on the header button, opens the drawer on a
+store to switch *from*, and the second switches to 4DN's — a press that is always there to make,
+where a drawer left on 4DN by an earlier visit, or by a link, made it one that had already happened.
+A tab that holds anything — a map, or a view restored from a reload that is about to open one — is
+left as it is and a new tab is opened beside it, as the brand does, rather than emptied under the
+reader. A resume does not move the window (§30.6).
+
+### 30.2 The data
+
+**4DNES4296C5Q** on the 4DN store: in situ Hi-C on IMR-90 lung fibroblasts, on GRCh38, with
+**1,067,738,237 contacts** — over a billion, so that domains are there to find at 10 kb, and not
+much more, so that a first session is not reading the deepest map on the shelf. Its map is
+`4DNFIJIP5BJF.mcool`, 7.8 GB on 4DN's bucket and read by range like any other (§12), and the set
+carries the three tracks 4DN's own pipeline computed from it: the compartment eigenvector at 250 kb
+(`4DNFIRL31X9M`), the insulation score at 10 kb (`4DNFIR2STZVV`) and the boundaries called on it.
+That is what makes the last step a fair comparison: the reader's own E1 at 250 kb and insulation at
+10 kb, computed in the page, against the consortium's at the same resolutions.
+
+**chr13**, for every task. It shows both halves of the story on one screen: an acrocentric whose short
+arm is empty — the blank square at its start is what a stretch with no unique sequence looks like on a
+map — and a long arm with broad, clean compartments. **41–45 Mb** of it is where domains are looked
+at: at 10 kb a run of clear squares along the diagonal, some inside others, reached from **35–55 Mb**
+at 250 kb, so that each of the two zooms is a drag across a square a hand can hit.
+
+Every task is run **with its defaults but one**, chr13 alone aside: the tutorial teaches where things
+are, and a parameter it chose would be one the reader took for the app's. The one is Compartments'
+gene model, and the tutorial **sets it itself** rather than asking for it: left to itself the form
+takes the first set of intervals loaded for one, which on this session is 4DN's boundaries, and a sign
+decided by those is a coin toss — the saddle says *phasing r 0.01*. Set to none, through the form's
+own `change`, on the steps before the run. Nothing else phases E1 — no track, no sequence — so the
+drawer says the sign is arbitrary, the saddle's text is written to hold either way round, and the last
+part says that an E1 can match 4DN's upside down, at −1.
+
+### 30.3 The steps
+
+Fifty, in ten parts, each part's name printed over its steps' titles. The welcome and the end
+are a card each in the middle of the window, and between them every step lights one thing:
+
+- **Welcome** — what the tutorial is, in two sentences, with its parts listed under them and *let's
+  go*.
+- **The 4DN store** — open the store drawer from its header button, on the lab's store; switch it to
+  4DN's; find `4DNES4296C5Q` in its search box, the accession set in colour on the card with a button
+  beside it that copies it, and *type it for me* beside the step for a reader who would rather not
+  type twelve characters at all; open the set with its tracks, one press.
+- **The map** — a step that is only read, lighting the General column: the file, its sequences, its
+  metadata; pick 250 kb; open chr13 from the Chromosomes table, scrolled to its row when the table has
+  not drawn it; a step that is only read, about the map, and how to scroll, drag and double-click on
+  it; and one lighting the Aesthetics column, which a map brings — the Map card, the Tracks card and
+  Export.
+- **Compartments** — set the map's score to *correlation*, so the plaid the task decomposes is on
+  screen before the number that summarises it, and a step that is only read, about the plaid; open
+  the Analysis panel, and three steps that are only read, lighting its groups one by one — the 2D
+  tasks, which read the map; the 3D tasks, which model it; the 1D tasks, which read tracks; choose
+  Compartments; untick every sequence; tick chr13; run (§30.2 for the gene model); a step that is only
+  read, about the saddle the run drew; close the drawer; and a step that is only read, the reader's E1
+  and A/B calls beside 4DN's.
+- **Zooming in** — set the score back to *balanced*, since domains are a matter of how often
+  stretches touch rather than how alike they are; hold Shift and Option and drag across the lit
+  square of 35–55 Mb, the keys named as the map's corner names them, Shift and Alt off a Mac (§8.9);
+  switch to 10 kb; drag across the lit square of 41–45 Mb; a step that is only read, about the
+  domains; turn on O/E; set smoothing to *3 × 3*; and a step that is only read, about domains and
+  compartments on one picture. Both drags have *zoom for me* beside them, which types the stretch into
+  the map's locus box. Neither O/E nor smoothing changes what a task reads — the drawer's heading still
+  says *balanced* — so they are left on.
+- **Insulation** — open the Analysis panel; choose Diamond insulation; untick every sequence; tick
+  chr13; run; close the drawer; and a step that is only read.
+- **Tracks** — open the Annotations panel; unfold the Insulation domains row; choose *1D track* for
+  its display; press its bottom edge, then its left one, so the lane is drawn under the map and not
+  beside it.
+- **Track correlation** — open the Analysis panel; choose Track correlation; tick its four tracks —
+  4DN's insulation and E1 and the reader's — in one step, the list lit whole; run; and a step that is
+  only read, which lights the figure.
+- **The console** — open it: every file opened and every run made is a line to paste into a
+  terminal.
+- **Done** — what the reader did, in one sentence, and where the tutorial is when it is wanted again.
+
+### 30.4 How a step moves on
+
+**A step is done by a state, never by a click.** It moves on when what it asks for holds — the drawer
+open on the 4DN store, the map at 250 kb, a run of the task on chr13 alone — however the reader got
+there: by the lit control, a key, the palette or a road the tutorial does not mention. A tour that
+waited for one click on one element would be stuck the moment somebody took the shortcut it was about
+to teach. The state is read on a tick and again just after anything the reader does, and the card
+stays on a done step for a moment, so the reader sees what they did land before it moves.
+
+**Forward passes over, back waits.** Entered going forward, a step already done goes by on its own —
+never the last, which says the tour is over and is closed by the reader. Entered by *back*, a done
+step is shown and waits for *next*: back means looking again, not bouncing forward.
+
+**A step whose surroundings have gone goes back for them.** A step that points into the Analysis
+drawer, with the drawer closed for half a second, goes back to the step that opens it, and one whose
+map is no longer in front goes back to the store's last step — unless it was done anyway: a run that
+finishes after its drawer was closed is still a run that finished.
+
+**A step that waits on the reader offers to be skipped**, quietly — *skip step*, in the quiet style,
+saying the steps after it may need it — and a step that is only read is gone on from with *next*,
+filled. When a step's control has not been on screen for a second and a half, the card says so and
+what to do: *Not on screen — scroll the table to chr13*, *Not in the list — empty the box over it if a
+word is typed there*. Not on a step already done, reached by *back*: doing it often takes its control
+away — the drawer it closed — and that control is not missing.
+
+### 30.5 The grey, the hole and the card
+
+**One ring round the target, whose shadow is the grey** — light enough that what it covers can still be
+read, since the reader is learning where things are — so the hole and the grey are one shape and
+cannot drift apart; six pixels of air round the control, and the hole follows it every frame — a
+column scrolling, a drawer sliding, lanes arriving under a map. A target partly out of sight is
+scrolled into view once, when the step opens — by its top when it is taller than most of the window, a
+group of tasks or a column of cards, so its heading is what shows; one already in view is not, since a
+scroll nobody needed moves the window under a reader about to press what they could see.
+
+**A press on the grey is kept from the app** and answered by the ring pulsing — the reader is shown
+where to press rather than allowed off the step by accident. Inside the hole there is nothing of the
+tour's at all: the press, the drag and the wheel reach the control exactly as they would without a
+tour. Only the *starts* of a gesture are kept from the app outside the hole, so a drag begun on the
+map and run out of the hole still ends where the map hears it. A step that lights nothing keeps the
+grey and keeps nothing from the app, so the window can be used to get back to where the step is.
+
+**The card** stands below the hole, then above, right or left of it, whichever side it fits, with a
+tail pointing into the hole from that side; in the bottom-right corner, with no tail, when the hole is
+the whole picture; at the bottom, centred, when nothing is lit. It glides from one control to the next
+rather than jumping, and its words come in rather than being swapped, so the eye follows the card to
+the next thing to press. Along its top it says the part, *step n of 50*, and *skip tutorial*, over a
+bar cut into the tour's parts, each filled as far as the reader has got through it. Then an icon for
+what the step asks — press, type, choose, drag, or only look — beside its title; one or two sentences;
+and *back* and *next* (*skip step* while the step waits, *finish* on the last, and no *back* on the
+first). The sentences are a polite live region, so a step that moves on by itself is heard as well as
+seen.
+
+**A name to type is set apart**: an accession in the face names are set in, on the accent's soft
+ground and in its colour (§26.5), since it is what the reader is about to act on; where the step
+offers it, a small button beside it copies it, and says so with a tick for a moment — or, where the
+browser will not write to the clipboard, selects it, so a copy is a key away. **Typed wrong, it
+blinks**: text in the box that cannot become the accession by typing on — not a beginning of it —
+turns the name the colour of *look at this* and blinks it three times, again for each new mistake,
+until the box holds a beginning of it again. Under *reduce motion* the colour stays and nothing
+blinks.
+
+**A step done is shown done.** The moment its state holds, the icon turns into a tick and the ring
+into the colour of a thing that finished (§26.5), and they stay so for the beat before the next step:
+the reader sees their action land before the card moves. A step waiting on the reader breathes — a
+slow halo out from the ring, here is where to press — and a step that is only read, or already done,
+holds still. The welcome and the end are a card a size up in the middle of the window over the plain
+grey; the end wears a tick over its title.
+
+**← and → go back and on**, from anywhere the keys are not a control's own — a box, a menu, a list,
+the map, which pans with them — and → never skips a step that waits on the reader: that is *skip
+step*'s, pressed on purpose. The buttons say their keys as every control does (§26.4).
+
+**A target can be a stretch of a map rather than a control**: the square a drag is to cross, placed
+through the map's own scales so that the square lit is the square a drag from one of its corners to
+the other names, and cut to what the map shows. Not in view — the reader zoomed somewhere else — it is
+not lit, and the card says so and offers *zoom for me*.
+
+**Above every surface of the app, below its dialogs, menus and notes**, and out of the way entirely
+while a dialog is up: a dialog owns the keyboard and the reader's attention, and a tour drawn over one
+would be a second voice talking over the first. It comes back, on the same step, when the dialog
+closes. Under *reduce motion* the ring and the card jump from control to control rather than gliding,
+the words do not come in, nothing breathes or pulses, and the tick is drawn rather than grown.
+
+### 30.6 The place kept
+
+**Where the reader got to is a preference**, in `localStorage` under the app's prefix
+(`chromosomix:tour`): the step, by its id and by its position, how many steps there were, and
+whether the reader finished. It outlives a reload and a closed window, and the stored-data account
+(§11) counts it with the other settings. *skip tutorial* keeps the step it was pressed on; *finish*
+says the tour was finished, and the landing page and *About* then offer to play it again. The landing
+page's offer follows the place as it moves, since it stays on screen while the reader works.
+
+**A resume lands on the first step of the part the reader left**, not on the step itself, because the
+window may have moved on since — reloaded, a drawer closed, a tab switched — and that step may point
+into something no longer open. The part's first step is the one that opens it, and every step after
+it whose state still holds goes by on its own, so a window that has not moved lands exactly where the
+reader was. The position is only what the two offers print; a step a later build no longer has
+starts the tutorial from the beginning.
+
+**It is in a chunk of its own**, fetched by the press that plays it: a reader who never asks for it
+pays for one `localStorage` read when the landing page or *About* is drawn.

@@ -56,7 +56,7 @@ import { calledSetFields } from '../ui/calledSurfaces'
 import { TASKS, tasksFor } from './registry'
 import { declaredOrigins } from './tasks/oriter'
 import { AnalysisRunner, type RunnerHost, type RunTarget } from './runner'
-import { rememberParams } from './memory'
+import { asAsked, recallParams, rememberParams } from './memory'
 import type {
   AnalysisContext,
   AnalysisFraming,
@@ -84,9 +84,13 @@ export interface AnalysisWorkspaceHost {
    * `cells` is the ticked set of a single-cell container and is absent for every
    * other file — see {@link RunTarget.cells}. `label` is what the reader calls
    * the map (§16.10), which a plain Run names its results by.
+   *
+   * This and {@link context} answer for the starred map — or, asked about a
+   * `task` that reads no map, for the session's own, whichever map is starred
+   * (§18.1): a 1D task reads the session's tracks and is framed by its map.
    */
-  source(): { uri: string; source: SourceSpec; cells?: readonly string[]; label?: string } | null
-  context(): AnalysisContext | null
+  source(task?: AnalysisTask): { uri: string; source: SourceSpec; cells?: readonly string[]; label?: string } | null
+  context(task?: AnalysisTask): AnalysisContext | null
   framing(): AnalysisFraming | null
   block(): BlockInput | null
   /**
@@ -110,10 +114,11 @@ export interface AnalysisWorkspaceHost {
    */
   targetMap?(): MapId
   /**
-   * Why no task can run at all right now, or `null` — a deck where the reader
-   * has left no map starred (§18.1). A task reads one file and there is none
-   * named, so every row is greyed under this sentence and Run refuses with it,
-   * rather than guessing a file on the reader's behalf.
+   * Why no task that reads a map can run right now, or `null` — a deck where
+   * the reader has left no map starred (§18.1). Such a task reads one file and
+   * there is none named, so its row is greyed under this sentence and Run
+   * refuses with it, rather than guessing a file on the reader's behalf. A task
+   * that reads only the tracks (`readsMap`) names no file, and is let by.
    */
   blocked?(): string | null
   /**
@@ -151,8 +156,11 @@ export interface AnalysisWorkspaceHost {
   targetCount?(): number
   /** The worker a bin vector is registered with, so `sample` can answer for it. */
   annotations(): AnnotationClient | null
-  /** The assembly, for the two writers that lay a vector out over it. */
-  contigs(): BedGraphContig[]
+  /**
+   * The assembly, for the two writers that lay a vector out over it — the
+   * session's own for a `task` that reads no map, as {@link context} is.
+   */
+  contigs(task?: AnalysisTask): BedGraphContig[]
   /**
    * What the workspace this one replaces was holding, when it replaces one.
    *
@@ -242,8 +250,8 @@ export class AnalysisWorkspace {
 
   constructor(private readonly host: AnalysisWorkspaceHost) {
     const runnerHost: RunnerHost = {
-      context: () => this.host.context(),
-      source: () => this.host.source(),
+      context: (task) => this.host.context(task),
+      source: (task) => this.host.source(task),
       block: () => this.host.block(),
       payload: (entryId) => this.host.store()?.byId(entryId)?.payload,
       // The reader's own name for the file, so an output that names an entry
@@ -251,9 +259,9 @@ export class AnalysisWorkspace {
       label: (entryId) => this.host.store()?.byId(entryId)?.label,
       vector: (entryId) => this.binVector(entryId),
       annotations: () => this.host.annotations(),
-      contigLengths: () => {
+      contigLengths: (task) => {
         const out: Record<string, number> = {}
-        for (const contig of this.host.contigs()) out[contig.name] = contig.length
+        for (const contig of this.host.contigs(task)) out[contig.name] = contig.length
         return out
       },
       // The star, so a plain Run files what it measured under the map it read
@@ -281,7 +289,7 @@ export class AnalysisWorkspace {
 
     this.drawer = new AnalysisDrawer({
       runner: this.runner,
-      context: () => this.host.context(),
+      context: (task) => this.host.context(task),
       blocked: () => this.host.blocked?.() ?? null,
       framing: () => this.host.framing(),
       onClose: () => this.show(null),
@@ -304,7 +312,9 @@ export class AnalysisWorkspace {
           if (held.output !== output) continue
           const entry = store.byId(id)
           if (entry !== undefined) {
-            return calledSetFields(store, entry, { map: this.host.context()?.hasMap ?? true })
+            // Whether there is a map to put the set on, for the task that called it.
+            const task = TASKS.find((candidate) => candidate.id === held.task)
+            return calledSetFields(store, entry, { map: this.host.context(task)?.hasMap ?? true })
           }
         }
         return null
@@ -395,6 +405,28 @@ export class AnalysisWorkspace {
     return this.drawer.isOpen
   }
 
+  /**
+   * The task the drawer is open on, by id, or `null`.
+   *
+   * For the tutorial (§30), which asks the window questions rather than
+   * listening for clicks: *is the drawer on Compartments* is the state its step
+   * waits for, however the reader opened it.
+   */
+  get openTask(): string | null {
+    return this.drawer.task?.id ?? null
+  }
+
+  /** Every finished run of a task on the starred map, newest first — the runner's own list. */
+  runsOf(taskId: string): TaskResult[] {
+    return this.runner.runsOf(taskId)
+  }
+
+  /** Whether a task is running or waiting to, as the panel's row shows it. */
+  isRunning(taskId: string): boolean {
+    const status = this.runner.stateOf(taskId).status
+    return status === 'running' || status === 'queued'
+  }
+
   /** Open the drawer on a task, or close it. */
   show(task: AnalysisTask | null): void {
     this.open = task
@@ -438,7 +470,13 @@ export class AnalysisWorkspace {
    */
   private adopt(task: AnalysisTask, result: TaskResult, on: RunTarget): void {
     const map = on.map
-    rememberParams(result.provenance.framing.uri, task.id, result.provenance.params)
+    const uri = result.provenance.framing.uri
+    const context = this.host.context(task)
+    rememberParams(
+      uri,
+      task.id,
+      asAsked(task, result.provenance.params, recallParams(uri, task.id), context?.uri === uri ? context : null),
+    )
 
     // **Before the early return below**, because this task produces neither a
     // profile nor an interval set: its output is a table, and its destination is
@@ -487,7 +525,7 @@ export class AnalysisWorkspace {
           output,
           provenance: result.provenance,
           task: task.id,
-          grid: this.gridFor(output.binsize),
+          grid: this.gridFor(output.binsize, task),
         })
       }
       this.drawer.refresh()
@@ -517,7 +555,7 @@ export class AnalysisWorkspace {
           output,
           provenance: result.provenance,
           task: task.id,
-          grid: this.gridFor(output.binsize),
+          grid: this.gridFor(output.binsize, task),
         })
       }
       this.drawer.refresh()
@@ -561,7 +599,9 @@ export class AnalysisWorkspace {
         style: entry.style,
       })
       this.placeOnTarget(store, entry.id, entry.placement, map)
-      const grid = this.gridFor(output.binsize)
+      // The grid the task was run on, which for a 1D task is the session's own
+      // map's whichever is starred — the runner cut its bins from the same list.
+      const grid = this.gridFor(output.binsize, task)
       this.profiles.set(entry.id, {
         output,
         provenance: result.provenance,
@@ -679,7 +719,7 @@ export class AnalysisWorkspace {
           ? 'overlay'
           : (output.display ?? (output.payload.kind === 'pairs' ? 'overlay' : 'lane')),
         look: output.look ?? 'corner',
-        overlay: this.host.context()?.hasMap ?? true,
+        overlay: this.host.context(task)?.hasMap ?? true,
         under,
       })
       this.intervals.set(id, held)
@@ -828,9 +868,9 @@ export class AnalysisWorkspace {
     this.host.changed()
   }
 
-  /** The assembly a vector computed *now* would be laid out over. */
-  private grid(): BinVectorContig[] {
-    return this.host.contigs().map((contig) => ({
+  /** The assembly a vector computed *now* would be laid out over, for `task`. */
+  private grid(task?: AnalysisTask): BinVectorContig[] {
+    return this.host.contigs(task).map((contig) => ({
       name: contig.name,
       startBin: contig.startBin,
       bins: contig.bins,
@@ -848,9 +888,15 @@ export class AnalysisWorkspace {
    * its first base into bins of that size ({@link gridAt}). Registered over the
    * session's grid instead, every sequence after the first would take its
    * values from the one before it.
+   *
+   * For the task that made the vector, since the session's grid is the
+   * starred map's for a task that reads one and the session's own map's for a
+   * task that reads none (`AnalysisWorkspaceHost.context`).
    */
-  private gridFor(binsize: number): BinVectorContig[] {
-    return this.host.context()?.binsize === binsize ? this.grid() : gridAt(this.host.contigs(), binsize)
+  private gridFor(binsize: number, task?: AnalysisTask): BinVectorContig[] {
+    return this.host.context(task)?.binsize === binsize
+      ? this.grid(task)
+      : gridAt(this.host.contigs(task), binsize)
   }
 
   /**

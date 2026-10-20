@@ -274,7 +274,12 @@ export async function readZoomAsync(
 }
 
 /** {@link findZoom} over a whole record, where running out of bytes is the record's fault. */
-function wholeRecord(bytes: Uint8Array, entry: MasterIndexEntry, unit: string, binSize: number): ZoomData | null {
+export function wholeRecord(
+  bytes: Uint8Array,
+  entry: MasterIndexEntry,
+  unit: string,
+  binSize: number,
+): ZoomData | null {
   try {
     return findZoom(bytes, unit, binSize, entry.size)
   } catch (err) {
@@ -299,14 +304,18 @@ function wholeRecord(bytes: Uint8Array, entry: MasterIndexEntry, unit: string, b
  * read through rather than split on — it costs less to carry than a second
  * request does — and a stretch stops growing at `cap`, so no one read holds
  * more than that in flight.
+ *
+ * Any span of the file groups the same way, which is how a walk reads the heads
+ * of many matrix records at once (`HicFile.prefetchWalk`): a stretch longer
+ * than `cap` on its own is one read of its own.
  */
-export function blockRuns(
-  refs: readonly BlockRef[],
+export function blockRuns<T extends { position: number; size: number }>(
+  refs: readonly T[],
   gap: number,
   cap: number,
-): Array<{ position: number; length: number; refs: BlockRef[] }> {
+): Array<{ position: number; length: number; refs: T[] }> {
   const sorted = [...refs].sort((p, q) => p.position - q.position)
-  const runs: Array<{ position: number; length: number; refs: BlockRef[] }> = []
+  const runs: Array<{ position: number; length: number; refs: T[] }> = []
   for (const ref of sorted) {
     const last = runs[runs.length - 1]
     const end = ref.position + ref.size

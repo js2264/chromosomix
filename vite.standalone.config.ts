@@ -54,6 +54,7 @@ import { defineConfig, type Plugin } from 'vite'
 
 import { withStandaloneCsp } from './scripts/csp.mjs'
 import { standaloneIndexProblems } from './scripts/standalone-shape.mjs'
+import { noticesComment, thirdPartyCollector, thirdPartyNotices } from './scripts/third-party-notices.mjs'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
   version?: string
@@ -158,6 +159,14 @@ function singleFile(): Plugin {
         .replace(/\s*<link rel="apple-touch-icon"[^>]*>/g, '')
         .replace(/\s*<meta name="theme-color"[^>]*>/g, '')
 
+      // The notices every other build writes beside its page, written into this
+      // one — it may not be two files — as a comment ahead of `</html>`.
+      // Collected by `thirdPartyNotices({ fileName: null })` and the workers'
+      // collectors in `generateBundle`, which every build has finished by
+      // `closeBundle` (`scripts/third-party-notices.mjs`).
+      if (!/<\/html>\s*$/i.test(html)) throw new Error('standalone build: index.html does not end in </html>')
+      html = html.replace(/<\/html>\s*$/i, `${noticesComment()}\n</html>\n`)
+
       // The policy, **last**, because it is computed over the page: it names
       // the hash of each script and stylesheet just inlined, and any edit after
       // this line would leave it naming something the page no longer holds —
@@ -204,7 +213,7 @@ export default defineConfig({
     __MARK_URL__: JSON.stringify(markDataUrl()),
   },
   publicDir: false,
-  plugins: [singleFile()],
+  plugins: [thirdPartyNotices({ fileName: null }), singleFile()],
   resolve: {
     alias: [
       // The one behavioural swap in the whole target. See `worker/spawn.ts`.
@@ -230,6 +239,7 @@ export default defineConfig({
     // Classic, not `es`. A module worker cannot be constructed from a `file://`
     // page at all — this is the flag that decides whether the app has a reader.
     format: 'iife',
+    plugins: () => [thirdPartyCollector()],
     rollupOptions: {
       output: {
         // The workers code-split too — the reader lazily reaches h5wasm — and

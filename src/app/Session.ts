@@ -29,6 +29,7 @@
  */
 
 import { AnnotationLoader, leadOf, pairIndexes } from '../annotations/loader'
+import { begin } from '../perf/rendered'
 import { devFeature } from '../state/devFeatures'
 import { EDIT_SCOPE, EditStore, genomeEditKey, readEdit } from '../state/referenceEdit'
 import { EditedAssembly, editFingerprint, type ReferenceEdit } from '../genome/edit'
@@ -139,14 +140,13 @@ import type {
 } from '../worker/protocol'
 import type { WireSource } from '../annotations/worker/protocol'
 import type { PickedFile } from '../browse/folder'
-import { routeFor, routeOf, type FileRoute } from '../browse/route'
+import { isTextTableName, routeFor, routeOf, type FileRoute } from '../browse/route'
 import { driveFileName } from '../browse/driveName'
 import { connectDirectory, subscribeFolders } from '../browse/connected'
 import { adoptFolders, hasLocation, missingFolderOf } from '../state/locations'
 import type { AssemblyResult } from '../annotations/worker/protocol'
 import { isHicProMatrix, splitBinsFragment, splitIndexFragment } from '../annotations/sidecar'
 import { readFileDrag } from '../ui/fileDrag'
-import { isStructureName } from '../annotations/g3d'
 import {
   assemblyOf,
   findContig,
@@ -297,6 +297,15 @@ export interface SessionHost {
    * (`ui/SidePanel.ts`, `conceal`), so the plot gets the room.
    */
   landingFileOpened(session: Session): void
+  /**
+   * The landing page's tutorial button was pressed: play the guided tutorial
+   * (§30) from its start or from where the reader left it.
+   *
+   * Optional, and absent where it cannot be played — a shell with no store
+   * drawer for its first step, and a host in a test — so the landing page
+   * offers it only where this is here.
+   */
+  startTutorial?(from: 'start' | 'resume'): void
 }
 
 /** What a heatmap view of the whole file at once has to offer the session. */
@@ -1040,6 +1049,7 @@ export class Session {
     this.picker = new FilePicker({
       onOpen: (uri, source) => void this.openWithConfig(uri, source),
       onOpenFiles: (files) => void this.openFiles(files, { fromLanding: true }),
+      onPicked: (picked) => this.openPickedHere(picked),
       // Neither door in an embed, whose landing page is *Load files* alone
       // (§21.2): the drawer a tile opens is not built there, and nor is the
       // Files column a place is connected into — so a tile pressed did
@@ -1058,6 +1068,12 @@ export class Session {
             // one.
             onConnect: (provider: ProviderId) => this.host.openConnect(provider),
             onConnected: (id: string) => this.host.folderConnected(id),
+            // The tutorial's offer, and the shell's for the same reason a store
+            // is: its first step is the window's drawer, and it plays across
+            // tabs (§30).
+            ...(this.host.startTutorial === undefined
+              ? {}
+              : { onTutorial: (from: 'start' | 'resume') => this.host.startTutorial?.(from) }),
           }),
     })
     this.store.subscribe((state, change) => {
@@ -1104,6 +1120,40 @@ export class Session {
 
   get hasFile(): boolean {
     return this.file !== null
+  }
+
+  /**
+   * The address of the file open here, as the hash names it, or `null` until
+   * one has opened — which is later than the hash names it, by the length of
+   * the open.
+   */
+  get fileUri(): string | null {
+    return this.file?.uri ?? null
+  }
+
+  /** The bin size of the map open here, or `null` with none, or none fixed. */
+  get binsize(): number | null {
+    return this.file?.info.binsize ?? null
+  }
+
+  /**
+   * Where a stretch of one sequence is drawn on the map in front, as the square
+   * it makes on the diagonal, in viewport pixels; `null` with no map in front
+   * or where it does not draw one (`MatrixPanel.squareOf`). For the tutorial
+   * (§30), which lights the square it asks a reader to drag across.
+   */
+  squareOnScreen(stretch: { contig: string; start: number; end: number }): DOMRect | null {
+    return this.current?.panel?.squareOf(stretch) ?? null
+  }
+
+  /**
+   * The score the map in front is drawn from, by its picker's id — `balanced`,
+   * `correlation` — with the file's default applied, which the view state leaves
+   * out ({@link scoreOf}); `null` with no map. For the tutorial (§30).
+   */
+  get scoreInForce(): string | null {
+    const state = this.state
+    return state === null || this.file === null ? null : this.scoreOf(state).id
   }
 
   /** `true` while this session is a 1D genome browser rather than a map. */
@@ -1551,7 +1601,8 @@ export class Session {
   /**
    * Contig names, if the contigs table has already been read.
    *
-   * @internal SessionDeck names the lead's contigs with it.
+   * @internal SessionDeck names the lead's contigs with it, and the tutorial
+   * finds a row of the Chromosomes table by it (§30).
    */
   contigNames(): string[] | null {
     const table = this.file?.contigs
@@ -1601,6 +1652,13 @@ export class Session {
    * the time anyone has found their file. Only for the picker a reader is
    * looking at, and only once: a tab restored with a map open makes its worker
    * straight away, and one with a genome never needs this one.
+   *
+   * The picker asking for a map's file is one of them — a workspace's, or a
+   * restored tab's, whose map is on this machine — and it used to be passed
+   * over: the file a workspace named was dropped on a page with no reader, and
+   * waited for one. From disk, a chromosome or a locus of the three maps
+   * `notebooks/timing.qmd` times took 1.18 s to draw from such a page, and
+   * takes 0.96 s now, medians of eleven pictures.
    *
    * @internal SessionRouter starts the reader under the picker.
    */
@@ -1735,6 +1793,18 @@ export class Session {
    * it needs and appears where the reader is expecting to be asked for a file.
    */
   async openConfig(config: SessionConfig): Promise<void> {
+    // A wait for the picture the workspace describes (`perf/rendered.ts`): its
+    // file is resolved before anything is opened or routed.
+    const end = begin()
+    try {
+      await this.openConfigNow(config)
+    } finally {
+      end()
+    }
+  }
+
+  /** What {@link openConfig} does. */
+  private async openConfigNow(config: SessionConfig): Promise<void> {
     setPlotOptions(config.plot)
     this.host.applyPanelLayout(config.panels)
     // Where its files are, in the installed app's kept folders (§20.6), before
@@ -1746,6 +1816,8 @@ export class Session {
       this.pendingConfig = config
       this.showContent(this.pickerWithConfig(config))
       this.host.sessionChanged(this)
+      // A picker asking for the map: its reader starts while the file is found.
+      this.warmReader()
       return
     }
     this.pendingConfig = config
@@ -1844,14 +1916,31 @@ export class Session {
    * after this line, which is the property worth having and the reason there is
    * no second door.
    */
-  async openConfigUrl(rawUrl: string): Promise<void> {
+  async openConfigUrl(
+    rawUrl: string,
+    /** What to call it where its address says only an id: a Drive file's name (§24.9). */
+    label?: string,
+  ): Promise<void> {
+    // A wait for the picture the workspace describes, from the moment it is
+    // asked for (`perf/rendered.ts`): the fetch comes before anything opens.
+    const end = begin()
+    try {
+      await this.openConfigUrlNow(rawUrl, label)
+    } finally {
+      end()
+    }
+  }
+
+  /** What {@link openConfigUrl} does. */
+  private async openConfigUrlNow(rawUrl: string, label?: string): Promise<void> {
     // `?config=` is the other road a URL arrives on — a link, not a box — so the
     // rewrite table runs here the way it runs in `inferSource` for `#uri=`
     // (SPECS §24.5). A workspace published on Drive or named `gs://` is fetched
     // from the address that serves it, and the names inside it are then resolved
     // against that address by `resolveConfig`, which canonicalises them too.
     const url = canonicalUrl(rawUrl)
-    this.showContent(loading(`Reading ${fileLabel(url)}`))
+    const name = label ?? fileLabel(url)
+    this.showContent(loading(`Reading ${name}`))
     this.host.sessionChanged(this)
     try {
       // Signed when a bucket entry covers it, unsigned otherwise. A published
@@ -1874,14 +1963,14 @@ export class Session {
       })
       if (!response.ok) {
         throw new Error(
-          `${fileLabel(url)} could not be read: the host answered ${response.status} ` +
+          `${name} could not be read: the host answered ${response.status} ` +
             `${response.statusText}${credential === null ? '' : ' to a signed request'}.`,
         )
       }
       if (this.destroyed) return
       // …and the same hop for a published one, with the URL it was found at, so
       // the relative names inside it resolve against that folder.
-      this.host.openWorkspaceFile(await response.text(), fileLabel(url), url)
+      this.host.openWorkspaceFile(await response.text(), name, url)
     } catch (err) {
       if (!this.destroyed) this.showError(err)
     } finally {
@@ -1930,6 +2019,13 @@ export class Session {
       return
     }
     this.noteSourceMismatch(uri, config, source)
+    // The map the workspace named *inside* its file — `::/resolutions/25000` of
+    // an `.mcool`, an entry of an `.mmetacool` — rides on the file that answers
+    // for it. A dropped file is named by its path alone, and opened at its root
+    // it landed on a rung of the file's own choosing rather than the one the
+    // workspace was saved at (§3.4), under a key its tracks were not written to.
+    const named = splitUri(config.state.uri).group
+    if (source.kind === 'local' && splitUri(uri).group === '/' && named !== '/') uri = `${uri}::${named}`
     applyConfig(config, this.memoryKey(uri))
     // Kept for the one hop `open` can make on its own: a collection addressed
     // at its root lands on one of its entries, under a URI this config has
@@ -1973,6 +2069,19 @@ export class Session {
    * click away on the compare card, which is where a claim that strong belongs.
    */
   async openFiles(files: readonly File[], options: { fromLanding?: boolean } = {}): Promise<void> {
+    // A wait for the picture the drop ends in (`perf/rendered.ts`): between the
+    // drop and the first open, a file is being read for what it is and nothing
+    // on screen says a picture is coming.
+    const end = begin()
+    try {
+      await this.openFilesNow(files, options)
+    } finally {
+      end()
+    }
+  }
+
+  /** What {@link openFiles} does. */
+  private async openFilesNow(files: readonly File[], options: { fromLanding?: boolean }): Promise<void> {
     if (files.length === 0) return
     const config = files.find((file) => looksLikeConfig(file.name))
     if (config !== undefined) {
@@ -1986,7 +2095,7 @@ export class Session {
       return
     }
     if (files.length === 1) {
-      await this.open(files[0].name, { kind: 'local', file: files[0] })
+      await this.openLocal(files[0])
       this.landingOpened(options)
       return
     }
@@ -2001,7 +2110,7 @@ export class Session {
     const leadPair = leadOf(paired, (name) => this.routeOf(name))
     if (leadPair === undefined) return
     const lead = leadPair.file
-    await this.open(lead.name, { kind: 'local', file: lead }, undefined, leadPair.index)
+    await this.openLocal(lead, leadPair.index)
     if (this.destroyed) return
     for (const pair of paired) {
       if (pair.file === lead) continue
@@ -2016,6 +2125,54 @@ export class Session {
     this.landingOpened(options)
   }
 
+  /**
+   * Open a dropped file — through the workspace or the view waiting for it,
+   * where one is.
+   *
+   * A workspace or a link naming a local file asks for it to be dropped, and
+   * promises the rest of its view back when it is (`pickerWithNote`). One file
+   * dropped on that page went through a pending workspace; two — the map and a
+   * track beside it — opened the map as a stranger. Both now take its door.
+   */
+  private async openLocal(file: File, index?: File): Promise<void> {
+    const source: SourceSpec = { kind: 'local', file }
+    if (this.pendingConfig !== null && index === undefined) {
+      await this.openWithConfig(file.name, source)
+      return
+    }
+    // A view waiting on this page for this file — a link or a workspace that
+    // named it — named the map inside it as well: opened by its path alone, an
+    // `.mcool` landed on a rung of its own choosing, and the view the page had
+    // promised back (`pickerWithNote`) was dropped for its Chromosomes table.
+    const waiting = this.file === null ? this.store.state : null
+    const named = waiting !== null && splitUri(waiting.uri).path === file.name ? waiting.uri : file.name
+    await this.open(named, source, undefined, index)
+  }
+
+  /**
+   * A row out of the Files column or a store, let go on this tab's landing
+   * page (§20.5, §24.2): opened here with all the row carries — the index found
+   * beside it, the name a store gave it — where its address alone lost both. A
+   * file on this machine goes through {@link openFiles}, the door a dropped one
+   * takes, which is also what a workspace or a link waiting for its file
+   * answers to (§5.6); a page waiting for one takes a remote file by its own
+   * door, and an empty tab with nothing waiting fills as the row's `+` would
+   * fill it. Not counted as the landing page's own open: the Files column
+   * stays where it is, the reader having just been working in it.
+   */
+  private openPickedHere(picked: PickedFile): void {
+    if (picked.source.kind === 'local') {
+      const file = picked.source.file
+      void this.openFiles(picked.index === undefined ? [file] : [file, picked.index])
+      return
+    }
+    if (this.pendingConfig !== null) {
+      void this.openWithConfig(picked.uri, picked.source)
+      return
+    }
+    void this.addPicked(picked)
+  }
+
   /** Tell the shell a landing-page open has produced a view, if it has. */
   private landingOpened(options: { fromLanding?: boolean }): void {
     if (!options.fromLanding || this.destroyed || this.state === null) return
@@ -2023,6 +2180,26 @@ export class Session {
   }
 
   async open(
+    uri: string,
+    source: SourceSpec,
+    carry?: ViewState,
+    index?: File,
+    binning?: PairsBinning,
+    label?: string,
+  ): Promise<void> {
+    // A wait for the picture the file is opened for (`perf/rendered.ts`). Most
+    // opens are already inside a render, which waits too; a rung picked, an
+    // entry chosen or a store row pressed is not, and opens before it renders.
+    const end = begin()
+    try {
+      await this.openNow(uri, source, carry, index, binning, label)
+    } finally {
+      end()
+    }
+  }
+
+  /** What {@link open} does; its arguments are explained here. */
+  private async openNow(
     uri: string,
     source: SourceSpec,
     carry?: ViewState,
@@ -2076,9 +2253,12 @@ export class Session {
     // is *before* the map door is tried, because that door's failure is dear:
     // HDF5 hunts for a superblock at doubling offsets, a megabyte chunk at
     // each, through the whole of a file that is not one. The question costs
-    // one small read (`openUnknown`), and a map answers it as a map.
+    // one small read (`openUnknown`), and a map answers it as a map. So is a
+    // `.json` that reached this door rather than the config road: it is a
+    // workspace only there ({@link openWithConfig}), and here a file like any
+    // other, asked before it is refused.
     let sniffed = false
-    if (route === 'unknown' && binning === undefined) {
+    if ((route === 'unknown' || route === 'workspace') && binning === undefined) {
       sniffed = true
       if (await this.openUnknown(uri, source, carry, label)) {
         named()
@@ -2457,6 +2637,16 @@ export class Session {
       // clear it for the same reason.
       this.opening = null
       if (route === 'unknown' && !sniffed && (await this.openUnknown(uri, source, carry, label))) return
+      // A text table's name whose bytes no reader took — they were asked above —
+      // is refused as the text it is. The map door's refusal, *not an HDF5
+      // file*, is true of a `notes.txt` and says nothing a reader can act on;
+      // the door is still tried, for a `.pairs` saved under a name like that.
+      const text = isTextTableName(uri) || (label !== undefined && isTextTableName(label))
+      if (sniffed && text && err instanceof ViewerError && err.code === 'not-hdf5') {
+        const name = label ?? fileLabel(uri)
+        this.showError(new ViewerError('not-a-table', `${name} is text, and no reader here took its rows as a table.`), uri, source)
+        return
+      }
       this.showError(err, uri, source)
     } finally {
       this.opening = null
@@ -2582,6 +2772,25 @@ export class Session {
    * @internal SessionRouter opens the genome a state names.
    */
   async openGenome(
+    uri: string,
+    source: SourceSpec,
+    locus?: string,
+    insist = false,
+    index?: File,
+    label?: string,
+    known?: AssemblyResult,
+  ): Promise<void> {
+    // A wait for the browser it opens, as {@link open} is for a map.
+    const end = begin()
+    try {
+      await this.openGenomeNow(uri, source, locus, insist, index, label, known)
+    } finally {
+      end()
+    }
+  }
+
+  /** What {@link openGenome} does; its arguments are explained here. */
+  private async openGenomeNow(
     uri: string,
     source: SourceSpec,
     locus?: string,
@@ -3517,6 +3726,16 @@ export class Session {
    */
   async dropFiles(files: readonly File[]): Promise<void> {
     if (files.length === 0) return
+    // An empty tab is filled by the road the landing page's drop zone takes
+    // ({@link openFiles}): a map takes the seat, and anything else opens the
+    // browser its genome makes. The seat below is a map's alone, so a bigWig
+    // pressed in the Files column on an empty tab — whose `+` says it opens
+    // there — reached `dropped` with no tracks to join and did nothing at all.
+    // Not while a file is opening: that tab is not empty, only not yet full.
+    if (this.file === null && this.assembly === null && this.opening === null) {
+      await this.openFiles(files)
+      return
+    }
     const maps = files.filter(
       (file) => !looksLikeConfig(file.name) && this.routeOf(file.name) === 'map',
     )
@@ -3672,6 +3891,14 @@ export class Session {
     // A Drive address pasted here says only its id; Drive says the rest (§24.9).
     if (label === undefined) label = (await this.driveName(uri, source)) ?? undefined
     if (this.destroyed) return
+    // …and a workspace whose address does not say so, by the name it was
+    // given: a Drive file is addressed by an id and a Dropbox one by a
+    // temporary link, so the folder that listed it is what knows it is a
+    // `session.json`. By its address alone it was taken for a track.
+    if (label !== undefined && looksLikeConfig(label)) {
+      await this.openConfigUrl(path, label)
+      return
+    }
     // An empty tab takes the file's name as its own: a tab that read
     // `1pq7NDWo…` for a file the folder called `ATAC_rep2.bw` was the one
     // place in the application the name did not reach.
@@ -3719,7 +3946,6 @@ export class Session {
     const held = this.annotations
     const before = new Set(held.store.entries.map((entry) => entry.id))
     held.loader.addUrl(path, label, placement)
-    this.openStructureCell(path)
     if (map !== undefined && map !== LEAD_MAP) {
       for (const entry of held.store.entries) {
         if (before.has(entry.id)) continue
@@ -3796,7 +4022,6 @@ export class Session {
     // here without being asked *here* — see the hook's own comment for why it
     // is not a line at this call site.
     held.loader.addFiles(index === undefined ? [file] : [file, index], placement)
-    this.openStructureCell(file.name)
     // Everything `begin` just created belongs to the map it was dropped on. The
     // import itself is the session's, as it always was — only the placement
     // moves, so the track is in the one list with every other and simply drawn
@@ -3811,30 +4036,19 @@ export class Session {
   }
 
   /**
-   * A structure file arrived: open a cell for it beside the map (§25.3).
+   * A structure arrived: open its cell beside the map (§25.3).
    *
-   * By the file's *name*, because this runs the moment the file is handed to
-   * the loader and before anything has read it, so the cell is on screen while
-   * the file is read; a structure this test misses gets its cell when its row
-   * arrives, from {@link watchStructureRows}. A cell **per model**: a new cell
-   * draws the model no other cell is drawing, so a second g3d opens beside the
-   * first rather than taking its picture. Nothing where this view cannot hold a
-   * deck ({@link SessionDeck.possible}).
-   */
-  private openStructureCell(name: string): void {
-    if (!isStructureName(name)) return
-    if (!this.deck.possible) return
-    this.deck.ensure().add({ kind: 'structure' })
-  }
-
-  /**
-   * The other road a structure arrives by: a row the Tracks card made itself,
-   * from its URL box or its file chooser, which never passes through
-   * {@link dropped} or {@link addRemote}. Watched on the store rather than
-   * hooked into the card, so every road agrees: a structure row that was not
-   * there a moment ago opens its cell. The rows already in the list when the
-   * watch begins — a restored session's — are noted and not opened, since
-   * their deck is the link's to rebuild ({@link noteRestoredStructures}).
+   * Every road one arrives by — dropped, named by a URL, picked from a folder,
+   * made by the Tracks card's own box or chooser, landed by a reconstruction —
+   * ends in a row of the store, so it is watched there rather than hooked into
+   * each road, and every road agrees: a structure row that was not there a
+   * moment ago opens its cell. The moment the loader begins it where its name
+   * says structure, so the cell is on screen while the file is read; once read
+   * where only its bytes do. The drop and the URL roads used to open a cell by
+   * the file's name as well, and between the two every dropped model was drawn
+   * twice. The rows already in the list when the watch begins — a restored
+   * session's — are noted and not opened, since their deck is the link's to
+   * rebuild ({@link noteRestoredStructures}).
    */
   private watchStructureRows(store: AnnotationStore): void {
     const seen = this.knownStructures
@@ -5000,6 +5214,14 @@ export class Session {
    * second "drop this again" in a session that already has one under the old
    * file's memory.
    *
+   * **Readable includes still reading.** A row whose bytes are on their way has
+   * an address to read them from as surely as one that has them, and it was
+   * left behind: a workspace seats its tracks reading, a row is remembered only
+   * once it has loaded (§8.6), and the old file's worker is put down under it —
+   * so a reader who picked another resolution in the second or two after a
+   * store's session opened lost every one of its tracks, at the new rung and for
+   * good. Carried, such a row is read again at the rung it arrives at.
+   *
    * And, for a **change of resolution only**, what was computed as well. That
    * condition is the whole of the difference between the two lists, and it is
    * `AnnotationLoader.carry`'s docstring stated the other way round: a computed
@@ -5009,7 +5231,9 @@ export class Session {
    * loses numbers this tab is still holding.
    */
   private carry(next: string): void {
-    const rows = this.annotations?.store.entries.filter((entry) => entry.status === 'ready')
+    const rows = this.annotations?.store.entries.filter(
+      (entry) => entry.status === 'ready' || entry.status === 'loading',
+    )
     this.carried = rows === undefined || rows.length === 0 ? null : [...rows]
     const lanes = this.annotations?.store.placements
     this.carriedLanes = lanes === undefined || lanes.length === 0 ? null : [...lanes]

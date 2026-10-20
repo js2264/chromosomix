@@ -231,6 +231,7 @@ import {
   type PlotOptionKey,
 } from './plotOptions'
 import { scaleFont, subscribeTextScale, textScaleField } from './textScale'
+import { Surface, type SurfaceAccount } from '../perf/rendered'
 
 const TRANSFORMS: Transform[] = ['log1p', 'log10', 'log2', 'none']
 
@@ -1125,6 +1126,13 @@ export class MatrixPanel {
   private exportName = 'contact-map'
 
   private data: MatrixResult | null = null
+  /**
+   * This map in the page's report of a finished picture (`perf/rendered.ts`):
+   * its veil, a paint it has asked for, its lanes' reads and a finer block
+   * being read for it are what it is waiting on. `null` until the panel has an
+   * element to be on screen as.
+   */
+  private surface: Surface | null = null
   /** Where this panel is looking, for whoever is keeping N of them in step. */
   private viewportListener: ((rows: [number, number], cols: [number, number]) => void) | null = null
   /**
@@ -1505,7 +1513,8 @@ export class MatrixPanel {
         ? {}
         : { metadata: options.annotations.metadata }),
       // Each stack's names beside the map, in the corner that follows it
-      // clockwise, rather than over its data (§8.8).
+      // clockwise, rather than over its data — with the name column on, which
+      // is off to begin with (§8.8).
       corners: true,
       onChange: () => this.schedule(),
     })
@@ -1783,6 +1792,12 @@ export class MatrixPanel {
                   () => this.shrinkTracks(),
                   { class: 'btn btn-icon', size: 15 },
                 ),
+                // Where the names stand: over each track, the default, or in
+                // the map's corners (§8.8). The 1D browser's name column, in
+                // the same place in its own card, and the same preference —
+                // a reader who wants the names beside the tracks wants them
+                // there on both surfaces.
+                optionToggle('gutter'),
               ]),
           ),
         ),
@@ -2453,6 +2468,7 @@ export class MatrixPanel {
           ]),
       body,
     )
+    this.surface = new Surface(this.el, () => this.renderedAccount())
 
     // Labels and the plot frame are page furniture, so they follow the theme.
     // The canvas cannot read a CSS variable, and the values are only correct
@@ -3045,6 +3061,7 @@ export class MatrixPanel {
     this.narrowWatcher()
     this.observer?.disconnect()
     this.heatmap.detach()
+    this.surface?.forget()
     for (const off of this.laneListeners) off()
     this.laneListeners.length = 0
     // The gestures' own listeners on the lane canvases and the window, and the
@@ -5690,10 +5707,13 @@ export class MatrixPanel {
     if (!busy && correlationNote !== null) {
       this.overlay.textContent = correlationNote
       this.overlay.classList.remove('hidden')
-      return
+    } else {
+      this.overlay.textContent = message
+      this.overlay.classList.toggle('hidden', !busy)
     }
-    this.overlay.textContent = message
-    this.overlay.classList.toggle('hidden', !busy)
+    // Whoever put the veil up, the picture under it is not finished: a read, a
+    // smoothing and a correlation all wait behind it (`perf/rendered.ts`).
+    this.surface?.wait('veil', !this.overlay.classList.contains('hidden'))
   }
 
   /**
@@ -5962,6 +5982,7 @@ export class MatrixPanel {
   /** Coalesce redraws to one per animation frame — the §12 60 fps budget. */
   private schedule(): void {
     if (this.frame !== 0) return
+    this.surface?.wait('paint', true)
     this.frame = requestAnimationFrame(() => {
       this.frame = 0
       // Before the metrics and the draw: a re-cut band is a different number of
@@ -6047,6 +6068,11 @@ export class MatrixPanel {
         const view = this.refineWindow()
         if (view !== null) this.refineListener(view)
       }
+      // Last, for the page's report of a finished picture (`perf/rendered.ts`):
+      // the lanes asked for their windows in the draw above, so their reads are
+      // counted before the paint is said to have been made.
+      this.surface?.wait('lanes', this.lanes.waiting())
+      this.surface?.wait('paint', false)
     })
   }
 
@@ -6062,6 +6088,45 @@ export class MatrixPanel {
    */
   setFrozen(on: boolean, onCancel?: () => void): void {
     this.heatmap.setFrozen(on, onCancel)
+    // The picture held still is about to be replaced by a sharper one.
+    this.surface?.wait('refine', on)
+  }
+
+  /**
+   * Say this map shows something other than its picture — a refusal above it,
+   * the whole-genome gate — or, with `null`, that it shows its picture again:
+   * what the page's report of a finished picture says instead of `drawn`
+   * (`perf/rendered.ts`).
+   */
+  noteRendered(status: 'gated' | 'error' | null, why = ''): void {
+    this.surface?.note(status, why)
+  }
+
+  /** This map as it is on screen, for the page's report of a finished picture. */
+  private renderedAccount(): SurfaceAccount {
+    const lanes = this.lanes.drawnCount
+    const data = this.data
+    if (data === null) return { lanes }
+    // The rung the block was read from, which is the open one unless a
+    // whole-genome view or a wide window read a coarser one (§7.2), times the
+    // bins pooled into each cell: the resolution on screen, which is the one a
+    // caption quotes and the one a script that asked for another has to hear.
+    const binsize = data.binsize ?? this.openBinsize()
+    const binsPerCell = Math.max(1, data.binsPerCell ?? 1)
+    return {
+      maps: [
+        {
+          title: this.lastTitle,
+          binsize,
+          binsPerCell,
+          resolution: binsize * binsPerCell,
+          rows: data.nrows,
+          cols: data.ncols,
+          level: data.level,
+        },
+      ],
+      lanes,
+    }
   }
 
   /**
@@ -6294,6 +6359,26 @@ export class MatrixPanel {
     const cols = this.locusAxes.cols?.locusToUnits(contact.cols.contig, contact.cols.bp) ?? []
     if (rows.length === 0 || cols.length === 0) return null
     return { row: Math.floor(rows[0]), col: Math.floor(cols[0]) }
+  }
+
+  /**
+   * Where a stretch of one sequence is drawn, as the square it makes on the
+   * diagonal, in viewport pixels — or `null` where this map does not draw it as
+   * one: before a block has arrived, and on a turned map, whose rows are
+   * separations rather than places.
+   *
+   * For the guided tutorial (§30), which lights the square it asks a reader to
+   * drag across rather than describing it in megabases.
+   */
+  squareOf(stretch: { contig: string; start: number; end: number }): DOMRect | null {
+    if (this.data === null || this.turned !== null) return null
+    const { rows, cols } = this.locusAxes
+    const r0 = rows?.locusToUnit(stretch.contig, stretch.start) ?? null
+    const r1 = rows?.locusToUnit(stretch.contig, stretch.end) ?? null
+    const c0 = cols?.locusToUnit(stretch.contig, stretch.start) ?? null
+    const c1 = cols?.locusToUnit(stretch.contig, stretch.end) ?? null
+    if (r0 === null || r1 === null || c0 === null || c1 === null) return null
+    return this.heatmap.cellsOnScreen([r0, r1], [c0, c1])
   }
 
   showLocusEcho(locus: { contig: string; bp: number } | null): void {

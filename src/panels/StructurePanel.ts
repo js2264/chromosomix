@@ -358,7 +358,7 @@ const NO_CHORDS: ReadonlyArray<readonly [number, number]> = []
 /** What a cell says while the row it draws is not ready. */
 const WAITING = {
   renderer: 'loading the 3D renderer…',
-  none: 'No structure loaded. Drop a g3d (text or binary), a .3dg or a bed3d here, or on the Structures card.',
+  none: 'No structure loaded. Drop a g3d (text or binary), a .3dg, a bed3d or a PDB this app wrote here, or on the Structures card.',
   removed: 'The model this cell was showing was removed. Pick another on the Structures card.',
   loading: 'reading the structure…',
   empty: 'The structure has no bead on any sequence of this map.',

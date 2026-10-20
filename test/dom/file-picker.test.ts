@@ -19,6 +19,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { FilePicker } from '@/ui/FilePicker'
 import { LoadBox } from '@/ui/LoadBox'
+import { FILE_DRAG_TYPE, writePickedDrag } from '@/ui/fileDrag'
+import type { PickedFile } from '@/browse/folder'
 import type { ProviderId } from '@/ui/connectFronts'
 import { connectedFolders, disconnectFolder } from '@/browse/connected'
 import { icon } from '@/ui/icons'
@@ -327,6 +329,41 @@ describe('the load box on its own', () => {
     expect(textsOf(box.el, '.load-or')).toEqual(['or a URL'])
     // No places and no stores here: this box is the *load* half alone.
     expect(all(box.el, '.picker-provider')).toHaveLength(0)
+  })
+
+  it('hands a dragged row over whole — a store’s name for it with it — where it can (§24.2)', async () => {
+    const picked: PickedFile = {
+      uri: 'https://data.example/4DNFI24F7GRY.mcool',
+      source: { kind: 'remote', url: 'https://data.example/4DNFI24F7GRY.mcool' },
+      name: 'Hi-C on HFF cells',
+    }
+    const rowDrop = (box: LoadBox): void => {
+      const data = new Map<string, string>()
+      const transfer = {
+        effectAllowed: '',
+        setData: (type: string, value: string) => void data.set(type, value),
+        getData: (type: string) => data.get(type) ?? '',
+        types: [FILE_DRAG_TYPE],
+        files: [],
+        items: [],
+      }
+      const start = new Event('dragstart') as DragEvent
+      Object.defineProperty(start, 'dataTransfer', { value: transfer })
+      writePickedDrag(start, picked)
+      const drop = new Event('drop', { bubbles: true, cancelable: true })
+      Object.defineProperty(drop, 'dataTransfer', { value: transfer })
+      box.el.querySelector('.dropzone')?.dispatchEvent(drop)
+    }
+    const whole: PickedFile[] = []
+    const opened: string[] = []
+    rowDrop(new LoadBox({ onOpen: (uri) => opened.push(uri), onOpenFiles: () => undefined, onPicked: (row) => whole.push(row) }))
+    await settled()
+    expect(whole).toEqual([picked])
+    expect(opened).toEqual([])
+    // A box that takes only addresses still opens it, by its address.
+    rowDrop(new LoadBox({ onOpen: (uri) => opened.push(uri), onOpenFiles: () => undefined }))
+    await settled()
+    expect(opened).toEqual([picked.uri])
   })
 })
 

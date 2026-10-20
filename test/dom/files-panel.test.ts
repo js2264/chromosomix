@@ -28,7 +28,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FilesCard } from '@/ui/FilesCard'
 import { connectSnapshot, disconnectFolder } from '@/browse/connected'
 import { writeScopes, type BucketScope } from '@/s3/credentials'
-import { FILE_DRAG_TYPE, readFileDrag } from '@/ui/fileDrag'
+import { FILE_DRAG_TYPE, readFileDrag, writePickedDrag } from '@/ui/fileDrag'
 import type { PickedFile } from '@/browse/folder'
 import { all, mounted, textsOf, setUpDom, type DomTeardown } from '../support/dom'
 
@@ -153,18 +153,57 @@ describe('a connected bucket', () => {
    * one thing it is for.
    */
   it('draws what it cannot open, dimmed, with the reason on it', async () => {
-    serve(listing([], [['collections/notes.txt', 10], ['collections/map.mcool', 10]]))
+    serve(listing([], [['collections/notes.md', 10], ['collections/map.mcool', 10]]))
     writeScopes([scope()])
     const { el } = card()
 
     await vi.waitFor(() => expect(all(el, '.folder-entry')).toHaveLength(2))
     const inert = all(el, '.folder-entry-inert')
     expect(inert).toHaveLength(1)
-    expect(inert[0].textContent).toContain('notes.txt')
+    expect(inert[0].textContent).toContain('notes.md')
     expect(inert[0].getAttribute('title')).toContain('Not a format this viewer opens')
     // No verbs on a row that cannot be loaded: a verb offered and refused is
     // worse than no verb.
     expect(all(inert[0], '.row-verb')).toHaveLength(0)
+  })
+
+  /**
+   * And offers what it can, the kinds the router had not been taught among
+   * them: a model, a loop table whose name says only `.tsv`, and a workspace —
+   * which is tabs rather than a file, so its row carries the new-session mark
+   * and nothing to add it to.
+   */
+  it('offers a model, a text table and a workspace, each with its verbs', async () => {
+    serve(
+      listing(
+        [],
+        [
+          ['collections/model.pdb', 10],
+          ['collections/loops.tsv', 10],
+          ['collections/session.json', 10],
+        ],
+      ),
+    )
+    writeScopes([scope()])
+    const { el } = card()
+
+    await vi.waitFor(() => expect(all(el, '.folder-entry')).toHaveLength(3))
+    expect(all(el, '.folder-entry-inert')).toHaveLength(0)
+    const verbs = (name: string): string[] => {
+      const row = all<HTMLElement>(el, '.folder-entry-file').find((node) => node.textContent?.includes(name))
+      return all<HTMLButtonElement>(row!, '.row-verb').map((node) => node.title)
+    }
+    expect(verbs('model.pdb')).toEqual([
+      'Add model.pdb to this tab, as a 3D model in a cell of its own.',
+      'Open model.pdb in a new tab — the one in front is left as it is.',
+    ])
+    expect(verbs('loops.tsv')[0]).toBe('Add loops.tsv to this tab, as a track.')
+    expect(verbs('session.json')).toEqual(['Open session.json — a saved session — as its own tab.'])
+    // …and the workspace does not drag, as a store's workspace row does not:
+    // it is tabs, with nowhere a drop could aim them.
+    const draggable = (name: string): boolean =>
+      all<HTMLElement>(el, '.folder-entry-file').find((node) => node.textContent?.includes(name))?.draggable ?? false
+    expect([draggable('model.pdb'), draggable('loops.tsv'), draggable('session.json')]).toEqual([true, true, false])
   })
 
   it('offers a BAM, and explains the index sitting beside it', async () => {
@@ -316,6 +355,58 @@ describe('dragging a row', () => {
     const drop = new window.Event('drop') as DragEvent
     Object.defineProperty(drop, 'dataTransfer', { value: { getData: () => '' } })
     expect(await readFileDrag(drop)).toBeNull()
+  })
+
+  /**
+   * A store row travels under the same type (§24.2), so every target that
+   * takes a Files row takes it — and by a token, never by its address, so a
+   * drag this window did not start opens nothing.
+   */
+  it('carries a store row by a token, resolved only for the drag this window started', async () => {
+    const transferOf = () => {
+      const data = new Map<string, string>()
+      return {
+        data,
+        transfer: {
+          effectAllowed: '',
+          setData: (type: string, value: string) => void data.set(type, value),
+          getData: (type: string) => data.get(type) ?? '',
+        },
+      }
+    }
+    const event = (type: string, transfer: unknown): DragEvent => {
+      const made = new window.Event(type) as DragEvent
+      Object.defineProperty(made, 'dataTransfer', { value: transfer })
+      return made
+    }
+    const picked: PickedFile = {
+      uri: 'https://data.example/a.bw',
+      source: { kind: 'remote', url: 'https://data.example/a.bw' },
+      name: 'HFF CTCF',
+    }
+    const first = transferOf()
+    let taken = 0
+    writePickedDrag(event('dragstart', first.transfer), picked, () => taken++)
+    expect(first.data.get(FILE_DRAG_TYPE) ?? '').not.toContain('data.example')
+    // The address is the plain-text half, for other applications.
+    expect(first.data.get('text/plain')).toBe(picked.uri)
+    // Nothing is noted for a drag still in the air…
+    expect(taken).toBe(0)
+    expect(await readFileDrag(event('drop', first.transfer))).toBe(picked)
+    // …and the row's shelf is, the moment a target takes it.
+    expect(taken).toBe(1)
+
+    // A payload naming a drag this window never started, or an address of its own.
+    const forged = (payload: object): DragEvent =>
+      event('drop', { getData: () => JSON.stringify(payload) })
+    expect(await readFileDrag(forged({ held: 'drag-999', name: 'x.cool' }))).toBeNull()
+    expect(await readFileDrag(forged({ held: 'x', uri: 'https://elsewhere.example/x.cool' }))).toBeNull()
+
+    // One hand: a second drag replaces the first, whose token then names nothing.
+    const second = transferOf()
+    writePickedDrag(event('dragstart', second.transfer), { ...picked, uri: 'https://data.example/b.bw' })
+    expect(await readFileDrag(event('drop', first.transfer))).toBeNull()
+    expect((await readFileDrag(event('drop', second.transfer)))?.uri).toBe('https://data.example/b.bw')
   })
 })
 

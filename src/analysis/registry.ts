@@ -23,6 +23,7 @@
  */
 
 import { CHROMOSIGHT_TASK } from "./tasks/chromosight";
+import { HICCUPS_TASK } from "./tasks/hiccups";
 import { devFeature } from '../state/devFeatures';
 import { CELL_QC_TASK } from "./tasks/cellqc";
 import { HICREP_TASK } from "./tasks/hicrep";
@@ -76,6 +77,11 @@ export const TASKS: readonly AnalysisTask[] = [
   // set — is what the pileup under it takes as input. Reproducibility and the
   // pileup close the card: both read the matrix against something else, another
   // map in one case and a set of places in the other.
+  //
+  // Detection is two rows, the narrower question first: *loop calling*
+  // (HiCCUPS) asks of every pixel whether it is a dot, and only that, where
+  // *pattern detection* (chromosight) matches any of five shapes, a loop among
+  // them — so a reader looking for loops meets the caller built for them first.
   COVERAGE_TASK,
   CIS_TRANS_TASK,
   CELL_QC_TASK,
@@ -90,6 +96,7 @@ export const TASKS: readonly AnalysisTask[] = [
   // with their secondary diagonal divided out: how strongly the two arms touch
   // is the question that makes the arm-frame expectation necessary at all.
   INTERARM_TASK,
+  HICCUPS_TASK,
   CHROMOSIGHT_TASK,
   HICREP_TASK,
   APA_TASK,

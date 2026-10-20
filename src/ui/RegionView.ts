@@ -1011,6 +1011,7 @@ export class RegionView {
     if (this.props.region === '') return
     this.panel.setBusy(true)
     this.problem.classList.add('hidden')
+    this.panel.noteRendered(null)
     try {
       const declared = this.circularNames()
       const parsed: ParsedRange = await this.props.client.request<'range'>({
@@ -1122,10 +1123,13 @@ export class RegionView {
           err.code === 'bad-range' ||
           err.code === 'dense-too-large')
       ) {
-        this.panel.setBusy(false)
         this.problem.textContent = err.message
         this.problem.classList.remove('hidden')
         this.matched.textContent = ''
+        // Before the veil comes down, so the report the page makes once it has
+        // says what is on screen: the sentence, over the picture that was there.
+        this.panel.noteRendered('error', err.message)
+        this.panel.setBusy(false)
         return
       }
       this.props.onError(err)

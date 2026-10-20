@@ -1,45 +1,46 @@
 # chromosomix
 
-A unified genome browser for `.*cool`, `.scool`, `.hic`, `.pairs`, HiC-Pro, and other similar formats, 
-and other genome-wide data formats like bigWig, bedGraph, GTF, FASTA, `.2bit`, BAM, VCF, barChart, 
-genePred, bedMethyl, cytoBand ideograms, RNA-seq splice junctions and UCSC's formats, and 3D chromatin 
-models beside them. 
-The browser is a single-page application that runs entirely in the browser, with no 
-server-side processing or data upload.
+[![Web app](https://img.shields.io/badge/web%20app-chromosomix.app-1f6feb)](https://chromosomix.app/)
+[![Tests](https://github.com/js2264/chromosomix/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/js2264/chromosomix/actions/workflows/test.yml)
+[![Deploy](https://github.com/js2264/chromosomix/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/js2264/chromosomix/actions/workflows/deploy.yml)
+[![npm](https://img.shields.io/npm/v/chromosomix?logo=npm)](https://www.npmjs.com/package/chromosomix)
+[![Release](https://img.shields.io/github/v/release/js2264/chromosomix?logo=github)](https://github.com/js2264/chromosomix/releases)
+[![Validation](https://img.shields.io/badge/validation-vs%20reference%20tools-2ea44f)](https://chromosomix.app/validation/)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
+
+**A unified genome browser for multi-dimensional genomic data.** Chromatin contact maps, genome tracks and 3D models, side by side, straight from your files.
+
+chromosomix launches in about a second and reads your data where it lives, on your own disk or in the cloud. No server, no preprocessing, no installation, no account, and it works offline. Most formats open as they are: `.*cool`, `.hic`, HiC-Pro, `.pairs`, bigWig, BED, BAM, FASTA/`.2bit`, 3D structures and more.
+
+<p align="center">
+  <img src="docs/screenshot.png" alt="chromosomix: a yeast micro-C contact map with its loop calls, beside sequence, gene, ATAC and Pol II tracks" width="100%">
+</p>
 
 ## Main features 
 
 - Support for all genomic data types: 
   - Supports 1D genomic formats: bigWig, bigBed, BED, bedGraph, wig, GTF/GFF3, FASTA (+`.fai`), `.2bit`, BAM, VCF, barChart/bigBarChart, genePred/refFlat/bigGenePred, bedMethyl/bigMethyl, chrom.sizes, ...
-  - Draws chromosome ideograms from UCSC's cytoBand/cytoBandIdeo (which also declare the genome's lengths), and RNA-seq splice junctions — STAR's `SJ.out.tab`, junction BEDs from regtools/TopHat, leafcutter's `.junc` — as sashimi arcs; a spliced BAM's coverage carries its own arcs, counted from its reads.
-  - Supports 2D genomic formats: `.*cool`, `.hic`, HiC-Pro, `pairs(.gz)`, ..., at every resolution the file stores and at any whole multiple of one that it does not, summed on the fly; balanced with the weights the file carries (none are ever invented — a map binned from a `.pairs` is raw counts). Also supports interaction formats: BEDPE, and UCSC's `interact`/`bigInteract` and `longrange`/longTabix — drawn as arcs over the contact map and as their own lane in the 1D browser.
-  - Supports 3D genomic formats: WashU's g3d (text or binary), `.3dg`, and `bed3d`, drawn in 3D and synchronized with the maps and tracks view. 
+  - Supports 2D genomic formats: `.*cool`, `.hic`, HiC-Pro, `pairs(.gz)`, ..., at every resolution the file stores. Also supports interaction formats: BEDPE, and UCSC's `interact`/`bigInteract` and `longrange`/longTabix — drawn as arcs over the contact map and as their own lane in the 1D browser.
+  - Supports 3D genomic formats: WashU's g3d (text or binary), `.3dg`, and `bed3d`, drawn in 3D and synchronized with the maps and tracks view. Every model also leaves as a PDB for PyMOL, ChimeraX and the other molecular viewers, a chain per chromosome and bonds along the fibre, and reads back here. 
 
-- Side by side: contact maps, 1D browsers and 3D models open as the cells of a deck, panned and zoomed together, and several sessions stay open at once, one tab each. The maps of a deck can be drawn to one number of contacts — subsampled exactly, or oversampled through Boost-HiC — so that they compare like for like.
+- Perform analyses directly in the browser:
+  - 1D analysis tasks: peak calling from a coverage track (yapc, with IDR between replicates), motif search, base composition and GC skew, the origin and terminus of replication, metaplots, track correlation, FRiP over a feature set, signal by group, interval overlap with a shuffle null, ...
+  - 2D analysis tasks: P(s) (and its four pair orientations), scalogram, diamond insulation, directionality index, HiC score, coverage, cis/trans per chromosome, virtual 4C, compartments annotation and saddle plot, the alignment of a bacterial chromosome's two arms, loops and borders detection, APA, loop ranking, ...
+  - 3D analysis tasks: build a 3D model from the contact map (pastis-NB or ShRec3D), compare a 3D model with the contact map, and turn a 3D model into tracks.
 
-- Circular chromosomes: a sequence whose ends touch is proposed as circular when the file first opens, and once declared, a window can be typed across its origin and every analysis reads it as a circle. A bacterial chromosome's origin of replication can be declared, or found from its sequence, and the map then read against both of its diagonals, or as the decay between its two arms alone.
+- Serverless browser & CLI-based: there is no upload, no required preprocessing step and no backend of any kind — the viewer is static files that read standard genome-wide formats directly. Every analysis can be run **interactively**, in the browser, or **programmatically**, with the `chromosomix` command line in a script or a pipeline: the same tasks, with the same parameters, producing the same results. A bottom Console panel in the browser records every run and reports the `chromosomix` command that repeats it.
 
-- Dedicated browser panels, five columns around the picture: 
-  - Files panel: the local folders, buckets, Google Drive and Dropbox places this window is connected to, and what is in them.
+- Side by side: contact maps, 1D browsers and 3D models open as the cells of a deck, panned and zoomed together, and several sessions stay open at once, one tab each.
+
+- Dedicated browser panels, four around the picture:
   - General panel: the file itself — its attributes, its chromosomes (or a metagenome's genomes and contigs), a minimap of the genome and the metadata it stores.
   - Aesthetics panel: to customize scales, color map, normalization, track layout, grouping, ...
   - Annotations panel, supporting linear tracks, 1D and 2D manual annotations, bookmarks and synthetic annotations.
-  - Analysis panel, with exportable results: 
-    - for 1D analysis tasks: peak calling from a coverage track (yapc, with IDR between replicates), motif search, base composition and GC skew, the origin and terminus of replication, metaplots, track correlation, FRiP over a feature set, signal by group, interval overlap with a shuffle null, ...
-    - for 2D analysis tasks: P(s) (and its four pair orientations), scalogram, diamond insulation, directionality index, HiC score, coverage, cis/trans per chromosome, virtual 4C, compartments annotation and saddle plot, the alignment of a bacterial chromosome's two arms, loops and borders detection, APA, loop ranking, ...
-    - for 3D analysis tasks: build a 3D model from the contact map (pastis-NB or ShRec3D), compare a 3D model with the contact map, and turn a 3D model into tracks.
-    - for comparing what is on screen: HiCRep reproducibility across the maps in a deck, stratum by stratum and pooled.
-    - for single cells: per-cell contact QC over an `.scool`, with the cell-cycle phasing scatter feeding back into the Cells table.
+  - Analysis panel: runs the analyses above on what is on screen, with exportable results.
 
 - Virtual file system: The browser runs entirely in the client, with no server-side processing or data upload. It uses a virtual file system to access local files, remote files, and cloud storage: 
   - Cloud-based file access: Open files directly from any object store that serves byte ranges with CORS (e.g. S3, Cloudflare R2, Google Cloud Storage, or any HTTP server that supports range requests), from Dropbox and Google Drive share links, and private Google Drive folder or Dropbox.
   - Stores: several pre-configured remote data stores are available — the lab's own figures, IGV's genomes, 4DN open data, ENCODE, DNA Zoo and Roadmap — and so is any UCSC track hub with a `hub.txt` file. The user can also setup their own store by providing a structured JSON file describing the store and its data.
-
-- Serverless: There is no upload, no required preprocessing step, no backend of any kind. The viewer is static files, and reads data directly from standard genome-wide formats. 
-
-- CLI-based analysis: The same analysis tasks available in the Analysis panel can be run from a command line with `chromosomix`, with the same parameters and producing the same results. A bottom Console panel in the genome browser records every action and reports the corresponding `chromosomix` command.
-
-- Dev features: what is still being built ships on `main` but stays out of sight until **dev features** is switched on in *About this viewer* — today the multi-genome `.metacool`/`.mmetacool` containers (written by metacooler, a separate project) and their metagenome tasks, editing the reference a map was built against, and the dot plot of two sequences against each other. `chromosomix` has no such switch: it lists and runs every task, the dev ones included.
 
 ## Philosophy
 
@@ -68,23 +69,6 @@ The app is then available offline as a desktop app as a PWA (Progressive Web App
 ### Install as a desktop app
 
 To install the app as a desktop app, you can fetch the latest release from [https://github.com/js2264/chromosomix/releases](https://github.com/js2264/chromosomix/releases). Builds are available for macOS (`.dmg`, Intel and Apple silicon) and Linux (`AppImage`, `.deb`); the Windows installer is temporarily not built, and on Windows the static HTML page below needs no installer at all. The app is then available offline as a desktop app.
-
-### Install with Node, from a local machine
-
-Node 22.12 or later needs to be installed on the local machine.
-
-```bash
-node --version
-```
-
-Then the repository can be cloned and the dependencies installed:
-
-```bash
-git clone https://github.com/js2264/chromosomix
-cd chromosomix
-npm install
-npm run dev
-```
 
 ### From a static HTML file
 
@@ -122,7 +106,32 @@ The text below is a live version of the above `<iframe>` (it will not work on Gi
 
 ## Using the chromosomix analysis CLI
 
-Thirty-one analysis tasks can be executed programatically through the CLI, with the same parameters and producing the same results as the Analysis panel interactively. This can be used in a pipeline or a script. To install the CLI, run the following commands in a terminal:
+Thirty-two analysis tasks can be executed programatically through the CLI, with the same parameters and producing the same results as the Analysis panel interactively. This can be used in a pipeline or a script.
+
+### Installing the CLI
+
+The CLI is published to npm with every release. It needs Node 22.12 or later on the machine:
+
+```bash
+node --version
+```
+
+Then install the `chromosomix` command globally, at the latest release:
+
+```bash
+npm install -g chromosomix
+```
+
+To pin a release instead, which is what a pipeline or a methods section should do, name its version; `npx` runs a given version without installing anything:
+
+```bash
+npm install -g chromosomix@<version>
+npx chromosomix@<version> insulation sample.cool --window 10 --out results/
+```
+
+`chromosomix --version` prints the version on its first line, then the Node it runs on and the versions of the two libraries that read every map and track, `h5wasm` and `@gmod/bbi`, as they are installed.
+
+To run the CLI from a clone instead, for example to try a change before it is released:
 
 ```bash
 git clone https://github.com/js2264/chromosomix
@@ -131,7 +140,9 @@ npm install
 npm run build:cli && npm link
 ```
 
-This will install the `chromosomix` command globally. You can then run the following command to see the available tasks and their parameters:
+### Running tasks
+
+Once it is installed, run the following command to see the available tasks and their parameters:
 
 ```bash
 chromosomix tasks
@@ -246,6 +257,18 @@ chromosomix tasks
 ##       --sequences  sequences
 ##       --band (default 2)  band
 ##       --armWindow (default 50)  window along the arms
+##       --no-balance  read the raw counts (balanced by default where the file carries weights)
+## 
+## loops
+##     Loop calling
+##       --sequences  sequences
+##       --outer (default 5)  outer half-width
+##       --inner (default 2)  inner half-width
+##       --maxSeparation (default 1000)  furthest from the diagonal
+##       --fdr (default 0.1)  false discovery rate
+##       --lambdaBins (default 40)  λ-chunks
+##       --clusteringRadius (default 2)  clustering radius
+##       --filter (default true)  enrichment filter
 ##       --no-balance  read the raw counts (balanced by default where the file carries weights)
 ## 
 ## chromosight
@@ -462,7 +485,8 @@ chromosomix tasks
 
 Each analysis is held to the package it reproduces — cooltools, coolpuppy, chromosight, deepTools,
 bedtools and a dozen others — on public data, command for command, in a notebook rendered with every
-release: <https://chromosomix.app/validation/>, and how long each command takes beside its
+release: <https://chromosomix.app/validation/>, with every number its figures draw in one table beside
+it, <https://chromosomix.app/validation/validation.txt>; and how long each command takes beside its
 reference, <https://chromosomix.app/timings/>.
 
 Every task writes its results where `--out` points, each named after the file it came from up to
@@ -518,9 +542,6 @@ chromosomix metaplot --tracks ATAC.bw --features peaks.narrowPeak --out results/
 chromosomix peaks --signal ChIP.bw --out results/
 chromosomix composition --sequence ref.fa.gz --out results/
 
-# Reproducibility compares the file with every map --against names.
-chromosomix hicrep rep1.mcool::resolutions/5000 --against rep2.mcool::resolutions/5000 --maxDistance 400
-
 # Compartments phased by GC content read the reference under --sequence.
 chromosomix compartments sample.cool --sequence ref.fa.gz --phaseSequence ref.fa.gz
 
@@ -542,15 +563,14 @@ chromosomix circular ecoli.mcool::/resolutions/5000
 chromosomix interarm ecoli.mcool::/resolutions/5000 --circular NC_000913.3 \
   --origin NC_000913.3:3925744 --out results/
 
-# A 3D model built from the map, written as a bed3d the viewer opens beside it.
+# A 3D model built from the map, written as a bed3d the viewer opens beside it,
+# and as a PDB for PyMOL.
 chromosomix reconstruct3d ecoli.mcool::/resolutions/20000 --out results/
 
 # What the session set from the picture, as flags: the score column a
-# .metacool is drawn from, the sequences declared circular, the cells of an
-# .scool that were ticked. The console writes them whenever they differ from
-# the defaults (count, none, every cell).
+# .metacool is drawn from and the sequences declared circular. The console
+# writes them whenever they differ from the defaults (count, none).
 chromosomix insulation sample.metacool --value balanced_by_depth --circular pCEN,p2u
-chromosomix cellqc cells.scool --cell c01,c02,c07 --cells selected
 
 # A .pairs is binned first, at a resolution you name — the shell's answer to
 # the browser's dialog. `--pairs` above is a BEDPE of features; the contact
@@ -568,4 +588,25 @@ The log is kept in your own browser for seven days or five hundred lines, whiche
 
 ## Licence
 
-MIT.
+Copyright © 2026 Jacques Serizay.
+
+chromosomix is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License, in [`LICENSE`](LICENSE), for more details.
+
+It is under the GPL because its peak calling is ported from yapc (GPL-3.0) and the IDR test it runs across replicates from IDR (GPL-2.0 or later), and a translation of GPL code can only be distributed under the GPL.
+
+Every build also carries the work of other projects, each under its own licence, and the app names them in **About → Licences**:
+
+- **Libraries compiled into the bundles:** three.js (MIT); echarts (Apache-2.0) with zrender (BSD-3-Clause) and tslib (0BSD); h5wasm (NIST's notice, with the BSD-style licence of the HDF5 library inside it); and `@gmod/bbi` with its dependencies `generic-filehandle2`, `@gmod/abortable-promise-cache` and `@jbrowse/quick-lru` (all MIT).
+- **Code ported from reference implementations**, where an analysis follows its reference function for function so that it gives the same numbers: yapc (GPL-3.0) and IDR (GPL-2.0 or later) for peak calling; cooltools (MIT) for loop calling and insulation's peak prominence; cooler (BSD-3-Clause) for region strings; chromosight (MIT) for pattern detection; SciPy (BSD-3-Clause) with the cephes functions its `xsf` carries for the Poisson tail and `fminbound`; NumPy (BSD-3-Clause, and NCSA or BSD-3-Clause for `numpy.random`) for its pairwise sums and its binomial and hypergeometric samplers; scikit-learn (BSD-3-Clause) for BIRCH; Boost-HiC (MIT); and fdlibm (Sun Microsystems' notice) for the error function.
+- **Material copied into the source by a generator:** Lucide (ISC), Simple Icons (CC0), chromosight's kernels (MIT), matplotlib's colour tables (the Matplotlib licence) and ColorBrewer's schemes (Apache-2.0).
+
+All of them are compatible with version 3 of the GPL. Each build lists what it carries and reproduces every one of those licences in full, after chromosomix's own, in `THIRD-PARTY-NOTICES.txt`, beside its `index.html`:
+
+- the web app: <https://chromosomix.app/THIRD-PARTY-NOTICES.txt>;
+- the npm package: `dist/` for the viewer, `dist-cli/` for the command;
+- the desktop app: inside the application, beside the licences of Electron and Chromium that every installer ships;
+- the standalone HTML page: in a comment at the end of the file.
+
+The upstream texts that are not in an npm package are kept under [`licenses/`](licenses/), and so is the MIT licence `generic-filehandle2` declares but does not ship.
+
+**Trademarks.** The logos on the data store tiles (IGV, 4DN, ENCODE, DNA Zoo, UCSC and Roadmap Epigenomics) are those projects' own published marks, and the GitHub, Google Drive and Dropbox marks in the interface are their owners' trademarks. Each is shown only to name the store or service it stands for. None of them is covered by chromosomix's licence or by the notices above, and their use implies no endorsement of chromosomix by their owners.

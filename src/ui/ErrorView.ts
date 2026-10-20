@@ -28,6 +28,7 @@
 import { ViewerError, type ErrorCode } from '../errors'
 import { devFeature } from '../state/devFeatures'
 import { button, el } from './dom'
+import { Surface } from '../perf/rendered'
 import { GOOGLE_HOSTS, GOOGLE_SIGN_IN_AVAILABLE, googleState, signIn } from '../auth/google'
 
 export interface ErrorViewProps {
@@ -66,6 +67,16 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
     advice: [
       'The first bytes are not an HDF5 signature, so it is not a cooler, a metacool or an mcool.',
       'If it is compressed (.gz, .zip), decompress it first — HDF5 is read in place and cannot be decompressed on the fly.',
+    ],
+  },
+  // A text file pressed or dropped under a name that says only *text* — a
+  // `.txt`, a `.tsv` — whose rows no reader took. The map door's refusal is
+  // true of it and is about HDF5, which is not what the reader opened.
+  'not-a-table': {
+    title: 'Text, but not a table this viewer reads',
+    advice: [
+      'A text file is read by its rows whatever its name: BED, bedGraph, BEDPE, GTF, VCF, a chrom.sizes, a cytoBand and the other tables a track comes in, tab- or space-separated, one feature to a line.',
+      'A table with a header row is read when its first three columns are a sequence, a start and an end, or when it names chrom1, start1, end1, chrom2, start2 and end2.',
     ],
   },
   'not-a-cooler': {
@@ -421,6 +432,10 @@ export class ErrorView {
       el('div', { class: 'error-actions' }, ...actions),
       google !== null && google.offer !== null ? signInError : null,
     )
+    // A refusal is what is on screen in place of the picture, and the page's
+    // report of a finished picture says so rather than `drawn` (`perf/rendered.ts`).
+    // Never forgotten by hand: the page drops it once this element has left.
+    new Surface(this.el, () => ({})).note('error', error instanceof Error ? error.message : String(error))
   }
 }
 
