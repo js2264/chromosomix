@@ -25,6 +25,10 @@ import { KEYS, keyedButton, withKey } from './commands'
 import { SearchBox, locusPlaceholder } from './SearchBox'
 import { VirtualTable, type ColumnDef, type VirtualTableOptions } from './VirtualTable'
 
+/** The circle button's two answers to "what will this draw" (§7.6). */
+const CIRCLE_EVERY = 'Every genome as a circle: arcs as long as the genomes, chords as wide as their contacts'
+const CIRCLE_TICKED = 'The ticked genomes as a circle: arcs as long as the genomes, chords as wide as their contacts'
+
 /** Columns the format guarantees, in the order they are shown. */
 const CORE_ORDER = ['name', 'length', 'n_contigs', 'n_bins']
 
@@ -68,6 +72,11 @@ const CORE_LABELS: Record<string, { label: string; title: string }> = {
 
 export interface GenomesTableOptions {
   data: GenomesResult
+  /**
+   * The genomes by name in the reader's order (§7.6), which is the table's own
+   * order wherever no column is sorted; absent, the file's.
+   */
+  order?: readonly string[]
   /** Restores the filters, search and sort a user left behind (`state/UiMemory`). */
   persistence?: VirtualTableOptions['persistence']
   onOpenGenome(name: string): void
@@ -88,6 +97,13 @@ export interface GenomesTableOptions {
    * when they wonder whether the whole thing can be seen at once.
    */
   onOpenWhole(): void
+  /**
+   * Open the ticked genomes as a circle, or every genome where none is ticked
+   * (§7.6) — the door to the circle from the screen a reader picks genomes on.
+   *
+   * Absent where the circle is not offered (§29.2), and then there is no button.
+   */
+  onOpenCircle?(names: string[]): void
   /**
    * Go straight to a window, without opening the genome that contains it.
    *
@@ -125,10 +141,20 @@ export class GenomesTable {
       title: 'Untick everything, including rows the filters are hiding',
     })
     none.disabled = true
+    // The circle, last, beside the whole metagenome: it opens what is ticked or,
+    // with nothing ticked, everything — so it is never greyed, and its tooltip
+    // says which of the two a press will draw.
+    const onOpenCircle = options.onOpenCircle
+    const circle =
+      onOpenCircle === undefined
+        ? null
+        : button('circle →', () => onOpenCircle(this.table.selection.map((row) => this.names[row])), {
+            title: CIRCLE_EVERY,
+          })
 
     this.table = new VirtualTable({
       columns,
-      rows: Array.from(data.display),
+      rows: arrangedRows(data, this.names, options.order),
       selectable: true,
       searchKeys: ['name'],
       // `filter`, not `search`: this box narrows the list under it, and `search`
@@ -147,6 +173,7 @@ export class GenomesTable {
         // does not: the Cells table beside this one has always said
         // `show <name> →` for a single tick, and `show 1 selected →` was this
         // table answering the same gesture with arithmetic.
+        if (circle !== null) circle.title = rows.length === 0 ? CIRCLE_EVERY : CIRCLE_TICKED
         show.textContent =
           rows.length === 1
             ? `show ${this.names[rows[0]]} →`
@@ -164,6 +191,7 @@ export class GenomesTable {
         title: withKey('Every genome at once, as one map', KEYS.whole),
       }),
     )
+    if (circle !== null) this.table.addToolbarItem(circle)
 
     this.locus = new SearchBox({
       // One builder for every locus box in the application (§26.6), and the
@@ -351,4 +379,18 @@ function columnDigits(column: ArrayLike<number>): number | null {
     if (point >= 0) digits = Math.max(digits, text.length - point - 1)
   }
   return digits
+}
+
+/**
+ * The displayed rows in the reader's order (§7.6): the rows it names, as it
+ * names them, then any it does not, in the file's order.
+ */
+function arrangedRows(data: GenomesResult, names: readonly string[], order: readonly string[] | undefined): number[] {
+  const rows = Array.from(data.display)
+  if (order === undefined || order.length === 0) return rows
+  const rank = new Map(order.map((name, index) => [name, index]))
+  return rows
+    .map((row, index) => ({ row, index, rank: rank.get(names[row]) ?? Number.POSITIVE_INFINITY }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map((entry) => entry.row)
 }

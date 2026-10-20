@@ -4109,8 +4109,8 @@ p {
 
 /* No focus ring on the pictures, written out so a UA default cannot put one back.
 
-   All three take focus so they can receive keys — the map and the browser pan,
-   a table scrolls — and for a while they drew a 2px accent ring on their own
+   All four take focus so they can receive keys — the map, its circle and the
+   browser pan, a table scrolls — and for a while they drew a 2px accent ring on their own
    edge pixels when they had it. It did not stay a keyboard reader's cue:
    `:focus-visible` also matches a focus the app hands over after a typed locus
    and Enter, so the ring appeared around the map and the browser after the
@@ -4118,6 +4118,7 @@ p {
    part of the figure. The picture has a frame of its own already. */
 .heatmap-canvas:focus-visible,
 .browser-canvas:focus-visible,
+.circle-canvas:focus-visible,
 .tviewport:focus-visible {
   outline: none;
 }
@@ -4276,6 +4277,145 @@ p {
 .heatmap-wrap:hover .map-hint,
 .browser-stage:hover .browser-hint {
   opacity: 1;
+}
+
+/* --- the map drawn round (§7.6) --------------------------------------------
+
+   The circle stands where the square stands, in the panel's body, and the two
+   are never on screen together: the square — its canvas, its lanes, its drop
+   rectangles — is set aside whole while the circle is drawn and comes back as it
+   was. Sized as the square is, by the window's height and the column's width,
+   but with no stacks to make room for: the tracks are rings inside it. */
+.circle-host {
+  display: none;
+  /* The circle is as tall as the window allows and no taller than the column
+     is wide, which is a question about this box's width — asked of it as a
+     container, as the 3D card asks of its own. */
+  container-type: inline-size;
+}
+
+.panel.is-circle > .panel-body > .panel-grid {
+  display: none;
+}
+
+.panel.is-circle > .panel-body > .circle-host {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+/* The whole width of the column, so the key can stand beside the circle rather
+   than shrink it: the circle is centred in it, as large as the shorter side. */
+.circle-wrap {
+  --circle-budget: clamp(20rem, calc(100vh - 14rem - var(--tabstrip-h)), 60rem);
+  position: relative;
+  width: 100%;
+  height: min(var(--circle-budget), 100cqi);
+}
+
+.circle-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* A press is the start of a pan, a pinch or a ring carried, none of which
+     the browser may take for a scroll of the page. */
+  touch-action: none;
+}
+
+/* The crosshair's layer: one radial line over the picture, redrawn as the
+   hand moves without redrawing the picture under it. */
+.circle-guide {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+/* The gestures nothing on the picture announces, under the key on hover, as
+   the square says under its key how to zoom into a region. On a card of the
+   page's colour, as the key is drawn on one once the circle is zoomed and runs
+   under them both; its padding taken back by the margin, so the words stand
+   where they would without it. */
+.circle-hint {
+  position: absolute;
+  left: 0;
+  top: 0;
+  margin: -2px -4px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  font-size: var(--step--2);
+  line-height: 1.25;
+  color: var(--text);
+  text-shadow:
+    0 0 2px var(--bg),
+    0 0 2px var(--bg),
+    0 0 3px var(--bg);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.circle-wrap:hover .circle-hint {
+  opacity: 1;
+}
+
+/* The Map card says only what the picture on screen answers to: the square's
+   rows step aside while the circle is drawn, and the circle's only row stays
+   away while it is not. */
+.controls-card.is-circle .square-only,
+.controls-card:not(.is-circle) .circle-only {
+  display: none !important;
+}
+
+/* …and between the circle and the two lines, which share the rest (§7.6): where
+   the rings go is the circle's alone, and the column the genomes are split by
+   is the lines' alone. */
+.controls-card.is-lines .round-only,
+.controls-card:not(.is-lines) .lines-only {
+  display: none !important;
+}
+
+/* The two lines are wider than they are tall: two lines across the column, as
+   tall as their lanes and the ribbons between them need and no taller than
+   seven tenths of its width. */
+.circle-wrap.lines-wrap {
+  height: min(var(--circle-budget), 70cqi);
+}
+
+/* What the two lines say where they draw nothing (§7.6): pick a column, or why
+   the one picked leaves a line empty — in the middle of the picture, the
+   `split by` select under the words. */
+.lines-prompt {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 1rem;
+  text-align: center;
+}
+
+.lines-prompt-text {
+  max-width: 28rem;
+  margin: 0;
+  color: var(--text-dim);
+  font-size: var(--step--1);
+  line-height: 1.4;
+}
+
+.lines-prompt .select {
+  min-width: 14rem;
+}
+
+/* The `split by` select and its swap, on one line: the select takes the room. */
+.split-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.3rem;
+  align-items: center;
 }
 
 @media (hover: none) {

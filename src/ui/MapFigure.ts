@@ -61,7 +61,29 @@ export interface FigureHost {
   caption(now: Date): { title: string; detail: string }
   /** What the figure is called, for the name of the file it is saved as. */
   exportName(): string
+  /**
+   * The map drawn round, while it is the picture on screen (§7.6): what a save
+   * and a copy draw instead of the square — the figure is the picture the
+   * reader is looking at. `null` while it is not.
+   */
+  round?(): RoundFigure | null
 }
+
+/**
+ * The circle as a figure: its box and a painter that draws it at a scale from
+ * the context's origin (`CircleView.figure`), and what its caption says
+ * (`MatrixPanel.circleCaption`). The caption is set and the page laid here, as
+ * the square's are.
+ */
+export interface RoundFigure {
+  width: number
+  height: number
+  paint(ctx: CanvasRenderingContext2D, scale: number): void
+  caption(now: Date): { title: string; detail: string }
+}
+
+/** Where a circle's caption starts from the page's left edge, in CSS pixels. */
+const ROUND_CAPTION_LEFT = 12
 
 /** The Export card, and every figure drawn for it. */
 export class MapFigure {
@@ -227,7 +249,8 @@ export class MapFigure {
       // The canvas is drawn *before* the clipboard item is built rather than
       // inside the promise handed to it, because drawing is the part that can
       // throw a message worth showing. What the item waits on is the encode.
-      const canvas = this.exportCanvas(this.exportDpi, now)
+      const round = this.host.round?.() ?? null
+      const canvas = round !== null ? this.roundCanvas(round, this.exportDpi, now) : this.exportCanvas(this.exportDpi, now)
       await copyPngToClipboard(canvasToPng(canvas))
       this.exportStatus.textContent = `copied · ${canvas.width}×${canvas.height} px`
     } catch (err) {
@@ -418,6 +441,78 @@ export class MapFigure {
   }
 
   /** Save the figure. The status line under the row reports what happened. */
+  /**
+   * The circle as one canvas at a resolution, its caption under it — the PNG
+   * and the clipboard's picture of a map drawn round, as {@link exportCanvas}
+   * is the square's.
+   */
+  private roundCanvas(round: RoundFigure, dpi: number, now: Date): HTMLCanvasElement {
+    const scale = scaleForDpi(dpi)
+    const out = document.createElement('canvas')
+    const ctx = out.getContext('2d')
+    if (ctx === null) throw new Error('Could not acquire a 2d context for the export canvas.')
+    const caption = round.caption(now)
+    const lines = getExportPrefs().caption ? captionLines(ctx, caption, Math.max(120, round.width - 2 * ROUND_CAPTION_LEFT)) : []
+    const height = round.height + captionHeightOf(lines)
+    const fits = largestDpiThatFits(round.width, height)
+    if (fits !== null && fits < dpi) {
+      throw new Error(
+        `${dpi} dpi would need a ${Math.round(round.width * scale)}×${Math.round(height * scale)} px ` +
+          `canvas, which is past what a browser will draw. ${fits} dpi is the largest that fits ` +
+          'this figure.',
+      )
+    }
+    out.width = Math.max(1, Math.round(round.width * scale))
+    out.height = Math.max(1, Math.round(height * scale))
+    round.paint(ctx, scale)
+    this.paintCaption(ctx, scale, lines, round.height, ROUND_CAPTION_LEFT)
+    ctx.globalCompositeOperation = 'destination-over'
+    ctx.fillStyle = FIGURE_BACKGROUND
+    ctx.fillRect(0, 0, out.width, out.height)
+    ctx.globalCompositeOperation = 'source-over'
+    return out
+  }
+
+  /** The circle as a vector page: every section, chord, ring and word a path or text. */
+  private async roundVector(round: RoundFigure, now: Date): Promise<Blob> {
+    const measure = document.createElement('canvas').getContext('2d')
+    if (measure === null) throw new Error('Could not measure the caption.')
+    const caption = round.caption(now)
+    const lines = getExportPrefs().caption ? captionLines(measure, caption, Math.max(120, round.width - 2 * ROUND_CAPTION_LEFT)) : []
+    const height = round.height + captionHeightOf(lines)
+    const page = new VectorPage(round.width, height)
+    page.ctx.setTransform(1, 0, 0, 1, 0, 0)
+    page.ctx.fillStyle = FIGURE_BACKGROUND
+    page.ctx.fillRect(0, 0, round.width, height)
+    round.paint(page.ctx, 1)
+    this.paintCaption(page.ctx, 1, lines, round.height, ROUND_CAPTION_LEFT)
+    return page.toBlob({ title: caption.title, created: now })
+  }
+
+  /** A caption's lines under a figure, from `top`, as {@link paintFigure} writes the square's. */
+  private paintCaption(
+    ctx: CanvasRenderingContext2D,
+    scale: number,
+    lines: CaptionLine[],
+    top: number,
+    left: number,
+  ): void {
+    if (lines.length === 0) return
+    const palette = readCanvasPalette(this.canvas)
+    ctx.setTransform(scale, 0, 0, scale, 0, 0)
+    ctx.textBaseline = 'alphabetic'
+    ctx.textAlign = 'left'
+    let y = top + scaleLength(CAPTION_TOP)
+    for (const line of lines) {
+      const height = scaleLength(line.strong ? CAPTION_TITLE_LINE : CAPTION_DETAIL_LINE)
+      ctx.font = scaleFont(line.strong ? CAPTION_TITLE_FONT : CAPTION_DETAIL_FONT)
+      ctx.fillStyle = palette.labelColor
+      ctx.fillText(line.text, left, y + height - 4)
+      y += height
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+  }
+
   private async save(format: ExportFormat): Promise<void> {
     const now = new Date()
     // The stamp is in the name because two exports of the same view are the
@@ -431,10 +526,14 @@ export class MapFigure {
     if (target === null) return
     this.exportStatus.textContent = `saving ${target.name}…`
     try {
+      // The picture on screen, whichever of the two it is.
+      const round = this.host.round?.() ?? null
       const blob =
         format === 'png'
-          ? await canvasToPng(this.exportCanvas(this.exportDpi, now))
-          : await this.vectorFigure(now)
+          ? await canvasToPng(round !== null ? this.roundCanvas(round, this.exportDpi, now) : this.exportCanvas(this.exportDpi, now))
+          : round !== null
+            ? await this.roundVector(round, now)
+            : await this.vectorFigure(now)
       await target.write(blob)
       this.exportStatus.textContent = `${target.name} · ${fmt.bytes(blob.size)}`
     } catch (err) {

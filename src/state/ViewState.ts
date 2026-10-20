@@ -67,6 +67,11 @@ const KEY_ORDER = [
   'smooth',
   'op',
   'flip',
+  'circle',
+  'sections',
+  'lines',
+  'split',
+  'top',
 ] as const
 
 /** The keys a patch may remove; `uri` and `view` always exist. */
@@ -96,6 +101,11 @@ const OPTIONAL_KEYS = [
   'smooth',
   'op',
   'flip',
+  'circle',
+  'sections',
+  'lines',
+  'split',
+  'top',
 ] as const
 
 /**
@@ -292,6 +302,22 @@ export function parseViewState(hash: string): ViewState | null {
   const flip = raw.get('flip')
   if (flip !== undefined) state.flip = flip === '1' || flip === 'true'
 
+  // The circle (§7.6), on the turn's terms: only a `true` draws it, and a view
+  // that cannot be drawn round ignores it rather than writing the refusal back.
+  const circle = raw.get('circle')
+  if (circle !== undefined) state.circle = circle === '1' || circle === 'true'
+  // Its cut: `contigs` or nothing, so a link from another build lands on genomes.
+  if (raw.get('sections') === 'contigs') state.sections = 'contigs'
+  // The two lines (§7.6), on the circle's terms, and the column and the value
+  // they are drawn by: any text, which the view checks against the file's table
+  // — a column it does not have, or no longer two values, asks again.
+  const lines = raw.get('lines')
+  if (lines !== undefined) state.lines = lines === '1' || lines === 'true'
+  const split = raw.get('split')
+  if (split !== undefined && split !== '') state.split = split
+  const top = raw.get('top')
+  if (top !== undefined && top !== '') state.top = top
+
   // A clip bound may legitimately be negative — `log10` of a balanced matrix is
   // negative throughout — so the only thing rejected here is a non-number.
   const vmin = raw.get('vmin')
@@ -398,7 +424,7 @@ export function differsOnlyInScale(a: ViewState, b: ViewState): boolean {
  * force decides how the panel is built — the split keeps each file's block and
  * a second key, a ratio neither — and a panel is built once, at construction.
  */
-export const DERIVED_KEYS = ['oe', 'arms', 'smooth', 'flip'] as const
+export const DERIVED_KEYS = ['oe', 'arms', 'smooth', 'flip', 'circle', 'sections', 'lines', 'split', 'top'] as const
 
 /**
  * The keys that name what is on screen **beside** this view (§16).
@@ -470,7 +496,7 @@ export const COMPANION_KEYS = ['maps', 'uri2'] as const
  * rule and with the same exception: a state that has said something about the
  * key is believed, including having said `false`.
  */
-export const READING_KEYS = ['flip', 'oe', 'arms', 'smooth'] as const
+export const READING_KEYS = ['flip', 'oe', 'arms', 'smooth', 'circle', 'sections', 'lines', 'split', 'top'] as const
 
 /**
  * The keys that say **which data the file is being read through**, and outlive

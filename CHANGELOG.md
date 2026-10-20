@@ -14,6 +14,60 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A metagenome's map drawn as a circle (§7.6, a dev feature).** Each genome an arc as long as it
+  is, the contacts between two genomes a chord as wide as they are, the tracks the map draws as rings
+  inside — the map's own block drawn round, so nothing more is read and the square comes back at
+  once. Turned on by the orbit toggle on the Map card, by *circle →* at the end of the Genomes
+  table's row (the ticked genomes, or every one), or by *Circle* in the palette; `circle=true` in the
+  link, kept as the reader navigates, so a genome clicked on the circle opens its contigs drawn round.
+  The whole metagenome is genomes at `genome × genome` and contigs under each genome's band at
+  `contig × contig`; ticked genomes are cut into genomes or, from the card's `sections` row
+  (`sections=contigs`), into their contigs. A hovered genome lights its partners, tinted and counted
+  by their contacts; a chord says what it carries and each end's share; an arc opens its genome or
+  contig, a chord the pair. The rings — bigWigs, bedGraphs, BEDs, genome and contig metadata — are
+  named at twelve o'clock and dragged in or out by their names to reorder them, and the Tracks card
+  and every map's lanes follow; a ring's inner edge is dragged to make it thicker or thinner, as a
+  lane's border is in the 1D browser, setting its track's height everywhere, and a ring is as thick
+  as its lane wherever the room allows. The Map card's `tracks` row puts the rings **outside** the
+  arcs instead, the genomes then the inner circle the chords meet. The Tracks card's `name column`
+  writes the rings' names right-aligned in a column before twelve o'clock with no track under them,
+  **on by default in the circle**: it is the circle's own setting, so the 1D browser's is exactly as
+  the reader left it when the map goes back to square, and `u` is the circle's while one is on
+  screen. Off, the names are centred over the opening. Every arc starts on twelve, always, and with
+  the column ends short of the names, the circle open by as much as they take. Chords are raw contacts for now, the strongest 3,000 kept and the
+  `chords` row thinning them to 1,000, 200 or 50; PNG, PDF and copy save the circle and its key.
+  **It zooms as the map does**: the wheel or a pinch about the pointer, up to 200 times, a drag to
+  pan, a sideways or ⌘ scroll to slide, the arrows and Page Up and Page Down, and a double click,
+  Home, the refit or `0` back to the whole circle. A zoom keeps what is under the pointer there, keeps
+  the rings as thick as their lanes, names the genomes or contigs it brings into view — forty of a
+  thousand genomes, the contigs of one genome — and reads the rings again at the screen's resolution
+  for the stretch in view once the view holds still; a zoomed figure is the view, its caption saying
+  how many sections are in it at what zoom.
+  **Genomes and contigs are put in the reader's own order by dragging them along the circle** — a
+  genome among the genomes, by its arc or its band, and a contig among its own genome's contigs only,
+  a bar marking where it will land and Escape putting it back — and **every map of the file follows**,
+  the squares included, with the Genomes and Contigs cards, the Genomes table, the ticked genomes and
+  the `<` `>` steps. An order rather than an edit: the file is read as it is stored, the order is kept
+  per file by name, carried by a workspace and a share link, and the Map card's `order` row puts the
+  file's order back.
+  **The same map can be drawn as two lines** (the toggle after the orbit, *Two lines* in the
+  palette, `lines=true&split=…` in the link): the genomes split in two by a column of the Genomes
+  table — `split by` lists every column, those with exactly two values with their values and the rest
+  greyed with why not, a genome with no value left out — one value's genomes along a line at the top
+  and the other's along the bottom, each line as wide as the picture, ribbons only between a genome of
+  one line and a genome of the other, the tracks as lanes above and below, the line titles, the lanes'
+  names and the key in a column to the left. A swap puts the other value on top; sections are dragged
+  along their line into the same reader's order; hovering, clicking, the contig level under genome
+  bands and the PNG and PDF figures are the circle's.
+  The Aesthetics column drives it as it drives the square and the lanes: the names follow the Map
+  card's `labels` (off by default, as for the square), with the square's rule — every name up to
+  fifty, past that only contigs of 50 kb or more, and never a thousand genomes', whose room the
+  circle takes instead; `legend` is its key, `crosshair` a radial line through every ring at the
+  pointer and `tooltip` its card; the Tracks card's track text, fill, outline, floor, opacity, text
+  size, height, stretch and shrink act on the rings; and a track group shares one range across its
+  rings, or one ring when it is drawn in one lane. `node scripts/ui-circle.mjs` drives it on the
+  mock community, and `node scripts/ui-lines.mjs` the reader's order and the two lines.
+
 - **Licences, in *About* (§22.4).** Under the tutorial and the source link: chromosomix's own
   licence, the GPL, then one line per project it is built with or ported from — three.js, Apache
   ECharts, h5wasm, `@gmod/bbi`, cooltools, chromosight, yapc with IDR, SciPy, NumPy, scikit-learn,

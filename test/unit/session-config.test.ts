@@ -319,6 +319,31 @@ describe('the round trip', () => {
     expect(odd !== null && 'genomeEdits' in odd).toBe(false)
   })
 
+  /**
+   * The reader's order of a metagenome (§7.6): what a drag on the circle sets,
+   * carried so a workspace of a rearranged circle opens rearranged.
+   */
+  it('carries the order the reader dragged the genomes and contigs into', () => {
+    const key = 'order|mock.metacool'
+    const order = { genomes: ['MAG_3', 'MAG_1'], contigs: { MAG_1: ['c2', 'c1'] } }
+    remember(key, 'map:order', order)
+    const config = buildConfig({ state: STATE, memoryKey: key, plot: DEFAULT_UI_PLOT_OPTIONS, now: new Date(0) })
+    const read = roundTrip(config)
+    expect(read?.order).toEqual(order)
+    applyConfig(read as NonNullable<typeof read>, 'into|mock.metacool')
+    expect(recall('into|mock.metacool', 'map:order')).toEqual(order)
+
+    // The file's own order is nothing to write, and a list that is not one of
+    // names is dropped rather than trusted.
+    remember(key, 'map:order', null)
+    expect('order' in buildConfig({ state: STATE, memoryKey: key, plot: DEFAULT_UI_PLOT_OPTIONS, now: new Date(0) })).toBe(false)
+    expect(parseTab({ state: STATE, order: { genomes: [1, 2], contigs: { MAG_1: ['c1'] } } })?.order).toEqual({
+      contigs: { MAG_1: ['c1'] },
+    })
+    const odd = parseTab({ state: STATE, order: 'MAG_3' })
+    expect(odd !== null && 'order' in odd).toBe(false)
+  })
+
   it('carries the deck’s arrangement into the importing session', () => {
     const key = 'deck|six.cool'
     remember(key, 'deck:starred', 'p4')

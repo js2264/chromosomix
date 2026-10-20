@@ -63,6 +63,7 @@ import {
   type AnnotationContext,
   type DerivePresentation,
   type TurnPresentation,
+  type PanelOrder,
 } from '../ui/MatrixPanel'
 import { axisRegion, type SelectedRegion } from '../ui/mapSelection'
 import { zoomedRegion } from '../ui/RegionView'
@@ -264,6 +265,12 @@ export interface MapPanelProps {
    * diagonal is not a reason to un-turn the deck (`ui/MatrixPanel.ts`).
    */
   turn(): TurnPresentation | undefined
+  /**
+   * The reader's order of the lead's genomes and contigs (§7.6), which this map
+   * is drawn in as well — by name, so a map of another file of the same genomes
+   * follows the lead's, and one of other genomes keeps its own.
+   */
+  order?(): PanelOrder | undefined
   /**
    * The bin size the lead is at, for a companion that turns out to be a
    * *collection* rather than a map (§3.4).
@@ -2005,6 +2012,7 @@ export class MapPanel {
         ...this.look,
       }
       const turn = this.props.turn()
+      const order = this.props.order?.()
       const derive = this.derivation()
       this.panel = new MatrixPanel({
         binsize: info.binsize ?? 1,
@@ -2012,6 +2020,7 @@ export class MapPanel {
         initial: this.look,
         ...(derive === undefined ? {} : { derive }),
         ...(turn === undefined ? {} : { turn }),
+        ...(order === undefined ? {} : { order }),
         ...(context === undefined ? {} : { annotations: context }),
         detachedControls: true,
         hideTitle: true,

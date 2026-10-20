@@ -66,6 +66,7 @@ import type {
   MatrixPanel,
   PanelGeometry,
   TurnPresentation,
+  PanelOrder,
 } from '../ui/MatrixPanel'
 import type { SelectedRegion } from '../ui/mapSelection'
 import type { ScaleState } from '../ui/GenomeView'
@@ -439,6 +440,8 @@ export interface PanelDeckProps {
    * bar claiming otherwise.
    */
   turn?(): TurnPresentation | undefined
+  /** The reader's order the lead is drawn in (§7.6), for every map of the deck. */
+  order?(): PanelOrder | undefined
   /**
    * Put a colour scale on the session's own map — "fix all scales" (§16.2).
    *
@@ -1986,6 +1989,7 @@ export class PanelDeck {
       circular: () => this.props.circular?.() ?? [],
       derive: () => this.props.derive?.(),
       turn: () => this.props.turn?.(),
+      order: () => this.props.order?.(),
       annotations: () => this.props.annotations?.(slot.id),
       // A track placed on this panel alone changes what every other panel has
       // to leave room for, so its own stacks are the deck's business (§16.8).
