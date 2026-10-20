@@ -14,13 +14,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
-- **Licences, in *About* (§22.4).** Under the tutorial and the source link: chromosomix's own MIT
-  licence, then one line per project it is built with or ported from — three.js, Apache ECharts,
-  h5wasm, `@gmod/bbi`, cooltools, chromosight, SciPy, NumPy, scikit-learn, Boost-HiC, fdlibm,
-  matplotlib, Lucide and Simple Icons — each with what it does here and its licence, a link to the
-  build's `THIRD-PARTY-NOTICES.txt`, and a line on the store and service marks. The dialog is wider
-  and taller to hold it, so the build stamp is still on screen on a laptop. The README's *Licence*
-  section names the same projects, and a test holds the two to the source.
+- **Licences, in *About* (§22.4).** Under the tutorial and the source link: chromosomix's own
+  licence, the GPL, then one line per project it is built with or ported from — three.js, Apache
+  ECharts, h5wasm, `@gmod/bbi`, cooltools, chromosight, yapc with IDR, SciPy, NumPy, scikit-learn,
+  Boost-HiC, fdlibm, matplotlib, Lucide and Simple Icons — each with what it does here and its
+  licence, a link to the build's `THIRD-PARTY-NOTICES.txt`, and a line on the store and service
+  marks. The dialog is wider and taller to hold it, so the build stamp is still on screen on a
+  laptop. The README's *Licence* section names the same projects, and a test holds the two to the
+  source.
 
 - **Loop calling, a 2D task of its own, just before Pattern detection (§18.8, §18.9).** It answers
   the one question *where are the loops*, where Pattern detection matches a template of which a loop
@@ -110,6 +111,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **chromosomix is now under the GNU General Public License, version 3 or later, in place of MIT
+  (§22.4, §18.9).** Peak calling is ported from yapc (GPL-3.0) and the IDR test it thresholds by
+  from IDR (GPL-2.0 or later), and a translation of GPL code can only be distributed under the GPL.
+  Version 3 is the one that admits both of them and echarts' Apache-2.0 together. Both ports shipped
+  in 0.15.0, which was labelled MIT. `LICENSE` is the GPL's text, `package.json` says
+  `GPL-3.0-or-later`, and the README, *About*, `llms.txt` and every build's notices say so.
+  Everything else the builds carry was already under a licence compatible with it.
+
 - **Pattern detection's own words name no package (§18.8).** Its row reads *Find loops, borders,
   hairpins, centromeres or stripes by template matching*, its thresholds are *the template's own
   numbers, tuned for it and published with it*, and the note on a file with no weights speaks of
@@ -149,8 +158,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **Every build's notices name the code ported into it (§22.4).** Analyses that follow a
   reference implementation function for function — cooltools' HiCCUPS and peak prominence, cooler's
-  region parsing, chromosight's detection functions, SciPy's cephes and `fminbound`, NumPy's
-  pairwise sum and samplers, scikit-learn's BIRCH, Boost-HiC and fdlibm's `erf` — owed their
+  region parsing, chromosight's detection functions, yapc's peak calling and IDR's fit, SciPy's
+  cephes and `fminbound`, NumPy's pairwise sum and samplers, scikit-learn's BIRCH, Boost-HiC and
+  fdlibm's `erf` — owed their
   upstreams' licences as any copy does, and `THIRD-PARTY-NOTICES.txt` named none of them. Each is
   now listed, its licence committed verbatim under `licenses/`. The notices also reproduce
   chromosomix's own licence first, which the desktop app and the standalone page carried nowhere,

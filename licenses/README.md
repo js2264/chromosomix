@@ -22,7 +22,12 @@ stands in for it.
 | `scikit-learn.txt` | scikit-learn 1.9.1, `COPYING` | BIRCH, ported from `_birch.py` in `src/analysis/birch.ts` |
 | `boost-hic.txt` | Boost-HiC, `LICENSE` | its enhancement, ported in `src/metacooler/boost.ts` |
 | `fdlibm.txt` | fdlibm, the notice at the head of `s_erf.c` | `erf`, transcribed in `src/analysis/idr.ts` |
+| `yapc.txt` | yapc 0.1, `LICENSE` (GPL-3.0) | its peak calling, ported in `src/analysis/yapc.ts` |
+| `idr.txt` | IDR 2.0.3, `LICENSE` (GPL-2.0, which its `setup.py` licenses "or later") | `fit_model_and_calc_local_idr` and `calc_global_IDR`, ported in `src/analysis/idr.ts` |
 | `generic-filehandle2.txt` | the MIT licence `generic-filehandle2`'s `package.json` declares, naming its author | nothing of `src/`: the package ships no licence text, in its tarball or its repository, and MIT asks for one in every copy |
+
+yapc and IDR are why chromosomix is under the GPL, version 3 or later (`LICENSE`). Anything ported in
+must be compatible with that.
 
 Regenerating one of those files from a newer upstream, or porting a function from one, is the moment
 to compare its licence with the copy here — and porting from a project that is not listed is the

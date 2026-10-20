@@ -1,15 +1,15 @@
 /**
  * The notices a build owes what it carries, written into what it built.
  *
- * chromosomix is MIT, and so is most of what it compiles in — but every one of
- * those licences is a condition on each copy, and a bundle is a copy. echarts
- * is Apache-2.0, which asks for its LICENSE and its NOTICE to travel with the
- * work; zrender, and the HDF5 inside h5wasm, are BSD-style and ask for their
- * notices in any redistribution in binary form; every MIT and ISC licence asks
- * for its copyright line in all copies or substantial portions. Minifying drops
- * the comments that carried them. three.js's two were the only notices that
- * reached `dist/`, and a tarball carried chromosomix's own LICENSE and nobody
- * else's.
+ * chromosomix is GPL, and most of what it compiles in is permissive — but
+ * every one of those licences is a condition on each copy, and a bundle is a
+ * copy. echarts is Apache-2.0, which asks for its LICENSE and its NOTICE to
+ * travel with the work; zrender, and the HDF5 inside h5wasm, are BSD-style and
+ * ask for their notices in any redistribution in binary form; every MIT and ISC
+ * licence asks for its copyright line in all copies or substantial portions.
+ * Minifying drops the comments that carried them. three.js's two were the only
+ * notices that reached `dist/`, and a tarball carried chromosomix's own LICENSE
+ * and nobody else's.
  *
  * So every build lists what it carries and reproduces each licence in full, in
  * `THIRD-PARTY-NOTICES.txt` beside its `index.html` — beside the command, for
@@ -118,6 +118,17 @@ export const VENDORED = [
     text: 'licenses/fdlibm.txt',
   },
   {
+    name: 'IDR',
+    files: ['src/analysis/idr.ts'],
+    version: /`idr` (\d[\w.-]*)/,
+    licence: 'GPL-2.0-or-later',
+    url: 'https://github.com/nboley/idr',
+    what:
+      'the irreproducible discovery rate as it fits it — fit_model_and_calc_local_idr and calc_global_IDR, ' +
+      'with its pseudo-values, EM and coordinate ascent — ported in its order',
+    text: 'licenses/idr.txt',
+  },
+  {
     name: 'Lucide',
     files: ['src/ui/icons.generated.ts'],
     version: /lucide-static (\d[\w.-]*)/,
@@ -175,6 +186,15 @@ export const VENDORED = [
     url: 'https://simpleicons.org/',
     what: "the brand marks, their SVG shapes copied verbatim by scripts/build-icons.mjs; each mark remains its owner's trademark",
     from: 'simple-icons',
+  },
+  {
+    name: 'yapc',
+    files: ['src/analysis/yapc.ts'],
+    version: /yapc (\d[\w.-]*)/,
+    licence: 'GPL-3.0',
+    url: 'https://github.com/jurgjn/yapc',
+    what: 'its peak calling — the smoothed second derivative, the concave regions and their scores — ported step for step',
+    text: 'licenses/yapc.txt',
   },
 ]
 
@@ -354,25 +374,35 @@ function describeVendored(entry) {
 
 const byName = (a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' })
 
+/** chromosomix's own licence, by its SPDX identifier, as a sentence names it. */
+const LICENCE_NAMES = {
+  MIT: 'the MIT licence',
+  'GPL-3.0-or-later': 'the GNU General Public License, version 3 or (at your option) any later version',
+}
+
 /**
  * The text, from what was found.
  *
  * Plain text and hard to misread: the list first, so a reader sees in ten lines
  * what the build carries, then each licence in full under a rule of its own.
  */
-export function renderNotices({ version, repository, own, packages, vendored }) {
+export function renderNotices({ version, repository, licence = 'MIT', own, packages, vendored }) {
   const rule = '='.repeat(72)
   const titleOf = (entry) => `${entry.name}${entry.version === '' ? '' : ` ${entry.version}`} — ${entry.licence}`
+  const named = LICENCE_NAMES[licence] ?? licence
   const out = [
     `${NOTICES_TITLE} for chromosomix ${version}`,
     '',
     own === undefined
-      ? `chromosomix itself is released under the MIT licence: LICENSE, in the package and in its repository, ${repository}.`
-      : `chromosomix itself is released under the MIT licence, reproduced below and in its repository, ${repository}.`,
+      ? `chromosomix itself is released under ${named}: LICENSE, in the package and in its repository, ${repository}.`
+      : `chromosomix itself is released under ${named}, reproduced below and in its repository, ${repository}.`,
+    // What the GPL asks of a copy that is not source — an installer, a bundle,
+    // one HTML file — is that it says where its source is.
+    `The complete source of this build, and of every release, is at ${repository}.`,
   ]
   const ownText = () => {
     if (own === undefined) return
-    out.push('', rule, `chromosomix ${version} — MIT`, repository, rule, '', own.replace(/\r\n?/g, '\n').trimEnd())
+    out.push('', rule, `chromosomix ${version} — ${licence}`, repository, rule, '', own.replace(/\r\n?/g, '\n').trimEnd())
   }
   if (packages.length === 0 && vendored.length === 0) {
     out.push('', 'This build carries no third-party code.')
@@ -425,6 +455,7 @@ export function noticesText(from = carried) {
   return renderNotices({
     version: manifest.version,
     repository: repositoryOf(manifest),
+    licence: manifest.license,
     own: readFileSync(join(ROOT, 'LICENSE'), 'utf8'),
     packages: [...seen.values()].sort(byName),
     vendored: VENDORED.filter((entry) => from.vendored.has(entry.name)).map(describeVendored).sort(byName),

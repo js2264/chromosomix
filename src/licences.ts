@@ -84,6 +84,14 @@ export const LICENSED: readonly Licensed[] = [
     covers: ['chromosight'],
   },
   {
+    name: 'yapc',
+    with: 'with IDR',
+    url: 'https://github.com/jurgjn/yapc',
+    what: 'peak calling, and its test across replicates',
+    licence: 'GPL-3.0, GPL-2.0-or-later',
+    covers: ['yapc', 'IDR'],
+  },
+  {
     name: 'SciPy',
     with: 'with cephes',
     url: 'https://scipy.org/',

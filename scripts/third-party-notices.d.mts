@@ -60,6 +60,8 @@ export declare function collect(bundle: Record<string, unknown>, into?: Carried)
 export declare function renderNotices(input: {
   version: string
   repository: string
+  /** chromosomix's own licence, by SPDX identifier: `package.json`'s. MIT when absent. */
+  licence?: string
   /** chromosomix's own LICENSE, reproduced ahead of the others. */
   own?: string
   packages: NoticeEntry[]

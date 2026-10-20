@@ -114,12 +114,15 @@ describe('the text', () => {
     const text = renderNotices({
       version: '1.2.3',
       repository: 'https://example.org/c',
-      own: 'MIT License\r\n\r\nCopyright (c) 2026 Somebody\r\n',
+      licence: 'GPL-3.0-or-later',
+      own: 'GNU GENERAL PUBLIC LICENSE\r\n\r\nCopyright (c) 2026 Somebody\r\n',
       packages: [entry('alpha')],
       vendored: [],
     })
-    expect(text).toContain('released under the MIT licence, reproduced below')
-    expect(text).toContain('chromosomix 1.2.3 — MIT')
+    expect(text).toContain(
+      'released under the GNU General Public License, version 3 or (at your option) any later version, reproduced below',
+    )
+    expect(text).toContain('chromosomix 1.2.3 — GPL-3.0-or-later')
     expect(text.indexOf('Copyright (c) 2026 Somebody')).toBeLessThan(text.indexOf("alpha's licence"))
     expect(text).not.toContain('\r')
   })
@@ -152,7 +155,9 @@ describe('the text', () => {
     const text = noticesText({ packages: new Set([`${root}/node_modules/generic-filehandle2`]), vendored: new Set() })
     expect(text).toContain('Its package.json declares MIT, by Colin Diesh, which is this.')
     expect(text).toContain('Copyright (c) Colin Diesh')
-    expect(text).toContain('Copyright (c) 2026 Jacques Serizay')
+    // chromosomix's own, ahead of it: the licence package.json declares, in full.
+    expect(text).toContain('chromosomix itself is released under the GNU General Public License, version 3')
+    expect(text).toContain('Version 3, 29 June 2007')
   })
 
   it('reproduces every text of an upstream with several', () => {
@@ -162,6 +167,14 @@ describe('the text', () => {
     }
     expect(text).toContain('Stephen L. Moshier')
     expect(text).toContain('SciPy 1.16.3 — BSD-3-Clause')
+  })
+
+  it('names the GPL code chromosomix is ported from, at the version it came from', () => {
+    const text = noticesText({ packages: new Set(), vendored: new Set(['yapc', 'IDR']) })
+    expect(text).toContain('IDR 2.0.3 — GPL-2.0-or-later')
+    expect(text).toContain('yapc 0.1 — GPL-3.0')
+    // IDR's own text is version 2 of the GPL, which it licenses "or later".
+    expect(text).toContain('Version 2, June 1991')
   })
 })
 

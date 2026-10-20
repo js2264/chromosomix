@@ -79,10 +79,12 @@ describe('the package', () => {
   })
 
   it('carries the licence it claims', () => {
-    // npm shows a package's licence, and a tarball that declares MIT without
-    // the text is asking to be taken on trust.
-    expect(pkg.license).toBe('MIT')
-    expect(readFileSync(new URL('LICENSE', root), 'utf8')).toContain('MIT License')
+    // npm shows a package's licence, and a tarball that declares the GPL
+    // without the text is asking to be taken on trust.
+    expect(pkg.license).toBe('GPL-3.0-or-later')
+    const text = readFileSync(new URL('LICENSE', root), 'utf8')
+    expect(text).toContain('GNU GENERAL PUBLIC LICENSE')
+    expect(text).toContain('Version 3, 29 June 2007')
   })
 
   it('says where it lives and what it needs', () => {

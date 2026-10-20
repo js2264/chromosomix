@@ -349,8 +349,12 @@ function licences(repoUrl: string): HTMLElement {
     el(
       'p',
       {},
-      'chromosomix is free and open-source software, under the ',
-      el('a', { text: 'MIT licence', class: 'about-link', attrs: { href: `${repoUrl}/blob/main/LICENSE`, ...outside } }),
+      'chromosomix is free software, under the ',
+      el('a', {
+        text: 'GNU General Public License, version 3 or later',
+        class: 'about-link',
+        attrs: { href: `${repoUrl}/blob/main/LICENSE`, ...outside },
+      }),
       '. It is built with, and in places ported from, the work of these projects, each under its own licence:',
     ),
     el(

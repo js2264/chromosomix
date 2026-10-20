@@ -9006,7 +9006,8 @@ functions and its `main()` loaded as they are, IDR's fit at the commit yapc cite
 for region, summit for summit and cut for cut (§18.10). A cut of this app's own devising is still
 refused: a single track is reported as a ranked candidate list with no significance claimed, rather
 than cut at a valley in its histogram or at a score that looked about right, because yapc's cut is
-IDR and nobody published another.
+IDR and nobody published another. A port of either is a translation of GPL code — yapc is GPL-3.0,
+IDR GPL-2.0 or later — and is why chromosomix itself is under the GPL, version 3 or later (§22.4).
 
 **Loop calling is the third, and the one the original rule named.** *Loop calling* is HiCCUPS as
 `cooltools.dots` 0.7.1 computes it — the Python API's defaults, a kernel from cooltools' own table
@@ -10494,8 +10495,12 @@ fork's, skips the registry rather than being refused by it.
 
 ### 22.4 The notices: what every build owes what it carries
 
-chromosomix is MIT, and most of what it compiles in is permissive — but each of those licences is a
-condition on every copy, and a bundle is a copy. echarts is Apache-2.0, which asks for its licence
+chromosomix is under the **GNU General Public License, version 3 or (at your option) any later
+version** — `LICENSE`, and `GPL-3.0-or-later` in `package.json`. It was MIT until peak calling was
+ported from yapc (GPL-3.0) and IDR (GPL-2.0 or later, §18.9): a translation of GPL code can only be
+distributed under the GPL, and version 3 is the one that admits both of them and echarts' Apache-2.0
+at once. Everything else it carries is permissive and compatible with it — but each of those licences
+is a condition on every copy, and a bundle is a copy. echarts is Apache-2.0, which asks for its licence
 and its NOTICE to travel with the work; zrender, and the HDF5 inside h5wasm, are BSD-style and ask
 for their notices in any redistribution in binary form; every MIT and ISC licence asks for its
 copyright line in all copies or substantial portions. Minifying drops the comments that carried
@@ -10531,7 +10536,8 @@ one would drop its upstream's licence without a word.
 **So is code ported from a reference implementation.** §18.9 holds an analysis to the numbers its
 reference gives, and some of them get there by following that code function for function, in its
 order — a translation, which is a copy in another language and owes what a copy owes. Each is named
-by the files that hold it, beside the material above: cooltools' HiCCUPS and peak prominence (MIT),
+by the files that hold it, beside the material above: yapc's peak calling (GPL-3.0) and IDR's fit
+(GPL-2.0 or later), cooltools' HiCCUPS and peak prominence (MIT),
 cooler's region parsing (BSD-3-Clause), chromosight's detection functions (MIT, with its kernels),
 the cephes functions SciPy's `xsf` carries and SciPy's `fminbound` (BSD-3-Clause), NumPy's pairwise
 sum and its two samplers (BSD-3-Clause, and NCSA or BSD-3-Clause for `numpy.random`), scikit-learn's
@@ -10543,7 +10549,7 @@ carry no `LICENSE` beside them. **A package that ships no licence text** — `ge
 which declares MIT and has no text of it in its tarball or its repository — has the licence it
 declares, naming the author it names, committed under `licenses/` and reproduced in its place.
 
-**About names them too**, under *Licences*: chromosomix's own licence, then one line per project —
+**About names them too**, under *Licences*: chromosomix's own licence, the GPL, then one line per project —
 its name linking to its home, what it does in this viewer, and its licence — with a dependency folded
 in beside what pulls it in, and a link to the build's own `THIRD-PARTY-NOTICES.txt` (the site's, from
 the desktop and the standalone page, which have none a link can open). The list is
