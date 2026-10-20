@@ -161,8 +161,8 @@ export const runChromosight: TaskRunner = async (job) => {
   if (weights === null) {
     job.note(
       'This file carries no balancing weights, so detectable bins are found from the coverage of ' +
-        `the raw counts (${numParam(job.params, 'nMads', 5)} MADs below the median). chromosight ` +
-        'balances the file first and this app does not write to the file it opened, so the two ' +
+        `the raw counts (${numParam(job.params, 'nMads', 5)} MADs below the median). The published ` +
+        'method balances the file first and this app does not write to the file it opened, so the two ' +
         'do not start from the same matrix — the scores are comparable in kind, not to the digit.',
     )
   }

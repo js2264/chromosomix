@@ -1,18 +1,19 @@
 /**
- * The dev features switch (§29), in headless Chromium: what a reader sees with
- * it off, the switch itself, and what turning it on brings back.
+ * Dev features (§29), in headless Chromium: what a reader sees without them,
+ * and what a page that asked for them brings back.
  *
  * Off, the landing page's store has no mock community, the stores have no DNA
- * Bacterial Zoo tile, *About* says nothing of `.metacool`, and a `.metacool`
- * named by a link is refused in the sentence an unknown file gets. The switch
- * is then pressed — which reloads the window — and the same are shot again: the
- * mock community back on the landing page, the zoo's tile beside the lab's, the
- * switch lit, and the `.metacool` opening on its genomes table. It
- * prints what each step found, so a clause that should have gone and did not
- * is a line in the log rather than something to spot in a picture.
+ * Bacterial Zoo tile, *About* says nothing of `.metacool` and has no switch,
+ * and a `.metacool` named by a link is refused in the sentence an unknown file
+ * gets. The same are then shot on a page that asked for them: the mock
+ * community back on the landing page, the zoo's tile beside the lab's, *About*
+ * naming the format and still no switch, and the `.metacool` opening on its
+ * genomes table. It prints what each step found, so a clause that should have
+ * gone and did not is a line in the log rather than something to spot in a
+ * picture.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-dev-features.mjs [out-dir]     # d00 … d08
+ *   node scripts/ui-dev-features.mjs [out-dir]     # d00 … d07
  */
 
 import { createRequire } from 'node:module'
@@ -54,12 +55,14 @@ const shot = async (name) => {
 /** Every word on screen, for the log's assertions. */
 const words = () => page.evaluate(() => document.body.innerText)
 const METACOOL = `${BASE}/demo/metagenomics/mock-community/Mock_microbial_community.metacool`
+/** `?dev` while the dev features are asked for, nothing while they are not. */
+let query = ''
 
 async function landing() {
   // The tabs a reload keeps live in `sessionStorage`; without clearing them the
   // landing page would come back as the last file opened rather than as itself.
   await page.evaluate(() => sessionStorage.clear()).catch(() => {})
-  await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`${BASE}/${query}`, { waitUntil: 'domcontentloaded' })
   await sleep(2500)
 }
 
@@ -75,7 +78,7 @@ async function closeModal() {
 }
 
 async function openMetacool() {
-  await page.goto(`${BASE}/#uri=${encodeURIComponent(METACOOL)}`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`${BASE}/${query}#uri=${encodeURIComponent(METACOOL)}`, { waitUntil: 'domcontentloaded' })
   // A remote open is a handful of range requests, and a name the router does
   // not know is sniffed first — during which the tab shows its picker. So wait
   // for the outcome itself, a refusal or the genomes table, not for a spinner
@@ -98,8 +101,6 @@ async function labStore() {
 const tiles = () => page.evaluate(() => [...document.querySelectorAll('.store-tile .store-tile-name')].map((name) => name.textContent))
 
 // ── Off ────────────────────────────────────────────────────────────────────
-await page.goto(`${BASE}/`)
-await page.evaluate(() => localStorage.removeItem('chromosomix:dev-features'))
 await landing()
 console.log('off · store tiles:', JSON.stringify(await tiles()))
 console.log('off · a DNA Bacterial Zoo tile:', /DNA Bacterial Zoo/.test(await words()))
@@ -113,7 +114,7 @@ await landing()
 await about()
 text = await page.evaluate(() => document.querySelector('.about-body')?.innerText ?? '')
 console.log('off · About names .metacool:', /\.m?metacool\b|multi-genome/i.test(text))
-console.log('off · switch pressed:', await page.getAttribute('.about-dev .btn-switch', 'aria-pressed'))
+console.log('off · About names dev:', /\bdev\b/i.test(text), '· a switch:', (await page.$('.about-body .btn-switch')) !== null)
 await shot('d02-about-off')
 await closeModal()
 
@@ -124,19 +125,12 @@ console.log('off · refusal names metacool (outside the file name):',
   /metacool/i.test(text.replaceAll('Mock_microbial_community.metacool', '')))
 await shot('d03-metacool-refused')
 
-// ── The switch ─────────────────────────────────────────────────────────────
-await landing()
-await about()
-await page.hover('.about-dev .btn-switch')
-await sleep(300)
-await shot('d04-about-switch-hover')
-await Promise.all([page.waitForEvent('load'), page.click('.about-dev .btn-switch')])
-await sleep(2500)
-
 // ── On ─────────────────────────────────────────────────────────────────────
+query = '?dev'
+await landing()
 console.log('on · store tiles:', JSON.stringify(await tiles()))
 console.log('on · a DNA Bacterial Zoo tile:', /DNA Bacterial Zoo/.test(await words()))
-await shot('d04b-tiles-on')
+await shot('d04-tiles-on')
 await labStore()
 text = await words()
 console.log('on · the lab store names the mock community:', /mock (microbial )?community/i.test(text))
@@ -144,9 +138,9 @@ await shot('d05-store-on')
 await landing()
 
 await about()
-console.log('on · switch pressed:', await page.getAttribute('.about-dev .btn-switch', 'aria-pressed'))
 text = await page.evaluate(() => document.querySelector('.about-body')?.innerText ?? '')
 console.log('on · About names .metacool:', /\.metacool multi-genome/.test(text))
+console.log('on · About names dev:', /\bdev\b/i.test(text), '· a switch:', (await page.$('.about-body .btn-switch')) !== null)
 await shot('d06-about-on')
 await closeModal()
 
@@ -154,14 +148,6 @@ await openMetacool()
 text = await words()
 console.log('on · genomes table:', /genomes/i.test(text), '· refused:', /not a contact map this viewer reads/.test(text))
 await shot('d07-metacool-on')
-
-// Back off, so a gallery run leaves the browser as it found it.
-await landing()
-await about()
-await Promise.all([page.waitForEvent('load'), page.click('.about-dev .btn-switch')])
-await sleep(1500)
-console.log('back off · switch:', await page.evaluate(() => localStorage.getItem('chromosomix:dev-features')))
-await shot('d08-landing-off-again')
 
 if (errors.length > 0) console.log('page errors:', errors)
 await browser.close()

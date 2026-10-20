@@ -1,6 +1,6 @@
 /**
  * Drive the ideogram view (§5.10) in headless Chromium and write what each state
- * looks like.
+ * looks like, every page opened with the dev features asked for (`?dev`, §29).
  *
  * The yeast tracks demo, from a session this script writes to `demo/yeast/` and
  * removes: the karyotype from `Yeast_cytobands.txt`, ATAC as an area, Pol II
@@ -62,11 +62,10 @@ const errors = []
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 let page = null
 
-/** A window with the dev features on (§29) and a save dialog that keeps the bytes. */
+/** A window with a save dialog that keeps the bytes; the dev features are asked for by each address (`?dev`, §29). */
 async function fresh(scheme = 'light') {
   const context = await browser.newContext({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 1, colorScheme: scheme })
   await context.addInitScript(() => {
-    window.localStorage.setItem('chromosomix:dev-features', 'on')
     window.__files = []
     window.showSaveFilePicker = async (options) => ({
       name: options.suggestedName,
@@ -215,7 +214,7 @@ writeFileSync(probe, JSON.stringify(session))
 
 try {
   page = await fresh()
-  await page.goto(`${BASE}/?config=${BASE}/${probe}`)
+  await page.goto(`${BASE}/?dev&config=${BASE}/${probe}`)
   await page.waitForSelector('.browser-canvas', { timeout: 120000 })
   await fold('Show the Annotations panel')
   await allReady(8)
@@ -356,7 +355,7 @@ try {
 // Over a map: the switch in its Tracks card, and the map given back
 // ---------------------------------------------------------------------------
 page = await fresh()
-await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.chromosomix.json`)
+await page.goto(`${BASE}/?dev&config=${BASE}/demo/yeast/Yeast_microC.chromosomix.json`)
 await page.waitForSelector('.heatmap-canvas', { timeout: 120000 })
 await sleep(8000)
 await page.mouse.move(5, 5)
@@ -413,7 +412,7 @@ await shot('iv23-the-switch-off-gives-the-map-back-where-it-was')
 // The human karyotype, and the dark theme
 // ---------------------------------------------------------------------------
 page = await fresh()
-await page.goto(`${BASE}/?config=${BASE}/demo/human/Human_chrX_RNA.chromosomix.json`)
+await page.goto(`${BASE}/?dev&config=${BASE}/demo/human/Human_chrX_RNA.chromosomix.json`)
 await page.waitForSelector('.browser-canvas', { timeout: 120000 })
 await sleep(6000)
 await ideogramSwitch().click()
@@ -428,7 +427,7 @@ console.log('human, whole genome:', await summary())
 await shot('iv25-human-karyotype')
 
 page = await fresh('dark')
-await page.goto(`${BASE}/?config=${BASE}/demo/human/Human_chrX_RNA.chromosomix.json`)
+await page.goto(`${BASE}/?dev&config=${BASE}/demo/human/Human_chrX_RNA.chromosomix.json`)
 await page.waitForSelector('.browser-canvas', { timeout: 120000 })
 await sleep(6000)
 await wholeGenome().click()

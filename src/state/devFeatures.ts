@@ -1,8 +1,8 @@
 /**
- * Dev features: on `main`, invisible until the switch in *About* is on (§29).
+ * Dev features: on `main`, invisible unless the page asked for them (§29).
  *
  * A dev feature is built, specified and tested like any other, and a reader
- * who has not turned the switch on sees **nothing** of it — no row, no task, no
+ * who has not asked for it sees **nothing** of it — no row, no task, no
  * command, no example, no clause in a sentence. Not greyed, not listed with an
  * instruction: §8.5's corrected form would list a control the reader could make
  * work, and this is the one case where there is something they could do and
@@ -14,17 +14,15 @@
  * registry's keys: a `devFeature('metacool')` whose key no longer exists is a
  * type error rather than a gate that quietly always opens.
  *
- * **The switch is a preference**, in `localStorage`: a fact about this browser,
- * not about a file or a tab, on the same side of the persistence tiers' line as
- * the theme. It is read once per page. Changing it reloads the window, which
- * keeps its tabs: every surface is then built from scratch with the new answer,
- * so no card, task list, worker or cached command list can disagree with it —
- * which a live re-render of a hundred surfaces could not promise.
+ * **The switch is the page's address**, read once per page, so nothing about
+ * it is kept in the browser. The answer must not change under a page that was
+ * built with the other one: every surface is built once with it, so no card,
+ * task list, worker or cached command list can disagree with it.
  *
- * **Never in an embed** (§21): an embedded page has no *About*, and a host page
- * is not a developer's browser. **Always on where there is no page** — the
- * command line has no switch and shows everything (§29.5), and it shares the
- * task registry and the examples that ask this.
+ * **Never in an embed** (§21): a host page is not a developer's browser.
+ * **Always on where there is no page** — the command line has no switch and
+ * shows everything (§29.5), and it shares the task registry and the examples
+ * that ask this.
  */
 
 import { embedded } from '../embed'
@@ -50,17 +48,13 @@ export const DEV_FEATURES = {
 
 export type DevFeature = keyof typeof DEV_FEATURES
 
-/** The `localStorage` key, named like the theme's. */
-export const DEV_FEATURES_KEY = 'chromosomix:dev-features'
-
 let cached: boolean | null = null
 
 /**
- * Whether the switch is on in this page.
+ * Whether the dev features are on in this page.
  *
  * Read once and remembered: the answer must not change under a page that was
- * built with the other one, which is why {@link setDevFeatures} reloads rather
- * than notifies. `false` wherever storage is refused, and always in an embed.
+ * built with the other one. `false` always in an embed.
  */
 export function devFeaturesOn(): boolean {
   if (cached !== null) return cached
@@ -79,6 +73,24 @@ export function devFeature(feature: DevFeature): boolean {
   return DEV_FEATURES[feature] !== undefined && devFeaturesOn()
 }
 
+/**
+ * Whether a query string asks for the dev features.
+ *
+ * Pure, so the whole contract is testable without a `location`. On for a key
+ * that is present, off for the three spellings of "no" — the same reading as
+ * `embed` (`embed.ts`).
+ */
+export function readDevFeatures(search: string): boolean {
+  let params: URLSearchParams
+  try {
+    params = new URLSearchParams(search)
+  } catch {
+    return false
+  }
+  const flag = params.get('dev')
+  return flag !== null && flag !== '0' && flag !== 'false' && flag !== 'off'
+}
+
 function read(): boolean {
   // No page, no switch: the command line — which imports the same task
   // registry and the same examples — sees everything, as §29.5 says it does. A
@@ -86,35 +98,12 @@ function read(): boolean {
   // instead of asking this.
   if (typeof window === 'undefined') return true
   if (embedded()) return false
-  try {
-    return window.localStorage.getItem(DEV_FEATURES_KEY) === 'on'
-  } catch {
-    return false
-  }
-}
-
-/**
- * Turn the switch, and rebuild the window under the new answer.
- *
- * `reload` is a parameter so a test can watch the call rather than lose its
- * document to it.
- */
-export function setDevFeatures(on: boolean, reload: () => void = () => window.location.reload()): void {
-  try {
-    if (on) window.localStorage.setItem(DEV_FEATURES_KEY, 'on')
-    else window.localStorage.removeItem(DEV_FEATURES_KEY)
-  } catch {
-    // A browser that refuses storage cannot keep the switch, so there is
-    // nothing to rebuild for: the page would come back as it is.
-    return
-  }
-  cached = on
-  reload()
+  return readDevFeatures(window.location.search)
 }
 
 /**
  * Forget the remembered answer, or state one. Tests only: a page reads it once,
- * and a test under `node` has no `localStorage` to put an answer in.
+ * and a test under `node` has no address to put an answer in.
  */
 export function resetDevFeatures(on: boolean | null = null): void {
   cached = on

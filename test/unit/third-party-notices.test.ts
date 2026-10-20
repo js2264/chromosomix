@@ -102,11 +102,28 @@ describe('the text', () => {
     expect(text.startsWith(`${NOTICES_TITLE} for chromosomix 1.2.3\n`)).toBe(true)
     expect(text).toContain('https://example.org/chromosomix')
     expect(text).toContain('Compiled in from npm:\n  alpha 1.0.0 — MIT\n  beta 1.0.0 — MIT\n')
-    expect(text).toContain('Copied into the source:\n  gamma — ISC\n')
+    expect(text).toContain('Copied or ported into the source:\n  gamma — ISC\n')
     expect(text).toContain("alpha's licence")
     expect(text).toContain('What this build holds of it: its icons (src/x.ts).')
     // Said, not left blank: the package declares a licence and ships no text of it.
     expect(text).toContain('The package ships no licence text. Its package.json declares MIT, by Someone.')
+    expect(text).not.toContain('\r')
+  })
+
+  it('reproduces chromosomix’s own licence first, for the builds that carry no LICENSE beside them', () => {
+    const text = renderNotices({
+      version: '1.2.3',
+      repository: 'https://example.org/c',
+      licence: 'GPL-3.0-or-later',
+      own: 'GNU GENERAL PUBLIC LICENSE\r\n\r\nCopyright (c) 2026 Somebody\r\n',
+      packages: [entry('alpha')],
+      vendored: [],
+    })
+    expect(text).toContain(
+      'released under the GNU General Public License, version 3 or (at your option) any later version, reproduced below',
+    )
+    expect(text).toContain('chromosomix 1.2.3 — GPL-3.0-or-later')
+    expect(text.indexOf('Copyright (c) 2026 Somebody')).toBeLessThan(text.indexOf("alpha's licence"))
     expect(text).not.toContain('\r')
   })
 
@@ -133,6 +150,32 @@ describe('the text', () => {
     expect(text).toContain('matplotlib 3.10.9 — Matplotlib licence (PSF-based)')
     expect(text).toContain('Romain Koszul Laboratory')
   })
+
+  it('reproduces the licence committed for a package that ships none', () => {
+    const text = noticesText({ packages: new Set([`${root}/node_modules/generic-filehandle2`]), vendored: new Set() })
+    expect(text).toContain('Its package.json declares MIT, by Colin Diesh, which is this.')
+    expect(text).toContain('Copyright (c) Colin Diesh')
+    // chromosomix's own, ahead of it: the licence package.json declares, in full.
+    expect(text).toContain('chromosomix itself is released under the GNU General Public License, version 3')
+    expect(text).toContain('Version 3, 29 June 2007')
+  })
+
+  it('reproduces every text of an upstream with several', () => {
+    const text = noticesText({ packages: new Set(), vendored: new Set(['SciPy', 'NumPy']) })
+    for (const file of ['licenses/scipy.txt', 'licenses/xsf.txt', 'licenses/cephes.txt', 'licenses/numpy-random.md']) {
+      expect(text).toContain(`--- ${file} ---`)
+    }
+    expect(text).toContain('Stephen L. Moshier')
+    expect(text).toContain('SciPy 1.16.3 — BSD-3-Clause')
+  })
+
+  it('names the GPL code chromosomix is ported from, at the version it came from', () => {
+    const text = noticesText({ packages: new Set(), vendored: new Set(['yapc', 'IDR']) })
+    expect(text).toContain('IDR 2.0.3 — GPL-2.0-or-later')
+    expect(text).toContain('yapc 0.1 — GPL-3.0')
+    // IDR's own text is version 2 of the GPL, which it licenses "or later".
+    expect(text).toContain('Version 2, June 1991')
+  })
 })
 
 describe('the vendored material', () => {
@@ -140,7 +183,7 @@ describe('the vendored material', () => {
     '%s: names files that exist, and a licence that can be read',
     (_name, entry) => {
       for (const file of entry.files) expect(existsSync(`${root}/${file}`)).toBe(true)
-      if (entry.text !== undefined) expect(existsSync(`${root}/${entry.text}`)).toBe(true)
+      for (const text of [entry.text ?? []].flat()) expect(existsSync(`${root}/${text}`)).toBe(true)
       if (entry.from !== undefined) expect(existsSync(`${root}/node_modules/${entry.from}`)).toBe(true)
     },
   )

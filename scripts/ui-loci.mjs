@@ -159,9 +159,7 @@ await shot('lo08-frip-per-feature')
 // ---- A genome view's box, with the dev features on ------------------------
 // In a page of its own: the one above has a tab the app would restore.
 const fresh = await (await g.browser.newContext({ viewport: { width: 1920, height: 1100 }, deviceScaleFactor: 1 })).newPage()
-await fresh.goto(`${g.base}/`)
-await fresh.evaluate(() => localStorage.setItem('chromosomix:dev-features', 'on'))
-await fresh.goto(`${g.base}/?config=${g.base}/demo/metagenomics/mock-community/Mock_microbial_community.chromosomix.json`)
+await fresh.goto(`${g.base}/?dev&config=${g.base}/demo/metagenomics/mock-community/Mock_microbial_community.chromosomix.json`)
 await fresh.waitForSelector('.view-genomes .tr', { timeout: 120000 }).catch(() => console.log('no genomes table'))
 await sleep(2500)
 await fresh.locator('.view-genomes .tr .td:not(.td-check)').first().click()

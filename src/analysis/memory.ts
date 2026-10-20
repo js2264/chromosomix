@@ -19,7 +19,7 @@
  */
 
 import { recall, remember } from '../state/UiMemory'
-import type { Params } from './types'
+import type { AnalysisContext, AnalysisTask, ParamValue, Params } from './types'
 
 /** The one scope. Named in `SessionConfig`'s `SCOPES`; do not rename lightly. */
 export const ANALYSIS_SCOPE = 'analysis:params'
@@ -69,4 +69,34 @@ export function rememberParams(uri: string, task: string, params: Params): void 
   const all = readAnalysisMemory(uri)
   all[task] = params
   remember(uri, ANALYSIS_SCOPE, all)
+}
+
+/**
+ * A run's parameters as the form should next open on them.
+ *
+ * As run, except a number the context seeds (`NumberParam.seed`) that the form
+ * `held` unanswered and the run read as that seed: it stays unanswered, so it
+ * goes on following the map. A run is handed every seed answered, so that its
+ * record names what was read; remembered as read, a 1 kb run's reach in bins
+ * would come back on the 10 kb rung as 1 kb's, ten times as far (§18.2). A
+ * number the reader typed, or one a replay asked for that is not the seed, is
+ * kept as it is.
+ */
+export function asAsked(
+  task: AnalysisTask,
+  ran: Params,
+  held: Params | null,
+  context: AnalysisContext | null,
+): Params {
+  if (held === null || context === null) return ran
+  let out: Record<string, ParamValue> | null = null
+  for (const spec of task.params) {
+    if (spec.kind !== 'number' || spec.seed === undefined) continue
+    const asked = held[spec.key]
+    if (typeof asked === 'number' && Number.isFinite(asked)) continue
+    if (ran[spec.key] !== spec.seed(context)) continue
+    out ??= { ...ran }
+    out[spec.key] = null
+  }
+  return out ?? ran
 }

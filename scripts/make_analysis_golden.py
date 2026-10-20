@@ -1461,6 +1461,303 @@ def chromosight_quantify_golden(chroms: list[str], limit: int) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# loop calling: HiCCUPS, as cooltools.dots computes it
+# ---------------------------------------------------------------------------
+
+#: The two configurations the loop-calling golden records. The first is
+#: `dots()`'s own defaults with the kernel `recommend_kernels` gives 10 kb bins
+#: — cooltools recommends none for the demo's 1 kb, and takes kernels from its
+#: caller there, which is what the task's form asks for — so its band is every
+#: chromosome whole. The second is `cooltools dots`' command-line defaults with
+#: a smaller kernel: a band narrower than the chromosomes, 45 λ-chunks, an FDR
+#: of 0.02 and a 39 kb clustering radius, each of which is a different path.
+HICCUPS_CONFIGS = {
+    "api": {
+        "w": 5,
+        "p": 2,
+        "max_loci_separation": 10_000_000,
+        "n_lambda_bins": 40,
+        "lambda_bin_fdr": 0.1,
+        "clustering_radius": 20_000,
+        "tile_size": 5_000_000,
+    },
+    "cli": {
+        "w": 3,
+        "p": 1,
+        "max_loci_separation": 200_000,
+        "n_lambda_bins": 45,
+        "lambda_bin_fdr": 0.02,
+        "clustering_radius": 39_000,
+        "tile_size": 6_000_000,
+    },
+}
+
+#: Rows of one tile whose every scored pixel the golden records, with its four λ.
+HICCUPS_TILE = ("I", (100, 120), (110, 175))
+
+
+def hiccups_golden(chroms: list[str]) -> dict:
+    """`cooltools.dots` on the demo cooler, stage by stage, and `dots()` itself.
+
+    The oracle with no `direct` half, for chromosight's reason: the algorithm is
+    the definition. What is recorded is what the package computes at each step
+    `dots()` takes, by calling the very functions it calls in its order — the
+    expected `expected_cis` gives it, the kernels, the λ-chunk edges, the
+    genome-wide histograms `scoring_and_histogramming_step` builds, the
+    thresholds `determine_thresholds` draws from them, the pixels
+    `scoring_and_extraction_step` extracts with their q-values, each one's
+    cluster as `clust_2D_pixels` labels it, and the calls `cluster_filtering_hiccups`
+    keeps — so that a disagreement says which step it is in. Then `dots()` is run
+    whole and its calls asserted equal to the staged ones, so the stages are its
+    stages and not a reconstruction of them.
+
+    The chromosomes are the view, and part of the answer: the thresholds are
+    drawn over every pixel of every chromosome in it.
+    """
+    import cooler
+    import cooltools
+    import pandas as pd
+    from cooltools.api import dotfinder
+    from cooltools.lib.common import assign_regions
+    from cooltools.lib.numutils import get_kernel
+
+    clr = cooler.Cooler(str(COOLER))
+    binsize = int(clr.binsize)
+    # `dots` wants its view in the cooler's own order.
+    order = [name for name in clr.chromnames if name in chroms]
+    view = pd.DataFrame(
+        {"chrom": order, "start": 0, "end": [int(clr.chromsizes[c]) for c in order], "name": order}
+    )
+    expected = cooltools.expected_cis(clr, view_df=view, ignore_diags=2, nproc=1)
+    kernel_names = ["donut", "vertical", "horizontal", "lowleft"]
+    out: dict[str, Any] = {
+        "cooler": COOLER.name,
+        "binsize": binsize,
+        "chroms": order,
+        "tool": "cooltools.api.dotfinder",
+        "expected": {
+            chrom: {
+                "balanced_avg": rounded(block["balanced.avg"].to_numpy(), 15),
+                "n_valid": [int(v) for v in block["n_valid"].to_numpy()],
+            }
+            for chrom, block in expected.groupby("region1", sort=False)
+        },
+        "configs": {},
+    }
+
+    indexed = expected.set_index(["region1", "region2", "dist"]).sort_index()
+    for name, cfg in HICCUPS_CONFIGS.items():
+        w, p = cfg["w"], cfg["p"]
+        kernels = {k: get_kernel(w, p, k) for k in kernel_names}
+        separation = dotfinder.bp_to_bins(cfg["max_loci_separation"], binsize)
+        tile_bins = dotfinder.bp_to_bins(cfg["tile_size"], binsize)
+        base = 2 ** (1 / 3)
+        n = cfg["n_lambda_bins"]
+        ledges = np.concatenate(
+            ([-np.inf], np.logspace(0, n - 1, num=n, base=base, dtype=np.float64), [np.inf])
+        )
+        tiles = list(dotfinder.generate_tiles_diag_band(clr, view, w, tile_bins, separation))
+        common = dict(
+            clr=clr,
+            expected_indexed=indexed,
+            expected_value_col="balanced.avg",
+            clr_weight_name="weight",
+            tiles=tiles,
+            kernels=kernels,
+            ledges=ledges,
+            max_nans_tolerated=1,
+            loci_separation_bins=separation,
+            nproc=1,
+        )
+        hist = dotfinder.scoring_and_histogramming_step(**common)
+        thresholds, qvalues = dotfinder.determine_thresholds(hist, cfg["lambda_bin_fdr"])
+        enriched = dotfinder.scoring_and_extraction_step(
+            **common, thresholds=thresholds, bin1_id_name="bin1_id", bin2_id_name="bin2_id"
+        )
+        with_q = dotfinder.annotate_pixels_with_qvalues(enriched, qvalues)
+        annotated = cooler.annotate(with_q, clr.bins()[["chrom", "start", "end"]], replace=True)
+        annotated = assign_regions(annotated, view)
+        radius = cfg["clustering_radius"]
+        centroids = dotfinder.clustering_step(annotated, radius).reset_index(drop=True)
+        calls = dotfinder.cluster_filtering_hiccups(centroids)
+
+        # Every pixel's cluster, by `clust_2D_pixels` itself, region by region as
+        # `clustering_step` calls it.
+        labelled = []
+        for _, block in annotated.groupby("region", observed=True):
+            labels = dotfinder.clust_2D_pixels(
+                block, threshold_cluster=radius, bin1_id_name="start1", bin2_id_name="start2"
+            )
+            labelled.append(block.join(labels))
+        labelled = pd.concat(labelled)
+
+        whole = dotfinder.dots(
+            clr,
+            expected,
+            view_df=view,
+            kernels=kernels,
+            max_loci_separation=cfg["max_loci_separation"],
+            n_lambda_bins=n,
+            lambda_bin_fdr=cfg["lambda_bin_fdr"],
+            clustering_radius=radius,
+            tile_size=cfg["tile_size"],
+            nproc=1,
+        )
+        keys = ["chrom1", "start1", "chrom2", "start2", "count"]
+        if not whole[keys].reset_index(drop=True).equals(calls[keys].reset_index(drop=True)):
+            raise SystemExit(f"hiccups {name}: the staged calls are not dots()'s own")
+
+        # One tile's scored pixels, every one, with the λ of each kernel.
+        tile_chrom, rows, cols = HICCUPS_TILE
+        offset = clr.offset(tile_chrom)
+        tile = (tile_chrom, (offset + rows[0], offset + rows[1]), (offset + cols[0], offset + cols[1]))
+        scored = dotfinder.score_tile(
+            tile, clr, indexed, "balanced.avg", "weight", kernels, 1, separation
+        )
+
+        def bins_of(frame, column):
+            # `cooler.annotate(replace=True)` swaps the bin ids for coordinates.
+            return [int(v) // binsize for v in frame[column]]
+
+        record: dict[str, Any] = {
+            "config": {**cfg, "max_separation_bins": separation},
+            "kernels": {k: [int(v) for v in kernels[k].ravel()] for k in kernel_names},
+            "ledges": [float(v) for v in ledges[1:-1]],
+            # The chunks' labels as pandas rounds them: their right ends are the
+            # λ `determine_thresholds` takes its Poisson tail at.
+            "labels": [float(iv.right) for iv in hist[kernel_names[0]].columns.categories[:-1]],
+            "histogram": {},
+            "thresholds": {k: [int(v) for v in thresholds[k].to_numpy()] for k in kernel_names},
+            "tile": {
+                "chrom": tile_chrom,
+                "rows": list(rows),
+                "cols": list(cols),
+                "bin1": [int(v - offset) for v in scored["bin1_id"]],
+                "bin2": [int(v - offset) for v in scored["bin2_id"]],
+                "count": [int(v) for v in scored["count"]],
+                **{k: rounded(scored[f"la_exp.{k}.value"].to_numpy(), 15) for k in kernel_names},
+            },
+            "enriched": {
+                "chrom": list(annotated["chrom1"]),
+                "bin1": bins_of(annotated, "start1"),
+                "bin2": bins_of(annotated, "start2"),
+                "count": [int(v) for v in annotated["count"]],
+                **{f"la_{k}": rounded(annotated[f"la_exp.{k}.value"].to_numpy(), 15) for k in kernel_names},
+                **{f"q_{k}": rounded(annotated[f"la_exp.{k}.qval"].to_numpy(), 15) for k in kernel_names},
+            },
+            "clusters": {
+                "chrom": list(labelled["chrom1"]),
+                "bin1": bins_of(labelled, "start1"),
+                "bin2": bins_of(labelled, "start2"),
+                "c_label": [int(v) for v in labelled["c_label"]],
+                "c_size": [int(v) for v in labelled["c_size"]],
+                "cstart1": rounded(labelled["cstart1"].to_numpy(), 17),
+                "cstart2": rounded(labelled["cstart2"].to_numpy(), 17),
+            },
+            "calls": {
+                "chrom": list(calls["chrom1"]),
+                "start1": [int(v) for v in calls["start1"]],
+                "start2": [int(v) for v in calls["start2"]],
+                "count": [int(v) for v in calls["count"]],
+                "c_label": [int(v) for v in calls["c_label"]],
+                "c_size": [int(v) for v in calls["c_size"]],
+            },
+            "n_centroids": int(len(centroids)),
+        }
+        for k in kernel_names:
+            frame = hist[k]
+            dense = frame.to_numpy()
+            rows_, cols_ = np.nonzero(dense)
+            # Sparse, as three columns: the row of the count, the chunk, the pixels.
+            record["histogram"][k] = {
+                "counts": [int(v) for v in frame.index],
+                "columns": int(dense.shape[1]),
+                "row": [int(r) for r in rows_],
+                "chunk": [int(c) for c in cols_],
+                "pixels": [int(dense[r, c]) for r, c in zip(rows_, cols_)],
+            }
+        out["configs"][name] = record
+        log.info(
+            "    hiccups %s: %d enriched pixels, %d centroids, %d calls",
+            name,
+            len(annotated),
+            len(centroids),
+            len(calls),
+        )
+
+    out["poisson"] = _hiccups_poisson()
+    out["birch"] = _hiccups_birch()
+    return out
+
+
+def _hiccups_poisson() -> list[dict]:
+    """`scipy.stats.poisson.sf` where `dots` evaluates it: every label λ, counts across its tail.
+
+    Each λ is a chunk label's right end, rounded as pandas rounds it, and the
+    counts run from zero through the bulk to where the tail underflows — so the
+    power series, the continued fraction and Temme's expansion are all reached,
+    and the count at which the tail becomes exactly zero, which decides the
+    threshold of a chunk too sparse to reach the FDR, is in the grid.
+    """
+    import pandas as pd
+    from scipy.stats import poisson
+
+    edges = np.logspace(0, 49, num=50, base=2 ** (1 / 3), dtype=np.float64)
+    cut = pd.cut(np.array([1.0]), np.concatenate(([-np.inf], edges, [np.inf])))
+    grid = []
+    for interval in cut.categories[:-1]:
+        mu = float(interval.right)
+        top = int(mu + 40 * math.sqrt(mu) + 800)
+        ks = sorted(set(range(0, 20)) | set(int(v) for v in np.linspace(0, top, 40)))
+        grid.append({"mu": mu, "k": ks, "sf": [float(poisson.sf(k, mu)) for k in ks]})
+    return grid
+
+
+def _hiccups_birch() -> list[dict]:
+    """sklearn's BIRCH on point sets that make it split nodes, as `dots` hands them over.
+
+    The demo's clusters are small enough that no node ever fills, so these are
+    drawn to fill them: blobs of pixels on a bin grid, sorted as `dots` sorts
+    them and passed through a DataFrame's `.values` as `clust_2D_pixels` passes
+    them, at a yeast scale and at a mammalian one. Of two dozen such sets drawn
+    while porting it, seven cluster differently unless every dot product rounds
+    as OpenBLAS's fused one does; these are two of the seven.
+    """
+    import pandas as pd
+    from sklearn.cluster import Birch
+
+    sets = []
+    for label, seed, binsize, span, spread, radius in (
+        ("yeast, 1 kb", 1, 1000, 1500, 8, 20_000),
+        ("mouse, 10 kb", 2, 10_000, 19_000, 4, 20_000),
+    ):
+        rng = np.random.default_rng(seed)
+        points = set()
+        for _ in range(200):
+            c1 = int(rng.integers(0, span))
+            c2 = c1 + int(rng.integers(5, 400))
+            for _ in range(int(rng.integers(1, 30))):
+                points.add(
+                    (c1 + int(rng.integers(-spread, spread + 1)), c2 + int(rng.integers(-spread, spread + 1)))
+                )
+        ordered = sorted(p for p in points if p[0] < p[1])
+        frame = pd.DataFrame([(a * binsize, b * binsize) for a, b in ordered], columns=["start1", "start2"])
+        coords = frame[["start1", "start2"]].values.astype(np.float64)
+        fit = Birch(n_clusters=None, threshold=radius, compute_labels=True).fit(coords)
+        sets.append(
+            {
+                "label": label,
+                "binsize": binsize,
+                "threshold": radius,
+                "bins": [int(v) // binsize for v in coords.ravel()],
+                "labels": [int(v) for v in fit.labels_],
+                "centers": [float(v) for v in fit.subcluster_centers_.ravel()],
+            }
+        )
+    return sets
+
+
+# ---------------------------------------------------------------------------
 # metaplot, over 1D tracks
 # ---------------------------------------------------------------------------
 
@@ -1961,6 +2258,7 @@ COVERAGE = {
     "apa_diagonal": "loop and local pileups reaching the diagonal, raw and O/E, against coolpuppy",
     "chromosight": "detection of loops and borders, against chromosight itself",
     "chromosight_quantify": "scores and the pileup for a given loop set, against chromosight quantify",
+    "hiccups": "loop calling, every stage of cooltools.dots, against cooltools itself",
     "metaplot": "mean bigWig signal around a real peak set, against pyBigWig",
     "overlap": "Jaccard and hit counts, against a per-base boolean mask",
     "hicontacts_ps": "P(s) contacts per break, against HiContacts::distanceLaw in R",
@@ -2120,6 +2418,7 @@ def main(argv: list[str] | None = None) -> int:
         ),
         ("overlap", overlap_golden, (), {}),
         ("hicontacts_ps", hicontacts_golden, ("bin:Rscript",), {"chroms": chroms}),
+        ("hiccups", hiccups_golden, ("cooltools", "sklearn"), {"chroms": chroms}),
         (
             "chromosight",
             chromosight_golden,
@@ -2183,6 +2482,9 @@ def main(argv: list[str] | None = None) -> int:
     versions: dict[str, str] = {}
     for module in (
         "numpy",
+        "scipy",
+        "pandas",
+        "sklearn",
         "cooler",
         "cooltools",
         "coolpuppy",

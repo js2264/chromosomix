@@ -56,7 +56,7 @@ import { calledSetFields } from '../ui/calledSurfaces'
 import { TASKS, tasksFor } from './registry'
 import { declaredOrigins } from './tasks/oriter'
 import { AnalysisRunner, type RunnerHost, type RunTarget } from './runner'
-import { rememberParams } from './memory'
+import { asAsked, recallParams, rememberParams } from './memory'
 import type {
   AnalysisContext,
   AnalysisFraming,
@@ -470,7 +470,13 @@ export class AnalysisWorkspace {
    */
   private adopt(task: AnalysisTask, result: TaskResult, on: RunTarget): void {
     const map = on.map
-    rememberParams(result.provenance.framing.uri, task.id, result.provenance.params)
+    const uri = result.provenance.framing.uri
+    const context = this.host.context(task)
+    rememberParams(
+      uri,
+      task.id,
+      asAsked(task, result.provenance.params, recallParams(uri, task.id), context?.uri === uri ? context : null),
+    )
 
     // **Before the early return below**, because this task produces neither a
     // profile nor an interval set: its output is a table, and its destination is

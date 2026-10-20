@@ -477,12 +477,10 @@ try {
     await shot('b35-session-ori')
 
     // The shipped tile with nothing uploaded yet names what builds it. A dev
-    // feature (§29): the switch goes on first, or `dbz` names no tile.
+    // feature (§29): asked for in the address, or `dbz` names no tile.
     page = await fresh()
     await page.route(DBZ_STORE, (route) => route.fulfill({ status: 404, body: 'Not Found' }))
-    await page.goto(`${BASE}/`)
-    await page.evaluate(() => localStorage.setItem('chromosomix:dev-features', 'on'))
-    await page.goto(`${BASE}/?store=dbz`)
+    await page.goto(`${BASE}/?dev&store=dbz`)
     await until('Nothing has been published', 30000)
     await sleep(1000)
     console.log('unpublished:', await page.evaluate(() => document.querySelector('.portal-status')?.textContent ?? ''))

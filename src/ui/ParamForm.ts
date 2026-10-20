@@ -1026,9 +1026,12 @@ export class ParamForm {
     // the open map's resolution, say — and follows it until the reader types.
     const held = (): number =>
       numberOr(this.params[spec.key], spec.seed?.(this.context) ?? spec.default)
+    // A seed the context has no answer for — a kernel at a resolution that has
+    // none of its own — is an empty box for the reader to fill, not `NaN`; the
+    // estimate refuses the run until it is filled and says why.
     const show = (value: number): void => {
-      box.value = String(value)
-      if (slider !== null) slider.value = String(value)
+      box.value = Number.isFinite(value) ? String(value) : ''
+      if (slider !== null && Number.isFinite(value)) slider.value = String(value)
     }
     const commitBox = (): void => {
       // On the *string*, not on `Number(box.value)`: `Number('')` is 0 and 0 is

@@ -411,6 +411,9 @@ describe('the cards', () => {
       'hicscore',
       'compartments',
       'interarm',
+      // Detection, the caller built for loops before the one that matches any
+      // of five templates, a loop among them.
+      'loops',
       'chromosight',
       'hicrep',
       // The pileup is about the matrix — it piles the matrix up at a set of

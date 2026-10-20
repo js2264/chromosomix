@@ -40,10 +40,37 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the figure exports as PNG or PDF. `scripts/ui-ideogram-view.mjs` drives it on the yeast and human
   demos.
 
+- **Licences, in *About* (§22.4).** Under the tutorial and the source link: chromosomix's own
+  licence, the GPL, then one line per project it is built with or ported from — three.js, Apache
+  ECharts, h5wasm, `@gmod/bbi`, cooltools, chromosight, yapc with IDR, SciPy, NumPy, scikit-learn,
+  Boost-HiC, fdlibm, matplotlib, Lucide and Simple Icons — each with what it does here and its
+  licence, a link to the build's `THIRD-PARTY-NOTICES.txt`, and a line on the store and service
+  marks. The dialog is wider and taller to hold it, so the build stamp is still on screen on a
+  laptop. The README's *Licence* section names the same projects, and a test holds the two to the
+  source.
+
+- **Loop calling, a 2D task of its own, just before Pattern detection (§18.8, §18.9).** It answers
+  the one question *where are the loops*, where Pattern detection matches a template of which a loop
+  is one of five. Every pixel is tested against four neighbourhoods of its own — a donut about it, a
+  bar through it each way and the square below and left of it — each giving the pixel a local
+  expected, in raw counts; pixels of a like expected are corrected together, in 40 log-spaced
+  λ-chunks at an FDR of 0.1, kernel by kernel; a pixel that passes all four is enriched, enriched
+  pixels within 20 kb are one loop, called at its brightest, and a filter keeps the loops that stand
+  1.5–2× over their neighbourhoods. The calls land on the map as rings and leave as BEDPE; beside
+  them, a table of every call with its four expecteds and q-values, the loop spectrum, and the count
+  each λ-chunk asked of a pixel. The kernel's two half-widths are filled in for bins of 4 to 28 kb
+  (`w 7, p 4` at 5 kb, `5, 2` at 10 kb, `3, 1` at 25 kb); on a map outside that range the boxes are
+  empty and the run is refused, saying why, until they are filled. A balanced map only. On the
+  command line it is `chromosomix loops`. It reproduces HiCCUPS as `cooltools.dots` 0.7.1 computes it,
+  with its Python API's defaults: held to that package's own output stage by stage over the demo
+  cooler (`test/golden/analysis/hiccups.json`), and genome-wide on a mouse Hi-C map at 10 kb in the
+  validation notebook's new § 19, where the same 236 loops are called with the same counts, clusters,
+  expecteds and q-values, in 48 s of CPU on one thread where cooltools takes 11 minutes over four.
+
 - **Every number the validation's figures draw, in one table (§18.10).** `notebooks/validation.qmd`
   writes `validation.txt` beside its page — <https://chromosomix.app/validation/validation.txt>, and
   `validation-<tag>.txt` among each release's assets — a tidy table with a row for every mark its
-  nineteen figures draw: each point, each vertex of a line, each hexagon of a density with its count,
+  twenty figures draw: each point, each vertex of a line, each hexagon of a density with its count,
   each cell of a picture, each bar, band and line across a panel, each tick that names something and
   each text, with the figure's label, the panel's letter and axes, and what the mark stands for. It
   is read off each figure as the page shows it, so any figure can be drawn again from it alone. A
@@ -110,6 +137,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **chromosomix is now under the GNU General Public License, version 3 or later, in place of MIT
+  (§22.4, §18.9).** Peak calling is ported from yapc (GPL-3.0) and the IDR test it thresholds by
+  from IDR (GPL-2.0 or later), and a translation of GPL code can only be distributed under the GPL.
+  Version 3 is the one that admits both of them and echarts' Apache-2.0 together. Both ports shipped
+  in 0.15.0, which was labelled MIT. `LICENSE` is the GPL's text, `package.json` says
+  `GPL-3.0-or-later`, and the README, *About*, `llms.txt` and every build's notices say so.
+  Everything else the builds carry was already under a licence compatible with it.
+
+- **Pattern detection's own words name no package (§18.8).** Its row reads *Find loops, borders,
+  hairpins, centromeres or stripes by template matching*, its thresholds are *the template's own
+  numbers, tuned for it and published with it*, and the note on a file with no weights speaks of
+  *the published method*. Its keywords no longer take *loop calling* or *call loops*, which find
+  Loop calling first; its command is still `chromosomix chromosight`.
+
 - **The package is published without a token (§22.3).** The release workflow publishes to npm by
   trusted publishing: npm takes the upload only from this repository's `release.yml`, by the
   short-lived identity GitHub gives the run, and publishes it with provenance, so each version on
@@ -132,7 +173,36 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   exact reads, where each read paid a 1 MiB slice of the disk: 11 MB for that chicken genome, where
   it was 222 MiB.
 
+### Removed
+
+- **The *dev features* switch in *About* (§29.1, §26.3).** It sat under the version, and it was the
+  one control in a dialog of facts and the one trace anywhere on screen of what is still being
+  built. *About* now carries none: nothing a reader sees names the switch or what it hides. The
+  slider it was drawn as, the one toggle in the application with a track and a knob, goes with it.
+
 ### Fixed
+
+- **Every build's notices name the code ported into it (§22.4).** Analyses that follow a
+  reference implementation function for function — cooltools' HiCCUPS and peak prominence, cooler's
+  region parsing, chromosight's detection functions, yapc's peak calling and IDR's fit, SciPy's
+  cephes and `fminbound`, NumPy's pairwise sum and samplers, scikit-learn's BIRCH, Boost-HiC and
+  fdlibm's `erf` — owed their
+  upstreams' licences as any copy does, and `THIRD-PARTY-NOTICES.txt` named none of them. Each is
+  now listed, its licence committed verbatim under `licenses/`. The notices also reproduce
+  chromosomix's own licence first, which the desktop app and the standalone page carried nowhere,
+  and the MIT licence `generic-filehandle2` declares but does not ship, where they said only that
+  it had none.
+
+- **A number the map decides still follows the map after a run (§18.2).** A run is handed every
+  such number answered, so that its record says what it read, and that answer was what the form
+  remembered: after a run, Base composition's and Signal by group's bin size stayed at the rung the
+  run was on instead of following the next. The form now remembers a run as it was asked, the
+  number left to the map unless the reader typed one.
+
+- **A log axis draws its first and last ticks (§18.13).** Where the figure gives an axis its own
+  ticks, at 1, 2 and 5 or every digit of a decade, the library hid the first and the last of them
+  whenever the axis's fitted end went unlabelled, grid lines and all: a loop spectrum from 10.9 kb had
+  no tick below 30 kb. An end goes unlabelled now only where a tick sits on it.
 
 - **A 1D task is one Run, deck or not (§18.1, §18.4).** The 1D tasks read the loaded tracks and
   sequences and never a map, yet a deck offered them *run on ★* and *run on all N maps*: the batch

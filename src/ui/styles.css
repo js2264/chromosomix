@@ -2286,7 +2286,6 @@ p {
    button says the opposite of what it is. */
 .btn-toggle[aria-pressed='true']:not(:disabled),
 .btn-icon[aria-pressed='true']:not(:disabled),
-.btn-switch[aria-pressed='true']:not(:disabled),
 .btn-icon[aria-expanded='true']:not(:disabled),
 .ann-flip.is-on,
 .structure-select.is-on,
@@ -4963,6 +4962,14 @@ canvas.is-frozen {
   width: min(46rem, 100%);
 }
 
+/* About: as wide as the wide dialogs, for the licences' three columns, and
+   taller than any, so the build stamp under them is on screen without a
+   scroll on a laptop. Still inside the backdrop's 8vh top margin. */
+.modal-about {
+  width: min(48rem, 100%);
+  max-height: 88vh;
+}
+
 /* The keyboard sheet, and the one dialog that is wider than wide: its body is
    three columns of short rows, and at 46rem it was two — which made the View
    group's twenty-one rows the height of the dialog on their own and pushed the
@@ -5572,11 +5579,90 @@ canvas.is-frozen {
 .about-body {
   overflow: auto;
   padding: 0.4rem 0.9rem 1rem;
-  max-width: 60ch;
 }
 
 .about-body p {
   margin: 0.6rem 0;
+}
+
+/* Whose work this is (`licences.ts`): set off by a rule like the build stamp
+   under it, and a table in three columns — the project, what it does here and
+   its licence — so the eye runs down the licences as one list. The rows are a
+   subgrid, so every column lines up while each row stays a list item. */
+.about-licences {
+  border-top: 1px solid var(--border);
+  margin-top: 0.9rem;
+}
+
+.about-body .about-heading {
+  margin: 0.8rem 0 0.2rem;
+  font-size: var(--step--1);
+}
+
+/* A link in a sentence or a list of names: the prose's own type in the accent,
+   where `.link` is monospace for an address. */
+.about-link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.about-link:hover {
+  color: var(--text);
+}
+
+.about-licence-list {
+  display: grid;
+  grid-template-columns: max-content 1fr max-content;
+  gap: 0.15rem 1rem;
+  margin: 0.5rem 0 0.7rem;
+  padding: 0;
+  list-style: none;
+  font-size: var(--step--1);
+}
+
+.about-licence-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+}
+
+.about-licence-with,
+.about-licence-what {
+  color: var(--text-dim);
+}
+
+.about-licence-id {
+  color: var(--text-faint);
+  text-align: right;
+}
+
+.about-body .about-fine {
+  font-size: var(--step--1);
+  color: var(--text-faint);
+}
+
+/* A phone: no room for three columns, so each project is two lines — its name,
+   then what it does and its licence. */
+@media (max-width: 40rem) {
+  .about-licence-list {
+    display: block;
+  }
+
+  .about-licence-row {
+    display: block;
+    margin-bottom: 0.4rem;
+  }
+
+  .about-licence-name {
+    display: block;
+  }
+
+  .about-licence-id::before {
+    content: ' · ';
+  }
 }
 
 /* The two buttons of the §12 listing gate, side by side and equally weighted:
@@ -5608,30 +5694,6 @@ canvas.is-frozen {
   user-select: text;
 }
 
-/* The dev features switch (§29.1), under the version picker and set off from
-   it by a rule: it is the one control in a dialog of facts, and the one trace a
-   dev feature leaves anywhere a reader looks. */
-.about-dev {
-  border-top: 1px solid var(--border);
-  margin-top: 0.6rem;
-  padding-top: 0.6rem;
-}
-
-.about-dev-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: var(--step--1);
-  color: var(--text-dim);
-  cursor: pointer;
-}
-
-.about-dev-hint {
-  margin: 0.3rem 0 0;
-  font-size: var(--step--1);
-  color: var(--text-faint);
-}
-
 /* The guided tutorial's offer (§30): a box of its own straight under what the
    viewer is, since it is the one thing in a dialog of facts that a newcomer
    came for. */
@@ -5658,55 +5720,6 @@ canvas.is-frozen {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-}
-
-/* A slider: the one toggle in the application drawn as a track and a knob.
-
-   It is lit by the rule that lights every toggle (§26.3) — border, fill and
-   colour, from `aria-pressed` — and the knob is `currentColor`, so on is the
-   knob in the accent, moved across. The slider is how it is drawn, never a
-   second way of saying it is on. */
-.btn-switch {
-  position: relative;
-  flex: none;
-  width: 2.2rem;
-  height: 1.25rem;
-  padding: 0;
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  background: var(--bg-muted);
-  color: var(--text-faint);
-}
-
-.btn-switch-knob {
-  position: absolute;
-  top: 50%;
-  left: 0.15rem;
-  width: 0.85rem;
-  height: 0.85rem;
-  border-radius: 50%;
-  background: currentColor;
-  transform: translateY(-50%);
-  transition: left 120ms ease;
-}
-
-.btn-switch[aria-pressed='true'] .btn-switch-knob {
-  left: calc(100% - 1rem);
-}
-
-/* Pointed at while off, the knob darkens rather than taking the accent: an
-   accent knob on the left read as half on, and the accent means *on* here and
-   nothing else (§26.5). */
-.btn-switch:hover:not(:disabled):not([aria-pressed='true']) {
-  border-color: var(--text-dim);
-  background: var(--bg-muted);
-  color: var(--text-dim);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .btn-switch-knob {
-    transition: none;
-  }
 }
 
 /* The version picker, directly under that stamp and deliberately continuous

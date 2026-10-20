@@ -1015,7 +1015,13 @@ export class AnalysisDrawer {
    */
   private seeded(task: AnalysisTask): Params {
     const context = this.context()
-    return context === null ? this.params : resolveSeeds(task.params, context, this.params)
+    if (context === null) return this.params
+    // Remembered as the form holds them, seeds unanswered, before the run is
+    // handed them answered: what the run's own record is remembered against
+    // when it comes back (`asAsked`), so a reader who pressed Run without
+    // typing still has a form that follows the map.
+    rememberParams(context.uri, task.id, this.params)
+    return resolveSeeds(task.params, context, this.params)
   }
 
   /**

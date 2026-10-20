@@ -44,6 +44,7 @@ node scripts/ui-deck-cells.mjs gallery       # a tracks cell's axis, both anchor
 node scripts/ui-correlation.mjs gallery      # the map's correlation at 4,096, 2,048 and 1,024 bins with its wait printed, the veil, a whole chromosome, the Compartments warning, yeast IV: co1 … co9
 node scripts/ui-compartments.mjs gallery     # the Compartments table under cooltools and under the correlation, each printed: cp1, cp2
 node scripts/ui-interarm.mjs gallery         # Inter-arm alignment's form, and its table, the enrichment after detrend beside the enrichment, on E. coli, on P. aeruginosa PAK (read from the zoo) and on B. subtilis 45 min into ParB induction, printed; on PAK the profile after detrend on the measurement's axis and the decay curves; then the ParB time course as one deck, its all-maps table drawn as the reach against the minutes in each map's name with its least-squares line, over every point and over a box drawn across the points under way: ia1 … ia9
+node scripts/ui-loop-calling.mjs gallery     # Loop calling on the yeast demo (§18.8): its row before Pattern detection, both under `loop`, the form on 1 kb with the kernel's boxes empty and the run refused saying why, the half-widths typed and the price, a run's notes, the loops as a table, the loop spectrum and the contacts each λ-chunk asked, the loops as rings on IV and close up, then a 5 kb rung after the run — the typed kernel kept, reach and radius following the rung — and the same rung fresh, the kernel for 5 kb bins in its boxes: lo01 … lo15
 node scripts/ui-arm-baseline.mjs gallery    # the score picker's arm decay on PAK: offered once the first open ticks the circle, both diagonals with arms off, the card, ori keeping it, a hover, expected beside it, the link, unticked and ticked, and not on yeast: ab01 … ab10
 node scripts/ui-peaks.mjs gallery-peaks      # peaks called on a bigWig, alone and with a replicate: p01 … p13
 node scripts/ui-task-segments.mjs gallery-segments  # every called set as one row: peaks as a track under ATAC, insulation's boundaries as a track and its domains as corners, A/B segments by name, the display moving a set onto the map and back, a reload keeping it, and the 1D browser's track with no display: s01 … s14
@@ -55,7 +56,7 @@ node scripts/ui-deck-drops.mjs gallery       # the header's + before back (§5.5
 node scripts/ui-contacts.mjs gallery         # the breadcrumb's contacts box: 10M typed, the figure and a task on the drawn map, a deck's chevrons down and up, two files in one square, a Boost-HiC refusal and its two ways out: ct01 … ct18
 node scripts/ui-stranded.mjs gallery         # P(s)'s four orientations on the lab's toy library: the .pairs binned on the fly, then a .pairs dropped on the .mcool's form, and an address: st01 … st09
 node scripts/ui-turned-marks.mjs gallery     # the reader's lines on a turned map: a V on the band, straight on down the lanes, re-cut by a zoom, an arm from off the side; then a hovered bead's echo, the same V dashed: tm01 … tm06
-node scripts/ui-dev-features.mjs gallery     # the dev features switch (§29): the lab store, About and a .metacool refused with it off, the switch pressed, the same three on, and off again: d01 … d08
+node scripts/ui-dev-features.mjs gallery     # dev features (§29): the store tiles, the lab store, About and a .metacool refused without them, then the same four with them, About carrying no switch either way: d00 … d07
 node scripts/ui-edit.mjs gallery             # the stage that edits the reference (§27, dev): the heading's word, the whole genome, a snap, a stretch selected and turned, the bow-tie zoomed, a drag with the map rearranged, a box, the set-aside menu, an undo, the heading edited, dark, and dev off: e01 … e14
 node scripts/ui-edit-bar.mjs gallery         # the pieces bars as handles (§27.3, §27.4): a piece's readout, a sequence dragged onto another's end with ⇧, the join, a piece turned by a double click: b01 … b04
 node scripts/ui-edit-order.mjs gallery       # the stage's sidebar cards, a whole sequence pressed, ↑ moving it, a grip dragged down the list, a piece let go between two sequences, review: o01 … o07
@@ -380,7 +381,7 @@ chromosome I with EFB1's arc beside it, from a session it writes to `demo/yeast/
 prints every row, card and hit it met. Run it after any change to `render/ideogram.ts`,
 `render/junctions.ts`, `render/sashimi.ts`, the two parsers, or the band search.
 
-`scripts/ui-ideogram-view.mjs` drives **the ideogram view** (§5.10), a dev feature it turns on, on
+`scripts/ui-ideogram-view.mjs` drives **the ideogram view** (§5.10), a dev feature it asks for, on
 the yeast tracks demo from a session it writes to `demo/yeast/` and removes: the karyotype, ATAC
 (with a ceiling under the rDNA's pile-up), Pol II, MNase as a heatmap, the micro-C loops and a file
 of pairs between the centromeres it writes beside them, the peaks and the genes open but hidden,

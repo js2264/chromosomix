@@ -7554,11 +7554,15 @@ Parameters are remembered per file and per task, and travel in an exported sessi
 a figure is opening the session and pressing Run.
 
 **A number can take its default from the file.** Base composition's bin size, and *Signal by group*'s,
-is the open map's resolution until the reader types another, and 10 kb where no map is open (§18.8).
-The form shows what that comes to on the file in front of it and follows a change of resolution,
-because the answer is still *the map's*; the run is handed the number itself, and its record, its
-command line and a replay carry that number. A `chromosomix` line with no such flag gets the same
-rule from the map it names, or 10 kb with none.
+is the open map's resolution until the reader types another, and 10 kb where no map is open; *Loop
+calling*'s kernel is the one for the open map's bins, and its scan's reach and clustering radius are
+10 Mb and 20 kb in them (§18.8). The form shows what that comes to on the file in front of it and
+follows a change of resolution, because the answer is still *the map's*; the run is handed the number
+itself, and its record, its command line and a replay carry that number. **After a run as before
+one**: what the form remembers of a run is what it was asked, so a number the reader left to the map
+is still the map's, and a run on the 1 kb rung does not leave the 10 kb rung's form holding 1 kb's
+answer — ten times the reach it meant. A `chromosomix` line with no such flag gets the same rule from
+the map it names, or 10 kb with none.
 
 **A locus parameter is in the typed form of §26.1** — 1-based and inclusive, digits grouped or not,
 `IV:1,000,001-1,400,000` — wherever it is held: in the form, in a result's provenance and the
@@ -8160,7 +8164,7 @@ exact stamp is that line's tooltip, so it is one hover from the words and identi
 
 ### 18.8 The catalogue
 
-Thirty-one tasks, in **four cards — 2D, 3D, 1D and Metagenome**, headed *2D tasks*, *3D tasks*,
+Thirty-two tasks, in **four cards — 2D, 3D, 1D and Metagenome**, headed *2D tasks*, *3D tasks*,
 *1D tasks* and *Metagenome*. The build order is in `docs/TASKS_PLAN.md`; what follows is what each
 one must be.
 
@@ -8183,14 +8187,14 @@ because a reader with no structure loaded has exactly one thing to do in it; *fi
 the other from a track. Five tasks are **dev features** (§29.3), absent rather than greyed while the
 switch is off and in every embed: the four metagenome tasks (`metacool`), and their card with them,
 and the 1D card's last, *Two sequences against each other* (`dotplot`); `chromosomix` lists and
-runs all thirty-one (§29.5). The 3D card's three — *Model from the map*, *Model versus map* and
+runs all thirty-two (§29.5). The 3D card's three — *Model from the map*, *Model versus map* and
 *Spatial tracks* — are specified beside the structures they make and read (§25.6), and the dot plot
 beside the view it draws (§28); every other task is below.
 
 **Which card each sits on**, in the registry's order: *2D tasks* — coverage and marginals, cis and
 trans per sequence, per-cell contact QC, P(s), the scalogram, the 4C profile, diamond insulation, the
-directionality index, the HiC score, compartments, inter-arm alignment, pattern detection,
-reproducibility and aggregate peak analysis; *3D tasks* — model from the map, model versus map and
+directionality index, the HiC score, compartments, inter-arm alignment, loop calling, pattern
+detection, reproducibility and aggregate peak analysis; *3D tasks* — model from the map, model versus map and
 spatial tracks; *1D tasks* — find a motif, peak calling, base composition, origin and terminus, the
 metaplot, track correlation, FRiP, signal by group, interval set overlap and the dot plot;
 *Metagenome* — MAG contact QC, the inter-MAG network, MAG purity and split-MAG detection. The entries
@@ -8614,6 +8618,37 @@ should: 3.1–3.2× on *P. aeruginosa* PAK from 2 to 16 kb, reaching 3.0 of its 
 *E. coli* MG1655 from 2 to 20 kb, whose arms are not aligned; and after detrend PAK's is 0.93–0.97×.
 Each square is read whole, so a sequence past Compartments' 8,192-bin gate is left out and named. Absent on a metacool,
 whose MAGs have no declared origins.
+*Loop calling* — the one question *where are the loops*, which Pattern detection answers as one of
+five shapes it can be handed: HiCCUPS (Rao et al. 2014) as `cooltools.dots` computes it, ported with
+its Python API's defaults. Every pixel the scan reaches is tested against four **neighbourhoods** of
+its own — the donut about it, a bar through it each way and the square below and left of it, out to
+the kernel's outer half-width `w` and with the square of half-width `p` about the pixel left out —
+whose **locally adjusted expected** is the distance decay at the pixel times what the neighbourhood
+holds over what the decay says it should, on the balanced map, scaled back to the pixel's raw count
+by its two weights so that a raw count is tested against a Poisson tail. The pixels are put in
+**λ-chunks** of like expected, 40 by default, log-spaced by 2^⅓, and Benjamini–Hochberg runs within
+each chunk, kernel by kernel, to the count a pixel of that chunk must reach; a pixel that reaches all
+four is **enriched**, enriched pixels within the **clustering radius** of each other are one loop,
+called at its brightest — clustered by BIRCH, as `dots` clusters them — and the **enrichment
+filter** keeps a loop at 1.5× its vertical and horizontal expecteds, 1.75× its donut and lower-left
+ones and 2× one of those two, and a cluster of one pixel only at q-values summing to 0.02 or less.
+**The kernel is the one setting with no default.** cooltools has kernels for 4 to 28 kb bins —
+`w 7, p 4` from 4 kb, `5, 2` from 8 kb, `3, 1` from 18 kb, Rao et al.'s — and refuses any other
+resolution unless it is handed one; so the two half-widths are seeded from that table, and on a map
+outside it the boxes are empty and the run is refused, saying why, until the reader fills them.
+Every other default is `dots()`'s, in the map's bins where it is a distance: 10 Mb from the
+diagonal, a 20 kb radius, an FDR of 0.1 — where cooltools' command line has 2 Mb, 39 kb and 0.02 —
+and like Base composition's bin size they follow a change of resolution until typed (§18.2). Four
+outputs: the **loop set**, a BEDPE that lands on the map as rings the moment the run finishes; a
+**table** of every call with its four expecteds and q-values; the **loop spectrum**, each loop's
+enrichment over its donut against separation (below); and **the contacts each λ-chunk asked of a
+pixel**, kernel by kernel against the line where a pixel merely meets its expected — the
+correction drawn, which is where a sparse map shows it was held to thresholds nothing in it could
+reach. A balanced map only: the expected is the balanced map's, so a file with no weights waits,
+saying to run `cooler balance`. **The task's own words name no package**: its row, its form, its
+notes, its figures and its command, `chromosomix loops`, say *loop calling*, and Pattern
+detection's row, form and notes name none either; the package each is a port of is named here, in
+§18.9 and §18.10, and in the validation notebook, where what is claimed for it is checked.
 *Pattern detection*, which is chromosight — loops, borders, hairpins, centromeres and stripes, by
 normalised cross-correlation against a template, over a map detrended by its own distance law, with
 neighbour suppression and a Benjamini-Hochberg q-value on every call. **The pattern is a parameter
@@ -8649,9 +8684,10 @@ a log axis, for the reason every distance plot here is. Drawn only off the diago
 separation to plot against; thinned by rank in separation past a couple of thousand marks, never
 truncated, so it stays the same picture. The same plot comes back from the chromosight **pileup**
 (where the scores are per anchor rather than per call) and from the ordinary APA over a loop set,
-where the quantity on the ordinate is each anchor's own P2LL. This is the one task whose
+where the quantity on the ordinate is each anchor's own P2LL, and from *Loop calling*, where it is
+each loop's count over its donut's expected. This and *Loop calling* are the two 2D tasks whose
 output is a *claim about the data* rather than a summary of it, which is why §18.9's paragraph
-against loop calling is answered in that section rather than here, and why its golden is the
+against loop calling is answered in that section rather than here, and why each one's golden is its
 package's own output rather than a re-derivation (§18.10).
 *Reproducibility* is the one task in the catalogue whose unit is a **pair of files**, and it is a
 port: HiCRep's stratum-adjusted correlation (Yang et al. 2017), which smooths both maps with a 2D
@@ -9138,7 +9174,18 @@ functions and its `main()` loaded as they are, IDR's fit at the commit yapc cite
 for region, summit for summit and cut for cut (§18.10). A cut of this app's own devising is still
 refused: a single track is reported as a ranked candidate list with no significance claimed, rather
 than cut at a valley in its histogram or at a score that looked about right, because yapc's cut is
-IDR and nobody published another.
+IDR and nobody published another. A port of either is a translation of GPL code — yapc is GPL-3.0,
+IDR GPL-2.0 or later — and is why chromosomix itself is under the GPL, version 3 or later (§22.4).
+
+**Loop calling is the third, and the one the original rule named.** *Loop calling* is HiCCUPS as
+`cooltools.dots` 0.7.1 computes it — the Python API's defaults, a kernel from cooltools' own table
+or the reader's — and its golden is that package's own output over `demo/yeast/`, stage by stage, in
+two configurations, the API's and the command line's (`test/golden/analysis/hiccups.json`). The port
+does not improve on it here either. The λ-chunk labels pandas rounds to three decimals are the λ the
+Poisson test and the q-values are taken at, and a pixel a hair past the last rounded label is
+dropped, as `dots` drops it; the tail is SciPy's `pdtrc`, Temme's asymptotic series included; and the
+clusters are sklearn's BIRCH down to the roundings the BLAS beneath it fuses, without which a pixel
+equidistant from two subclusters joins the other one.
 
 **Contact-based reordering and scaffolding: the reference editor (§27).** ~~No contact-based contig
 reordering or scaffolding. It would only be useful if the reordering could be written back into a
@@ -9150,7 +9197,7 @@ in its coordinates. It is **written as new files** — an AGP, a Juicebox `.asse
 FASTA, lifted tracks — each of which is authoring an output, which §13 never refused. And it is
 **re-applied** from the AGP or the `.assembly` to the same library's other files. What stays refused
 is what the rule was protecting: the file that was opened is never modified. The editor is a dev
-feature (§29.3), drawn only once the switch in *About* is on.
+feature (§29.3), drawn only while the dev features are on.
 
 **No writing of a `.cool`, `.mcool` or `.metacool` this app derived.** ~~No writing of `.cool`,
 `.mcool` or `.metacool`.~~ The original rule was the second sentence, and its reason still stands: a
@@ -9277,9 +9324,9 @@ are floats rather than counts:
 
 - **`scripts/make_golden.py` gains an analysis section**, guarded so that a machine without the extra
   packages still produces every existing golden. The new developer-side Python dependencies are
-  **cooltools** (expected, insulation, eigenvectors, saddle), **coolpuppy** (pileups),
-  **chromosight** (detection and quantification), **deeptools** (`computeMatrix`, for the 1D
-  metaplots) and **pyBigWig** (the writer cross-check).
+  **cooltools** (expected, insulation, eigenvectors, saddle, dots), **scikit-learn** (the clustering
+  `dots` calls), **coolpuppy** (pileups), **chromosight** (detection and quantification),
+  **deeptools** (`computeMatrix`, for the 1D metaplots) and **pyBigWig** (the writer cross-check).
 - **The tolerance is recorded per task in the golden file**, not written into the test, so it is data
   that can be tightened: relative `1e-6` for anything that is a sum or a ratio of sums, `2e-6` where
   numpy's float64 is held to arithmetic over the `Float32Array` a block reaches a task as, `1e-4` for
@@ -9354,6 +9401,19 @@ the residue lands as `3.2e-8` **absolute** on coefficients of a few ten-thousand
 orders below the 0.15–0.3 a call has to reach, which is why the calls compare exactly and the map
 compares against an absolute floor.
 
+**The loop caller's golden is staged the same way, for the same reason.** `dots` is the definition of
+what it calls, so its golden is its own functions called in its own order over the demo cooler — the
+expected `expected_cis` hands it, the kernels, the λ-chunk edges and the labels pandas cuts by, the
+chunk every scored pixel of a tile falls in and its four expecteds, the four histograms whole, the
+thresholds, every enriched pixel with its expecteds and q-values, the clusters with their centroids,
+and the calls — and then `dots()` itself, asserted equal to the staged calls before anything is
+written, in two configurations: the API's defaults at `w 5, p 2`, and the command line's at `w 3,
+p 1`. The thresholds, the histograms, the clusters and the calls compare exactly; the expecteds to
+`1e-13` and the q-values to `1e-11`, relative, since the expected is summed in a different order and
+the tail is a series. Beside it, the tail at 2,950 points over fifty λ against SciPy's own, exactly
+zero where SciPy's is, and BIRCH on two point sets whose nodes split and whose distances tie, chosen
+because a plain rounding of them clusters otherwise.
+
 **And one golden is against R rather than Python, for the curve the panel actually draws.**
 `HiContacts::distanceLaw()` is P(s) as a *probability density* — the share of all cis contacts at a
 separation, per base pair — where cooltools' `expected-cis`, goldened above, is P(s) as a *mean per bin
@@ -9416,14 +9476,14 @@ takes the same coordinate-ascent fallback, with SciPy's bounded Brent ported bes
 the same 1,615 to 1,630 peaks at the six thresholds.
 
 **And beside the goldens, two notebooks at full size.** `notebooks/validation.qmd`, rendered with
-Quarto, runs eighteen analyses twice over public data, each file named by its accession and fetched
+Quarto, runs nineteen analyses twice over public data, each file named by its accession and fetched
 from where it was published (4DN's; GEO's yeast Micro-C; and UCSC's mm10 sequence and RefSeq genes
 as Illumina iGenomes distributes them) — once through `chromosomix`, once through the package each
 reproduces, called as it is meant to be called and never re-implemented — and lines the two up bin
 by bin or call by call: insulation, compartments, P(s), coverage and virtual 4C against cooltools;
 the directionality index against `domaincaller`; peak calling with IDR on two replicates against
 yapc 0.1; loops against chromosight 1.6.3, and the pileup's chromosight score against `chromosight
-quantify`; pileups — raw, over the expected and over distance-matched controls, off the diagonal and
+quantify`; loop calling, genome-wide on a mouse map at 10 kb, against `cooltools.dots`; pileups — raw, over the expected and over distance-matched controls, off the diagonal and
 on it — against coolpuppy; reproducibility against `hicrep` 0.2.6; the 3D model against pastis;
 Boost-HiC against its own Python, through `chromosomix boost` (§6.5); the metaplot against
 deepTools, over one track and over two, its heatmaps in `plotHeatmap`'s order; interval overlap and its shuffled null against bedtools; base composition against
@@ -9761,7 +9821,10 @@ of them, about six to the axis — the library's own step there is ten decades, 
 drawn as violins, and a step handed to it is counted from the axis's end, which on a fitted axis
 is no decade (`1.2e-10`, `1.2e-8`); and with fewer than three decades inside, where the library
 labels only decades, at 1, 2 and 5 of each, then at every digit, then on a linear ladder — a P(s)
-zoomed to 221 kb – 783 kb had no label at all.
+zoomed to 221 kb – 783 kb had no label at all. **And every one of those ticks is drawn**: the library
+hides the first and the last of the ticks it is handed where an axis's end label is left bare, wherever
+they fall, so a loop spectrum fitted from 10.9 kb lost its 20 kb tick, and the grid line with it; an
+end's label is left bare only where the first or the last tick is that end.
 
 **A legend down the right is beside the plot, never over it.** Its room was a fixed 132 pixels, and
 a series named after its file — `T4dNDD-infection.10min.mcool::5000`, as a map in a deck is — ran
@@ -10600,8 +10663,12 @@ fork's, skips the registry rather than being refused by it.
 
 ### 22.4 The notices: what every build owes what it carries
 
-chromosomix is MIT, and most of what it compiles in is permissive — but each of those licences is a
-condition on every copy, and a bundle is a copy. echarts is Apache-2.0, which asks for its licence
+chromosomix is under the **GNU General Public License, version 3 or (at your option) any later
+version** — `LICENSE`, and `GPL-3.0-or-later` in `package.json`. It was MIT until peak calling was
+ported from yapc (GPL-3.0) and IDR (GPL-2.0 or later, §18.9): a translation of GPL code can only be
+distributed under the GPL, and version 3 is the one that admits both of them and echarts' Apache-2.0
+at once. Everything else it carries is permissive and compatible with it — but each of those licences
+is a condition on every copy, and a bundle is a copy. echarts is Apache-2.0, which asks for its licence
 and its NOTICE to travel with the work; zrender, and the HDF5 inside h5wasm, are BSD-style and ask
 for their notices in any redistribution in binary form; every MIT and ISC licence asks for its
 copyright line in all copies or substantial portions. Minifying drops the comments that carried
@@ -10633,6 +10700,32 @@ upstream that is not an npm package, a text committed verbatim under `licenses/`
 off the generated file's own header where it records one, so the notice names what the material came
 from rather than what is installed today. A test holds every such file to existing, since renaming
 one would drop its upstream's licence without a word.
+
+**So is code ported from a reference implementation.** §18.9 holds an analysis to the numbers its
+reference gives, and some of them get there by following that code function for function, in its
+order — a translation, which is a copy in another language and owes what a copy owes. Each is named
+by the files that hold it, beside the material above: yapc's peak calling (GPL-3.0) and IDR's fit
+(GPL-2.0 or later), cooltools' HiCCUPS and peak prominence (MIT),
+cooler's region parsing (BSD-3-Clause), chromosight's detection functions (MIT, with its kernels),
+the cephes functions SciPy's `xsf` carries and SciPy's `fminbound` (BSD-3-Clause), NumPy's pairwise
+sum and its two samplers (BSD-3-Clause, and NCSA or BSD-3-Clause for `numpy.random`), scikit-learn's
+BIRCH (BSD-3-Clause), Boost-HiC (MIT) and fdlibm's `erf` (Sun's notice). An implementation written
+from a paper and checked against a tool's output owes that tool nothing, and is not listed.
+
+**chromosomix's own licence leads the texts**, because the desktop's asar and the standalone page
+carry no `LICENSE` beside them. **A package that ships no licence text** — `generic-filehandle2`,
+which declares MIT and has no text of it in its tarball or its repository — has the licence it
+declares, naming the author it names, committed under `licenses/` and reproduced in its place.
+
+**About names them too**, under *Licences*: chromosomix's own licence, the GPL, then one line per project —
+its name linking to its home, what it does in this viewer, and its licence — with a dependency folded
+in beside what pulls it in, and a link to the build's own `THIRD-PARTY-NOTICES.txt` (the site's, from
+the desktop and the standalone page, which have none a link can open). The list is
+`src/licences.ts`, and `test/unit/licences.test.ts` holds it to every package the source imports and
+everything those pull in, to every entry the notices name as copied or ported, and to the README's
+*Licence* section. Then one line on the marks of the stores and services the interface shows. The
+dialog is wider than a plain one for its three columns, and taller, so the build stamp under them is
+on screen on a laptop.
 
 Each check asserts the notices are there — the package's (§22.3), the archived pin's (§21), the
 desktop renderer's (§15) and the standalone page's (§19) — because a notice that stopped being
@@ -13012,12 +13105,6 @@ in `ui/styles.css` draws all of them. `test/unit/toggle-look.test.ts` holds the 
 refuses a second lit look. A toggle that has become unavailable is unavailable first: the lit rule
 stands down for `:disabled`.
 
-**One toggle is drawn as a slider** — *dev features* in *About* (§29.1), a track and a knob, because a
-switch that reloads the window should look like the switch it is rather than like one more button in
-a dialog of facts. It is still a `button` with `aria-pressed`, lit by the same rule as every other
-toggle; the knob is `currentColor`, so *lit* is the knob in the accent, moved across. The slider is how
-it is drawn, never a second way of saying it is on.
-
 A **selection** is not a toggle. A chosen row, tile or folder carries a fill and a border and keeps
 its text colour, because its text is content — a file's name — rather than a label. A toggle's whole
 text is its label, so the label carries the state.
@@ -13285,8 +13372,8 @@ stage's map and snapped to, placed finer than the picture's cell, and answered i
 (§27.5, §27.6), with the sequence's own evidence, its telomeres and its gaps of `N` (§27.5); the
 exports, and an AGP or `.assembly` read back as an edit (§27.8); and the stage on one genome of a
 metagenome (§27.10). There is not yet the rest of the evidence beyond the map, nor the command line
-(§27.13). It is a **dev feature** (§29) throughout: on `main`, and invisible until the switch in
-*About* is on. The design it was written from — the method in full, the architecture with the
+(§27.13). It is a **dev feature** (§29) throughout: on `main`, and invisible until the dev
+features are on. The design it was written from — the method in full, the architecture with the
 code it lands in, the alternatives weighed, the order it is built in — is `docs/reference-editing.md`.
 
 It reverses two of §18.9's refusals and narrows a third, each in its own paragraph there: contact-based
@@ -14279,7 +14366,7 @@ writes none, which the note ends by saying in those words.
 ## 29. Dev features
 
 A feature on `main` — built, specified, tested and released like any other — that a reader **does not
-see at all** until they turn it on. What it is for is the stretch between *it works* and *it is
+see at all** unless the page asked for it. What it is for is the stretch between *it works* and *it is
 finished*: long enough that a branch would rot, and too unfinished for a reader who did not ask for it.
 **Built**: the switch, the registry (`state/devFeatures.ts`), and all four gates below — `metacool`'s,
 `edit`'s and `dotplot`'s over as much of §27 and §28 as is built, and `ideogram`'s over §5.10, each
@@ -14287,15 +14374,14 @@ gated from its first line.
 
 ### 29.1 One switch
 
-In *About*, under the version: **dev features**, a switch, off by default. It is a **preference**,
-kept in `localStorage` — a fact about this browser, not about a file or a tab (the persistence tiers'
-dividing line) — and it is the **only** trace a dev feature leaves anywhere a reader looks. Turning it
-on or off **reloads the window**, which keeps its tabs: every surface is then built from scratch with
-the new answer, so no card, task list, worker or cached command list can disagree with it — which a
-live re-render of every surface could not promise. The answer is read once per page for the same
-reason. The price is the reload's: a file dropped without a handle comes back as a name to drop again,
-as it does after any reload (§20). A worker has no `localStorage`, so the answer is stamped on every
-open the page sends it — once, in the client, where the credentials are.
+Off by default, and **on no surface a reader sees**: no control in *About* or anywhere else, no
+sentence in the app, and nothing in the README or this document says how a page turns it on — that is
+in `state/devFeatures.ts` and nowhere else. Nothing about it is kept in the browser, so no line of
+*What this browser is remembering* names it. The answer is read **once per page**: every surface is
+built once with it, so no card, task list, worker or cached command list can disagree with it — which
+a live re-render of every surface could not promise. A worker cannot see what the page was asked, so
+the answer is stamped on every open the page sends it — once, in the client, where the credentials
+are.
 
 **The registry is one file**, each entry a name and the reason it is not public yet, and the names are
 a type: making a feature public is deleting its line, and the compiler then names every gate it left
@@ -14345,14 +14431,13 @@ What is dev, and what switched off means for each:
 ### 29.4 What a dev feature left in a session
 
 **Kept, and not applied.** A link or a workspace carrying an edit, naming a dot plot or drawing an
-ideogram, opens while the switch is off as if it did not: the view falls back to the one it would have without the feature,
-and the record is left exactly as it was, so turning the switch on brings it back. A dev feature is
-never the reason a session is lost.
+ideogram, opens while the switch is off as if it did not: the view falls back to the one it would have
+without the feature, and the record is left exactly as it was, so turning the switch on brings it
+back. A dev feature is never the reason a session is lost.
 
 ### 29.5 Where the switch is not
 
-- **Never in an embed** (§21): an embedded page has no *About*, and a host page is not a developer's
-  browser.
+- **Never in an embed** (§21): a host page is not a developer's browser.
 - **Not on the command line**: `chromosomix` is a developer's tool, lists every task and runs every
   one.
 - **Not in the static text** around the app — the page's title and description, the description a
