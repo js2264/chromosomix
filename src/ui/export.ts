@@ -130,6 +130,9 @@ type SavePicker = (options: {
   types?: Array<{ description: string; accept: Record<string, string[]> }>
 }) => Promise<{ name: string; createWritable(): Promise<{ write(data: Blob): Promise<void>; close(): Promise<void> }> }>
 
+/** Every file this window has written, by the name it offered, oldest first. */
+const saved: string[] = []
+
 /**
  * Ask the reader where a file goes, with its name ready to change — the
  * platform's own save dialog, opened in their Downloads folder.
@@ -171,6 +174,7 @@ export async function chooseSaveTarget(filename: string, type = ''): Promise<Sav
           await out.write(blob)
           await out.close()
           logWrite(handle.name, blob)
+          saved.push(filename)
         },
       }
     } catch (err) {
@@ -181,7 +185,13 @@ export async function chooseSaveTarget(filename: string, type = ''): Promise<Sav
       // declining, and the file is still owed to them.
     }
   }
-  return { name: filename, write: async (blob) => downloadTo(blob, filename) }
+  return {
+    name: filename,
+    write: async (blob) => {
+      downloadTo(blob, filename)
+      saved.push(filename)
+    },
+  }
 }
 
 /**
@@ -204,15 +214,11 @@ export async function downloadBlob(blob: Blob, filename: string): Promise<string
     messageToast(`Could not write ${target.name}: ${err instanceof Error ? err.message : String(err)}`)
     return null
   }
-  saved.push(filename)
   return target.name
 }
 
-/** Every file this window has written, by the name it offered, oldest first. */
-const saved: string[] = []
-
 /**
- * The names of the files this window has saved, as {@link downloadBlob} offered
+ * The names of the files this window has saved, as {@link chooseSaveTarget} offered
  * them — what the tutorial's *save it* steps ask (§30), since a save is a
  * state of the window the reader reached rather than a click it can watch.
  */
