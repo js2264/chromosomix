@@ -45,6 +45,7 @@ import { calledSetFields } from './calledSurfaces'
 import {
   framingOf,
   isSynthetic,
+  pairExports,
   recomputeNote,
   syntheticExports,
   syntheticMark,
@@ -1285,6 +1286,10 @@ export class AnnotationCard {
       const framing = framingOf(entry)
       if (framing !== null) out.push(el('p', { class: 'ann-origin', text: framing, title: framing }))
       return out
+    }
+    // A loaded set of pairs leaves as its anchors (§8.1); the pairs are the file.
+    if (entry.kind === 'pairs' && entry.payload?.kind === 'pairs' && this.props.onExport !== undefined) {
+      out.push(pairExports(entry, this.props.onExport))
     }
     out.push(this.origin(entry))
     return out

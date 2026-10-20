@@ -1679,7 +1679,11 @@ for a sequence by the name **its** file writes. One track, three vocabularies, a
 ever have chosen one of them. So every place a held track is asked for a name resolves as well as the
 range does: the bigWig's refNames, a bedGraph's contigs, a FASTA's sequences, the feature sets the
 renderer walks, and — the one with no file behind it at all — a synthetic track's grid, which is laid
-out over the map the analysis was *computed on* and drawn beside every other.
+out over the map the analysis was *computed on* and drawn beside every other. **Everything drawn at a
+place resolves too**: a loop set's rings and arcs, a mark, a rectangle, a called set's corners are
+placed through the map's own axis (`LocusAxis.ownName`), which answers a spelling it does not write —
+`chrXIV` on a deck cell whose file writes `XIV` — through the same matcher. Asked by the exact name, a
+loop set lit on a second map spelled the other way drew nothing there, while its tracks beside it did.
 
 **It says so.** A panel that answered a name it does not itself write prints a line under its heading
 naming both spellings and the rule that joined them, and says separately when the two lengths
@@ -2822,7 +2826,13 @@ a card of their own: whether a file is a lane or an overlay is a fact about its 
 bytes settle (§8.3), and not a shelf the reader has to put it on. Pairs — a BEDPE, an interact or a
 longrange file (§8.18), a loop set a task called — mark off-diagonal pairs as circles; an interval
 set a task called (§18.5) marks places on the diagonal as points or short markers across it, and
-extents as the corners of the squares they claim (§18.7); a BED the reader loads is a lane.
+extents as the corners of the squares they claim (§18.7); a BED the reader loads is a lane. **A set of
+pairs opens on the map and offers the other display too**, as a called set does: *arcs (1D track)*
+draws every pair as an arc from one anchor to the other along an edge of the map — the 1D browser's
+own picture of a BEDPE, on any edge, rising the way a signal grows and hung from the other edge when
+flipped — and *map overlay* puts the rings back. The row's card holds the choice (`linear` for a
+loaded file's track), so a reload keeps it. A loaded set of pairs exports one file, its **anchors**:
+both ends of every pair as a BED, each exact place once however many pairs share it.
 These answer a different question from a lane — not "what is on the sequence here" but "this pixel
 is a feature" — so every one is an outline, a rule or a glyph beside what it points at: an overlay
 must not hide the pixel it is about. A place's point is the one dot, and it sits on the diagonal, over
@@ -7858,10 +7868,12 @@ score, the boundaries as segments one bin wide under it, and the domains as corn
   put it — and whichever surface the set opens on, so one put on the map and back is where it was. A
   map it was put on as an overlay (dropped on a map's face, lit in the maps field) gives it the row's
   edges when it becomes a track.
-- **A loop set's 1D track is its anchors**: both ends of every pair, each place once, under the name of
-  the first pair to reach it and the best score among them. It **opens on the map**, because a loop is
-  a pixel of the map and its anchors along one axis are a reading rather than the picture; the display
-  is there. It leaves as its BEDPE from either surface.
+- **A loop set's 1D track is its arcs**: every pair drawn from one anchor to the other along the
+  edge, as the 1D browser draws a BEDPE (§8.1). It was its anchors, two boxes with nothing joining
+  them, which said where the ends were and not which end went with which. It **opens on the map**,
+  because a loop is a pixel of the map; the display is there. It leaves as its BEDPE from either
+  surface, and as its **anchors** beside that — both ends of every pair as a BED, each exact place
+  once, under the name of the first pair to reach it and the best score among them.
 - **With no map there is no choice.** On the 1D browser demo a set is a track and its row offers no
   display, and in the 1D browser every called set is drawn as a track whatever its display beside a
   map: there is no map there for it to be on, as there is none for a loaded BEDPE (§8.1).

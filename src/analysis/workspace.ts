@@ -51,7 +51,7 @@ import { AnalysisPanelCard } from '../ui/AnalysisPanelCard'
 import { groupNameOn, syntheticEntry, syntheticId, type SyntheticFormat } from '../ui/synthetic'
 import type { SourceSpec } from '../worker/protocol'
 import { gridAt } from './context'
-import { adoptCalledSet, calledPayloadOf, isCalledSet } from './surfaces'
+import { adoptCalledSet, anchorsOf, calledPayloadOf, isCalledSet } from './surfaces'
 import { calledSetFields } from '../ui/calledSurfaces'
 import { TASKS, tasksFor } from './registry'
 import { declaredOrigins } from './tasks/oriter'
@@ -1130,6 +1130,25 @@ export class AnalysisWorkspace {
     // coordinates, and they are on the entry. Written through the same
     // `annotations/export.ts` the hand-drawn marks use, so there is one opinion
     // in this repository about where a half-open interval ends.
+    // A set of pairs' anchors, each place once (§18.7) — from a called loop set
+    // or a loaded BEDPE alike, since the pairs are on the row either way.
+    if (format === 'anchors') {
+      const payload = calledPayloadOf(entry)
+      if (payload?.kind !== 'pairs') return
+      const held = this.intervals.get(entry.id)
+      const text = formatIntervals(
+        { kind: 'features', data: anchorsOf(payload.data) },
+        {
+          label: `${entry.label} anchors`,
+          ...(held === undefined
+            ? {}
+            : { file: held.provenance.framing.label, created: held.provenance.createdAt }),
+        },
+      )
+      void downloadBlob(new Blob([text], { type: 'text/plain' }), `${base}-anchors-${stamp}.bed`)
+      return
+    }
+
     if (format === 'bed') {
       // The set as it was called, whichever surface it is on: a loop set shown
       // as its anchors still leaves as its loops (§18.7).

@@ -2898,6 +2898,7 @@ export class BrowserView {
       const drawn = drawArcs(ctx, frame, this.trackAxis, entry.payload.data, {
         colour: entry.style.colour,
         opacity: entry.style.opacity,
+        flip: entry.style.flip,
       })
       if (this.text) {
         label = {

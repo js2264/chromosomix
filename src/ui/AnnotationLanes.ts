@@ -81,6 +81,7 @@ import {
   progressDetail,
 } from '../render/laneLabel'
 import { formatLocus } from '../genome/assembly'
+import { drawArcs } from '../render/browser'
 import { stretchOf, unitSpan, type LocusAxis } from '../render/locus'
 import { barLimitsOf } from '../render/barchart'
 import { drawSashimi, junctionsOfSamples } from '../render/sashimi'
@@ -1685,6 +1686,23 @@ export class AnnotationLanes {
                   ? `${fmt.int(shown.size)} categories`
                   : `${fmt.int(shown.size)} of ${fmt.int(lane.categories.levels.length)} categories`,
             },
+            at: 'near',
+          }
+        }
+      } else if (entry.payload?.kind === 'pairs' && axis !== null) {
+        // A loop set as a track (§8.1): its pairs as arcs, the browser's own
+        // drawing on this edge of the map — the display a reader picks when
+        // the question is *what touches what along here* rather than *which
+        // pixels are loops*.
+        const drawn = drawArcs(ctx, frame, axis, entry.payload.data, {
+          colour: entry.style.colour,
+          opacity: entry.style.opacity,
+          flip: entry.style.flip,
+        })
+        if (text) {
+          label = {
+            entries: [entry],
+            detail: { kind: 'text', text: `${fmt.int(drawn)} pairs in view` },
             at: 'near',
           }
         }
