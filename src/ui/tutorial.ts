@@ -5,22 +5,28 @@
  *
  * ## The data, and why these
  *
- * **4DNES4296C5Q**, Hi-C on IMR-90 lung fibroblasts from the 4DN portal: one of
- * the classic human maps, on GRCh38, with **1.07 billion contacts** — enough for
- * domains at 10 kb, not so many that a first session is reading the deepest map
- * on the shelf. Its experiment set carries the three tracks 4DN's own pipeline
+ * **4DNESC23ZYOF**, in situ Hi-C on K562 cells from the 4DN portal (Belaghzal
+ * et al. 2021), on GRCh38, with **187 million contacts** in a 1.9 GB file —
+ * enough for domains and their loops at 5 kb, and a map a first session opens
+ * quickly. Its experiment set carries the three tracks 4DN's own pipeline
  * computed from the same map: the compartment eigenvector at 250 kb, the
- * insulation score at 10 kb and the boundaries called on it. So the last step
- * compares like with like: the reader's E1 at 250 kb and insulation at 10 kb,
- * computed in this page, against the consortium's at the same resolutions.
+ * insulation score and the boundaries called on it. So the last step compares
+ * like with like: the reader's E1 and insulation, computed in this page,
+ * against the consortium's.
  *
- * **chr13**, because it shows both halves of the story on one screen: an
+ * **chr15**, because it shows both halves of the story on one screen: an
  * acrocentric whose short arm is empty — the blank square at its start is what
  * a stretch with no unique sequence looks like — and a long arm with broad,
- * clean compartments. **41–45 Mb** of it is where the tutorial looks at domains:
- * at 10 kb, a run of clear squares along the diagonal, some nested in others,
- * reached from **35–55 Mb** at 250 kb so that each drag is across a square a
- * hand can hit.
+ * clean compartments. **38.1–50.0 Mb** of it is where the tutorial looks at
+ * domains: at 5 kb, a run of squares along the diagonal nested in bigger ones,
+ * reached from **30–60 Mb** at 250 kb so that each drag is across a square a
+ * hand can hit. In it, the domain from **45.66 to 48.32 Mb** is closed by a loop
+ * between its two borders — the dot at its corner, which the reader marks — and
+ * split by **one weak border at 47.2 Mb** into two subTADs: the one dip the
+ * insulation's widest window (400 kb) finds inside it, shallow beside the two
+ * borders of the domain, and 4DN's own call there is *Weak*. The reader draws a
+ * line on it, which is what makes the four scales' point: a border the narrow
+ * windows all see and the wide one barely does is a level down the hierarchy.
  *
  * ## The steps a reader would not think of
  *
@@ -58,6 +64,7 @@
  */
 
 import { LEAD_MAP } from '../annotations/placement'
+import type { ManualMark } from '../annotations/manual'
 import type { AnnotationEntry } from '../annotations/types'
 import type { AnnotationStore } from '../annotations/store'
 import { displayOf } from '../analysis/surfaces'
@@ -99,24 +106,38 @@ export interface TutorialHost {
   square(stretch: { contig: string; start: number; end: number }): DOMRect | null
   /** Whether the console is open along the bottom of the window. */
   consoleOpen(): boolean
+  /** The marks drawn on the tab in front's Manual annotations card, or `null`. */
+  marks(): readonly ManualMark[] | null
+  /** Every file the window has saved, by the name it offered (`ui/export.ts`). */
+  saved(): readonly string[]
 }
 
 /** The experiment set the tutorial opens. */
-export const TUTORIAL_SET = '4DNES4296C5Q'
+export const TUTORIAL_SET = '4DNESC23ZYOF'
 /** The store it is on. */
 export const TUTORIAL_STORE = '4dn'
 /** The sequence every task is run on. */
-export const TUTORIAL_SEQUENCE = 'chr13'
+export const TUTORIAL_SEQUENCE = 'chr15'
 /** Its contact map, by the accession its file is named after. */
-const MAP_FILE = '4DNFIJIP5BJF'
-/** 4DN's own tracks from the same set: E1 at 250 kb, insulation at 10 kb. */
-const FOURDN_E1 = '4DNFIRL31X9M'
-const FOURDN_INSULATION = '4DNFIR2STZVV'
-/** The square the first drag crosses, at 250 kb, and the one the second crosses, at 10 kb. */
-const OVERVIEW = { start: 35_000_000, end: 55_000_000 }
-const DOMAINS = { start: 41_000_000, end: 45_000_000 }
+const MAP_FILE = '4DNFIKI77KEM'
+/** 4DN's own tracks from the same set: E1 at 250 kb, and insulation. */
+const FOURDN_E1 = '4DNFI3OPG4RB'
+const FOURDN_INSULATION = '4DNFI4GZZC7Z'
+/** The square the first drag crosses, at 250 kb, and the one the second crosses, at 5 kb. */
+const OVERVIEW = { start: 30_000_000, end: 60_000_000 }
+const DOMAINS = { start: 38_100_000, end: 50_025_000 }
 /** How narrow a window has to be for the second zoom to count: a few domains, not a chromosome arm. */
-const DOMAINS_SPAN = 8_000_000
+const DOMAINS_SPAN = 15_000_000
+/** The resolution domains and insulation are read at. */
+const FINE = 5_000
+/** How many windows insulation is run at, each twice the one before (§18.8). */
+const SCALES = 4
+/** The loop at the corner of the domain the marks are drawn on, as the reader types it (1-based). */
+const LOOP = { rows: 45_662_501, cols: 48_312_501 }
+/** The weak border between that domain's two subTADs, as the reader types it. */
+const SUBTAD_BORDER = 47_215_001
+/** How near a mark has to land to count: a few 5 kb bins. */
+const MARK_SLACK = 25_000
 /** The smoothing the domains are looked at with, as the view state names it (`render/smooth.ts`). */
 const SMOOTH_3X3 = '1'
 /**
@@ -210,6 +231,55 @@ function oeToggle(): HTMLElement | null {
     if (words(node) === 'O/E') return node
   }
   return null
+}
+
+/** A number box of the drawer's form, by the words beside it. */
+function formInput(word: string): HTMLInputElement | null {
+  for (const label of drawer()?.querySelectorAll('label.param-field') ?? []) {
+    if (words(label.querySelector('.field-label')) !== word) continue
+    const input = label.querySelector('input')
+    return input instanceof HTMLInputElement ? input : null
+  }
+  return null
+}
+
+/** Type into a box as a reader would: the value, then the events a keystroke and a commit send. */
+function typeInto(box: HTMLInputElement | null, value: string): void {
+  if (box === null) return
+  box.value = value
+  box.dispatchEvent(new Event('input', { bubbles: true }))
+  box.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
+/** The Manual annotations card, wherever it has been carried. */
+function manualCard(): HTMLElement | null {
+  for (const card of document.querySelectorAll('section.annotation-card')) {
+    if (laidOut(card) && words(card.querySelector('.card-head, .card-title, h3')).startsWith('Manual annotations')) {
+      return card as HTMLElement
+    }
+  }
+  return null
+}
+
+/** One of the Manual annotations card's forms — Lines, Arrowheads, Rectangles — by its title. */
+function manualForm(title: string): HTMLElement | null {
+  for (const form of manualCard()?.querySelectorAll<HTMLElement>('.manual-form') ?? []) {
+    if (words(form.querySelector('.manual-form-title')) === title) return form
+  }
+  return null
+}
+
+/** A form's `add` button. */
+function addButton(form: HTMLElement | null): HTMLButtonElement | null {
+  for (const node of form?.querySelectorAll<HTMLButtonElement>('button') ?? []) {
+    if (words(node) === 'add') return node
+  }
+  return null
+}
+
+/** The Export card's format select and its download button, wherever the card is. */
+function exportRow(): HTMLElement | null {
+  return first('.panel-aesthetics .export-row') ?? first('.export-row')
 }
 
 /** A select of the drawer's form, by the words beside it. */
@@ -351,8 +421,31 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
   const fourdn = (accession: string): AnnotationEntry | undefined =>
     host.tracks()?.entries.find((entry) => entry.source.kind === 'remote' && entry.source.url.includes(accession))
   const ownE1 = (): AnnotationEntry | undefined => host.tracks()?.byId(OWN_E1)
-  const ownInsulation = (): AnnotationEntry | undefined =>
-    host.tracks()?.entries.find((entry) => entry.id.startsWith(OWN_INSULATION))
+  /** The reader's insulation, one row per window, narrowest first. */
+  const ownInsulations = (): AnnotationEntry[] =>
+    host.tracks()?.entries.filter((entry) => entry.id.startsWith(OWN_INSULATION)) ?? []
+  const insulationRow = (): HTMLElement | null => {
+    const entry = ownInsulations()[0]
+    return entry === undefined ? null : first(`.ann-row[data-id="${entry.id}"]`)
+  }
+  const insulationOpen = (): boolean =>
+    insulationRow()?.querySelector('.ann-more')?.getAttribute('aria-expanded') === 'true'
+  /** A file of this kind saved since the tutorial began. */
+  const savedAny = (suffix: string): boolean => host.saved().some((name) => name.toLowerCase().endsWith(suffix))
+  /** A mark the reader drew near a place on the tutorial's sequence. */
+  const near = (point: { contig: string; bp: number }, at: number): boolean =>
+    point.contig === TUTORIAL_SEQUENCE && Math.abs(point.bp - at) <= MARK_SLACK
+  const loopMarked = (): boolean =>
+    (host.marks() ?? []).some(
+      (mark) =>
+        mark.kind === 'arrowhead' &&
+        ((near(mark.a, LOOP.rows) && near(mark.b, LOOP.cols)) ||
+          (near(mark.a, LOOP.cols) && near(mark.b, LOOP.rows))),
+    )
+  const borderMarked = (): boolean =>
+    (host.marks() ?? []).some(
+      (mark) => mark.kind === 'line' && mark.axis !== 'horizontal' && near(mark.at, SUBTAD_BORDER),
+    )
   const domainsRow = (): HTMLElement | null => first(`.ann-row[data-id="${OWN_DOMAINS}"]`)
   const domainsOpen = (): boolean =>
     domainsRow()?.querySelector('.ann-more')?.getAttribute('aria-expanded') === 'true'
@@ -437,6 +530,10 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
     extra: {
       tour?: (panel: string) => TourStep[]
       setup?: () => void
+      /** Steps on the form, between the sequence and the run. */
+      form?: (open: () => boolean) => TourStep[]
+      /** What else a run has to have been asked for to count. */
+      ran?: (params: Record<string, unknown>) => boolean
       after?: (open: () => boolean) => TourStep[]
     } = {},
   ): TourStep[] => {
@@ -477,6 +574,7 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
         done: () => sameNames(tickedSequences(), [TUTORIAL_SEQUENCE]),
         needs: { holds: open, back: task },
       },
+      ...(extra.form?.(open) ?? []),
       {
         id: `${task}-run`,
         chapter,
@@ -486,7 +584,16 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
         // passed over when it is already done, and its setup with it.
         prepare: extra.setup,
         target: runButton,
-        done: () => ranOn(task),
+        done: () =>
+          extra.ran === undefined
+            ? ranOn(task)
+            : host
+                .runs(task)
+                .some(
+                  (run) =>
+                    sameNames(namesIn(run.provenance.params.sequences), [TUTORIAL_SEQUENCE]) &&
+                    extra.ran!(run.provenance.params),
+                ),
         // A run carries on with its drawer closed, and is still a run.
         needs: { holds: () => open() || host.running(task), back: task },
       },
@@ -502,13 +609,21 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
     ]
   }
 
-  /** The four tracks the correlation is run over: 4DN's insulation and E1, and the reader's. */
-  const fourTracks = (): Array<AnnotationEntry | undefined> => [
-    fourdn(FOURDN_INSULATION),
-    fourdn(FOURDN_E1),
-    ownE1(),
-    ownInsulation(),
-  ]
+  /**
+   * Every track the correlation is run over: 4DN's insulation and E1, the
+   * reader's E1, and the reader's insulation at each of its four windows.
+   */
+  const everyTrack = (): Array<AnnotationEntry | undefined> => {
+    const own = ownInsulations()
+    return [
+      fourdn(FOURDN_INSULATION),
+      fourdn(FOURDN_E1),
+      ownE1(),
+      ...(own.length === 0 ? [undefined] : own),
+    ]
+  }
+  /** The tick boxes the correlation's form shows for them. */
+  const everyBox = (): Array<HTMLElement | null> => everyTrack().map((entry) => trackBox(entry))
 
   /** A group of the Analysis panel's tasks, shown while the panel is open. */
   const groupStep = (id: string, heading: string, text: string, panel: string): TourStep => ({
@@ -527,8 +642,9 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       chapter: 'Welcome',
       title: 'A first session, on real data',
       text:
-        'Open a Hi-C map from the 4D Nucleome project, find its compartments and domains on chr13, and set ' +
-        'them against 4DN’s own — in the real app, one step at a time.',
+        `Open a Hi-C map from the 4D Nucleome project, find its compartments, domains and a loop on ` +
+        `${TUTORIAL_SEQUENCE}, save what you made, and set it against 4DN’s own — in the real app, one step at ` +
+        'a time.',
       hero: true,
       agenda: true,
       next: 'let’s go',
@@ -561,7 +677,7 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       text: [
         'Type ',
         { name: TUTORIAL_SET, copy: true },
-        ' in the search box: Hi-C on IMR-90 lung fibroblasts, about a billion contacts.',
+        ' in the search box: Hi-C on K562 cells, about 190 million contacts.',
       ],
       action: 'type',
       target: searchBox,
@@ -591,7 +707,7 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       title: 'Open it with its tracks',
       text:
         'One press opens the contact map with the tracks 4DN computed from it — compartments, insulation and ' +
-        'boundaries — without downloading its 7.8 GB.',
+        'boundaries — without downloading its 1.9 GB.',
       target: () => setGroup()?.querySelector<HTMLElement>('.portal-session') ?? null,
       done: onMap,
       needs: { holds: () => host.store() === TUTORIAL_STORE || onMap(), back: 'store' },
@@ -757,13 +873,13 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       },
     },
     {
-      id: 'resolution-10',
+      id: 'resolution-5',
       chapter: 'Zooming in',
-      title: 'Switch to 10 kb',
-      text: 'At 10 kb the domains along the diagonal come into view.',
+      title: 'Switch to 5 kb',
+      text: 'At 5 kb the domains along the diagonal come into view, and the loops at their corners.',
       action: 'choose',
       target: resolutionControl,
-      done: () => host.binsize() === 10_000,
+      done: () => host.binsize() === FINE,
       needs: { holds: onMap, back: 'open-set' },
     },
     {
@@ -779,10 +895,10 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
           stretch !== null &&
           stretch.contig === TUTORIAL_SEQUENCE &&
           stretch.end - stretch.start <= DOMAINS_SPAN &&
-          host.binsize() === 10_000
+          host.binsize() === FINE
         )
       },
-      needs: { holds: () => onSequence() && host.binsize() === 10_000, back: 'resolution-10' },
+      needs: { holds: () => onSequence() && host.binsize() === FINE, back: 'resolution-5' },
       missing: 'Not in view — press zoom for me, or go back a step.',
       assist: {
         label: 'zoom for me',
@@ -796,7 +912,7 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       title: 'Domains',
       text:
         'Each dark square along the diagonal is a domain, or TAD: a stretch that touches itself more than its ' +
-        'neighbours. Some sit inside bigger ones.',
+        'neighbours. Most sit inside bigger ones — the big square from 45.7 to 48.3 Mb holds two.',
       target: mapPicture,
     },
     {
@@ -813,7 +929,7 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       chapter: 'Zooming in',
       title: 'Smooth it',
       text:
-        'At 10 kb most pixels hold a handful of contacts. Set smooth to 3 × 3, which averages each pixel with ' +
+        'At 5 kb most pixels hold a handful of contacts. Set smooth to 3 × 3, which averages each pixel with ' +
         'the eight around it.',
       action: 'choose',
       target: inMapCard(() => mapField('smooth')),
@@ -831,31 +947,156 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
     },
 
     // -- Insulation -----------------------------------------------------------
-    ...sequenceTask('Insulation', 'insulation', 'Diamond insulation', {
-      choose: 'It scores how much contact crosses each bin; its dips are the boundaries between domains.',
-      none: 'Again, press none…',
-      tick: `…then tick ${TUTORIAL_SEQUENCE}.`,
-      run: 'Press run. At 10 kb it takes ten seconds or so.',
-    }),
+    ...sequenceTask(
+      'Insulation',
+      'insulation',
+      'Diamond insulation',
+      {
+        choose: 'It scores how much contact crosses each bin; its dips are the boundaries between domains.',
+        none: 'Again, press none…',
+        tick: `…then tick ${TUTORIAL_SEQUENCE}.`,
+        run: 'Press run. Four windows over a whole chromosome at 5 kb take a little while.',
+      },
+      {
+        form: (open) => [
+          {
+            id: 'insulation-scales',
+            chapter: 'Insulation',
+            title: `Four scales`,
+            text:
+              `Set scales to ${SCALES}. The window is 10 bins, 50 kb here, and each scale doubles it: 50, 100, ` +
+              '200 and 400 kb, one insulation track each.',
+            action: 'type',
+            target: () => formInput('scales'),
+            focus: true,
+            done: () => Number(formInput('scales')?.value) === SCALES,
+            needs: { holds: open, back: 'insulation' },
+            assist: {
+              label: 'set it for me',
+              title: `Set scales to ${SCALES}`,
+              run: () => typeInto(formInput('scales'), String(SCALES)),
+            },
+          },
+        ],
+        ran: (params) => params.scales === SCALES && host.binsize() === FINE,
+      },
+    ),
     {
       id: 'look-insulation',
       chapter: 'Insulation',
-      title: 'Your insulation',
+      title: 'Your insulation, at four scales',
       text:
-        'The score and its boundaries are drawn left of the map, and the domains between the boundaries are ' +
-        'outlined on the map itself.',
+        'Four scores are drawn left of the map, one per window, with the boundaries and the domains between ' +
+        'them. The scales are the TAD hierarchy: the 50 kb window dips at the edge of every small domain, the ' +
+        '400 kb one only at the borders of the big ones. A border every window finds is high in the hierarchy; ' +
+        'one only the narrow windows see is a subTAD’s, nested inside a bigger domain.',
+      target: mapPicture,
+    },
+
+    // -- Marks ----------------------------------------------------------------
+    {
+      id: 'annotations',
+      chapter: 'Marks',
+      title: 'Open the Annotations panel',
+      text: 'Every track has a row here, the ones you computed among them, and so do the marks you draw.',
+      target: () => columnDoor('annotations'),
+      done: () => host.panelOpen('annotations'),
+      needs: { holds: onMap, back: 'open-set' },
+    },
+    {
+      id: 'mark-loop',
+      chapter: 'Marks',
+      title: 'Mark the loop',
+      text: [
+        'The big domain has a dot at its corner: a loop, its two borders held together. In Manual annotations, ' +
+          'under Arrowheads, type ',
+        { name: `${TUTORIAL_SEQUENCE}:${bp(LOOP.rows)}`, copy: true },
+        ' in rows and ',
+        { name: `${TUTORIAL_SEQUENCE}:${bp(LOOP.cols)}`, copy: true },
+        ' in columns, then press add.',
+      ],
+      target: () => manualForm('Arrowheads') ?? manualCard(),
+      done: loopMarked,
+      needs: { holds: () => host.panelOpen('annotations'), back: 'annotations' },
+      missing: 'Not on screen — scroll the Annotations panel to Manual annotations.',
+      assist: {
+        label: 'mark it for me',
+        title: `An arrowhead at ${TUTORIAL_SEQUENCE}:${bp(LOOP.rows)} × ${TUTORIAL_SEQUENCE}:${bp(LOOP.cols)}`,
+        run: () => {
+          const form = manualForm('Arrowheads')
+          const [rows, cols] = [...(form?.querySelectorAll<HTMLInputElement>('input') ?? [])]
+          if (rows === undefined || cols === undefined) return
+          rows.value = `${TUTORIAL_SEQUENCE}:${bp(LOOP.rows)}`
+          cols.value = `${TUTORIAL_SEQUENCE}:${bp(LOOP.cols)}`
+          addButton(form)?.click()
+        },
+      },
+    },
+    {
+      id: 'mark-border',
+      chapter: 'Marks',
+      title: 'Mark the weak border',
+      text: [
+        'Inside that domain one border is weak: the 400 kb window barely dips there, 4DN calls it Weak, and it ' +
+          'splits the domain into two subTADs. Under Lines, keep vertical, type ',
+        { name: `${TUTORIAL_SEQUENCE}:${bp(SUBTAD_BORDER)}`, copy: true },
+        ' and press add.',
+      ],
+      target: () => manualForm('Lines') ?? manualCard(),
+      done: borderMarked,
+      needs: { holds: () => host.panelOpen('annotations'), back: 'annotations' },
+      missing: 'Not on screen — scroll the Annotations panel to Manual annotations.',
+      assist: {
+        label: 'mark it for me',
+        title: `A vertical line at ${TUTORIAL_SEQUENCE}:${bp(SUBTAD_BORDER)}`,
+        run: () => {
+          const form = manualForm('Lines')
+          const axis = form?.querySelector('select')
+          const at = form?.querySelector<HTMLInputElement>('input')
+          if (axis === null || axis === undefined || at === null || at === undefined) return
+          axis.value = 'vertical'
+          at.value = `${TUTORIAL_SEQUENCE}:${bp(SUBTAD_BORDER)}`
+          addButton(form)?.click()
+        },
+      },
+    },
+    {
+      id: 'look-marks',
+      chapter: 'Marks',
+      title: 'A loop and a subTAD border',
+      text:
+        'The arrowhead points at the loop closing the big domain, and the line crosses the map and every track ' +
+        'at the border inside it. Follow the line down your four insulation tracks: deep at 50 kb, shallow at ' +
+        '400 kb — that is the hierarchy, read off one bin.',
       target: mapPicture,
     },
 
     // -- Tracks ---------------------------------------------------------------
     {
-      id: 'annotations',
+      id: 'insulation-row',
       chapter: 'Tracks',
-      title: 'Open the Annotations panel',
-      text: 'Every track has a row here, the ones you computed among them.',
-      target: () => columnDoor('annotations'),
-      done: () => host.panelOpen('annotations'),
-      needs: { holds: onMap, back: 'open-set' },
+      title: 'Unfold your insulation’s settings',
+      text: 'A computed track is a track like any other: press the arrow on your first insulation row.',
+      target: () => insulationRow()?.querySelector<HTMLElement>('.ann-more') ?? null,
+      done: insulationOpen,
+      needs: { holds: () => host.panelOpen('annotations'), back: 'annotations' },
+      missing: 'No insulation row — run Diamond insulation again.',
+    },
+    {
+      id: 'insulation-bigwig',
+      chapter: 'Tracks',
+      title: 'Save it as a bigWig',
+      text:
+        'Press bigWig to save the score as a file IGV, deepTools and pyBigWig open — written here, in this ' +
+        'page, with nothing uploaded.',
+      target: () => {
+        for (const node of insulationRow()?.querySelectorAll<HTMLElement>('.ann-exports button') ?? []) {
+          if (words(node) === 'bigWig') return node
+        }
+        return null
+      },
+      done: () => savedAny('.bw'),
+      needs: { holds: () => host.panelOpen('annotations') && insulationOpen(), back: 'insulation-row' },
     },
     {
       id: 'domains',
@@ -870,7 +1111,7 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
     {
       id: 'domains-display',
       chapter: 'Tracks',
-      title: 'Draw them as a 1D track',
+      title: 'Draw the domains as a 1D track',
       text: 'Domains are outlined on the map. Choose 1D track to draw them as a lane beside it instead.',
       action: 'choose',
       target: () => domainsRow()?.querySelector<HTMLElement>(`select[data-display="${OWN_DOMAINS}"]`) ?? null,
@@ -899,6 +1140,32 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       needs: { holds: () => domainsOpen() && domainsLane(), back: 'domains-display' },
     },
 
+    // -- The figure -----------------------------------------------------------
+    {
+      id: 'export-format',
+      chapter: 'The figure',
+      title: 'Choose PDF',
+      text:
+        'The Export card at the top of the Aesthetics panel saves what is on screen — the map, your marks and ' +
+        'every track — as a figure. Choose PDF (vector): lines and text stay sharp at any size.',
+      action: 'choose',
+      target: () => exportRow()?.querySelector<HTMLElement>('select.select-format') ?? columnDoor('aesthetics'),
+      done: () => (exportRow()?.querySelector('select.select-format') as HTMLSelectElement | null)?.value === 'pdf',
+      needs: { holds: onMap, back: 'open-set' },
+    },
+    {
+      id: 'export-save',
+      chapter: 'The figure',
+      title: 'Save the figure',
+      text: 'Press the download button beside it.',
+      target: () => exportRow()?.querySelector<HTMLElement>('.export-acts button') ?? null,
+      done: () => savedAny('.pdf'),
+      needs: {
+        holds: () => (exportRow()?.querySelector('select.select-format') as HTMLSelectElement | null)?.value === 'pdf',
+        back: 'export-format',
+      },
+    },
+
     // -- Track correlation ----------------------------------------------------
     analysisPanel('analysis-trackcorr', 'Track correlation'),
     {
@@ -914,32 +1181,41 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
     {
       id: 'tick-tracks',
       chapter: 'Track correlation',
-      title: 'Tick the four tracks',
+      title: 'Tick every track',
       text: [
         { name: FOURDN_INSULATION },
         ' and ',
         { name: FOURDN_E1 },
-        ', 4DN’s insulation and E1, and the E1 and insulation you computed.',
+        ', 4DN’s insulation and E1, your E1, and your insulation at all four scales.',
       ],
-      // The list rather than one box in it: four ticks are one step, and the
+      // The list rather than one box in it: the ticks are one step, and the
       // reader is shown the whole of what they are choosing from.
       target: () =>
-        fourTracks()
-          .map((entry) => trackBox(entry)?.closest<HTMLElement>('.param-field') ?? null)
+        everyBox()
+          .map((box) => box?.closest<HTMLElement>('.param-field') ?? null)
           .find((field) => field !== null) ?? null,
-      done: () =>
-        fourTracks().every((entry) => trackBox(entry)?.querySelector('input')?.checked === true),
+      done: () => everyBox().every((box) => box?.querySelector('input')?.checked === true),
       needs: { holds: () => host.task() === 'trackcorr', back: 'trackcorr' },
       missing: 'Not in the list — a track did not load, or was closed.',
+      assist: {
+        label: 'tick them for me',
+        title: 'Tick every track in the list',
+        run: () => {
+          for (const box of everyBox()) {
+            const input = box?.querySelector('input')
+            if (input !== null && input !== undefined && !input.checked) input.click()
+          }
+        },
+      },
     },
     {
       id: 'trackcorr-run',
       chapter: 'Track correlation',
       title: 'Run it',
-      text: `Every pair is compared over the windows all four have values in, which is ${TUTORIAL_SEQUENCE}.`,
+      text: `Every pair is compared over the windows all of them have values in, which is ${TUTORIAL_SEQUENCE}.`,
       target: runButton,
       done: () => {
-        const wanted = fourTracks()
+        const wanted = everyTrack()
         if (wanted.some((entry) => entry === undefined)) return false
         return host.runs('trackcorr').some((run) => {
           const chosen = new Set(namesIn(run.provenance.params.tracks) ?? [])
@@ -954,7 +1230,8 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       title: 'Yours against 4DN’s',
       text:
         'Each square compares two tracks: red where they rise and fall together, blue where one rises as the ' +
-        'other falls. Find yours against 4DN’s; an unphased E1 can match upside down, at −1.',
+        'other falls. Find yours against 4DN’s — an unphased E1 can match upside down, at −1 — and your four ' +
+        'scales against each other: neighbouring windows agree most, the hierarchy again.',
       target: () => figure('Track correlation'),
     },
 
@@ -974,8 +1251,9 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       chapter: 'Done',
       title: 'That’s the tour',
       text:
-        'You opened a billion-contact map from 4DN, called compartments and domains on chr13, and set them ' +
-        'against 4DN’s own. The tutorial is on the landing page and in About whenever you want it again.',
+        `You opened a map from 4DN, called compartments and domains at four scales on ${TUTORIAL_SEQUENCE}, ` +
+        'marked a loop and a subTAD border, saved a track and a figure, and set it all against 4DN’s own. The ' +
+        'tutorial is on the landing page and in About whenever you want it again.',
       hero: true,
     },
   ]

@@ -14370,43 +14370,52 @@ reader. A resume does not move the window (§30.6).
 
 ### 30.2 The data
 
-**4DNES4296C5Q** on the 4DN store: in situ Hi-C on IMR-90 lung fibroblasts, on GRCh38, with
-**1,067,738,237 contacts** — over a billion, so that domains are there to find at 10 kb, and not
-much more, so that a first session is not reading the deepest map on the shelf. Its map is
-`4DNFIJIP5BJF.mcool`, 7.8 GB on 4DN's bucket and read by range like any other (§12), and the set
-carries the three tracks 4DN's own pipeline computed from it: the compartment eigenvector at 250 kb
-(`4DNFIRL31X9M`), the insulation score at 10 kb (`4DNFIR2STZVV`) and the boundaries called on it.
-That is what makes the last step a fair comparison: the reader's own E1 at 250 kb and insulation at
-10 kb, computed in the page, against the consortium's at the same resolutions.
+**4DNESC23ZYOF** on the 4DN store: in situ Hi-C (DpnII) on K562 cells, on GRCh38 (Belaghzal et al.
+2021), with **186,956,649 contacts** — enough for domains and the loops at their corners at 5 kb, in a
+map a first session opens quickly. Its map is `4DNFIKI77KEM.mcool`, 1.9 GB on 4DN's bucket and read by
+range like any other (§12), and the set carries the three tracks 4DN's own pipeline computed from it:
+the compartment eigenvector at 250 kb (`4DNFI3OPG4RB`), the insulation score (`4DNFI4GZZC7Z`) and the
+boundaries called on it. That is what makes the last step a fair comparison: the reader's own E1 and
+insulation, computed in the page, against the consortium's.
 
-**chr13**, for every task. It shows both halves of the story on one screen: an acrocentric whose short
+**chr15**, for every task. It shows both halves of the story on one screen: an acrocentric whose short
 arm is empty — the blank square at its start is what a stretch with no unique sequence looks like on a
-map — and a long arm with broad, clean compartments. **41–45 Mb** of it is where domains are looked
-at: at 10 kb a run of clear squares along the diagonal, some inside others, reached from **35–55 Mb**
-at 250 kb, so that each of the two zooms is a drag across a square a hand can hit.
+map — and a long arm with broad, clean compartments. **chr15:38,100,001-50,025,000** is where domains
+are looked at: at 5 kb a run of squares along the diagonal, nested in bigger ones, reached from
+**30–60 Mb** at 250 kb, so that each of the two zooms is a drag across a square a hand can hit. In it
+the domain from **45.66 to 48.32 Mb** is closed by a **loop** between its two borders —
+`chr15:45,662,501 × chr15:48,312,501`, the dot at its corner, on two of 4DN's *Strong* boundaries —
+and split into two subTADs by **one weak border at chr15:47,215,001**: the one dip the insulation's
+widest window (400 kb) finds inside the domain, a fifth as deep as the domain's own borders, where
+4DN's call is *Weak* and every narrower window dips deeply. Those two places are the marks the reader
+draws (§30.3), and the second is the four scales' whole point.
 
-Every task is run **with its defaults but one**, chr13 alone aside: the tutorial teaches where things
-are, and a parameter it chose would be one the reader took for the app's. The one is Compartments'
-gene model, and the tutorial **sets it itself** rather than asking for it: left to itself the form
-takes the first set of intervals loaded for one, which on this session is 4DN's boundaries, and a sign
-decided by those is a coin toss — the saddle says *phasing r 0.01*. Set to none, through the form's
-own `change`, on the steps before the run. Nothing else phases E1 — no track, no sequence — so the
-drawer says the sign is arbitrary, the saddle's text is written to hold either way round, and the last
-part says that an E1 can match 4DN's upside down, at −1.
+Every task is run **with its defaults but two**, chr15 alone aside: the tutorial teaches where things
+are, and a parameter it chose would be one the reader took for the app's. The first is insulation's
+**scales, 4** — the window of 10 bins, 50 kb at 5 kb, doubled three times to 100, 200 and 400 kb — which
+the reader types, with *set it for me* beside the step, because the scales *are* the TAD hierarchy:
+the narrow window dips at every small domain's edge, the wide one only at the big ones', so a border
+all four see is high in the hierarchy and one only the narrow ones see is a subTAD's. The second is
+Compartments' gene model, and the tutorial **sets it itself** rather than asking for it: left to itself
+the form takes the first set of intervals loaded for one, which on this session is 4DN's boundaries,
+and a sign decided by those is a coin toss. Set to none, through the form's own `change`, on the steps
+before the run. Nothing else phases E1 — no track, no sequence — so the drawer says the sign is
+arbitrary, the saddle's text is written to hold either way round, and the last part says that an E1 can
+match 4DN's upside down, at −1.
 
 ### 30.3 The steps
 
-Fifty, in ten parts, each part's name printed over its steps' titles. The welcome and the end
+Fifty-eight, in twelve parts, each part's name printed over its steps' titles. The welcome and the end
 are a card each in the middle of the window, and between them every step lights one thing:
 
 - **Welcome** — what the tutorial is, in two sentences, with its parts listed under them and *let's
   go*.
 - **The 4DN store** — open the store drawer from its header button, on the lab's store; switch it to
-  4DN's; find `4DNES4296C5Q` in its search box, the accession set in colour on the card with a button
+  4DN's; find `4DNESC23ZYOF` in its search box, the accession set in colour on the card with a button
   beside it that copies it, and *type it for me* beside the step for a reader who would rather not
   type twelve characters at all; open the set with its tracks, one press.
 - **The map** — a step that is only read, lighting the General column: the file, its sequences, its
-  metadata; pick 250 kb; open chr13 from the Chromosomes table, scrolled to its row when the table has
+  metadata; pick 250 kb; open chr15 from the Chromosomes table, scrolled to its row when the table has
   not drawn it; a step that is only read, about the map, and how to scroll, drag and double-click on
   it; and one lighting the Aesthetics column, which a map brings — the Map card, the Tracks card and
   Export.
@@ -14414,25 +14423,35 @@ are a card each in the middle of the window, and between them every step lights 
   screen before the number that summarises it, and a step that is only read, about the plaid; open
   the Analysis panel, and three steps that are only read, lighting its groups one by one — the 2D
   tasks, which read the map; the 3D tasks, which model it; the 1D tasks, which read tracks; choose
-  Compartments; untick every sequence; tick chr13; run (§30.2 for the gene model); a step that is only
+  Compartments; untick every sequence; tick chr15; run (§30.2 for the gene model); a step that is only
   read, about the saddle the run drew; close the drawer; and a step that is only read, the reader's E1
   and A/B calls beside 4DN's.
 - **Zooming in** — set the score back to *balanced*, since domains are a matter of how often
   stretches touch rather than how alike they are; hold Shift and Option and drag across the lit
-  square of 35–55 Mb, the keys named as the map's corner names them, Shift and Alt off a Mac (§8.9);
-  switch to 10 kb; drag across the lit square of 41–45 Mb; a step that is only read, about the
-  domains; turn on O/E; set smoothing to *3 × 3*; and a step that is only read, about domains and
-  compartments on one picture. Both drags have *zoom for me* beside them, which types the stretch into
-  the map's locus box. Neither O/E nor smoothing changes what a task reads — the drawer's heading still
-  says *balanced* — so they are left on.
+  square of 30–60 Mb, the keys named as the map's corner names them, Shift and Alt off a Mac (§8.9);
+  switch to 5 kb; drag across the lit square of chr15:38,100,001-50,025,000; a step that is only read,
+  about the domains, nested in bigger ones; turn on O/E; set smoothing to *3 × 3*; and a step that is
+  only read, about domains and compartments on one picture. Both drags have *zoom for me* beside them,
+  which types the stretch into the map's locus box. Neither O/E nor smoothing changes what a task
+  reads — the drawer's heading still says *balanced* — so they are left on.
 - **Insulation** — open the Analysis panel; choose Diamond insulation; untick every sequence; tick
-  chr13; run; close the drawer; and a step that is only read.
-- **Tracks** — open the Annotations panel; unfold the Insulation domains row; choose *1D track* for
-  its display; press its bottom edge, then its left one, so the lane is drawn under the map and not
-  beside it.
-- **Track correlation** — open the Analysis panel; choose Track correlation; tick its four tracks —
-  4DN's insulation and E1 and the reader's — in one step, the list lit whole; run; and a step that is
-  only read, which lights the figure.
+  chr15; set scales to 4 (§30.2); run, which counts only at 5 kb and four scales; close the drawer; and
+  a step that is only read, about the four tracks and the hierarchy they read.
+- **Marks** — open the Annotations panel; mark the loop as an arrowhead, its two loci typed into the
+  Manual annotations card's Arrowheads form, each set in colour with a copy button; mark the weak
+  border with a vertical line, typed into its Lines form; and a step that is only read: the line
+  crosses the four insulation tracks, deep at 50 kb and shallow at 400 kb — the hierarchy read off one
+  bin. Each has *mark it for me*, and a mark counts within five bins of its place, either way round.
+- **Tracks** — unfold the first insulation row's settings and press its **bigWig**: a computed track
+  saved as the file IGV and deepTools open, written in the page (the step is done when the window has
+  saved a `.bw`); unfold the Insulation domains row; choose *1D track* for its display; press its
+  bottom edge, then its left one, so the lane is drawn under the map and not beside it.
+- **The figure** — in the Export card, choose *PDF (vector)*, then press its download: the map, the
+  marks and every track as one figure, done when the window has saved a `.pdf`.
+- **Track correlation** — open the Analysis panel; choose Track correlation; tick **every** track —
+  4DN's insulation and E1, the reader's E1 and the reader's insulation at all four scales — in one
+  step, the list lit whole and *tick them for me* beside it; run; and a step that is only read, which
+  lights the figure: the reader's against 4DN's, and the four scales against each other.
 - **The console** — open it: every file opened and every run made is a line to paste into a
   terminal.
 - **Done** — what the reader did, in one sentence, and where the tutorial is when it is wanted again.
@@ -14440,7 +14459,7 @@ are a card each in the middle of the window, and between them every step lights 
 ### 30.4 How a step moves on
 
 **A step is done by a state, never by a click.** It moves on when what it asks for holds — the drawer
-open on the 4DN store, the map at 250 kb, a run of the task on chr13 alone — however the reader got
+open on the 4DN store, the map at 250 kb, a run of the task on chr15 alone — however the reader got
 there: by the lit control, a key, the palette or a road the tutorial does not mention. A tour that
 waited for one click on one element would be stuck the moment somebody took the shortcut it was about
 to teach. The state is read on a tick and again just after anything the reader does, and the card
@@ -14458,7 +14477,7 @@ finishes after its drawer was closed is still a run that finished.
 **A step that waits on the reader offers to be skipped**, quietly — *skip step*, in the quiet style,
 saying the steps after it may need it — and a step that is only read is gone on from with *next*,
 filled. When a step's control has not been on screen for a second and a half, the card says so and
-what to do: *Not on screen — scroll the table to chr13*, *Not in the list — empty the box over it if a
+what to do: *Not on screen — scroll the table to chr15*, *Not in the list — empty the box over it if a
 word is typed there*. Not on a step already done, reached by *back*: doing it often takes its control
 away — the drawer it closed — and that control is not missing.
 

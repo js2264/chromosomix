@@ -3,10 +3,12 @@
  * Chromium, and shoot every step it shows.
  *
  * The tutorial is the app used on real data, so this is the app used on real
- * data: the 4DN store, the IMR-90 map on 4DN's bucket, the map drawn as a
- * correlation, compartments phased and run on chr13, two zooms down to a few
- * domains seen under O/E and smoothing, insulation run, the domains moved under
- * the map, the four tracks correlated and the console opened. Each step is
+ * data: the 4DN store, the K562 map on 4DN's bucket (4DNESC23ZYOF), the map
+ * drawn as a correlation, compartments run on chr15, two zooms down to
+ * chr15:38,100,001-50,025,000 at 5 kb seen under O/E and smoothing, insulation
+ * run at four scales, a loop and a subTAD border marked, an insulation track
+ * saved as a bigWig, the domains moved under the map, the figure saved as a PDF,
+ * every track correlated and the console opened. Each step is
  * answered the way a reader would answer it — a real press on the lit control,
  * a real drag across the square the tour lights — so a step whose target is
  * covered by the tour's own grey fails here as it would fail a reader. On the
@@ -78,7 +80,13 @@ await context.route(`${BASE}/stores/**`, async (route) => {
   }
   await route.fulfill({ response: await route.fetch({ url: `${SITE}${name}` }) })
 })
+// No save dialog: the bigWig and the PDF the tour asks for arrive as plain
+// downloads, which a headless browser takes without asking anyone.
+await context.addInitScript(() => {
+  window.showSaveFilePicker = undefined
+})
 const page = await context.newPage()
+page.on('download', (download) => console.log(`  saved ${download.suggestedFilename()}`))
 const errors = []
 page.on('pageerror', (e) => errors.push(String(e)))
 page.on('console', (m) => {
@@ -247,13 +255,36 @@ async function openStores() {
   console.log(`  the stores opened on ${on}`)
   if (on !== 'rsg') throw new Error(`the stores opened on ${on}, not the lab's store`)
 }
-/** Tick whichever of the correlation's four tracks is not ticked yet. */
-async function tickFour() {
-  for (const words of ['4DNFIR2STZVV', '4DNFIRL31X9M', 'E1 · chr13', 'Insulation · ']) {
-    const box = page.locator('.analysis-drawer label.param-check', { hasText: words }).first()
+/** Tick every track the correlation's form lists that is not ticked yet. */
+async function tickEvery() {
+  const boxes = page.locator('.analysis-drawer .param-field', { has: page.locator('.field-label', { hasText: /^tracks$/ }) }).locator('label.param-check')
+  for (let i = 0; i < (await boxes.count()); i++) {
+    const box = boxes.nth(i)
     if (!(await box.locator('input').isChecked())) await box.click()
   }
 }
+/** One of the Manual annotations card's forms, by its title. */
+const manualForm = (title) =>
+  page.locator('.manual-form', { has: page.locator('.manual-form-title', { hasText: new RegExp(`^${title}$`) }) }).first()
+/** Type the loop the tour names into the Arrowheads form, and add it. */
+async function markLoop() {
+  const form = manualForm('Arrowheads')
+  await form.scrollIntoViewIfNeeded()
+  const boxes = form.locator('input')
+  await boxes.nth(0).fill('chr15:45,662,501')
+  await boxes.nth(1).fill('chr15:48,312,501')
+  await form.locator('button', { hasText: /^add$/ }).click()
+}
+/** A vertical line at the subTAD border the tour names. */
+async function markBorder() {
+  const form = manualForm('Lines')
+  await form.scrollIntoViewIfNeeded()
+  await form.locator('select').selectOption('vertical')
+  await form.locator('input').first().fill('chr15:47,215,001')
+  await form.locator('button', { hasText: /^add$/ }).click()
+}
+/** The first insulation row's settings, and its bigWig. */
+const insulationRow = '.annotation-card .ann-row[data-id^="analysis:insulation-w"]'
 
 /** What a reader does at each step. */
 const ACT = {
@@ -279,7 +310,7 @@ const ACT = {
   },
   'open-set': () => page.click('.store-drawer .portal-session'),
   'resolution-250': () => page.selectOption('select.res-pick', { label: '250 kb' }),
-  chromosome: () => page.click('.content .tviewport .tr .td[title="chr13"]'),
+  chromosome: () => page.click('.content .tviewport .tr .td[title="chr15"]'),
   'look-general': next,
   'look-map': next,
   'look-aesthetics': next,
@@ -291,14 +322,14 @@ const ACT = {
   'tasks-1d': next,
   compartments: () => clickTask('Compartments'),
   'compartments-none': () => page.click('.analysis-drawer button[title="Untick every sequence"]'),
-  'compartments-sequence': () => clickSequence('chr13'),
+  'compartments-sequence': () => clickSequence('chr15'),
   'compartments-run': () => page.click('.analysis-drawer .analysis-run > button'),
   'look-saddle': next,
   'compartments-close': () => page.click('.analysis-drawer .analysis-drawer-head .btn-close'),
   'look-compartments': next,
   'score-balanced': () => mapSelect('score').selectOption('balanced'),
   zoom: dragLit,
-  'resolution-10': () => page.selectOption('select.res-pick', { label: '10 kb' }),
+  'resolution-5': () => page.selectOption('select.res-pick', { label: '5 kb' }),
   'zoom-domains': dragLit,
   'look-domains': next,
   'oe-on': () =>
@@ -312,18 +343,36 @@ const ACT = {
   'analysis-insulation': () => page.click('.panel-analysis .panel-tab'),
   insulation: () => clickTask('Diamond insulation'),
   'insulation-none': () => page.click('.analysis-drawer button[title="Untick every sequence"]'),
-  'insulation-sequence': () => clickSequence('chr13'),
+  'insulation-sequence': () => clickSequence('chr15'),
+  'insulation-scales': async () => {
+    const box = page
+      .locator('.analysis-drawer label.param-field', { has: page.locator('.field-label', { hasText: /^scales$/ }) })
+      .locator('input')
+    await box.fill('4')
+    await box.press('Enter')
+    await box.dispatchEvent('change')
+  },
   'insulation-run': () => page.click('.analysis-drawer .analysis-run > button'),
   'insulation-close': () => page.click('.analysis-drawer .analysis-drawer-head .btn-close'),
   'look-insulation': next,
   annotations: () => page.click('.panel-annotations .panel-tab'),
+  'mark-loop': markLoop,
+  'mark-border': markBorder,
+  'look-marks': next,
+  'insulation-row': async () => {
+    await page.locator(insulationRow).first().scrollIntoViewIfNeeded()
+    await page.locator(`${insulationRow} .ann-more`).first().click()
+  },
+  'insulation-bigwig': () => page.locator(`${insulationRow} .ann-exports button`, { hasText: /^bigWig$/ }).first().click(),
+  'export-format': () => page.locator('.export-row select.select-format >> visible=true').first().selectOption('pdf'),
+  'export-save': () => page.locator('.export-row .export-acts button >> visible=true').first().click(),
   domains: () => page.click(`${domains} .ann-more`),
   'domains-display': () => page.selectOption(`${domains} select[data-display]`, 'lane'),
   'domains-bottom': () => clickPlace('bottom'),
   'domains-left': () => clickPlace('left'),
   'analysis-trackcorr': () => page.click('.panel-analysis .panel-tab'),
   trackcorr: () => clickTask('Track correlation'),
-  'tick-tracks': tickFour,
+  'tick-tracks': tickEvery,
   'trackcorr-run': () => page.click('.analysis-drawer .analysis-run > button'),
   'look-trackcorr': next,
   console: () => page.click('button[aria-label="console"]'),

@@ -204,7 +204,20 @@ export async function downloadBlob(blob: Blob, filename: string): Promise<string
     messageToast(`Could not write ${target.name}: ${err instanceof Error ? err.message : String(err)}`)
     return null
   }
+  saved.push(filename)
   return target.name
+}
+
+/** Every file this window has written, by the name it offered, oldest first. */
+const saved: string[] = []
+
+/**
+ * The names of the files this window has saved, as {@link downloadBlob} offered
+ * them — what the tutorial's *save it* steps ask (§30), since a save is a
+ * state of the window the reader reached rather than a click it can watch.
+ */
+export function savedFiles(): readonly string[] {
+  return saved
 }
 
 /**
