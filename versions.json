@@ -214,6 +214,13 @@
   ],
   "pulls": [
     {
+      "number": 127,
+      "commit": "8f2cd5b",
+      "title": "Add laptop.qmd: benchmark 23 analyses on your own machine",
+      "branch": "js/jolly-bohr-tjsqlr",
+      "date": "2026-10-21T12:06:03Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
