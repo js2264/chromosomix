@@ -51,7 +51,7 @@ quarto render notebooks/laptop.qmd
 
 The data (about 13.7 GB) are downloaded once into `notebooks/work/laptop/data/`; files that
 `validation.qmd` has already downloaded are linked rather than downloaded again. The analyses take about
-45 minutes, most of it peak calling. Each result is saved to `notebooks/work/laptop/timings.tsv` as soon
+20 minutes. Each result is saved to `notebooks/work/laptop/timings.tsv` as soon
 as it is measured, so a second render reads the table instead of running everything again; set `REDO`
 below to start over.
 
