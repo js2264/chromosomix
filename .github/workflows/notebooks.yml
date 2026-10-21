@@ -408,9 +408,9 @@ jobs:
               cases = {}
               for row in rows:
                   cases.setdefault((row['case'], row['task']), []).append(row['verdict'])
-              print('\n| Case | Task | Files | Identical | Header differs | Data differs | One side only |\n|---|---|---|---|---|---|---|')
+              print('\n| Case | Task | Files | Identical | Data differs | One side only |\n|---|---|---|---|---|---|')
               for (case, task), verdicts in cases.items():
                   alone = sum(v in ('browser only', 'command line only') for v in verdicts)
                   print(f"| {case} | `{task}` | {len(verdicts)} | {verdicts.count('identical')} | "
-                        f"{verdicts.count('header differs')} | {verdicts.count('data differs')} | {alone} |")
+                        f"{verdicts.count('data differs')} | {alone} |")
           PY

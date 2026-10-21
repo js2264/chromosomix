@@ -2595,11 +2595,15 @@ for size in SIZES:
 
 
 def square_of(path):
-    """A correlation matrix, its tracks put in one order whatever order the file wrote them in."""
+    """A correlation matrix, its tracks put in one order whatever order the file wrote them in, each
+    known by its file's name with or without the `.bw`: chromosomix names a track as the app names
+    its row, without it, and the two references with it."""
     frame = pd.read_csv(path, sep='\t', comment='#', index_col=0)
-    frame.index = [str(name).strip("'") for name in frame.index]
-    frame.columns = [str(name).strip("'") for name in frame.columns]
-    return frame.loc[TRACK_NAMES, TRACK_NAMES].to_numpy(float)
+    named = lambda label: str(label).strip("'").removesuffix('.bw')
+    frame.index = [named(label) for label in frame.index]
+    frame.columns = [named(label) for label in frame.columns]
+    order = [named(label) for label in TRACK_NAMES]
+    return frame.loc[order, order].to_numpy(float)
 
 
 def exact_windows(size):

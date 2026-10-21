@@ -9437,17 +9437,18 @@ app — this checkout's build, served from loopback and driven in headless Chrom
 `notebooks/scripts/parity.mjs` — and again from the line the console wrote for each run (§23.1), run
 as written in the folder holding the files with only `--out` added, and compares the files the two
 wrote: insulation, compartments phased by the sequence's GC, P(s), coverage, virtual 4C, loop calling
-and a motif search on GEO's yeast Micro-C (GSE151553), whole at 1.6 kb, with UCSC's sacCer3 beside it;
+and a motif search on GEO's yeast Micro-C (GSE151553) at 1.6 kb, framed on chrIV, which the map draws
+bin for bin where the whole genome is drawn in pooled bins, with UCSC's sacCer3 beside it;
 APA over the loops the app called there; and peak calling and the metaplot on GEO's yeast ATAC-seq and
 its MACS2 peaks (GSM8640701), opened with no map. The files are opened as a reader opens them — a
 workspace dropped on the landing page and then the files it asks for, or the files alone — so the
 line names them as the shell will find them; every file the app offers for a run is saved through the
 buttons a reader presses, the drawer's TSV, BED and BEDPE and each new track's bigWig and bedGraph on
-the Tracks card. Each is matched to the command line's by output and format and is **identical** — the
-same bytes, or the same bar the three lines that say when, by which build and from where it was
-written (`# chromosomix`, `# created:`, `# file:`) — or its **header differs**, every data line the
-same and some other provenance line not, or its **data differs**, or one side alone wrote it. Every
-file and its verdict is one line of `notebooks/work/parity/summary.tsv`.
+the Tracks card. Each is matched to the command line's by output and format and is **identical** — a
+bigWig byte for byte, a text file line for line with its provenance, the `#` lines that say when, by
+which build, from which file and in which words each surface frames a run, set aside — or its **data
+differs**, or one side alone wrote it. Every file and its verdict is one line of
+`notebooks/work/parity/summary.tsv`.
 
 They are documents, not tests: they need the data (about 6 GB for the analyses, 15 GB for the
 viewers and 160 MB for the parity), the reference packages, yapc's own environment and
@@ -10714,6 +10715,11 @@ session would have shipped; and a `.pairs` named for its orientation curves is r
 is no refusal left for `cliCommandFor` to write. What the record does not hold arrives as a `#` note
 above the line rather than as a silent omission — the maps `hicrep` ran against are the deck's and not
 the result's, so they are read off the session and, with no session to ask, the note says to add them.
+A file opened under `--tracks` is **called what the app calls its row**: its name less the suffix the
+app knows it by (`annotations/names.ts`), `signal` for `signal.bw`, wherever a run names the track —
+a metaplot's columns, a correlation's axes, a table's rows, an output's label. It was the base name,
+`signal.bw`, so the shell's TSV and the drawer's headed the same numbers two ways, and
+`notebooks/parity.qmd` found it in the metaplot's columns.
 
 **The framing is written, not only the parameters.** Six facts a session sets from the picture are
 inputs to the arithmetic and parameters of no task: the score column the map is drawn from (§3.5),

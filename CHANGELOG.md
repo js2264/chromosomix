@@ -16,12 +16,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **The app held to its own command line, in a notebook (§18.10).** `notebooks/parity.qmd` runs ten
   tasks in the app, in headless Chromium — insulation, compartments, P(s), coverage, virtual 4C, loop
-  calling, a motif search and APA on GEO's yeast Micro-C, whole at 1.6 kb, and peak calling and the
-  metaplot on GEO's yeast ATAC-seq — saves every file the app offers for each run through the buttons
-  a reader presses, runs the line the console wrote for it with `chromosomix`, and compares the two
-  sets file by file: identical bar the build, the instant and the path, a provenance line apart, or
-  the data apart. Rendered with the validation and the timings on every release and published at
-  <https://chromosomix.app/parity/>, with every file and its verdict in `summary.tsv` beside it.
+  calling, a motif search and APA on GEO's yeast Micro-C at 1.6 kb, framed on chrIV, and peak calling
+  and the metaplot on GEO's yeast ATAC-seq — saves every file the app offers for each run through the
+  buttons a reader presses, runs the line the console wrote for it with `chromosomix`, and compares
+  the two sets file by file: identical (a bigWig byte for byte, a text file line for line, its `#`
+  provenance set aside), or the data apart. Rendered with the validation and the timings on every
+  release and published at <https://chromosomix.app/parity/>, with every file and its verdict in
+  `summary.tsv` beside it.
+
+### Changed
+
+- **The command line names a track as the app does (§23.1).** A file opened under `--tracks` is
+  called what the app calls its row — `signal` for `signal.bw` — in a metaplot's columns, a
+  correlation's axes, FRiP's and Signal by group's rows and every label a run writes, where it was the
+  file's base name. The shell's tables and the drawer's now share their headers.
 
 ## [0.16.0] - 2026-10-20
 

@@ -39,17 +39,13 @@ task opened from the Analysis panel, its form set, **run** pressed, and every fi
 for the result saved through the buttons a reader presses — the drawer's TSV, BED and BEDPE, and
 the bigWig and the bedGraph on each new track's row of the Tracks card. Then the line the console
 wrote for that run is run **as written**, in the folder that holds the files, with only `--out`
-added. The two sets of files are then matched by output and format and compared byte for byte.
+added. The two sets of files are then matched by output and format and compared.
 
 Each file comes out as one of these:
 
-- **identical**: the same bytes, or the same bar the three lines that say when, by which build and
-  from where a file was written, and nothing else: `# chromosomix` and the build (`0.16.0 cli` on
-  the command line, the version and the commit in the app), `# created:` and its instant (and the
-  instant at the end of a BED's first line), and `# file:`, which the command line writes as the
-  full path it opened and the app as the name it was given;
-- **header differs**: every line of data the same, and a line of the provenance above it (`#`)
-  other than those three not;
+- **identical**: a bigWig byte for byte; a text file line for line, its provenance — the `#` lines
+  above the data, which say when, by which build, from which file and in which words each surface
+  frames a run — set aside;
 - **data differs**: a line that is not a comment differs, or, for a bigWig, a byte;
 - **browser only** or **command line only**: a file one side wrote and the other did not.
 
@@ -184,12 +180,14 @@ show(pd.DataFrame([{'data': d['data'], 'accession': d['accession'],
 
 ## The runs
 
-Three sessions, each opened in a fresh browser context. The first is the map, whole, at 1.6 kb,
-with the sequence as a track, as a workspace names them: the workspace is dropped on the landing
-page, then the files it asks for. The app measures, once the map is open, which sequences read as
-circular, and says so; the runs wait for that, since it is part of what each run records. The second
-is the same map with the loops the first called, for the pileup. The third is the ATAC-seq coverage
-and its peaks, dropped alone. Every form is left as it opens but for what the table says: what a
+Three sessions, each opened in a fresh browser context. The first is the map at 1.6 kb, framed on
+chrIV, with the sequence as a track, as a workspace names them: the workspace is dropped on the
+landing page, then the files it asks for. chrIV, 1.5 Mb, is drawn bin for bin at 1.6 kb, where the
+whole genome would be drawn in pooled bins of 3.2 kb, so every run reads the file's own bins. The app
+measures, once the map is open, which sequences read as circular, and says so; the runs wait for
+that, since it is part of what each run records. The second is the same map and window with the
+loops the first called, for the pileup. The third is the ATAC-seq coverage and its peaks, dropped
+alone. Every form is left as it opens but for what the table says: what a
 task needs to run at all (an anchor, a motif, a kernel at 1.6 kb), or which loaded file it reads.
 
 ```{python}
@@ -204,15 +202,20 @@ def track(id_, kind, name, label, card='linear'):
             'visible': True, 'placement': {'bottom': True, 'right': False}, 'style': STYLE}
 
 
+#: The window every map session is framed on: chrIV whole, which sacCer3 makes 1,531,933 bp.
+WINDOW = 'chrIV:0-1531933'
+
+
 def map_workspace(*tracks):
-    """The map, whole, at 1.6 kb, balanced, and the tracks beside it."""
+    """The map at 1.6 kb, balanced, framed on chrIV, and the tracks beside it."""
     return {'kind': 'chromosomix.workspace', 'version': 1, 'active': 0, 'tabs': [{
-        'version': 1, 'state': {'uri': f'{MAP}::/resolutions/1600', 'view': 'whole', 'balance': True},
+        'version': 1, 'state': {'uri': f'{MAP}::/resolutions/1600', 'view': 'region', 'region': WINDOW,
+                                'balance': True},
         'tracks': list(tracks)}]}
 
 
 SESSIONS = [
-    dict(id='map', what='the map, whole, at 1.6 kb, and the sequence',
+    dict(id='map', what='the map at 1.6 kb on chrIV, and the sequence',
          workspace=map_workspace(track('sequence', 'sequence', FASTA, 'sacCer3')), files=[MAP, FASTA],
          waitFor='reads as circular', cases=[
              dict(id='insulation', title='Diamond insulation'),
@@ -225,7 +228,7 @@ SESSIONS = [
              dict(id='motif', title='Find a motif', set=[{'key': 'sequence', 'option': 'sacCer3'},
                                                          {'key': 'pattern', 'value': 'WTTTAYRTTTW'}]),
          ]),
-    dict(id='map-loops', what='the map, whole, at 1.6 kb, and the loops the first session called',
+    dict(id='map-loops', what='the map at 1.6 kb on chrIV, and the loops the first session called',
          inputs=[{'from': 'loops/browser/loops-calls.bedpe', 'as': LOOPS}],
          workspace=map_workspace(track('loops', 'pairs', LOOPS, 'loops', 'overlay')), files=[MAP, LOOPS],
          waitFor='reads as circular', cases=[
@@ -319,20 +322,7 @@ show(pd.DataFrame([{'case': c['id'], 'run': CLI_RUNS[c['id']]['status'], 'second
 ## File by file
 
 ```{python}
-#: The three lines that say when, by which build and from where, which are set aside.
-STAMPS = [(re.compile(r'^# chromosomix \S+( \S+)?$'), '# chromosomix <build>'),
-          (re.compile(r'^# created: .*$'), '# created: <instant>'),
-          (re.compile(r'^# file: .*$'), '# file: <file>')]
-#: The instant at the end of a BED's or a BEDPE's first line, `# chromosomix <set> from <framing> on <instant>`.
-BED_HEAD = re.compile(r' on \d{4}-\d\d-\d\dT[\d:.]+Z$')
-ORDER = ['identical', 'header differs', 'data differs', 'browser only', 'command line only']
-
-
-def unstamped(line):
-    for pattern, kept in STAMPS:
-        if pattern.match(line):
-            return kept
-    return BED_HEAD.sub(' on <instant>', line) if line.startswith('# chromosomix ') else line
+ORDER = ['identical', 'data differs', 'browser only', 'command line only']
 
 
 def cli_files(case_id, task):
@@ -360,12 +350,9 @@ def pair(browser, cli):
     return pairs
 
 
-def header_key(line):
-    """A provenance line by what it is about: `framing`, `param tracks`, `output`; a BED's first line,
-    which names the set and its framing, as `set and framing`."""
-    if line.startswith('# chromosomix '):
-        return 'set and framing'
-    return line[2:].split(':', 1)[0].strip()
+def data(path):
+    """A text file's lines, its provenance — every `#` line — set aside."""
+    return [line for line in path.read_text().splitlines() if not line.startswith('#')]
 
 
 def shown(lines, at, width=72):
@@ -386,21 +373,13 @@ def compare(b, c):
         return 'identical', ''
     if b.suffix == '.bw':
         return 'data differs', f'{b.stat().st_size:,} bytes in the browser, {c.stat().st_size:,} on the command line'
-    lb = [unstamped(line) for line in b.read_text().splitlines()]
-    lc = [unstamped(line) for line in c.read_text().splitlines()]
-    if lb == lc:
+    db, dc = data(b), data(c)
+    if db == dc:
         return 'identical', ''
-    db = [line for line in lb if not line.startswith('#')]
-    dc = [line for line in lc if not line.startswith('#')]
-    if db != dc:
-        at = next((i for i, (x, y) in enumerate(zip(db, dc)) if x != y), min(len(db), len(dc)))
-        differ = sum(x != y for x, y in zip(db, dc)) + abs(len(db) - len(dc))
-        first = f'browser `{shown(db, at)}`, command line `{shown(dc, at)}`'
-        return 'data differs', f'{differ:,} of {max(len(db), len(dc)):,} data lines; the first, line {at + 1}: {first}'
-    hb = [line for line in lb if line.startswith('#')]
-    hc = [line for line in lc if line.startswith('#')]
-    keys = sorted({header_key(line) for line in set(hb) ^ set(hc)})
-    return 'header differs', '; '.join(keys)
+    at = next((i for i, (x, y) in enumerate(zip(db, dc)) if x != y), min(len(db), len(dc)))
+    differ = sum(x != y for x, y in zip(db, dc)) + abs(len(db) - len(dc))
+    first = f'browser `{shown(db, at)}`, command line `{shown(dc, at)}`'
+    return 'data differs', f'{differ:,} of {max(len(db), len(dc)):,} data lines; the first, line {at + 1}: {first}'
 
 
 ROWS = []
@@ -411,10 +390,10 @@ for case in CASES:
     for name, b, c, note in pair(saved, cli_files(case['id'], task)):
         verdict, what = compare(b, c)
         ROWS.append({'case': case['id'], 'task': task, 'file': name, 'verdict': verdict,
-                     'what differs': '; '.join(part for part in (note, what) if part),
+                     'note': '; '.join(part for part in (note, what) if part),
                      'browser bytes': b.stat().st_size if b is not None else None,
                      'command line bytes': c.stat().st_size if c is not None else None})
-FILES = pd.DataFrame(ROWS, columns=['case', 'task', 'file', 'verdict', 'what differs', 'browser bytes',
+FILES = pd.DataFrame(ROWS, columns=['case', 'task', 'file', 'verdict', 'note', 'browser bytes',
                                     'command line bytes'])
 FILES.to_csv(SUMMARY, sep='\t', index=False)
 ```
@@ -439,8 +418,8 @@ for number, case in enumerate(CASES, 1):
         if run.get('error'):
             print(f"{side}: **{run['status']}** — {html.escape(run['error'])}\n")
     if len(rows):
-        table = rows[['file', 'verdict', 'what differs']].copy()
-        table['what differs'] = table['what differs'].map(lambda text: re.sub(r'`([^`]*)`', lambda m: code(m[1]), html.escape(text, quote=False).replace('&#x27;', "'")))
+        table = rows[['file', 'verdict', 'note']].copy()
+        table['note'] = table['note'].map(lambda text: re.sub(r'`([^`]*)`', lambda m: code(m[1]), html.escape(text, quote=False).replace('&#x27;', "'")))
         print(table.to_html(index=False, escape=False, border=0, classes='table table-sm'))
         print()
 ```
@@ -455,23 +434,13 @@ BY_CASE['files'] = BY_CASE[ORDER].sum(axis=1)
 show(BY_CASE[['case', 'task', 'files', *ORDER]])
 ```
 
-Which lines of the provenance differ, over every file whose data are the same:
-
-```{python}
-HEADERS = (FILES[FILES['verdict'] == 'header differs']
-           .assign(line=lambda frame: frame['what differs'].str.split('; '))
-           .explode('line'))
-HEADERS = HEADERS[~HEADERS['line'].str.startswith('named ')]
-show(HEADERS.groupby('line').agg(files=('file', 'size'), cases=('case', lambda c: ', '.join(dict.fromkeys(c))))
-     .reset_index().sort_values(['files', 'line'], ascending=[False, True]).rename(columns={'line': 'provenance line'}))
-```
-
 ```{python}
 #| echo: false
 #| output: asis
 same = int((FILES['verdict'] == 'identical').sum())
-print(f"**{same} of {len(FILES)} files** are identical between the app and the command line, bar the three "
-      f"stamp lines; {int((FILES['verdict'] == 'header differs').sum())} differ only in their provenance, and "
-      f"{int((FILES['verdict'] == 'data differs').sum())} in their data.\n")
+alone = int(FILES['verdict'].isin(['browser only', 'command line only']).sum())
+print(f"**{same} of {len(FILES)} files** are identical between the app and the command line; "
+      f"{int((FILES['verdict'] == 'data differs').sum())} differ in their data, and {alone} "
+      f"{'was' if alone == 1 else 'were'} written by one side alone.\n")
 print(R.foot())
 ```
