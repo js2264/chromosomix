@@ -1,6 +1,13 @@
 {
-  "latest": "0ee421f",
+  "latest": "15e6f15",
   "versions": [
+    {
+      "commit": "15e6f15",
+      "version": "0.16.0",
+      "date": "2026-10-21T16:39:53+02:00",
+      "subject": "Add laptop.qmd: benchmark 23 analyses on your own machine (#127)",
+      "tag": ""
+    },
     {
       "commit": "0ee421f",
       "version": "0.16.0",
@@ -132,13 +139,6 @@
       "version": "0.13.0",
       "date": "2026-10-13T16:55:26+02:00",
       "subject": "Fig. 2: bacterial chromosomes along their arms, drawn from the paper store's data (manuscript/figure2)",
-      "tag": ""
-    },
-    {
-      "commit": "2beda15",
-      "version": "0.13.0",
-      "date": "2026-10-09T22:17:03+02:00",
-      "subject": "Colour a model by a track from white to the track's colour, and type the key's ends (§25.5) (#101)",
       "tag": ""
     },
     {
