@@ -1,7 +1,8 @@
 name: Notebooks
 
-# Renders the two notebooks that hold chromosomix to the packages it reproduces
-# (SPECS §18.10) and publishes them beside the app:
+# Renders the notebooks that hold chromosomix to the packages it reproduces,
+# and the app to its own command line (SPECS §18.10), and publishes them beside
+# the app:
 #
 #   https://chromosomix.app/validation/   notebooks/validation.qmd — every
 #                                         analysis run twice, by chromosomix and
@@ -10,6 +11,10 @@ name: Notebooks
 #                                         track drawn by chromosomix, juicebox.js
 #                                         and HiGlass, timed; then every command
 #                                         of the first, run again and timed
+#   https://chromosomix.app/parity/       notebooks/parity.qmd — ten tasks run
+#                                         in the app in headless Chromium, then
+#                                         from the line its console wrote, and
+#                                         the files the two wrote compared
 #
 # **When.** On every release, once it is published — release.yml makes the
 # release a draft from the tag and a person publishes it, and that act is what
@@ -36,12 +41,16 @@ name: Notebooks
 # Ubuntu's libfuse 2 for the files it reads from a bucket.
 #
 # **What it costs.** About 6 GB of public data (4DN's, UCSC's mm10 through
-# iGenomes, and GEO's yeast Micro-C, each from where it was published) is
+# iGenomes, and GEO's yeast Micro-C, each from where it was published), and
+# 160 MB more for the parity (GEO's yeast Micro-C and ATAC-seq, UCSC's sacCer3), is
 # fetched on every run rather than cached, and 15 GB more for the viewers (4DN's
 # chicken and mouse maps in both formats, the mouse's 13 GB of it, and the
 # app's yeast demo): a cache that size would evict the repository's npm and
 # Electron caches, and the buckets answer a runner at hundreds of megabytes a
-# second. From nothing, the validation renders in about an hour on a standard
+# second. The parity renders first, in about five minutes, so that a page that
+# cannot render fails the run before the hours of the others; a file the app and
+# the command line write differently is a verdict on its page, not a failure.
+# From nothing, the validation renders in about an hour on a standard
 # runner (4 cores, 16 GB — the heaviest reference peaks at about 4 GB), every
 # reference run for the first time; the viewers' pictures in about twenty
 # minutes a round, and the timings in about twenty minutes a run, so four of
@@ -53,24 +62,26 @@ name: Notebooks
 #
 # **Where it is published, and why through a branch.** Pages replaces the
 # whole site on every deployment and only deploy.yml deploys it, so this
-# workflow does what stores.yml does: it force-pushes the two pages, and the
+# workflow does what stores.yml does: it force-pushes the three pages, and the
 # files beside them, to an orphan `notebooks` branch as one commit, and asks
-# deploy.yml to publish; the deploy copies them into `validation/` and
-# `timings/` on every run after that, so a push to `main` keeps them. Beside
+# deploy.yml to publish; the deploy copies them into `validation/`, `timings/`
+# and `parity/` on every run after that, so a push to `main` keeps them. Beside
 # each page: `rendered.json`, what the stamp at its top says (when, from which
 # commit and release, by which run, on what machine); `commands.json`,
 # `summary.tsv` and `validation.txt` beside the validation, every command it
 # ran, every verdict and every number its figures draw, one row a mark (33 MB,
 # most of it Boost-HiC's two maps of chr19 and the metaplot over two tracks);
 # `timings.tsv` beside the timings, every timed run, one row each, and
-# `viewers.tsv`, every picture timed in a viewer. A release also gets the two
-# pages and the four tables as assets of its own — every verdict as
-# `validation-<tag>.tsv`, every number its figures draw as
-# `validation-<tag>.txt`, every timed run as `timings-<tag>.tsv` and every
-# picture as `viewers-<tag>.tsv` — so a release's numbers outlive the next
-# release's pages. Every run keeps what it
-# rendered as an artifact for 90 days, even when it fails: the validation alone,
-# and the timing rounds it finished, when the timings are what failed.
+# `viewers.tsv`, every picture timed in a viewer; `summary.tsv` beside the
+# parity, every file the app and the command line wrote, and its verdict. A
+# release also gets the three pages and the five tables as assets of its own —
+# every verdict as `validation-<tag>.tsv`, every number its figures draw as
+# `validation-<tag>.txt`, every timed run as `timings-<tag>.tsv`, every
+# picture as `viewers-<tag>.tsv` and every file compared as
+# `parity-<tag>.tsv` — so a release's numbers outlive the next release's pages.
+# Every run keeps what it rendered as an artifact for 90 days, even when it
+# fails: the validation alone, and the timing rounds it finished, when the
+# timings are what failed.
 
 on:
   release:
@@ -86,7 +97,7 @@ on:
         type: number
         default: 4
       publish:
-        description: 'Publish the pages at <site>/validation/ and <site>/timings/'
+        description: 'Publish the pages at <site>/validation/, <site>/timings/ and <site>/parity/'
         type: boolean
         default: true
 
@@ -250,6 +261,14 @@ jobs:
           git clone --quiet https://github.com/LeopoldC/Boost-HiC "$BOOSTHIC_DIR"
           git -C "$BOOSTHIC_DIR" checkout --quiet a615aff7aa53a8370051a6366d893d6c03440906
 
+      # Ten tasks in the app, driven in the viewers' Chromium, and again from the
+      # lines its console wrote; first, being the shortest. NOTEBOOKS_SITE is what
+      # makes each page link to the others, and to the files beside it.
+      - name: Render the parity
+        env:
+          NOTEBOOKS_SITE: ${{ steps.site.outputs.url }}
+        run: quarto render notebooks/parity.qmd
+
       # Fetches the data, runs every analysis twice and writes the command list
       # the timings run from. NOTEBOOKS_SITE is what makes each page link to the
       # other, and to the files beside it, where they are published.
@@ -285,13 +304,19 @@ jobs:
             cp notebooks/timing.html pages/timings/index.html
             cp "$work/rendered-timing.json" pages/timings/rendered.json
           fi
+          if [ -f notebooks/parity.html ]; then
+            mkdir -p pages/parity
+            cp notebooks/parity.html pages/parity/index.html
+            cp notebooks/work/parity/rendered-parity.json pages/parity/rendered.json
+            cp notebooks/work/parity/summary.tsv pages/parity/
+          fi
           for table in timings.tsv viewers.tsv; do
             if [ -f "$work/$table" ]; then
               mkdir -p pages/timings
               cp "$work/$table" pages/timings/
             fi
           done
-          if [ -d pages ]; then du -ah pages; else echo 'Neither notebook rendered.'; fi
+          if [ -d pages ]; then du -ah pages; else echo 'No notebook rendered.'; fi
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -312,7 +337,7 @@ jobs:
         run: |
           set -euo pipefail
           git init --quiet --initial-branch "$NOTEBOOKS_BRANCH" published
-          cp -R pages/validation pages/timings published/
+          cp -R pages/validation pages/timings pages/parity published/
           cd published
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -336,6 +361,8 @@ jobs:
           cp pages/validation/validation.txt "assets/validation-${TAG}.txt"
           cp pages/timings/timings.tsv "assets/timings-${TAG}.tsv"
           cp pages/timings/viewers.tsv "assets/viewers-${TAG}.tsv"
+          cp pages/parity/index.html "assets/parity-${TAG}.html"
+          cp pages/parity/summary.tsv "assets/parity-${TAG}.tsv"
           gh release upload "$TAG" assets/* --clobber --repo '${{ github.repository }}'
 
       # The publisher of the site, as stores.yml asks it. A run dispatched by the
@@ -358,8 +385,8 @@ jobs:
           work = pathlib.Path('notebooks/work/validation')
           site = os.environ['SITE']
           print('## Notebooks\n')
-          for page, path in (('validation', 'validation/'), ('timing', 'timings/')):
-              stamp = work / f'rendered-{page}.json'
+          for page, path in (('validation', 'validation/'), ('timing', 'timings/'), ('parity', 'parity/')):
+              stamp = (work.parent / 'parity' if page == 'parity' else work) / f'rendered-{page}.json'
               if not stamp.exists():
                   print(f'- **{path[:-1]}**: not rendered')
                   continue
@@ -375,4 +402,15 @@ jobs:
               print('\n| § | Analysis | Reference | Verdict |\n|---|---|---|---|')
               for row in rows:
                   print(f"| {row['§']} | {row['Analysis']} | {row['Reference']} | {row['Verdict']} |")
+          files = work.parent / 'parity' / 'summary.tsv'
+          if files.exists():
+              rows = list(csv.DictReader(files.open(), delimiter='\t'))
+              cases = {}
+              for row in rows:
+                  cases.setdefault((row['case'], row['task']), []).append(row['verdict'])
+              print('\n| Case | Task | Files | Identical | Data differs | One side only |\n|---|---|---|---|---|---|')
+              for (case, task), verdicts in cases.items():
+                  alone = sum(v in ('browser only', 'command line only') for v in verdicts)
+                  print(f"| {case} | `{task}` | {len(verdicts)} | {verdicts.count('identical')} | "
+                        f"{verdicts.count('data differs')} | {alone} |")
           PY

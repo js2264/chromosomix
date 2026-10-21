@@ -14,6 +14,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The app held to its own command line, in a notebook (§18.10).** `notebooks/parity.qmd` runs ten
+  tasks in the app, in headless Chromium — insulation, compartments, P(s), coverage, virtual 4C, loop
+  calling, a motif search and APA on GEO's yeast Micro-C at 1.6 kb, framed on chrIV, and peak calling
+  and the metaplot on GEO's yeast ATAC-seq — saves every file the app offers for each run through the
+  buttons a reader presses, runs the line the console wrote for it with `chromosomix`, and compares
+  the two sets file by file: identical (a bigWig byte for byte, a text file line for line, its `#`
+  provenance set aside), or the data apart. Rendered with the validation and the timings on every
+  release and published at <https://chromosomix.app/parity/>, with every file and its verdict in
+  `summary.tsv` beside it.
+
 - **The validation notebook holds four more analyses to their references, and does not time them
   (§18.10).** `notebooks/validation.qmd` adds cis and trans per sequence against cooltools'
   `expected_cis` and `expected_trans`, on a chicken map whose microchromosomes meet one another at
@@ -22,6 +32,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   exact sums; and signal by group against pyBigWig's exact stretch means, rank for rank in each group,
   and NumPy's and SciPy's summaries and rank tests. Their commands are written to `commands.json`
   with the others and left out of `notebooks/timing.qmd`'s runs.
+
+### Changed
+
+- **The command line names a track as the app does (§23.1).** A file opened under `--tracks` is
+  called what the app calls its row — `signal` for `signal.bw` — in a metaplot's columns, a
+  correlation's axes, FRiP's and Signal by group's rows and every label a run writes, where it was the
+  file's base name. The shell's tables and the drawer's now share their headers.
 
 ### Fixed
 

@@ -6,7 +6,7 @@
  * lives in the hash, so one document serves them all — except the addresses
  * that hold a different document under the same scope: an archived build at
  * `v/<commit>/`, a pull request's preview at `pr/<n>/`, and the two rendered
- * notebooks at `validation/` and `timings/` (`.github/workflows/notebooks.yml`).
+ * notebooks at `validation/`, `timings/` and `parity/` (`.github/workflows/notebooks.yml`).
  * Answered with the shell, those show this build at that address, which is the
  * one failure a reader has no symptom to notice by. The notebooks are passed
  * through without their trailing slash too, because that is how a link to one
@@ -58,7 +58,7 @@ describe('a navigation', () => {
   const answers = worker('https://chromosomix.app/')
 
   it('into the app is answered with the cached shell', () => {
-    for (const path of ['/', '/index.html', '/?config=x', '/validations/', '/timingsheet']) {
+    for (const path of ['/', '/index.html', '/?config=x', '/validations/', '/timingsheet', '/parityx/']) {
       expect(answers(path), path).toBe(true)
     }
   })
@@ -70,7 +70,7 @@ describe('a navigation', () => {
   })
 
   it('to a rendered notebook is left to the network, with or without its slash', () => {
-    for (const path of ['/validation/', '/validation', '/validation/index.html', '/timings/', '/timings']) {
+    for (const path of ['/validation/', '/validation', '/validation/index.html', '/timings/', '/timings', '/parity/', '/parity']) {
       expect(answers(path), path).toBe(false)
     }
   })
@@ -80,5 +80,6 @@ describe('a navigation', () => {
     expect(below('/chromosomix/')).toBe(true)
     expect(below('/chromosomix/validation/')).toBe(false)
     expect(below('/chromosomix/timings')).toBe(false)
+    expect(below('/chromosomix/parity/')).toBe(false)
   })
 })

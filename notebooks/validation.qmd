@@ -310,6 +310,13 @@ def table(path):
     return pd.read_csv(path, sep='\t', comment='#')
 
 
+def track_name(name):
+    """A bigWig as chromosomix names it in a table it writes, as the app names the track's row: its file's
+    name less the `.bw` (`src/annotations/names.ts`). A reference that names it by its file is read
+    through this, so that the two meet."""
+    return str(name).strip("'").removesuffix('.bw')
+
+
 def one(folder, pattern):
     """The one file of `folder` matching `pattern`."""
     hits = sorted(Path(folder).glob(pattern))
@@ -2621,11 +2628,14 @@ for size in SIZES:
 
 
 def square_of(path):
-    """A correlation matrix, its tracks put in one order whatever order the file wrote them in."""
+    """A correlation matrix, its tracks put in one order whatever order the file wrote them in, each
+    known by its file's name with or without the `.bw`: chromosomix names a track as the app names
+    its row, without it, and the two references with it."""
     frame = pd.read_csv(path, sep='\t', comment='#', index_col=0)
-    frame.index = [str(name).strip("'") for name in frame.index]
-    frame.columns = [str(name).strip("'") for name in frame.columns]
-    return frame.loc[TRACK_NAMES, TRACK_NAMES].to_numpy(float)
+    frame.index = [track_name(label) for label in frame.index]
+    frame.columns = [track_name(label) for label in frame.columns]
+    order = [track_name(label) for label in TRACK_NAMES]
+    return frame.loc[order, order].to_numpy(float)
 
 
 def exact_windows(size):
@@ -3179,15 +3189,17 @@ for key, (label, bed) in FRIP_SETS.items():
 #: The columns of a FRiP chromosomix writes, and the places it writes each to.
 FRIP_PLACES = {'frip': 4, 'covered': 4, 'enrichment': 2, 'inFeature': 3}
 KEYS = ['track', 'contig', 'start', 'end']
-REPLICATE = {path.name: f'rep. {k + 1}' for k, path in enumerate(REPS)}
+REPLICATE = {track_name(path.name): f'rep. {k + 1}' for k, path in enumerate(REPS)}
 fr, rows = {}, []
 for key, (label, bed) in FRIP_SETS.items():
     app = table(one(FR / key, '*.frip.tsv')).set_index('track')
-    ref = pd.read_csv(FR / f'pybigwig-{key}-frip.tsv', sep='\t').set_index('track').loc[app.index]
+    ref = (pd.read_csv(FR / f'pybigwig-{key}-frip.tsv', sep='\t').assign(track=lambda f: f['track'].map(track_name))
+           .set_index('track').loc[app.index])
     total = relative_difference(app['totalSignal'].to_numpy(float), ref['totalSignal'].to_numpy(float))
     # Every feature by its track and coordinates; one written twice is the same numbers twice.
     each = (table(one(FR / key, '*.frip-features.tsv')).drop_duplicates(KEYS)
-            .merge(pd.read_csv(FR / f'pybigwig-{key}-features.tsv', sep='\t').drop_duplicates(KEYS), on=KEYS,
+            .merge(pd.read_csv(FR / f'pybigwig-{key}-features.tsv', sep='\t')
+                   .assign(track=lambda f: f['track'].map(track_name)).drop_duplicates(KEYS), on=KEYS,
                    how='outer', suffixes=('_app', '_ref'), indicator=True))
     paired = each[each['_merge'] == 'both']
     signal_gap = np.abs(paired['signal_app'] - paired['signal_ref'])
@@ -3314,9 +3326,10 @@ reference('pybigwig-groupsignal', 'Signal by group', 'pyBigWig, SciPy',
 
 groups_app = table(one(GS / 'app', '*.groupsignal-groups.tsv'))
 tests_app = table(one(GS / 'app', '*.groupsignal-tests.tsv')).fillna({'b': ''})
-groups_ref = pd.read_csv(GS / 'reference-groups.tsv', sep='\t')
-tests_ref = pd.read_csv(GS / 'reference-tests.tsv', sep='\t').fillna({'b': ''})
-exact = pd.read_csv(GS / 'reference-stretches.tsv', sep='\t')
+groups_ref = pd.read_csv(GS / 'reference-groups.tsv', sep='\t').assign(track=lambda f: f['track'].map(track_name))
+tests_ref = (pd.read_csv(GS / 'reference-tests.tsv', sep='\t').fillna({'b': ''})
+             .assign(track=lambda f: f['track'].map(track_name)))
+exact = pd.read_csv(GS / 'reference-stretches.tsv', sep='\t').rename(columns=track_name)
 
 
 def violin_values(path):
