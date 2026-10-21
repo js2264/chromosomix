@@ -39,9 +39,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   replicates and the mm10 sequence — and tabulates the wall-clock and CPU time and the peak memory of
   each, with the machine it ran on, a figure, and every command at the end. It needs Quarto with
   pandas, matplotlib and pyfaidx, and a built command line; the data, about 13.7 GB, are downloaded
-  once, each held to its MD5.
+  once, each held to its MD5. Render it on your own laptop, or read it at
+  <https://chromosomix.app/laptop/>, rendered with every release on a GitHub runner.
 
 ### Changed
+
+- **The notebooks render a job each, and the run's summary has a section each (§18.10).**
+  `.github/workflows/notebooks.yml` renders the parity first, then the validation with the timings
+  (which run the validation's commands on its inputs) beside the laptop, each job on a runner of its
+  own installing what it needs through `.github/actions/notebooks-setup`; a last job publishes the
+  four pages only if all rendered. The summary gives each notebook its address, version and render
+  time, the one line of findings the notebook now writes with its stamp (`rendered.json`), and its
+  table, folded. Where each page is published and which files go beside it is one table,
+  `notebooks/scripts/pages.py`, which the workflow and `rendered.py` both read.
 
 - **The command line names a track as the app does (§23.1).** A file opened under `--tracks` is
   called what the app calls its row — `signal` for `signal.bw` — in a metaplot's columns, a

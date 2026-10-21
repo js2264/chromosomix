@@ -442,5 +442,7 @@ alone = int(FILES['verdict'].isin(['browser only', 'command line only']).sum())
 print(f"**{same} of {len(FILES)} files** are identical between the app and the command line; "
       f"{int((FILES['verdict'] == 'data differs').sum())} differ in their data, and {alone} "
       f"{'was' if alone == 1 else 'were'} written by one side alone.\n")
-print(R.foot())
+print(R.foot(summary=f"{same} of {len(FILES)} files are identical between the app and the command line; "
+                     f"{int((FILES['verdict'] == 'data differs').sum())} differ in their data, and {alone} "
+                     f"{'was' if alone == 1 else 'were'} written by one side alone."))
 ```

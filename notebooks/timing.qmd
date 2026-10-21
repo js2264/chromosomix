@@ -936,5 +936,8 @@ plt.show()
 ```{python}
 #| echo: false
 #| output: asis
-print(R.foot())
+print(R.foot(summary=f"chromosomix takes {TEXT['fold']}× less CPU time than the references over {TEXT['n']} pairs "
+                     f"({TEXT['range']}), and {TEXT['wall']}× less wall-clock time. On the same file from disk, "
+                     f"juicebox.js's time to a picture over chromosomix's is {V_TEXT['juicebox_local']}, "
+                     f"HiGlass's {V_TEXT['higlass_local']}."))
 ```

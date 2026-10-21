@@ -13,6 +13,22 @@ execute:
   warning: false
 ---
 
+```{python}
+#| echo: false
+#| output: asis
+# When, from what, by what and on what this page was rendered: notebooks/scripts/rendered.py.
+import sys
+from pathlib import Path
+
+_here = Path.cwd().resolve()
+sys.path.append(str((_here if _here.name == 'notebooks' else _here / 'notebooks') / 'scripts'))
+from rendered import Render
+
+R = Render('laptop')
+print(R.head(also=f"The same analyses against the packages they reproduce: {R.anchor('timing', 'the timings')}. "
+                  f"Beside this page: {R.download('timings.tsv')}, every analysis measured, with the machine."))
+```
+
 How long does an analysis take in chromosomix, and how much memory does it need, when it is run over a
 whole genome on an ordinary laptop? This notebook answers that for 23 analyses on public data: Hi-C maps
 from 69 million to 1.08 billion contacts, a yeast Micro-C map down to 50 bp, and ATAC-seq tracks and
@@ -23,7 +39,9 @@ runs the same code the browser runs, and as a separate process its time and memo
 the operating system: the wall-clock time from start to finish, the CPU time, and the peak memory (the
 largest resident set the process reached).
 
-To render it, from the root of a clone, on a laptop that is plugged in and otherwise idle:
+The block above says which machine this page was rendered on. With every release it is a GitHub runner
+(`.github/workflows/notebooks.yml`); to measure your own, render it from the root of a clone, on a laptop
+that is plugged in and otherwise idle:
 
 ```bash
 npm ci && npm run build:cli
@@ -72,21 +90,10 @@ VERSION = subprocess.run(['node', str(CLI), '--version'], capture_output=True, t
 ## The machine
 
 ```{python}
-def processor():
-    if sys.platform == 'darwin':
-        return subprocess.run(['sysctl', '-n', 'machdep.cpu.brand_string'], capture_output=True,
-                              text=True).stdout.strip()
-    if Path('/proc/cpuinfo').exists():
-        for line in open('/proc/cpuinfo'):
-            if line.startswith('model name'):
-                return line.split(':', 1)[1].strip()
-    return platform.processor()
-
-
 MACHINE = {
-    'processor': processor(),
+    'processor': R.machine['processor'],
     'cores': os.cpu_count(),
-    'memory': f"{os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / 2**30:.0f} GB",
+    'memory': f"{R.machine['memory_gb']:.0f} GB",
     'system': platform.platform(),
     'node': subprocess.run(['node', '--version'], capture_output=True, text=True).stdout.strip(),
     'chromosomix': VERSION.removeprefix('chromosomix '),
@@ -349,4 +356,13 @@ print('```bash')
 for command in times['command']:
     print(command)
 print('```')
+```
+
+```{python}
+#| echo: false
+#| output: asis
+print(R.foot(summary=f"{len(times)} analyses run genome-wide on {MACHINE['processor']} with {MACHINE['memory']}: "
+                     f"{under_a_minute} took less than a minute; the slowest, {slowest['analysis'].split(',')[0]} "
+                     f"({slowest['data']}), {duration(slowest['wall_s'])}; the most memory, "
+                     f"{largest['peak_mb']:,.0f} MB ({largest['analysis'].split(',')[0]}, {largest['data']})."))
 ```

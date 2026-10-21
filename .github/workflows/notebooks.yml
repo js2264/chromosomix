@@ -1,8 +1,8 @@
 name: Notebooks
 
-# Renders the notebooks that hold chromosomix to the packages it reproduces,
-# and the app to its own command line (SPECS §18.10), and publishes them beside
-# the app:
+# Renders the four notebooks that hold chromosomix to the packages it reproduces,
+# to its own command line, and to a machine like a reader's (SPECS §18.10), and
+# publishes them beside the app:
 #
 #   https://chromosomix.app/validation/   notebooks/validation.qmd — every
 #                                         analysis run twice, by chromosomix and
@@ -10,11 +10,14 @@ name: Notebooks
 #   https://chromosomix.app/timings/      notebooks/timing.qmd — a map and a
 #                                         track drawn by chromosomix, juicebox.js
 #                                         and HiGlass, timed; then every command
-#                                         of the first, run again and timed
+#                                         of the validation, run again and timed
 #   https://chromosomix.app/parity/       notebooks/parity.qmd — ten tasks run
 #                                         in the app in headless Chromium, then
 #                                         from the line its console wrote, and
 #                                         the files the two wrote compared
+#   https://chromosomix.app/laptop/       notebooks/laptop.qmd — 23 analyses
+#                                         run genome-wide, once each, with their
+#                                         time and peak memory
 #
 # **When.** On every release, once it is published — release.yml makes the
 # release a draft from the tag and a person publishes it, and that act is what
@@ -23,65 +26,81 @@ name: Notebooks
 # Run workflow, on any branch or tag, with the number of timed runs and
 # whether to publish. A run from a branch that publishes replaces the pages a
 # release put up; untick *publish* to look at a branch's pages in the run's
-# artifact instead.
+# artifacts instead.
+#
+# **One job a notebook.** `site` works out where the pages will be, for the
+# links between them. `parity` renders first, in about ten minutes, so that a
+# page that cannot render fails the run before the hours of the others; then
+# `validation` and `laptop` run side by side, each on a runner of its own.
+# The validation and the timings share a job because the timings run the
+# validation's own commands again, on the inputs the validation fetched and
+# made: about 6 GB that would otherwise go from one job to the next as an
+# artifact on every run, which a private repository pays for. Each job
+# installs what it needs through .github/actions/notebooks-setup, gathers its
+# pages with notebooks/scripts/pages.py — the one table of where each page is
+# published and which files go beside it — and keeps them as an artifact for
+# 90 days, even when it fails: the validation alone, and the timing rounds it
+# finished, when the timings are what failed. `publish` waits for all three,
+# publishes only if every page rendered, and writes the run's summary either
+# way: each notebook's address, version and time, the one line of findings
+# it wrote, and its table.
 #
 # **What it installs**, and why pinned. The references are the versions the
 # notebooks' prose names: `notebooks/requirements.txt` is the reference
 # environment as the last render by hand had it, every package pinned, on
-# Python 3.13; `notebooks/requirements-yapc.txt` is yapc 0.1's, on Python
-# 3.11, which needs a numpy from before 1.24, and IDR 2.0.3 and yapc are built
-# from their repositories at the commits the notebook cites, as the yapc
-# section of scripts/make_analysis_golden.py does. Boost-HiC is a checkout;
-# bedtools and seqkit are Ubuntu 24.04's own packages, which are the versions
-# the notebook was written against. Quarto comes with the reference
+# Python 3.13, and every notebook renders in it; `notebooks/requirements-yapc.txt`
+# is yapc 0.1's, on Python 3.11, which needs a numpy from before 1.24, and IDR
+# 2.0.3 and yapc are built from their repositories at the commits the notebook
+# cites, as the yapc section of scripts/make_analysis_golden.py does. Boost-HiC
+# is a checkout; bedtools and seqkit are Ubuntu 24.04's own packages, which are
+# the versions the notebook was written against. Quarto comes with the reference
 # environment, as the `quarto-cli` package. The viewers the timings open on are
 # pinned in `notebooks/viewers/package.json` (juicebox.js, HiGlass and the
-# Playwright that drives Chromium for all three), and HiGlass's tile server in
-# `notebooks/requirements-higlass.txt`, higlass-python's environment, with
-# Ubuntu's libfuse 2 for the files it reads from a bucket.
+# Playwright that drives Chromium for all three, and for the parity), and
+# HiGlass's tile server in `notebooks/requirements-higlass.txt`,
+# higlass-python's environment, with Ubuntu's libfuse 2 for the files it reads
+# from a bucket.
 #
-# **What it costs.** About 6 GB of public data (4DN's, UCSC's mm10 through
-# iGenomes, and GEO's yeast Micro-C, each from where it was published), and
-# 160 MB more for the parity (GEO's yeast Micro-C and ATAC-seq, UCSC's sacCer3), is
-# fetched on every run rather than cached, and 15 GB more for the viewers (4DN's
-# chicken and mouse maps in both formats, the mouse's 13 GB of it, and the
-# app's yeast demo): a cache that size would evict the repository's npm and
-# Electron caches, and the buckets answer a runner at hundreds of megabytes a
-# second. The parity renders first, in about five minutes, so that a page that
-# cannot render fails the run before the hours of the others; a file the app and
-# the command line write differently is a verdict on its page, not a failure.
-# From nothing, the validation renders in about an hour on a standard
-# runner (4 cores, 16 GB — the heaviest reference peaks at about 4 GB), every
-# reference run for the first time; the viewers' pictures in about twenty
-# minutes a round, and the timings in about twenty minutes a run, so four of
-# each fit the six hours a job may take — four, an even number, so that each
-# side of a pair goes first in as many rounds as the other (timing.qmd's
-# `round_of`), and as many as there are viewers, so that each goes first once
-# a picture. Every runner is a different machine, which is why the timings page
-# says which one it ran on.
+# **What it costs.** Every run fetches its data rather than caching them: about
+# 6 GB for the validation (4DN's, UCSC's mm10 through iGenomes, and GEO's yeast
+# Micro-C, each from where it was published) and 15 GB more for the viewers
+# (4DN's chicken and mouse maps in both formats, the mouse's 13 GB of it, and
+# the app's yeast demo); 160 MB for the parity (GEO's yeast Micro-C and
+# ATAC-seq, UCSC's sacCer3); 13.7 GB for the laptop (the validation's mouse
+# and yeast maps, ATAC-seq and mm10, and 4DN's 8.3 GB IMR-90 map). A cache
+# that size would evict the repository's npm and Electron caches, and the
+# buckets answer a runner at hundreds of megabytes a second. From nothing, the
+# validation renders in about an hour on a standard runner (4 cores, 16 GB —
+# the heaviest reference peaks at about 4 GB), every reference run for the
+# first time; the viewers' pictures in about twenty minutes a round, and the
+# timings in about twenty minutes a run, so four of each fit the six hours a
+# job may take — four, an even number, so that each side of a pair goes first
+# in as many rounds as the other (timing.qmd's `round_of`), and as many as
+# there are viewers, so that each goes first once a picture. The laptop takes
+# about an hour, half of it peak calling over the whole mouse genome. Every
+# runner is a different machine, which is why each page says which one it ran
+# on.
 #
 # **Where it is published, and why through a branch.** Pages replaces the
 # whole site on every deployment and only deploy.yml deploys it, so this
-# workflow does what stores.yml does: it force-pushes the three pages, and the
+# workflow does what stores.yml does: it force-pushes the four pages, and the
 # files beside them, to an orphan `notebooks` branch as one commit, and asks
-# deploy.yml to publish; the deploy copies them into `validation/`, `timings/`
-# and `parity/` on every run after that, so a push to `main` keeps them. Beside
-# each page: `rendered.json`, what the stamp at its top says (when, from which
-# commit and release, by which run, on what machine); `commands.json`,
-# `summary.tsv` and `validation.txt` beside the validation, every command it
-# ran, every verdict and every number its figures draw, one row a mark (33 MB,
-# most of it Boost-HiC's two maps of chr19 and the metaplot over two tracks);
+# deploy.yml to publish; the deploy copies them into `validation/`,
+# `timings/`, `parity/` and `laptop/` on every run after that, so a push to
+# `main` keeps them. Beside each page: `rendered.json`, what the stamp at its
+# top says (when, from which commit and release, by which run, on what
+# machine) and its line of findings; `commands.json`, `summary.tsv` and
+# `validation.txt` beside the validation, every command it ran, every verdict
+# and every number its figures draw, one row a mark (33 MB, most of it
+# Boost-HiC's two maps of chr19 and the metaplot over two tracks);
 # `timings.tsv` beside the timings, every timed run, one row each, and
 # `viewers.tsv`, every picture timed in a viewer; `summary.tsv` beside the
-# parity, every file the app and the command line wrote, and its verdict. A
-# release also gets the three pages and the five tables as assets of its own —
-# every verdict as `validation-<tag>.tsv`, every number its figures draw as
-# `validation-<tag>.txt`, every timed run as `timings-<tag>.tsv`, every
-# picture as `viewers-<tag>.tsv` and every file compared as
-# `parity-<tag>.tsv` — so a release's numbers outlive the next release's pages.
-# Every run keeps what it rendered as an artifact for 90 days, even when it
-# fails: the validation alone, and the timing rounds it finished, when the
-# timings are what failed.
+# parity, every file the app and the command line wrote, and its verdict;
+# `timings.tsv` beside the laptop, every analysis measured. A release also
+# gets the four pages and the six tables as assets of its own —
+# `validation-<tag>.tsv` and `.txt`, `timings-<tag>.tsv`, `viewers-<tag>.tsv`,
+# `parity-<tag>.tsv` and `laptop-<tag>.tsv` — so a release's numbers outlive
+# the next release's pages.
 
 on:
   release:
@@ -97,7 +116,7 @@ on:
         type: number
         default: 4
       publish:
-        description: 'Publish the pages at <site>/validation/, <site>/timings/ and <site>/parity/'
+        description: 'Publish the pages at <site>/validation/, <site>/timings/, <site>/parity/ and <site>/laptop/'
         type: boolean
         default: true
 
@@ -113,44 +132,23 @@ env:
   NOTEBOOKS_BRANCH: notebooks
 
 jobs:
-  render:
-    name: render and publish
+  # Where the site is, for the links between the pages and to the files beside
+  # them — the same resolution as deploy.yml and preview.yml — and the version
+  # and commit every artifact of the run is named after.
+  site:
+    name: site
     runs-on: ubuntu-24.04
-    # GitHub's ceiling is 360; what is left over is for publishing.
-    timeout-minutes: 350
+    timeout-minutes: 5
     permissions:
-      # The `notebooks` branch, and a release's assets.
-      contents: write
-      # The deploy it asks for at the end.
-      actions: write
-    env:
-      TIMING_RUNS: ${{ inputs.runs || 4 }}
-      VIEWER_RUNS: ${{ inputs.viewer_runs || 4 }}
-      PUBLISH: ${{ github.event_name == 'release' || inputs.publish }}
+      contents: read
+    outputs:
+      url: ${{ steps.site.outputs.url }}
+      short: ${{ steps.site.outputs.short }}
+      version: ${{ steps.site.outputs.version }}
     steps:
-      # The data, their outputs and three Python environments need about 15 GB,
-      # and the viewers' files 15 GB more; a fresh runner has about half of
-      # that free. Toolchains and browsers this job never uses are what make
-      # the room — the viewers run in Playwright's own Chromium.
-      - name: Make room
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
-            /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/share/swift \
-            /usr/local/share/powershell /opt/microsoft /opt/google /usr/lib/jvm /opt/az \
-            /usr/local/julia* /usr/local/share/chromium
-          sudo docker image prune --all --force > /dev/null || true
-          df -h /
-
       # On a release, the release's tag: what is rendered is what was released.
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
-
-      # Where the site is, for the links between the two pages and to the files
-      # beside them — the same resolution as deploy.yml and preview.yml.
       - name: Resolve the site
         id: site
         run: |
@@ -170,199 +168,178 @@ jobs:
             echo "version=$(node -p "require('./package.json').version")"
           } >> "$GITHUB_OUTPUT"
 
-      - run: npm ci
+  # Ten tasks in the app, driven in the viewers' Chromium, and again from the
+  # lines its console wrote; first, being the shortest.
+  parity:
+    name: parity
+    needs: site
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      NOTEBOOKS_SITE: ${{ needs.site.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
 
-      # The command-line form of the app's Analysis panel, typechecked first, and
-      # the app itself, which the viewers' timings serve from dist/.
-      - name: Build chromosomix
-        run: |
-          npm run build:cli
-          npm run build
-
-      # libfuse 2, which higlass-python's FUSE mount (fusepy) loads to serve a
-      # file from a bucket, with its fusermount.
-      - name: bedtools, seqkit and FUSE
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends bedtools seqkit fuse libfuse2t64
-          bedtools --version
-          seqkit version
-          fusermount -V
-
-      # juicebox.js, HiGlass and Playwright at the versions the timings name, and
-      # the Chromium that Playwright drives, with what it needs from Ubuntu.
-      - name: The viewers and their browser
-        run: |
-          npm ci --prefix notebooks/viewers
-          npx --prefix notebooks/viewers playwright install --with-deps chromium
-
-      # yapc's first, so that the reference environment's 3.13 is the one left
-      # on the PATH.
-      - uses: actions/setup-python@v5
-        id: python311
+      - uses: ./.github/actions/notebooks-setup
         with:
-          python-version: '3.11'
+          viewers: 'true'
 
-      - uses: actions/setup-python@v5
-        id: python313
-        with:
-          python-version: '3.13'
-          cache: pip
-          cache-dependency-path: notebooks/requirements*.txt
-
-      - name: Where the environments go
-        run: |
-          {
-            echo "REFS=$RUNNER_TEMP/refs"
-            echo "QUARTO_PYTHON=$RUNNER_TEMP/refs/bin/python"
-            echo "YAPC_PYTHON=$RUNNER_TEMP/yapc-env/bin/python"
-            echo "BOOSTHIC_DIR=$RUNNER_TEMP/Boost-HiC"
-            echo "HIGLASS_PYTHON=$RUNNER_TEMP/higlass-env/bin/python"
-          } >> "$GITHUB_ENV"
-          echo "$RUNNER_TEMP/refs/bin" >> "$GITHUB_PATH"
-
-      - name: The reference packages
-        run: |
-          set -euo pipefail
-          '${{ steps.python313.outputs.python-path }}' -m venv "$REFS"
-          "$REFS/bin/pip" install --quiet --upgrade pip
-          "$REFS/bin/pip" install --quiet -r notebooks/requirements.txt
-          "$REFS/bin/pip" check
-          "$REFS/bin/quarto" --version
-
-      # The recipe in the yapc section of scripts/make_analysis_golden.py:
-      # IDR's generated `inv_cdf.c` predates Python 3.11, and Cython regenerates
-      # a `.c` only when it is older than its `.pyx`, so it goes before the build.
-      - name: yapc and IDR, in an environment of their own
-        run: |
-          set -euo pipefail
-          '${{ steps.python311.outputs.python-path }}' -m venv "$RUNNER_TEMP/yapc-env"
-          pip="$RUNNER_TEMP/yapc-env/bin/pip"
-          "$pip" install --quiet -r notebooks/requirements-yapc.txt
-          git clone --quiet https://github.com/nboley/idr "$RUNNER_TEMP/idr"
-          git -C "$RUNNER_TEMP/idr" checkout --quiet 74665e73bffb689a440948640c386b1188eea1e3
-          rm "$RUNNER_TEMP/idr/idr/inv_cdf.c"
-          "$pip" install --quiet --no-build-isolation "$RUNNER_TEMP/idr"
-          "$pip" install --quiet --no-deps 'git+https://github.com/jurgjn/yapc@cf2ea62694f082fc282a979057d44b5e5b0fb41a'
-          "$RUNNER_TEMP/yapc-env/bin/yapc" --help > /dev/null
-
-      # HiGlass's tile server, as higlass-python starts one, in an environment of
-      # its own: its pins (numpy 2, a newer h5py) are not the references'.
-      - name: higlass-python, in an environment of its own
-        run: |
-          set -euo pipefail
-          '${{ steps.python313.outputs.python-path }}' -m venv "$RUNNER_TEMP/higlass-env"
-          "$RUNNER_TEMP/higlass-env/bin/pip" install --quiet -r notebooks/requirements-higlass.txt
-          "$RUNNER_TEMP/higlass-env/bin/pip" check
-          "$HIGLASS_PYTHON" -c 'import higlass, clodius, simple_httpfs, fuse'
-
-      - name: Boost-HiC
-        run: |
-          git clone --quiet https://github.com/LeopoldC/Boost-HiC "$BOOSTHIC_DIR"
-          git -C "$BOOSTHIC_DIR" checkout --quiet a615aff7aa53a8370051a6366d893d6c03440906
-
-      # Ten tasks in the app, driven in the viewers' Chromium, and again from the
-      # lines its console wrote; first, being the shortest. NOTEBOOKS_SITE is what
-      # makes each page link to the others, and to the files beside it.
       - name: Render the parity
-        env:
-          NOTEBOOKS_SITE: ${{ steps.site.outputs.url }}
         run: quarto render notebooks/parity.qmd
 
-      # Fetches the data, runs every analysis twice and writes the command list
-      # the timings run from. NOTEBOOKS_SITE is what makes each page link to the
-      # other, and to the files beside it, where they are published.
-      - name: Render the validation
-        env:
-          NOTEBOOKS_SITE: ${{ steps.site.outputs.url }}
-        run: quarto render notebooks/validation.qmd
-
-      - name: Render the timings, ${{ env.VIEWER_RUNS }} rounds of pictures and ${{ env.TIMING_RUNS }} runs of each command
-        env:
-          NOTEBOOKS_SITE: ${{ steps.site.outputs.url }}
-        run: quarto render notebooks/timing.qmd
-
-      # Whatever rendered, after a failure too: an hour of validation is worth
-      # keeping when the timings after it fail, and the benchmark writes its
-      # table after every round, so the rounds it finished are kept with it.
-      # `always()`, not `!cancelled()`, because the likeliest failure is the
-      # timings outrunning the job's limit, and GitHub cancels a job that does;
-      # copying files cannot hang. Publishing, below, still needs both pages.
-      - name: Gather the pages and the files beside them
+      # Whatever rendered, after a failure too.
+      - name: Gather the page and the files beside it
         if: always()
-        run: |
-          set -euo pipefail
-          work=notebooks/work/validation
-          if [ -f notebooks/validation.html ]; then
-            mkdir -p pages/validation
-            cp notebooks/validation.html pages/validation/index.html
-            cp "$work/rendered-validation.json" pages/validation/rendered.json
-            cp "$work/commands.json" "$work/summary.tsv" "$work/validation.txt" pages/validation/
-          fi
-          if [ -f notebooks/timing.html ]; then
-            mkdir -p pages/timings
-            cp notebooks/timing.html pages/timings/index.html
-            cp "$work/rendered-timing.json" pages/timings/rendered.json
-          fi
-          if [ -f notebooks/parity.html ]; then
-            mkdir -p pages/parity
-            cp notebooks/parity.html pages/parity/index.html
-            cp notebooks/work/parity/rendered-parity.json pages/parity/rendered.json
-            cp notebooks/work/parity/summary.tsv pages/parity/
-          fi
-          for table in timings.tsv viewers.tsv; do
-            if [ -f "$work/$table" ]; then
-              mkdir -p pages/timings
-              cp "$work/$table" pages/timings/
-            fi
-          done
-          if [ -d pages ]; then du -ah pages; else echo 'No notebook rendered.'; fi
+        run: python3 notebooks/scripts/pages.py gather parity
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: notebooks-${{ steps.site.outputs.version }}-${{ steps.site.outputs.short }}
+          name: notebooks-parity-${{ needs.site.outputs.version }}-${{ needs.site.outputs.short }}
           path: pages/
           retention-days: 90
           # A re-run of a failed attempt uploads under the same name.
           overwrite: true
 
+  # The validation fetches the data, runs every analysis twice and writes the
+  # command list the timings then run, on the same runner.
+  validation:
+    name: validation and timings
+    needs: [site, parity]
+    runs-on: ubuntu-24.04
+    # GitHub's ceiling is 360; what is left over is for gathering the pages.
+    timeout-minutes: 350
+    permissions:
+      contents: read
+    env:
+      NOTEBOOKS_SITE: ${{ needs.site.outputs.url }}
+      TIMING_RUNS: ${{ inputs.runs || 4 }}
+      VIEWER_RUNS: ${{ inputs.viewer_runs || 4 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/notebooks-setup
+        with:
+          viewers: 'true'
+          references: 'true'
+          higlass: 'true'
+
+      - name: Render the validation
+        run: quarto render notebooks/validation.qmd
+
+      - name: Render the timings, ${{ env.VIEWER_RUNS }} rounds of pictures and ${{ env.TIMING_RUNS }} runs of each command
+        run: quarto render notebooks/timing.qmd
+
+      # An hour of validation is worth keeping when the timings after it fail,
+      # and the benchmark writes its table after every round, so the rounds it
+      # finished are kept with it. `always()`, not `!cancelled()`, because the
+      # likeliest failure is the timings outrunning the job's limit, and GitHub
+      # cancels a job that does; copying files cannot hang.
+      - name: Gather the pages and the files beside them
+        if: always()
+        run: python3 notebooks/scripts/pages.py gather validation timing
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: notebooks-validation-${{ needs.site.outputs.version }}-${{ needs.site.outputs.short }}
+          path: pages/
+          retention-days: 90
+          overwrite: true
+
+  # 23 analyses run genome-wide, once each, on this job's runner: the same
+  # kind of machine as the timings', with no reference package beside them.
+  laptop:
+    name: laptop
+    needs: [site, parity]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    env:
+      NOTEBOOKS_SITE: ${{ needs.site.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/notebooks-setup
+
+      - name: Render the laptop
+        run: quarto render notebooks/laptop.qmd
+
+      # Each analysis is written to its table as it is measured, so a render
+      # that failed part of the way keeps the ones it finished.
+      - name: Gather the page and the files beside it
+        if: always()
+        run: python3 notebooks/scripts/pages.py gather laptop
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: notebooks-laptop-${{ needs.site.outputs.version }}-${{ needs.site.outputs.short }}
+          path: pages/
+          retention-days: 90
+          overwrite: true
+
+  # Every page, published together or not at all, and the run's summary in
+  # any case.
+  publish:
+    name: publish
+    needs: [site, parity, validation, laptop]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      # The `notebooks` branch, and a release's assets.
+      contents: write
+      # The deploy it asks for at the end.
+      actions: write
+    env:
+      RENDERED: ${{ needs.parity.result == 'success' && needs.validation.result == 'success' && needs.laptop.result == 'success' }}
+      PUBLISH: ${{ github.event_name == 'release' || inputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: notebooks/scripts
+
+      # Nothing to download when every render failed before it gathered a
+      # page; the summary still says so.
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: notebooks-*-${{ needs.site.outputs.version }}-${{ needs.site.outputs.short }}
+          path: pages
+          merge-multiple: true
+
       # One orphan commit, force-pushed: the branch's only interesting state is
       # its tip, and the deploy clones it on every push to `main`.
       - name: Publish to the notebooks branch
         id: publish
-        if: env.PUBLISH == 'true'
+        if: env.RENDERED == 'true' && env.PUBLISH == 'true'
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           git init --quiet --initial-branch "$NOTEBOOKS_BRANCH" published
-          cp -R pages/validation pages/timings pages/parity published/
+          cp -R pages/* published/
           cd published
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          git commit --quiet -m 'notebooks: chromosomix ${{ steps.site.outputs.version }} at ${{ steps.site.outputs.short }}'
+          git commit --quiet -m 'notebooks: chromosomix ${{ needs.site.outputs.version }} at ${{ needs.site.outputs.short }}'
           git push --quiet --force "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" \
             "HEAD:refs/heads/$NOTEBOOKS_BRANCH"
 
       # The site keeps the newest pages only; the release keeps its own.
       - name: Attach the pages to the release
-        if: github.event_name == 'release'
+        if: env.RENDERED == 'true' && github.event_name == 'release'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
-          mkdir assets
-          cp pages/validation/index.html "assets/validation-${TAG}.html"
-          cp pages/timings/index.html "assets/timings-${TAG}.html"
-          cp pages/validation/summary.tsv "assets/validation-${TAG}.tsv"
-          cp pages/validation/validation.txt "assets/validation-${TAG}.txt"
-          cp pages/timings/timings.tsv "assets/timings-${TAG}.tsv"
-          cp pages/timings/viewers.tsv "assets/viewers-${TAG}.tsv"
-          cp pages/parity/index.html "assets/parity-${TAG}.html"
-          cp pages/parity/summary.tsv "assets/parity-${TAG}.tsv"
+          python3 notebooks/scripts/pages.py assets "$TAG" assets
           gh release upload "$TAG" assets/* --clobber --repo '${{ github.repository }}'
 
       # The publisher of the site, as stores.yml asks it. A run dispatched by the
@@ -373,44 +350,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh workflow run deploy.yml --ref '${{ github.event.repository.default_branch || 'main' }}' --repo '${{ github.repository }}'
 
-      # What the run page says: where the pages are, from what, and every verdict.
+      # What the run page says, a section a notebook: where it is and from what,
+      # the line of findings it wrote, and its table, folded.
       - name: Summary
         if: always()
         env:
-          SITE: ${{ steps.site.outputs.url }}
+          SITE: ${{ needs.site.outputs.url }}
           PUBLISHED: ${{ steps.publish.outcome == 'success' }}
-        run: |
-          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import csv, json, os, pathlib
-          work = pathlib.Path('notebooks/work/validation')
-          site = os.environ['SITE']
-          print('## Notebooks\n')
-          for page, path in (('validation', 'validation/'), ('timing', 'timings/'), ('parity', 'parity/')):
-              stamp = (work.parent / 'parity' if page == 'parity' else work) / f'rendered-{page}.json'
-              if not stamp.exists():
-                  print(f'- **{path[:-1]}**: not rendered')
-                  continue
-              facts = json.loads(stamp.read_text())
-              where = f'[{site}{path}]({site}{path})' if os.environ['PUBLISHED'] == 'true' else 'not published'
-              c = facts['chromosomix']
-              print(f"- **{path[:-1]}**: {where} · chromosomix {c['version']} at `{(c['commit'] or '')[:7]}`"
-                    + (f", release {c['tag']}" if c['tag'] else '')
-                    + f" · rendered in {facts['seconds'] // 60} min, finished {facts['finished']}")
-          verdicts = work / 'summary.tsv'
-          if verdicts.exists():
-              rows = list(csv.DictReader(verdicts.open(), delimiter='\t'))
-              print('\n| § | Analysis | Reference | Verdict |\n|---|---|---|---|')
-              for row in rows:
-                  print(f"| {row['§']} | {row['Analysis']} | {row['Reference']} | {row['Verdict']} |")
-          files = work.parent / 'parity' / 'summary.tsv'
-          if files.exists():
-              rows = list(csv.DictReader(files.open(), delimiter='\t'))
-              cases = {}
-              for row in rows:
-                  cases.setdefault((row['case'], row['task']), []).append(row['verdict'])
-              print('\n| Case | Task | Files | Identical | Data differs | One side only |\n|---|---|---|---|---|---|')
-              for (case, task), verdicts in cases.items():
-                  alone = sum(v in ('browser only', 'command line only') for v in verdicts)
-                  print(f"| {case} | `{task}` | {len(verdicts)} | {verdicts.count('identical')} | "
-                        f"{verdicts.count('data differs')} | {alone} |")
-          PY
+          NEEDS: ${{ toJSON(needs) }}
+        run: python3 notebooks/scripts/pages.py summary >> "$GITHUB_STEP_SUMMARY"

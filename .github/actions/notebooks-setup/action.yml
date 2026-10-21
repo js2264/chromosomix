@@ -1,0 +1,137 @@
+name: Notebooks setup
+description: >
+  What a job of notebooks.yml renders a notebook with: room on the runner, chromosomix built (the app and
+  its command line), and the reference environment, which brings Quarto, Jupyter and every package the
+  notebooks import. Each job asks for the rest it needs: the viewers and their Chromium (the parity and
+  the timings), the references' own programs (the validation), HiGlass's tile server (the timings).
+
+inputs:
+  viewers:
+    description: juicebox.js, HiGlass and Playwright's Chromium, as notebooks/viewers pins them
+    default: 'false'
+  references:
+    description: bedtools, seqkit, yapc and IDR, and Boost-HiC
+    default: 'false'
+  higlass:
+    description: higlass-python's tile server, with libfuse 2 for the files it reads from a bucket
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    # The validation's and the timings' data, their outputs and three Python environments need about
+    # 30 GB, and the laptop's data 14 GB; a fresh runner has about half of that free. Toolchains and
+    # browsers no notebook uses make the room — the viewers run in Playwright's own Chromium.
+    - name: Make room
+      shell: bash
+      run: |
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
+          /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/share/swift \
+          /usr/local/share/powershell /opt/microsoft /opt/google /usr/lib/jvm /opt/az \
+          /usr/local/julia* /usr/local/share/chromium
+        sudo docker image prune --all --force > /dev/null || true
+        df -h /
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+        cache: npm
+
+    # The command-line form of the app's Analysis panel, typechecked first, and the app itself, which
+    # the parity drives and the viewers' timings serve from dist/.
+    - name: Build chromosomix
+      shell: bash
+      run: |
+        npm ci
+        npm run build:cli
+        npm run build
+
+    - name: bedtools, seqkit and FUSE
+      if: inputs.references == 'true' || inputs.higlass == 'true'
+      shell: bash
+      run: |
+        sudo apt-get update -q
+        sudo apt-get install -y -q --no-install-recommends bedtools seqkit fuse libfuse2t64
+        bedtools --version
+        seqkit version
+        fusermount -V
+
+    - name: The viewers and their browser
+      if: inputs.viewers == 'true'
+      shell: bash
+      run: |
+        npm ci --prefix notebooks/viewers
+        npx --prefix notebooks/viewers playwright install --with-deps chromium
+
+    # yapc's first, so that the reference environment's 3.13 is the one left on the PATH.
+    - uses: actions/setup-python@v5
+      if: inputs.references == 'true'
+      id: python311
+      with:
+        python-version: '3.11'
+
+    - uses: actions/setup-python@v5
+      id: python313
+      with:
+        python-version: '3.13'
+        cache: pip
+        cache-dependency-path: notebooks/requirements*.txt
+
+    - name: Where the environments go
+      shell: bash
+      run: |
+        {
+          echo "REFS=$RUNNER_TEMP/refs"
+          echo "QUARTO_PYTHON=$RUNNER_TEMP/refs/bin/python"
+          echo "YAPC_PYTHON=$RUNNER_TEMP/yapc-env/bin/python"
+          echo "BOOSTHIC_DIR=$RUNNER_TEMP/Boost-HiC"
+          echo "HIGLASS_PYTHON=$RUNNER_TEMP/higlass-env/bin/python"
+        } >> "$GITHUB_ENV"
+        echo "$RUNNER_TEMP/refs/bin" >> "$GITHUB_PATH"
+
+    - name: The reference packages
+      shell: bash
+      run: |
+        set -euo pipefail
+        '${{ steps.python313.outputs.python-path }}' -m venv "$REFS"
+        "$REFS/bin/pip" install --quiet --upgrade pip
+        "$REFS/bin/pip" install --quiet -r notebooks/requirements.txt
+        "$REFS/bin/pip" check
+        "$REFS/bin/quarto" --version
+
+    # The recipe in the yapc section of scripts/make_analysis_golden.py: IDR's generated `inv_cdf.c`
+    # predates Python 3.11, and Cython regenerates a `.c` only when it is older than its `.pyx`, so it
+    # goes before the build.
+    - name: yapc and IDR, in an environment of their own
+      if: inputs.references == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        '${{ steps.python311.outputs.python-path }}' -m venv "$RUNNER_TEMP/yapc-env"
+        pip="$RUNNER_TEMP/yapc-env/bin/pip"
+        "$pip" install --quiet -r notebooks/requirements-yapc.txt
+        git clone --quiet https://github.com/nboley/idr "$RUNNER_TEMP/idr"
+        git -C "$RUNNER_TEMP/idr" checkout --quiet 74665e73bffb689a440948640c386b1188eea1e3
+        rm "$RUNNER_TEMP/idr/idr/inv_cdf.c"
+        "$pip" install --quiet --no-build-isolation "$RUNNER_TEMP/idr"
+        "$pip" install --quiet --no-deps 'git+https://github.com/jurgjn/yapc@cf2ea62694f082fc282a979057d44b5e5b0fb41a'
+        "$RUNNER_TEMP/yapc-env/bin/yapc" --help > /dev/null
+
+    # HiGlass's tile server, as higlass-python starts one, in an environment of its own: its pins
+    # (numpy 2, a newer h5py) are not the references'.
+    - name: higlass-python, in an environment of its own
+      if: inputs.higlass == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        '${{ steps.python313.outputs.python-path }}' -m venv "$RUNNER_TEMP/higlass-env"
+        "$RUNNER_TEMP/higlass-env/bin/pip" install --quiet -r notebooks/requirements-higlass.txt
+        "$RUNNER_TEMP/higlass-env/bin/pip" check
+        "$HIGLASS_PYTHON" -c 'import higlass, clodius, simple_httpfs, fuse'
+
+    - name: Boost-HiC
+      if: inputs.references == 'true'
+      shell: bash
+      run: |
+        git clone --quiet https://github.com/LeopoldC/Boost-HiC "$BOOSTHIC_DIR"
+        git -C "$BOOSTHIC_DIR" checkout --quiet a615aff7aa53a8370051a6366d893d6c03440906
