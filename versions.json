@@ -215,10 +215,10 @@
   "pulls": [
     {
       "number": 128,
-      "commit": "5d28843",
+      "commit": "df4452e",
       "title": "Peak calling: 3× faster with WebAssembly SIMD kernel",
       "branch": "js/inspiring-mccarthy-ci0vxg",
-      "date": "2026-10-21T15:27:37Z"
+      "date": "2026-10-21T15:29:46Z"
     },
     {
       "number": 122,
