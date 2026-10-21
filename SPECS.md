@@ -8932,8 +8932,13 @@ or from **a track**, its bins cut by sign (an eigenvector's two compartments, un
 quantiles, and a grouping made that way is written out as intervals named by group. What is compared
 is **stretches of at most one bin**: a group's merged intervals cut on the bin grid, a piece shorter
 than half a bin joined to its neighbour and a feature shorter than a bin kept whole, so a 30 kb
-compartment is three observations and a 300 bp peak one, each the track's mean over the bases it has
-a value for; the bin size is seeded as base composition's is (§18.2). Each group is summarised (count,
+compartment is three observations and a 300 bp peak one, each the track's **exact mean over the bases
+it has a value for**, read as track correlation reads a window — at the track's own resolution, never
+from a zoom level, a megabase at a time: read at a twentieth of a stretch, a mouse ATAC-seq track's
+896 bp zoom records carried each neighbour's signal into a stretch's ends, and chr19's 10 kb stretches
+came out a median 0.2 % from their own means, one in thirteen more than 1 %. A track the groups are
+cut from, and a row per feature, are read the same way. The bin size is seeded as base composition's
+is (§18.2). Each group is summarised (count,
 bases, mean, SD, median, quartiles, and its mean less that of every other stretch) and drawn as a
 **violin**, and the groups are tested **by ranks** — Mann–Whitney pairwise, with the rank-biserial
 effect and the median difference, and Kruskal–Wallis over three or more — tie-corrected, in the
@@ -9372,7 +9377,7 @@ takes the same coordinate-ascent fallback, with SciPy's bounded Brent ported bes
 the same 1,615 to 1,630 peaks at the six thresholds.
 
 **And beside the goldens, two notebooks at full size.** `notebooks/validation.qmd`, rendered with
-Quarto, runs nineteen analyses twice over public data, each file named by its accession and fetched
+Quarto, runs twenty-three analyses twice over public data, each file named by its accession and fetched
 from where it was published (4DN's; GEO's yeast Micro-C; and UCSC's mm10 sequence and RefSeq genes
 as Illumina iGenomes distributes them) — once through `chromosomix`, once through the package each
 reproduces, called as it is meant to be called and never re-implemented — and lines the two up bin
@@ -9383,12 +9388,19 @@ quantify`; loop calling, genome-wide on a mouse map at 10 kb, against `cooltools
 on it — against coolpuppy; reproducibility against `hicrep` 0.2.6; the 3D model against pastis;
 Boost-HiC against its own Python, through `chromosomix boost` (§6.5); the metaplot against
 deepTools, over one track and over two, its heatmaps in `plotHeatmap`'s order; interval overlap and its shuffled null against bedtools; base composition against
-bioframe and Biopython; the motif search against seqkit; and the track correlation, on two ATAC-seq
+bioframe and Biopython; the motif search against seqkit; the track correlation, on two ATAC-seq
 replicates and a Hi-C insulation score cut to chr19, against pyBigWig's exact window means with
 SciPy, a window any track lacks left out of every pair as deepTools leaves it, and against
-deepTools, whose zoom-level means are measured apart. Where a reference draws at random — a pileup's
-controls, an overlap's shuffles, IDR's ties — two distributions are compared, the reference's own
-spread from seed to seed the yardstick. **Every number its figures draw is a line of one table**,
+deepTools, whose zoom-level means are measured apart; cis and trans per sequence, on a chicken map
+of macro- and microchromosomes, against cooltools' `expected_cis` and `expected_trans` sums, the
+ratio to indifference against NumPy over them; the compartment call's saddle against
+`cooltools.saddle` over chromosomix's own E1, cut into its groups by cooltools' `digitize`; the
+fraction of signal in features against pyBigWig's exact sums and NumPy, the whole track's own read
+from a zoom level and measured apart; and signal by group against pyBigWig's exact stretch means,
+rank for rank in each group, and its summaries and tests against NumPy's and SciPy's. Where a
+reference draws at random — a pileup's controls, an overlap's shuffles, IDR's ties — two
+distributions are compared, the reference's own spread from seed to seed the yardstick. **Every
+number its figures draw is a line of one table**,
 `notebooks/work/validation/validation.txt`, read off each figure as it is shown rather than gathered
 beside it, so that the table and the picture cannot disagree and any figure can be drawn again from
 the table alone: a row a mark — a point, a vertex of a line, a hexagon of a density with its count, a
@@ -9396,15 +9408,18 @@ cell of a picture, a bar, a band or a line across a panel, a tick that names som
 the figure's label, the panel's letter and axes, what the mark stands for and where it is drawn, to
 ten significant digits. A density is the hexagons it draws, not the millions of values behind it,
 which are the outputs of the commands it prints; a symmetric map's numbers are written once, its
-upper triangle; and the metaplot's heatmaps, tens of thousands of transcripts in a picture a few
-hundred pixels high, draw each line as the mean of a hundred, which is what the table holds. It
-writes every command it ran to
+upper triangle; the metaplot's heatmaps, tens of thousands of transcripts in a picture a few
+hundred pixels high, draw each line as the mean of a hundred, which is what the table holds; and the
+differences of tens of thousands of cells from their reference are drawn, and held, as counts four to
+a decade. It writes every command it ran to
 `notebooks/work/validation/commands.json`, and `notebooks/timing.qmd` runs them again, four times
 round robin, each a fresh process — all but the ones that would time a job twice or two different
 jobs: one seed of the shifted controls, the *Sox2* viewpoint of virtual 4C, Boost-HiC on chr1, and
 APA raw and over controls but not over the expected, where coolpuppy is handed an expected computed
-beforehand. **The two sides of a pair take turns to go first**: the even rounds run each analysis's
-references before its `chromosomix` commands, because the side that goes first is the one that reads
+beforehand — and none of the four analyses after loop calling, from cis and trans to signal by group,
+whose commands it lists and does not run: they are validated, and not timed. **The two sides of a
+pair take turns to go first**: the even rounds run each analysis's references before its
+`chromosomix` commands, because the side that goes first is the one that reads
 from the disk what the page cache let go since the round before, and in one order that wait was
 always `chromosomix`'s. Every run is one line of the tidy table
 `notebooks/work/validation/timings.tsv` — CPU and wall-clock seconds and peak memory, with the machine
