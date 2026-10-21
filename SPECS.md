@@ -9436,6 +9436,25 @@ They are documents, not tests: they need the data (about 6 GB for the analyses a
 viewers), the reference packages, yapc's own environment and higlass-python's, and the two viewers, and
 nothing in the suite runs them.
 
+**And one for the reader's own machine.** `notebooks/laptop.mjs` answers what the two notebooks do not
+— what a genome-wide task costs on the laptop in front of the reader — with nothing but Node and a
+clone. It builds the command line and fetches the validation's mouse map, yeast Micro-C, ATAC-seq
+replicates, mm10 and its RefSeq genes, and the timings' 1.07-billion-contact mouse map (about 12.4 GB,
+into the folders the notebooks fetch them into, each held to its size and MD5, the sequence indexed
+beside itself), then runs twenty-three tasks over them genome-wide, three times round robin, each run
+a fresh process: on the mouse, coverage, P(s), insulation, the directionality index, compartments
+phased by GC, loop calling, chromosight's loops, a pileup over them and a 3D model of the genome; five
+of these again on the deeper map; P(s) at 50 bp, loops and a model on the yeast; and peak calling with
+IDR, interval overlap, a metaplot, track correlation, base composition and a motif search over the
+mouse genome. **Each process measures itself**: a hook loaded with `--import` writes its
+`process.resourceUsage()` as it exits — `getrusage` wherever Node runs, so CPU seconds and the peak
+resident set are what `/usr/bin/time` would say, in the same units on macOS as on Linux — and the wall
+clock runs from its start to its exit. Every run is one line of `notebooks/work/laptop/runs.tsv`, with
+the notes it printed, the machine — its model, processor, cores, memory, system and whether it is on
+mains power — and the build; `summary.md` is one table per data set, the median wall-clock time with
+its range, the CPU time and the largest peak, then every command as it ran. It is a document too, and
+nothing in the suite runs it.
+
 **They are published with every release.** `.github/workflows/notebooks.yml` installs all of it on a
 fresh runner — the reference environment pinned package by package in `notebooks/requirements.txt`,
 yapc's in `requirements-yapc.txt` with IDR and yapc built at the commits the notebook cites,
