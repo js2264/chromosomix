@@ -215,10 +215,10 @@
   "pulls": [
     {
       "number": 127,
-      "commit": "66c15f3",
+      "commit": "df3f5c1",
       "title": "Add laptop.qmd: benchmark 23 analyses on your own machine",
       "branch": "js/jolly-bohr-tjsqlr",
-      "date": "2026-10-21T13:59:44Z"
+      "date": "2026-10-21T14:12:02Z"
     },
     {
       "number": 122,
