@@ -21,7 +21,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { App } from '@/app/App'
 import { connectSnapshot, disconnectFolder } from '@/browse/connected'
 import { resetMounting } from '@/embed'
-import { setUpDom, type DomTeardown } from '../support/dom'
+import { setUpDom, type DomTeardown, stopsWithTheDom } from '../support/dom'
 
 let teardown: DomTeardown
 /** Ids connected by a test, dropped afterwards: the list outlives a window. */
@@ -47,7 +47,7 @@ afterEach(async () => {
 function mount(): void {
   const root = document.createElement('div')
   document.body.appendChild(root)
-  new App(root)
+  stopsWithTheDom(new App(root))
 }
 
 const column = (): HTMLElement => document.querySelector('.panel-files') as HTMLElement

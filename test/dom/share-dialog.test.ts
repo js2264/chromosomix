@@ -24,7 +24,7 @@ import { CONFIG_VERSION, type SessionConfig } from '@/state/SessionConfig'
 import { SHARE_KEY } from '@/state/shareLink'
 import { openShareDialog } from '@/ui/ShareDialog'
 import type { Modal } from '@/ui/Modal'
-import { setUpDom, type DomTeardown } from '../support/dom'
+import { setUpDom, type DomTeardown, stopsWithTheDom } from '../support/dom'
 
 let teardown: DomTeardown
 const open: Modal[] = []
@@ -254,7 +254,7 @@ describe('as the shell opens it', () => {
     resetMounting()
     const root = document.createElement('div')
     document.body.appendChild(root)
-    const app = new App(root)
+    const app = stopsWithTheDom(new App(root))
     // A tab with something in it, so the button *offers* the dialog: with
     // nothing open there is nothing to put in a link and the button is
     // unavailable rather than answering with a refusal (§8.5). `adopt` tells

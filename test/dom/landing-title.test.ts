@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { App } from '@/app/App'
 import type { Session } from '@/app/Session'
 import { resetMounting } from '@/embed'
-import { setUpDom, type DomTeardown } from '../support/dom'
+import { setUpDom, type DomTeardown, stopsWithTheDom } from '../support/dom'
 
 /** A worker that is created, listened to, and never answers. */
 class DeadWorker {
@@ -54,7 +54,7 @@ function mountedUnder(title: string): App {
   document.title = title
   const root = document.createElement('div')
   document.body.appendChild(root)
-  const app = new App(root)
+  const app = stopsWithTheDom(new App(root))
   app['activate'](0)
   return app
 }
