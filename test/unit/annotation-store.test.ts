@@ -22,7 +22,8 @@ import {
   type ManualPoint,
 } from '../../src/annotations/manual'
 import { LEAD_MAP, resolveStyle } from '../../src/annotations/placement'
-import { ANNOTATION_PALETTE, AnnotationStore, cleanLabel } from '../../src/annotations/store'
+import { ANNOTATION_PALETTE, AnnotationStore } from '../../src/annotations/store'
+import { cleanLabel } from '../../src/annotations/names'
 import { defaultStyle, placementOn, type Placement } from '../../src/annotations/types'
 import { remember } from '../../src/state/UiMemory'
 import { overlapWarning } from '../../src/ui/AnnotationCard'

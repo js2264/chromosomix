@@ -131,6 +131,7 @@ import { parseJunctions, sniffJunctions } from '../annotations/junctions'
 import { parseLongRange, sniffLongRange } from '../annotations/longrange'
 import { parseVcf, sniffVcf } from '../annotations/vcf'
 import { formatIntervals } from '../annotations/export'
+import { cleanLabel } from '../annotations/names'
 import { parseBed3d, parseG3d, sniffBed3d, sniffG3d, writeBed3d } from '../annotations/g3d'
 import { parsePdb, pdbRefusal, sniffPdb, writePdb } from '../annotations/pdb'
 import type { FeatureSet, PairSet, StoredEntry } from '../annotations/types'
@@ -2032,13 +2033,18 @@ async function loadTrackFiles(
  *
  * A figure's axis reads `inputs.labels[entry]` and falls back to the entry
  * itself, which here is the path as typed — so a correlation matrix's axes
- * read as `/data/run3/signal.bw` until this says they are `signal.bw`, the
- * same base name a feature set is filed under.
+ * read as `/data/run3/signal.bw` until this says what they are. And what they
+ * are is what the app calls the same file once it is dropped: `signal`, its
+ * row's label (`annotations/names.ts`). The base name, `signal.bw`, was what
+ * this said until the two were run side by side (`notebooks/parity.qmd`): a
+ * metaplot's columns, a correlation's axes and FRiP's rows then named one
+ * track two ways, and a table from the shell could not be laid beside the
+ * drawer's by its headers.
  */
 function withTrackLabels(inputs: TaskInputs, tracks: ReadonlyMap<string, LoadedTrack>): TaskInputs {
   if (tracks.size === 0) return inputs
   const labels: Record<string, string> = { ...inputs.labels }
-  for (const [key, track] of tracks) labels[key] = track.name
+  for (const [key, track] of tracks) labels[key] = cleanLabel(track.name)
   return { ...inputs, labels }
 }
 

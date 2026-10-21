@@ -929,6 +929,9 @@ describe('the annotations venue', () => {
     expect(files).toContain('sample.metaplot.metaplot-heatmap.tsv')
     const text = await readFile(join(where, 'sample.metaplot.metaplot.tsv'), 'utf8')
     expect(text).toMatch(/^# task: metaplot/m)
+    // The curve's column is the track as the app names its row, `signal`, so the
+    // drawer's TSV and this one have one header (notebooks/parity.qmd).
+    expect(text).toMatch(/^Distance from the anchor \(bp\)\tsignal\tsignal_low\tsignal_high$/m)
     expect(complained()).not.toMatch(/failed:/)
   })
 
@@ -957,10 +960,11 @@ describe('the annotations venue', () => {
     ).toBe(0)
     const text = await readFile(join(where, 'sample.frip.frip.tsv'), 'utf8')
     expect(text).toMatch(/^# task: frip/m)
-    // One row, named after the file, with a fraction in it: the arithmetic is
-    // goldened in `analysis-golden.test.ts`, and what is pinned here is that a
-    // shell reaches it through the same `sample`.
-    expect(text).toMatch(/signal\.bw\t0\.\d+/)
+    // One row, named after the file as the app names its row — `signal`, the
+    // suffix off — with a fraction in it: the arithmetic is goldened in
+    // `analysis-golden.test.ts`, and what is pinned here is that a shell reaches
+    // it through the same `sample`.
+    expect(text).toMatch(/^signal\t0\.\d+/m)
     expect(complained()).not.toMatch(/failed:/)
   })
 
@@ -975,8 +979,8 @@ describe('the annotations venue', () => {
     ).toBe(0)
     const text = await readFile(join(where, 'sample.trackcorr.trackcorr-table.tsv'), 'utf8')
     // A track and twice itself rank identically, so Spearman is exactly 1 —
-    // and the axes are file names, not `a1`.
-    expect(text).toMatch(/signal\.bw\ttwice\.bw\t1(\.0*)?$/m)
+    // and the axes are the files' names as the app's rows have them, not `a1`.
+    expect(text).toMatch(/^signal\ttwice\t1(\.0*)?$/m)
   })
 
   it('runs a track task with no contact map at all', async () => {
@@ -992,7 +996,7 @@ describe('the annotations venue', () => {
     expect(files).toContain('signal.frip.frip.tsv')
     const text = await readFile(join(where, 'signal.frip.frip.tsv'), 'utf8')
     expect(text).toMatch(/^# framing: signal\.bw · loaded tracks, no contact map/m)
-    expect(text).toMatch(/signal\.bw\t0\.\d+/)
+    expect(text).toMatch(/^signal\t0\.\d+/m)
   })
 
   it('calls peaks on a bigWig, with no map, and writes them as BED', async () => {
@@ -1075,8 +1079,8 @@ describe('the annotations venue', () => {
     expect(files).toContain('signal.groupsignal.groupsignal-tests.tsv')
     const summary = await readFile(join(where, 'signal.groupsignal.groupsignal-groups.tsv'), 'utf8')
     // Six stretches of 10 kb each, their means 4.5 … 54.5 on A and 64.5 … 114.5 on B.
-    expect(summary).toMatch(/signal\.bw\tA\t6\t60000\t29\.5\b/)
-    expect(summary).toMatch(/signal\.bw\tB\t6\t60000\t89\.5\b/)
+    expect(summary).toMatch(/^signal\tA\t6\t60000\t29\.5\b/m)
+    expect(summary).toMatch(/^signal\tB\t6\t60000\t89\.5\b/m)
     const tests = await readFile(join(where, 'signal.groupsignal.groupsignal-tests.tsv'), 'utf8')
     expect(tests).toMatch(/Mann–Whitney U\tA\tB\t-60\t-1\b/)
   })
@@ -1154,7 +1158,8 @@ describe('the annotations venue', () => {
     expect(complained()).not.toMatch(/skipped/)
     expect(complained()).not.toMatch(/failed:/)
     const text = await readFile(join(where, 'sample.trackcorr.trackcorr-table.tsv'), 'utf8')
-    expect(text).toMatch(/signal\.bw\ttwice\.bw\t1(\.0*)?$/m)
+    // Named as the workspace's rows are, `signal` and `twice`.
+    expect(text).toMatch(/^signal\ttwice\t1(\.0*)?$/m)
   })
 })
 

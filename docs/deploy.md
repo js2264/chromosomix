@@ -603,15 +603,16 @@ once, hence the test in the assembly step.
 
 ### So are the rendered notebooks
 
-`/validation/` and `/timings/` are `notebooks/validation.qmd` and `notebooks/timing.qmd` as
-`.github/workflows/notebooks.yml` last rendered them (SPECS §18.10). That workflow runs when a
+`/validation/`, `/timings/` and `/parity/` are `notebooks/validation.qmd`, `notebooks/timing.qmd`
+and `notebooks/parity.qmd` as `.github/workflows/notebooks.yml` last rendered them (SPECS §18.10). That workflow runs when a
 release is published — `release.yml` makes the release a draft and a person publishes it, which is
 the event that reaches it — and from **Actions → Notebooks → Run workflow** on any branch or tag,
 with the number of timed runs (five by default) and whether to publish. It installs everything on a
-fresh runner, renders both notebooks (about three hours, most of it the timings), force-pushes the
-two pages and the files beside them to the `notebooks` branch as one commit, attaches them to the
-release with the tables beside them — among them `validation.txt`, every number the validation's
-figures draw — and dispatches this deploy, which copies `validation/` and `timings/` from
+fresh runner, renders the three notebooks (about three hours, most of it the timings; the parity
+first, in five minutes), force-pushes the three pages and the files beside them to the `notebooks`
+branch as one commit, attaches them to the release with the tables beside them — among them
+`validation.txt`, every number the validation's figures draw — and dispatches this deploy, which
+copies `validation/`, `timings/` and `parity/` from
 that branch on every run after — the stores' arrangement exactly. Every run also keeps what it
 rendered as an artifact for 90 days, even when it fails — the validation alone, with the timing
 rounds it finished, when the timings fail — and its summary lists every verdict.
