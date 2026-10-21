@@ -30,7 +30,9 @@ sample() {
   nap=''
   trap '[ -z "$nap" ] || kill "$nap"; exit 0' TERM
   awk -v every="$every" -v cores="$(nproc)" \
-    '/^MemTotal:/ { printf "memory: every %s s, of %d MB on %d cores\n", every, $2 / 1024, cores; exit }' /proc/meminfo
+    '/^MemTotal:/ { total = $2 } /^SwapTotal:/ { swap = $2 }
+     END { printf "memory: every %s s, of %d MB and %d MB of swap on %d cores\n", every, total / 1024, swap / 1024, cores }' \
+    /proc/meminfo
   while :; do
     sleep "$every" &
     nap=$!

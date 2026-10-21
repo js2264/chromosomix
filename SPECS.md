@@ -9468,7 +9468,12 @@ pair take turns to go first**: the even rounds run each analysis's references be
 from the disk what the page cache let go since the round before, and in one order that wait was
 always `chromosomix`'s. Every run is one line of the tidy table
 `notebooks/work/validation/timings.tsv` — CPU and wall-clock seconds and peak memory, with the machine
-and every version — and each `chromosomix` command's speed is a fold over the reference commands it is
+and every version — the peak memory being **every process of the run together**: their proportional
+set sizes, a page they share counted once between them, summed four times a second while it runs and
+never less than the largest resident set any one reached (`ru_maxrss`), so that a reference running
+four processes holds what the four hold, where it was the largest of them alone; on a system that
+does not list a process's children, as macOS, it is that largest alone. Each `chromosomix` command's
+speed is a fold over the reference commands it is
 paired with, a side's commands summed where there are several (deepTools' `computeMatrix` and then
 `plotProfile` against one metaplot, and `plotHeatmap` as well against one over two tracks).
 

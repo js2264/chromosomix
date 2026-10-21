@@ -40,8 +40,13 @@ it ran to `notebooks/work/validation/commands.json`. This notebook runs each of 
 as written there but writing to a scratch folder, as a fresh process, `RUNS` times round robin (four,
 unless `TIMING_RUNS` in the environment says otherwise), the two sides of each pair taking turns to go
 first, and measures what each run costs: its **CPU time**, user and system, of the process and of
-every process it started and waited for; its **wall-clock time**; and its **peak memory**, the largest
-resident set of any one of those processes.
+every process it started and waited for; its **wall-clock time**; and its **peak memory**, the most
+those processes held together: their proportional set sizes — a page two of them share counted half in
+each, so that a pool of forked workers is not counted again in every worker — added up four times a
+second while the command runs, and never less than the largest resident set any one of them reached,
+which a sample can miss. A reference that runs four processes holds what the four hold. Where the
+system does not list a process's children, as macOS does not, the peak memory is that largest resident
+set alone.
 
 Every run of a command is one line of **`notebooks/work/validation/timings.tsv`**, a tidy table — one
 row per command and run, one column per variable, the machine and the versions included — and every
@@ -112,6 +117,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -160,6 +166,12 @@ def machine():
 
 
 MACHINE = machine()
+#: Whether the system lists a process's children and its proportional set size, as Linux does: where it does
+#: not, as macOS does not, a run's peak memory is that of its largest process alone.
+WEIGHS = (Path(f'/proc/self/task/{threading.get_native_id()}/children').exists()
+          and Path('/proc/self/smaps_rollup').exists())
+#: How often, in seconds, a run's processes are weighed while it runs.
+EVERY = 0.25
 ```
 
 ## Time to a picture
@@ -665,7 +677,9 @@ OUT = LISTED['placeholder']
 JOBS = [job for job in LISTED['commands'] if job['bench']]
 measures({**MACHINE, 'commands timed': f"{len(JOBS)} of the {len(LISTED['commands'])} listed",
           'runs of each': RUNS, 'chromosomix': LISTED['chromosomix'],
-          'processes a reference was given, where it takes them': LISTED['threads']})
+          'processes a reference was given, where it takes them': LISTED['threads'],
+          'peak memory': (f'every process of a run together, weighed every {EVERY} s' if WEIGHS
+                          else 'the largest process of a run alone')})
 ```
 
 ## The runs
@@ -693,28 +707,69 @@ def argv_for(job, scratch):
     return [a.replace(OUT, target) for a in job['argv']]
 
 
+def under(pid):
+    """`pid` and every process under it, by the children each of their threads started."""
+    found, todo = [], [pid]
+    while todo:
+        pid = todo.pop()
+        found.append(pid)
+        try:
+            for tid in os.listdir(f'/proc/{pid}/task'):
+                with open(f'/proc/{pid}/task/{tid}/children') as handle:
+                    todo += [int(child) for child in handle.read().split()]
+        except OSError:
+            pass
+    return found
+
+
+def pss_kb(pid):
+    """A process's proportional set size, in kB: its resident pages, one it shares with others counted as its
+    share of it, so that a pool of forked workers is not counted again in each."""
+    try:
+        with open(f'/proc/{pid}/smaps_rollup') as handle:
+            return next(int(line.split()[1]) for line in handle if line.startswith('Pss:'))
+    except (OSError, StopIteration):
+        return 0
+
+
+def weigh(pid, done, peak):
+    """Every EVERY seconds until `done`, the processes under `pid` weighed together, the most into `peak[0]`."""
+    while True:
+        peak[0] = max(peak[0], sum(pss_kb(p) for p in under(pid)))
+        if done.wait(EVERY):
+            return
+
+
 def timed(argv, extra):
     """One run, from work/validation/: CPU seconds of the process and every process it started and waited
-    for, wall seconds, and the largest resident set among them, in MB."""
+    for, wall seconds, and the most memory they held together, in MB."""
     env = None if extra is None else dict(os.environ, **extra)
     with tempfile.TemporaryFile() as err:
         start = time.perf_counter()
         process = subprocess.Popen(argv, cwd=WORK, env=env, stdout=subprocess.DEVNULL, stderr=err)
+        done, peak = threading.Event(), [0]
+        weigher = threading.Thread(target=weigh, args=(process.pid, done, peak), daemon=True)
+        if WEIGHS:
+            weigher.start()
         _, status, usage = os.wait4(process.pid, 0)
         wall = time.perf_counter() - start
+        done.set()
+        if WEIGHS:
+            weigher.join()
         process.returncode = os.waitstatus_to_exitcode(status)
         if process.returncode:
             err.seek(0)
             raise RuntimeError(f'{shlex.join(argv)}\n{err.read().decode(errors="replace")[-3000:]}')
-    # ru_maxrss is in kilobytes on Linux and in bytes on macOS.
-    rss = usage.ru_maxrss / (1024 * 1024 if sys.platform == 'darwin' else 1024)
+    # ru_maxrss, the largest resident set any one of the processes reached, which a sample can miss: in
+    # kilobytes on Linux and in bytes on macOS.
+    largest = usage.ru_maxrss / (1024 * 1024 if sys.platform == 'darwin' else 1024)
     return {'cpu_s': usage.ru_utime + usage.ru_stime, 'user_s': usage.ru_utime, 'system_s': usage.ru_stime,
-            'wall_s': wall, 'max_rss_mb': rss}
+            'wall_s': wall, 'peak_mb': max(peak[0] / 1024, largest)}
 
 
 #: The columns of the table, in order: what was run, the run, what it cost, where.
 COLUMNS = ['section', 'analysis', 'data', 'command', 'tool', 'version', 'variant', 'group', 'threads', 'run',
-           'order', 'cpu_s', 'user_s', 'system_s', 'wall_s', 'max_rss_mb', 'started', *MACHINE, 'chromosomix',
+           'order', 'cpu_s', 'user_s', 'system_s', 'wall_s', 'peak_mb', 'started', *MACHINE, 'chromosomix',
            'command_line']
 
 
@@ -754,10 +809,13 @@ def benchmark():
 
 
 def current():
-    """Whether the table on disk times every command listed, each RUNS times, with the chromosomix listed."""
+    """Whether the table on disk times every command listed, each RUNS times, with the chromosomix listed, in
+    this notebook's columns."""
     if REDO or not TIMINGS.exists():
         return False
     held = pd.read_csv(TIMINGS, sep='\t', keep_default_na=False)
+    if list(held.columns) != COLUMNS:
+        return False
     runs = held.groupby('order')['run'].nunique()
     return (len(runs) == len(JOBS) and set(held['command']) == {job['name'] for job in JOBS}
             and (runs == RUNS).all() and set(held['chromosomix']) == {LISTED['chromosomix']})
@@ -786,11 +844,11 @@ CPU and wall-clock seconds, mean ± sd over the runs, and the peak memory of the
 KEY = ['section', 'analysis', 'tool', 'variant', 'group', 'command', 'order']
 per = (times.groupby(KEY, sort=False)
        .agg(cpu=('cpu_s', 'mean'), cpu_sd=('cpu_s', 'std'), wall=('wall_s', 'mean'), wall_sd=('wall_s', 'std'),
-            rss=('max_rss_mb', 'max'))
+            peak=('peak_mb', 'max'))
        .reset_index().sort_values('order').reset_index(drop=True))
 per['CPU s'] = [f'{m:.2f} ± {s:.2f}' for m, s in zip(per['cpu'], per['cpu_sd'])]
 per['wall s'] = [f'{m:.2f} ± {s:.2f}' for m, s in zip(per['wall'], per['wall_sd'])]
-per['peak MB'] = per['rss'].round().astype(int)
+per['peak MB'] = per['peak'].round().astype(int)
 show(per[['section', 'analysis', 'tool', 'variant', 'CPU s', 'wall s', 'peak MB']], **{'peak MB': '{:,}'})
 ```
 
@@ -840,7 +898,7 @@ def pairs():
                         'chromosomix commands': summed(mine), 'reference commands': summed(theirs),
                         'chromosomix CPU s': mine['cpu'].sum(), 'reference CPU s': theirs['cpu'].sum(),
                         'chromosomix wall s': mine['wall'].sum(), 'reference wall s': theirs['wall'].sum(),
-                        'chromosomix peak MB': mine['rss'].max(), 'reference peak MB': theirs['rss'].max()})
+                        'chromosomix peak MB': mine['peak'].max(), 'reference peak MB': theirs['peak'].max()})
     frame = pd.DataFrame(out)
     frame['× faster, CPU'] = frame['reference CPU s'] / frame['chromosomix CPU s']
     frame['× faster, wall'] = frame['reference wall s'] / frame['chromosomix wall s']

@@ -65,6 +65,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   and the three programs holding the most, into the job's log every ten seconds: a runner shut down
   for want of memory leaves no error and runs no step after it, and that log is what is left.
 
+- **The timings' peak memory is every process of a run together (§18.10).** `notebooks/timing.qmd`
+  recorded the largest resident set any one process of a run reached, so a reference that runs a
+  pool of workers was credited with its largest worker alone: cooltools' expected over the mouse
+  genome at 10 kb read 3.8 GB when its four processes held 9.5 to 12 GB between them. Each run is now
+  weighed four times a second while it runs, its process and every process under it, by their
+  proportional set sizes — a page forked workers share counted once between them, not again in each
+  — and the most they held together is the `peak_mb` column of `timings.tsv`, in place of
+  `max_rss_mb`, never less than the largest resident set any one reached. A command of one process,
+  as every `chromosomix` command is, reads as before. A table on disk with the old column is timed
+  again. Where the system does not list a process's children, as macOS does not, the column is the
+  largest process alone, and the page says which.
+
 - **The command line names a track as the app does (§23.1).** A file opened under `--tracks` is
   called what the app calls its row — `signal` for `signal.bw` — in a metaplot's columns, a
   correlation's axes, FRiP's and Signal by group's rows and every label a run writes, where it was the
