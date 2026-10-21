@@ -54,12 +54,12 @@ const PRECACHED = new Set(PRECACHE)
 const SCOPE_DIR = new URL('./', self.location.href).pathname
 // …and the same for pull-request previews under `pr/<number>/`, which are the
 // same kind of copy at a different address (docs/deploy.md), and for the
-// rendered notebooks under `validation/` and `timings/` (notebooks.yml), which
+// rendered notebooks under `validation/`, `timings/`, `parity/` and `laptop/` (notebooks.yml), which
 // are pages of their own and no build at all. Each is passed through with and
 // without its trailing slash: Pages answers `…/validation` with a redirect to
 // `…/validation/`, and answering the first with the shell would never let the
 // redirect be seen.
-const PINNED_PREFIXES = ['v/', 'pr/', 'validation/', 'timings/'].map((dir) => `${SCOPE_DIR}${dir}`)
+const PINNED_PREFIXES = ['v/', 'pr/', 'validation/', 'timings/', 'parity/', 'laptop/'].map((dir) => `${SCOPE_DIR}${dir}`)
 const passedThrough = (pathname) =>
   PINNED_PREFIXES.some((prefix) => pathname.startsWith(prefix) || pathname === prefix.slice(0, -1))
 

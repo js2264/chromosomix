@@ -603,24 +603,30 @@ once, hence the test in the assembly step.
 
 ### So are the rendered notebooks
 
-`/validation/` and `/timings/` are `notebooks/validation.qmd` and `notebooks/timing.qmd` as
+`/validation/`, `/timings/`, `/parity/` and `/laptop/` are `notebooks/validation.qmd`,
+`notebooks/timing.qmd`, `notebooks/parity.qmd` and `notebooks/laptop.qmd` as
 `.github/workflows/notebooks.yml` last rendered them (SPECS §18.10). That workflow runs when a
 release is published — `release.yml` makes the release a draft and a person publishes it, which is
 the event that reaches it — and from **Actions → Notebooks → Run workflow** on any branch or tag,
-with the number of timed runs (five by default) and whether to publish. It installs everything on a
-fresh runner, renders both notebooks (about three hours, most of it the timings), force-pushes the
-two pages and the files beside them to the `notebooks` branch as one commit, attaches them to the
-release with the tables beside them — among them `validation.txt`, every number the validation's
-figures draw — and dispatches this deploy, which copies `validation/` and `timings/` from
-that branch on every run after — the stores' arrangement exactly. Every run also keeps what it
-rendered as an artifact for 90 days, even when it fails — the validation alone, with the timing
-rounds it finished, when the timings fail — and its summary lists every verdict.
+with the number of timed runs (four by default) and whether to publish. Each notebook renders in a
+job of its own, on a fresh runner, through the setup in `.github/actions/notebooks-setup`: the
+parity first, in about ten minutes, then the validation and the timings in one job (about three
+hours, the timings running the validation's commands on its inputs) beside the laptop (about an
+hour). A last job publishes only if every page rendered: it force-pushes the four pages and the
+files beside them to the `notebooks` branch as one commit, attaches them to the release with the
+tables beside them — among them `validation.txt`, every number the validation's figures draw — and
+dispatches this deploy, which copies `validation/`, `timings/`, `parity/` and `laptop/` from that
+branch on every run after — the stores' arrangement exactly. Every job also keeps what it rendered
+as an artifact for 90 days, even when it fails — the validation alone, with the timing rounds it
+finished, when the timings fail — and the run's summary has a section a notebook: where it is,
+from what, in how long, the line of findings it wrote, and its table. Which page is published
+where, with which files beside it, is one table, `notebooks/scripts/pages.py`.
 
 Each page says, in a block under its title, when it was rendered, from which version, commit and
 release, by which run, and on what machine; `rendered.json` beside it says the same for a script.
-The service worker leaves both addresses to the network (`src/sw.js`), as it does `v/` and `pr/`:
-they are pages of their own, and the app's shell answered there would be the app wearing their
-address. A reader whose worker predates this sees the app at those two addresses until they take
+The service worker leaves the four addresses to the network (`src/sw.js`), as it does `v/` and
+`pr/`: they are pages of their own, and the app's shell answered there would be the app wearing
+their address. A reader whose worker predates this sees the app at those addresses until they take
 the update the app offers. Absent until the workflow has published once; the first run is by
 hand, or the next release.
 

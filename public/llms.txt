@@ -56,6 +56,8 @@ Every analysis is held to the package it reproduces (cooltools, coolpuppy, chrom
 - [The documentation in one file](https://chromosomix.app/llms-full.txt): the README, served beside this file for tools that read a single document
 - [Validation](https://chromosomix.app/validation/): each analysis compared with its reference implementation
 - [Timings](https://chromosomix.app/timings/): how long each command takes beside its reference
+- [Parity](https://chromosomix.app/parity/): ten tasks run in the app and from the command line its console writes, file for file
+- [Laptop](https://chromosomix.app/laptop/): the time and peak memory of 23 analyses run genome-wide, up to a 1.08-billion-contact map
 - [Changelog](https://raw.githubusercontent.com/js2264/chromosomix/main/CHANGELOG.md): what changed in each release
 
 ## Get it

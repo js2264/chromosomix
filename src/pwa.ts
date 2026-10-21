@@ -196,9 +196,9 @@ const RECOVERED = 'chromosomix:unpinned'
  * The symptom is exactly detectable, which is what makes recovery safe rather
  * than a guess: the document's path is under the archive prefix, and the code
  * reading it was built for the site root. Those two cannot both be true of a
- * correctly served page. The rendered notebooks, at `validation/` and
- * `timings/`, are the same case one step further: no build at all lives there,
- * so this app running at either address is a worker that predates them.
+ * correctly served page. The rendered notebooks, at `validation/`, `timings/`,
+ * `parity/` and `laptop/`, are the same case one step further: no build at all lives
+ * there, so this app running at any of them is a worker that predates them.
  *
  * Recovery is to unregister and reload — coarse, and deliberately so. The
  * registration is what is serving the wrong document, `update()` would not

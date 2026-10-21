@@ -50,6 +50,32 @@ import { VectorPage } from '@/ui/vector'
 /** Undo whatever {@link setUpDom} installed. */
 export type DomTeardown = () => void
 
+/** The apps mounted under the current document, stopped with it. */
+const ticking: object[] = []
+
+/**
+ * An `App` that stops with the document it was mounted in.
+ *
+ * Its status bar measures memory and CPU once a second for as long as the window
+ * lives (`src/ui/StatusBar.ts`), and a test's window lives until something stops
+ * it. A tick that outlives the document throws `document is not defined` into
+ * whichever file the worker runs next — so a run fails, or does not, by the order
+ * the files happened to share a worker in, on a file that changed nothing.
+ * {@link setUpDom}'s teardown stops every app handed to this; a file that does
+ * not use that teardown calls {@link stopApps} itself.
+ */
+export function stopsWithTheDom<T extends object>(app: T): T {
+  ticking.push(app)
+  return app
+}
+
+/** Stop the status bar of every app {@link stopsWithTheDom} was handed. */
+export function stopApps(): void {
+  for (const app of ticking.splice(0)) {
+    ;(app as unknown as { status?: { destroy(): void } | null }).status?.destroy()
+  }
+}
+
 /**
  * Put the document back to a known state and make a canvas answer `null`.
  *
@@ -108,6 +134,7 @@ export function setUpDom(options: { canvas?: 'null' | 'stub' } = {}): DomTeardow
   }
 
   return () => {
+    stopApps()
     prototype.getContext = original
     globals['ImageData'] = hadImageData
     globals['OffscreenCanvas'] = hadOffscreen

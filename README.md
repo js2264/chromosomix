@@ -479,7 +479,13 @@ Each analysis is held to the package it reproduces — cooltools, coolpuppy, chr
 bedtools and a dozen others — on public data, command for command, in a notebook rendered with every
 release: <https://chromosomix.app/validation/>, with every number its figures draw in one table beside
 it, <https://chromosomix.app/validation/validation.txt>; and how long each command takes beside its
-reference, <https://chromosomix.app/timings/>.
+reference, <https://chromosomix.app/timings/>. A third notebook holds the app to this command: ten
+tasks run in the app, in a headless browser, then from the line its console wrote for each, and every
+file the two wrote compared, <https://chromosomix.app/parity/>. And what the commands cost on a machine
+like yours — the time and the peak memory of 23 analyses run genome-wide, up to a 1.08-billion-contact
+human map — is <https://chromosomix.app/laptop/>, rendered on a GitHub runner; render
+`notebooks/laptop.qmd` with Quarto from a clone to measure your own: it downloads the data, runs each
+analysis once and tabulates them.
 
 Every task writes its results where `--out` points, each named after the file it came from up to
 its first dot — `sample.coverage.coverage-total.tsv`. Two files of one command that would share a

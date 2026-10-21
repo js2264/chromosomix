@@ -5645,10 +5645,10 @@ did not ask for, and on a map or a lane left without its data.
 the app is, the formats it opens, how to write a link that opens a file at a place — the hash of
 §5.5, with a map's `region` in the machine form and the browser's `locus` in the display form
 (§26.1) — how to embed one (§21), how to run the command line (§23), and links to the README, the
-validation and timing notebooks, the changelog and this specification. `robots.txt` lets every
+validation, timing, parity and laptop notebooks, the changelog and this specification. `robots.txt` lets every
 crawler in, those of language models included, keeps the archived pins and the pull-request
 previews (`/v/`, `/pr/`) out of search — each is a copy of the app at the root, kept for links that
-must not change — and names `sitemap.xml`, which lists the app and its two notebooks. The site
+must not change — and names `sitemap.xml`, which lists the app and its four notebooks. The site
 build adds a fourth, `llms-full.txt`: the README as one file, its repository-relative links made
 absolute (`scripts/llms.mjs`), for a tool that reads a single document rather than following links.
 **`llms.txt` is written by hand and held to the app by a test**, because a model acts on it — writes
@@ -8961,8 +8961,13 @@ or from **a track**, its bins cut by sign (an eigenvector's two compartments, un
 quantiles, and a grouping made that way is written out as intervals named by group. What is compared
 is **stretches of at most one bin**: a group's merged intervals cut on the bin grid, a piece shorter
 than half a bin joined to its neighbour and a feature shorter than a bin kept whole, so a 30 kb
-compartment is three observations and a 300 bp peak one, each the track's mean over the bases it has
-a value for; the bin size is seeded as base composition's is (§18.2). Each group is summarised (count,
+compartment is three observations and a 300 bp peak one, each the track's **exact mean over the bases
+it has a value for**, read as track correlation reads a window — at the track's own resolution, never
+from a zoom level, a megabase at a time: read at a twentieth of a stretch, a mouse ATAC-seq track's
+896 bp zoom records carried each neighbour's signal into a stretch's ends, and chr19's 10 kb stretches
+came out a median 0.2 % from their own means, one in thirteen more than 1 %. A track the groups are
+cut from, and a row per feature, are read the same way. The bin size is seeded as base composition's
+is (§18.2). Each group is summarised (count,
 bases, mean, SD, median, quartiles, and its mean less that of every other stretch) and drawn as a
 **violin**, and the groups are tested **by ranks** — Mann–Whitney pairwise, with the rank-biserial
 effect and the median difference, and Kruskal–Wallis over three or more — tie-corrected, in the
@@ -9416,7 +9421,7 @@ edge, whose region at its first base yapc drops. The generated module carries th
 was built from, and a test fails until `npm run wasm:yapc` is run after `yapc.c` changes.
 
 **And beside the goldens, two notebooks at full size.** `notebooks/validation.qmd`, rendered with
-Quarto, runs nineteen analyses twice over public data, each file named by its accession and fetched
+Quarto, runs twenty-three analyses twice over public data, each file named by its accession and fetched
 from where it was published (4DN's; GEO's yeast Micro-C; and UCSC's mm10 sequence and RefSeq genes
 as Illumina iGenomes distributes them) — once through `chromosomix`, once through the package each
 reproduces, called as it is meant to be called and never re-implemented — and lines the two up bin
@@ -9427,12 +9432,19 @@ quantify`; loop calling, genome-wide on a mouse map at 10 kb, against `cooltools
 on it — against coolpuppy; reproducibility against `hicrep` 0.2.6; the 3D model against pastis;
 Boost-HiC against its own Python, through `chromosomix boost` (§6.5); the metaplot against
 deepTools, over one track and over two, its heatmaps in `plotHeatmap`'s order; interval overlap and its shuffled null against bedtools; base composition against
-bioframe and Biopython; the motif search against seqkit; and the track correlation, on two ATAC-seq
+bioframe and Biopython; the motif search against seqkit; the track correlation, on two ATAC-seq
 replicates and a Hi-C insulation score cut to chr19, against pyBigWig's exact window means with
 SciPy, a window any track lacks left out of every pair as deepTools leaves it, and against
-deepTools, whose zoom-level means are measured apart. Where a reference draws at random — a pileup's
-controls, an overlap's shuffles, IDR's ties — two distributions are compared, the reference's own
-spread from seed to seed the yardstick. **Every number its figures draw is a line of one table**,
+deepTools, whose zoom-level means are measured apart; cis and trans per sequence, on a chicken map
+of macro- and microchromosomes, against cooltools' `expected_cis` and `expected_trans` sums, the
+ratio to indifference against NumPy over them; the compartment call's saddle against
+`cooltools.saddle` over chromosomix's own E1, cut into its groups by cooltools' `digitize`; the
+fraction of signal in features against pyBigWig's exact sums and NumPy, the whole track's own read
+from a zoom level and measured apart; and signal by group against pyBigWig's exact stretch means,
+rank for rank in each group, and its summaries and tests against NumPy's and SciPy's. Where a
+reference draws at random — a pileup's controls, an overlap's shuffles, IDR's ties — two
+distributions are compared, the reference's own spread from seed to seed the yardstick. **Every
+number its figures draw is a line of one table**,
 `notebooks/work/validation/validation.txt`, read off each figure as it is shown rather than gathered
 beside it, so that the table and the picture cannot disagree and any figure can be drawn again from
 the table alone: a row a mark — a point, a vertex of a line, a hexagon of a density with its count, a
@@ -9440,15 +9452,18 @@ cell of a picture, a bar, a band or a line across a panel, a tick that names som
 the figure's label, the panel's letter and axes, what the mark stands for and where it is drawn, to
 ten significant digits. A density is the hexagons it draws, not the millions of values behind it,
 which are the outputs of the commands it prints; a symmetric map's numbers are written once, its
-upper triangle; and the metaplot's heatmaps, tens of thousands of transcripts in a picture a few
-hundred pixels high, draw each line as the mean of a hundred, which is what the table holds. It
-writes every command it ran to
+upper triangle; the metaplot's heatmaps, tens of thousands of transcripts in a picture a few
+hundred pixels high, draw each line as the mean of a hundred, which is what the table holds; and the
+differences of tens of thousands of cells from their reference are drawn, and held, as counts four to
+a decade. It writes every command it ran to
 `notebooks/work/validation/commands.json`, and `notebooks/timing.qmd` runs them again, four times
 round robin, each a fresh process — all but the ones that would time a job twice or two different
 jobs: one seed of the shifted controls, the *Sox2* viewpoint of virtual 4C, Boost-HiC on chr1, and
 APA raw and over controls but not over the expected, where coolpuppy is handed an expected computed
-beforehand. **The two sides of a pair take turns to go first**: the even rounds run each analysis's
-references before its `chromosomix` commands, because the side that goes first is the one that reads
+beforehand — and none of the four analyses after loop calling, from cis and trans to signal by group,
+whose commands it lists and does not run: they are validated, and not timed. **The two sides of a
+pair take turns to go first**: the even rounds run each analysis's references before its
+`chromosomix` commands, because the side that goes first is the one that reads
 from the disk what the page cache let go since the round before, and in one order that wait was
 always `chromosomix`'s. Every run is one line of the tidy table
 `notebooks/work/validation/timings.tsv` — CPU and wall-clock seconds and peak memory, with the machine
@@ -9476,27 +9491,77 @@ juicebox.js by its last repaint covering the state asked for and its track's til
 tile in view fetched and drawn. Four rounds, the viewers taking turns to go first; every run, and
 every cell refused, is one line of `notebooks/work/validation/viewers.tsv`, with the requests and
 bytes the page asked for, the machine and every version.
-They are documents, not tests: they need the data (about 6 GB for the analyses and 15 GB for the
-viewers), the reference packages, yapc's own environment and higlass-python's, and the two viewers, and
-nothing in the suite runs them.
+**And a third holds the app to its own command line.** `notebooks/parity.qmd` runs ten tasks in the
+app — this checkout's build, of the commit the command line is built from or nothing runs, served
+from loopback and driven in headless Chromium by `notebooks/scripts/parity.mjs` — and again from
+the line the console wrote for each run (§23.1), run as written in the folder holding the files with
+only `--out` added, and compares the files the two wrote: insulation, compartments phased by the
+sequence's GC, P(s), coverage, virtual 4C, loop calling and a motif search on GEO's yeast Micro-C
+(GSE151553) at 1.6 kb, framed on chrIV, which the map draws bin for bin where the whole genome is
+drawn in pooled bins, with UCSC's sacCer3 beside it;
+APA over the loops the app called there; and peak calling and the metaplot on GEO's yeast ATAC-seq and
+its MACS2 peaks (GSM8640701), opened with no map. The files are opened as a reader opens them — a
+workspace dropped on the landing page and then the files it asks for, or the files alone — so the
+line names them as the shell will find them; every file the app offers for a run is saved through the
+buttons a reader presses, the drawer's TSV, BED and BEDPE and each new track's bigWig and bedGraph on
+the Tracks card. Each is matched to the command line's by output and format and is **identical** — a
+bigWig byte for byte, a text file line for line with its provenance, the `#` lines that say when, by
+which build, from which file and in which words each surface frames a run, set aside — or its **data
+differs**, or one side alone wrote it. Every file and its verdict is one line of
+`notebooks/work/parity/summary.tsv`.
 
-**They are published with every release.** `.github/workflows/notebooks.yml` installs all of it on a
-fresh runner — the reference environment pinned package by package in `notebooks/requirements.txt`,
-yapc's in `requirements-yapc.txt` with IDR and yapc built at the commits the notebook cites,
-Boost-HiC's checkout, Ubuntu's bedtools and seqkit, the app's build, the two viewers with Playwright's
-Chromium, and higlass-python's environment with libfuse — renders both notebooks, and publishes them at
-`<site>/validation/` and `<site>/timings/`, each a self-contained page with its tables beside it
+**And one for the reader's own machine.** `notebooks/laptop.qmd` answers what the other three do not
+— what a genome-wide analysis costs on a machine like the reader's — with Quarto, pandas, matplotlib and
+pyfaidx and the built command line, and no reference package, so that a reader can render it on their
+own laptop. It downloads the validation's mouse map, yeast Micro-C, ATAC-seq replicates, mm10 and its
+RefSeq genes, and 4DN's IMR-90 in situ Hi-C (Rao et al. 2014, 4DNFIJTOIGOI, 1.08 billion contacts):
+about 13.7 GB into `notebooks/work/laptop/data/`, each file held to its MD5, a file `validation.qmd`
+already holds linked instead. Then it runs 23 analyses genome-wide, once each, every one a process of
+its own: on the mouse map, coverage, P(s), insulation, the directionality index, compartments (E1,
+unphased), loop calling, chromosight's loops, a pileup over them and a 3D model; five of these again on
+the human map, sixteen times deeper; P(s) at 50 bp, loops and a model on the yeast; and peak calling
+with IDR, interval overlap, a metaplot, track correlation, base composition and a motif search over the
+mouse genome. `os.wait4` gives each process's CPU time and peak resident set, and the wall clock runs
+from its start to its exit. Each result is written to `notebooks/work/laptop/timings.tsv` as it is
+measured, with the machine and the build, and a second render of the same build reads it back instead
+of running again. The page is a table of all 23, the five analyses side by side at the two depths, a
+figure, and every command in one block at the end.
+
+They are documents, not tests: they need the data (about 6 GB for the analyses, 15 GB for the
+viewers, 160 MB for the parity and 13.7 GB for the laptop), the reference packages, yapc's own
+environment and higlass-python's, the two viewers and Playwright's Chromium, and nothing in the suite
+runs them.
+
+**They are published with every release, a job a notebook.** `.github/workflows/notebooks.yml`
+renders each on a fresh runner, with what `.github/actions/notebooks-setup` installs for it: the
+app's build, and the reference environment pinned package by package in `notebooks/requirements.txt`,
+which brings Quarto and every package the notebooks import; for the validation, yapc's environment
+(`requirements-yapc.txt`, IDR and yapc built at the commits the notebook cites), Boost-HiC's checkout,
+and Ubuntu's bedtools and seqkit; for the parity and the timings, the two viewers with Playwright's
+Chromium; for the timings, higlass-python's environment with libfuse. The parity renders first, alone,
+so that a page that cannot render stops the run before the hours of the others; then the validation
+and the timings in one job — the timings run the validation's commands on the inputs it fetched and
+made, which no other runner holds — beside the laptop in another. Each job gathers its pages with
+`notebooks/scripts/pages.py`, the one table of where each page is published and which files go beside
+it, which `rendered.py` reads too, and every job keeps what it rendered as an artifact for 90 days,
+even when it fails: the validation alone, with the timing rounds it finished, when the timings fail.
+A last job publishes them only if all four rendered, at `<site>/validation/`, `<site>/timings/`,
+`<site>/parity/` and `<site>/laptop/`, each a self-contained page with its tables beside it
 (`commands.json`, `summary.tsv` and `validation.txt`, every command, every verdict and every number its
-figures draw; `timings.tsv` and `viewers.tsv`); a release keeps its own copies of both pages and of the
-four tables as assets, and every run keeps
-what it rendered as an artifact for 90 days, the validation alone, with the timing rounds it finished,
-when the timings fail. It runs when a release is published and on demand. Each page opens on a block
-saying when it was rendered, from which version, commit and release, by which run or by hand, and on
-what machine, and closes on how long it took; the two link to each other there and on a reader's disk
-alike. The pages are no build of the app, so the service worker leaves those two addresses to the
-network, as it does `v/` and `pr/`, and the app, from this version on, finding itself at either
-unregisters its worker and reloads once (`recoverPinnedNavigation`), as at `v/`; a worker from before
-answers there with its own app until its reader takes the update it offers.
+figures draw; `timings.tsv` and `viewers.tsv`; the parity's `summary.tsv`, every file compared; the
+laptop's `timings.tsv`, every analysis measured); a release keeps its own copies of the four pages and
+of the six tables as assets. It runs when a release is published and on demand. Each page opens on a
+block saying when it was rendered, from which version, commit and release, by which run or by hand,
+and on what machine, and closes on how long it took, writing the same to `rendered.json` beside it with
+**one line of what it found** — how many analyses reproduce their reference, how much less time
+chromosomix takes than the references and the other viewers, how many files the app and the command
+line write alike, how many analyses finish within a minute and the most memory any takes. The run's
+summary is a section a notebook: where it is, from what and in how long, that line, and its table,
+folded. The pages link to each other there and on a reader's disk alike. They are no build of the app,
+so the service worker leaves those four addresses to the network, as it does `v/` and `pr/`, and the
+app, from this version on, finding itself at any of them unregisters its worker and reloads once
+(`recoverPinnedNavigation`), as at `v/`; a worker from before answers there with its own app until its
+reader takes the update it offers.
 
 ### 18.11 A set of scales is one picture
 
@@ -10740,6 +10805,11 @@ session would have shipped; and a `.pairs` named for its orientation curves is r
 is no refusal left for `cliCommandFor` to write. What the record does not hold arrives as a `#` note
 above the line rather than as a silent omission — the maps `hicrep` ran against are the deck's and not
 the result's, so they are read off the session and, with no session to ask, the note says to add them.
+A file opened under `--tracks` is **called what the app calls its row**: its name less the suffix the
+app knows it by (`annotations/names.ts`), `signal` for `signal.bw`, wherever a run names the track —
+a metaplot's columns, a correlation's axes, a table's rows, an output's label. It was the base name,
+`signal.bw`, so the shell's TSV and the drawer's headed the same numbers two ways, and
+`notebooks/parity.qmd` found it in the metaplot's columns.
 
 **The framing is written, not only the parameters.** Six facts a session sets from the picture are
 inputs to the arithmetic and parameters of no task: the score column the map is drawn from (§3.5),

@@ -12,7 +12,53 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Added
+
+- **The app held to its own command line, in a notebook (§18.10).** `notebooks/parity.qmd` runs ten
+  tasks in the app, in headless Chromium — insulation, compartments, P(s), coverage, virtual 4C, loop
+  calling, a motif search and APA on GEO's yeast Micro-C at 1.6 kb, framed on chrIV, and peak calling
+  and the metaplot on GEO's yeast ATAC-seq — saves every file the app offers for each run through the
+  buttons a reader presses, runs the line the console wrote for it with `chromosomix`, and compares
+  the two sets file by file: identical (a bigWig byte for byte, a text file line for line, its `#`
+  provenance set aside), or the data apart. Rendered with the validation and the timings on every
+  release and published at <https://chromosomix.app/parity/>, with every file and its verdict in
+  `summary.tsv` beside it.
+  The app and the command line must be built from one commit or nothing runs, and a session the
+  app refuses to open stops at the app's own words rather than after a ten-minute wait.
+
+- **The validation notebook holds four more analyses to their references, and does not time them
+  (§18.10).** `notebooks/validation.qmd` adds cis and trans per sequence against cooltools'
+  `expected_cis` and `expected_trans`, on a chicken map whose microchromosomes meet one another at
+  nearly twice what indifference predicts; the compartment call's saddle against `cooltools.saddle`
+  over chromosomix's own E1, cell for cell; the fraction of signal in features against pyBigWig's
+  exact sums; and signal by group against pyBigWig's exact stretch means, rank for rank in each group,
+  and NumPy's and SciPy's summaries and rank tests. Their commands are written to `commands.json`
+  with the others and left out of `notebooks/timing.qmd`'s runs.
+
+- **Time and memory on your own machine (§18.10).** `notebooks/laptop.qmd` runs 23 analyses
+  genome-wide through `chromosomix`, once each — on the validation's 69-million-contact mouse map and
+  yeast Micro-C, on 4DN's 1.08-billion-contact IMR-90 map (Rao et al. 2014), and on two ATAC-seq
+  replicates and the mm10 sequence — and tabulates the wall-clock and CPU time and the peak memory of
+  each, with the machine it ran on, a figure, and every command at the end. It needs Quarto with
+  pandas, matplotlib and pyfaidx, and a built command line; the data, about 13.7 GB, are downloaded
+  once, each held to its MD5. Render it on your own laptop, or read it at
+  <https://chromosomix.app/laptop/>, rendered with every release on a GitHub runner.
+
 ### Changed
+
+- **The notebooks render a job each, and the run's summary has a section each (§18.10).**
+  `.github/workflows/notebooks.yml` renders the parity first, then the validation with the timings
+  (which run the validation's commands on its inputs) beside the laptop, each job on a runner of its
+  own installing what it needs through `.github/actions/notebooks-setup`; a last job publishes the
+  four pages only if all rendered. The summary gives each notebook its address, version and render
+  time, the one line of findings the notebook now writes with its stamp (`rendered.json`), and its
+  table, folded. Where each page is published and which files go beside it is one table,
+  `notebooks/scripts/pages.py`, which the workflow and `rendered.py` both read.
+
+- **The command line names a track as the app does (§23.1).** A file opened under `--tracks` is
+  called what the app calls its row — `signal` for `signal.bw` — in a metaplot's columns, a
+  correlation's axes, FRiP's and Signal by group's rows and every label a run writes, where it was the
+  file's base name. The shell's tables and the drawer's now share their headers.
 
 - **Peak calling over a genome is nine times faster and holds less than a quarter of the memory,
   every number the same (§18.8).** With IDR over a mouse ATAC-seq pair, genome-wide, a call took 29
@@ -26,6 +72,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   a WebAssembly kernel with SIMD (`npm run wasm:yapc` rebuilds it), with the TypeScript where
   WebAssembly has no SIMD. Each is tested bit for bit against what it replaced (§18.10), and the
   validation's comparison with yapc 0.1 on chr19 is unchanged to the last digit.
+
+### Fixed
+
+- **Signal by group's stretches are their exact means (§18.8).** A stretch was read at a twentieth
+  of a typical stretch's width, from a zoom level wherever the file had one that fine, and a zoom
+  record is a mean over its own span: on 4DN's mouse ATAC-seq on chr19, the 896 bp records carried
+  each neighbour's signal into a stretch's ends, the 10 kb stretches came out a median 0.2 % from
+  their own means and one in thirteen more than 1 %, and the Mann–Whitney U between the two
+  compartments as much as 0.2 % from SciPy's on the exact means. Every track is now read as track correlation
+  reads a window — at its own resolution, a megabase at a time, each record weighted by how much of
+  the stretch it covers, pyBigWig's `stats(…, exact=True)` — and the same run agrees with pyBigWig
+  to within 5 × 10⁻⁶ in every stretch and with SciPy to every digit written in every test, in 1.0 s
+  where it took 0.9 s, and half the memory. A track the groups are cut from, and the per-feature
+  table, are read the same way.
 
 ## [0.16.0] - 2026-10-20
 

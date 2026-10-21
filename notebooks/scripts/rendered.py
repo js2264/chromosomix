@@ -1,14 +1,18 @@
-"""When, from what, by what and on what a notebook was rendered (validation.qmd, timing.qmd).
+"""When, from what, by what and on what a notebook was rendered (validation.qmd, timing.qmd, parity.qmd,
+laptop.qmd).
 
 `Render.head()` is the block under each notebook's title and `Render.foot()` the line at its end,
 both Markdown for a cell with `output: asis`; `foot()` also writes the same facts as JSON beside the
-notebook's outputs, which .github/workflows/notebooks.yml publishes with the page. Everything is
+notebook's outputs, with the one-line summary the notebook gives it, which .github/workflows/notebooks.yml
+publishes with the page and prints in the run's summary. Everything is
 asked of the checkout and the machine, or read from what GitHub Actions sets, so a page rendered by
 hand says so rather than borrowing a run's link.
 
-The two notebooks link to each other through `Render.link()`. Where NOTEBOOKS_SITE names the site
+The notebooks link to each other through `Render.link()`. Where NOTEBOOKS_SITE names the site
 they are published on, a link goes to the other's page there, and a download to the file published
-beside the page; rendered by hand, to the other's HTML file and to the file in work/validation/.
+beside the page; rendered by hand, to the other's HTML file and to the file in the page's own
+folder of work/ — work/validation/ for the validation and the timings, which share it, work/parity/
+for the parity and work/laptop/ for the laptop. Which page is where is `pages.py`'s table.
 """
 import datetime
 import json
@@ -20,11 +24,10 @@ from pathlib import Path
 
 from IPython.display import Markdown
 
+from pages import PAGES
+
 REPO = Path(__file__).resolve().parents[2]
 NOTEBOOKS = REPO / 'notebooks'
-WORK = NOTEBOOKS / 'work' / 'validation'
-#: Each notebook by its file's name: where it is published under the site, and what it is called.
-PAGES = {'validation': ('validation/', 'Validation'), 'timing': ('timings/', 'Timings')}
 
 
 def _git(*args):
@@ -33,6 +36,10 @@ def _git(*args):
 
 
 def _processor():
+    if platform.system() == 'Darwin':
+        run = subprocess.run(['sysctl', '-n', 'machdep.cpu.brand_string'], capture_output=True, text=True)
+        if run.returncode == 0 and run.stdout.strip():
+            return run.stdout.strip()
     try:
         for line in Path('/proc/cpuinfo').read_text().splitlines():
             if line.startswith('model name'):
@@ -76,6 +83,7 @@ class Render:
 
     def __init__(self, page):
         self.page = page
+        self.work = NOTEBOOKS / 'work' / PAGES[page].work
         self.started = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
         package = json.loads((REPO / 'package.json').read_text())
         self.version = package['version']
@@ -99,7 +107,7 @@ class Render:
 
     def url(self, page):
         """Where the notebook named `page` is read: its published address, or its HTML file here."""
-        return f'{self.site}{PAGES[page][0]}' if self.site else f'{page}.html'
+        return f'{self.site}{PAGES[page].path}/' if self.site else f'{page}.html'
 
     def anchor(self, page, text=None):
         """A link to the other notebook, as Markdown text."""
@@ -110,8 +118,8 @@ class Render:
         return Markdown(self.anchor(page, text))
 
     def download(self, name, text=None):
-        """A file published beside this page; rendered by hand, the one in work/validation/."""
-        target = name if self.site else os.path.relpath(WORK / name, NOTEBOOKS)
+        """A file published beside this page; rendered by hand, the one in the page's folder of work/."""
+        target = name if self.site else os.path.relpath(self.work / name, NOTEBOOKS)
         return f'[{text or f"`{name}`"}]({target})'
 
     def _chromosomix(self):
@@ -145,21 +153,22 @@ class Render:
             body += f'\n\n{also}'
         return f'::: {{.callout-note appearance="simple" icon=false}}\n{body}\n:::\n'
 
-    def facts(self):
-        """Everything head() and foot() say, as one JSON-ready dictionary."""
+    def facts(self, summary=None):
+        """Everything head() and foot() say, and the page's own summary, as one JSON-ready dictionary."""
         finished = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
         return {'page': self.page, 'published_at': self.url(self.page) if self.site else None,
                 'started': self.started.isoformat(), 'finished': finished.isoformat(),
                 'seconds': int((finished - self.started).total_seconds()),
                 'chromosomix': {'version': self.version, 'commit': self.commit, 'tag': self.tag,
                                 'source': self.source},
-                'run': self.run, 'machine': self.machine}
+                'run': self.run, 'machine': self.machine, 'summary': summary}
 
-    def foot(self):
-        """The closing line, and the same facts written to work/validation/rendered-<page>.json."""
-        facts = self.facts()
-        WORK.mkdir(parents=True, exist_ok=True)
-        (WORK / f'rendered-{self.page}.json').write_text(json.dumps(facts, indent=2) + '\n')
+    def foot(self, summary=None):
+        """The closing line, and the same facts written to rendered-<page>.json in the page's folder of work/,
+        with `summary`, a line of Markdown on what the page found, for the run's summary."""
+        facts = self.facts(summary)
+        self.work.mkdir(parents=True, exist_ok=True)
+        (self.work / f'rendered-{self.page}.json').write_text(json.dumps(facts, indent=2) + '\n')
         minutes, seconds = divmod(facts['seconds'], 60)
         took = f'{minutes} min {seconds} s' if minutes else f'{seconds} s'
         finished = datetime.datetime.fromisoformat(facts['finished'])

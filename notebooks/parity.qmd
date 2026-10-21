@@ -1,0 +1,459 @@
+---
+title: "chromosomix in the browser and on the command line"
+subtitle: "Ten tasks run in the app, then again from the line its console wrote for each, file for file"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+    code-fold: true
+    code-summary: "Code"
+    code-overflow: wrap
+jupyter: python3
+execute:
+  warning: false
+---
+
+```{python}
+#| echo: false
+#| output: asis
+# When, from what, by what and on what this page was rendered: notebooks/scripts/rendered.py.
+import sys
+from pathlib import Path
+
+_here = Path.cwd().resolve()
+sys.path.append(str((_here if _here.name == 'notebooks' else _here / 'notebooks') / 'scripts'))
+from rendered import Render
+
+R = Render('parity')
+print(R.head(also=f"Each analysis held to the package it reproduces: {R.anchor('validation', 'the validation')}. "
+                  f"Beside this page: {R.download('summary.tsv')}, every file compared and its verdict."))
+```
+
+The Analysis panel and the `chromosomix` command are one implementation (SPECS §18.1, §23): the
+command line imports the app's runners and writers, and every run in the app writes, on its
+console, the command that repeats it. This page holds the two to that. Each task is run **in the
+app** — this checkout's build, served from loopback and driven in headless Chromium
+(`notebooks/scripts/parity.mjs`): the files dropped on its landing page as a reader drops them, the
+task opened from the Analysis panel, its form set, **run** pressed, and every file the app offers
+for the result saved through the buttons a reader presses — the drawer's TSV, BED and BEDPE, and
+the bigWig and the bedGraph on each new track's row of the Tracks card. Then the line the console
+wrote for that run is run **as written**, in the folder that holds the files, with only `--out`
+added. The two sets of files are then matched by output and format and compared.
+
+Each file comes out as one of these:
+
+- **identical**: a bigWig byte for byte; a text file line for line, its provenance — the `#` lines
+  above the data, which say when, by which build, from which file and in which words each surface
+  frames a run — set aside;
+- **data differs**: a line that is not a comment differs, or, for a bigWig, a byte;
+- **browser only** or **command line only**: a file one side wrote and the other did not.
+
+A file only one side names its own way is matched to the other's by the task's word and the format,
+and the table says so.
+
+**To render.** Build the app and the command line, from one commit, since a page whose two builds
+name two is refused before anything runs, and have a Chromium for Playwright — the
+timings' (`notebooks/viewers`, pinned) or one already installed, named in `PARITY_CHROMIUM` or found
+under `PLAYWRIGHT_BROWSERS_PATH`:
+
+```bash
+npm run build && npm run build:cli
+npm ci --prefix notebooks/viewers && npx --prefix notebooks/viewers playwright install chromium
+QUARTO_PYTHON=refs/bin/python quarto render notebooks/parity.qmd
+```
+
+The data (160 MB) are fetched once into `notebooks/work/parity/data/`, and what each side wrote is
+kept under `notebooks/work/parity/out/<case>/`, `browser/` and `cli/`. The app is driven again when
+the plan, the driver, the app's build or the data change (`REDO`); the command line runs every
+time, in seconds. `.github/workflows/notebooks.yml` renders this page with the other two on every
+release and publishes it at <https://chromosomix.app/parity/>.
+
+```{python}
+from pathlib import Path
+import os
+
+#: Drive the app again even where its files for this same plan and build are on disk.
+REDO = False
+
+HERE = Path.cwd().resolve()
+REPO = HERE.parent if HERE.name == 'notebooks' else HERE
+CLI = REPO / 'dist-cli' / 'chromosomix.mjs'
+APP = REPO / 'dist'
+WORK = REPO / 'notebooks' / 'work' / 'parity'
+DATA = WORK / 'data'
+OUT = WORK / 'out'
+DRIVER = REPO / 'notebooks' / 'scripts' / 'parity.mjs'
+PLAN_FILE = WORK / 'plan.json'
+RESULTS = WORK / 'results.json'
+SUMMARY = WORK / 'summary.tsv'
+#: A Chromium to drive: PARITY_CHROMIUM, else the one under PLAYWRIGHT_BROWSERS_PATH, else Playwright's own.
+_browsers = os.environ.get('PLAYWRIGHT_BROWSERS_PATH', '')
+CHROMIUM = os.environ.get('PARITY_CHROMIUM') or (
+    str(Path(_browsers) / 'chromium') if _browsers and (Path(_browsers) / 'chromium').exists() else None)
+```
+
+```{python}
+import filecmp
+import hashlib
+import html
+import json
+import re
+import shlex
+import shutil
+import subprocess
+import time
+import urllib.parse
+import urllib.request
+
+import pandas as pd
+
+for built, how in ((CLI, 'npm run build:cli'), (APP / 'index.html', 'npm run build')):
+    if not built.exists():
+        raise FileNotFoundError(f'{built} is not there: run `{how}` at the repository root.')
+DATA.mkdir(parents=True, exist_ok=True)
+OUT.mkdir(parents=True, exist_ok=True)
+
+
+def show(frame, **formats):
+    """A table without row numbers."""
+    return frame.style.hide(axis='index').format(formats or None, precision=2)
+
+
+def md5(path):
+    digest = hashlib.md5()
+    with open(path, 'rb') as handle:
+        for block in iter(lambda: handle.read(1 << 22), b''):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def fetch(url, md5sum, name=None):
+    """A public file, fetched once into work/parity/data and held to its MD5: a file of that name
+    that is anything else is refused rather than compared."""
+    path = DATA / (name or urllib.parse.unquote(url.rsplit('/', 1)[-1]))
+    if not path.exists():
+        print('fetching', url)
+        part = path.with_name(path.name + '.part')
+        with urllib.request.urlopen(url) as response, open(part, 'wb') as out:
+            shutil.copyfileobj(response, out, 1 << 22)
+        part.rename(path)
+    if md5(path) != md5sum:
+        raise ValueError(f'{path} is not {url}: its MD5 is {md5(path)}, not {md5sum}. '
+                         'Delete it, and it is fetched again.')
+    return path
+
+
+VERSION = subprocess.run(['node', str(CLI), '--version'], capture_output=True, text=True).stdout.splitlines()[0]
+
+# One build of one checkout on both sides. dist/ and dist-cli/ are built apart, and an app left from
+# an older checkout can refuse this page's workspace and record nothing the driver waits for, so two
+# builds of two commits are refused here, not ten minutes into each session. The app names its build
+# in its service worker's cache, `chromosomix-<version>-<commit>`; the command line, on `--version`.
+_cli = re.fullmatch(r'chromosomix (\S+)(?: \((\w+)\))?', VERSION)
+_app = re.search(r'const CACHE = "([^"]*)"', (APP / 'sw.js').read_text()) if (APP / 'sw.js').exists() else None
+if _cli is None or _app is None or _app[1] != '-'.join(filter(None, ('chromosomix', *_cli.groups()))):
+    raise RuntimeError(f"dist/ is {_app[1] if _app else 'not the site build'} and dist-cli/ is {VERSION}: "
+                       'run `npm run build && npm run build:cli` at the repository root, so both are this checkout.')
+```
+
+## Data
+
+Four public files and nothing made from them. The map is the Micro-C of yeast in G2/M of Costantino
+et al. (2020), GEO's GSE151553, read at 1.6 kb; the sequence is UCSC's sacCer3, as Illumina
+iGenomes distributes it, the assembly the map is on; the ATAC-seq coverage and its MACS2 peaks are
+GEO's GSM8640701, on that sample's own assembly (W303 with a *Mycoplasma mycoides* chromosome), so
+they are opened apart from the map, as tracks with no map. The loops the pileup is run on are the
+ones the app calls in the first session, saved from it as a reader saves them.
+
+```{python}
+GEO = 'https://ftp.ncbi.nlm.nih.gov/geo'
+DATASETS = [
+    dict(data='Yeast Micro-C, G2/M (Costantino et al. 2020)', accession='GEO GSE151553',
+         url=f'{GEO}/series/GSE151nnn/GSE151553/suppl/GSE151553_A364_merged.mcool',
+         md5='319a04a8d7e41d9eb88e2378ea3ea373'),
+    dict(data='Yeast genome sequence, sacCer3 (Illumina iGenomes copy)', accession='UCSC sacCer3', name='sacCer3.fa',
+         url='https://ngi-igenomes.s3.amazonaws.com/igenomes/Saccharomyces_cerevisiae/UCSC/sacCer3/Sequence/WholeGenomeFasta/genome.fa',
+         md5='64d5e97395c71b2f577eddad296ca5d3'),
+    dict(data='Yeast ATAC-seq, CPM (W303 + M. mycoides)', accession='GEO GSM8640701',
+         url=f'{GEO}/samples/GSM8640nnn/GSM8640701/suppl/GSM8640701_ATAC_Mmyco_rep1.CPM.bw',
+         md5='c7b10d3d7330505d5de5491a143eef25'),
+    dict(data='Yeast ATAC-seq, MACS2 peaks', accession='GEO GSM8640701',
+         url=f'{GEO}/samples/GSM8640nnn/GSM8640701/suppl/GSM8640701_ATAC_Mmyco_rep1.narrowPeak.gz',
+         md5='51939c00e996cb57e515764307b35ddd'),
+]
+PATHS = [fetch(d['url'], d['md5'], d.get('name')) for d in DATASETS]
+MAP, FASTA, ATAC, PEAKS = (path.name for path in PATHS)
+show(pd.DataFrame([{'data': d['data'], 'accession': d['accession'],
+                    'file': f'<a href="{d["url"]}">{html.escape(p.name)}</a>', 'MB': p.stat().st_size / 1e6}
+                   for d, p in zip(DATASETS, PATHS)]), MB='{:,.1f}')
+```
+
+## The runs
+
+Three sessions, each opened in a fresh browser context. The first is the map at 1.6 kb, framed on
+chrIV, with the sequence as a track, as a workspace names them: the workspace is dropped on the
+landing page, then the files it asks for. chrIV, 1.5 Mb, is drawn bin for bin at 1.6 kb, where the
+whole genome would be drawn in pooled bins of 3.2 kb, so every run reads the file's own bins. The app
+measures, once the map is open, which sequences read as circular, and says so; the runs wait for
+that, since it is part of what each run records. The second is the same map and window with the
+loops the first called, for the pileup. The third is the ATAC-seq coverage and its peaks, dropped
+alone. Every form is left as it opens but for what the table says: what a
+task needs to run at all (an anchor, a motif, a kernel at 1.6 kb), or which loaded file it reads.
+
+```{python}
+LOOPS = 'Costantino_loops.bedpe'
+STYLE = {'colour': '#2a78d6', 'size': 46, 'mode': 'area', 'limits': {'auto': True, 'min': 0, 'max': 1},
+         'group': '', 'shape': 'element', 'radius': 7, 'opacity': 1, 'flip': False}
+
+
+def track(id_, kind, name, label, card='linear'):
+    """A row of a workspace: a file on the reader's disk, asked for by its name."""
+    return {'id': id_, 'card': card, 'kind': kind, 'label': label, 'source': {'kind': 'local', 'name': name},
+            'visible': True, 'placement': {'bottom': True, 'right': False}, 'style': STYLE}
+
+
+#: The window every map session is framed on: chrIV whole, which sacCer3 makes 1,531,933 bp.
+WINDOW = 'chrIV:0-1531933'
+
+
+def map_workspace(*tracks):
+    """The map at 1.6 kb, balanced, framed on chrIV, and the tracks beside it."""
+    return {'kind': 'chromosomix.workspace', 'version': 1, 'active': 0, 'tabs': [{
+        'version': 1, 'state': {'uri': f'{MAP}::/resolutions/1600', 'view': 'region', 'region': WINDOW,
+                                'balance': True},
+        'tracks': list(tracks)}]}
+
+
+SESSIONS = [
+    dict(id='map', what='the map at 1.6 kb on chrIV, and the sequence',
+         workspace=map_workspace(track('sequence', 'sequence', FASTA, 'sacCer3')), files=[MAP, FASTA],
+         waitFor='reads as circular', cases=[
+             dict(id='insulation', title='Diamond insulation'),
+             dict(id='compartments', title='Compartments', set=[{'key': 'phaseSequence', 'option': 'sacCer3'}]),
+             dict(id='ps', title='Contact probability P(s)'),
+             dict(id='coverage', title='Coverage and marginals'),
+             dict(id='fourc', title='4C profile from an anchor',
+                  set=[{'key': 'anchor', 'value': 'chrIV:1,300,001-1,302,000'}]),
+             dict(id='loops', title='Loop calling', set=[{'key': 'outer', 'value': 5}, {'key': 'inner', 'value': 2}]),
+             dict(id='motif', title='Find a motif', set=[{'key': 'sequence', 'option': 'sacCer3'},
+                                                         {'key': 'pattern', 'value': 'WTTTAYRTTTW'}]),
+         ]),
+    dict(id='map-loops', what='the map at 1.6 kb on chrIV, and the loops the first session called',
+         inputs=[{'from': 'loops/browser/loops-calls.bedpe', 'as': LOOPS}],
+         workspace=map_workspace(track('loops', 'pairs', LOOPS, 'loops', 'overlay')), files=[MAP, LOOPS],
+         waitFor='reads as circular', cases=[
+             dict(id='apa', title='Aggregate peak analysis'),
+         ]),
+    dict(id='tracks', what='the ATAC-seq coverage and its peaks, with no map', files=[ATAC, PEAKS], cases=[
+        dict(id='peaks', title='Peak calling', set=[{'key': 'signal', 'option': 'ATAC'}]),
+        dict(id='metaplot', title='Metaplot over a feature set', set=[{'key': 'features', 'option': PEAKS.split('.')[0]}]),
+    ]),
+]
+PLAN = {'app': str(APP), 'data': str(DATA), 'out': str(OUT), 'executablePath': CHROMIUM, 'sessions': SESSIONS}
+CASES = [dict(case, session=session['id'], what=session['what']) for session in SESSIONS for case in session['cases']]
+
+
+def setting(one):
+    if 'option' in one:
+        return f"{one['key']}: {one['option']}"
+    return f"{one['key']} = {one['value']}"
+
+
+show(pd.DataFrame([{'case': c['id'], 'task': c['title'], 'session': c['what'],
+                    'set in the form': '; '.join(setting(s) for s in c.get('set', [])) or 'nothing'} for c in CASES]))
+```
+
+## In the browser
+
+```{python}
+def digest(*paths):
+    h = hashlib.sha256()
+    for path in paths:
+        h.update(Path(path).read_bytes())
+    return h.hexdigest()[:16]
+
+
+# What the browser's files depend on: the plan, the driver, the app's build (its page names every
+# asset by its hash) and the data.
+STAMP = digest(DRIVER, APP / 'index.html') + json.dumps(SESSIONS, sort_keys=True) + \
+    ''.join(d['md5'] for d in DATASETS)
+held = json.loads(RESULTS.read_text()) if RESULTS.exists() else {}
+if REDO or held.get('stamp') != STAMP:
+    PLAN_FILE.write_text(json.dumps(PLAN, indent=1))
+    start = time.time()
+    run = subprocess.run(['node', str(DRIVER), str(PLAN_FILE), str(RESULTS)], capture_output=True, text=True)
+    print(run.stdout.strip())
+    if run.returncode:
+        raise RuntimeError(run.stderr[-4000:])
+    held = json.loads(RESULTS.read_text())
+    held['stamp'] = STAMP
+    held['seconds'] = round(time.time() - start)
+    RESULTS.write_text(json.dumps(held, indent=1))
+BROWSER = {case['id']: case for case in held['cases']}
+print(f"Chromium {held['chromium']}; the app at {R.short}, driven in {held.get('seconds', 0) // 60} min.")
+show(pd.DataFrame([{'case': c['id'], 'run': BROWSER[c['id']]['status'],
+                    'seconds': (BROWSER[c['id']].get('ms') or float('nan')) / 1000,
+                    'files saved': len(BROWSER[c['id']]['files']),
+                    'error': BROWSER[c['id']].get('error', '')} for c in CASES]), seconds='{:.1f}')
+```
+
+The seconds are the app's own, as its console records them: from the job's dispatch to its result.
+
+## On the command line
+
+Each line as the console wrote it, run in `work/parity/data/` with `--out` added, `chromosomix`
+being this checkout's build (`node dist-cli/chromosomix.mjs`).
+
+```{python}
+CLI_RUNS = {}
+for case in CASES:
+    browser = BROWSER[case['id']]
+    line = browser.get('line')
+    folder = OUT / case['id'] / 'cli'
+    shutil.rmtree(folder, ignore_errors=True)
+    if line is None:
+        CLI_RUNS[case['id']] = dict(status='not run', seconds=float('nan'), error='the app wrote no line')
+        continue
+    argv = shlex.split(line)
+    if argv[0] != 'chromosomix':
+        CLI_RUNS[case['id']] = dict(status='not run', seconds=float('nan'), error=f'not a command: {line}')
+        continue
+    start = time.time()
+    run = subprocess.run(['node', str(CLI), *argv[1:], '--out', str(folder), '--quiet'],
+                         capture_output=True, text=True, cwd=DATA)
+    CLI_RUNS[case['id']] = dict(status='ok' if run.returncode == 0 else f'exit {run.returncode}',
+                                seconds=time.time() - start, error=run.stderr.strip()[-2000:] if run.returncode else '')
+print(VERSION)
+show(pd.DataFrame([{'case': c['id'], 'run': CLI_RUNS[c['id']]['status'], 'seconds': CLI_RUNS[c['id']]['seconds'],
+                    'files written': len(list((OUT / c['id'] / 'cli').glob('*'))) if (OUT / c['id'] / 'cli').exists() else 0,
+                    'error': CLI_RUNS[c['id']]['error']} for c in CASES]), seconds='{:.1f}')
+```
+
+## File by file
+
+```{python}
+ORDER = ['identical', 'data differs', 'browser only', 'command line only']
+
+
+def cli_files(case_id, task):
+    """What the command line wrote, by output and format: `<stem>.<task>.<output>.<format>` less the stem and task."""
+    folder = OUT / case_id / 'cli'
+    if not folder.exists():
+        return {}
+    return {re.sub(rf'^.*?\.{re.escape(task)}\.', '', p.name): p for p in sorted(folder.iterdir())}
+
+
+def pair(browser, cli):
+    """Each file matched by name; what is left matched by the task's word and the format where that is one file a side."""
+    pairs = [(name, browser[name], cli[name], '') for name in sorted(set(browser) & set(cli))]
+    left_b = sorted(set(browser) - set(cli))
+    left_c = sorted(set(cli) - set(browser))
+    key = lambda name: (name.split('-')[0].split('.')[0], name.rsplit('.', 1)[-1])
+    for name in list(left_b):
+        mates = [other for other in left_c if key(other) == key(name)]
+        if len(mates) == 1 and sum(key(b) == key(name) for b in left_b) == 1:
+            pairs.append((name, browser[name], cli[mates[0]], f'named {mates[0]} on the command line'))
+            left_b.remove(name)
+            left_c.remove(mates[0])
+    pairs += [(name, browser[name], None, '') for name in left_b]
+    pairs += [(name, None, cli[name], '') for name in left_c]
+    return pairs
+
+
+def data(path):
+    """A text file's lines, its provenance — every `#` line — set aside."""
+    return [line for line in path.read_text().splitlines() if not line.startswith('#')]
+
+
+def shown(lines, at, width=72):
+    """A line as the table prints it: its tabs as ⇥, and cut to `width` characters."""
+    if at >= len(lines):
+        return '(no line)'
+    line = lines[at].replace('\t', ' ⇥ ')
+    return line if len(line) <= width else line[:width - 1] + '…'
+
+
+def compare(b, c):
+    """The verdict on one file, and a line on what differs."""
+    if b is None:
+        return 'command line only', ''
+    if c is None:
+        return 'browser only', ''
+    if filecmp.cmp(b, c, shallow=False):
+        return 'identical', ''
+    if b.suffix == '.bw':
+        return 'data differs', f'{b.stat().st_size:,} bytes in the browser, {c.stat().st_size:,} on the command line'
+    db, dc = data(b), data(c)
+    if db == dc:
+        return 'identical', ''
+    at = next((i for i, (x, y) in enumerate(zip(db, dc)) if x != y), min(len(db), len(dc)))
+    differ = sum(x != y for x, y in zip(db, dc)) + abs(len(db) - len(dc))
+    first = f'browser `{shown(db, at)}`, command line `{shown(dc, at)}`'
+    return 'data differs', f'{differ:,} of {max(len(db), len(dc)):,} data lines; the first, line {at + 1}: {first}'
+
+
+ROWS = []
+for case in CASES:
+    browser = BROWSER[case['id']]
+    task = shlex.split(browser['line'])[1] if browser.get('line') else case['id']
+    saved = {f['name']: OUT / case['id'] / 'browser' / f['name'] for f in browser['files']}
+    for name, b, c, note in pair(saved, cli_files(case['id'], task)):
+        verdict, what = compare(b, c)
+        ROWS.append({'case': case['id'], 'task': task, 'file': name, 'verdict': verdict,
+                     'note': '; '.join(part for part in (note, what) if part),
+                     'browser bytes': b.stat().st_size if b is not None else None,
+                     'command line bytes': c.stat().st_size if c is not None else None})
+FILES = pd.DataFrame(ROWS, columns=['case', 'task', 'file', 'verdict', 'note', 'browser bytes',
+                                    'command line bytes'])
+FILES.to_csv(SUMMARY, sep='\t', index=False)
+```
+
+```{python}
+#| output: asis
+def code(text):
+    return f'<code>{html.escape(text)}</code>'
+
+
+for number, case in enumerate(CASES, 1):
+    browser, cli = BROWSER[case['id']], CLI_RUNS[case['id']]
+    rows = FILES[FILES['case'] == case['id']]
+    counts = rows['verdict'].value_counts()
+    print(f"\n### {number} · {case['title']}\n")
+    print(f"*{case['what']}* — "
+          + (' · '.join(f"{v}: {counts[v]}" for v in ORDER if v in counts) or 'no files') + '\n')
+    if browser.get('line'):
+        notes = ''.join(f'{note}\n' for note in browser.get('notes') or [])
+        print(f"```bash\n{notes}{browser['line']}\n```\n")
+    for side, run in (('In the app', browser), ('On the command line', cli)):
+        if run.get('error'):
+            print(f"{side}: **{run['status']}** — {html.escape(run['error'])}\n")
+    if len(rows):
+        table = rows[['file', 'verdict', 'note']].copy()
+        table['note'] = table['note'].map(lambda text: re.sub(r'`([^`]*)`', lambda m: code(m[1]), html.escape(text, quote=False).replace('&#x27;', "'")))
+        print(table.to_html(index=False, escape=False, border=0, classes='table table-sm'))
+        print()
+```
+
+## Summary
+
+```{python}
+BY_CASE = (FILES.groupby('case')['verdict'].value_counts().unstack(fill_value=0)
+           .reindex(columns=ORDER, fill_value=0).reindex([c['id'] for c in CASES], fill_value=0).reset_index())
+BY_CASE.insert(1, 'task', [c['title'] for c in CASES])
+BY_CASE['files'] = BY_CASE[ORDER].sum(axis=1)
+show(BY_CASE[['case', 'task', 'files', *ORDER]])
+```
+
+```{python}
+#| echo: false
+#| output: asis
+same = int((FILES['verdict'] == 'identical').sum())
+alone = int(FILES['verdict'].isin(['browser only', 'command line only']).sum())
+print(f"**{same} of {len(FILES)} files** are identical between the app and the command line; "
+      f"{int((FILES['verdict'] == 'data differs').sum())} differ in their data, and {alone} "
+      f"{'was' if alone == 1 else 'were'} written by one side alone.\n")
+print(R.foot(summary=f"{same} of {len(FILES)} files are identical between the app and the command line; "
+                     f"{int((FILES['verdict'] == 'data differs').sum())} differ in their data, and {alone} "
+                     f"{'was' if alone == 1 else 'were'} written by one side alone."))
+```
