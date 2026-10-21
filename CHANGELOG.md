@@ -55,6 +55,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   table, folded. Where each page is published and which files go beside it is one table,
   `notebooks/scripts/pages.py`, which the workflow and `rendered.py` both read.
 
+- **The validation gives a reference a process a core, at most four, and every render logs the
+  memory (§18.10).** On the two-core, 8 GB runner a private repository is given, six renders of the
+  notebooks in nine were shut down mid-step ("The runner has received a shutdown signal"), four in
+  the cell where cooltools computes the expected over the mouse genome at 10 kb with four
+  processes, the largest alone at 3.6 GB. `notebooks/validation.qmd`'s `THREADS` is now the
+  machine's cores up to four, so the timings' `threads` column reads 2 on that runner; and each
+  render runs through `notebooks/scripts/memory.sh`, which writes the memory in use and available,
+  and the three programs holding the most, into the job's log every ten seconds: a runner shut down
+  for want of memory leaves no error and runs no step after it, and that log is what is left.
+
 - **The command line names a track as the app does (§23.1).** A file opened under `--tracks` is
   called what the app calls its row — `signal` for `signal.bw` — in a metaplot's columns, a
   correlation's axes, FRiP's and Signal by group's rows and every label a run writes, where it was the
