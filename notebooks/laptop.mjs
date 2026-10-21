@@ -56,7 +56,9 @@
  *   node notebooks/laptop.mjs --only mouse       # a group, or tasks by name
  *
  * It builds the command line first (`vite build --config vite.cli.config.ts`); `--no-build` times
- * `dist-cli/` as it is.
+ * `dist-cli/` as it is. One round of every task took 44 minutes on a 2.1 GHz Xeon core, 31 of them
+ * peak calling over the whole mouse genome, so the default three rounds are an afternoon's run and
+ * `--runs 1` a first look.
  */
 
 import { spawn, spawnSync } from 'node:child_process'
@@ -509,7 +511,7 @@ const median = (values) => {
   const mid = sorted.length >> 1
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
 }
-const seconds = (s) => (s >= 100 ? s.toFixed(0) : s.toFixed(1))
+const seconds = (s) => (s >= 100 ? Math.round(s).toLocaleString('en-US') : s.toFixed(1))
 const grouped = (n) => n.toLocaleString('en-US')
 const resolution = (bp) => (bp === null ? '—' : bp >= 1e6 ? `${bp / 1e6} Mb` : bp >= 1e3 ? `${bp / 1e3} kb` : `${bp} bp`)
 
