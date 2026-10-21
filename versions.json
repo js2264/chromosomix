@@ -214,6 +214,13 @@
   ],
   "pulls": [
     {
+      "number": 125,
+      "commit": "677a5d0",
+      "title": "Validate cis and trans, the saddle, FRiP and signal by group; signal by group reads exactly (§18.8, §18.10)",
+      "branch": "js/youthful-albattani-x7amjj",
+      "date": "2026-10-21T09:14:39Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
