@@ -604,7 +604,7 @@ async function main() {
   if (about.power === 'battery') {
     console.log('warning: on battery power, which slows most laptops down; plug it in for numbers to cite')
   }
-  console.log(`${tasks.length} tasks, ${RUNS} run${RUNS === 1 ? '' : 's'} each\n`)
+  console.log(`${tasks.length} task${tasks.length === 1 ? '' : 's'}, ${RUNS} run${RUNS === 1 ? '' : 's'} each\n`)
 
   const rows = []
   for (let round = 1; round <= RUNS; round++) {
