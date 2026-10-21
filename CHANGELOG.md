@@ -10,6 +10,19 @@ The deployed site at <https://chromosomix.app/> is built from `main` on every pu
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Added
+
+- **The app held to its own command line, in a notebook (§18.10).** `notebooks/parity.qmd` runs ten
+  tasks in the app, in headless Chromium — insulation, compartments, P(s), coverage, virtual 4C, loop
+  calling, a motif search and APA on GEO's yeast Micro-C, whole at 1.6 kb, and peak calling and the
+  metaplot on GEO's yeast ATAC-seq — saves every file the app offers for each run through the buttons
+  a reader presses, runs the line the console wrote for it with `chromosomix`, and compares the two
+  sets file by file: identical bar the build, the instant and the path, a provenance line apart, or
+  the data apart. Rendered with the validation and the timings on every release and published at
+  <https://chromosomix.app/parity/>, with every file and its verdict in `summary.tsv` beside it.
+
 ## [0.16.0] - 2026-10-20
 
 ### Added

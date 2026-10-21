@@ -1,4 +1,4 @@
-"""When, from what, by what and on what a notebook was rendered (validation.qmd, timing.qmd).
+"""When, from what, by what and on what a notebook was rendered (validation.qmd, timing.qmd, parity.qmd).
 
 `Render.head()` is the block under each notebook's title and `Render.foot()` the line at its end,
 both Markdown for a cell with `output: asis`; `foot()` also writes the same facts as JSON beside the
@@ -6,9 +6,11 @@ notebook's outputs, which .github/workflows/notebooks.yml publishes with the pag
 asked of the checkout and the machine, or read from what GitHub Actions sets, so a page rendered by
 hand says so rather than borrowing a run's link.
 
-The two notebooks link to each other through `Render.link()`. Where NOTEBOOKS_SITE names the site
+The notebooks link to each other through `Render.link()`. Where NOTEBOOKS_SITE names the site
 they are published on, a link goes to the other's page there, and a download to the file published
-beside the page; rendered by hand, to the other's HTML file and to the file in work/validation/.
+beside the page; rendered by hand, to the other's HTML file and to the file in the page's own
+folder of work/ — work/validation/ for the validation and the timings, which share it, and
+work/parity/ for the parity.
 """
 import datetime
 import json
@@ -22,9 +24,10 @@ from IPython.display import Markdown
 
 REPO = Path(__file__).resolve().parents[2]
 NOTEBOOKS = REPO / 'notebooks'
-WORK = NOTEBOOKS / 'work' / 'validation'
-#: Each notebook by its file's name: where it is published under the site, and what it is called.
-PAGES = {'validation': ('validation/', 'Validation'), 'timing': ('timings/', 'Timings')}
+#: Each notebook by its file's name: where it is published under the site, what it is called, and
+#: the folder of work/ its outputs are in.
+PAGES = {'validation': ('validation/', 'Validation', 'validation'), 'timing': ('timings/', 'Timings', 'validation'),
+         'parity': ('parity/', 'Parity', 'parity')}
 
 
 def _git(*args):
@@ -76,6 +79,7 @@ class Render:
 
     def __init__(self, page):
         self.page = page
+        self.work = NOTEBOOKS / 'work' / PAGES[page][2]
         self.started = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
         package = json.loads((REPO / 'package.json').read_text())
         self.version = package['version']
@@ -110,8 +114,8 @@ class Render:
         return Markdown(self.anchor(page, text))
 
     def download(self, name, text=None):
-        """A file published beside this page; rendered by hand, the one in work/validation/."""
-        target = name if self.site else os.path.relpath(WORK / name, NOTEBOOKS)
+        """A file published beside this page; rendered by hand, the one in the page's folder of work/."""
+        target = name if self.site else os.path.relpath(self.work / name, NOTEBOOKS)
         return f'[{text or f"`{name}`"}]({target})'
 
     def _chromosomix(self):
@@ -156,10 +160,10 @@ class Render:
                 'run': self.run, 'machine': self.machine}
 
     def foot(self):
-        """The closing line, and the same facts written to work/validation/rendered-<page>.json."""
+        """The closing line, and the same facts written to rendered-<page>.json in the page's folder of work/."""
         facts = self.facts()
-        WORK.mkdir(parents=True, exist_ok=True)
-        (WORK / f'rendered-{self.page}.json').write_text(json.dumps(facts, indent=2) + '\n')
+        self.work.mkdir(parents=True, exist_ok=True)
+        (self.work / f'rendered-{self.page}.json').write_text(json.dumps(facts, indent=2) + '\n')
         minutes, seconds = divmod(facts['seconds'], 60)
         took = f'{minutes} min {seconds} s' if minutes else f'{seconds} s'
         finished = datetime.datetime.fromisoformat(facts['finished'])

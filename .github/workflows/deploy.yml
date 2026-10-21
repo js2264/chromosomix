@@ -152,8 +152,8 @@ jobs:
           fi
 
       # The rendered notebooks, which notebooks.yml keeps on a branch of their
-      # own on the same terms as the stores: the validation and the timings
-      # (SPECS §18.10), each a self-contained page with its files beside it.
+      # own on the same terms as the stores: the validation, the timings and the
+      # parity (SPECS §18.10), each a self-contained page with its files beside it.
       # Absent until that workflow has published once.
       - name: Fetch the rendered notebooks
         env:
@@ -164,7 +164,7 @@ jobs:
           if git ls-remote --exit-code --heads "$remote" "$NOTEBOOKS_BRANCH" >/dev/null 2>&1; then
             git clone --quiet --depth 1 --branch "$NOTEBOOKS_BRANCH" "$remote" rendered
           else
-            echo "No $NOTEBOOKS_BRANCH branch yet — /validation/ and /timings/ appear once the Notebooks workflow has run."
+            echo "No $NOTEBOOKS_BRANCH branch yet — /validation/, /timings/ and /parity/ appear once the Notebooks workflow has run."
           fi
 
       # Previews belong to open pull requests, and preview.yml removes one when
@@ -244,7 +244,7 @@ jobs:
       # not copied: those are the dated copies, which the branch keeps and the
       # site has no reason to serve.
       #
-      # `validation/` and `timings/` are the rendered notebooks, copied whole
+      # `validation/`, `timings/` and `parity/` are the rendered notebooks, copied whole
       # from their branch, each directory named rather than globbed so that the
       # branch can never put anything else at the site's root.
       - name: Assemble the site
@@ -259,11 +259,11 @@ jobs:
             if [ -d stores/sessions ]; then cp -R stores/sessions dist/stores/sessions; fi
             echo "Copied $(find dist/stores -name '*.json' | wc -l) store and session files."
           fi
-          for page in validation timings; do
+          for page in validation timings parity; do
             if [ -f "rendered/$page/index.html" ]; then cp -R "rendered/$page" "dist/$page"; fi
           done
           parts=(dist dist/v)
-          for part in dist/pr dist/stores dist/validation dist/timings; do
+          for part in dist/pr dist/stores dist/validation dist/timings dist/parity; do
             if [ -d "$part" ]; then parts+=("$part"); fi
           done
           du -sh "${parts[@]}"
