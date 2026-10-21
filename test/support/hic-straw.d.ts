@@ -24,6 +24,8 @@ declare module 'hic-straw/dist/hic-straw.esm.js' {
     version: number
     genomeId: string
     chromosomes: Array<{ index: number; name: string; size: number }>
+    /** Base-pair bin sizes, in file order. */
+    resolutions: number[]
   }
 
   export default class Straw {

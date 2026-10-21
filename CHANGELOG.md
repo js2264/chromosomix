@@ -44,6 +44,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   once, each held to its MD5. Render it on your own laptop, or read it at
   <https://chromosomix.app/laptop/>, rendered with every release on a GitHub runner.
 
+- **The `.hic` reader held to `hic-straw` on a file Juicer Tools wrote (§3.6).**
+  `test/unit/hic-straw-oracle.test.ts` read only fixtures this repository's own writer produced, so
+  straw and this reader agreed on our reading of the format and never met a block Juicer laid out.
+  It now reads the demo map too, `demo/yeast/Yeast_hic.hic` (v8, Juicer Tools 1.9.9), with both
+  readers, every cell of four windows — a whole chromosome with its short last bin, a window inside
+  another, a megabase off the diagonal, and between two chromosomes — at all five resolutions, raw
+  counts exactly and KR-balanced ones to float32 precision, through `MetaCooler` as a view reads it.
+  The map is committed, so this runs on every push with nothing to build.
+
 ### Changed
 
 - **The notebooks render a job each, and the run's summary has a section each (§18.10).**
