@@ -18,6 +18,12 @@
  * `ConcaveScan` carries what crosses a seam. The answer is bit for bit the one a
  * whole sequence in memory gives; the golden checks it both ways.
  *
+ * Where the engine has WebAssembly with SIMD, a window's whole scan — pieces,
+ * pooling, both convolutions, the concave mask and the regions — is one call
+ * into yapc's kernel (`yapcKernel.ts`), three times the speed of the same
+ * TypeScript and the same numbers to the last bit; the TypeScript below is what
+ * runs where it cannot, and what the kernel is tested against.
+ *
  * ## What comes out
  *
  * The peaks as an interval set — each with its summit as the thick part, which
@@ -30,7 +36,7 @@
 
 import { yieldToEventLoop } from '../../async'
 import { FeatureBuilder } from '../../annotations/featureset'
-import { DETAIL_SEP } from '../../annotations/types'
+import { DETAIL_SEP, type TrackSamples } from '../../annotations/types'
 import { IDR_BOX, IdrError, fitIdr, globalIdr, idrRanks, localIdr, scaledIdr, type IdrFit } from '../idr'
 import {
   boolParam,
@@ -58,10 +64,10 @@ import {
   yapcKernel,
   zeroRuns,
   type ConcaveRegions,
-  type Runs,
   type StrongestRegionsHeld,
   type YapcKernel,
 } from '../yapc'
+import { KernelMemoryError, KernelScan } from '../yapcKernel'
 
 /**
  * Bases computed per read.
@@ -420,55 +426,74 @@ async function scanAll(
  * all, or a sentence where a track refused to be read here — which only a
  * track kind with a limit on what it will answer can do, and which is then the
  * whole run's answer rather than a hole in it.
+ *
+ * Each window is scanned in yapc's WebAssembly kernel where this engine runs it
+ * (`yapcKernel.ts`), and in the TypeScript below where it does not, or where
+ * `engine` asks for it — the two give the same regions to the last bit, which is
+ * what the tests ask both for. A kernel that runs out of memory part-way leaves
+ * the sequence to the TypeScript, from its first base.
  */
-async function scanSequence(
+export async function scanSequence(
   job: TrackJobContext,
   entries: readonly string[],
   name: string,
   length: number,
   kernel: YapcKernel,
   report: (bases: number) => void,
+  engine: 'auto' | 'js' = 'auto',
 ): Promise<{ regions: ConcaveRegions; absent: boolean[] } | string> {
   const { left, right } = convolutionReach(kernel, length)
   const absent = entries.map(() => false)
+  const fast = engine === 'js' ? null : KernelScan.open(kernel, name, length, entries.length, WINDOW)
   let scan: ConcaveScan | null = null
-  for (let from = 0; from < length; from += WINDOW) {
-    const to = Math.min(length, from + WINDOW)
-    const lo = Math.max(0, from - left)
-    const hi = Math.min(length, to + right)
-    const runs: Runs[] = []
-    for (let t = 0; t < entries.length; t++) {
-      if (absent[t]) {
-        runs.push(zeroRuns(lo, hi))
-        continue
-      }
-      // Base resolution: one base per pixel is what selects the file's own
-      // intervals rather than a zoom level's means (§8.2).
-      const set = await job.sample(entries[t], [{ contig: name, start: lo, end: hi }], 1)
-      if (set.note !== undefined) return set.note
-      const answer = set.regions[0]
-      if (answer === undefined) {
+  let done = 0
+  try {
+    for (let from = 0; from < length; from += WINDOW) {
+      const to = Math.min(length, from + WINDOW)
+      const lo = Math.max(0, from - left)
+      const hi = Math.min(length, to + right)
+      const answers: Array<TrackSamples | null> = []
+      for (let t = 0; t < entries.length; t++) {
+        if (absent[t]) {
+          answers.push(null)
+          continue
+        }
+        // Base resolution: one base per pixel is what selects the file's own
+        // intervals rather than a zoom level's means (§8.2).
+        const set = await job.sample(entries[t], [{ contig: name, start: lo, end: hi }], 1)
+        if (set.note !== undefined) return set.note
+        const answer = set.regions[0]
         // Asked about a sequence the track does not name: it has none of it,
         // which yapc reads as zeros (`zeroRuns`).
-        absent[t] = true
-        runs.push(zeroRuns(lo, hi))
-        continue
+        if (answer === undefined) absent[t] = true
+        answers.push(answer ?? null)
       }
-      runs.push(runsOver(answer.starts, answer.ends, answer.values, lo, hi))
+      if (fast !== null) fast.window(from, to, lo, hi, answers)
+      else {
+        const runs = answers.map((answer) =>
+          answer === null ? zeroRuns(lo, hi) : runsOver(answer.starts, answer.ends, answer.values, lo, hi),
+        )
+        scan ??= new ConcaveScan(name, length, absent)
+        const flat = new Uint8Array(to - from)
+        const pooled = convolveSame(pooledRuns(runs, lo, hi), kernel, length, from, to, flat)
+        // Each track's own second derivative is read only inside a concave region
+        // of the pooled one, to score it — half the bases — so it is summed only there.
+        const concave = entries.length === 1 ? null : concaveMask(pooled)
+        const own =
+          concave === null ? [pooled] : runs.map((r) => convolveSame(r, kernel, length, from, to, undefined, concave))
+        scan.feed(from, pooled, own, flat)
+      }
+      report(to - from)
+      done += to - from
+      await yieldToEventLoop()
+      job.throwIfCancelled()
     }
-    scan ??= new ConcaveScan(name, length, absent)
-    const flat = new Uint8Array(to - from)
-    const pooled = convolveSame(pooledRuns(runs, lo, hi), kernel, length, from, to, flat)
-    // Each track's own second derivative is read only inside a concave region
-    // of the pooled one, to score it — half the bases — so it is summed only there.
-    const concave = entries.length === 1 ? null : concaveMask(pooled)
-    const own =
-      concave === null ? [pooled] : runs.map((r) => convolveSame(r, kernel, length, from, to, undefined, concave))
-    scan.feed(from, pooled, own, flat)
-    report(to - from)
-    await yieldToEventLoop()
-    job.throwIfCancelled()
+  } catch (error) {
+    if (!(error instanceof KernelMemoryError)) throw error
+    report(-done)
+    return scanSequence(job, entries, name, length, kernel, report, 'js')
   }
+  if (fast !== null) return { regions: fast.finish(), absent }
   return { regions: (scan ?? new ConcaveScan(name, length, absent)).finish(), absent }
 }
 

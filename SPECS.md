@@ -8753,7 +8753,7 @@ hold; and on request a row per peak — its start and summit printed 1-based and
 replicates of one experiment put it — is said, naming the parameters that hit it, since its IDRs are
 then not a statement about reproducibility.
 
-**What a genome costs, and what that does not change.** Nine-tenths of a genome-wide call is the
+**What a genome costs, and what that does not change.** Nine-tenths of a genome-wide call was the
 convolution — on the validation's mouse ATAC-seq pair, a hundred float64 terms a base, one per constant
 piece of signal under the kernel, over 2.7 billion bases for the pooled track and each replicate — and
 it is summed **piece by piece**: each piece adds its term to every base whose window it meets, so that
@@ -8768,8 +8768,19 @@ held keeps the same regions in the same order as the cut over all (`StrongestReg
 track can give — leaves no order a subset reproduces, and the scan is then run again holding every
 candidate. And IDR's pseudo-values, which depend on the number of peaks and the parameters and not on
 which peak holds which rank, are bisected once a round for both replicates, where `idr` bisects once
-for each. None of the four moves a number (§18.10). On that pair, genome-wide on a 4-core 2.1 GHz Xeon,
-a call took 29 minutes and 1.27 GB and takes 10 minutes and 435 MB.
+for each.
+
+**And a window's whole scan runs in WebAssembly with SIMD** — its pieces, the tracks' mean, both
+convolutions and the flat mask, where the pooled track is concave, and the regions with their summits
+and scores — in a kernel of its own (`analysis/wasm/yapc.c`, built by `npm run wasm:yapc` and committed
+as base64, as Floyd–Warshall's is in §6.5), on the one thread the call already ran on. It does the
+TypeScript's operations in the TypeScript's order: two neighbouring bases to a vector, never two terms
+of one base, and nothing fused into a multiply-add, so its numbers are the TypeScript's to the last
+bit, at three times its speed. A memory per sequence holds the scan's state, so two calls in one worker
+never share one. The TypeScript is what runs where WebAssembly has no SIMD, and what scans a sequence
+again from its first base where the kernel's memory runs out part-way. None of this moves a number
+(§18.10). On that pair, genome-wide on a 4-core 2.1 GHz Xeon, a call took 29 minutes and 1.27 GB, and
+takes 3 minutes and 290 MB.
 
 **Over tracks and feature sets.** *Metaplot over a feature set*, in both **reference-point** (a
 point ± a flank) and
@@ -9396,6 +9407,13 @@ on one shorter than the kernel — and so is its flat mask; a replicate summed o
 whole convolution there; the cut made as candidates arrive keeps what the cut over all of them keeps,
 over ties at the cut and tracks that score −∞, with one track or two, and leaves the one-track figure
 the same values below it; and the pseudo-values shared by two replicates are each replicate's own.
+The WebAssembly kernel is held to the TypeScript the same way (`test/unit/yapc-kernel.test.ts`): a
+sequence it scans gives the TypeScript's regions, summits, flags and scores, compared with `Object.is`,
+and each window's pooled track, second derivatives and flat mask value for value — across the seams
+between windows, runs of zeros longer than the kernel, stretches with no interval, a track without the
+sequence, one track and two, three kernels, a sequence shorter than the kernel, and one with no rising
+edge, whose region at its first base yapc drops. The generated module carries the hash of the source it
+was built from, and a test fails until `npm run wasm:yapc` is run after `yapc.c` changes.
 
 **And beside the goldens, two notebooks at full size.** `notebooks/validation.qmd`, rendered with
 Quarto, runs nineteen analyses twice over public data, each file named by its accession and fetched
