@@ -5,7 +5,8 @@
  * second, with A called over the first half and B over the next 30 kb: A must
  * come out higher than B and than the rest, every stretch of it higher than
  * every stretch of B, and the grouping by a track's sign must find the same
- * boundary and write it out as intervals.
+ * boundary and write it out as intervals. Every track is read at its own
+ * resolution, never from a zoom level whose records straddle a stretch's edge.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -32,27 +33,46 @@ const TRACKS: Record<string, (at: number) => number> = {
   ramp: (at) => at / LENGTH,
 }
 
-/** Answers in 1 kb intervals over each region asked, as a bigWig's zoom level would. */
-function sample(entry: string, regions: Region[]): Promise<TrackSampleSet> {
+/** The track's own records, and its one zoom level's: each a mean over its span. */
+const OWN = 100
+const ZOOM = 896
+
+/** Every resolution a run asked for. */
+const asked: number[] = []
+
+/**
+ * Answers over each region asked as a bigWig does: from its zoom level where
+ * that is at most twice the bases per pixel asked for, as bbi picks one, and
+ * from its own records otherwise — a zoom record laid across an edge carries
+ * the far side's signal.
+ */
+function sample(entry: string, regions: Region[], basesPerPixel: number): Promise<TrackSampleSet> {
+  asked.push(basesPerPixel)
   const f = TRACKS[entry]
+  const width = ZOOM <= 2 * basesPerPixel ? ZOOM : OWN
+  const meanOver = (start: number): number => {
+    let sum = 0
+    for (let at = start; at < start + width; at++) sum += f(at)
+    return sum / width
+  }
   const answers: TrackSamples[] = regions.map((region) => {
-    const from = Math.floor(region.start / 1000)
-    const to = Math.ceil(region.end / 1000)
-    const starts = Int32Array.from({ length: to - from }, (_, i) => (from + i) * 1000)
+    const from = Math.floor(region.start / width)
+    const to = Math.ceil(region.end / width)
+    const starts = Int32Array.from({ length: to - from }, (_, i) => (from + i) * width)
     return {
       contig: region.contig,
       start: region.start,
       end: region.end,
       starts,
-      ends: Int32Array.from(starts, (start) => start + 1000),
-      values: Float32Array.from(starts, (start) => f(start + 500)),
+      ends: Int32Array.from(starts, (start) => start + width),
+      values: Float32Array.from(starts, meanOver),
       min: null,
       max: null,
       variant: null,
-      summary: false,
+      summary: width === ZOOM,
     }
   })
-  return Promise.resolve({ basesPerPixel: 1000, regions: answers, extent: null })
+  return Promise.resolve({ basesPerPixel, regions: answers, extent: null })
 }
 
 function compartments(): FeatureSet {
@@ -148,6 +168,21 @@ describe('groups from a feature set', () => {
     expect(notes.join(' ')).toContain('rest of the genome had no stretch')
     const figure = outputs.find((one): one is CurveOutput => one.kind === 'curve')
     expect(figure?.series).toHaveLength(2)
+  })
+
+  it('reads every track at its own resolution, never a zoom level’s', async () => {
+    asked.length = 0
+    const { outputs } = await run({ ...params, perFeature: true })
+    expect(new Set(asked)).toEqual(new Set([1]))
+    // A's stretches all read 0.7 and B's 0.5, the stretches either side of 50 kb
+    // too, where a zoom record across the edge would mix the two.
+    const groups = table(outputs, 'groupsignal-groups')
+    for (const row of groups?.rows ?? []) expect(Number(row.sd)).toBeLessThan(1e-9)
+    expect(Number(groups?.rows[0].mean)).toBeCloseTo(0.7, 6)
+    expect(Number(groups?.rows[1].mean)).toBeCloseTo(0.5, 6)
+    const perFeature = table(outputs, 'groupsignal-features')
+    expect(Number(perFeature?.rows[0].track1)).toBeCloseTo(0.7, 6)
+    expect(Number(perFeature?.rows[1].track1)).toBeCloseTo(0.5, 6)
   })
 
   it('refuses to run without a set, and says why', async () => {

@@ -1,6 +1,6 @@
 ---
 title: "chromosomix against reference implementations"
-subtitle: "Nineteen analyses on public data, each run by chromosomix and by the package it reproduces"
+subtitle: "Twenty-three analyses on public data, each run by chromosomix and by the package it reproduces"
 format:
   html:
     toc: true
@@ -26,7 +26,8 @@ sys.path.append(str((_here if _here.name == 'notebooks' else _here / 'notebooks'
 from rendered import Render
 
 R = Render('validation')
-print(R.head(also=f"Every command below, run again and timed: {R.anchor('timing', 'the timings')}. "
+print(R.head(also=f"Every command of §§ 1–19 below, run again and timed: "
+                  f"{R.anchor('timing', 'the timings')}. "
                   f"Beside this page: {R.download('commands.json')}, every command as it ran; "
                   f"{R.download('summary.tsv')}, every verdict; and {R.download('validation.txt')}, every "
                   "number its figures draw."))
@@ -36,7 +37,8 @@ Each analysis is run on the same public file twice: by **`chromosomix`**, the co
 the app's Analysis panel (the same code), and by the **reference package** it reproduces, called as
 its authors intend. The two outputs are matched bin by bin or call by call. Every command is printed
 as it ran, from `notebooks/work/validation/`, and written to `commands.json` there, from which
-`{python} R.link('timing')` runs each again and times it.
+`{python} R.link('timing')` runs each again and times it — those of §§ 20–23 aside, which are
+compared here and not timed.
 
 Every number a figure draws is one line of **`validation.txt`**, beside `commands.json`: a tidy table,
 one row per mark — a point, a vertex of a line, a hexagon of a density and its count, a cell of a
@@ -69,6 +71,10 @@ the mean of 100, which is what is written.
 | 17 | Motif search | mm10, chr19 | `seqkit locate` |
 | 18 | Track correlation | mouse ATAC-seq, two replicates, and insulation, chr19, 100 bp to 10 kb | pyBigWig and SciPy; deepTools `multiBigwigSummary`, `plotCorrelation` |
 | 19 | Loop calling | mouse Hi-C, 10 kb | `cooltools.dots` |
+| 20 | Cis and trans per sequence | chicken Hi-C, 100 kb | `cooltools.expected_cis`, `expected_trans` |
+| 21 | Saddle | mouse Hi-C, 100 kb, § 3's E1 | `cooltools.saddle` |
+| 22 | Fraction of signal in features | mouse ATAC-seq, two replicates, chr19; peaks and promoters | pyBigWig and NumPy |
+| 23 | Signal by group | mouse ATAC-seq, two replicates, chr19; § 3's compartments | pyBigWig, NumPy and SciPy |
 
 **To render.** `npm run build:cli` at the repository root builds this checkout's `chromosomix`.
 yapc needs an environment of its own (numpy < 1.24; the recipe is in the yapc section of
@@ -346,6 +352,24 @@ def relative_difference(a, b):
     return np.abs(a - b) / np.maximum(np.maximum(np.abs(a), np.abs(b)), 1e-300)
 
 
+def rounded(decimals):
+    """How far rounding to `decimals` places moves a number: half the last place, and a hair over it for the
+    float the difference is taken in."""
+    return 0.5 * 10.0 ** -decimals * (1 + 1e-6)
+
+
+#: The edges a figure counts differences between two tools in: four to a decade, from 10⁻⁹ to 1.
+DIFFERENCE_EDGES = np.logspace(-9, 0, 37)
+
+
+def differences(values):
+    """How many of `values` fall between each two of `DIFFERENCE_EDGES`, as `ax.stairs` draws them: the
+    first counts every one below 10⁻⁹, an exact 0 among them. A figure of tens of thousands of cells
+    draws, and writes to validation.txt, three dozen counts rather than a point a cell."""
+    counts, _ = np.histogram(np.clip(values, DIFFERENCE_EDGES[0], DIFFERENCE_EDGES[-1]), DIFFERENCE_EDGES)
+    return counts, DIFFERENCE_EDGES
+
+
 # Blue is chromosomix, orange the reference.
 APP_COLOUR, REF = '#2a78d6', '#eb6834'
 INK, INK2, GRID, SURFACE, MISSING = '#0b0b0b', '#52514e', '#e7e6e2', '#fcfcfb', '#efeeea'
@@ -613,6 +637,8 @@ PROGRAMS = {'bedtools': program_version([BEDTOOLS, '--version']),
 TOOL_VERSIONS = {'chromosomix': APP_VERSION, 'yapc 0.1': f'{YAPC}, with idr {IDR}',
                  'Boost-HiC': PROGRAMS['Boost-HiC (GitHub)'], 'deepTools': VERSIONS['deeptools'],
                  'bioframe, Biopython': f"{VERSIONS['bioframe']}, {VERSIONS['biopython']}",
+                 'pyBigWig, NumPy': f"{VERSIONS['pyBigWig']}, {VERSIONS['numpy']}",
+                 'pyBigWig, SciPy': f"{VERSIONS['pyBigWig']}, {VERSIONS['scipy']}",
                  **VERSIONS, **PROGRAMS}
 show(pd.DataFrame([{'package': 'chromosomix', 'version': APP_VERSION},
                    *[{'package': k, 'version': v} for k, v in VERSIONS.items()],
@@ -2828,6 +2854,584 @@ record('Loop calling', 'mouse Hi-C, 10 kb, every chromosome', f"cooltools {VERSI
        'Identical (to the digits written)' if LC_EXACT else 'Differs', apps=['loops'], refs=['cooltools-dots'])
 ```
 
+## 20 · Cis and trans per sequence (cooltools)
+
+Per sequence, its contacts with both ends on it (cis) and with one end elsewhere (trans), the cis
+fraction and the ratio of the two; between every pair of sequences, their contacts, and those over what
+indifference predicts from the two sequences' own trans contacts, `T_a·T_b/2T`, scaled so that the
+expectation sums to the trans contacts there are (§18.8). cooltools has no such task, but its two
+summaries hold every one of those sums: `expected_cis`, added up over every diagonal of a sequence, the
+main one included, is the sequence's cis contacts, and `expected_trans` the contacts between each pair;
+the ratio to indifference is NumPy's, over cooltools' sums. The first of § 7's chicken maps at 100 kb,
+its 36 sequences running from the macrochromosomes to microchromosomes a few bins long, raw and
+balanced. The table per sequence is written to whole contacts and three decimals and the square between
+sequences to six digits, so the contacts between two sequences are compared in the square, drawn with
+`--normalise raw`, those within one in the table, and the ratio to indifference in the square the task
+draws by default.
+
+| | chromosomix | cooltools |
+|---|---|---|
+| within a sequence | `cistrans`, its table | `expected_cis(ignore_diags=0)`, every diagonal of the sequence added up |
+| between two | its square, `--normalise raw` | `expected_trans` |
+| counts | raw (`--no-balance`) and balanced (the default) | `clr_weight_name=None`, and `'weight'` |
+| against indifference | its square, `--normalise enrichment` (the default) | NumPy over `expected_trans`'s sums |
+
+```{python}
+CT = WORK / 'cistrans'
+CHICKEN_100K = URIS[LABELS[0]]
+clr_ch = cooler.Cooler(f'{CHICKEN[0]}::/resolutions/{RES}')
+SEQUENCES = clr_ch.chromnames
+#: name: (label, chromosomix's arguments).
+CT_RUNS = {'raw': ('raw counts', ['--no-balance', '--normalise', 'raw']),
+           'balanced': ('balanced', ['--normalise', 'raw']),
+           'indifference': ('balanced, against indifference', [])}
+for key, (label, extra) in CT_RUNS.items():
+    mr('cistrans', CHICKEN_100K, *extra, out=CT / key, name=f'cistrans-{key}', analysis='Cis and trans per sequence',
+       label=label, bench=False)
+for kind, weight in (('raw', []), ('balanced', ['weight'])):
+    reference(f'cooltools-cistrans-{kind}', 'Cis and trans per sequence', 'cooltools',
+              [PYTHON, script('cooltools_cistrans'), CHICKEN_100K, OUT, THREADS, *weight],
+              out=CT / f'cooltools-{kind}.tsv', label=kind, threads=THREADS, bench=False)
+
+
+def sums(kind):
+    """cooltools' sums as one square, the sequences in the file's order: cis on the diagonal, the pairs off it."""
+    at = {name: i for i, name in enumerate(SEQUENCES)}
+    held = np.zeros((len(SEQUENCES), len(SEQUENCES)))
+    for a, b, contacts in pd.read_csv(CT / f'cooltools-{kind}.tsv', sep='\t').itertuples(index=False):
+        held[at[a], at[b]] = held[at[b], at[a]] = 0 if np.isnan(contacts) else contacts
+    return held
+
+
+def against_indifference(held):
+    """Each pair's contacts over `T_a·T_b/2T`, scaled to sum to the trans contacts there are (§18.8)."""
+    between = held - np.diag(np.diag(held))
+    trans = between.sum(axis=1)
+    total = trans.sum() / 2
+    expected = 4 * total ** 2 / (4 * total ** 2 - (trans ** 2).sum()) * np.outer(trans, trans) / (2 * total)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        ratio = np.where(expected > 0, between / expected, np.nan)
+    np.fill_diagonal(ratio, np.nan)
+    return ratio
+
+
+def drawn_square(key):
+    """The square chromosomix wrote, in the file's order of sequences."""
+    frame = table(one(CT / key, '*.cistrans-matrix.tsv'))
+    return frame.set_index(frame.columns[0]).loc[SEQUENCES, SEQUENCES].to_numpy(float)
+
+
+BINS_CH = np.array([np.diff(clr_ch.extent(name))[0] for name in SEQUENCES])
+OFF = ~np.eye(len(SEQUENCES), dtype=bool)
+ct = {}
+for kind in ('raw', 'balanced'):
+    held = sums(kind)
+    cis = np.diag(held).copy()
+    trans = (held - np.diag(cis)).sum(axis=1)
+    rows = table(one(CT / kind, '*.cistrans.tsv')).set_index('sequence').loc[SEQUENCES]
+    with np.errstate(invalid='ignore', divide='ignore'):
+        shares = {'fraction': np.where(cis + trans > 0, cis / (cis + trans), np.nan),
+                  'ratio': np.where(cis > 0, trans / cis, np.nan), 'perBin': (cis + trans) / BINS_CH}
+    pairs = drawn_square(kind)
+    ct[kind] = dict(held=held, cis=cis, trans=trans, rows=rows, pairs=pairs, fraction=shares['fraction'],
+                    bins=bool((rows['bins'].to_numpy() == BINS_CH).all()),
+                    sums=max(np.abs(rows[column].to_numpy(float) - value).max()
+                             for column, value in (('cis', cis), ('trans', trans), ('total', cis + trans))),
+                    shares={column: np.nanmax(np.abs(rows[column].to_numpy(float) - value))
+                            for column, value in shares.items()},
+                    shares_gaps=all((np.isfinite(rows[column].to_numpy(float)) == np.isfinite(value)).all()
+                                    for column, value in shares.items()),
+                    between=relative_difference(pairs[OFF], held[OFF]).max())
+oe_app, oe_ref = drawn_square('indifference'), against_indifference(ct['balanced']['held'])
+oe_both = np.isfinite(oe_app) & np.isfinite(oe_ref)
+oe_rel = relative_difference(oe_app[oe_both], oe_ref[oe_both]).max()
+OE_GAPS = bool((np.isfinite(oe_app) == np.isfinite(oe_ref)).all())
+raw_, bal_ = ct['raw'], ct['balanced']
+measures({
+    'sequences; their bins as the file has them': f"{len(SEQUENCES)}; {'yes' if raw_['bins'] and bal_['bins'] else 'no'}",
+    'raw: cis, trans and total of every sequence, max |difference|': f"{raw_['sums']:g}",
+    'raw: contacts between two sequences, max relative difference': f"{raw_['between']:.1e}",
+    'balanced: cis, trans and total, max |difference| (whole contacts written)': f"{bal_['sums']:.2f}",
+    'balanced: contacts between two sequences, max relative difference': f"{bal_['between']:.1e}",
+    'cis fraction, trans / cis, contacts per bin: max |difference| (3, 3 and 2 decimals written)':
+        ', '.join(f"{max(raw_['shares'][c], bal_['shares'][c]):.1e}" for c in ('fraction', 'ratio', 'perBin')),
+    'against indifference, max relative difference; the same pairs without a value':
+        f"{oe_rel:.1e}; {'yes' if OE_GAPS else 'no'}",
+})
+```
+
+```{python}
+#| label: fig-cistrans
+#| fig-cap: "Cis and trans per sequence, chicken Hi-C at 100 kb, the sequences in the file's order. a, the cis fraction of every sequence, balanced; b, every sum, raw and balanced — a sequence's cis and trans contacts and the contacts between every pair — against cooltools'; c, every pair against indifference, as chromosomix draws it."
+TEXT['ct_n'] = f'{len(SEQUENCES)}'
+TEXT['ct_pairs'] = f'{len(SEQUENCES) * (len(SEQUENCES) - 1) // 2:,}'
+TEXT['ct_raw'] = 'the same' if raw_['sums'] == 0 and raw_['between'] == 0 else 'not the same'
+TEXT['ct_bal_sums'] = f"{bal_['sums']:.2f}"
+TEXT['ct_bal_pairs'] = f"{bal_['between']:.1e}"
+TEXT['ct_oe'] = f'{oe_rel:.1e}'
+TEXT['ct_oe_gaps'] = ('the same pairs left without one' if OE_GAPS else 'different pairs left without one')
+CT_EXACT = (raw_['sums'] == 0 and raw_['between'] == 0 and bal_['sums'] <= rounded(0) and bal_['between'] < 6e-6
+            and all(ct[k]['shares']['fraction'] <= rounded(3) and ct[k]['shares']['ratio'] <= rounded(3)
+                    and ct[k]['shares']['perBin'] <= rounded(2) and ct[k]['shares_gaps'] and ct[k]['bins'] for k in ct)
+            and oe_rel < 6e-6 and OE_GAPS)
+#: A sequence's name on an axis: `chr` dropped, and an unplaced scaffold's long tail.
+SHORT_SEQ = [name.removeprefix('chr').split('_')[0] + ('…' if '_' in name else '') for name in SEQUENCES]
+# The microchromosomes, chr16 on, and the five largest, against indifference.
+numbered = {int(name[3:]): i for i, name in enumerate(SEQUENCES) if name[3:].isdigit()}
+MACRO, MICRO = [numbered[k] for k in range(1, 6)], [i for k, i in numbered.items() if k >= 16]
+TEXT['ct_micro'] = f'{np.nanmedian(oe_app[np.ix_(MICRO, MICRO)]):.2f}'
+TEXT['ct_macro_micro'] = f'{np.nanmedian(oe_app[np.ix_(MACRO, MICRO)]):.2f}'
+
+fig, axes = plt.subplots(1, 3, figsize=(12, 4.3), layout='constrained', width_ratios=[1.25, 1, 1.15])
+ax = axes[0]
+x = np.arange(len(SEQUENCES))
+ax.bar(x, bal_['rows']['fraction'].to_numpy(float), width=0.75, color=APP_COLOUR, label='chromosomix')
+ax.scatter(x, bal_['fraction'], s=12, color=REF, zorder=3, label='cooltools')
+ax.set_xticks(x, SHORT_SEQ, rotation=90, fontsize=6)
+ax.set(ylim=(0, 1), xlabel='sequence', ylabel='cis fraction, balanced', title='a  cis fraction')
+ax.legend(loc='upper left')
+ax = axes[1]
+upper = np.triu(OFF)
+for kind, colour in (('raw', APP_COLOUR), ('balanced', '#1baf7a')):
+    v = ct[kind]
+    ref_all = np.r_[v['cis'], v['trans'], v['held'][upper]]
+    app_all = np.r_[v['rows']['cis'].to_numpy(float), v['rows']['trans'].to_numpy(float), v['pairs'][upper]]
+    seen = (ref_all > 0) & (app_all > 0)
+    ax.scatter(ref_all[seen], app_all[seen], s=8, color=colour, alpha=0.7, lw=0, label=kind)
+every_sum = np.concatenate([np.r_[ct[k]['cis'], ct[k]['trans'], ct[k]['held'][upper]] for k in ct])
+identity(ax, every_sum[every_sum > 0].min(), every_sum.max())
+ax.set(xscale='log', yscale='log', xlabel='cooltools', ylabel='chromosomix', title='b  every sum')
+ax.legend(loc='upper left')
+ax = axes[2]
+diverging = plt.get_cmap('RdBu_r').copy()
+diverging.set_bad(MISSING)
+bar = square(ax, oe_app, 'c  against indifference', cmap=diverging, norm=LogNorm(1 / 4, 4),
+             label='observed / expected')
+bar.set_ticks([1 / 4, 1 / 2, 1, 2, 4], labels=['¼', '½', '1', '2', '4'])
+bar.minorticks_off()
+ax.set_xticks(x, SHORT_SEQ, rotation=90, fontsize=5)
+ax.set_yticks(x, SHORT_SEQ, fontsize=5)
+drawn('fig-cistrans')
+```
+
+Raw, the two tools count `{python} TEXT['ct_raw']` contacts on each of the
+`{python} TEXT['ct_n']` sequences and between each of their `{python} TEXT['ct_pairs']` pairs.
+Balanced, the table's sums are within `{python} TEXT['ct_bal_sums']` of cooltools', the whole contacts
+it writes, and the pairs within `{python} TEXT['ct_bal_pairs']`, the six digits the square is written
+to; every cis fraction and ratio is within its three decimals; and against indifference every pair is
+within `{python} TEXT['ct_oe']` of NumPy's over cooltools' sums, with `{python} TEXT['ct_oe_gaps']`.
+The square is the karyotype's: the microchromosomes, chr16 on, meet one another at a median of
+`{python} TEXT['ct_micro']` times what indifference predicts, and the five largest chromosomes meet
+them at `{python} TEXT['ct_macro_micro']`.
+
+```{python}
+record('Cis and trans per sequence', f'chicken Hi-C, 100 kb, {len(SEQUENCES)} sequences, raw and balanced',
+       f"cooltools {VERSIONS['cooltools']}",
+       f"raw: {TEXT['ct_raw']} contacts within and between every sequence; balanced: the pairs within "
+       f"{TEXT['ct_bal_pairs']}; against indifference within {TEXT['ct_oe']} of NumPy over cooltools' sums",
+       'Identical (to the digits written)' if CT_EXACT else 'Differs', apps=[f'cistrans-{key}' for key in CT_RUNS],
+       refs=['cooltools-cistrans-raw', 'cooltools-cistrans-balanced'])
+```
+
+## 21 · Saddle (cooltools)
+
+The saddle § 3's compartment call draws for each chromosome: its bins in 50 groups at the quantiles of
+E1 over the chromosome, and the mean observed/expected of every pair of groups, the first two
+diagonals left out as the call leaves them out; and AA, BB and AB, the means of its corners over the
+fifth of the groups at each end (§18.8). cooltools' `saddle`, over each chromosome alone, its expected
+`expected_cis`'s unsmoothed `balanced.avg`, is handed chromosomix's own E1 as its track, from the bigWig
+chromosomix writes, cut into its groups by cooltools' `digitize`: what is compared is the saddle, the
+eigenvector being § 3's to compare. AA, BB and AB are taken from cooltools' saddle as chromosomix takes
+them from its own.
+
+| | chromosomix | cooltools |
+|---|---|---|
+| groups | `--quantiles 50` (the default), E1's quantiles over the chromosome | `digitize(n_bins=50, qrange=(0, 1))`, over the chromosome (`view_df`) |
+| diagonals left out | 2 (the default) | `min_diag=2` |
+| expected | the chromosome's decay with distance | `expected_cis(ignore_diags=2, smooth=False)`, `balanced.avg` |
+| track | its own E1 | chromosomix's E1, from its bigWig |
+
+```{python}
+SD = WORK / 'saddle'
+SD.mkdir(parents=True, exist_ok=True)
+SADDLE_GROUPS = 50
+# chromosomix's E1 from the bigWig it writes, a float32 a bin, where its table keeps six digits: two
+# bins six digits cannot tell apart may lie either side of a group's edge. As cooltools reads a track,
+# and under a name that changes with it, so that the reference runs again when the eigenvector does.
+handle = pyBigWig.open(str(one(CMP / 'app', '*.compartment-e1.bw')))
+e1_held = {(chrom, start): value
+           for chrom in handle.chroms() for start, _, value in handle.intervals(chrom) or ()}
+handle.close()
+e1_bins = clr100.bins()[['chrom', 'start', 'end']][:]
+e1_track = e1_bins.assign(E1=[e1_held.get(at, np.nan) for at in zip(e1_bins['chrom'], e1_bins['start'])]).to_csv(
+    sep='\t', index=False)
+E1_TRACK = SD / f"e1-{hashlib.sha256(e1_track.encode()).hexdigest()[:12]}.tsv"
+if not E1_TRACK.exists():
+    E1_TRACK.write_text(e1_track)
+reference('cooltools-saddle', 'Saddle', 'cooltools',
+          [PYTHON, script('cooltools_saddle'), MOUSE_100K, E1_TRACK, SADDLE_GROUPS, OUT, ','.join(COMPARED)],
+          out=SD / 'cooltools.npz', bench=False)
+
+saddles_ref = np.load(SD / 'cooltools.npz')
+CORNER = max(1, round(SADDLE_GROUPS / 5))
+
+
+def corners(cells):
+    """AA, BB and AB as chromosomix takes them: each corner's mean over the cells that have a value."""
+    k = CORNER
+    return {'AA': np.nanmean(cells[-k:, -k:]), 'BB': np.nanmean(cells[:k, :k]), 'AB': np.nanmean(cells[:k, -k:])}
+
+
+sd, rows = {}, []
+for chrom in COMPARED:
+    path = one(CMP / 'app', f'*.compartment-saddle-{chrom}.tsv')
+    frame = table(path)
+    app = frame.set_index(frame.columns[0]).to_numpy(float)
+    stated = {k: float(v) for k, v in re.findall(r'^# (AA|BB|AB): (\S+)$', path.read_text(), flags=re.M)}
+    ref = saddles_ref[chrom]
+    both = np.isfinite(app) & np.isfinite(ref)
+    expected_corners = corners(ref)
+    sd[chrom] = dict(app=app, stated=stated, corners=expected_corners, rel=relative_difference(app, ref)[both])
+    rows.append({'chromosome': chrom, 'the same cells without a value': bool((np.isfinite(app) == np.isfinite(ref)).all()),
+                 'max relative difference': sd[chrom]['rel'].max(),
+                 **{f'{k}, chromosomix / cooltools': f"{stated[k]:.2f} / {v:.4f}" for k, v in expected_corners.items()}})
+saddle_table = pd.DataFrame(rows)
+show(saddle_table, **{'max relative difference': '{:.1e}'})
+```
+
+```{python}
+#| label: fig-saddle
+#| fig-cap: "Saddles, mouse Hi-C at 100 kb, by chromosomix's E1. a, chr2's, as chromosomix draws it; b, every cell of every chromosome's against cooltools'; c, the three corners of every chromosome."
+TEXT['sd_n'] = f'{len(COMPARED)}'
+TEXT['sd_rel'] = f"{saddle_table['max relative difference'].max():.1e}"
+corner_gap = max(abs(v['stated'][k] - v['corners'][k]) for v in sd.values() for k in ('AA', 'BB', 'AB'))
+TEXT['sd_corners'] = f'{corner_gap:.1e}'
+SADDLE_GAPS = saddle_table['the same cells without a value'].all()
+TEXT['sd_gaps'] = 'the same cells' if SADDLE_GAPS else 'not the same cells'
+SADDLE_EXACT = SADDLE_GAPS and saddle_table['max relative difference'].max() < 6e-6 and corner_gap <= rounded(2)
+
+fig, axes = plt.subplots(1, 3, figsize=(12, 3.9), layout='constrained', width_ratios=[1, 1.1, 1])
+diverging = plt.get_cmap('RdBu_r').copy()
+diverging.set_bad(MISSING)
+bar = square(axes[0], sd['chr2']['app'], 'a  chr2', cmap=diverging, norm=LogNorm(1 / 2, 2), label='observed / expected')
+bar.set_ticks([1 / 2, 1, 2], labels=['½', '1', '2'])
+bar.minorticks_off()
+axes[0].set(xlabel='E1, B to A', ylabel='E1, B to A')
+ax = axes[1]
+ax.stairs(*differences(np.concatenate([v['rel'] for v in sd.values()])), color=APP_COLOUR, lw=1.6,
+          label='every cell')
+ax.set(xscale='log', yscale='log', xlabel='|chromosomix / cooltools − 1|, 0 at 10⁻⁹', ylabel='cells',
+       title='b  every cell')
+ax = axes[2]
+for name, colour in (('AA', APP_COLOUR), ('BB', REF), ('AB', '#1baf7a')):
+    ax.scatter([v['corners'][name] for v in sd.values()], [v['stated'][name] for v in sd.values()], s=18,
+               color=colour, label=name, zorder=3)
+every_corner = [v['corners'][k] for v in sd.values() for k in ('AA', 'BB', 'AB')]
+identity(ax, min(every_corner), max(every_corner))
+ax.set(xlabel='cooltools', ylabel='chromosomix (two decimals)', title='c  AA, BB and AB')
+ax.legend(loc='upper left')
+drawn('fig-saddle')
+```
+
+Every cell of the `{python} TEXT['sd_n']` chromosomes' saddles agrees with cooltools' within
+`{python} TEXT['sd_rel']`, the six digits chromosomix writes, with `{python} TEXT['sd_gaps']` left
+without a value, and AA, BB and AB within `{python} TEXT['sd_corners']`, their two decimals.
+
+```{python}
+record('Saddle', f"mouse Hi-C, 100 kb, § 3's E1, {len(COMPARED)} chromosomes", f"cooltools {VERSIONS['cooltools']}",
+       f"every cell within {TEXT['sd_rel']}, the corners within {TEXT['sd_corners']}",
+       'Identical (float32)' if SADDLE_EXACT else 'Differs',
+       apps=['compartments'], refs=['cooltools-saddle'])
+```
+
+## 22 · Fraction of signal in features (pyBigWig)
+
+ChIP-seq's FRiP, over a track: the signal inside a set of intervals over the whole of it, the signal
+being an area, value × bases, and the intervals merged first so that a base two of them share counts
+once; beside it, the share of the sequences' bases the set covers, and the enrichment, their ratio
+(§18.8). The reference is pyBigWig's exact sum over each interval, `stats(..., type='sum', exact=True)`,
+and NumPy. § 5's two ATAC-seq replicates on chr19, over two sets: § 5's peaks, yapc's at IDR ≤ 0.05, and
+§ 15's promoters, which overlap wherever two transcripts start alike — and every feature of each on its
+own (`--perFeature`), its signal and its mean over the bases with a value. chromosomix reads the
+features finely, at a fiftieth of their median width, and the whole track coarsely, at a two
+hundred-thousandth of the assembly, from a zoom level where the file has one that fine: away from a
+boundary, a sum weighted by span is the same area at any resolution, and a whole sequence has almost no
+boundaries.
+
+| | chromosomix | pyBigWig and NumPy |
+|---|---|---|
+| features | merged where they overlap or touch | merged likewise, as `bedtools merge` merges them |
+| signal | Σ value × bases, read at a fiftieth of the features' median width | `stats(..., type='sum', exact=True)` |
+| the whole track | read at a two hundred-thousandth of the assembly | the same exact sum, over every sequence the header declares |
+| each feature | `--perFeature`: its signal, and its mean over the bases with a value | `type='sum'`, `type='mean'`, exact |
+
+```{python}
+FR = WORK / 'frip'
+#: name: (label, the feature set).
+FRIP_SETS = {'peaks': ('ATAC-seq peaks', PEAKS_BED), 'promoters': ('promoters', PROMOTERS)}
+for key, (label, bed) in FRIP_SETS.items():
+    mr('frip', '--tracks', ','.join(rel(path) for path in REPS), '--features', bed, '--perFeature', out=FR / key,
+       name=f'frip-{key}', analysis='Fraction of signal in features', label=label, bench=False)
+    reference(f'pybigwig-frip-{key}', 'Fraction of signal in features', 'pyBigWig, NumPy',
+              [PYTHON, script('pybigwig_frip'), bed, OUT, *REPS], out=FR / f'pybigwig-{key}',
+              made=FR / f'pybigwig-{key}-frip.tsv', label=label, bench=False)
+
+#: The columns of a FRiP chromosomix writes, and the places it writes each to.
+FRIP_PLACES = {'frip': 4, 'covered': 4, 'enrichment': 2, 'inFeature': 3}
+KEYS = ['track', 'contig', 'start', 'end']
+REPLICATE = {path.name: f'rep. {k + 1}' for k, path in enumerate(REPS)}
+fr, rows = {}, []
+for key, (label, bed) in FRIP_SETS.items():
+    app = table(one(FR / key, '*.frip.tsv')).set_index('track')
+    ref = pd.read_csv(FR / f'pybigwig-{key}-frip.tsv', sep='\t').set_index('track').loc[app.index]
+    total = relative_difference(app['totalSignal'].to_numpy(float), ref['totalSignal'].to_numpy(float))
+    # Every feature by its track and coordinates; one written twice is the same numbers twice.
+    each = (table(one(FR / key, '*.frip-features.tsv')).drop_duplicates(KEYS)
+            .merge(pd.read_csv(FR / f'pybigwig-{key}-features.tsv', sep='\t').drop_duplicates(KEYS), on=KEYS,
+                   how='outer', suffixes=('_app', '_ref'), indicator=True))
+    paired = each[each['_merge'] == 'both']
+    signal_gap = np.abs(paired['signal_app'] - paired['signal_ref'])
+    mean_gap = np.abs(paired['mean_app'] - paired['mean_ref'])
+    gaps = {column: np.abs(app[column].to_numpy(float) - ref[column].to_numpy(float)) for column in FRIP_PLACES}
+    fr[key] = dict(app=app, ref=ref, paired=paired, unpaired=int((each['_merge'] != 'both').sum()),
+                   inside=np.abs(app['signal'] - ref['signal']).max(), total=total.max(),
+                   places={column: gap.max() for column, gap in gaps.items()},
+                   # Each within the places it is written to, once the whole track's own difference, which
+                   # moves a FRiP and an enrichment in proportion, is allowed for.
+                   within=all((gap <= rounded(FRIP_PLACES[c]) + np.abs(ref[c].to_numpy(float)) * total).all()
+                              for c, gap in gaps.items()),
+                   # Two decimals and four written, beside the float32 a bigWig holds its values in.
+                   features=bool((signal_gap <= rounded(2) + 1e-6 * paired['signal_ref'].abs()).all()
+                                 and (mean_gap <= rounded(4) + 1e-6 * paired['mean_ref'].abs()).all()
+                                 and (np.isnan(paired['mean_app']) == np.isnan(paired['mean_ref'])).all()),
+                   signal_gap=signal_gap.max(), mean_gap=mean_gap.max())
+    for track in app.index:
+        rows.append({'set': label, 'track': REPLICATE[track], 'FRiP, chromosomix / exact':
+                     f"{app.loc[track, 'frip']:.4f} / {ref.loc[track, 'frip']:.6f}",
+                     'covered': f"{app.loc[track, 'covered']:.4f} / {ref.loc[track, 'covered']:.6f}",
+                     'enrichment': f"{app.loc[track, 'enrichment']:.2f} / {ref.loc[track, 'enrichment']:.4f}",
+                     'signal inside, |difference|': abs(app.loc[track, 'signal'] - ref.loc[track, 'signal']),
+                     'signal in all, relative difference': relative_difference(app.loc[track, 'totalSignal'],
+                                                                               ref.loc[track, 'totalSignal'])})
+display(show(pd.DataFrame(rows),
+             **{'signal inside, |difference|': '{:.2f}', 'signal in all, relative difference': '{:.1e}'}))
+measures({f'{FRIP_SETS[k][0]}: features; unpaired; signal, mean, max |difference| (2 and 4 decimals written)':
+          f"{len(v['paired']) // len(REPS):,}; {v['unpaired']}; {v['signal_gap']:.4f}, {v['mean_gap']:.1e}"
+          for k, v in fr.items()})
+```
+
+```{python}
+#| label: fig-frip
+#| fig-cap: "FRiP of two mouse ATAC-seq replicates on chr19. a, every feature's signal, both sets and both tracks, against pyBigWig's exact sum; b, every feature's mean over the bases with a value; c, the FRiP of each track over each set, and the share of chr19 the set covers."
+TEXT['fr_features'] = f"{sum(len(v['paired']) for v in fr.values()) // len(REPS):,}"
+TEXT['fr_inside'] = f"{max(v['inside'] for v in fr.values()):.2f}"
+TEXT['fr_total'] = f"{max(v['total'] for v in fr.values()):.1e}"
+TEXT['fr_frip'] = f"{max(v['places']['frip'] for v in fr.values()):.1e}"
+FRIP_EXACT = all(v['inside'] <= rounded(0) and v['features'] and v['unpaired'] == 0 and v['within']
+                 for v in fr.values())
+TEXT['fr_places'] = 'every one' if FRIP_EXACT else 'not every one'
+
+fig, axes = plt.subplots(1, 3, figsize=(12, 3.9), layout='constrained', width_ratios=[1, 1, 1.05])
+every = pd.concat([v['paired'] for v in fr.values()])
+agreement(axes[0], every['signal_ref'].to_numpy(float), every['signal_app'].to_numpy(float), 'pyBigWig, exact',
+          'chromosomix', 'a  every feature’s signal', scale='log')
+agreement(axes[1], every['mean_ref'].to_numpy(float), every['mean_app'].to_numpy(float), 'pyBigWig, exact',
+          'chromosomix', 'b  every feature’s mean', scale='log')
+ax = axes[2]
+at = 0
+ticks, names = [], []
+for key, (label, _) in FRIP_SETS.items():
+    v = fr[key]
+    for track in v['app'].index:
+        ax.bar(at, v['app'].loc[track, 'frip'], width=0.7, color=APP_COLOUR,
+               label='chromosomix' if at == 0 else None, gid='chromosomix')
+        ax.scatter(at, v['ref'].loc[track, 'frip'], s=26, color=REF, zorder=3,
+                   label='pyBigWig, exact' if at == 0 else None, gid='pyBigWig, exact')
+        ticks.append(at)
+        names.append(f"{key},\n{REPLICATE[track]}")
+        at += 1
+    ax.axhline(v['app']['covered'].iloc[0], xmin=(at - 2) / 4, xmax=at / 4, color=INK2, lw=1, ls=(0, (4, 3)),
+               gid=f'{label}: the share of chr19 covered')
+ax.set_xticks(ticks, names, fontsize=8)
+ax.set(xlim=(-0.5, at - 0.5), ylabel='FRiP', title='c  each set, each track; dashed, chr19 covered')
+ax.legend(loc='upper right')
+drawn('fig-frip')
+```
+
+Every one of the `{python} TEXT['fr_features']` features has its signal and its mean on both tracks
+within the rounding of the two and four decimals chromosomix writes them to, and inside the merged
+features the signal is pyBigWig's exact sum within `{python} TEXT['fr_inside']`, the rounding of the
+whole number it is written as. The whole track, read from a zoom level, is within
+`{python} TEXT['fr_total']` of its exact sum, which moves a FRiP by less than the last of its four
+decimals: `{python} TEXT['fr_places']` of the FRiPs, the shares covered and the enrichments is within
+the rounding of the places it is written to, the FRiP within `{python} TEXT['fr_frip']`.
+
+```{python}
+record('Fraction of signal in features', 'mouse ATAC-seq, 2 replicates, chr19; § 5’s peaks and § 15’s promoters',
+       f"pyBigWig {VERSIONS['pyBigWig']}, NumPy {VERSIONS['numpy']}",
+       f"every feature's signal and mean to the digits written; inside, the exact sum; the whole track, from a "
+       f"zoom level, within {TEXT['fr_total']}; FRiP within {TEXT['fr_frip']}",
+       'The same FRiP to its four decimals and every feature to the digits written, the whole track read from a '
+       'zoom level' if FRIP_EXACT else 'Differs',
+       apps=[f'frip-{key}' for key in FRIP_SETS], refs=[f'pybigwig-frip-{key}' for key in FRIP_SETS])
+```
+
+## 23 · Signal by group (pyBigWig and SciPy)
+
+A track compared between groups of the genome (§18.8): the groups are a feature set's names and the
+stretch of the genome it does not cover, each cut on the bin grid into stretches of at most a bin; a
+stretch's value is the track's exact mean over the bases it has a value for; and the groups are
+summarised and tested by ranks — Mann–Whitney pair by pair and Kruskal–Wallis over all of them, every P
+adjusted with every other (Benjamini–Hochberg). The groups are § 3's compartment call on chr19, A and B,
+and the rest of chr19, which the call leaves out; the tracks are § 5's two ATAC-seq replicates. The
+reference cuts the stretches by the same rule, reads each one's mean with pyBigWig, and summarises and
+tests them with NumPy and SciPy. chromosomix writes every stretch's mean, a group's ascending, as the
+violin it draws, and those are compared with the reference's rank for rank in each group; its summaries
+and tests are compared with NumPy's and SciPy's, each to the places it is written to.
+
+| | chromosomix | pyBigWig, NumPy and SciPy |
+|---|---|---|
+| groups | `--features`, § 3's call, `--split name`; the rest of chr19 (`--outside`, the default) | the BED's names; what it does not cover |
+| stretches | at most a bin, `--resolution 10000` | cut by the same rule |
+| a stretch's value | its mean, at the track's own resolution | `stats(..., type='mean', exact=True)` |
+| summaries | n, mean, SD, median, quartiles, the mean less the others' | NumPy: `std(ddof=1)`, `quantile` |
+| tests | Mann–Whitney, Kruskal–Wallis, tie-corrected; Benjamini–Hochberg | `mannwhitneyu` (asymptotic, continuity-corrected), `kruskal`; `false_discovery_control` |
+
+```{python}
+GS = WORK / 'groupsignal'
+GS.mkdir(parents=True, exist_ok=True)
+GS_BIN = 10_000
+# § 3's compartment call, under a name that changes with it, so that the reference runs again when it does.
+ab_call = one(CMP / 'app', '*.compartment-ab.bed').read_text()
+AB_CALL = GS / f"ab-{hashlib.sha256(ab_call.encode()).hexdigest()[:12]}.bed"
+if not AB_CALL.exists():
+    AB_CALL.write_text(ab_call)
+mr('groupsignal', '--tracks', ','.join(rel(path) for path in REPS), '--features', AB_CALL, '--split', 'name',
+   '--resolution', GS_BIN, out=GS / 'app', name='groupsignal', analysis='Signal by group', bench=False)
+reference('pybigwig-groupsignal', 'Signal by group', 'pyBigWig, SciPy',
+          [PYTHON, script('pybigwig_groupsignal'), AB_CALL, GS_BIN, OUT, *REPS], out=GS / 'reference',
+          made=GS / 'reference-tests.tsv', bench=False)
+
+groups_app = table(one(GS / 'app', '*.groupsignal-groups.tsv'))
+tests_app = table(one(GS / 'app', '*.groupsignal-tests.tsv')).fillna({'b': ''})
+groups_ref = pd.read_csv(GS / 'reference-groups.tsv', sep='\t')
+tests_ref = pd.read_csv(GS / 'reference-tests.tsv', sep='\t').fillna({'b': ''})
+exact = pd.read_csv(GS / 'reference-stretches.tsv', sep='\t')
+
+
+def violin_values(path):
+    """A violin as chromosomix writes it: its track, and every stretch's mean a group, ascending."""
+    frame = table(path)
+    track = re.search(r'^# output: (.+?) by ', path.read_text(), flags=re.M).group(1)
+    return track, {name: frame[name].dropna().to_numpy(float) for name in frame.columns[1:]}
+
+
+def significant(digits):
+    """How far rounding to `digits` significant digits moves a number, relative to it, and a hair over."""
+    return 0.5 * 10.0 ** (1 - digits) * (1 + 1e-6)
+
+
+VALUES = dict(violin_values(path) for path in sorted((GS / 'app').glob('*.groupsignal-[0-9]*.tsv')))
+#: Each column chromosomix writes and how near the reference has to be: the places it is written to, and P
+#: and q, written in scientific notation, to their six significant digits.
+GROUP_COLUMNS = {'mean': rounded(4), 'sd': rounded(4), 'median': rounded(4), 'q1': rounded(4), 'q3': rounded(4),
+                 'vsRest': rounded(4)}
+TEST_COLUMNS = {'difference': rounded(4), 'effect': rounded(3), 'statistic': rounded(2), 'p': significant(6),
+                'q': significant(6)}
+
+
+def against(app, other, key, columns):
+    """Each column's largest difference — P and q relative, the others as written — and whether every one
+    is near enough."""
+    paired = app.merge(other, on=key, suffixes=('', '_other'))
+    out = {}
+    for column, near in columns.items():
+        mine, theirs = paired[column].to_numpy(float), paired[f'{column}_other'].to_numpy(float)
+        gap = relative_difference(mine, theirs) if column in ('p', 'q') else np.abs(mine - theirs)
+        gap = np.nan_to_num(gap, nan=0.0)
+        out[column] = (np.max(gap), bool((gap <= near).all()))
+    return out, len(paired)
+
+
+held_groups, n_groups = against(groups_app, groups_ref, ['track', 'group'], GROUP_COLUMNS)
+held_tests, n_tests = against(tests_app, tests_ref, ['track', 'test', 'a', 'b'], TEST_COLUMNS)
+HELD = held_groups | held_tests
+
+
+def exact_sorted(track, name):
+    """A group's exact stretch means on one track, ascending, as chromosomix's violins write its own."""
+    return np.sort(exact.loc[(exact['group'] == name) & exact[track].notna(), track].to_numpy())
+
+
+# The stretches, rank for rank in each group: chromosomix's means, its violins, against the exact ones.
+rank_gap = np.concatenate([relative_difference(values, exact_sorted(track, name))
+                           for track, by_group in VALUES.items() for name, values in by_group.items()])
+same_counts = bool((groups_app.merge(groups_ref, on=['track', 'group'], suffixes=('', '_ref'))
+                    .eval('n == n_ref and bases == bases_ref')).all())
+NAMES = list(dict.fromkeys(groups_app['group']))
+display(measures({
+    'stretches; groups': f"{len(exact):,}; {', '.join(NAMES)}",
+    'stretches and bases of each group, the same': 'yes' if same_counts else 'no',
+    'stretch means, rank for rank: median, max relative difference': f'{np.median(rank_gap):.1e}, {rank_gap.max():.1e}',
+}))
+show(pd.DataFrame([{'column': column, 'measured': 'relative' if column in ('p', 'q') else 'as written',
+                    'near enough': (GROUP_COLUMNS | TEST_COLUMNS)[column], 'max difference': HELD[column][0],
+                    'near enough, every one': HELD[column][1]}
+                   for column in [*GROUP_COLUMNS, *TEST_COLUMNS]]),
+     **{c: '{:.1e}' for c in ('near enough', 'max difference')})
+```
+
+```{python}
+#| label: fig-groupsignal
+#| fig-cap: "ATAC-seq on chr19 by § 3's compartments, in stretches of at most 10 kb. a, each group's stretch means as chromosomix measures them, replicate 1; b, every stretch's mean, rank for rank in its group, both replicates, against pyBigWig's; c, every summary and test against NumPy's and SciPy's — P and q relative, the others as they are written."
+TEXT['gs_n'] = f'{len(exact):,}'
+TEXT['gs_rank'] = f'{rank_gap.max():.1e}'
+GS_HELD = all(ok for _, ok in HELD.values()) and n_groups == len(groups_app) and n_tests == len(tests_app)
+TEXT['gs_held'] = 'every one' if GS_HELD else 'not every one'
+GS_EXACT = GS_HELD and same_counts and rank_gap.max() <= significant(6)
+
+fig, axes = plt.subplots(1, 3, figsize=(12, 3.9), layout='constrained', width_ratios=[1.05, 1, 1.25])
+ax = axes[0]
+first_track = next(iter(VALUES))
+edges = np.linspace(0, np.percentile(np.concatenate(list(VALUES[first_track].values())), 99.5), 41)
+for name, colour in zip(NAMES, ('#1baf7a', '#7c56c2', INK2)):
+    counts, _ = np.histogram(np.clip(VALUES[first_track][name], 0, edges[-1]), edges)
+    ax.stairs(counts / counts.sum(), edges, color=colour, lw=1.6, label=name)
+ax.set(xlabel=f'mean ATAC signal in a stretch, {REPLICATE[first_track]}', ylabel='share of the group’s stretches',
+       title='a  each group')
+ax.legend(loc='upper right')
+agreement(axes[1], np.concatenate([exact_sorted(track, name) for track, by_group in VALUES.items() for name in by_group]),
+          np.concatenate([values for by_group in VALUES.values() for values in by_group.values()]), 'pyBigWig',
+          'chromosomix', 'b  every stretch, rank for rank')
+ax = axes[2]
+columns = [*GROUP_COLUMNS, *TEST_COLUMNS]
+for k, column in enumerate(columns):
+    ax.scatter(k, max(HELD[column][0], 1e-9), s=26, color=APP_COLOUR, zorder=3,
+               label='max difference' if k == 0 else None, gid='max difference')
+    near = (GROUP_COLUMNS | TEST_COLUMNS)[column]
+    ax.plot([k - 0.35, k + 0.35], [near, near], color=INK2, lw=1, gid='near enough')
+ax.set_xticks(range(len(columns)), ['mean', 'SD', 'median', 'Q1', 'Q3', 'mean − rest', 'median diff.', 'effect',
+                                    'U or H', 'P, relative', 'q, relative'], fontsize=7, rotation=45, ha='right')
+ax.set(yscale='log', ylim=(1e-9, 10), ylabel='max difference', title='c  every summary and test; ticks, near enough')
+ax.legend(loc='upper left')
+drawn('fig-groupsignal')
+```
+
+The two tools cut chr19 into the same `{python} TEXT['gs_n']` stretches, the same number in each group
+and of the same bases, and read the same means from them: rank for rank in each group, chromosomix's are
+pyBigWig's within `{python} TEXT['gs_rank']`, the six digits it writes. NumPy and SciPy give
+`{python} TEXT['gs_held']` of its summaries and tests to the places it writes them — U and H to two
+decimals, P and q, far below anything a reader acts on, to six significant digits.
+
+```{python}
+record('Signal by group', "mouse ATAC-seq, 2 replicates, chr19, by § 3's compartments; 10 kb stretches",
+       f"pyBigWig {VERSIONS['pyBigWig']}, NumPy {VERSIONS['numpy']}, SciPy {VERSIONS['scipy']}",
+       f"the same stretches, their means within {TEXT['gs_rank']}; {TEXT['gs_held']} of the summaries and tests "
+       "as written",
+       'Identical (to the digits written)' if GS_EXACT else 'Differs',
+       apps=['groupsignal'], refs=['pybigwig-groupsignal'])
+```
+
 ## Summary
 
 Commands as run, from `notebooks/work/validation/`: `chromosomix` is this checkout's
@@ -2908,7 +3512,7 @@ lies within the reference's own spread from one seed to the next. Besides those:
 The 3D model fits the contacts within chromosomes `{python} TEXT['p3_within_word']` pastis, and over
 all pairs `{python} TEXT['p3_all_word']` pastis. P(s) as a density (HiContacts' `distanceLaw`), the
 app's default, is held to HiContacts by the unit tests (`test/golden/analysis/hicontacts_ps.json`).
-Each command's time is measured by `{python} R.link('timing')`.
+Each command's time, but those of §§ 20–23, is measured by `{python} R.link('timing')`.
 
 ### Reference scripts
 

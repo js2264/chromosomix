@@ -10,6 +10,33 @@ The deployed site at <https://chromosomix.app/> is built from `main` on every pu
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Added
+
+- **The validation notebook holds four more analyses to their references, and does not time them
+  (§18.10).** `notebooks/validation.qmd` adds cis and trans per sequence against cooltools'
+  `expected_cis` and `expected_trans`, on a chicken map whose microchromosomes meet one another at
+  nearly twice what indifference predicts; the compartment call's saddle against `cooltools.saddle`
+  over chromosomix's own E1, cell for cell; the fraction of signal in features against pyBigWig's
+  exact sums; and signal by group against pyBigWig's exact stretch means, rank for rank in each group,
+  and NumPy's and SciPy's summaries and rank tests. Their commands are written to `commands.json`
+  with the others and left out of `notebooks/timing.qmd`'s runs.
+
+### Fixed
+
+- **Signal by group's stretches are their exact means (§18.8).** A stretch was read at a twentieth
+  of a typical stretch's width, from a zoom level wherever the file had one that fine, and a zoom
+  record is a mean over its own span: on 4DN's mouse ATAC-seq on chr19, the 896 bp records carried
+  each neighbour's signal into a stretch's ends, the 10 kb stretches came out a median 0.2 % from
+  their own means and one in thirteen more than 1 %, and the Mann–Whitney U between the two
+  compartments as much as 0.2 % from SciPy's on the exact means. Every track is now read as track correlation
+  reads a window — at its own resolution, a megabase at a time, each record weighted by how much of
+  the stretch it covers, pyBigWig's `stats(…, exact=True)` — and the same run agrees with pyBigWig
+  to within 5 × 10⁻⁶ in every stretch and with SciPy to every digit written in every test, in 1.0 s
+  where it took 0.9 s, and half the memory. A track the groups are cut from, and the per-feature
+  table, are read the same way.
+
 ## [0.16.0] - 2026-10-20
 
 ### Added
