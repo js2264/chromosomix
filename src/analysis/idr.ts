@@ -231,11 +231,44 @@ export function pseudoValues(
   lamda: number,
   eps: number,
 ): Float64Array {
-  const n = ranks.length
-  const out = new Float64Array(n)
-  if (n === 0) return out
-  const pseudoN = n + 1
+  return byRank(ranks, rankPoints(ranks.length, mu, sigma, lamda, eps))
+}
+
+/**
+ * Both replicates' pseudo-values, from one bisection.
+ *
+ * `idr` bisects once per replicate, but what it bisects for — the point of each
+ * rank `0 … n − 1` — depends on the number of peaks and the parameters and not
+ * on the ranks, which only say which peak takes which point. Two replicates of
+ * the same peaks are the same `n`, so the points are found once and each
+ * replicate's ranks read them: the same numbers, for half the `erf`s that were
+ * most of a fit's time.
+ */
+export function pseudoValuePair(
+  r1: Int32Array,
+  r2: Int32Array,
+  mu: number,
+  sigma: number,
+  lamda: number,
+  eps: number,
+): [Float64Array, Float64Array] {
+  const points = rankPoints(r1.length, mu, sigma, lamda, eps)
+  const other = r2.length === r1.length ? points : rankPoints(r2.length, mu, sigma, lamda, eps)
+  return [byRank(r1, points), byRank(r2, other)]
+}
+
+/** `points[ranks[i]]` for each peak `i`. */
+function byRank(ranks: Int32Array, points: Float64Array): Float64Array {
+  const out = new Float64Array(ranks.length)
+  for (let i = 0; i < ranks.length; i++) out[i] = points[ranks[i]]
+  return out
+}
+
+/** The point on the mixture's marginal of each rank `0 … n − 1`, in rank order. */
+function rankPoints(n: number, mu: number, sigma: number, lamda: number, eps: number): Float64Array {
   const ordered = new Float64Array(n)
+  if (n === 0) return ordered
+  const pseudoN = n + 1
   const smallest = 1 / pseudoN
   let lb = 0 <= mu ? 0 : mu
   while (mixtureCdf(lb, mu, sigma, lamda) > smallest) lb -= 1
@@ -251,8 +284,7 @@ export function pseudoValues(
     lb = res
     ub = lb + 2 * (res - ordered[i - 1])
   }
-  for (let i = 0; i < n; i++) out[i] = ordered[ranks[i]]
-  return out
+  return ordered
 }
 
 // ---------------------------------------------------------------------------
@@ -607,8 +639,7 @@ export async function fitIdr(
   const pvEps = IDR_DEFAULTS.pseudoValueEps
   const s = options.start ?? IDR_DEFAULTS.start
   let theta: IdrTheta = [s[0], s[1], s[2], s[3]]
-  let z1 = pseudoValues(r1, theta[0], theta[1], theta[3], pvEps)
-  let z2 = pseudoValues(r2, theta[0], theta[1], theta[3], pvEps)
+  let [z1, z2] = pseudoValuePair(r1, r2, theta[0], theta[1], theta[3], pvEps)
   let coordinateAscent = false
   let rounds = 0
   const change = new Float64Array(r1.length)
@@ -629,9 +660,8 @@ export async function fitIdr(
       Math.abs(theta[3] - previous[3]),
     ])
     const previousZ1 = z1
-    z1 = pseudoValues(r1, theta[0], theta[1], theta[3], pvEps)
     const previousZ2 = z2
-    z2 = pseudoValues(r2, theta[0], theta[1], theta[3], pvEps)
+    ;[z1, z2] = pseudoValuePair(r1, r2, theta[0], theta[1], theta[3], pvEps)
     for (let k = 0; k < change.length; k++) change[k] = Math.abs(previousZ1[k] - z1[k])
     const moved1 = numpyMean(change)
     for (let k = 0; k < change.length; k++) change[k] = Math.abs(previousZ2[k] - z2[k])
@@ -654,8 +684,7 @@ export async function fitIdr(
  */
 export function localIdr(theta: Readonly<IdrTheta>, r1: Int32Array, r2: Int32Array): Float64Array {
   const eps = IDR_DEFAULTS.finalPseudoValueEps
-  const z1 = pseudoValues(r1, theta[0], theta[1], theta[3], eps)
-  const z2 = pseudoValues(r2, theta[0], theta[1], theta[3], eps)
+  const [z1, z2] = pseudoValuePair(r1, r2, theta[0], theta[1], theta[3], eps)
   const ez = new Mixture(z1, z2).membership(theta)
   const floor = IDR_DEFAULTS.convergenceEps
   const out = new Float64Array(ez.length)

@@ -10,6 +10,21 @@ The deployed site at <https://chromosomix.app/> is built from `main` on every pu
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Changed
+
+- **Peak calling over a genome is nearly three times faster and holds a third of the memory, every
+  number the same (§18.8).** With IDR over a mouse ATAC-seq pair, genome-wide, a call took 29 minutes
+  and 1.27 GB on a 4-core 2.1 GHz Xeon and takes 10 minutes and 435 MB. The 456-tap convolution,
+  nine-tenths of the time, is summed piece by piece rather than base by base, each base's terms
+  added in the order they were; a replicate's own second derivative is summed only where the pooled
+  one is concave, the only bases it scores; of the 6.5 million candidates, only those that can still
+  be among the 100,000 strongest are held, where every one was held to the end; and IDR bisects the
+  pseudo-values both replicates share once a round rather than once each. Each is tested bit for bit
+  against what it replaced (§18.10), and the validation's comparison with yapc 0.1 on chr19 is
+  unchanged to the last digit.
+
 ## [0.16.0] - 2026-10-20
 
 ### Added

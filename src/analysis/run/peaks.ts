@@ -47,17 +47,19 @@ import {
   ConcaveScan,
   YAPC_DEFAULTS,
   YAPC_IDR_THRESHOLDS,
+  concaveMask,
   convolutionReach,
   convolveSame,
   peakBounds,
   pooledRuns,
   runsOver,
   scaledThreshold,
-  strongestRegions,
+  StrongestRegions,
   yapcKernel,
   zeroRuns,
   type ConcaveRegions,
   type Runs,
+  type StrongestRegionsHeld,
   type YapcKernel,
 } from '../yapc'
 
@@ -124,24 +126,18 @@ export const runPeaks: TrackTaskRunner = async (job) => {
 
   // ---- the scan --------------------------------------------------------------
   const kernel = yapcKernel(width, times)
-  const totalBases = names.reduce((sum, name) => sum + lengths[name], 0)
-  let doneBases = 0
-  const scanned: ConcaveRegions[] = []
-  const absentOn: string[][] = entries.map(() => [])
-  for (const name of names) {
-    const found = await scanSequence(job, entries, name, lengths[name], kernel, (bases) => {
-      doneBases += bases
-      job.progress(doneBases, totalBases, name)
-    })
-    if (typeof found === 'string') {
-      job.note(found)
-      return []
-    }
-    scanned.push(found.regions)
-    found.absent.forEach((gone, t) => {
-      if (gone) absentOn[t].push(name)
-    })
+  const scan = (prune: boolean): Promise<Scanned | string> =>
+    scanAll(job, entries, names, lengths, kernel, { minWidth, truncate, below: replicate === null, prune })
+  let scanned = await scan(true)
+  // A `NaN` score after a region was let go — only an infinite value in a track
+  // gives one — leaves no order a subset of the regions can reproduce
+  // (`StrongestRegions`), so the scan is run again holding every region.
+  if (typeof scanned !== 'string' && !scanned.held.exact) scanned = await scan(false)
+  if (typeof scanned === 'string') {
+    job.note(scanned)
+    return []
   }
+  const { held, found, n, perSequence, absentOn } = scanned
   for (let t = 0; t < entries.length; t++) {
     if (absentOn[t].length === names.length) {
       job.note(
@@ -160,30 +156,6 @@ export const runPeaks: TrackTaskRunner = async (job) => {
   }
 
   // ---- regions to candidates --------------------------------------------------
-  const contig: string[] = []
-  const startList: number[] = []
-  const endList: number[] = []
-  const modeList: number[] = []
-  const flatList: number[] = []
-  const scoreLists: number[][] = entries.map(() => [])
-  const perSequence = new Map<string, { regions: number; wide: number }>()
-  let found = 0
-  for (const regions of scanned) {
-    found += regions.starts.length
-    let wide = 0
-    for (let i = 0; i < regions.starts.length; i++) {
-      if (regions.ends[i] - regions.starts[i] < minWidth) continue
-      wide++
-      contig.push(regions.contig)
-      startList.push(regions.starts[i])
-      endList.push(regions.ends[i])
-      modeList.push(regions.modes[i])
-      flatList.push(regions.flat[i])
-      for (let t = 0; t < entries.length; t++) scoreLists[t].push(regions.scores[t][i])
-    }
-    perSequence.set(regions.contig, { regions: regions.starts.length, wide })
-  }
-  const n = startList.length
   const readAs =
     `${kernel.values.length}-tap kernel: a ${width.toLocaleString()} bp window, ` +
     `${times} ${times === 1 ? 'pass' : 'passes'}`
@@ -195,14 +167,10 @@ export const runPeaks: TrackTaskRunner = async (job) => {
     )
     return []
   }
-  const starts = Int32Array.from(startList)
-  const ends = Int32Array.from(endList)
-  const modes = Int32Array.from(modeList)
-  const flats = Uint8Array.from(flatList)
-  const scores = scoreLists.map((list) => Float64Array.from(list))
-  // In yapc's IDR order: by sequence name, then position. Everything below is
-  // indexed through this.
-  const tested = strongestRegions(contig, starts, ends, scores, truncate)
+  // Every candidate that could be among the strongest, and — in yapc's IDR order,
+  // by sequence name, then position — the strongest. Everything below is indexed
+  // through `tested`.
+  const { contig, starts, ends, modes, flat: flats, scores, tested } = held
   job.note(
     `${found.toLocaleString()} concave ${found === 1 ? 'region' : 'regions'} on ` +
       `${names.length.toLocaleString()} ${names.length === 1 ? 'sequence' : 'sequences'} ` +
@@ -357,7 +325,7 @@ export const runPeaks: TrackTaskRunner = async (job) => {
       look: 'point',
     } satisfies IntervalsOutput)
   }
-  const figure = curvatureFigure(entries.map(nameOf), scores, tested, passes, replicate !== null, n, flats)
+  const figure = curvatureFigure(entries.map(nameOf), scores, tested, passes, replicate !== null, flats, held.below)
   if (figure !== null) outputs.push(figure)
   outputs.push(sequenceTable(names, lengths, perSequence, called.map((k) => contig[tested[k]])))
   if (fit !== null && global !== null) outputs.push(thresholdTable(global, threshold))
@@ -380,6 +348,69 @@ export const runPeaks: TrackTaskRunner = async (job) => {
   }
   job.progress(1, 1, 'done')
   return outputs
+}
+
+/** Every sequence scanned, and what of its regions the cut can use. */
+interface Scanned {
+  /** The candidates that could be among the strongest, and the strongest. */
+  held: StrongestRegionsHeld
+  /** Concave regions found, and those at least the minimum wide. */
+  found: number
+  n: number
+  perSequence: Map<string, { regions: number; wide: number }>
+  /** Per track, the sequences it does not have. */
+  absentOn: string[][]
+}
+
+/**
+ * Every ticked sequence, scanned in turn, its regions counted and those wide
+ * enough handed to the cut as soon as it is done.
+ *
+ * Only the regions that can still be among the strongest are held from one
+ * sequence to the next (`StrongestRegions`): every region of the genome is
+ * scored and ranked as yapc ranks it, but a mouse genome's 6.5 million of them
+ * are never in memory at once — which they were, and which was most of the
+ * memory a genome-wide call took (§18.8).
+ */
+async function scanAll(
+  job: TrackJobContext,
+  entries: readonly string[],
+  names: readonly string[],
+  lengths: Readonly<Record<string, number>>,
+  kernel: YapcKernel,
+  options: { minWidth: number; truncate: number; below: boolean; prune: boolean },
+): Promise<Scanned | string> {
+  const totalBases = names.reduce((sum, name) => sum + lengths[name], 0)
+  let doneBases = 0
+  const strongest = new StrongestRegions(entries.length, options.truncate, {
+    prune: options.prune,
+    below: options.below,
+  })
+  const absentOn: string[][] = entries.map(() => [])
+  const perSequence = new Map<string, { regions: number; wide: number }>()
+  let found = 0
+  let n = 0
+  for (const name of names) {
+    const scanned = await scanSequence(job, entries, name, lengths[name], kernel, (bases) => {
+      doneBases += bases
+      job.progress(doneBases, totalBases, name)
+    })
+    if (typeof scanned === 'string') return scanned
+    const { regions } = scanned
+    let wide = 0
+    for (let i = 0; i < regions.starts.length; i++) {
+      if (regions.ends[i] - regions.starts[i] < options.minWidth) continue
+      wide++
+      strongest.add(regions, i)
+    }
+    found += regions.starts.length
+    n += wide
+    perSequence.set(name, { regions: regions.starts.length, wide })
+    scanned.absent.forEach((gone, t) => {
+      if (gone) absentOn[t].push(name)
+    })
+  }
+  return { held: strongest.finish(), found, n, perSequence, absentOn }
 }
 
 /**
@@ -428,7 +459,11 @@ async function scanSequence(
     scan ??= new ConcaveScan(name, length, absent)
     const flat = new Uint8Array(to - from)
     const pooled = convolveSame(pooledRuns(runs, lo, hi), kernel, length, from, to, flat)
-    const own = entries.length === 1 ? [pooled] : runs.map((r) => convolveSame(r, kernel, length, from, to))
+    // Each track's own second derivative is read only inside a concave region
+    // of the pooled one, to score it — half the bases — so it is summed only there.
+    const concave = entries.length === 1 ? null : concaveMask(pooled)
+    const own =
+      concave === null ? [pooled] : runs.map((r) => convolveSame(r, kernel, length, from, to, undefined, concave))
     scan.feed(from, pooled, own, flat)
     report(to - from)
     await yieldToEventLoop()
@@ -506,11 +541,12 @@ function curvatureFigure(
   tested: Int32Array,
   passes: Uint8Array,
   withIdr: boolean,
-  candidates: number,
   flats: Uint8Array,
+  /** Track 0's curvature of every candidate the cut let go before the end, where there is no IDR. */
+  below: Float64Array,
 ): CurveOutput | null {
   const series: CurveSeries[] = []
-  const inTest = new Uint8Array(candidates)
+  const inTest = new Uint8Array(flats.length)
   for (const i of tested) inTest[i] = 1
   for (let t = 0; t < scores.length; t++) {
     const kept: number[] = []
@@ -523,11 +559,14 @@ function curvatureFigure(
       if (passes[k] === 1) kept.push(value)
       else cut.push(value)
     })
-    // Below the truncation: candidates that never reached a test.
+    // Below the truncation: candidates that never reached a test — those held to
+    // the end, and those let go on the way. A violin is drawn from its values
+    // sorted, so which came first does not matter.
     if (!withIdr) {
-      for (let i = 0; i < candidates; i++) {
+      for (let i = 0; i < flats.length; i++) {
         if (inTest[i] === 0 && scores[t][i] > 0 && flats[i] === 0) cut.push(scores[t][i])
       }
+      for (const value of below) cut.push(value)
     }
     const prefix = scores.length === 1 ? '' : `${names[t]} · `
     const keptName = withIdr ? `${prefix}passes IDR` : `${prefix}peaks`
