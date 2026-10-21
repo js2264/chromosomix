@@ -14,13 +14,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
-- **Time and memory on your own machine (§18.10).** `node notebooks/laptop.mjs` runs twenty-three
-  tasks genome-wide through `chromosomix` — on the validation's 69-million-contact mouse map and its
-  yeast Micro-C, on 4DN's 1.07-billion-contact mouse map, and on two ATAC-seq replicates and the mm10
-  sequence — three times each, a fresh process each time, and writes the wall-clock and CPU seconds
-  and the peak resident memory of every run, with the machine and the build, to
-  `notebooks/work/laptop/`, and a table of them ready for a supplement. It needs Node and a clone; the
-  data, about 12.4 GB, are fetched once into the folders the notebooks use, each held to its MD5.
+- **Time and memory on your own machine (§18.10).** `notebooks/laptop.qmd` runs 23 analyses
+  genome-wide through `chromosomix`, once each — on the validation's 69-million-contact mouse map and
+  yeast Micro-C, on 4DN's 1.08-billion-contact IMR-90 map (Rao et al. 2014), and on two ATAC-seq
+  replicates and the mm10 sequence — and tabulates the wall-clock and CPU time and the peak memory of
+  each, with the machine it ran on, a figure, and every command at the end. It needs Quarto with
+  pandas, matplotlib and pyfaidx, and a built command line; the data, about 13.7 GB, are downloaded
+  once, each held to its MD5.
 
 ## [0.16.0] - 2026-10-20
 

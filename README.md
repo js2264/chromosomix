@@ -480,9 +480,9 @@ bedtools and a dozen others — on public data, command for command, in a notebo
 release: <https://chromosomix.app/validation/>, with every number its figures draw in one table beside
 it, <https://chromosomix.app/validation/validation.txt>; and how long each command takes beside its
 reference, <https://chromosomix.app/timings/>. What they cost on your own machine — the time and the
-peak memory of twenty-three tasks run genome-wide, up to a 1.07-billion-contact mouse map — is
-`node notebooks/laptop.mjs` from a clone, which fetches the data, runs each task three times and
-writes a table of them to `notebooks/work/laptop/summary.md`.
+peak memory of 23 analyses run genome-wide, up to a 1.08-billion-contact human map — is
+`notebooks/laptop.qmd`: render it with Quarto from a clone and it downloads the data, runs each analysis
+once and tabulates them.
 
 Every task writes its results where `--out` points, each named after the file it came from up to
 its first dot — `sample.coverage.coverage-total.tsv`. Two files of one command that would share a

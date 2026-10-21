@@ -1,0 +1,354 @@
+---
+title: "chromosomix on a laptop"
+subtitle: "Time and memory of genome-wide analyses, run once each on the machine that renders this page"
+format:
+  html:
+    toc: true
+    embed-resources: true
+    fig-format: png
+    code-fold: true
+    code-summary: "Code"
+jupyter: python3
+execute:
+  warning: false
+---
+
+How long does an analysis take in chromosomix, and how much memory does it need, when it is run over a
+whole genome on an ordinary laptop? This notebook answers that for 23 analyses on public data: Hi-C maps
+from 69 million to 1.08 billion contacts, a yeast Micro-C map down to 50 bp, and ATAC-seq tracks and
+sequence over the whole mouse genome.
+
+Each analysis is run once through `chromosomix`, the command-line form of the app's Analysis panel. It
+runs the same code the browser runs, and as a separate process its time and memory can be measured by
+the operating system: the wall-clock time from start to finish, the CPU time, and the peak memory (the
+largest resident set the process reached).
+
+To render it, from the root of a clone, on a laptop that is plugged in and otherwise idle:
+
+```bash
+npm ci && npm run build:cli
+pip install jupyter pandas matplotlib pyfaidx
+quarto render notebooks/laptop.qmd
+```
+
+The data (about 13.7 GB) are downloaded once into `notebooks/work/laptop/data/`; files that
+`validation.qmd` has already downloaded are linked rather than downloaded again. The analyses take about
+45 minutes, most of it peak calling. Each result is saved to `notebooks/work/laptop/timings.tsv` as soon
+as it is measured, so a second render reads the table instead of running everything again; set `REDO`
+below to start over.
+
+```{python}
+import hashlib
+import os
+import platform
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import pyfaidx
+
+REDO = False
+
+HERE = Path.cwd().resolve()
+REPO = HERE.parent if HERE.name == 'notebooks' else HERE
+CLI = REPO / 'dist-cli' / 'chromosomix.mjs'
+WORK = REPO / 'notebooks' / 'work' / 'laptop'
+DATA = WORK / 'data'
+TIMINGS = WORK / 'timings.tsv'
+DATA.mkdir(parents=True, exist_ok=True)
+
+if not CLI.exists():
+    raise FileNotFoundError(f'{CLI} is not there: run `npm run build:cli` first.')
+VERSION = subprocess.run(['node', str(CLI), '--version'], capture_output=True, text=True).stdout.split('\n')[0]
+```
+
+## The machine
+
+```{python}
+def processor():
+    if sys.platform == 'darwin':
+        return subprocess.run(['sysctl', '-n', 'machdep.cpu.brand_string'], capture_output=True,
+                              text=True).stdout.strip()
+    if Path('/proc/cpuinfo').exists():
+        for line in open('/proc/cpuinfo'):
+            if line.startswith('model name'):
+                return line.split(':', 1)[1].strip()
+    return platform.processor()
+
+
+MACHINE = {
+    'processor': processor(),
+    'cores': os.cpu_count(),
+    'memory': f"{os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / 2**30:.0f} GB",
+    'system': platform.platform(),
+    'node': subprocess.run(['node', '--version'], capture_output=True, text=True).stdout.strip(),
+    'chromosomix': VERSION.removeprefix('chromosomix '),
+}
+pd.DataFrame(MACHINE.items(), columns=['', 'this machine']).style.hide(axis='index')
+```
+
+## The data
+
+| Data | Source | Contacts | Size |
+|---|---|---:|---:|
+| Mouse Hi-C, mm10 | 4DN 4DNFIOZ1TRUS | 69 million | 0.7 GB |
+| Human Hi-C, IMR-90, GRCh38 (Rao et al. 2014) | 4DN 4DNFIJTOIGOI | 1.08 billion | 8.3 GB |
+| Yeast Micro-C (Costantino et al. 2020) | GEO GSE151553 | 51 million | 0.1 GB |
+| Mouse ATAC-seq, two replicates | 4DN 4DNFIIY4QW2D, 4DNFITBRHVZE | | 1.7 GB |
+| Mouse genome sequence and RefSeq genes, mm10 | UCSC, as Illumina iGenomes distributes them | | 2.9 GB |
+
+Every file is checked against its MD5 when it is downloaded. The mouse sequence is indexed beside itself
+(`mm10.fa.fai`) so that it is read by range.
+
+```{python}
+FOURDN = 'https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput'
+IGENOMES = 'https://ngi-igenomes.s3.amazonaws.com/igenomes/Mus_musculus/UCSC/mm10'
+GEO = 'https://ftp.ncbi.nlm.nih.gov/geo/series'
+FILES = {
+    '4DNFIOZ1TRUS.mcool': (f'{FOURDN}/727b405d-c9f5-4b13-ae58-1dbf29d19a8f/4DNFIOZ1TRUS.mcool',
+                           '503fea3d171e9c5c7f8a5403af73481e'),
+    '4DNFIJTOIGOI.mcool': (f'{FOURDN}/b4939d95-4121-4f86-9cc8-29a34eb834ef/4DNFIJTOIGOI.mcool',
+                           '659f9dc7613650494aa5ed4138e2e17e'),
+    'GSE151553_A364_merged.mcool': (f'{GEO}/GSE151nnn/GSE151553/suppl/GSE151553_A364_merged.mcool',
+                                    '319a04a8d7e41d9eb88e2378ea3ea373'),
+    '4DNFIIY4QW2D.bw': (f'{FOURDN}/7fb6d419-a8de-4bc8-9c17-f68f814496a2/4DNFIIY4QW2D.bw',
+                        '9f8a3a413f54129a689548a93584cdf4'),
+    '4DNFITBRHVZE.bw': (f'{FOURDN}/e567a80e-c7d2-41ff-b12d-67047906c076/4DNFITBRHVZE.bw',
+                        '99c928ea99ee1a2a7ec7091260f1e4be'),
+    'mm10.fa': (f'{IGENOMES}/Sequence/WholeGenomeFasta/genome.fa', '34d90c586dc92f5c3e8df3ed24530f4f'),
+    'mm10.genes.gtf': (f'{IGENOMES}/Annotation/Genes/genes.gtf', '543ec24bb11a4ff0cf5aa4f695320b82'),
+}
+VALIDATION_DATA = REPO / 'notebooks' / 'work' / 'validation' / 'data'
+
+
+def md5(path):
+    digest = hashlib.md5()
+    with open(path, 'rb') as handle:
+        for block in iter(lambda: handle.read(1 << 22), b''):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def fetch(name, url, expected):
+    path = DATA / name
+    if path.exists():
+        return
+    if (VALIDATION_DATA / name).exists():
+        path.symlink_to(VALIDATION_DATA / name)
+        return
+    print('downloading', url)
+    part = path.with_name(name + '.part')
+    with urllib.request.urlopen(url) as response, open(part, 'wb') as out:
+        shutil.copyfileobj(response, out, 1 << 22)
+    if md5(part) != expected:
+        part.unlink()
+        raise ValueError(f'{url} did not download as published: its MD5 is not {expected}.')
+    part.rename(path)
+
+
+for name, (url, expected) in FILES.items():
+    fetch(name, url, expected)
+pyfaidx.Faidx(str(DATA / 'mm10.fa')).close()
+
+pd.DataFrame([{'file': name, 'GB': round((DATA / name).stat().st_size / 1e9, 2)} for name in FILES]) \
+    .style.hide(axis='index').format(precision=2)
+```
+
+## The analyses
+
+Each analysis is one command, run from `notebooks/work/laptop/` with its output in `out/<name>/`. Two of
+them read another's output: the pileup (APA) is over the loops chromosight called, and the overlap is
+of the peaks called on the ATAC-seq replicates against the RefSeq transcripts. Parameters are the app's
+defaults, except where the validation notebook uses others for the same analysis.
+
+```{python}
+MOUSE, HUMAN, YEAST = 'data/4DNFIOZ1TRUS.mcool', 'data/4DNFIJTOIGOI.mcool', 'data/GSE151553_A364_merged.mcool'
+ATAC1, ATAC2, MM10, GENES = 'data/4DNFIIY4QW2D.bw', 'data/4DNFITBRHVZE.bw', 'data/mm10.fa', 'data/mm10.genes.gtf'
+LOOPS = 'out/chromosight/4DNFIOZ1TRUS_10000.chromosight.chromosight-patterns.bedpe'
+PEAKS = 'out/peaks/4DNFIIY4QW2D.peaks.peaks-data_4DNFIIY4QW2D_bw-data_4DNFITBRHVZE_bw.bed'
+
+
+def at(path, bp):
+    return f'{path}::/resolutions/{bp}'
+
+
+# name, data, analysis, resolution, and the command after `chromosomix`
+TASKS = [
+    ('coverage', 'Mouse Hi-C, 69 M contacts', 'Coverage, balanced', '10 kb',
+     ['coverage', at(MOUSE, 10_000), '--balance']),
+    ('expected', 'Mouse Hi-C, 69 M contacts', 'P(s)', '10 kb',
+     ['expected', at(MOUSE, 10_000), '--quantity', 'expected', '--scope', 'file']),
+    ('insulation', 'Mouse Hi-C, 69 M contacts', 'Insulation, 100 kb window, boundaries', '10 kb',
+     ['insulation', at(MOUSE, 10_000), '--window', '10']),
+    ('di', 'Mouse Hi-C, 69 M contacts', 'Directionality index, 2 Mb window, borders', '50 kb',
+     ['di', at(MOUSE, 50_000), '--window', '40']),
+    ('compartments', 'Mouse Hi-C, 69 M contacts', 'Compartments (E1) and saddle', '100 kb',
+     ['compartments', at(MOUSE, 100_000)]),
+    ('loops', 'Mouse Hi-C, 69 M contacts', 'Loop calling (cooltools dots), to 10 Mb', '10 kb',
+     ['loops', at(MOUSE, 10_000)]),
+    ('chromosight', 'Mouse Hi-C, 69 M contacts', 'Loop detection (chromosight), to 2 Mb', '10 kb',
+     ['chromosight', at(MOUSE, 10_000), '--pattern', 'loops']),
+    ('apa', 'Mouse Hi-C, 69 M contacts', "APA over chromosight's loops", '10 kb',
+     ['apa', at(MOUSE, 10_000), '--pairs', LOOPS]),
+    ('model', 'Mouse Hi-C, 69 M contacts', '3D model of the genome (pastis-NB)', '1 Mb',
+     ['reconstruct3d', at(MOUSE, 1_000_000), '--method', 'nb', '--alpha', '3']),
+
+    ('human-coverage', 'Human Hi-C, 1.08 B contacts', 'Coverage, balanced', '10 kb',
+     ['coverage', at(HUMAN, 10_000), '--balance']),
+    ('human-expected', 'Human Hi-C, 1.08 B contacts', 'P(s)', '10 kb',
+     ['expected', at(HUMAN, 10_000), '--quantity', 'expected', '--scope', 'file']),
+    ('human-insulation', 'Human Hi-C, 1.08 B contacts', 'Insulation, 100 kb window, boundaries', '10 kb',
+     ['insulation', at(HUMAN, 10_000), '--window', '10']),
+    ('human-compartments', 'Human Hi-C, 1.08 B contacts', 'Compartments (E1) and saddle', '100 kb',
+     ['compartments', at(HUMAN, 100_000)]),
+    ('human-loops', 'Human Hi-C, 1.08 B contacts', 'Loop calling (cooltools dots), to 10 Mb', '10 kb',
+     ['loops', at(HUMAN, 10_000)]),
+
+    ('yeast-expected', 'Yeast Micro-C, 51 M contacts', 'P(s)', '50 bp',
+     ['expected', at(YEAST, 50), '--quantity', 'expected', '--scope', 'file']),
+    ('yeast-chromosight', 'Yeast Micro-C, 51 M contacts', 'Loop detection (chromosight)', '800 bp',
+     ['chromosight', at(YEAST, 800), '--pattern', 'loops']),
+    ('yeast-model', 'Yeast Micro-C, 51 M contacts', '3D model of the genome (pastis-NB)', '12.8 kb',
+     ['reconstruct3d', at(YEAST, 12_800), '--method', 'nb', '--alpha', '3']),
+
+    ('peaks', 'Mouse ATAC-seq and mm10', 'Peak calling with IDR, two replicates', '1 bp',
+     ['peaks', '--signal', ATAC1, '--replicate', ATAC2, '--width', '150', '--times', '3', '--minWidth', '75',
+      '--truncate', '100000', '--idr', '0.05']),
+    ('overlap', 'Mouse ATAC-seq and mm10', 'Overlap of the peaks with transcripts, 1,000 shuffles', '1 bp',
+     ['overlap', '--sequence', MM10, '--features', PEAKS, '--features', GENES, '--a', PEAKS, '--b', GENES,
+      '--shuffle', '--iterations', '1000', '--seed', '1']),
+    ('metaplot', 'Mouse ATAC-seq and mm10', 'Metaplot at every RefSeq TSS, ±2 kb', '50 bp',
+     ['metaplot', '--tracks', ATAC1, '--features', GENES, '--mode', 'reference', '--at', 'start', '--flank',
+      '2000', '--step', '50', '--band', 'none']),
+    ('trackcorr', 'Mouse ATAC-seq and mm10', 'Correlation of the two replicates (Spearman)', '1 kb',
+     ['trackcorr', '--tracks', f'{ATAC1},{ATAC2}', '--binsize', '1000', '--method', 'spearman']),
+    ('composition', 'Mouse ATAC-seq and mm10', 'Base composition: GC, skews', '10 kb',
+     ['composition', '--sequence', MM10, '--resolution', '10000']),
+    ('motif', 'Mouse ATAC-seq and mm10', 'Motif search, CTCF core, ≤ 1 mismatch', '1 bp',
+     ['motif', '--sequence', MM10, '--pattern', 'CCGCGNGGNGGCAG', '--mismatches', '1']),
+]
+```
+
+Each command runs as a process of its own, and `os.wait4` returns what the system counted of it:
+its CPU time, user and system, and its peak resident memory (`ru_maxrss`, which macOS gives in bytes and
+Linux in kilobytes).
+
+```{python}
+def run(name, args):
+    """One command: its wall-clock and CPU seconds, and its peak memory in MB."""
+    out = WORK / 'out' / name
+    shutil.rmtree(out, ignore_errors=True)
+    out.mkdir(parents=True)
+    with tempfile.TemporaryFile() as err:
+        start = time.perf_counter()
+        process = subprocess.Popen(['node', str(CLI), *args, '--out', f'out/{name}', '--quiet'], cwd=WORK,
+                                   stdout=subprocess.DEVNULL, stderr=err)
+        _, status, usage = os.wait4(process.pid, 0)
+        wall = time.perf_counter() - start
+        if os.waitstatus_to_exitcode(status):
+            err.seek(0)
+            raise RuntimeError(f'chromosomix {" ".join(args)} failed:\n{err.read().decode()[-3000:]}')
+    peak = usage.ru_maxrss / (2**20 if sys.platform == 'darwin' else 2**10)
+    return {'wall_s': wall, 'cpu_s': usage.ru_utime + usage.ru_stime, 'peak_mb': peak}
+
+
+# Results from an earlier render of this same build are kept; the others are run, and saved one by one.
+done = pd.read_csv(TIMINGS, sep='\t') if TIMINGS.exists() and not REDO else pd.DataFrame()
+if len(done):
+    done = done[done['chromosomix'] == MACHINE['chromosomix']]
+rows = done.to_dict('records')
+for name, data, analysis, resolution, args in TASKS:
+    if any(row['name'] == name for row in rows):
+        continue
+    print(f'{name} …', end=' ', flush=True)
+    cost = run(name, args)
+    print(f"{cost['wall_s']:.1f} s, {cost['peak_mb']:.0f} MB")
+    rows.append({'name': name, 'data': data, 'analysis': analysis, 'resolution': resolution, **cost,
+                 'command': 'chromosomix ' + ' '.join(args), **MACHINE})
+    pd.DataFrame(rows).to_csv(TIMINGS, sep='\t', index=False)
+times = pd.DataFrame(rows).set_index('name').loc[[task[0] for task in TASKS]].reset_index()
+```
+
+## Results
+
+```{python}
+def duration(seconds):
+    return f'{seconds:.1f} s' if seconds < 60 else f'{seconds / 60:.1f} min'
+
+
+table = times.assign(time=times['wall_s'].map(duration), cpu=times['cpu_s'].map(duration),
+                     memory=times['peak_mb'].round().astype(int))
+table[['data', 'analysis', 'resolution', 'time', 'cpu', 'memory']] \
+    .rename(columns={'time': 'wall-clock time', 'cpu': 'CPU time', 'memory': 'peak memory (MB)'}) \
+    .style.hide(axis='index').format({'peak memory (MB)': '{:,}'})
+```
+
+```{python}
+slowest = times.loc[times['wall_s'].idxmax()]
+largest = times.loc[times['peak_mb'].idxmax()]
+under_a_minute = int((times['wall_s'] < 60).sum())
+```
+
+On this machine:
+
+- **Under a minute:** `{python} under_a_minute` of the `{python} len(times)` analyses.
+- **Slowest:** `{python} slowest['analysis']` (`{python} slowest['data']`), in
+  `{python} duration(slowest['wall_s'])`.
+- **Most memory:** `{python} f"{largest['peak_mb']:,.0f}"` MB, for `{python} largest['analysis']`
+  (`{python} largest['data']`).
+
+The CPU time is close to the wall-clock time because chromosomix computes on one thread; it can be
+slightly higher, as Node collects garbage and compiles on threads of its own.
+
+The two Hi-C maps differ 16-fold in depth, on genomes of about the same size. The same five analyses on
+each:
+
+```{python}
+pairs = []
+for name in ['coverage', 'expected', 'insulation', 'compartments', 'loops']:
+    mouse = times.set_index('name').loc[name]
+    human = times.set_index('name').loc[f'human-{name}']
+    pairs.append({'analysis': mouse['analysis'], 'resolution': mouse['resolution'],
+                  '69 M contacts': duration(mouse['wall_s']), '1.08 B contacts': duration(human['wall_s']),
+                  '69 M, MB': round(mouse['peak_mb']), '1.08 B, MB': round(human['peak_mb'])})
+pd.DataFrame(pairs).style.hide(axis='index')
+```
+
+```{python}
+#| label: fig-laptop
+#| fig-cap: "Wall-clock time (left, logarithmic) and peak memory (right) of each analysis, coloured by its data."
+colours = dict(zip(times['data'].unique(), ['#2a78d6', '#eb6834', '#4f9d69', '#8c6bb1']))
+labels = [f'{a} ({r})' for a, r in zip(times['analysis'], times['resolution'])]
+y = range(len(times))[::-1]
+fig, (left, right) = plt.subplots(1, 2, figsize=(10, 0.3 * len(times) + 1), sharey=True, layout='constrained')
+left.barh(y, times['wall_s'], color=times['data'].map(colours))
+left.set(xscale='log', xlabel='wall-clock time (s)', yticks=list(y), yticklabels=labels)
+right.barh(y, times['peak_mb'], color=times['data'].map(colours))
+right.set(xlabel='peak memory (MB)')
+for data, colour in colours.items():
+    right.barh([], [], color=colour, label=data)
+right.legend(loc='lower right', frameon=False, fontsize=8)
+for ax in (left, right):
+    ax.spines[['top', 'right']].set_visible(False)
+    ax.tick_params(axis='y', labelsize=8)
+plt.show()
+```
+
+## Every command
+
+Run from `notebooks/work/laptop/`, each followed by `--out out/<name> --quiet`:
+
+```{python}
+#| echo: false
+#| output: asis
+print('```bash')
+for command in times['command']:
+    print(command)
+print('```')
+```

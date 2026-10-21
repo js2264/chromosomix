@@ -9436,24 +9436,22 @@ They are documents, not tests: they need the data (about 6 GB for the analyses a
 viewers), the reference packages, yapc's own environment and higlass-python's, and the two viewers, and
 nothing in the suite runs them.
 
-**And one for the reader's own machine.** `notebooks/laptop.mjs` answers what the two notebooks do not
-— what a genome-wide task costs on the laptop in front of the reader — with nothing but Node and a
-clone. It builds the command line and fetches the validation's mouse map, yeast Micro-C, ATAC-seq
-replicates, mm10 and its RefSeq genes, and the timings' 1.07-billion-contact mouse map (about 12.4 GB,
-into the folders the notebooks fetch them into, each held to its size and MD5, the sequence indexed
-beside itself), then runs twenty-three tasks over them genome-wide, three times round robin, each run
-a fresh process: on the mouse, coverage, P(s), insulation, the directionality index, compartments
-phased by GC, loop calling, chromosight's loops, a pileup over them and a 3D model of the genome; five
-of these again on the deeper map; P(s) at 50 bp, loops and a model on the yeast; and peak calling with
-IDR, interval overlap, a metaplot, track correlation, base composition and a motif search over the
-mouse genome. **Each process measures itself**: a hook loaded with `--import` writes its
-`process.resourceUsage()` as it exits — `getrusage` wherever Node runs, so CPU seconds and the peak
-resident set are what `/usr/bin/time` would say, in the same units on macOS as on Linux — and the wall
-clock runs from its start to its exit. Every run is one line of `notebooks/work/laptop/runs.tsv`, with
-the notes it printed, the machine — its model, processor, cores, memory, system and whether it is on
-mains power — and the build; `summary.md` is one table per data set, the median wall-clock time with
-its range, the CPU time and the largest peak, then every command as it ran. It is a document too, and
-nothing in the suite runs it.
+**And one for the reader's own machine.** `notebooks/laptop.qmd` answers what the two notebooks do not
+— what a genome-wide analysis costs on the laptop in front of the reader — with Quarto, pandas,
+matplotlib and pyfaidx and the built command line, and no reference package. It downloads the
+validation's mouse map, yeast Micro-C, ATAC-seq replicates, mm10 and its RefSeq genes, and 4DN's IMR-90
+in situ Hi-C (Rao et al. 2014, 4DNFIJTOIGOI, 1.08 billion contacts): about 13.7 GB into
+`notebooks/work/laptop/data/`, each file held to its MD5, a file `validation.qmd` already holds linked
+instead. Then it runs 23 analyses genome-wide, once each, every one a process of its own: on the mouse
+map, coverage, P(s), insulation, the directionality index, compartments (E1, unphased), loop calling,
+chromosight's loops, a pileup over them and a 3D model; five of these again on the human map, sixteen
+times deeper; P(s) at 50 bp, loops and a model on the yeast; and peak calling with IDR, interval overlap,
+a metaplot, track correlation, base composition and a motif search over the mouse genome. `os.wait4`
+gives each process's CPU time and peak resident set, and the wall clock runs from its start to its exit.
+Each result is written to `notebooks/work/laptop/timings.tsv` as it is measured, with the machine and the
+build, and a second render of the same build reads it back instead of running again. The page is a table
+of all 23, the five analyses side by side at the two depths, a figure, and every command in one block at
+the end. It is a document too, and nothing in the suite runs it.
 
 **They are published with every release.** `.github/workflows/notebooks.yml` installs all of it on a
 fresh runner — the reference environment pinned package by package in `notebooks/requirements.txt`,
