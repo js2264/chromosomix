@@ -50,6 +50,7 @@ import urllib.request
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 import pandas as pd
 import pyfaidx
 
@@ -180,57 +181,57 @@ def at(path, bp):
 
 # name, data, analysis, resolution, and the command after `chromosomix`
 TASKS = [
-    ('coverage', 'Mouse Hi-C, 69 M contacts', 'Coverage, balanced', '10 kb',
+    ('coverage', 'Mouse Hi-C', 'Coverage, balanced', '10 kb',
      ['coverage', at(MOUSE, 10_000), '--balance']),
-    ('expected', 'Mouse Hi-C, 69 M contacts', 'P(s)', '10 kb',
+    ('expected', 'Mouse Hi-C', 'P(s)', '10 kb',
      ['expected', at(MOUSE, 10_000), '--quantity', 'expected', '--scope', 'file']),
-    ('insulation', 'Mouse Hi-C, 69 M contacts', 'Insulation, 100 kb window, boundaries', '10 kb',
+    ('insulation', 'Mouse Hi-C', 'Insulation, 100 kb window, boundaries', '10 kb',
      ['insulation', at(MOUSE, 10_000), '--window', '10']),
-    ('di', 'Mouse Hi-C, 69 M contacts', 'Directionality index, 2 Mb window, borders', '50 kb',
+    ('di', 'Mouse Hi-C', 'Directionality index, 2 Mb window, borders', '50 kb',
      ['di', at(MOUSE, 50_000), '--window', '40']),
-    ('compartments', 'Mouse Hi-C, 69 M contacts', 'Compartments (E1) and saddle', '100 kb',
+    ('compartments', 'Mouse Hi-C', 'Compartments (E1) and saddle', '100 kb',
      ['compartments', at(MOUSE, 100_000)]),
-    ('loops', 'Mouse Hi-C, 69 M contacts', 'Loop calling (cooltools dots), to 10 Mb', '10 kb',
+    ('loops', 'Mouse Hi-C', 'Loop calling (cooltools dots), to 10 Mb', '10 kb',
      ['loops', at(MOUSE, 10_000)]),
-    ('chromosight', 'Mouse Hi-C, 69 M contacts', 'Loop detection (chromosight), to 2 Mb', '10 kb',
+    ('chromosight', 'Mouse Hi-C', 'Loop detection (chromosight), to 2 Mb', '10 kb',
      ['chromosight', at(MOUSE, 10_000), '--pattern', 'loops']),
-    ('apa', 'Mouse Hi-C, 69 M contacts', "APA over chromosight's loops", '10 kb',
+    ('apa', 'Mouse Hi-C', "APA over chromosight's loops", '10 kb',
      ['apa', at(MOUSE, 10_000), '--pairs', LOOPS]),
-    ('model', 'Mouse Hi-C, 69 M contacts', '3D model of the genome (pastis-NB)', '1 Mb',
+    ('model', 'Mouse Hi-C', '3D model of the genome (pastis-NB)', '1 Mb',
      ['reconstruct3d', at(MOUSE, 1_000_000), '--method', 'nb', '--alpha', '3']),
 
-    ('human-coverage', 'Human Hi-C, 1.08 B contacts', 'Coverage, balanced', '10 kb',
+    ('human-coverage', 'Human Hi-C', 'Coverage, balanced', '10 kb',
      ['coverage', at(HUMAN, 10_000), '--balance']),
-    ('human-expected', 'Human Hi-C, 1.08 B contacts', 'P(s)', '10 kb',
+    ('human-expected', 'Human Hi-C', 'P(s)', '10 kb',
      ['expected', at(HUMAN, 10_000), '--quantity', 'expected', '--scope', 'file']),
-    ('human-insulation', 'Human Hi-C, 1.08 B contacts', 'Insulation, 100 kb window, boundaries', '10 kb',
+    ('human-insulation', 'Human Hi-C', 'Insulation, 100 kb window, boundaries', '10 kb',
      ['insulation', at(HUMAN, 10_000), '--window', '10']),
-    ('human-compartments', 'Human Hi-C, 1.08 B contacts', 'Compartments (E1) and saddle', '100 kb',
+    ('human-compartments', 'Human Hi-C', 'Compartments (E1) and saddle', '100 kb',
      ['compartments', at(HUMAN, 100_000)]),
-    ('human-loops', 'Human Hi-C, 1.08 B contacts', 'Loop calling (cooltools dots), to 10 Mb', '10 kb',
+    ('human-loops', 'Human Hi-C', 'Loop calling (cooltools dots), to 10 Mb', '10 kb',
      ['loops', at(HUMAN, 10_000)]),
 
-    ('yeast-expected', 'Yeast Micro-C, 51 M contacts', 'P(s)', '50 bp',
+    ('yeast-expected', 'Yeast Micro-C', 'P(s)', '50 bp',
      ['expected', at(YEAST, 50), '--quantity', 'expected', '--scope', 'file']),
-    ('yeast-chromosight', 'Yeast Micro-C, 51 M contacts', 'Loop detection (chromosight)', '800 bp',
+    ('yeast-chromosight', 'Yeast Micro-C', 'Loop detection (chromosight)', '800 bp',
      ['chromosight', at(YEAST, 800), '--pattern', 'loops']),
-    ('yeast-model', 'Yeast Micro-C, 51 M contacts', '3D model of the genome (pastis-NB)', '12.8 kb',
+    ('yeast-model', 'Yeast Micro-C', '3D model of the genome (pastis-NB)', '12.8 kb',
      ['reconstruct3d', at(YEAST, 12_800), '--method', 'nb', '--alpha', '3']),
 
-    ('peaks', 'Mouse ATAC-seq and mm10', 'Peak calling with IDR, two replicates', '1 bp',
+    ('peaks', 'Mouse ATAC-seq, mm10', 'Peak calling with IDR, two replicates', '1 bp',
      ['peaks', '--signal', ATAC1, '--replicate', ATAC2, '--width', '150', '--times', '3', '--minWidth', '75',
       '--truncate', '100000', '--idr', '0.05']),
-    ('overlap', 'Mouse ATAC-seq and mm10', 'Overlap of the peaks with transcripts, 1,000 shuffles', '1 bp',
+    ('overlap', 'Mouse ATAC-seq, mm10', 'Overlap of the peaks with transcripts, 1,000 shuffles', '1 bp',
      ['overlap', '--sequence', MM10, '--features', PEAKS, '--features', GENES, '--a', PEAKS, '--b', GENES,
       '--shuffle', '--iterations', '1000', '--seed', '1']),
-    ('metaplot', 'Mouse ATAC-seq and mm10', 'Metaplot at every RefSeq TSS, ±2 kb', '50 bp',
+    ('metaplot', 'Mouse ATAC-seq, mm10', 'Metaplot at every RefSeq TSS, ±2 kb', '50 bp',
      ['metaplot', '--tracks', ATAC1, '--features', GENES, '--mode', 'reference', '--at', 'start', '--flank',
       '2000', '--step', '50', '--band', 'none']),
-    ('trackcorr', 'Mouse ATAC-seq and mm10', 'Correlation of the two replicates (Spearman)', '1 kb',
+    ('trackcorr', 'Mouse ATAC-seq, mm10', 'Correlation of the two replicates (Spearman)', '1 kb',
      ['trackcorr', '--tracks', f'{ATAC1},{ATAC2}', '--binsize', '1000', '--method', 'spearman']),
-    ('composition', 'Mouse ATAC-seq and mm10', 'Base composition: GC, skews', '10 kb',
+    ('composition', 'Mouse ATAC-seq, mm10', 'Base composition: GC, skews', '10 kb',
      ['composition', '--sequence', MM10, '--resolution', '10000']),
-    ('motif', 'Mouse ATAC-seq and mm10', 'Motif search, CTCF core, ≤ 1 mismatch', '1 bp',
+    ('motif', 'Mouse ATAC-seq, mm10', 'Motif search, CTCF core, ≤ 1 mismatch', '1 bp',
      ['motif', '--sequence', MM10, '--pattern', 'CCGCGNGGNGGCAG', '--mismatches', '1']),
 ]
 ```
@@ -266,9 +267,7 @@ rows = done.to_dict('records')
 for name, data, analysis, resolution, args in TASKS:
     if any(row['name'] == name for row in rows):
         continue
-    print(f'{name} …', end=' ', flush=True)
     cost = run(name, args)
-    print(f"{cost['wall_s']:.1f} s, {cost['peak_mb']:.0f} MB")
     rows.append({'name': name, 'data': data, 'analysis': analysis, 'resolution': resolution, **cost,
                  'command': 'chromosomix ' + ' '.join(args), **MACHINE})
     pd.DataFrame(rows).to_csv(TIMINGS, sep='\t', index=False)
@@ -306,8 +305,8 @@ On this machine:
 The CPU time is close to the wall-clock time because chromosomix computes on one thread; it can be
 slightly higher, as Node collects garbage and compiles on threads of its own.
 
-The two Hi-C maps differ 16-fold in depth, on genomes of about the same size. The same five analyses on
-each:
+The mouse and human Hi-C maps differ 16-fold in depth (69 million and 1.08 billion contacts), on genomes
+of about the same size. The same five analyses on each:
 
 ```{python}
 pairs = []
@@ -315,9 +314,9 @@ for name in ['coverage', 'expected', 'insulation', 'compartments', 'loops']:
     mouse = times.set_index('name').loc[name]
     human = times.set_index('name').loc[f'human-{name}']
     pairs.append({'analysis': mouse['analysis'], 'resolution': mouse['resolution'],
-                  '69 M contacts': duration(mouse['wall_s']), '1.08 B contacts': duration(human['wall_s']),
-                  '69 M, MB': round(mouse['peak_mb']), '1.08 B, MB': round(human['peak_mb'])})
-pd.DataFrame(pairs).style.hide(axis='index')
+                  'time, 69 M': duration(mouse['wall_s']), 'time, 1.08 B': duration(human['wall_s']),
+                  'memory, 69 M (MB)': round(mouse['peak_mb']), 'memory, 1.08 B (MB)': round(human['peak_mb'])})
+pd.DataFrame(pairs).style.hide(axis='index').format('{:,}', subset=['memory, 69 M (MB)', 'memory, 1.08 B (MB)'])
 ```
 
 ```{python}
@@ -331,9 +330,8 @@ left.barh(y, times['wall_s'], color=times['data'].map(colours))
 left.set(xscale='log', xlabel='wall-clock time (s)', yticks=list(y), yticklabels=labels)
 right.barh(y, times['peak_mb'], color=times['data'].map(colours))
 right.set(xlabel='peak memory (MB)')
-for data, colour in colours.items():
-    right.barh([], [], color=colour, label=data)
-right.legend(loc='lower right', frameon=False, fontsize=8)
+fig.legend(handles=[Patch(color=colour, label=data) for data, colour in colours.items()], loc='outside lower center',
+           ncols=len(colours), frameon=False, fontsize=8)
 for ax in (left, right):
     ax.spines[['top', 'right']].set_visible(False)
     ax.tick_params(axis='y', labelsize=8)
