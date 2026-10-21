@@ -20,7 +20,7 @@ import { App } from '@/app/App'
 import type { Command } from '@/ui/commands'
 import { resetMounting } from '@/embed'
 import type { ViewState } from '@/types'
-import { all, setUpDom, type DomTeardown } from '../support/dom'
+import { all, setUpDom, type DomTeardown, stopsWithTheDom } from '../support/dom'
 
 let teardown: DomTeardown
 
@@ -44,7 +44,7 @@ function windowAt(search: string): { root: HTMLElement; app: App } {
   resetMounting()
   const root = document.createElement('div')
   document.body.appendChild(root)
-  return { root, app: new App(root) }
+  return { root, app: stopsWithTheDom(new App(root)) }
 }
 
 /** What the history was asked to do, from here until the returned undo. */

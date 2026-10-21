@@ -26,7 +26,7 @@ import { buildWorkspaceFile } from '@/state/workspace'
 import { DEFAULT_UI_PLOT_OPTIONS, getPlotOptions, setPlotOptions } from '@/ui/plotOptions'
 import { ANNOTATION_PANEL } from '@/ui/SidePanel'
 import type { ViewState } from '@/types'
-import { setUpDom, type DomTeardown } from '../support/dom'
+import { setUpDom, type DomTeardown, stopsWithTheDom } from '../support/dom'
 
 /** A worker that is created, listened to, and never answers. */
 class DeadWorker {
@@ -77,7 +77,7 @@ function windowOf(count: number): App {
   resetMounting()
   const root = document.createElement('div')
   document.body.appendChild(root)
-  const app = new App(root)
+  const app = stopsWithTheDom(new App(root))
   app['sessions'][0].prime(stateOf('https://data.example/t0.mcool'))
   for (let index = 1; index < count; index++) {
     const uri = `https://data.example/t${index}.mcool`

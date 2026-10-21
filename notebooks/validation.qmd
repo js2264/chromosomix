@@ -3541,5 +3541,6 @@ for path, analysis in {p: ref['analysis'] for ref in REFS.values() for p in ref[
 ```{python}
 #| echo: false
 #| output: asis
-print(R.foot())
+print(R.foot(summary=f"{TEXT['n_identical']} of {len(SUMMARY)} analyses reproduce their reference to the "
+                     "float32 the app computes in, or to every digit written."))
 ```

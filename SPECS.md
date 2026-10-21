@@ -5645,10 +5645,10 @@ did not ask for, and on a map or a lane left without its data.
 the app is, the formats it opens, how to write a link that opens a file at a place — the hash of
 §5.5, with a map's `region` in the machine form and the browser's `locus` in the display form
 (§26.1) — how to embed one (§21), how to run the command line (§23), and links to the README, the
-validation, timing and parity notebooks, the changelog and this specification. `robots.txt` lets every
+validation, timing, parity and laptop notebooks, the changelog and this specification. `robots.txt` lets every
 crawler in, those of language models included, keeps the archived pins and the pull-request
 previews (`/v/`, `/pr/`) out of search — each is a copy of the app at the root, kept for links that
-must not change — and names `sitemap.xml`, which lists the app and its three notebooks. The site
+must not change — and names `sitemap.xml`, which lists the app and its four notebooks. The site
 build adds a fourth, `llms-full.txt`: the README as one file, its repository-relative links made
 absolute (`scripts/llms.mjs`), for a tool that reads a single document rather than following links.
 **`llms.txt` is written by hand and held to the app by a test**, because a model acts on it — writes
@@ -9466,28 +9466,58 @@ which build, from which file and in which words each surface frames a run, set a
 differs**, or one side alone wrote it. Every file and its verdict is one line of
 `notebooks/work/parity/summary.tsv`.
 
-They are documents, not tests: they need the data (about 6 GB for the analyses, 15 GB for the
-viewers and 160 MB for the parity), the reference packages, yapc's own environment and
-higlass-python's, the two viewers and Playwright's Chromium, and nothing in the suite runs them.
+**And one for the reader's own machine.** `notebooks/laptop.qmd` answers what the other three do not
+— what a genome-wide analysis costs on a machine like the reader's — with Quarto, pandas, matplotlib and
+pyfaidx and the built command line, and no reference package, so that a reader can render it on their
+own laptop. It downloads the validation's mouse map, yeast Micro-C, ATAC-seq replicates, mm10 and its
+RefSeq genes, and 4DN's IMR-90 in situ Hi-C (Rao et al. 2014, 4DNFIJTOIGOI, 1.08 billion contacts):
+about 13.7 GB into `notebooks/work/laptop/data/`, each file held to its MD5, a file `validation.qmd`
+already holds linked instead. Then it runs 23 analyses genome-wide, once each, every one a process of
+its own: on the mouse map, coverage, P(s), insulation, the directionality index, compartments (E1,
+unphased), loop calling, chromosight's loops, a pileup over them and a 3D model; five of these again on
+the human map, sixteen times deeper; P(s) at 50 bp, loops and a model on the yeast; and peak calling
+with IDR, interval overlap, a metaplot, track correlation, base composition and a motif search over the
+mouse genome. `os.wait4` gives each process's CPU time and peak resident set, and the wall clock runs
+from its start to its exit. Each result is written to `notebooks/work/laptop/timings.tsv` as it is
+measured, with the machine and the build, and a second render of the same build reads it back instead
+of running again. The page is a table of all 23, the five analyses side by side at the two depths, a
+figure, and every command in one block at the end.
 
-**They are published with every release.** `.github/workflows/notebooks.yml` installs all of it on a
-fresh runner — the reference environment pinned package by package in `notebooks/requirements.txt`,
-yapc's in `requirements-yapc.txt` with IDR and yapc built at the commits the notebook cites,
-Boost-HiC's checkout, Ubuntu's bedtools and seqkit, the app's build, the two viewers with Playwright's
-Chromium, and higlass-python's environment with libfuse — renders the three notebooks, the parity
-first, and publishes them at `<site>/validation/`, `<site>/timings/` and `<site>/parity/`, each a
-self-contained page with its tables beside it (`commands.json`, `summary.tsv` and `validation.txt`,
-every command, every verdict and every number its figures draw; `timings.tsv` and `viewers.tsv`; the
-parity's `summary.tsv`, every file compared); a release keeps its own copies of the three pages and of
-the five tables as assets, and every run keeps
-what it rendered as an artifact for 90 days, the validation alone, with the timing rounds it finished,
-when the timings fail. It runs when a release is published and on demand. Each page opens on a block
-saying when it was rendered, from which version, commit and release, by which run or by hand, and on
-what machine, and closes on how long it took; they link to each other there and on a reader's disk
-alike. The pages are no build of the app, so the service worker leaves those three addresses to the
-network, as it does `v/` and `pr/`, and the app, from this version on, finding itself at any of them
-unregisters its worker and reloads once (`recoverPinnedNavigation`), as at `v/`; a worker from before
-answers there with its own app until its reader takes the update it offers.
+They are documents, not tests: they need the data (about 6 GB for the analyses, 15 GB for the
+viewers, 160 MB for the parity and 13.7 GB for the laptop), the reference packages, yapc's own
+environment and higlass-python's, the two viewers and Playwright's Chromium, and nothing in the suite
+runs them.
+
+**They are published with every release, a job a notebook.** `.github/workflows/notebooks.yml`
+renders each on a fresh runner, with what `.github/actions/notebooks-setup` installs for it: the
+app's build, and the reference environment pinned package by package in `notebooks/requirements.txt`,
+which brings Quarto and every package the notebooks import; for the validation, yapc's environment
+(`requirements-yapc.txt`, IDR and yapc built at the commits the notebook cites), Boost-HiC's checkout,
+and Ubuntu's bedtools and seqkit; for the parity and the timings, the two viewers with Playwright's
+Chromium; for the timings, higlass-python's environment with libfuse. The parity renders first, alone,
+so that a page that cannot render stops the run before the hours of the others; then the validation
+and the timings in one job — the timings run the validation's commands on the inputs it fetched and
+made, which no other runner holds — beside the laptop in another. Each job gathers its pages with
+`notebooks/scripts/pages.py`, the one table of where each page is published and which files go beside
+it, which `rendered.py` reads too, and every job keeps what it rendered as an artifact for 90 days,
+even when it fails: the validation alone, with the timing rounds it finished, when the timings fail.
+A last job publishes them only if all four rendered, at `<site>/validation/`, `<site>/timings/`,
+`<site>/parity/` and `<site>/laptop/`, each a self-contained page with its tables beside it
+(`commands.json`, `summary.tsv` and `validation.txt`, every command, every verdict and every number its
+figures draw; `timings.tsv` and `viewers.tsv`; the parity's `summary.tsv`, every file compared; the
+laptop's `timings.tsv`, every analysis measured); a release keeps its own copies of the four pages and
+of the six tables as assets. It runs when a release is published and on demand. Each page opens on a
+block saying when it was rendered, from which version, commit and release, by which run or by hand,
+and on what machine, and closes on how long it took, writing the same to `rendered.json` beside it with
+**one line of what it found** — how many analyses reproduce their reference, how much less time
+chromosomix takes than the references and the other viewers, how many files the app and the command
+line write alike, how many analyses finish within a minute and the most memory any takes. The run's
+summary is a section a notebook: where it is, from what and in how long, that line, and its table,
+folded. The pages link to each other there and on a reader's disk alike. They are no build of the app,
+so the service worker leaves those four addresses to the network, as it does `v/` and `pr/`, and the
+app, from this version on, finding itself at any of them unregisters its worker and reloads once
+(`recoverPinnedNavigation`), as at `v/`; a worker from before answers there with its own app until its
+reader takes the update it offers.
 
 ### 18.11 A set of scales is one picture
 
