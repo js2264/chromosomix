@@ -1,6 +1,13 @@
 {
-  "latest": "37cfbbe",
+  "latest": "0ee421f",
   "versions": [
+    {
+      "commit": "0ee421f",
+      "version": "0.16.0",
+      "date": "2026-10-21T16:10:15+02:00",
+      "subject": "parity.qmd: one build of one commit on both sides, and a refused session stops at once",
+      "tag": ""
+    },
     {
       "commit": "37cfbbe",
       "version": "0.16.0",
@@ -132,13 +139,6 @@
       "version": "0.13.0",
       "date": "2026-10-09T22:17:03+02:00",
       "subject": "Colour a model by a track from white to the track's colour, and type the key's ends (§25.5) (#101)",
-      "tag": ""
-    },
-    {
-      "commit": "b9eda86",
-      "version": "0.13.0",
-      "date": "2026-10-09T22:11:13+02:00",
-      "subject": "Draw a called set as one row, a 1D track or on the map as its display says; boundaries as points or short diagonal markers, domains as corners (§8.1, §18.5, §18.7, §18.8) (#100)",
       "tag": ""
     },
     {
