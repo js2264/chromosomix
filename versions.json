@@ -214,13 +214,6 @@
   ],
   "pulls": [
     {
-      "number": 126,
-      "commit": "69363a3",
-      "title": "Add parity notebook comparing app and CLI outputs",
-      "branch": "js/dazzling-newton-4oard6",
-      "date": "2026-10-21T11:21:37Z"
-    },
-    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
