@@ -1,6 +1,13 @@
 {
-  "latest": "ab9f82c",
+  "latest": "37cfbbe",
   "versions": [
+    {
+      "commit": "37cfbbe",
+      "version": "0.16.0",
+      "date": "2026-10-21T13:54:10+02:00",
+      "subject": "Add parity notebook comparing app and CLI outputs (#126)",
+      "tag": ""
+    },
     {
       "commit": "ab9f82c",
       "version": "0.16.0",
@@ -132,13 +139,6 @@
       "version": "0.13.0",
       "date": "2026-10-09T22:11:13+02:00",
       "subject": "Draw a called set as one row, a 1D track or on the map as its display says; boundaries as points or short diagonal markers, domains as corners (§8.1, §18.5, §18.7, §18.8) (#100)",
-      "tag": ""
-    },
-    {
-      "commit": "955f2c9",
-      "version": "0.13.0",
-      "date": "2026-10-09T20:51:55+02:00",
-      "subject": "Search a genome read by range for a motif, chromosome by chromosome, and open a --sequence by its index (§8.8, §8.21, §18.8, §23.1) (#99)",
       "tag": ""
     },
     {
