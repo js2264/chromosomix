@@ -9448,12 +9448,13 @@ tile in view fetched and drawn. Four rounds, the viewers taking turns to go firs
 every cell refused, is one line of `notebooks/work/validation/viewers.tsv`, with the requests and
 bytes the page asked for, the machine and every version.
 **And a third holds the app to its own command line.** `notebooks/parity.qmd` runs ten tasks in the
-app — this checkout's build, served from loopback and driven in headless Chromium by
-`notebooks/scripts/parity.mjs` — and again from the line the console wrote for each run (§23.1), run
-as written in the folder holding the files with only `--out` added, and compares the files the two
-wrote: insulation, compartments phased by the sequence's GC, P(s), coverage, virtual 4C, loop calling
-and a motif search on GEO's yeast Micro-C (GSE151553) at 1.6 kb, framed on chrIV, which the map draws
-bin for bin where the whole genome is drawn in pooled bins, with UCSC's sacCer3 beside it;
+app — this checkout's build, of the commit the command line is built from or nothing runs, served
+from loopback and driven in headless Chromium by `notebooks/scripts/parity.mjs` — and again from
+the line the console wrote for each run (§23.1), run as written in the folder holding the files with
+only `--out` added, and compares the files the two wrote: insulation, compartments phased by the
+sequence's GC, P(s), coverage, virtual 4C, loop calling and a motif search on GEO's yeast Micro-C
+(GSE151553) at 1.6 kb, framed on chrIV, which the map draws bin for bin where the whole genome is
+drawn in pooled bins, with UCSC's sacCer3 beside it;
 APA over the loops the app called there; and peak calling and the metaplot on GEO's yeast ATAC-seq and
 its MACS2 peaks (GSM8640701), opened with no map. The files are opened as a reader opens them — a
 workspace dropped on the landing page and then the files it asks for, or the files alone — so the

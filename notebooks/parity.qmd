@@ -52,7 +52,8 @@ Each file comes out as one of these:
 A file only one side names its own way is matched to the other's by the task's word and the format,
 and the table says so.
 
-**To render.** Build the app and the command line, and have a Chromium for Playwright — the
+**To render.** Build the app and the command line, from one commit, since a page whose two builds
+name two is refused before anything runs, and have a Chromium for Playwright — the
 timings' (`notebooks/viewers`, pinned) or one already installed, named in `PARITY_CHROMIUM` or found
 under `PLAYWRIGHT_BROWSERS_PATH`:
 
@@ -144,6 +145,16 @@ def fetch(url, md5sum, name=None):
 
 
 VERSION = subprocess.run(['node', str(CLI), '--version'], capture_output=True, text=True).stdout.splitlines()[0]
+
+# One build of one checkout on both sides. dist/ and dist-cli/ are built apart, and an app left from
+# an older checkout can refuse this page's workspace and record nothing the driver waits for, so two
+# builds of two commits are refused here, not ten minutes into each session. The app names its build
+# in its service worker's cache, `chromosomix-<version>-<commit>`; the command line, on `--version`.
+_cli = re.fullmatch(r'chromosomix (\S+)(?: \((\w+)\))?', VERSION)
+_app = re.search(r'const CACHE = "([^"]*)"', (APP / 'sw.js').read_text()) if (APP / 'sw.js').exists() else None
+if _cli is None or _app is None or _app[1] != '-'.join(filter(None, ('chromosomix', *_cli.groups()))):
+    raise RuntimeError(f"dist/ is {_app[1] if _app else 'not the site build'} and dist-cli/ is {VERSION}: "
+                       'run `npm run build && npm run build:cli` at the repository root, so both are this checkout.')
 ```
 
 ## Data

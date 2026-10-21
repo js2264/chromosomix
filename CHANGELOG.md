@@ -23,6 +23,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   provenance set aside), or the data apart. Rendered with the validation and the timings on every
   release and published at <https://chromosomix.app/parity/>, with every file and its verdict in
   `summary.tsv` beside it.
+  The app and the command line must be built from one commit or nothing runs, and a session the
+  app refuses to open stops at the app's own words rather than after a ten-minute wait.
 
 - **The validation notebook holds four more analyses to their references, and does not time them
   (§18.10).** `notebooks/validation.qmd` adds cis and trans per sequence against cooltools'

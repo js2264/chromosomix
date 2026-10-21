@@ -260,6 +260,18 @@ function failAll(session, results, error) {
   }
 }
 
+/**
+ * Wait for `wait`, unless the app puts a dialog up first: no file of a plan asks a question, so a
+ * dialog while a session opens is the app refusing one, and its words are the error rather than a
+ * wait that runs out.
+ */
+async function unrefused(page, wait) {
+  const refused = page.waitForSelector('.modal-panel', { state: 'visible', timeout: LIMIT_MS }).then(async (panel) => {
+    throw new Error(`the app said “${(await panel.innerText()).replace(/\s+/g, ' ').trim()}”`)
+  })
+  await Promise.race([wait, refused])
+}
+
 /** Drop the session's workspace, where it has one, and then its files; wait for what the app says once they are open. */
 async function open(page, session) {
   await page.goto(`${PLAN.base}/`, { waitUntil: 'domcontentloaded' })
@@ -273,16 +285,17 @@ async function open(page, session) {
     await sleep(2000)
   }
   await drop(page, session.files.map((name) => join(PLAN.data, name)))
-  await page.waitForFunction(
+  await unrefused(page, page.waitForFunction(
     (opened) => JSON.parse(localStorage.getItem('chromosomix:actions') ?? '{"entries":[]}').entries
       .filter((one) => one.kind === 'open' || one.kind === 'track').length >= opened,
     session.files.length,
     { timeout: LIMIT_MS },
-  )
+  ))
   // What the app measures once a file is open and says in a notice — that a sequence reads as
   // circular — is a fact of the framing every run records, so the runs wait for it.
   if (session.waitFor !== undefined) {
-    await page.waitForFunction((text) => document.body.innerText.includes(text), session.waitFor, { timeout: LIMIT_MS })
+    await unrefused(page, page.waitForFunction((text) => document.body.innerText.includes(text), session.waitFor,
+      { timeout: LIMIT_MS }))
   }
   await sleep(3000)
 }
