@@ -10942,23 +10942,40 @@ file named twice, or two names a Mac's disk holds as one, is numbered (`sample_2
 has written is written over by the same command. `coverage HCT116.rep1.cool HCT116.rep2.cool` wrote
 `HCT116.coverage.*` twice, the second run's files over the first's, with exit 0.
 
-**An address is fetched first, whole.** The app reads a remote file by range, through a reader that
-is synchronous (§11), which a worker has and Node does not, so a shell cannot read one that way. An
-http or https address — the map, an `--against`, a `--sequence`, `--tracks`, `--features` or
-`--pairs`, a `.pairs` named for P(s)'s orientations, the workspace `replay` reads — is downloaded
-instead, streamed to disk with its progress on stderr unless `--quiet`, into one directory per
-command under `$TMPDIR` that is removed when the command ends, Ctrl-C included; and with the sidecar
-its format reads beside itself, where the server has one: a FASTA's `.fai`, a HiC-Pro matrix's bin
-file. A batch lets each map go once its run is done, so it holds one at a time. What every run reads
-— a `--sequence`, `--tracks`, `--features`, `--pairs`, `--against` or the workspace — is fetched
+**An address is read by range, as the app reads it.** The app reads a remote file through
+`RemoteRangeSource`, whose reads are synchronous because HDF5's are (§11), and a browser worker
+answers them with a synchronous `XMLHttpRequest` that Node does not have. The command has one of its
+own instead (`cli/syncFetch.ts`): a helper thread makes each request with `fetch` while the thread
+running the task waits on a shared word with `Atomics.wait` and takes the answer off the port it was
+posted to — so the same source, with the same chunk cache, coalescing and read-ahead, reads an
+address here as it does in a tab. Under the command's NODERAWFS, where h5wasm's filesystem *is* the
+disk, the source is mounted as a path no file lies behind (`h5/lazyFile.ts`): NODERAWFS hands any
+stream that carries stream ops of its own back to the in-memory layer, so every read HDF5 makes of
+that path is the source's. A map — a cooler, an `.mcool` rung, a `.hic`, an `.scool`, a `.pairs`
+and the `.px2` beside it — an `--against`, a bigWig or `.2bit` in `--tracks`, a `.2bit` or a FASTA
+with its `.fai` beside it in `--sequence`, and a `.pairs` named for P(s)'s orientations are read so,
+and nothing of them is written to disk: one rung of the demo's 46 MB *E. coli* `.mcool` costs 2.6 MB
+in three requests, and a metaplot over a 15 MB bigWig 4.2 MB. A text track in `--tracks` is read in
+one request, being parsed whole. Every request asks for `identity`, which Node, unlike a page, may.
+What is read whole from a copy — a `--features` or `--pairs` set, a HiC-Pro matrix and its bin file
+(§3.9), the workspace `replay` reads — and **any address
+whose host will not serve a range**, answering a range with the whole object or compressing it in
+transit, is fetched to disk instead, said so on stderr for the latter, streamed with its progress
+unless `--quiet`, into one directory per command under `$TMPDIR` that is removed when the command
+ends, Ctrl-C included; with the sidecar its format reads beside itself, where the server has one. So
+the command works on every host it worked on, and reads by range on every host the app can. A batch
+lets each copied map go once its run is done, so it holds one at a time. What every run reads — a
+`--sequence`, `--tracks`, `--features`, `--pairs`, `--against` or the workspace — is opened or fetched
 before the first, so an address there that cannot be had is exit 2; a map that cannot be is that
-file's failure, named, and the batch goes on; and a `.pairs` a parameter names is fetched when the
-task asks for it, and noted by the task where it cannot be, as a file on disk is. The map is opened *as* its address, so the
-framing, the provenance and every sentence about it name the URL that was typed, and its outputs are
-named after its file, the query left off. Any other scheme is refused by name: an `s3://` address
-needs credentials the command has not got. An address went to `stat` as a path until now — *cannot
-stat /cwd/https:/example.org/x.cool* — under a README that said it was fetched, and the console said a
-shell reads local files only; its note now says what the line costs instead (§23.3).
+file's failure, named with the status the host answered or the cause of a request that got no
+answer, and the batch goes on; and a `.pairs` a parameter names is opened when the task asks for it,
+and noted by the task where it cannot be, as a file on disk is. The map is opened *as* its address,
+so the framing, the provenance and every sentence about it name the URL that was typed, and its
+outputs are named after its file, the query left off — as is every sentence about it, so a signed
+link's signature stays out of the log. Any other scheme is refused by name: an `s3://` address needs
+credentials the command has not got. An address went to `stat` as a path once — *cannot stat
+/cwd/https:/example.org/x.cool* — and was then downloaded whole, seven gigabytes for one rung; the
+console's note about that cost is gone with it (§23.3).
 
 ### 23.2 What else is on it, and what is not
 
@@ -11010,10 +11027,10 @@ shell cannot be told — a window across several sequences or off the diagonal, 
 set with no file behind it, an `.scool`'s cells or the maps `hicrep` compared against where the
 record does not name them, a map drawn balanced and read raw or the reverse, which the one
 `--no-balance` cannot say, a map drawn through an edit of its reference (§27.7) — and a command that
-runs and answers a slightly different question is worse than one that says what it left out. And
-about the one thing a shell is told at a price: a remote file, which the line names and the shell
-downloads whole before reading it (§23.1), where the app reads only what it draws — so the note says
-so, and that a reader running several lines over one file should fetch it once and name the copy.
+runs and answers a slightly different question is worse than one that says what it left out. A
+remote file is no longer one of them: the shell reads it by range, as the app read it (§23.1), so the
+line names the URL and runs as it stands. Its note said for a while that the command downloaded the
+whole file, and that a reader running several lines over one should fetch it once.
 
 They sit **above a command and below anything else**, which is one rule read twice: a caveat
 qualifies a line the reader is about to run, so it comes first; a refusal explains a line that is

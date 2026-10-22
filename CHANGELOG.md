@@ -55,6 +55,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The command line reads an address by range, as the app does, rather than downloading it whole
+  (§23.1).** A map — a cooler, an `.mcool` rung, a `.hic`, an `.scool`, a `.pairs` and its `.px2` —
+  an `--against`, a bigWig or `.2bit` in `--tracks`, and a `.2bit` or an indexed FASTA in
+  `--sequence` are read through the app's own `RemoteRangeSource`, with its cache, coalescing and
+  read-ahead, and nothing of them is written to disk: one rung of the demo's 46 MB *E. coli* `.mcool`
+  costs 2.6 MB in three requests, and a metaplot over a 15 MB bigWig 4.2 MB, where the command used to
+  fetch both whole first. Node has no synchronous request, so a helper thread fetches while the task's
+  thread waits on `Atomics.wait` (`cli/syncFetch.ts`), and a range source is mounted under h5wasm's
+  Node filesystem as a path no file lies behind (`h5/lazyFile.ts`). Every file a command writes over
+  an address is the file it writes over the same bytes on disk (`test/unit/cli-range.test.ts`). What
+  is read whole from a copy is unchanged — a feature set, a HiC-Pro matrix, a workspace — and so is
+  any address whose host will not serve a range, now said on stderr. A `404` names its status, a
+  request that got no answer its cause, and neither its query. The console's note that a remote line
+  downloads the whole file is gone with the download.
+
 - **pastis-NB's fit runs on every core, and gives the same model on any number of them (§25.6,
   §23.1).** Each evaluation of the likelihood, and of pastis' MDS start before it, is now summed in
   bands of rows laid out by the bead count alone, and the bands are shared among helper workers —

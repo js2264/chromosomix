@@ -498,11 +498,14 @@ value after it: `--stranded` turns it on, `--stranded=false` or `--no-stranded` 
 is none of its values is refused before any file is opened, with exit 2 and the values there are,
 and so is a number that is not one.
 
-Files are read from disk. A file named by an http or https address — the map, or what `--against`,
-`--sequence`, `--tracks`, `--features` or `--pairs` names — is downloaded first, whole, because the
-reader's range requests are synchronous, which a browser worker has and Node does not: it goes into
-`$TMPDIR`, with its progress on stderr, and is removed when the command ends. For several commands
-over one large remote file, download it once yourself and name the copy.
+Files are read from disk or from where they are published. A map named by an http or https address —
+a cooler, an `.mcool` rung, a `.hic`, an `.scool` or a `.pairs`, as the positional or after
+`--against` — and a bigWig, a `.2bit` or an indexed FASTA after `--tracks` or `--sequence` is read
+**by range**, as the app reads it: one rung of a seven-gigabyte `.mcool` costs that rung, and nothing
+is written to disk; a bedGraph or a wig after `--tracks` is read in one request. What is read whole
+from a copy — a `--features` or `--pairs` set, a HiC-Pro matrix, a workspace — and any file whose host
+will not serve a range is downloaded into `$TMPDIR` instead, with its progress on stderr, and removed
+when the command ends.
 
 ```bash
 chromosomix insulation *.mcool --sequences II --out results/
