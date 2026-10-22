@@ -485,7 +485,8 @@ file the two wrote compared, <https://chromosomix.app/parity/>. And what the com
 like yours — the time and the peak memory of 23 analyses run genome-wide, up to a 1.08-billion-contact
 human map — is <https://chromosomix.app/laptop/>, rendered on a GitHub runner; render
 `notebooks/laptop.qmd` with Quarto from a clone to measure your own: it downloads the data, runs each
-analysis once and tabulates them.
+analysis once and tabulates them. The app lists all four in **About → Notebooks**, each with the one
+line of what it found.
 
 Every task writes its results where `--out` points, each named after the file it came from up to
 its first dot — `sample.coverage.coverage-total.tsv`. Two files of one command that would share a

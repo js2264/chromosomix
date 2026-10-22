@@ -4,7 +4,8 @@ laptop.qmd).
 `Render.head()` is the block under each notebook's title and `Render.foot()` the line at its end,
 both Markdown for a cell with `output: asis`; `foot()` also writes the same facts as JSON beside the
 notebook's outputs, with the one-line summary the notebook gives it, which .github/workflows/notebooks.yml
-publishes with the page and prints in the run's summary. Everything is
+publishes with the page and prints in the run's summary, and which the app's About shows under
+*Notebooks* (src/notebooks.ts reads it, and drops a field that fails its check). Everything is
 asked of the checkout and the machine, or read from what GitHub Actions sets, so a page rendered by
 hand says so rather than borrowing a run's link.
 

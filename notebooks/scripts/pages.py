@@ -5,7 +5,9 @@ run the validation's commands again on the validation's inputs — and a last jo
 publishes them and writes the run's summary. Every one of those steps asks the same things of a page:
 where it is published, which folder of work/ its outputs are in, which files go beside it, and which
 of them a release keeps. They are answered here, once, and `rendered.py` reads the same table, so a
-fifth notebook is one more entry. Nothing beyond Python itself is needed.
+fifth notebook is one more entry — and one more in `src/notebooks.ts`, the list the app's About names
+under *Notebooks*, which test/unit/notebooks.test.ts holds to this one. Nothing beyond Python itself
+is needed.
 
     python notebooks/scripts/pages.py gather validation timing    # the pages into pages/
     python notebooks/scripts/pages.py assets v0.17.0 assets/       # a release's copies, from pages/

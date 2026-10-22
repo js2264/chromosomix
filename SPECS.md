@@ -9578,6 +9578,27 @@ app, from this version on, finding itself at any of them unregisters its worker 
 (`recoverPinnedNavigation`), as at `v/`; a worker from before answers there with its own app until its
 reader takes the update it offers.
 
+**And the app names them, in *About*.** The dialog is three tabs — *Overview*, what the viewer is, the
+tutorial (§30.1) and the source; *Notebooks*; and *Licences* (§22.4) — over the build stamp and the
+version picker, which stay under every tab and outside the part that scrolls, so a tab as long as the
+licences never takes the stamp off screen. It opens on *Overview*, with the caret on the row of tabs,
+one stop walked with ← and →, Home and End. **The Notebooks tab** says in a sentence what the
+notebooks are, then gives each a block: its title, linking to its page in a new tab, and its address;
+what it holds chromosomix to; and, read from the `rendered.json` beside the page, the one line of what
+it found, set off by a rule, and a quiet line saying when it was rendered, from which version and
+commit, in how long, on how many cores and how much memory, and by which run of the workflow, linked.
+The list is `src/notebooks.ts`, held by `test/unit/notebooks.test.ts` to `pages.py`'s table and to the
+segments the service worker leaves alone, so a fifth notebook cannot be published without the tab
+naming it. The pages are this site's, when the app is served from one — an archived pin and a preview
+reach up to its root — and the deployed site's, by `package.json`'s `homepage`, from the desktop, the
+single file, the package's copy and a dev server; a build that can name neither has no Notebooks tab.
+**The stamps are read when the tab is first chosen, never when *About* opens**, all four at once; until
+one answers its block says it is being read, and one that cannot be read — offline, a page not
+published yet, a file that does not parse — takes its two lines away and leaves the link. A stamp is
+untrusted input that ends up on screen: a field that fails its check is dropped rather than repaired, a
+run is linked only on GitHub, and a stamp with no finishing time or no version is none. The single
+file, whose policy allows no request (§19), links the pages and reads nothing.
+
 ### 18.11 A set of scales is one picture
 
 Some tasks produce a *set* of profiles that are one reading at several settings, and diamond
@@ -10737,15 +10758,17 @@ carry no `LICENSE` beside them. **A package that ships no licence text** — `ge
 which declares MIT and has no text of it in its tarball or its repository — has the licence it
 declares, naming the author it names, committed under `licenses/` and reproduced in its place.
 
-**About names them too**, under *Licences*: chromosomix's own licence, the GPL, then one line per project —
-its name linking to its home, what it does in this viewer, and its licence — with a dependency folded
-in beside what pulls it in, and a link to the build's own `THIRD-PARTY-NOTICES.txt` (the site's, from
-the desktop and the standalone page, which have none a link can open). The list is
+**About names them too**, under *Licences*, the last of its three tabs (§18.10): chromosomix's own
+licence, the GPL, then one line per project — its name linking to its home, what it does in this
+viewer, and its licence — with a dependency folded in beside what pulls it in, and a link to the
+build's own `THIRD-PARTY-NOTICES.txt` (the site's, from the desktop and the standalone page, which
+have none a link can open). The list is
 `src/licences.ts`, and `test/unit/licences.test.ts` holds it to every package the source imports and
 everything those pull in, to every entry the notices name as copied or ported, and to the README's
 *Licence* section. Then one line on the marks of the stores and services the interface shows. The
-dialog is wider than a plain one for its three columns, and taller, so the build stamp under them is
-on screen on a laptop.
+dialog is wider than a plain one for its three columns. The licences are a tab of their own because
+on the one page they shared with what the viewer is they pushed the build stamp out of sight on a
+laptop; the stamp is now under every tab.
 
 Each check asserts the notices are there — the package's (§22.3), the archived pin's (§21), the
 desktop renderer's (§15) and the standalone page's (§19) — because a notice that stopped being
@@ -14557,11 +14580,11 @@ itself**: a reader who came to open a file is not asked first whether they would
 says what *About* says (below), and steps out of sight while a tour is on screen, since under the grey
 an offer to play the tutorial is one more thing to read.
 
-**In *About*, straight after what the viewer is** — the answer to the question a reader who has just
-read that asks next, and the one way in a newcomer finds without being told where to look. One
-sentence, and one filled button that says what it will do: *play the tutorial* for a reader who has
-not begun it, *resume at step 32 of 50* for one who left it, with a quiet *start over* beside it, and
-*play the tutorial again* for one who finished it. The palette has it too, as *Guided tutorial* under
+**In *About*, straight after what the viewer is**, on its first tab — the answer to the question a
+reader who has just read that asks next, and the one way in a newcomer finds without being told where
+to look. One sentence, and one filled button that says what it will do: *play the tutorial* for a
+reader who has not begun it, *resume at step 32 of 50* for one who left it, with a quiet *start over*
+beside it, and *play the tutorial again* for one who finished it. The palette has it too, as *Guided tutorial* under
 Help, its hint saying which of the three a press will do.
 
 **Only where its first step is.** It opens on a store, so it is offered wherever the store drawer is:

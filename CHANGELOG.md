@@ -14,6 +14,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The notebooks, in *About* (§18.10).** A *Notebooks* tab names the four notebooks GitHub Actions
+  renders with every release — the validation, the timings, the parity and the laptop — each linking
+  to its page, with a sentence on what it holds chromosomix to and, read from the `rendered.json`
+  published beside it, the one line of what it found and when, from which build, on what runner and
+  by which run it was rendered. The stamps are read when the tab is chosen, never when *About* opens;
+  one that cannot be read leaves the link alone. The desktop app, the single file, the package's copy
+  and a dev server link the deployed site's pages; the single file reads no stamp.
+
 - **The app held to its own command line, in a notebook (§18.10).** `notebooks/parity.qmd` runs ten
   tasks in the app, in headless Chromium — insulation, compartments, P(s), coverage, virtual 4C, loop
   calling, a motif search and APA on GEO's yeast Micro-C at 1.6 kb, framed on chrIV, and peak calling
@@ -54,6 +62,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   The map is committed, so this runs on every push with nothing to build.
 
 ### Changed
+
+- **About is three tabs, and the licences are one of them (§22.4).** *Overview* — what the viewer is,
+  the tutorial and the source — then *Notebooks* and *Licences*, with the build stamp and the version
+  picker under every tab rather than under the licences, which had pushed them out of sight on a
+  laptop. The row of tabs is walked with ← and →, Home and End.
 
 - **pastis-NB's fit runs on every core, and gives the same model on any number of them (§25.6,
   §23.1).** Each evaluation of the likelihood, and of pastis' MDS start before it, is now summed in
