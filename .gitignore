@@ -26,6 +26,9 @@ __pycache__/
 *.egg-info/
 # JupyterLab's autosaves beside a notebook it opened (widgets/python/demo.ipynb).
 .ipynb_checkpoints/
+# `R CMD build` and `R CMD check` of the R widget (widgets/r).
+widgets/r/*.Rcheck/
+widgets/r/chromosomix_*.tar.gz
 
 # The icon size ladder `npm run icons:app` draws alongside the five icons the
 # app actually installs. Those five are committed (see the script's docstring);

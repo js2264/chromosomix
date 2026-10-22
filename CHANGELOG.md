@@ -27,6 +27,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   `widgets/python/demo.ipynb` drives the yeast demo; `scripts/ui-jupyter-widget.mjs` runs it in
   JupyterLab and shoots every frame.
 
+- **The viewer in R: an htmlwidget for R Markdown, Quarto, RStudio and Shiny (§21.5).** The
+  `chromosomix` R package (`widgets/r/`, `install.packages("widgets/r", repos = NULL)` from a clone)
+  draws the app on a page — `chromosomix(map, region = "IV:1000000-1400000", tracks = c("ATAC.bw",
+  "genes.gtf"), transform = "log10")` — and `chromosomix_goto()`, `chromosomix_navigate()` and
+  `chromosomix_add()` move it: piped onto a widget before it is drawn, which is how a static page moves
+  its views, or of one on screen in Shiny through `chromosomixProxy()`, where `input$<id>_state`
+  follows the reader. Files on this machine are served to the viewer by byte range from the R
+  session, their sidecars beside them; behind RStudio Server through RStudio's proxy. The examples are
+  an R Markdown page of the yeast demo and a Shiny app driving it
+  (`system.file("examples", package = "chromosomix")`); `scripts/ui-r-widget.mjs` renders and runs
+  both and shoots every widget.
+
 - **`chromosomix:add`, a host page putting files in an embed (§21.4).** The sixth message of the
   embed's channel: a list of addresses, each put in the tab as the header's `+` puts one — a track
   beside the map, another map or a model beside it, a workspace — once the map the `src=` named is

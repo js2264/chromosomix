@@ -10604,9 +10604,10 @@ A `view` this build has never heard of falls back; a smoothing radius it does no
 an array where a genome name should be is not stringified into one. What the host is told afterwards
 is where the view actually **went**, which for a trimmed patch is not always where it asked to go.
 
-### 21.5 In a notebook
+### 21.5 In a notebook, and in R
 
-The channel is what a notebook widget is made of, and the repository carries one: `widgets/python/`,
+The channel is what a notebook widget is made of, and the repository carries two: one for Python and
+Jupyter, one for R. The Python one first: `widgets/python/`,
 the `chromosomix` package on PyPI, an [anywidget](https://anywidget.dev/) that works wherever
 anywidget does — JupyterLab, Notebook 7, VS Code, Colab, marimo. It is the embed in an `<iframe>` and
 nothing else: no second renderer, no kernel-side reader, no data through the kernel's comm.
@@ -10643,6 +10644,40 @@ nothing else: no second renderer, no kernel-side reader, no data through the ker
 `widgets/python/demo.ipynb` is the yeast demo driven from Python, and `scripts/ui-jupyter-widget.mjs`
 runs it whole in JupyterLab and shoots each frame once it has reported a finished picture of what
 was asked of it.
+
+**R's is an htmlwidget**, `widgets/r/`, the `chromosomix` R package: the same frame and the same
+conversation on an R Markdown or Quarto page, in the RStudio viewer and in Shiny. `chromosomix(map,
+region =, tracks =, ...)` writes the same fragment in the same order; `chromosomix_goto()`,
+`chromosomix_navigate()` and `chromosomix_add()` are the same three requests. What differs is R's:
+
+- **Requests are laid on a widget before it is drawn**, piped onto `chromosomix()` — a static page
+  has no R behind it once rendered, and this is how it moves its views — or made of one on screen
+  in Shiny through `chromosomixProxy()`, as custom messages. The frame makes all of them in order,
+  and all of them again when it reloads. `goto` is sent as a `goto` and made a `region` or a `locus`
+  by the widget's own script, from the view the frame last reported or, before it has, from how the
+  widget opened.
+- **What the viewer says reaches R only in Shiny**, as inputs named after the output:
+  `input$<id>_state`, `input$<id>_rendered`, `input$<id>_version`.
+- **The file server is httpuv**, on `127.0.0.1` in the R session, with the Python server's rules —
+  one `Range`, CORS for any origin, the private-network preflight, a `.gz` sent as its bytes, a
+  directory under a 128-bit token drawn from the system's random source rather than R's generator
+  (which a script's `set.seed()` makes predictable), no path out of it, a link included. It answers
+  on R's event loop — while R is idle, at the console, in RStudio and under Shiny — because httpuv's
+  static paths, which answer from a thread of their own, ignore `Range` and send a file whole. **A
+  rendered page that names local files therefore draws them only while the session that rendered it
+  runs**, and a page that will be read elsewhere names its files by address. Behind RStudio Server
+  the server is reached through `rstudioapi::translateLocalUrl()`; `CHROMOSOMIX_PUBLIC_URL` names
+  any other way in.
+- **The viewer** resolves as Python's does, with the option `chromosomix.viewer` before
+  `CHROMOSOMIX_VIEWER`, and `install_viewer()` caches the npm package in `tools::R_user_dir()`.
+
+`widgets/r/inst/examples/` holds the demo: `demo.Rmd`, the yeast demo on an R Markdown page from the
+bucket — a map with its tracks, the same map moved before it is drawn, a 1D browser — and `app.R`, the
+map in Shiny with a region box, the scale, observed / expected and the model driving it, and the state
+the viewer sends back under them, the controls following it. `scripts/ui-r-widget.mjs` renders the
+page with the data and the build from this disk and runs the app, and shoots each widget once its
+frame has reported what was asked of it. Both packages' tests run on every push, in the Tests
+workflow's `widgets` job: pytest for the Python one, `R CMD check` for the R one.
 
 ## 22. The package: the copy that goes to npm
 
