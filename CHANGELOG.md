@@ -202,6 +202,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **An embed no longer recalls another frame's tracks (§21.2).** The memory of each file — its
+  tracks, marks and filters — was kept in `sessionStorage`, which every frame a page holds on one
+  origin shares; with no tab strip, every embed started with the same session id. Two embeds of one
+  map on a page, or two notebook widgets, showed the first one's tracks in the second, and a frame
+  reloaded in place showed its own twice. An embed now keeps that memory in the frame alone.
+
 - **A map read through a proxy that empties a `HEAD` opens (§11).** jupyter-server-proxy, the way
   into a notebook kernel's files behind JupyterHub, answers every `HEAD` with `Content-Length: 0`
   and passes the server's `Accept-Ranges` through, and the reader took both at their word: a 19 MB

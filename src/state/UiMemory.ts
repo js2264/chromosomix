@@ -18,6 +18,7 @@
  * embedding), because losing a filter must never break a view.
  */
 
+import { embedded } from '../embed'
 import { splitUri } from '../ui/labels'
 
 const PREFIX = 'chromosomix:ui:'
@@ -55,7 +56,20 @@ export function fileMemoryKey(sessionId: string, uri: string): string {
 /** Storage that cannot throw. Falls back to a module-level map. */
 const memory = new Map<string, string>()
 
+/**
+ * Whether this window keeps its memory to itself, in {@link memory}: an embed
+ * (§21.2). Every frame a page holds on one origin shares that origin's
+ * `sessionStorage`, and an embed keeps no tab strip, so each starts with the
+ * same session id — one notebook widget's tracks came back in the next widget
+ * on the same map, and in the same widget's frame again when it reloaded, under
+ * the tracks its host put there. An embed shows what its page says, every load.
+ */
+function ownMemory(): boolean {
+  return embedded()
+}
+
 function read(key: string): string | null {
+  if (ownMemory()) return memory.get(key) ?? null
   try {
     return window.sessionStorage.getItem(key)
   } catch {
@@ -64,6 +78,10 @@ function read(key: string): string | null {
 }
 
 function write(key: string, value: string): void {
+  if (ownMemory()) {
+    memory.set(key, value)
+    return
+  }
   try {
     window.sessionStorage.setItem(key, value)
   } catch {
@@ -114,7 +132,7 @@ export function recallBelow<T>(prefix: string, scope: string): Array<{ rest: str
   const tail = `:${scope}`
   const keys = new Set<string>(memory.keys())
   try {
-    for (let i = 0; i < window.sessionStorage.length; i++) {
+    for (let i = 0; !ownMemory() && i < window.sessionStorage.length; i++) {
       const key = window.sessionStorage.key(i)
       if (key !== null) keys.add(key)
     }

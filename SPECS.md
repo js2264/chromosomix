@@ -10530,7 +10530,11 @@ embed — which has no drawer — ignores it.
   step the map instead of leaving the page. Every write replaces. The bar is still written — a
   reload and a copied link both read it — only the stack is left alone.
 - **A memory of itself.** Neither the `sessionStorage` tab strip (§5.6) nor the durable record
-  under it (`state/workspace.ts`) is written. An embed is one view seeded by its URL and must show what the page says on
+  under it (`state/workspace.ts`) is written, and the memory of each file — its tracks, marks and
+  filters (`state/UiMemory.ts`) — is kept in the frame alone, never in `sessionStorage`: every frame
+  a page holds on one origin shares that, and with no tab strip each starts with the same session
+  id, so a second notebook widget on one map recalled the first's tracks, and a frame reloaded in
+  place recalled its own under the ones its host added again. An embed is one view seeded by its URL and must show what the page says on
   every load; and a third-party frame's storage is partitioned per embedding site, so what it wrote
   would be a store the reader has no interface to and no way to clear.
 - **The service worker and the version notice.** An embed is not an app to install, and a bar
