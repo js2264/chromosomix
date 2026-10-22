@@ -22,10 +22,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   `state` — a traitlet a cell can `observe` — follows where the reader takes it. A file on the
   kernel's disk is served to the viewer by byte range from a server on `127.0.0.1`, its sidecars
   beside it; behind JupyterHub through jupyter-server-proxy, in Colab through Colab's proxy. The
-  frame holds the site, a release by its permanent address (`viewer='0.16.0'`), any build, or the
+  frame holds the site, a release by its permanent address (`viewer='0.17.0'`), any build, or the
   npm package fetched once by `install_viewer()` so the notebook works offline.
-  `widgets/python/demo.ipynb` drives the yeast demo; `scripts/ui-jupyter-widget.mjs` runs it in
-  JupyterLab and shoots every frame.
+  `widgets/python/demo.ipynb` drives the yeast demo, and `demo_marimo.py` the same in marimo, where
+  the wrapper is read and the widget driven; `scripts/ui-jupyter-widget.mjs` runs it in JupyterLab
+  and shoots every frame. The local file server serves no dot-named file, follows a link by its own
+  name so a DataLad or git-annex file finds its index, ignores a `Range` it cannot read, and prints
+  nothing when a reader hangs up; behind JupyterHub, where only a viewer the kernel serves can read
+  through the hub's login, the widget warns when its frame is the site.
 
 - **The viewer in R: an htmlwidget for R Markdown, Quarto, RStudio and Shiny (§21.5).** The
   `chromosomix` R package (`widgets/r/`, `install.packages("widgets/r", repos = NULL)` from a clone)

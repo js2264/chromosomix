@@ -18,11 +18,15 @@ in an `<iframe>`. Four places a build can come from, named by `viewer=`:
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import io
 import json
 import os
 import re
+import shutil
 import tarfile
+import tempfile
 import urllib.request
 import warnings
 from pathlib import Path
@@ -61,7 +65,29 @@ def installed_viewers() -> list[Path]:
     def key(path: Path) -> tuple[int, ...]:
         return tuple(int(part) for part in re.findall(r'\d+', path.name)[:3])
 
-    return sorted((p for p in CACHE.iterdir() if (p / 'index.html').is_file()), key=key)
+    # A name starting with `.` is an install still being unpacked, or one cut
+    # short: never a build.
+    builds = (p for p in CACHE.iterdir() if not p.name.startswith('.') and (p / 'index.html').is_file())
+    return sorted(builds, key=key)
+
+
+def _check_integrity(packed: bytes, integrity: str | None, version: str) -> None:
+    # npm's `dist.integrity` is a Subresource Integrity string: `sha512-<base64>`
+    # of the tarball, maybe with others beside it. One that names a hash this
+    # can compute must match it.
+    known = [
+        (algorithm, digest)
+        for algorithm, _, digest in (part.partition('-') for part in (integrity or '').split())
+        if algorithm in ('sha256', 'sha384', 'sha512')
+    ]
+    if not known:
+        return
+    matches = (base64.b64encode(hashlib.new(algorithm, packed).digest()).decode() == digest for algorithm, digest in known)
+    if not any(matches):
+        raise RuntimeError(
+            f'chromosomix {version} from npm is not the package npm describes: its tarball does not match '
+            f'dist.integrity. Nothing was installed.'
+        )
 
 
 def install_viewer(version: str = 'latest') -> Path:
@@ -85,24 +111,43 @@ def install_viewer(version: str = 'latest') -> Path:
         return target
     with urllib.request.urlopen(meta['dist']['tarball']) as response:
         packed = response.read()
-    target.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(fileobj=io.BytesIO(packed), mode='r:gz') as archive:
-        for member in archive.getmembers():
-            # The built viewer only, and nothing that would land outside it.
-            if not member.name.startswith('package/dist/') or not (member.isfile() or member.isdir()):
-                continue
-            relative = Path(member.name).relative_to('package/dist')
-            if '..' in relative.parts:
-                continue
-            out = target / relative
-            if member.isdir():
-                out.mkdir(parents=True, exist_ok=True)
-                continue
-            out.parent.mkdir(parents=True, exist_ok=True)
-            with archive.extractfile(member) as source, open(out, 'wb') as sink:  # type: ignore[union-attr]
-                sink.write(source.read())
-    if not (target / 'index.html').is_file():
-        raise RuntimeError(f'chromosomix {meta["version"]} on npm has no dist/index.html.')
+    _check_integrity(packed, meta['dist'].get('integrity'), meta['version'])
+    # Unpacked beside the build's place, under a name `installed_viewers` passes
+    # over, and moved into it whole: an install cut short leaves no half a build
+    # that every widget after would frame.
+    CACHE.mkdir(parents=True, exist_ok=True)
+    unpacked = Path(tempfile.mkdtemp(prefix=f'.{meta["version"]}-', dir=CACHE))
+    try:
+        # Readable as a build made with `mkdir` would be, not the temporary directory's owner-only.
+        unpacked.chmod(0o755)
+        with tarfile.open(fileobj=io.BytesIO(packed), mode='r:gz') as archive:
+            for member in archive.getmembers():
+                # The built viewer only, and nothing that would land outside it.
+                if not member.name.startswith('package/dist/') or not (member.isfile() or member.isdir()):
+                    continue
+                relative = Path(member.name).relative_to('package/dist')
+                if '..' in relative.parts:
+                    continue
+                out = unpacked / relative
+                if member.isdir():
+                    out.mkdir(parents=True, exist_ok=True)
+                    continue
+                out.parent.mkdir(parents=True, exist_ok=True)
+                with archive.extractfile(member) as source, open(out, 'wb') as sink:  # type: ignore[union-attr]
+                    sink.write(source.read())
+        if not (unpacked / 'index.html').is_file():
+            raise RuntimeError(f'chromosomix {meta["version"]} on npm has no dist/index.html.')
+        # What an install from before this one left half done is not a build.
+        if target.exists() and not (target / 'index.html').is_file():
+            shutil.rmtree(target)
+        try:
+            os.replace(unpacked, target)
+        except OSError:
+            # Another kernel put the same build in place first.
+            if not (target / 'index.html').is_file():
+                raise
+    finally:
+        shutil.rmtree(unpacked, ignore_errors=True)
     return target
 
 

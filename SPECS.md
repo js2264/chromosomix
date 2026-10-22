@@ -10633,14 +10633,26 @@ nothing else: no second renderer, no kernel-side reader, no data through the ker
 - **What to open is the `src=`.** `Chromosomix(map, region=…, tracks=[…], **view)` writes the map and
   every view keyword into the frame's fragment in the app's own key order and spelling (§5.5), and the
   tracks — which the fragment has no word for — go to the frame as one `add` once it says it is ready.
-  With no map the frame opens on its picker and the first file becomes the tab's.
+  With no map the frame opens on its picker, the first file becomes the tab's, and `locus` — or
+  `region`, with `view='region'` — and the view keywords are a navigate after the files. A value is
+  one value: a list for a key is refused by name, a NumPy switch is written `true` or `false` as the
+  hash spells one, and `uri`, `uri2` and the files among `maps` (not the deck's own words, `~`, `3d`,
+  `tracks`) are served like the map.
 - **Python to the viewer is state, not messages.** `goto`, `navigate` and `add` append a numbered
   request to a synced list, and every view of the widget posts the ones past the last it posted —
   all of them again when the frame reloads, which a notebook detaching and re-attaching an output
   does. A message would reach only the views that exist when it is sent, and "Run all" sends a later
-  cell's `goto` before the browser has drawn the first cell's frame. `goto` moves the map's `region`,
-  or the 1D browser's `locus`: by the view the viewer last reported, or, before it has reported one,
-  by how the cell opened it. The newest 64 are kept.
+  cell's `goto` before the browser has drawn the first cell's frame. `goto` moves the map's `region`
+  — clearing `region2` and `focus`, so an off-diagonal block becomes the square asked for — or the 1D
+  browser's `locus`: by the view the viewer last reported, or, before it has reported one, by how
+  the cell opened it. A navigate after a navigate is merged into it, so a slider's thousand moves
+  replay as one and an `add` is never pushed out; a view that made the earlier one is sent only the
+  keys asked since, so a pan the reader made between two calls stays. **Every `load()` is a new
+  frame** — a counter the front end listens to, and a new `<iframe>` element — because a `src` that
+  differs only after its `#`, or not at all, would be a move within the old document, which says no
+  `ready`; `load()` resolves every file before it resets anything, so one it cannot serve leaves
+  the cell as it was. The postMessage target is the origin the frame's `ready` came from, so a
+  viewer behind a redirect is still spoken to.
 - **The viewer to Python is traitlets.** Every `state` lands in `state`, a traitlet a cell can
   `observe`; every finished picture's report in `rendered`; the build's version in `version`.
 - **A frame that cannot take files says so.** The tracks and every `add` reach the frame as
@@ -10653,17 +10665,38 @@ nothing else: no second renderer, no kernel-side reader, no data through the ker
   `127.0.0.1`: a `ThreadingHTTPServer` that answers one `Range`, sends `Access-Control-Allow-Origin: *`
   and `Access-Control-Allow-Private-Network`, never sends a `.gz` with a `Content-Encoding`, and
   serves the *directory* a file was named in — so its sidecars are read from beside it — under a
-  random token, refusing any path out of it. Behind JupyterHub it is reached through
-  jupyter-server-proxy at `<prefix>/proxy/<port>/`, in Colab through Colab's port proxy, and
-  `CHROMOSOMIX_PUBLIC_URL` names any other way in; the widget makes a relative address absolute
-  against the notebook's page before the frame sees it. Nothing is uploaded and nothing leaves the
-  machine the kernel runs on (C1).
+  random token. No name that starts with a dot is served, so a home directory's `.ssh` is not under
+  a map's token. A link in the directory is served by its own name and followed wherever it points
+  — its owner made it, and a DataLad or git-annex file finds its index beside the link, not beside
+  its object. A `Range` it cannot read — several ranges, a reversed one, another unit — is ignored
+  and the whole file sent, as RFC 9110 says; 416 is for a range past the end. A `HEAD` that names
+  no range says no `Accept-Ranges`, so the viewer asks for one byte and takes the size from its
+  `Content-Range`. A reader that hangs up mid-read is no traceback in whichever cell ran last.
+  Behind JupyterHub it is reached through jupyter-server-proxy at `<prefix>/proxy/<port>/`, which
+  must be installed beside the single-user server, and which answers every `HEAD` with
+  `Content-Length: 0` (§11) and holds each answer whole, refusing one over 100 MB — which touches
+  only a file read whole, an annotation file with no tabix index. **Behind JupyterHub only a viewer
+  the kernel serves reads these files**: the proxy answers only a request carrying the reader's login
+  to the hub, and a page on another origin — the site — sends none, so its every read is answered
+  `302` to the login page, or `403` to a preflight, before the kernel's server is asked; the widget
+  warns when its frame is on another origin there. In Colab it is reached through Colab's port
+  proxy, and `CHROMOSOMIX_PUBLIC_URL` names any other way in; the widget makes a relative address
+  absolute against the notebook's page before the frame sees it. Nothing is uploaded and nothing
+  leaves the machine the kernel runs on (C1).
 - **Which build is in the frame is the reader's to pin.** The site by default; a release by its
   permanent address (`viewer='0.17.0'` is `…/v/v0.17.0/`, §21; one before it takes no files, above);
-  any address; or a built `dist/` on the kernel's disk (§22), served beside the data. `install_viewer()` fetches the npm package once
-  into `~/.cache/chromosomix/` and every widget after uses it — the app and the data are then one
-  origin and the notebook works offline, where the site reading `http://127.0.0.1` has Chrome ask the
-  reader once to let the page reach this machine. `CHROMOSOMIX_VIEWER` names one for every widget.
+  any address; or a built `dist/` on the kernel's disk (§22), served beside the data.
+  `install_viewer()` fetches the npm package once into `~/.cache/chromosomix/` — unpacked beside the
+  cache, checked against npm's `dist.integrity`, and moved into place whole, so an interrupted
+  install leaves nothing a later widget would frame — and every widget after uses it: the app and
+  the data are then one origin and the notebook works offline, where the site reading
+  `http://127.0.0.1` has Chrome ask the reader once to let the page reach this machine, and behind
+  JupyterHub cannot read it at all. `CHROMOSOMIX_VIEWER` names one for every widget.
+- **In marimo** a cell that names the `mo.ui.anywidget` wrapper is run again every time the frame
+  reports, on every move and every finished picture, so the wrapper is named only where `state` is
+  read and the widget itself is what is driven: `live.goto(…)` would pull the view back each time
+  the reader moved it, and `live.add(…)` would add the file again on every report. `demo_marimo.py`
+  is the demo written that way; Notebook 7 runs `demo.ipynb` as JupyterLab does.
 
 `widgets/python/demo.ipynb` is the yeast demo driven from Python, and `scripts/ui-jupyter-widget.mjs`
 runs it whole in JupyterLab and shoots each frame once it has reported a finished picture of what

@@ -6,7 +6,9 @@
 // `files`, which go to the frame as `chromosomix:add` once it says it is ready.
 // After that the kernel's `navigate` and `add` requests — a numbered list in the
 // model, so a view drawn after they were made still makes them — are posted to
-// the frame, and the frame's `state` and `rendered` are written back.
+// the frame, and the frame's `state` and `rendered` are written back. Each
+// `load()` in Python counts one more in `loads`, and each puts a new <iframe>
+// in the place of the last.
 //
 // A frame that cannot take files — a build from before `chromosomix:add`, whose
 // `ready` lists no `accepts` (SPECS §21.4) — draws the map without its tracks,
@@ -29,7 +31,21 @@ function absolute(address) {
   }
 }
 
-/** The frame's address, its `uri` and `uri2` made absolute where the kernel gave them relative. */
+/** The view state's keys that name files: a map, its comparison, and a deck's maps, split by `|`. */
+const FILE_KEYS = ['uri', 'uri2', 'maps']
+/** The deck's own words in `maps`, which name a cell rather than a file (`panels/deck.ts`). */
+const DECK_WORDS = ['~', '3d', 'tracks']
+
+/** A file key's value with every address in it made absolute, and a deck's own words as they are. */
+function absoluteFiles(key, value) {
+  if (key !== 'maps') return absolute(value)
+  return value
+    .split('|')
+    .map((part) => (part.trim() === '' || DECK_WORDS.includes(part.trim()) ? part : absolute(part)))
+    .join('|')
+}
+
+/** The frame's address, the files in its fragment made absolute where the kernel gave them relative. */
 function frameAddress(src) {
   const url = new URL(src, window.location.href)
   if (url.hash.length > 1) {
@@ -39,8 +55,9 @@ function frameAddress(src) {
       .map((part) => {
         const eq = part.indexOf('=')
         const key = eq < 0 ? part : part.slice(0, eq)
-        if (key !== 'uri' && key !== 'uri2') return part
-        return `${key}=${encodeURIComponent(absolute(decodeURIComponent(part.slice(eq + 1)))).replace(/%2F/g, '/').replace(/%3A/g, ':')}`
+        if (eq < 0 || !FILE_KEYS.includes(key)) return part
+        const value = absoluteFiles(key, decodeURIComponent(part.slice(eq + 1)))
+        return `${key}=${encodeURIComponent(value).replace(/%2F/g, '/').replace(/%3A/g, ':').replace(/%7C/g, '|')}`
       })
       .join('&')
   }
@@ -55,12 +72,8 @@ function render({ model, el }) {
     'padding:0.4rem 0.6rem;margin:0 0 0.3rem;border-left:3px solid #c77c02;background:rgba(199,124,2,0.1);' +
     'font:13px/1.4 system-ui,sans-serif'
   el.appendChild(notice)
-  const frame = document.createElement('iframe')
-  frame.setAttribute('allow', ALLOW)
-  frame.style.width = '100%'
-  frame.style.border = '0'
-  frame.style.display = 'block'
-  el.appendChild(frame)
+  /** The frame on screen, a new element for each load. */
+  let frame = null
 
   let origin = '*'
   let ready = false
@@ -74,12 +87,15 @@ function render({ model, el }) {
   let version = ''
   /** Files the frame could not take since it loaded. */
   let refused = 0
+  /** The `loads` the frame on screen was made for. */
+  let loaded = model.get('loads')
 
   const size = () => {
+    if (frame === null) return
     frame.style.height = `${model.get('height')}px`
     frame.title = model.get('title') || 'chromosomix'
   }
-  const post = (message) => frame.contentWindow?.postMessage(message, origin)
+  const post = (message) => frame?.contentWindow?.postMessage(message, origin)
   /** Files for the frame: added where it takes them, said on the page where it does not. */
   const addFiles = (files) => {
     if (files.length === 0) return
@@ -99,13 +115,18 @@ function render({ model, el }) {
   }
   /** Every request past the last this view posted, once its frame is ready. */
   const flush = () => {
-    if (!ready) return
+    // Requests made for a newer load are for the frame about to replace this one.
+    if (!ready || model.get('loads') !== loaded) return
     for (const request of model.get('requests') || []) {
       if (!(request.seq > posted)) continue
+      const previous = posted
       posted = request.seq
       if (request.type === 'navigate') {
-        const state = { ...(request.state || {}) }
-        for (const key of ['uri', 'uri2']) if (typeof state[key] === 'string') state[key] = absolute(state[key])
+        // A merged patch whose earlier part this view has made already: only
+        // what was asked since, so a key the reader changed meanwhile stays.
+        const since = request.after !== undefined && request.after <= previous
+        const state = { ...((since ? request.fresh : request.state) || {}) }
+        for (const key of FILE_KEYS) if (typeof state[key] === 'string') state[key] = absoluteFiles(key, state[key])
         post({ type: 'chromosomix:navigate', state })
       } else if (request.type === 'add') {
         addFiles((request.files || []).map(absolute))
@@ -113,26 +134,48 @@ function render({ model, el }) {
     }
   }
   const load = () => {
-    const src = model.get('src')
-    if (!src) return
-    const url = frameAddress(src)
-    origin = url.origin === 'null' ? '*' : url.origin
+    loaded = model.get('loads')
     ready = false
     posted = 0
     refused = 0
     notice.hidden = true
-    // The files the fragment cannot carry go first once the frame is up: the
-    // app waits for the map the fragment names to be drawn before it adds them.
-    files = (model.get('files') || []).map(absolute)
-    frame.src = url.href
+    // A new element rather than a new `src` on the old one. A `src` that
+    // differs only in its fragment is a move within the same document, which
+    // says no `ready`, and the same `src` again is no load at all; and a
+    // message the old document was still sending comes from a window that is
+    // no longer this frame's, so it is not taken for the new one's.
+    const next = document.createElement('iframe')
+    next.setAttribute('allow', ALLOW)
+    next.style.width = '100%'
+    next.style.border = '0'
+    next.style.display = 'block'
+    const src = model.get('src')
+    if (src) {
+      const url = frameAddress(src)
+      origin = url.origin === 'null' ? '*' : url.origin
+      // The files the fragment cannot carry go first once the frame is up: the
+      // app waits for the map the fragment names to be drawn before it adds them.
+      files = (model.get('files') || []).map(absolute)
+      next.src = url.href
+    }
+    if (frame === null) el.appendChild(next)
+    else frame.replaceWith(next)
+    frame = next
+    size()
   }
 
   const onMessage = (event) => {
-    if (event.source !== frame.contentWindow) return
+    if (frame === null || event.source !== frame.contentWindow) return
     const data = event.data
     if (data === null || typeof data !== 'object' || typeof data.type !== 'string') return
     if (data.type === 'chromosomix:ready') {
       ready = true
+      // Answered where the frame's document is, which is not always where
+      // `src` named: a viewer's address that redirects — http to https, a
+      // build that moved — puts it on another origin, and every message aimed
+      // at the one named would be dropped without a word. An opaque origin
+      // cannot be named, and keeps the target it had.
+      if (typeof event.origin === 'string' && event.origin !== '' && event.origin !== 'null') origin = event.origin
       // A frame that says it is ready has just loaded `src`, and nothing asked
       // of the last one is on it: the first time, or again when the notebook
       // detached the output and put it back, which reloads an <iframe>. Every
@@ -158,16 +201,15 @@ function render({ model, el }) {
 
   window.addEventListener('message', onMessage)
   model.on('change:requests', flush)
-  model.on('change:src', load)
+  model.on('change:loads', load)
   model.on('change:height', size)
   model.on('change:title', size)
-  size()
   load()
 
   return () => {
     window.removeEventListener('message', onMessage)
     model.off('change:requests', flush)
-    model.off('change:src', load)
+    model.off('change:loads', load)
     model.off('change:height', size)
     model.off('change:title', size)
   }
