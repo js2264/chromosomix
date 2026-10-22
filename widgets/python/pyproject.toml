@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "chromosomix"
-version = "0.16.0"
+version = "0.17.0.dev0"
 description = "The chromosomix viewer as a Jupyter widget: contact maps, genome tracks and 3D models in a notebook cell, driven from Python."
 readme = "README.md"
 license = "GPL-3.0-or-later"

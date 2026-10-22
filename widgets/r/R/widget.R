@@ -110,6 +110,8 @@ chromosomix <- function(map = NULL, tracks = character(), region = NULL, locus =
     stop("Every view keyword is named, as the address bar names it: transform = \"log10\", oe = TRUE.", call. = FALSE)
   }
   base <- resolve_viewer(viewer)
+  files <- addresses(tracks)
+  warn_if_refused(base, length(files))
   src <- paste0(base, "?embed=1")
   if (!is.null(map)) {
     state <- list(uri = address(map))
@@ -123,8 +125,9 @@ chromosomix <- function(map = NULL, tracks = character(), region = NULL, locus =
   }
   x <- list(
     src = src,
-    files = I(addresses(tracks)),
+    files = I(files),
     title = title,
+    base = base,
     # What `chromosomix_goto()` moves until the viewer has said what it shows:
     # with no map, the 1D browser's locus.
     browser = is.null(map) || identical(view$view, "browser"),
@@ -193,7 +196,20 @@ chromosomix_navigate <- function(view, ...) {
 chromosomix_add <- function(view, ...) {
   files <- addresses(list(...))
   if (length(files) == 0L) return(view)
+  if (inherits(view, "htmlwidget")) warn_if_refused(view$x$base, length(files))
   ask(view, list(type = "add", files = I(files)))
+}
+
+# Said here for a release named by its address; any other build says at run
+# time whether it takes files, above the frame.
+warn_if_refused <- function(base, count) {
+  release <- release_of(base)
+  if (count > 0L && !is.null(release) && release < TAKES_FILES) {
+    warning(sprintf(
+      "The viewer in this frame, chromosomix %s, cannot take files from R, so %d will not be added: name one from %s on.",
+      format(release), count, format(TAKES_FILES)
+    ), call. = FALSE)
+  }
 }
 
 ask <- function(view, request) {

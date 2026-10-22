@@ -55,9 +55,14 @@ RStudio's own proxy (with rstudioapi installed); `CHROMOSOMIX_PUBLIC_URL` names 
 | `viewer =` | the build |
 |---|---|
 | nothing | `CHROMOSOMIX_VIEWER` if set, else a build fetched by `install_viewer()`, else https://chromosomix.app/ |
-| `"0.16.0"` | that release, kept for ever at `https://chromosomix.app/v/v0.16.0/` — what a page that must draw the same picture next year names |
+| `"0.17.0"` | that release, kept for ever at `https://chromosomix.app/v/v0.17.0/` — what a page that must draw the same picture next year names |
 | an address | any build, a lab's own copy of the npm package's `dist/` among them |
 | a directory | a built `dist/` on this machine, served beside the data |
+
+**Tracks need a viewer from 0.17.0 on.** The frame takes the files a widget adds — its `tracks`, and
+`chromosomix_add()` — through a message the viewer learned in 0.17.0. An older build draws the map and
+nothing it adds, and says so above the frame (and, in Shiny, as `input$<id>_notice`); naming an older
+release warns when the widget is made.
 
 **With files on this machine, prefer a build served beside them.** `install_viewer()` fetches the npm
 package once into R's user cache directory; every widget after uses it, so the app and the data are one
@@ -80,7 +85,7 @@ Or, in Shiny, of a widget on screen, through a proxy; what the viewer says comes
 ```r
 output$view <- renderChromosomix(chromosomix(map, region = "IV:1000000-1400000"))
 observeEvent(input$go, chromosomix_goto(chromosomixProxy("view"), input$where))
-output$region <- renderText(input$view_state$region)   # also input$view_rendered, input$view_version
+output$region <- renderText(input$view_state$region)   # also input$view_rendered, _version, _notice
 ```
 
 Each request is made in order, once the one before it is done: a locus asked for after tracks were

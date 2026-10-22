@@ -15,12 +15,19 @@
 // it. What the frame says comes back, in Shiny, as `input$<id>_state`,
 // `input$<id>_rendered` and `input$<id>_version`.
 //
+// A frame that cannot take files — a build from before `chromosomix:add`, whose
+// `ready` lists no `accepts` (SPECS §21.4) — draws the map without its tracks,
+// so the widget says so above the frame, and in Shiny as `input$<id>_notice`,
+// rather than the tracks going missing without a word.
+//
 // An address R gives may be relative to the page — a proxy's path to the R
 // session's file server — so every one is made absolute here, against this
 // page, before the frame sees it.
 
 (function () {
   var ALLOW = 'clipboard-write; fullscreen; local-network-access; local-network; loopback-network'
+  /** What a `ready` without an `accepts` list means: a build from before `add`. */
+  var BEFORE_ADD = ['chromosomix:where', 'chromosomix:navigate']
 
   function absolute(address) {
     try {
@@ -54,10 +61,22 @@
     type: 'output',
 
     factory: function (el) {
+      var notice = document.createElement('div')
+      notice.setAttribute('role', 'status')
+      notice.hidden = true
+      notice.style.cssText =
+        'flex:0 0 auto;padding:0.4rem 0.6rem;border-left:3px solid #c77c02;background:#fdf3e1;' +
+        'color:#3a2a00;font:13px/1.4 system-ui,sans-serif'
+      // A column the widget's size is shared out in: the notice, when there is
+      // one, above the frame and taken out of its height rather than over it.
+      el.style.display = 'flex'
+      el.style.flexDirection = 'column'
+      el.appendChild(notice)
       var frame = document.createElement('iframe')
       frame.setAttribute('allow', ALLOW)
       frame.style.width = '100%'
-      frame.style.height = '100%'
+      frame.style.flex = '1 1 auto'
+      frame.style.minHeight = '0'
       frame.style.border = '0'
       frame.style.display = 'block'
       el.appendChild(frame)
@@ -71,6 +90,11 @@
       var posted = 0
       /** Where the view is, as the frame last said; `null` before it has. */
       var state = null
+      /** The messages the frame said it takes, and its version. */
+      var accepts = BEFORE_ADD
+      var version = ''
+      /** Files the frame could not take since it loaded. */
+      var refused = 0
 
       function post(message) {
         if (frame.contentWindow) frame.contentWindow.postMessage(message, origin)
@@ -81,6 +105,21 @@
         if (HTMLWidgets.shinyMode && el.id && window.Shiny && Shiny.setInputValue) {
           Shiny.setInputValue(el.id + '_' + name, value)
         }
+      }
+
+      /** Files for the frame: added where it takes them, said on the page where it does not. */
+      function addFiles(files) {
+        if (files.length === 0) return null
+        if (accepts.indexOf('chromosomix:add') >= 0) return { type: 'chromosomix:add', files: files }
+        refused += files.length
+        var text =
+          'The viewer in this frame (chromosomix ' + (version || 'from an older release') + ') cannot take files ' +
+          'from R, so ' + (refused === 1 ? '1 file was' : refused + ' files were') + ' not added. A viewer from ' +
+          '0.17.0 on takes them: chromosomix::install_viewer(), or viewer = a newer build.'
+        notice.textContent = text
+        notice.hidden = false
+        tell('notice', text)
+        return null
       }
 
       /** Whether `goto` moves a 1D browser: as the frame last said, or as R opened it. */
@@ -108,9 +147,7 @@
           })
           return { type: 'chromosomix:navigate', state: patch }
         }
-        if (request.type === 'add') {
-          return { type: 'chromosomix:add', files: [].concat(request.files || []).map(absolute) }
-        }
+        if (request.type === 'add') return addFiles([].concat(request.files || []).map(absolute))
         return null
       }
 
@@ -132,11 +169,14 @@
           ready = true
           posted = 0
           state = null
-          tell('version', String(data.version || ''))
+          refused = 0
+          accepts = Array.isArray(data.accepts) ? data.accepts : BEFORE_ADD
+          version = String(data.version || '')
+          tell('version', version)
           // Speaking first is what subscribes this page to the frame's states.
           post({ type: 'chromosomix:where' })
-          var files = [].concat((x && x.files) || []).map(absolute)
-          if (files.length > 0) post({ type: 'chromosomix:add', files: files })
+          var added = addFiles([].concat((x && x.files) || []).map(absolute))
+          if (added !== null) post(added)
           flush()
         } else if (data.type === 'chromosomix:state') {
           state = data.state || null
@@ -155,6 +195,8 @@
           posted = 0
           ready = false
           state = null
+          refused = 0
+          notice.hidden = true
           var url = frameAddress(x.src)
           origin = url.origin === 'null' ? '*' : url.origin
           frame.src = url.href

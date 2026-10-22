@@ -6,6 +6,18 @@ SITE <- "https://chromosomix.app/"
 
 .version_pattern <- "^v?[0-9]+\\.[0-9]+\\.[0-9]+([-.+][0-9A-Za-z.-]+)?$"
 
+# The first release whose frame takes files from R (`chromosomix:add`, SPECS
+# §21.4). An older one draws the map the fragment names and nothing the widget
+# adds.
+TAKES_FILES <- numeric_version("0.17.0")
+
+# The release a viewer's address names — the site's `/v/vX.Y.Z/` — or NULL for
+# any other build, which says at run time whether it takes files.
+release_of <- function(address) {
+  found <- regmatches(address, regexec("/v/v([0-9]+\\.[0-9]+\\.[0-9]+)/?$", address))[[1]]
+  if (length(found) == 0L) NULL else numeric_version(found[[2]])
+}
+
 viewer_cache <- function() {
   root <- Sys.getenv("CHROMOSOMIX_CACHE")
   if (!nzchar(root)) root <- tools::R_user_dir("chromosomix", which = "cache")
@@ -90,6 +102,12 @@ installed_viewers <- function() {
 install_viewer <- function(version = "latest") {
   meta <- jsonlite::fromJSON(sprintf("https://registry.npmjs.org/chromosomix/%s", version))
   target <- file.path(viewer_cache(), meta$version)
+  if (numeric_version(sub("[-+].*$", "", meta$version)) < TAKES_FILES) {
+    warning(sprintf(
+      "chromosomix %s from npm cannot take files from R: a widget with tracks needs %s or later.",
+      meta$version, format(TAKES_FILES)
+    ), call. = FALSE)
+  }
   if (file.exists(file.path(target, "index.html"))) return(target)
   tarball <- tempfile(fileext = ".tgz")
   on.exit(unlink(tarball), add = TRUE)

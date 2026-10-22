@@ -133,6 +133,15 @@ describe('announcing', () => {
     expect(first.message.state).toBeUndefined()
   })
 
+  it('lists the messages it takes, `add` only where the window can take files', () => {
+    const plain = channelOn()
+    plain.channel.start()
+    expect((plain.parent.seen[0].message as { accepts?: string[] }).accepts).toEqual([EMBED_WHERE, EMBED_NAVIGATE])
+    const parent = hostWindow()
+    new EmbedChannel({ state: () => A, navigate: () => {}, add: async () => {} }, parent, source()).start()
+    expect((parent.seen[0].message as { accepts?: string[] }).accepts).toEqual([EMBED_WHERE, EMBED_NAVIGATE, EMBED_ADD])
+  })
+
   it('has nothing to say when no window framed this one', () => {
     const events = source()
     const channel = new EmbedChannel({ state: () => A, navigate: () => {} }, null, events)

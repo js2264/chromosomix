@@ -10,10 +10,13 @@
  *
  * Out, from the frame:
  *
- * - `{ type: 'chromosomix:ready', protocol, version, commit }` — once, when the
- *   window is mounted. It carries **nothing about the reader's session**, which
- *   is what lets it be the one message posted before anybody has identified
- *   themselves.
+ * - `{ type: 'chromosomix:ready', protocol, version, commit, accepts }` — once,
+ *   when the window is mounted. It carries **nothing about the reader's
+ *   session**, which is what lets it be the one message posted before anybody
+ *   has identified themselves. `accepts` lists the messages this window takes,
+ *   because adding one leaves the protocol's number alone: a host that needs
+ *   `add` reads it here, and a frame whose `ready` has no list — every build
+ *   before `add` — takes `where` and `navigate` only.
  * - `{ type: 'chromosomix:state', state }` — the view state (§5.5), as the same
  *   object the URL hash is written from, or `null` for the file picker.
  * - `{ type: 'chromosomix:rendered', report }` — the picture on screen is
@@ -221,6 +224,7 @@ export class EmbedChannel {
         protocol: EMBED_PROTOCOL,
         version: VERSION,
         ...(COMMIT === '' ? {} : { commit: COMMIT }),
+        accepts: [EMBED_WHERE, EMBED_NAVIGATE, ...(this.host.add === undefined ? [] : [EMBED_ADD])],
       },
       '*',
     )

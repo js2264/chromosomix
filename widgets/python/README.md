@@ -48,9 +48,14 @@ names another way in, with `{port}` where the port goes.
 | `viewer=` | the build |
 |---|---|
 | nothing | `CHROMOSOMIX_VIEWER` if set, else a build fetched by `install_viewer()`, else https://chromosomix.app/ |
-| `"0.16.0"` | that release, kept for ever at `https://chromosomix.app/v/v0.16.0/` — what a notebook that must draw the same picture next year names |
+| `"0.17.0"` | that release, kept for ever at `https://chromosomix.app/v/v0.17.0/` — what a notebook that must draw the same picture next year names |
 | an address | any build, a lab's own copy of the npm package's `dist/` among them |
 | a directory | a built `dist/` on this machine, served beside the data |
+
+**Tracks need a viewer from 0.17.0 on.** The frame takes the files a widget adds — its `tracks`, and
+`add` — through a message the viewer learned in 0.17.0. An older build draws the map the cell names and
+nothing it adds, and says so above the frame (and in `view.notice`); naming an older release warns
+when the widget is made.
 
 **With files on the kernel's disk, prefer a build served beside them.** `chromosomix.install_viewer()`
 fetches the npm package once and keeps it in `~/.cache/chromosomix/`; every widget after uses it, so
@@ -67,6 +72,7 @@ the app and the data are one origin and the notebook works offline. The site in 
 | `view.load(map, tracks=…, region=…)` | another map in this cell |
 | `view.state` | where the view is now — the app's view state, a traitlet to `observe` |
 | `view.rendered` | the last finished picture: what is drawn, at which resolution |
+| `view.notice` | what the frame could not do — a viewer too old to take files — or `''` |
 
 ```python
 view.observe(lambda change: print(change['new'].get('region')), names='state')

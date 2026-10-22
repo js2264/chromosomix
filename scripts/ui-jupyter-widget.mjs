@@ -17,12 +17,16 @@
  *   node scripts/ui-jupyter-widget.mjs [out-dir]
  *
  * `GALLERY_LAB` names another JupyterLab than http://127.0.0.1:8899.
+ * `GALLERY_OLD_VIEWER` names a build from before `chromosomix:add` — npm's
+ * `chromosomix@0.16.0`, its `package/dist` — and adds one shot: a notebook,
+ * written under `gallery/` for the run, framing the map and its tracks in that
+ * build, which draws the map alone and says above it what it could not add (jw04).
  */
 
 import { createRequire } from 'node:module'
 import { execSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { join, relative, resolve } from 'node:path'
 
 const require = createRequire(import.meta.url)
 function playwright() {
@@ -35,7 +39,7 @@ function playwright() {
 }
 const { chromium } = playwright()
 
-const OUT = process.argv[2] ?? 'gallery'
+const OUT = resolve(process.argv[2] ?? 'gallery')
 // JupyterLab saves the outputs it ran into the notebook; it is put back as it was.
 const NOTEBOOK = 'widgets/python/demo.ipynb'
 const pristine = readFileSync(NOTEBOOK, 'utf8')
@@ -183,5 +187,49 @@ await page.screenshot({ path: `${OUT}/jw03-driven-from-python.png` })
 console.log('shot jw03-driven-from-python')
 
 console.log(`--- what the frames said\n${(await page.evaluate(() => window.__heard)).join('\n')}`)
+
+// A viewer from before `add`: the map drawn alone, and the cell saying why.
+if (process.env.GALLERY_OLD_VIEWER) {
+  const demo = join(process.cwd(), 'demo', 'yeast')
+  const notebook = join(OUT, 'old-viewer.ipynb')
+  const code = [
+    'from chromosomix import Chromosomix',
+    `DEMO = ${JSON.stringify(demo)}`,
+    'view = Chromosomix(',
+    "    f'{DEMO}/Yeast_microC_G2M_1kb.cool',",
+    "    region='IV:1000000-1400000',",
+    "    tracks=[f'{DEMO}/Yeast_ATAC.bw', f'{DEMO}/Yeast_MNase.bw', f'{DEMO}/Yeast_annotations.gtf'],",
+    "    transform='log10',",
+    '    height=620,',
+    `    viewer=${JSON.stringify(process.env.GALLERY_OLD_VIEWER)},`,
+    ')',
+    'view',
+  ].join('\n')
+  writeFileSync(
+    notebook,
+    JSON.stringify({
+      cells: [{ cell_type: 'code', metadata: {}, execution_count: null, outputs: [], source: code }],
+      metadata: { kernelspec: { name: 'python3', display_name: 'Python 3', language: 'python' } },
+      nbformat: 4,
+      nbformat_minor: 5,
+    }),
+  )
+  const old = await context.newPage()
+  await old.goto(`${LAB}/lab/tree/${relative(process.cwd(), notebook)}`)
+  await old.waitForSelector('.jp-Notebook', { timeout: 120000 })
+  await sleep(4000)
+  await old.locator('.lm-MenuBar-itemLabel', { hasText: /^Run$/ }).click()
+  await old.locator('.lm-Menu-itemLabel', { hasText: /^Run All Cells$/ }).click()
+  const said = await old
+    .waitForSelector('.jp-OutputArea [role="status"]:not([hidden])', { timeout: 120000 })
+    .then((element) => element.textContent())
+    .catch(() => null)
+  console.log('the old viewer:', said === null ? 'NO NOTICE' : `the cell says: ${said}`)
+  await sleep(4000)
+  await old.locator('.jp-OutputArea-output').first().screenshot({ path: `${OUT}/jw04-old-viewer-notice.png` })
+  console.log('shot jw04-old-viewer-notice')
+  rmSync(notebook, { force: true })
+}
+
 await browser.close()
 if (errors.length > 0) console.log(`--- page errors\n${errors.join('\n')}`)

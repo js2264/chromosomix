@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import os
 import re
+import warnings
 from collections.abc import Iterable
 from pathlib import Path
 from urllib.parse import quote
@@ -37,7 +38,7 @@ import anywidget
 import traitlets
 
 from .server import serve
-from .viewer import resolve_viewer
+from .viewer import TAKES_FILES, release_of, resolve_viewer, takes_files
 
 #: The view state's keys, in the order the app writes them (`state/ViewState.ts`).
 KEY_ORDER = (
@@ -112,6 +113,8 @@ class Chromosomix(anywidget.AnyWidget):
     rendered = traitlets.Dict(default_value={}).tag(sync=True)
     #: The viewer's version, once its frame has said it is ready.
     version = traitlets.Unicode('').tag(sync=True)
+    #: Said when the frame cannot do what was asked of it — a viewer too old to take files — or ''.
+    notice = traitlets.Unicode('').tag(sync=True)
     #: Moves and additions asked of the viewer since the frame was loaded, numbered, the newest last.
     requests = traitlets.List(traitlets.Dict(), default_value=[]).tag(sync=True)
 
@@ -154,6 +157,7 @@ class Chromosomix(anywidget.AnyWidget):
         comm, and which its constructor calls.
         """
         added = [address(track) for track in tracks]
+        self._warn_if_refused(len(added))
         # A new frame starts with nothing asked of it.
         self.requests = []
         # What `goto` moves until the viewer has said what it shows: a cell
@@ -200,4 +204,16 @@ class Chromosomix(anywidget.AnyWidget):
 
     def add(self, *files: str | os.PathLike[str]) -> None:
         """Put more files in this cell, as the header's `+` does: tracks, maps, a workspace."""
+        self._warn_if_refused(len(files))
         self._ask({'type': 'add', 'files': [address(file) for file in files]})
+
+    def _warn_if_refused(self, count: int) -> None:
+        # Said here for a release named by its address; any other build says
+        # at run time whether it takes files, and the cell shows `notice`.
+        release = release_of(self._viewer)
+        if count > 0 and not takes_files(release):
+            warnings.warn(
+                f'The viewer in this frame, chromosomix {".".join(map(str, release or ()))}, cannot take files from '
+                f'the notebook, so {count} will not be added: name one from {".".join(map(str, TAKES_FILES))} on.',
+                stacklevel=3,
+            )

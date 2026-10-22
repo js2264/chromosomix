@@ -74,7 +74,7 @@ it (`serve()`); a page rendered with local files draws them only while that sess
 that will be read elsewhere names its files by address, as this one does.
 
 The frame holds https://chromosomix.app/ unless `viewer` — or the option `chromosomix.viewer` —
-names another build: a release (`viewer = "0.16.0"`, kept for ever, which is what a page that must draw
+names another build: a release (`viewer = "0.17.0"`, kept for ever, which is what a page that must draw
 the same picture next year names), any address, or a built `dist/` on this disk. `install_viewer()`
 fetches the npm package's build once, and every widget after uses it.
 

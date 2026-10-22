@@ -10571,8 +10571,8 @@ those four things would be asking a reader to trust a picture with no provenance
 ### 21.4 The channel
 
 An embed that can only be linked to is a picture. `postMessage` is the other half, and it is six
-messages (`app/EmbedChannel.ts`). Out: `chromosomix:ready`, once, carrying the protocol version and
-the build and **nothing about the session**; `chromosomix:state`, the view state as the hash is
+messages (`app/EmbedChannel.ts`). Out: `chromosomix:ready`, once, carrying the protocol version,
+the build, the messages the window takes (`accepts`) and **nothing about the session**; `chromosomix:state`, the view state as the hash is
 written from; and `chromosomix:rendered`, the report of a finished picture (§12), which is what a
 host takes a screenshot on. In: `chromosomix:where`, answered with the state; `chromosomix:navigate`, a **patch**
 laid over what is on screen — `{ locus: … }` moves the browser without the host knowing what else is
@@ -10583,6 +10583,12 @@ and on an empty tab the first as its file. The view state has no word for a trac
 host that frames a map puts its tracks beside it. It waits for the frame's first picture — the map
 the `src=` named — takes `http(s)` addresses only and at most 64 of them, and is answered with the
 state once every file is in, so a host knows when they are.
+
+**What a frame takes is in its `ready`, not in the protocol's number.** Adding a message leaves the
+number alone (a host written against it ignores what it has never heard of), so a host that needs
+`add` reads `accepts`; a `ready` without the list is a build from before `add` — the site and every
+release up to 0.16.0 — which takes `where` and `navigate` only. Sent to one of those, an `add` is
+ignored, and the widgets (§21.5) say so on the page rather than drawing a map without its tracks.
 
 **A host's messages are carried out in the order they came.** An `add` takes as long as its files
 take to open, and a `navigate` sent after one waits for it: a host that adds a 1D browser's tracks
@@ -10625,6 +10631,12 @@ nothing else: no second renderer, no kernel-side reader, no data through the ker
   by how the cell opened it. The newest 64 are kept.
 - **The viewer to Python is traitlets.** Every `state` lands in `state`, a traitlet a cell can
   `observe`; every finished picture's report in `rendered`; the build's version in `version`.
+- **A frame that cannot take files says so.** The tracks and every `add` reach the frame as
+  `chromosomix:add`, which a viewer before 0.17.0 does not know (§21.4): its `ready` lists no
+  `accepts`. The widget then sends it nothing, and says above the frame how many files were not
+  added and which viewer would take them — in `notice` for Python too — rather than drawing a map
+  whose tracks are missing without a word. Naming such a release by its version warns when the
+  widget is made, and `install_viewer()` warns when the build npm hands it is one.
 - **A file on the kernel's disk is served by the kernel**, by byte range, from a server on
   `127.0.0.1`: a `ThreadingHTTPServer` that answers one `Range`, sends `Access-Control-Allow-Origin: *`
   and `Access-Control-Allow-Private-Network`, never sends a `.gz` with a `Content-Encoding`, and
@@ -10635,8 +10647,8 @@ nothing else: no second renderer, no kernel-side reader, no data through the ker
   against the notebook's page before the frame sees it. Nothing is uploaded and nothing leaves the
   machine the kernel runs on (C1).
 - **Which build is in the frame is the reader's to pin.** The site by default; a release by its
-  permanent address (`viewer='0.16.0'` is `…/v/v0.16.0/`, §21); any address; or a built `dist/` on
-  the kernel's disk (§22), served beside the data. `install_viewer()` fetches the npm package once
+  permanent address (`viewer='0.17.0'` is `…/v/v0.17.0/`, §21; one before it takes no files, above);
+  any address; or a built `dist/` on the kernel's disk (§22), served beside the data. `install_viewer()` fetches the npm package once
   into `~/.cache/chromosomix/` and every widget after uses it — the app and the data are then one
   origin and the notebook works offline, where the site reading `http://127.0.0.1` has Chrome ask the
   reader once to let the page reach this machine. `CHROMOSOMIX_VIEWER` names one for every widget.
@@ -10657,7 +10669,8 @@ region =, tracks =, ...)` writes the same fragment in the same order; `chromosom
   by the widget's own script, from the view the frame last reported or, before it has, from how the
   widget opened.
 - **What the viewer says reaches R only in Shiny**, as inputs named after the output:
-  `input$<id>_state`, `input$<id>_rendered`, `input$<id>_version`.
+  `input$<id>_state`, `input$<id>_rendered`, `input$<id>_version` — and `input$<id>_notice`, the
+  same notice the widget shows above a frame too old to take files.
 - **The file server is httpuv**, on `127.0.0.1` in the R session, with the Python server's rules —
   one `Range`, CORS for any origin, the private-network preflight, a `.gz` sent as its bytes, a
   directory under a 128-bit token drawn from the system's random source rather than R's generator

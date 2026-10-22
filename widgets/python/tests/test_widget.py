@@ -1,5 +1,6 @@
 """What the widget hands its frame: the address, the view in it, and the messages after."""
 
+import warnings
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -118,3 +119,16 @@ def test_moves_a_browser_by_its_locus_before_the_viewer_has_said_anything():
     view.goto('IV:1-100')
     assert browser.requests[-1]['state'] == {'locus': 'IV:400,001-460,000'}
     assert view.requests[-1]['state'] == {'view': 'region', 'region': 'IV:1-100'}
+
+
+def test_warns_when_a_release_too_old_to_take_files_is_given_some():
+    with pytest.warns(UserWarning, match='cannot take files'):
+        Chromosomix('https://d.example/a.cool', tracks=['https://d.example/a.bw'], viewer='0.16.0')
+    view = Chromosomix('https://d.example/a.cool', viewer='0.16.0')
+    with pytest.warns(UserWarning, match='1 will not be added'):
+        view.add('https://d.example/b.bw')
+    # A release that takes them, or a build that names no release, says nothing here.
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        Chromosomix('https://d.example/a.cool', tracks=['https://d.example/a.bw'], viewer='0.17.0')
+        Chromosomix('https://d.example/a.cool', tracks=['https://d.example/a.bw'], viewer='https://lab.example/viewer/')

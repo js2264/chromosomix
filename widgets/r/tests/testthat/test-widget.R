@@ -119,3 +119,16 @@ test_that("a proxy sends each request to its output, namespaced", {
   expect_equal(sent[[1]], list(type = "chromosomix-request", message = list(id = "mod-view", request = list(type = "goto", where = "IV:1-2"))))
   expect_equal(sent[[2]]$message$request$files, I("https://d.example/b.bw"))
 })
+
+test_that("it warns when a release too old to take files is given some", {
+  local_no_viewer()
+  expect_warning(
+    chromosomix("https://d.example/a.cool", tracks = "https://d.example/a.bw", viewer = "0.16.0"),
+    "cannot take files"
+  )
+  view <- chromosomix("https://d.example/a.cool", viewer = "0.16.0")
+  expect_warning(chromosomix_add(view, "https://d.example/b.bw"), "1 will not be added")
+  # A release that takes them, or a build that names no release, says nothing here.
+  expect_no_warning(chromosomix("https://d.example/a.cool", tracks = "https://d.example/a.bw", viewer = "0.17.0"))
+  expect_no_warning(chromosomix("https://d.example/a.cool", tracks = "https://d.example/a.bw", viewer = "https://lab.example/v/"))
+})

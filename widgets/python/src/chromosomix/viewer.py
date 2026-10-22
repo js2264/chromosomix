@@ -24,6 +24,7 @@ import os
 import re
 import tarfile
 import urllib.request
+import warnings
 from pathlib import Path
 
 from .server import public_base, shared_server
@@ -35,6 +36,21 @@ SITE = 'https://chromosomix.app/'
 CACHE = Path(os.environ.get('CHROMOSOMIX_CACHE', Path.home() / '.cache' / 'chromosomix')) / 'viewer'
 
 _VERSION = re.compile(r'^v?\d+\.\d+\.\d+([-.+][0-9A-Za-z.-]+)?$')
+
+#: The first release whose frame takes files from a notebook (`chromosomix:add`, SPECS §21.4).
+#: An older one draws the map the fragment names and nothing the widget adds.
+TAKES_FILES = (0, 17, 0)
+
+
+def release_of(address: str) -> tuple[int, int, int] | None:
+    """The release a viewer's address names — the site's `/v/vX.Y.Z/` — or `None` for any other build."""
+    found = re.search(r'/v/v(\d+)\.(\d+)\.(\d+)/?$', address)
+    return None if found is None else (int(found[1]), int(found[2]), int(found[3]))
+
+
+def takes_files(release: tuple[int, int, int] | None) -> bool:
+    """Whether a release's frame takes files from a notebook; a build that names none is asked at run time."""
+    return release is None or release >= TAKES_FILES
 
 
 def installed_viewers() -> list[Path]:
@@ -58,6 +74,13 @@ def install_viewer(version: str = 'latest') -> Path:
     with urllib.request.urlopen(f'https://registry.npmjs.org/chromosomix/{version}') as response:
         meta = json.load(response)
     target = CACHE / meta['version']
+    release = tuple(int(part) for part in re.findall(r'\d+', meta['version'])[:3])
+    if not takes_files(release):  # type: ignore[arg-type]
+        warnings.warn(
+            f'chromosomix {meta["version"]} from npm cannot take files from a notebook: a widget with '
+            f'tracks needs {".".join(map(str, TAKES_FILES))} or later.',
+            stacklevel=2,
+        )
     if (target / 'index.html').is_file():
         return target
     with urllib.request.urlopen(meta['dist']['tarball']) as response:

@@ -44,7 +44,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   beside the map, another map or a model beside it, a workspace — once the map the `src=` named is
   drawn, and answered with the state once they are in. The view state has no word for a track; this
   is how a page that frames a map puts its tracks beside it. A host's messages are now carried out
-  in the order they came, so a `navigate` sent after an `add` lands on what the add opened.
+  in the order they came, so a `navigate` sent after an `add` lands on what the add opened, and
+  `chromosomix:ready` lists the messages the frame takes (`accepts`), so a host can tell a frame that
+  takes files from one built before this. The Jupyter and R widgets read it: a viewer before 0.17.0
+  draws the map without the tracks, and the widget says above the frame how many it could not add.
 
 - **The app held to its own command line, in a notebook (§18.10).** `notebooks/parity.qmd` runs ten
   tasks in the app, in headless Chromium — insulation, compartments, P(s), coverage, virtual 4C, loop

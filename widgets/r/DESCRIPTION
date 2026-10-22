@@ -1,7 +1,7 @@
 Package: chromosomix
 Type: Package
 Title: The 'chromosomix' Hi-C Viewer as an HTML Widget
-Version: 0.16.0
+Version: 0.16.0.9000
 Authors@R: person("Jacques", "Serizay", email = "jacquesserizay@gmail.com",
     role = c("aut", "cre"))
 Description: The 'chromosomix' viewer (<https://chromosomix.app/>) - a contact

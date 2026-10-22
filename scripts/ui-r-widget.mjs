@@ -22,6 +22,11 @@
  *
  * Needs R with htmlwidgets, httpuv, jsonlite, rmarkdown and shiny, and pandoc;
  * the package is installed into `<out-dir>/r-lib/` for the run.
+ *
+ * `GALLERY_OLD_VIEWER` names a build from before `chromosomix:add` — npm's
+ * `chromosomix@0.16.0`, its `package/dist` — and adds one shot: the map and its
+ * tracks in that frame, which draws the map alone and says above it what it
+ * could not add (rw06).
  */
 
 import { createRequire } from 'node:module'
@@ -232,6 +237,36 @@ await app.screenshot({ path: `${OUT}/rw05-shiny-driven.png` })
 console.log('shot rw05-shiny-driven')
 console.log(`--- what the frame said\n${(await app.evaluate(() => window.__heard)).join('\n')}`)
 
-await browser.close()
 shiny.child.kill()
+
+// --- A viewer from before `add` --------------------------------------------
+
+if (process.env.GALLERY_OLD_VIEWER) {
+  const old = await serving(`
+    library(chromosomix)
+    view <- suppressWarnings(chromosomix(
+      ${JSON.stringify(join(REPO, 'demo', 'yeast', 'Yeast_microC_G2M_1kb.cool'))},
+      region = "IV:1000000-1400000",
+      tracks = file.path(${JSON.stringify(join(REPO, 'demo', 'yeast'))}, c("Yeast_ATAC.bw", "Yeast_MNase.bw", "Yeast_annotations.gtf")),
+      transform = "log10", height = 620, viewer = ${JSON.stringify(process.env.GALLERY_OLD_VIEWER)}
+    ))
+    page <- file.path(${JSON.stringify(WORK)}, "old-viewer.html")
+    htmlwidgets::saveWidget(view, page, selfcontained = FALSE)
+    cat("SERVING", serve(page), "\\n")
+    repeat httpuv::service(100)
+  `)
+  const before = await context.newPage()
+  await before.goto(old.url)
+  await before.waitForSelector('.html-widget [role="status"]:not([hidden])', { timeout: 60000 }).then(
+    () => console.log('the old viewer: the notice is shown'),
+    () => console.log('the old viewer: NO NOTICE'),
+  )
+  console.log('it says:', (await before.locator('.html-widget [role="status"]').textContent())?.trim())
+  await sleep(4000)
+  await before.screenshot({ path: `${OUT}/rw06-old-viewer-notice.png` })
+  console.log('shot rw06-old-viewer-notice')
+  old.child.kill()
+}
+
+await browser.close()
 if (errors.length > 0) console.log(`--- page errors\n${errors.join('\n')}`)
