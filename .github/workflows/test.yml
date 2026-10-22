@@ -203,6 +203,9 @@ jobs:
           if [ "$FIXTURES" != "success" ]; then
             echo "::warning title=Full suite not run::metacooler's fixtures were not built (set the METACOOLER_REPO_TOKEN secret to a token that can read js2264/metacooler), so the twelve reader suites over them and the metacool request budgets did not run. The demo maps and the public fixtures still did, where their own steps say so."
           fi
+          if [ "$PUBLIC_FIXTURES" != "success" ]; then
+            echo "::warning title=Public fixtures not built::cooler or g3dtools did not build their fixtures, so the .pairs (cooler cload pairs) and binary g3d oracles did not run in this job, nor the .scool and HiC-Pro ones unless metacooler's fixtures rebuilt them. Run npm run fixtures:scool, fixtures:hicpro, fixtures:pairs and fixtures:g3d and look at the error."
+          fi
           if [ "$DEMO" != "success" ]; then
             echo "::warning title=Demo maps not fetched::the demo maps could not be fetched from the public bucket, so the reader was not compared with cooler on them in this job."
           fi

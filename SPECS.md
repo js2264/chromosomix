@@ -421,10 +421,14 @@ code path; and writing, for §13's reason.
 **Correctness.** The reader is checked three ways: against fixtures whose contents are known exactly,
 across every encoding the format allows (v7/v8/v9, short and float values, short and int positions,
 list-of-rows and dense blocks, grid and diagonal block numbering); against **`hic-straw`**, the
-reference implementation, as a devDependency oracle on every one of those fixtures; and through
-`MetaCooler` itself, asserting that the ordinary cooler surface answers identically. The second of the
-three is not optional and the reason is recorded: the first version of the reader and the first version
-of the writer agreed with each other that the format is big-endian. It is not.
+reference implementation, as a devDependency oracle on every one of those fixtures and on the demo
+map, a v8 file Juicer Tools 1.9.9 wrote, cell for cell at all five of its resolutions, raw and
+balanced by its own KR vectors; and through `MetaCooler` itself, asserting that the ordinary cooler
+surface answers identically. The second of the three is not optional and the reason is recorded: the
+first version of the reader and the first version of the writer agreed with each other that the format
+is big-endian. It is not. The demo map is among them because the fixtures are this repository's own
+writing: a misreading of the format that the writer and both readers shared would never meet a block
+Juicer laid out.
 
 ---
 
