@@ -14,6 +14,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **What a task re-implements, on its row (§18.1).** A `?` in a circle at the right of a task's title
+  in the Analysis column names the published method it follows, how it came out against it in the
+  validation notebook, and the paper's DOI as a link, in a small tip shown on hover. Green where the
+  validation found it identical or equivalent — 20 tasks, from coverage and insulation to pastis-NB
+  and the metaplot — and in the text's colour where it is untested: the scalogram, the HiC score and
+  per-cell contact QC. A mark, not a button: a press on it opens no task. Tasks that follow no
+  published method have none.
+
 - **The notebooks, in *About* (§18.10).** A *Notebooks* tab names the four published notebooks — the
   validation, the timings and the parity, which GitHub Actions renders with every release, and the
   laptop, rendered by hand — each linking to its page, with a sentence on what it holds chromosomix

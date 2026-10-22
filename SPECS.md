@@ -7264,6 +7264,21 @@ run, queued, running, done, failed, cancelled. It carries no controls — bar a 
 is queued or running — because a panel that both lists twenty tasks and configures them is a panel
 that does neither.
 
+**A task that re-implements a published method says which**, with a `?` in a circle at the right of
+its title's line, after the state: a mark and not a control — not in the caret's walk, and a press on
+it opens no task. Hovering it shows a small tip: the method and whose it is, how the task came out
+against it, and the paper's DOI as a link — *Diamond insulation (Crane et al. 2015), as cooltools
+computes it. Identical in the validation · doi:10.1038/nature14450*. The `?` is **green** where
+`notebooks/validation.qmd` found the task identical or equivalent to its reference (§18.10), and in
+the text's colour where it is **untested**: the scalogram, the HiC score and per-cell contact QC. A task
+whose code follows no published method — the arms' alignment, the origin and terminus, the
+metagenome's tables, the model against the map, the dot plot — has none, since a citation there would
+claim what the code does not. The tip hangs from the page rather than from the row, which is a button a
+link cannot sit in, and stays while the pointer is on the `?` or on the tip, so it can be followed to
+the DOI; on a touch screen a tap shows it and a tap elsewhere puts it away. The table is
+`src/analysis/references.ts`, and `test/unit/references.test.ts` holds each line to a task, each green
+one to a section of the validation's own table, and the tasks without one to having none.
+
 **Over the cards, a box narrows the list** — `filter 25 tasks…` — because thirty tasks in four cards
 is a list read top to bottom by somebody who already knows the one they want. It is a filter over the
 list rather than a control over any task: every word typed must be found in a task's title, its
@@ -8161,7 +8176,7 @@ The decay curve averages every bin of a sequence into one line and answers *how 
 the scalogram keeps the bins apart and answers *where does this genome fold differently from itself*.
 At each bin it accumulates the cumulative distribution of its contacts over separation — the two cells
 either side of it at each distance, which on a circular sequence are the two ways round — and reports
-the separation at which that cumulative reaches each of a set of quantiles. Cournac et al. (2012)'s
+the separation at which that cumulative reaches each of a set of quantiles. Lioy et al. (2018)'s
 reading, and `HiContacts::scalogram()`'s quantity. It is a **distribution** and not a mean, because
 contact probability has a heavy tail by construction: the mean separation of a bin's contacts moves by
 a factor of two when the balancer drops a single distant cell, and its median does not. The quantile is

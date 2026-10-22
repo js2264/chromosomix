@@ -11804,6 +11804,77 @@ span.deck-name {
   color: var(--ok);
 }
 
+/* What the task re-implements (`ui/taskReference.ts`): a `?` in a circle at the
+   right of the title's line, after the chip. Green where the validation found
+   it identical or equivalent to its reference, the text's own colour where it
+   is untested. A mark and not a control — no fill, no hover state, the help
+   cursor its only invitation — so a column of twenty rows does not read as
+   twenty more buttons. Lucide's drawn mark, at 16 pixels: a typed `?` in a
+   bordered ring sat where the font's metrics put it, off-centre by a pixel on
+   some rows and not on others. */
+.task-ref {
+  display: inline-flex;
+  flex: 0 0 auto;
+  /* On the title's first line, centred on the chip beside it, as the chip
+     itself is held there (`align-self: start`): centred in the cell instead,
+     it sank to the middle of a title that wraps onto two lines. The chip is
+     about 0.27rem taller. */
+  align-self: start;
+  margin-top: 0.135rem;
+  color: var(--text);
+  cursor: help;
+}
+
+.task-ref > .icon {
+  display: block;
+}
+
+.task-ref.is-validated {
+  color: var(--ok);
+}
+
+/* The same width on a row with no `?`, so that every chip stands in one column
+   rather than the rows without a reference pushing theirs to the edge. */
+.task-ref-blank {
+  flex: 0 0 auto;
+  width: 16px;
+}
+
+/* Its tip, hung from the body and placed under the `?` by hand: the column
+   scrolls and clips, and the row is a button a link cannot sit inside. Small
+   and plain — the method, then how it came out and its DOI — since it is a
+   footnote to the row and not a card of its own. */
+.task-ref-tip {
+  position: fixed;
+  z-index: 95;
+  width: max-content;
+  max-width: min(19rem, calc(100vw - 1rem));
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  color: var(--text);
+  box-shadow: var(--shadow-2);
+  font-size: var(--step--2);
+  line-height: 1.4;
+}
+
+.task-ref-tip > p {
+  margin: 0;
+}
+
+.task-ref-tip > .task-ref-status {
+  margin-top: 0.15rem;
+  color: var(--text-dim);
+}
+
+.task-ref-tip a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
 .analysis-chip.is-failed {
   border-color: var(--danger);
   color: var(--danger);
