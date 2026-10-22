@@ -1358,19 +1358,24 @@ record('Reproducibility (HiCRep)', 'chicken Hi-C, 3 maps, 100 kb, raw counts', f
 
 ## 8 · 3D model (pastis-NB)
 
-Counts drawn from a negative binomial of mean `β·bᵢ·bⱼ·d^−α`, α = 3, with `bᵢ = 1/wᵢ` from the file's
-balancing weights and zeros taken as counts. Reference: pastis (GitHub `6888ac2`; Varoquaux, Noble &
-Vert 2023) through its own functions — the dispersion fitted against the mean
-(`ExponentialDispersion(degree=1)`), an MDS start, `negative_binomial_structure.estimate_X` — on the same
-beads (bins with a weight and a contact). The app departs on purpose: its dispersion is a moment
-estimate per separation, its start ShRec3D's MDS. A structure has no unique solution, so pastis from
-three seeds is the yardstick. chromosomix runs its default 150 steps.
+Counts drawn from a negative binomial of mean `bᵢ·bⱼ·d^−α`, α = 3, with `bᵢ = 1/wᵢ` from the file's
+balancing weights scaled to a mean of 1, zeros taken as counts, and a dispersion that is a curve
+against the mean. Reference: pastis (GitHub `6888ac2`; Varoquaux, Noble & Vert 2023) through its own
+functions — the moments at each separation and the dispersion fitted against the mean
+(`compute_mean_variance`, `ExponentialDispersion(degree=1)`), an MDS start from random positions,
+`negative_binomial_structure.estimate_X` — on the same beads (bins with a weight and a contact).
+chromosomix ports each of those functions, draws its random start with numpy's own generator so a
+seed places the beads where pastis' does, and runs its default 150 steps, about where pastis' own
+L-BFGS-B stops on this map; pastis runs to its own tolerances. A structure has no unique solution,
+so each runs from the same three seeds: the two from one seed should be one model, and pastis from
+three seeds is the yardstick for how alike two models of this map can be.
 
 ```{python}
 P3 = WORK / 'pastis'
 YEAST_12K = f'{rel(YEAST)}::/resolutions/12800'
-mr('reconstruct3d', YEAST_12K, '--method', 'nb', '--alpha', 3, out=P3 / 'app', name='reconstruct3d',
-   analysis='3D model (pastis-NB)', label='150 steps')
+for seed in (0, 1, 2):
+    mr('reconstruct3d', YEAST_12K, '--method', 'nb', '--alpha', 3, '--seed', seed, out=P3 / f'app-seed{seed}',
+       name=f'reconstruct3d-seed{seed}', analysis='3D model (pastis-NB)', label=f'seed {seed}', bench=seed == 0)
 PASTIS = script('pastis_nb')
 for seed in (0, 1, 2):
     reference(f'pastis-seed{seed}', '3D model (pastis-NB)', 'pastis', [PYTHON, PASTIS, YEAST_12K, OUT, seed],
@@ -1390,7 +1395,7 @@ def app_model(folder):
     return beads.merge(bed3d, on=['chrom', 'start'], how='left')[['x', 'y', 'z']].to_numpy(float)
 
 
-MODELS = {'chromosomix': app_model(P3 / 'app'),
+MODELS = {**{f'chromosomix, seed {s}': app_model(P3 / f'app-seed{s}') for s in (0, 1, 2)},
           **{f'pastis, seed {s}': np.load(P3 / f'pastis-seed{s}.npy') for s in (0, 1, 2)}}
 assert all(model.shape == (KEEP.sum(), 3) and np.isfinite(model).all() for model in MODELS.values()), \
     'a bead is missing from a model'
@@ -1410,12 +1415,19 @@ def per_chromosome_disparity(a, b):
     return np.median([procrustes(a[bead_chrom == c], b[bead_chrom == c])[2] for c in pd.unique(bead_chrom)])
 
 
+def kind(a, b):
+    tool_a, seed_a = a.split(', seed ')
+    tool_b, seed_b = b.split(', seed ')
+    if tool_a != tool_b:
+        return 'chromosomix vs pastis, same seed' if seed_a == seed_b else 'chromosomix vs pastis, other seeds'
+    return f'{tool_a} vs {tool_b}'
+
+
 rows = []
 names_ = list(MODELS)
 for i, a in enumerate(names_):
     for b in names_[i + 1:]:
-        rows.append({'models': f'{a} / {b}',
-                     'kind': 'pastis vs pastis' if a.startswith('pastis') else 'chromosomix vs pastis',
+        rows.append({'models': f'{a} / {b}', 'kind': kind(a, b),
                      'within chromosomes, Spearman ρ': stats.spearmanr(dist[a][same], dist[b][same])[0],
                      'between chromosomes, Spearman ρ': stats.spearmanr(dist[a][~same], dist[b][~same])[0],
                      'per-chromosome Procrustes disparity': per_chromosome_disparity(MODELS[a], MODELS[b])})
@@ -1432,8 +1444,8 @@ map counted.
 
 ```{python}
 #| label: fig-pastis
-#| fig-cap: "pastis-NB, yeast Micro-C at 12.8 kb. a, distances within chromosomes, chromosomix against pastis' first seed, each over its model's median distance between neighbouring beads; b, how alike two models are, within and between chromosomes."
-cross = models_table[models_table['kind'] == 'chromosomix vs pastis']
+#| fig-cap: "pastis-NB, yeast Micro-C at 12.8 kb. a, distances within chromosomes, chromosomix against pastis from the same seed, 0, each over its model's median distance between neighbouring beads; b, how alike two runs are, within and between chromosomes: chromosomix and pastis from one seed, and pastis from two."
+cross = models_table[models_table['kind'] == 'chromosomix vs pastis, same seed']
 selfs = models_table[models_table['kind'] == 'pastis vs pastis']
 
 
@@ -1446,22 +1458,25 @@ TEXT['p3_intra_cross'] = spread(cross, 'within chromosomes, Spearman ρ', 3)
 TEXT['p3_intra_self'] = spread(selfs, 'within chromosomes, Spearman ρ', 3)
 TEXT['p3_inter_cross'] = spread(cross, 'between chromosomes, Spearman ρ', 2)
 TEXT['p3_inter_self'] = spread(selfs, 'between chromosomes, Spearman ρ', 2)
+TEXT['p3_disparity_cross'] = spread(cross, 'per-chromosome Procrustes disparity', 3)
+TEXT['p3_disparity_self'] = spread(selfs, 'per-chromosome Procrustes disparity', 3)
 fits = fit_table.set_index('model')['fit, all pairs']
-TEXT['p3_fit_app'] = f"{fits['chromosomix']:.3f}"
-pastis_fits = fits[[n for n in fits.index if n.startswith('pastis')]]
-TEXT['p3_fit_pastis'] = f"{pastis_fits.min():.3f}–{pastis_fits.max():.3f}"
 within = fit_table.set_index('model')['fit, within chromosomes']
-pastis_within = within[[n for n in within.index if n.startswith('pastis')]]
-TEXT['p3_fit_app_within'] = f"{within['chromosomix']:.3f}"
-TEXT['p3_fit_pastis_within'] = f"{pastis_within.min():.3f}–{pastis_within.max():.3f}"
+app_names = [n for n in fits.index if n.startswith('chromosomix')]
+pastis_names = [n for n in fits.index if n.startswith('pastis')]
+TEXT['p3_fit_app'] = f"{fits[app_names].min():.3f}–{fits[app_names].max():.3f}"
+TEXT['p3_fit_pastis'] = f"{fits[pastis_names].min():.3f}–{fits[pastis_names].max():.3f}"
+TEXT['p3_fit_app_within'] = f"{within[app_names].min():.3f}–{within[app_names].max():.3f}"
+TEXT['p3_fit_pastis_within'] = f"{within[pastis_names].min():.3f}–{within[pastis_names].max():.3f}"
 
 
 def versus(app, reference_):
-    return 'better than' if app > reference_.max() else 'less well than' if app < reference_.min() else 'as well as'
+    return ('better than' if app.min() > reference_.max() else 'less well than' if app.max() < reference_.min()
+            else 'as well as')
 
 
-TEXT['p3_within_word'] = versus(within['chromosomix'], pastis_within)
-TEXT['p3_all_word'] = versus(fits['chromosomix'], pastis_fits)
+TEXT['p3_within_word'] = versus(within[app_names], within[pastis_names])
+TEXT['p3_all_word'] = versus(fits[app_names], fits[pastis_names])
 
 fig, axes = plt.subplots(1, 2, figsize=(11, 4.6), layout='constrained', width_ratios=[1, 1.15])
 
@@ -1471,11 +1486,11 @@ def scaled(model):
     return pdist(model) / step
 
 
-agreement(axes[0], scaled(MODELS['pastis, seed 0'])[same], scaled(MODELS['chromosomix'])[same],
-          'pastis, seed 0', 'chromosomix', 'a  distances within chromosomes', scale='log')
+agreement(axes[0], scaled(MODELS['pastis, seed 0'])[same], scaled(MODELS['chromosomix, seed 0'])[same],
+          'pastis, seed 0', 'chromosomix, seed 0', 'a  distances within chromosomes', scale='log')
 ax = axes[1]
 for col, metric in enumerate(('within chromosomes, Spearman ρ', 'between chromosomes, Spearman ρ')):
-    for offset, frame, colour, label in ((-0.12, cross, APP_COLOUR, 'chromosomix vs pastis'),
+    for offset, frame, colour, label in ((-0.12, cross, APP_COLOUR, 'chromosomix vs pastis, same seed'),
                                          (0.12, selfs, REF, 'pastis vs pastis')):
         ax.scatter(np.full(len(frame), col + offset), frame[metric], s=36, color=colour,
                    label=label if col == 0 else None, zorder=3, gid=label)
@@ -1485,21 +1500,26 @@ ax.legend(loc='lower left')
 drawn('fig-pastis')
 ```
 
-On `{python} TEXT['p3_beads']` beads, distances within chromosomes correlate with pastis' at
-ρ = `{python} TEXT['p3_intra_cross']`, against `{python} TEXT['p3_intra_self']` between pastis seeds;
-between chromosomes at `{python} TEXT['p3_inter_cross']` (`{python} TEXT['p3_inter_self']`).
-chromosomix's model fits the contacts within chromosomes `{python} TEXT['p3_within_word']` pastis'
+On `{python} TEXT['p3_beads']` beads, chromosomix and pastis from the same seed give the same model:
+distances within chromosomes correlate at ρ = `{python} TEXT['p3_intra_cross']`, against
+`{python} TEXT['p3_intra_self']` between pastis' own seeds; between chromosomes at
+`{python} TEXT['p3_inter_cross']` (`{python} TEXT['p3_inter_self']`); and the median per-chromosome
+Procrustes disparity is `{python} TEXT['p3_disparity_cross']` (`{python} TEXT['p3_disparity_self']`).
+chromosomix's models fit the contacts within chromosomes `{python} TEXT['p3_within_word']` pastis'
 (`{python} TEXT['p3_fit_app_within']` against `{python} TEXT['p3_fit_pastis_within']`), and over all
 pairs, the chromosomes' arrangement included, `{python} TEXT['p3_all_word']` pastis'
 (`{python} TEXT['p3_fit_app']` against `{python} TEXT['p3_fit_pastis']`).
 
 ```{python}
 record('3D model (pastis-NB)', f"yeast Micro-C, 12.8 kb, {TEXT['p3_beads']} beads", 'pastis 0.5.0 (GitHub 6888ac2)',
-       f"within chromosomes ρ = {TEXT['p3_intra_cross']} (pastis vs pastis {TEXT['p3_intra_self']}); "
+       f"same seed: within chromosomes ρ = {TEXT['p3_intra_cross']}, between {TEXT['p3_inter_cross']} "
+       f"(pastis vs pastis {TEXT['p3_intra_self']}, {TEXT['p3_inter_self']}); "
        f"fit within chromosomes {TEXT['p3_fit_app_within']} vs {TEXT['p3_fit_pastis_within']}, "
        f"all pairs {TEXT['p3_fit_app']} vs {TEXT['p3_fit_pastis']}",
-       f"Fits within chromosomes {TEXT['p3_within_word']} pastis; all pairs {TEXT['p3_all_word']} pastis",
-       apps=['reconstruct3d'], refs=['pastis-seed0', 'pastis-seed1', 'pastis-seed2'])
+       f"Same seed, same model; fits within chromosomes {TEXT['p3_within_word']} pastis; "
+       f"all pairs {TEXT['p3_all_word']} pastis",
+       apps=['reconstruct3d-seed0', 'reconstruct3d-seed1', 'reconstruct3d-seed2'],
+       refs=['pastis-seed0', 'pastis-seed1', 'pastis-seed2'])
 ```
 
 ## 9 · Coverage

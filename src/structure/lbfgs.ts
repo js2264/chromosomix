@@ -14,8 +14,8 @@
  * `fmin_l_bfgs_b`). It keeps the last `history` pairs of *step* and *gradient
  * change* and builds an implicit inverse Hessian out of them by the two-loop
  * recursion, which costs `O(history · n)` per iteration and no matrix at all.
- * For a structure that is three coordinates per bead plus one scale, `n` is
- * `3 · beads + 1` and the whole history at depth six is fourteen vectors — four
+ * For a structure that is three coordinates per bead, `n` is `3 · beads` and
+ * the whole history at SciPy's depth of ten is twenty-two vectors — six
  * megabytes at twelve thousand beads, beside the half-gigabyte matrix of
  * counts. The Hessian a full BFGS would write down is `(3n)²`, which at that
  * size is thirty **terabytes**, so the "limited-memory" is not an optimisation
@@ -27,10 +27,18 @@
  * guarantees the sufficient *decrease* — not the curvature condition `sᵀy > 0`
  * that makes the Hessian approximation positive definite. Without it the
  * history poisons itself on exactly the functions this is here for: a negative
- * binomial whose dispersion varies over six orders of magnitude between the
- * near diagonal and the far pairs is badly scaled, and a badly scaled problem
- * is where a rejected curvature pair costs an iteration and an *accepted* bad
- * one costs the run.
+ * binomial whose counts run from thousands on the near diagonal to nothing far
+ * from it is badly scaled, and a badly scaled problem is where a rejected
+ * curvature pair costs an iteration and an *accepted* bad one costs the run.
+ *
+ * **Its constants are SciPy's**, the ones every pastis run is made with: a
+ * step must buy a thousandth of the decrease its slope promised, its slope
+ * must fall to 0.9 of where it began, a search has twenty probes, the history
+ * is ten pairs deep, a failed search throws the history away and tries once
+ * more by steepest descent, and the run stops once an iteration buys less than
+ * `tolerance` of the value — L-BFGS-B's `factr · ε` — or the largest gradient
+ * component is under `gradientTolerance`, its `pgtol`. So a caller that hands
+ * it pastis' tolerances stops where pastis would.
  *
  * **A generator, a value at a time**, for the same reason `classicalMdsSweeps`
  * is one: at ten thousand beads a single evaluation is a hundred million pair
@@ -90,7 +98,7 @@ export interface LbfgsResult {
 export interface LbfgsOptions {
   /** Iterations, not evaluations: each costs one line search. Default 200. */
   iterations?: number
-  /** Curvature pairs kept. Default 6; more is a better Hessian and more memory. */
+  /** Curvature pairs kept. Default 10, SciPy's; more is a better Hessian and more memory. */
   history?: number
   /** Stop once an iteration improves the value by less than this share of it. Default 1e-9. */
   tolerance?: number
@@ -98,12 +106,16 @@ export interface LbfgsOptions {
   gradientTolerance?: number
 }
 
-/** Armijo's constant: how much of the predicted decrease a step must deliver. */
-const SUFFICIENT_DECREASE = 1e-4
-/** Wolfe's curvature constant. 0.9 is the standard for a quasi-Newton method. */
+/**
+ * Armijo's constant: how much of the predicted decrease a step must deliver.
+ * SciPy's L-BFGS-B line search asks for a thousandth (`ftol = 1e-3`), and that
+ * is the optimiser pastis calls, so it is the one this is held to.
+ */
+const SUFFICIENT_DECREASE = 1e-3
+/** Wolfe's curvature constant. 0.9 is the standard for a quasi-Newton method, and SciPy's. */
 const CURVATURE = 0.9
-/** Line-search steps before giving up on one direction. */
-const SEARCH_STEPS = 40
+/** Line-search steps before giving up on one direction: SciPy's `maxls`. */
+const SEARCH_STEPS = 20
 /** A curvature pair flatter than this is dropped rather than inverted. */
 const CURVATURE_FLOOR = 1e-12
 
@@ -121,7 +133,7 @@ export function* lbfgs(
   options: LbfgsOptions = {},
 ): Generator<LbfgsProgress, LbfgsResult, void> {
   const iterations = Math.max(0, Math.round(options.iterations ?? 200))
-  const depth = Math.max(1, Math.round(options.history ?? 6))
+  const depth = Math.max(1, Math.round(options.history ?? 10))
   const tolerance = options.tolerance ?? 1e-9
   const gradientTolerance = options.gradientTolerance ?? 1e-10
   const n = start.length
@@ -194,8 +206,9 @@ export function* lbfgs(
     }
 
     // Steepest descent has no scale of its own, so the first step is sized to
-    // the gradient; a quasi-Newton direction carries its own and starts at 1.
-    const first = steps.length === 0 ? Math.min(1, 1 / sumAbs(gradient)) : 1
+    // the gradient — a unit move, `1/‖∇f‖`, as L-BFGS-B sizes it; a
+    // quasi-Newton direction carries its own and starts at 1.
+    const first = steps.length === 0 ? Math.min(1e10, 1 / Math.sqrt(dot(gradient, gradient))) : 1
     const search = yield* lineSearch(
       objective,
       point,
@@ -210,6 +223,17 @@ export function* lbfgs(
       iterations,
     )
     if (!search.ok) {
+      // L-BFGS-B's answer to a failed search: the history may be what pointed
+      // the step somewhere useless, so it is thrown away and the iteration
+      // tried again by steepest descent. Only a search that fails *without* a
+      // history ends the run.
+      if (steps.length > 0) {
+        steps.length = 0
+        changes.length = 0
+        rho.length = 0
+        done--
+        continue
+      }
       stop = 'search'
       break
     }
@@ -242,7 +266,7 @@ export function* lbfgs(
       }
     }
 
-    if (before - value <= tolerance * Math.max(1, Math.abs(before))) {
+    if (before - value <= tolerance * Math.max(1, Math.abs(before), Math.abs(value))) {
       done++
       stop = 'value'
       break
@@ -363,8 +387,8 @@ function* lineSearch(
  * but the failure mode of an interpolant on a function with a pole — which this
  * one has, since a pair of beads on one point makes the mean infinite — is a
  * trial step outside the bracket, and the safeguard that puts it back is most
- * of what interpolation saved. The bracket halves every probe, so forty probes
- * is a step known to a part in `2⁴⁰` and the loop is never the run's cost.
+ * of what interpolation saved. The bracket halves every probe, so twenty probes
+ * is a step known to a part in a million and the loop is never the run's cost.
  */
 function* zoom(
   objective: Objective,
@@ -445,10 +469,4 @@ function maxAbs(v: Float64Array): number {
     if (a > most) most = a
   }
   return most
-}
-
-function sumAbs(v: Float64Array): number {
-  let sum = 0
-  for (let i = 0; i < v.length; i++) sum += Math.abs(v[i])
-  return sum
 }

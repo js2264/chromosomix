@@ -204,7 +204,9 @@ describe('model from the map', () => {
     expect(estimate.note).toMatch(/24,000 beads/)
     // What the wait and the memory will be, in the words a reader decides on.
     expect(estimate.note).toMatch(/per hundred steps/)
-    expect(estimate.note).toMatch(/of matrices/)
+    // pastis-NB, the default, holds the counts and nothing else: one matrix.
+    expect(estimate.note).toMatch(/GB matrix/)
+    expect(RECONSTRUCT_TASK.estimate(context, { method: 'shrec3d' }).note).toMatch(/of matrices/)
     expect(estimate.note).toMatch(/read from the file/)
     // A sequence is its own bins, again at the file's resolution and not the
     // screen's: the drawn cell of two bins never enters the arithmetic.
@@ -289,11 +291,17 @@ describe('model from the map', () => {
     } as never
     const nb = RECONSTRUCT_TASK.estimate(context, { method: 'nb' })
     const shrec = RECONSTRUCT_TASK.estimate(context, { method: 'shrec3d' })
-    const seconds = (note: string): number => Number(/about (\d+) seconds per hundred steps/.exec(note)?.[1])
+    const seconds = (note: string): number => {
+      const [, count, unit] = /about (\d+) (seconds|minutes) per hundred steps/.exec(note) ?? []
+      return Number(count) * (unit === 'minutes' ? 60 : 1)
+    }
     expect(seconds(nb.note ?? '')).toBeGreaterThan(seconds(shrec.note ?? ''))
-    // Both hold the same two matrices: the likelihood adds vectors, not squares.
-    const matrices = (note: string): string => String(/(\d+) MB of matrices/.exec(note)?.[1])
-    expect(matrices(nb.note ?? '')).toBe(matrices(shrec.note ?? ''))
+    // pastis-NB holds one matrix, the counts, where ShRec3D holds two: the
+    // likelihood adds vectors, not squares, and fills in no distance.
+    const megabytes = (note: string): number => Number(/(\d+) MB/.exec(note)?.[1])
+    expect(nb.note).toMatch(/MB matrix/)
+    expect(shrec.note).toMatch(/MB of matrices/)
+    expect(2 * megabytes(nb.note ?? '')).toBe(megabytes(shrec.note ?? ''))
   })
 
   it('models with pastis-NB by default, and says what the likelihood did', async () => {
@@ -313,24 +321,45 @@ describe('model from the map', () => {
     expect(row(table, 'Method')).toMatch(/pastis-NB/)
     // This file carries balancing weights, so the coverage is corrected where
     // pastis puts it: in the mean, not in the data.
-    expect(row(table, 'Mean of a pair')).toBe('μ = β · bᵢ · bⱼ · d^(−3)')
+    expect(row(table, 'Mean of a pair')).toBe('μ = bᵢ · bⱼ · d^(−3)')
     expect(row(table, 'Counts')).toMatch(/^raw, with/)
     // The weighting is ShRec3D's row and is not reported for a run that had none.
     expect(row(table, 'Pairs weighted by')).toBeUndefined()
     expect(row(table, 'Weighted stress')).toBeUndefined()
-    // This map's counts are exact at every separation, so there is nothing for
-    // the negative binomial to find and it says so rather than implying a
-    // dispersion it did not measure.
-    expect(row(table, 'Overdispersion (r)')).toMatch(/none/)
+    // This map's counts are exact at every separation, but its weights say its
+    // bins were read unevenly: divided by the coverage the counts scatter, and
+    // the dispersion is fitted to that as pastis fits it, a curve against the
+    // mean, written out with what it gives near the diagonal and far from it.
+    expect(row(table, 'Overdispersion (r)')).toMatch(/^r = [\d.]+ · λ\^-?[\d.]+, λ the mean, fitted over \d+ separations/)
     expect(row(table, 'Zeros used as evidence')).toMatch(/0 of the 190 pairs/)
-    expect(row(table, 'MDS start')).toMatch(/SMACOF steps/)
+    // pastis' own start, from the seed the reader can see.
+    expect(row(table, 'MDS start')).toMatch(/^pastis’ MDS from random positions, seed 0: \d+ steps/)
     expect(row(table, 'Stopped on')).toBeDefined()
-    expect(Number(row(table, 'Scale β'))).toBeGreaterThan(0)
-    // 1/(1+s) read as a mean of β·d^(−3) is a chain no three axes hold
+    // β is pastis' 1 and the model's size is fitted instead, so there is no scale to report.
+    expect(row(table, 'Scale β')).toBeUndefined()
+    // 1/(1+s) read as a mean of d^(−3) is a chain no three axes hold
     // exactly, so the rank agreement over every pair is good rather than
     // perfect — the same bar the ShRec3D run above is held to.
     expect(Number(row(table, 'Spearman ρ (1/d vs contacts)'))).toBeGreaterThan(0.75)
     expect(notes).toEqual([])
+  })
+
+  it('starts pastis-NB from the seed it is given: the same seed the same model, another seed its own', async () => {
+    const seed = RECONSTRUCT_TASK.params.find((spec) => spec.key === 'seed')
+    expect(seed?.kind).toBe('seed')
+    // pastis' `random_state`, so a question for pastis-NB alone.
+    expect(seed?.when?.({ method: 'nb' })).toBe(true)
+    expect(seed?.when?.({ method: 'shrec3d' })).toBe(false)
+    const beadsOf = async (params: Record<string, number>): Promise<Float64Array> => {
+      const outputs = await runReconstruct(blockJob({ alpha: 3, iterations: 40, ...params }, []))
+      const model = outputs.find((o): o is IntervalsOutput => o.kind === 'intervals')
+      if (model === undefined || model.payload.kind !== 'features') throw new Error('no model')
+      const m = model.payload.data.model as NonNullable<typeof model.payload.data.model>
+      return Float64Array.from({ length: 3 * m.x.length }, (_, i) => [m.x, m.y, m.z][i % 3][Math.floor(i / 3)])
+    }
+    const first = await beadsOf({ seed: 7 })
+    expect(await beadsOf({ seed: 7 })).toEqual(first)
+    expect(await beadsOf({ seed: 8 })).not.toEqual(first)
   })
 
   it('reads a counted zero as evidence rather than dropping the pair', async () => {
@@ -367,7 +396,7 @@ describe('model from the map', () => {
     // A balanced value is a count times two weights, and `variance > mean` is a
     // question about a count — so the counts stay raw and the weights go into
     // the mean. The run says both, in the table and to the reader.
-    expect(row(table, 'Mean of a pair')).toBe('μ = β · bᵢ · bⱼ · d^(−3)')
+    expect(row(table, 'Mean of a pair')).toBe('μ = bᵢ · bⱼ · d^(−3)')
     expect(row(table, 'Counts')).toMatch(/raw, with the file’s balancing weights folded into the mean/)
     expect(notes.join(' ')).toMatch(/raw counts underneath/)
     // The block on screen is balanced, so it is not the counts this method
@@ -387,8 +416,12 @@ describe('model from the map', () => {
       throw new Error('This file has no /bins/weight column.')
     }
     const table = (await runReconstruct(plain)).find((o): o is TableOutput => o.kind === 'table')
-    expect(row(table, 'Mean of a pair')).toBe('μ = β · d^(−3)')
+    expect(row(table, 'Mean of a pair')).toBe('μ = d^(−3)')
     expect(row(table, 'Counts')).toMatch(/no balancing weights/)
+    // With no coverage to divide out the counts are exact at every separation,
+    // so there is nothing for the negative binomial to find and it says so
+    // rather than implying a dispersion it did not measure.
+    expect(row(table, 'Overdispersion (r)')).toMatch(/^none: these counts are Poisson, so this is pastis-PM2/)
     // Every bead is kept: there is no weight to reject one by.
     expect(row(table, 'Beads')).toMatch(/^20 of 20 cells/)
   })
