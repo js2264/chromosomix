@@ -20,7 +20,7 @@ chromosomix launches in about a second and reads your data where it lives, on yo
 
 - Support for all genomic data types: 
   - Supports 1D genomic formats: bigWig, bigBed, BED, bedGraph, wig, GTF/GFF3, FASTA (+`.fai`), `.2bit`, BAM, VCF, barChart/bigBarChart, genePred/refFlat/bigGenePred, bedMethyl/bigMethyl, chrom.sizes, ...
-  - Supports 2D genomic formats: `.*cool`, `.hic`, HiC-Pro, `pairs(.gz)`, ..., at every resolution the file stores. Also supports interaction formats: BEDPE, and UCSC's `interact`/`bigInteract` and `longrange`/longTabix — drawn as arcs over the contact map and as their own lane in the 1D browser.
+  - Supports 2D genomic formats: `.*cool`, `.hic`, HiC-Pro, `pairs(.gz)`, ..., at every resolution the file stores. A `.pairs` is binned on import, and the same pass counts what `pairtools stats` counts — mapped, duplicates, cis and trans, pair types, strand convergence, library size — shown in the General panel and saved as a `.stats` file MultiQC reads. Also supports interaction formats: BEDPE, and UCSC's `interact`/`bigInteract` and `longrange`/longTabix — drawn as arcs over the contact map and as their own lane in the 1D browser.
   - Supports 3D genomic formats: WashU's g3d (text or binary), `.3dg`, and `bed3d`, drawn in 3D and synchronized with the maps and tracks view. Every model also leaves as a PDB for PyMOL, ChimeraX and the other molecular viewers, a chain per chromosome and bonds along the fibre, and reads back here. 
 
 - Perform analyses directly in the browser:
@@ -579,6 +579,10 @@ chromosomix insulation sample.metacool --value balanced_by_depth --circular pCEN
 chromosomix coverage Hum53.pairs.gz --bin-size 5000 --rungs 4
 
 chromosomix replay workspace.chromosomix.json --over data/*.hic
+
+# What `pairtools stats` writes for a contact list, counted by the pass the
+# app's import makes, in pairtools' own format — for MultiQC.
+chromosomix stats sample.pairs.gz --out qc/
 ```
 
 ### Recovering the commands you ran

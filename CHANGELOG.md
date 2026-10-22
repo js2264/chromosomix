@@ -14,6 +14,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **`pairtools stats` for every `.pairs` the app imports, and a command that writes it (§3.7).** The
+  import counts, in the pass that bins the map, everything `pairtools stats` counts — records mapped
+  on both sides, on one and on neither, duplicates, cis and trans and cis past 1 to 40 kb, every pair
+  type, the four orientations by separation and where they converge, and the library's size — and
+  the General column shows it as a **Pairs statistics** card, each row a count and the share pairtools
+  and MultiQC give it, with **save .stats** writing the whole table in pairtools' own format.
+  `chromosomix stats sample.pairs.gz --out qc/` writes the same file from a shell. A port of pairtools
+  1.1.2's `PairCounter`, held to pairtools' own output on a committed fixture with every pair type in
+  it (`test/unit/pairs-stats.test.ts`, `npm run fixtures:pairstats`): every key and every count and
+  fraction the same, the library estimate to 1e-12. The pair type is counted and nothing is decided
+  from it — the map is the same with the column or without it.
+
 - **The app held to its own command line, in a notebook (§18.10).** `notebooks/parity.qmd` runs ten
   tasks in the app, in headless Chromium — insulation, compartments, P(s), coverage, virtual 4C, loop
   calling, a motif search and APA on GEO's yeast Micro-C at 1.6 kb, framed on chrIV, and peak calling

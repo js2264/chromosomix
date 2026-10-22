@@ -164,6 +164,9 @@ import {
 import type { PeerMap, TaskInputs } from '../analysis/worker/protocol'
 import type { OrientationSummary } from '../worker/protocol'
 import { importPairs, probePairs } from '../pairs/import'
+import { binPairs } from '../pairs/bin'
+import { isPairsFile, readPairsHeader } from '../pairs/format'
+import { writePairtoolsStats, type PairStats } from '../pairs/stats'
 import { ViewerError } from '../errors'
 import { parseUri } from '../uri'
 import type { ByteSource } from '../types'
@@ -2230,6 +2233,15 @@ const USAGE = `chromosomix — the Analysis panel, from a shell
       --alpha <a>          the exponent of the distances, 1/SCN^a.
                            Default: 0.2
 
+  chromosomix stats <file.pairs.gz> [...]
+      What \`pairtools stats\` writes for a .pairs file, counted by the pass the
+      app's import makes: records mapped on both sides, on one and on neither,
+      duplicates, cis and trans and cis past 1 to 40 kb, every pair type, the
+      four orientations by separation and where they converge, and the
+      library's size. One <name>.stats per file into --out, in pairtools' own
+      format, which MultiQC and \`pairtools stats --merge\` read; to stdout
+      without --out.
+
   chromosomix replay <workspace.chromosomix.json> --over <file> [...]
       Re-run every analysis recorded in a saved workspace, with the parameters
       it recorded, over the files named by --over and after the workspace —
@@ -2727,6 +2739,90 @@ async function circularCommand(args: Args, downloads: Downloads): Promise<number
 }
 
 /**
+ * `pairtools stats` for each `.pairs` named, as the app's import counts it (§3.7).
+ *
+ * The counts are the import's own (`pairs/stats.ts`), made by the import's own
+ * pass — binned at one bin a sequence, which costs nothing, so that what this
+ * writes and what the General column shows of the same file are one count. A
+ * file with no `#chromsize:` is refused as the import refuses it: the sizes are
+ * the last section of the file, and the bin table the pass is built on.
+ *
+ * The one file this command writes with no `#` lines over it. pairtools reads a
+ * `.stats` back a `key<TAB>value` a line and refuses any other, and the point
+ * of writing its format is that it is read by what reads pairtools' — MultiQC,
+ * `pairtools stats --merge`. Where it came from is said on stderr instead.
+ */
+async function statsCommand(args: Args, downloads: Downloads): Promise<number> {
+  if (args.positional.length === 0) {
+    process.stderr.write('stats needs at least one .pairs file.\n')
+    return 2
+  }
+  const directory = one(args, 'out') ?? one(args, 'o')
+  const quiet = flag(args, 'quiet')
+  const stems = stemsOf(args.positional)
+  let failures = 0
+  for (const [index, path] of args.positional.entries()) {
+    let source: ByteSource | null = null
+    try {
+      if (!quiet) process.stderr.write(`${displayOf(path)}\n`)
+      downloads.refuseScheme(path)
+      const where = await downloads.where(uriOf(path), false)
+      source = where.kind === 'range' ? where.source : await LocalFileSource.fromPath(where.path)
+      await source.mount()
+      if (!(await isPairsFile(source))) {
+        throw new Error(`${fileNameOf(path)} is not a .pairs file: it does not begin with a \`## pairs format\` line.`)
+      }
+      const header = await readPairsHeader(source)
+      const widest = header.contigs.reduce((most, contig) => Math.max(most, contig.length), 1)
+      let shown = -1
+      const binned = await binPairs(source, {
+        binSize: widest,
+        contigs: header.contigs,
+        columns: header.columns,
+        ...(quiet
+          ? {}
+          : {
+              onProgress: (done: number, total: number) => {
+                const percent = total > 0 ? Math.floor((done / total) * 100) : 0
+                if (percent === shown) return
+                shown = percent
+                process.stderr.write(`\r  counting records: ${percent}%   `)
+              },
+            }),
+      })
+      if (!quiet) process.stderr.write('\r')
+      if (binned?.stats == null) throw new Error('the count was interrupted')
+      const text = writePairtoolsStats(binned.stats)
+      if (directory === undefined) {
+        process.stdout.write(text)
+      } else {
+        await mkdir(directory, { recursive: true })
+        const at = join(directory, `${stems[index]}.stats`)
+        await writeFile(at, text)
+        if (!quiet) process.stderr.write(`  wrote ${at}\n`)
+      }
+      if (!quiet) process.stderr.write(`  ${statsLine(binned.stats)}\n`)
+    } catch (error) {
+      failures += 1
+      process.stderr.write(`  failed: ${error instanceof Error ? error.message : String(error)}\n`)
+    } finally {
+      source?.close()
+      if (!namedAgain(args.positional, index)) await downloads.release(path)
+    }
+  }
+  return failures === 0 ? 0 : 1
+}
+
+/** The few numbers a reader looks at first, on one line of stderr. */
+function statsLine(stats: PairStats): string {
+  const pct = (part: number, whole: number): string => (whole > 0 ? `${((100 * part) / whole).toFixed(1)}%` : '—')
+  return (
+    `${stats.total.toLocaleString('en-US')} records · ${pct(stats.totalMapped, stats.total)} mapped · ` +
+    `${pct(stats.totalDups, stats.totalMapped)} duplicates · ${pct(stats.cis, stats.totalNodups)} cis`
+  )
+}
+
+/**
  * Boost-HiC's map of each sequence, as an oversample makes it (§6.5) and as
  * Boost-HiC's own `main.py` writes it.
  *
@@ -3033,7 +3129,7 @@ export async function main(argv: readonly string[]): Promise<number> {
       listTasks()
       return 0
     }
-    if (!['replay', 'circular', 'boost'].includes(command) && taskById(command) === undefined) {
+    if (!['replay', 'circular', 'boost', 'stats'].includes(command) && taskById(command) === undefined) {
       process.stderr.write(`Unknown task ${JSON.stringify(command)}. Try \`tasks\`.\n`)
       return 2
     }
@@ -3068,6 +3164,7 @@ export async function main(argv: readonly string[]): Promise<number> {
     if (args.command === 'replay') return await replayCommand(args, downloads)
     if (args.command === 'circular') return await circularCommand(args, downloads)
     if (args.command === 'boost') return await boostCommand(args, downloads)
+    if (args.command === 'stats') return await statsCommand(args, downloads)
     return await runCommand(args, downloads)
   } finally {
     await downloads.close()

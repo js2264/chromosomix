@@ -8661,6 +8661,51 @@ body.is-carrying-card * {
   margin: 0 0 0.25rem;
 }
 
+/* Pairs statistics (§3.7): the File card's rows, in its type, with the counts
+   standing under one another; the pair types as one wrapped line of the mono
+   the counts are in, since a row each would be a dozen more rows for a list a
+   reader scans; and the save beside nothing, at the foot, as the File card's
+   own actions are. */
+.pairs-stats-table .v {
+  font-variant-numeric: tabular-nums;
+}
+
+.pairs-stats-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.6rem;
+  font-family: var(--mono);
+  font-size: var(--step--1);
+  color: var(--text-dim);
+  margin: 0.45rem 0 0;
+}
+
+.pairs-stats-types-key {
+  font-family: var(--sans);
+  width: 100%;
+}
+
+.pairs-stats-type {
+  white-space: nowrap;
+}
+
+.pairs-stats > .hint {
+  margin: 0.45rem 0 0;
+}
+
+.pairs-stats-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}
+
+.pairs-stats-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+}
+
 /* The one disclosure left in the app: the error view's "what the file actually
    says", where the JSON under it is evidence a reader opens once. The General
    column's Metadata block used this shape too and is a card now (§26.6), which

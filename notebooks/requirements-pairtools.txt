@@ -1,0 +1,30 @@
+# pairtools 1.1.2's environment (validation.qmd § 24), on Python 3.12: pairtools imports the standard
+# library's `pipes`, which Python 3.13 removed, so it cannot share the reference environment. h5py is
+# for scripts/make_pairstats_golden.py, which builds the unit test's golden in the same environment.
+# .github/actions/notebooks-setup installs exactly this.
+bioframe==0.8.0
+certifi==2026.10.19
+charset-normalizer==3.5.2
+click==8.5.0
+contourpy==1.4.0
+cycler==0.12.1
+cython==3.3.0
+fonttools==4.67.0
+h5py==3.16.0
+idna==3.20
+kiwisolver==1.5.1
+matplotlib==3.11.2
+numpy==2.5.4
+packaging==26.3
+pairtools==1.1.2
+pandas==3.1.0
+pillow==13.0.0
+pyparsing==3.3.3
+pysam==0.24.1
+python-dateutil==3.0.0
+pyyaml==6.0.3
+requests==2.34.2
+scipy==1.18.1
+six==1.17.0
+tzdata==2026.5
+urllib3==2.8.0

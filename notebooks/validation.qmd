@@ -75,6 +75,7 @@ the mean of 100, which is what is written.
 | 21 | Saddle | mouse Hi-C, 100 kb, § 3's E1 | `cooltools.saddle` |
 | 22 | Fraction of signal in features | mouse ATAC-seq, two replicates, chr19; peaks and promoters | pyBigWig and NumPy |
 | 23 | Signal by group | mouse ATAC-seq, two replicates, chr19; § 3's compartments | pyBigWig, NumPy and SciPy |
+| 24 | Pairs statistics | yeast Hi-C contact list, 17.6 million pairs | `pairtools stats` 1.1.2 |
 
 **To render.** `npm run build:cli` at the repository root builds this checkout's `chromosomix`.
 yapc needs an environment of its own (numpy < 1.24; the recipe is in the yapc section of
@@ -90,7 +91,9 @@ pip install jupyter matplotlib cooler cooltools bioframe pyfaidx pyBigWig 'panda
     scikit-learn scikit-image h5py \
     'git+https://github.com/hiclib/pastis@6888ac25ded72ce3e559987b8a31b3f8ed2935ed'
 git clone https://github.com/LeopoldC/Boost-HiC ../Boost-HiC
-QUARTO_PYTHON=refs/bin/python YAPC_PYTHON=yapc-env/bin/python quarto render notebooks/validation.qmd
+uv venv -p 3.12 pairtools-env && uv pip install -p pairtools-env -r notebooks/requirements-pairtools.txt
+QUARTO_PYTHON=refs/bin/python YAPC_PYTHON=yapc-env/bin/python PAIRTOOLS_PYTHON=pairtools-env/bin/python \
+    quarto render notebooks/validation.qmd
 ```
 
 `notebooks/requirements.txt` is that environment at the versions this page was last rendered with,
@@ -99,7 +102,7 @@ both and renders this page and the timings on every release, publishing them at
 <https://chromosomix.app/validation/> and <https://chromosomix.app/timings/>; the block under the
 title says which render this is.
 
-The data (6 GB) are fetched once into `notebooks/work/validation/data/`. Outputs are kept beside them,
+The data (7.5 GB) are fetched once into `notebooks/work/validation/data/`. Outputs are kept beside them,
 so a second render reads rather than recomputes (`REDO`).
 
 ```{python}
@@ -113,6 +116,9 @@ REDO = False
 THREADS = min(4, os.cpu_count() or 1)
 #: yapc 0.1's interpreter, relative to the repository or absolute.
 YAPC_PYTHON = os.environ.get('YAPC_PYTHON', 'yapc-env/bin/python')
+#: pairtools 1.1.2's interpreter: an environment of its own, on Python 3.12 or older, since pairtools
+#: imports the `pipes` module 3.13 removed.
+PAIRTOOLS_PYTHON = os.environ.get('PAIRTOOLS_PYTHON', 'pairtools-env/bin/python')
 #: A checkout of LeopoldC/Boost-HiC, relative to the repository or absolute.
 BOOSTHIC_DIR = os.environ.get('BOOSTHIC_DIR', '../Boost-HiC')
 
@@ -125,6 +131,9 @@ SCRIPTS = REPO / 'notebooks' / 'scripts'
 #: Every command of this notebook, as timing.qmd runs it again.
 MANIFEST = WORK / 'commands.json'
 YAPC_PYTHON = Path(YAPC_PYTHON) if Path(YAPC_PYTHON).is_absolute() else REPO / YAPC_PYTHON
+PAIRTOOLS_PYTHON = Path(PAIRTOOLS_PYTHON) if Path(PAIRTOOLS_PYTHON).is_absolute() else REPO / PAIRTOOLS_PYTHON
+#: The `pairtools` program beside that interpreter.
+PAIRTOOLS = str(PAIRTOOLS_PYTHON.parent / 'pairtools')
 BOOSTHIC_DIR = Path(BOOSTHIC_DIR) if Path(BOOSTHIC_DIR).is_absolute() else (REPO / BOOSTHIC_DIR).resolve()
 ```
 
@@ -217,7 +226,8 @@ def arg(value):
 
 def typed(argv):
     """A command as a reader would type it: each tool by its installed name."""
-    names = {PYTHON: 'python', str(YAPC_PYTHON): 'yapc-env/bin/python', CHROMOSIGHT: 'chromosight',
+    names = {PYTHON: 'python', str(YAPC_PYTHON): 'yapc-env/bin/python', PAIRTOOLS: 'pairtools',
+             CHROMOSIGHT: 'chromosight',
              COMPUTEMATRIX: 'computeMatrix', PLOTPROFILE: 'plotProfile', SEQKIT: 'seqkit',
              MULTIBIGWIGSUMMARY: 'multiBigwigSummary', PLOTCORRELATION: 'plotCorrelation',
              PLOTHEATMAP: 'plotHeatmap'}
@@ -568,9 +578,10 @@ Every file is public, read by its accession and fetched from the URL listed. 4DN
 4DN Data Portal's open-data bucket on AWS; the mm10 sequence, used to phase compartments by GC
 content and read for composition and motifs, and the RefSeq genes, for the metaplot's TSS and the
 promoters, are UCSC's as distributed by Illumina iGenomes; the yeast Micro-C map is GEO's
-GSE151553, fetched from GEO. Two are also held to an MD5, and a file of either name that does not
-match is refused rather than compared: the yeast map, and 4DN's insulation score for § 18, to the
-MD5 4DN publishes for it.
+GSE151553, fetched from GEO; and the yeast Hi-C contact list of § 24 is the one the chromosomix demo
+keeps on its bucket, as pairtools wrote it. Three are also held to an MD5, and a file of any of those
+names that does not match is refused rather than compared: the yeast map, 4DN's insulation score for
+§ 18, to the MD5 4DN publishes for it, and the contact list.
 
 ```{python}
 FOURDN = 'https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput'
@@ -597,9 +608,13 @@ DATASETS = [
          url=f'{IGENOMES}/Sequence/WholeGenomeFasta/genome.fa'),
     dict(data='Mouse RefSeq genes (Illumina iGenomes copy)', accession='refGene', source='UCSC mm10',
          name='mm10.genes.gtf', url=f'{IGENOMES}/Annotation/Genes/genes.gtf'),
+    dict(data='Yeast Hi-C contact list, as pairtools wrote it', accession='CH128', source='chromosomix demo',
+         url='https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/CH128.pairs.gz',
+         md5='e3e37117383283da0c8e57f4e0837699'),
 ]
 PATHS = {d['accession']: fetch(d['url'], d.get('name'), d.get('md5')) for d in DATASETS}
 MOUSE, YEAST, MM10, GENES = PATHS['4DNFIOZ1TRUS'], PATHS['GSE151553'], PATHS['mm10'], PATHS['refGene']
+CH128 = PATHS['CH128']
 CHICKEN = [PATHS[a] for a in ('4DNFIH8L6WON', '4DNFITBCUX56', '4DNFIIML46E5')]
 ATAC = [PATHS[a] for a in ('4DNFIIY4QW2D', '4DNFITBRHVZE')]
 # mm10's index, by which every tool reads the sequence by range: made once, beside it.
@@ -635,6 +650,7 @@ def program_version(argv, pattern=r'v?([\d.]+)'):
 
 APP_VERSION = f"{json.loads((REPO / 'package.json').read_text())['version']} at {commit(REPO)}"
 YAPC, IDR, YAPC_NUMPY = yapc_versions()
+PAIRTOOLS_VERSION = program_version([PAIRTOOLS, '--version'], r'version ([\d.]+)') if Path(PAIRTOOLS).exists() else 'not found'
 VERSIONS = {name: version(name) for name in (
     'cooler', 'cooltools', 'bioframe', 'chromosight', 'hicrep', 'domaincaller', 'pastis', 'coolpuppy',
     'deeptools', 'pyBigWig', 'biopython', 'pyfaidx', 'numpy', 'scipy', 'pandas')}
@@ -647,11 +663,13 @@ TOOL_VERSIONS = {'chromosomix': APP_VERSION, 'yapc 0.1': f'{YAPC}, with idr {IDR
                  'bioframe, Biopython': f"{VERSIONS['bioframe']}, {VERSIONS['biopython']}",
                  'pyBigWig, NumPy': f"{VERSIONS['pyBigWig']}, {VERSIONS['numpy']}",
                  'pyBigWig, SciPy': f"{VERSIONS['pyBigWig']}, {VERSIONS['scipy']}",
+                 'pairtools': PAIRTOOLS_VERSION,
                  **VERSIONS, **PROGRAMS}
 show(pd.DataFrame([{'package': 'chromosomix', 'version': APP_VERSION},
                    *[{'package': k, 'version': v} for k, v in VERSIONS.items()],
                    *[{'package': k, 'version': v} for k, v in PROGRAMS.items()],
-                   {'package': 'yapc (own environment)', 'version': f'{YAPC}, with idr {IDR} and numpy {YAPC_NUMPY}'}]))
+                   {'package': 'yapc (own environment)', 'version': f'{YAPC}, with idr {IDR} and numpy {YAPC_NUMPY}'},
+                   {'package': 'pairtools (own environment)', 'version': PAIRTOOLS_VERSION}]))
 ```
 
 The RefSeq annotation as transcripts: each one's extent over its exons, on its sequence and strand.
@@ -3464,6 +3482,111 @@ record('Signal by group', "mouse ATAC-seq, 2 replicates, chr19, by § 3's compar
        "as written",
        'Identical (to the digits written)' if GS_EXACT else 'Differs',
        apps=['groupsignal'], refs=['pybigwig-groupsignal'])
+```
+
+## 24 · Pairs statistics (pairtools)
+
+What `pairtools stats` counts over a contact list — records mapped on both sides, on one and on
+neither, duplicates, cis and trans and cis past 1 to 40 kb, every pair type, the four strand
+orientations by separation and where they converge, and the library's size — counted by the pass the
+app's import makes of a `.pairs` file, through `chromosomix stats`, against `pairtools stats` itself.
+The library is a yeast Hi-C contact list as pairtools wrote it, deduplicated, each pair with its type
+and its two SAM records. pairtools has an environment of its own, on Python 3.12: 1.1.2 imports the
+`pipes` module 3.13 removed.
+
+| | chromosomix | pairtools |
+|---|---|---|
+| command | `stats` | `stats` |
+| compared | every key pairtools writes, and its value as the file spells it | |
+
+```{python}
+PS = WORK / 'pairstats'
+PS.mkdir(parents=True, exist_ok=True)
+mr('stats', CH128, out=PS / 'app', name='pairstats', analysis='Pairs statistics')
+reference('pairtools-stats', 'Pairs statistics', 'pairtools', [PAIRTOOLS, 'stats', CH128, '-o', OUT],
+          out=PS / 'pairtools.stats')
+
+
+def stats_file(path):
+    """A `.stats` file as pairtools reads one back: a key and a value a line."""
+    with open(path) as handle:
+        return dict(line.rstrip('\n').split('\t', 1) for line in handle if line.strip())
+
+
+ours, theirs = stats_file(one(PS / 'app', '*.stats')), stats_file(PS / 'pairtools.stats')
+only = sorted(set(ours) ^ set(theirs))
+differ = {key: (ours.get(key), value) for key, value in theirs.items() if ours.get(key) != value}
+STRANDS = ['++', '--', '-+', '+-']
+#: The separation bins' left edges, as pairtools' keys name them: `dist_freq/<lo>-<hi>/<strands>`, the
+#: last `dist_freq/<lo>+/<strands>`.
+edges = sorted({int(key.split('/')[1].split('-')[0].rstrip('+')) for key in theirs if key.startswith('dist_freq/')})
+ranges = [f'{lo}-{hi}' for lo, hi in zip(edges, edges[1:])] + [f'{edges[-1]}+']
+
+
+def binned(table, strands):
+    """One orientation's cis pairs per separation bin, in the bins' order."""
+    return np.array([int(table[f'dist_freq/{span}/{strands}']) for span in ranges])
+
+
+TEXT['ps_records'] = f"{int(theirs['total']):,}"
+TEXT['ps_keys'] = f'{len(theirs):,}'
+TEXT['ps_same'] = 'every one of them spelled the same' if not differ and not only else \
+    f'{len(differ)} spelled differently and {len(only)} in one file only'
+TEXT['ps_types'] = ', '.join(key.split('/')[1] for key in theirs if key.startswith('pair_types/'))
+TEXT['ps_cis'] = f"{float(theirs['summary/frac_cis']):.1%}"
+TEXT['ps_meet'] = theirs['summary/dist_freq_convergence/convergence_dist']
+display(measures({
+    'records': TEXT['ps_records'],
+    'keys, chromosomix / pairtools': f'{len(ours):,} / {len(theirs):,}',
+    'keys in one file only': ', '.join(only) or 'none',
+    'values spelled differently': ', '.join(f'{k}: {a} / {b}' for k, (a, b) in differ.items()) or 'none',
+    'mapped, duplicates (pairtools)': f"{int(theirs['total_mapped']):,}, {int(theirs['total_dups']):,}",
+    'cis, of the unique (pairtools)': TEXT['ps_cis'],
+    'pair types': TEXT['ps_types'],
+    'strands converge past (pairtools), bp': TEXT['ps_meet'],
+    'library size (pairtools)': theirs['summary/complexity_naive'],
+}))
+```
+
+```{python}
+#| label: fig-pairstats
+#| fig-cap: "Cis pairs by separation in each of the four strand orientations, per base pair of each bin: pairtools' (lines) and chromosomix's (points), and the separation past which pairtools finds every orientation within 5 % of their mean."
+fig, ax = plt.subplots(figsize=(7, 4), layout='constrained')
+# Each bin's width, the last as wide as an eighth of a decade past its edge; drawn from 1 bp, on a log axis.
+widths = np.diff(np.r_[edges, edges[-1] * 10 ** (1 / 8)])
+starts = np.maximum(edges, 1)
+# An orientation a dash, pairtools' in orange and chromosomix's points over it in blue.
+DASHES = {'++': '-', '--': (0, (5, 2)), '-+': (0, (1, 1.5)), '+-': (0, (6, 2, 1, 2))}
+for strands in STRANDS:
+    reference_curve, app_curve = binned(theirs, strands), binned(ours, strands)
+    seen = reference_curve > 0
+    ax.plot(starts[seen], (reference_curve / widths)[seen], color=REF, lw=1.3, ls=DASHES[strands],
+            label=f'pairtools, {strands}')
+    ax.plot(starts[seen], (app_curve / widths)[seen], ls='none', marker='o', ms=2.4, color=APP_COLOUR,
+            label='chromosomix, each orientation' if strands == '++' else None, gid=f'chromosomix {strands}')
+meet = theirs['summary/dist_freq_convergence/convergence_dist']
+if meet != '0':
+    ax.axvline(int(meet), color=INK, lw=1, ls=(0, (4, 3)), gid='convergence')
+    ax.text(int(meet), 0.97, ' converged', transform=ax.get_xaxis_transform(), va='top', ha='right',
+            fontsize=7, color=INK2, rotation=90)
+ax.set(xscale='log', yscale='log', xlabel='separation, bp', ylabel='cis pairs per bp of separation',
+       title='Cis pairs by separation and strand orientation')
+ax.legend(ncol=2, fontsize=7)
+drawn('fig-pairstats')
+PAIRSTATS_SAME = not differ and not only
+```
+
+pairtools wrote `{python} TEXT['ps_keys']` keys for the `{python} TEXT['ps_records']` pairs, and the
+app's import counted `{python} TEXT['ps_same']`: the totals, the pair types (`{python} TEXT['ps_types']`),
+the cis fraction of `{python} TEXT['ps_cis']`, every separation bin of every orientation, and the
+convergence past `{python} TEXT['ps_meet']` bp. A library with no duplicates has no estimate of its
+size, and both write `nan` for it: scipy's Lambert W at `-exp(-1)`, which lies a hair past -1/e, and the
+port's.
+
+```{python}
+record('Pairs statistics', 'yeast Hi-C contact list, deduplicated', f'pairtools {PAIRTOOLS_VERSION}',
+       'every key, and every value as the file spells it',
+       'Identical' if PAIRSTATS_SAME else 'Differs', apps=['pairstats'], refs=['pairtools-stats'])
 ```
 
 ## Summary

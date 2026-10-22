@@ -516,8 +516,8 @@ makes the same file cheaper. It is **not** §8.13's case: a pairs file has a who
 respects §12, so its absence is never a refusal.
 
 **What is deliberately not read**: ~~the strand, pair-type and mapping-quality columns, and any
-filtering on them.~~ **Narrowed**: the pair-type and mapping-quality columns, and **any filtering
-at all**. A pairs file is the output of a pipeline that has already made those decisions, and
+filtering on them.~~ ~~**Narrowed**: the pair-type and mapping-quality columns, and **any filtering
+at all**.~~ **Narrowed again**: the mapping-quality columns, and **any filtering at all**. A pairs file is the output of a pipeline that has already made those decisions, and
 re-making them here would be the second application §13 refuses — the importer counts the records
 the file contains, and if a reader wants different records they filter with `pairtools select` and
 import the result. Nothing is inferred about restriction fragments, and no matrix is
@@ -546,6 +546,49 @@ never acted on — nothing trims a file, sets a minimum separation, or warns tha
 below the convergence point, because a threshold is a method with choices in it and §18.9's
 argument about a half-good caller applies to one exactly as it applies to a loop. Where the figure
 lives is §18.8, under P(s).
+
+**The pair type is read too, for `pairtools stats`' counts, and on the strands' terms.** The first
+thing anybody asks of a contact list is the table `pairtools stats` writes — records mapped on both
+sides, on one, on neither; duplicates; of the unique, cis and trans, and cis past 1, 2, 4, 10, 20 and
+40 kb; every pair type; the four orientations by separation and where they converge; and the library's
+size by the Lander–Waterman estimate — and every number in it is about *records*, so none of it can be
+had from the map afterwards. The import counts it in the same pass (`pairs/stats.ts`): one more field
+off a record the loop is already walking, and every record counted before the binner can turn one
+away, since pairtools counts the unmapped `!` and the sequences the header does not declare as well as
+what is binned. Nothing is decided from the pair type. No record is kept or dropped for it, a `DD` is
+counted as a duplicate and still binned, and the pixel table is the same table with the column there
+or taken out — asserted rather than claimed (`test/unit/pairs-stats.test.ts`). A reader who wants the
+duplicates gone runs `pairtools dedup`, as before.
+
+It is a **port**, held to its reference on §18.9's terms: `PairCounter.add_pairs_from_dataframe` and
+`calculate_summaries` of pairtools 1.1.2, which is what `pairtools stats` runs — the same
+classification of a record (unmapped where both chromosomes are `!`, mapped where neither is, a
+duplicate only where mapped and typed `DD`), the same separation bins
+(`round(10 ** arange(0, 9.001, 1/8))` with `0` before them, found by `searchsorted(…, 'right') - 1`),
+the same five per cent the convergence is judged at, the same edge after the furthest stray, and the
+same library estimate through the principal branch of Lambert's W — `nan` for a library with no
+duplicates, as scipy's W is at `-exp(-1)` and as pairtools writes it. Its golden is pairtools' own
+`.stats` for a committed fixture drawn from the yeast Micro-C cooler with every pair type pairtools
+writes in it (`test/golden/pairs_stats/`, `npm run fixtures:pairstats`): every key the same, every
+count and fraction the same to the last digit, the library to 1e-12. Two departures, each on a file
+pairtools would not have written: a strand that is neither `+` nor `-` or a position that is not a
+number ends pairtools' run with an error, and here leaves that record out of the separation table
+alone; and the `duplicate` column `add_pairs_from_dataframe` prefers to `DD` where a file has one is
+not read, since `pairtools dedup` marks a duplicate by its type. A file with no `pair_type` column has
+no duplicates to count, and says so. An import scoped through a `.px2` counts the records it read and
+says that too.
+
+It lands as the **Pairs statistics** card in the General column, under the File card's own facts and
+over the stored metadata: the rows a library is judged by — records, mapped, one side, unmapped,
+duplicates, cis, trans, cis past each distance, the library's size and where the orientations meet —
+each a count and the share pairtools and MultiQC give it, over pairtools' own denominator (said on the
+key's tooltip, so the value stays short enough for a narrow column); the pair types as one line of
+chips, a type to a chip; and **save .stats**, which writes everything pairtools counts in pairtools'
+own format, key and value a line in its order and its spelling of a number (`0.05`, `1e-05`, `inf`), so
+MultiQC and `pairtools stats --merge` read it as theirs. The shell's answer is `chromosomix stats
+<file.pairs.gz>`, through the same pass at one bin a sequence, which writes `<name>.stats` into `--out`
+(or to stdout): the one file the command writes with no `#` lines over it, because pairtools' reader
+refuses any line that is not a key and a value.
 
 **Equivalence with a cooler is asserted, not assumed.** An imported map and the `.mcool` written
 from it must answer *every* `PixelStore` method identically — `forEachWindow` on and off the
