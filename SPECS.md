@@ -9447,7 +9447,8 @@ fraction of signal in features against pyBigWig's exact sums and NumPy, the whol
 from a zoom level and measured apart; and signal by group against pyBigWig's exact stretch means,
 rank for rank in each group, and its summaries and tests against NumPy's and SciPy's. Where a
 reference draws at random — a pileup's controls, an overlap's shuffles, IDR's ties — two
-distributions are compared, the reference's own spread from seed to seed the yardstick. **Every
+distributions are compared, the reference's own spread from seed to seed the yardstick. A reference
+that takes a number of processes is given one a core of the machine, at most four (`THREADS`). **Every
 number its figures draw is a line of one table**,
 `notebooks/work/validation/validation.txt`, read off each figure as it is shown rather than gathered
 beside it, so that the table and the picture cannot disagree and any figure can be drawn again from
@@ -9471,7 +9472,12 @@ pair take turns to go first**: the even rounds run each analysis's references be
 from the disk what the page cache let go since the round before, and in one order that wait was
 always `chromosomix`'s. Every run is one line of the tidy table
 `notebooks/work/validation/timings.tsv` — CPU and wall-clock seconds and peak memory, with the machine
-and every version — and each `chromosomix` command's speed is a fold over the reference commands it is
+and every version — the peak memory being **every process of the run together**: their proportional
+set sizes, a page they share counted once between them, summed four times a second while it runs and
+never less than the largest resident set any one reached (`ru_maxrss`), so that a reference running
+four processes holds what the four hold, where it was the largest of them alone; on a system that
+does not list a process's children, as macOS, it is that largest alone. Each `chromosomix` command's
+speed is a fold over the reference commands it is
 paired with, a side's commands summed where there are several (deepTools' `computeMatrix` and then
 `plotProfile` against one metaplot, and `plotHeatmap` as well against one over two tracks).
 
@@ -9545,7 +9551,12 @@ and Ubuntu's bedtools and seqkit; for the parity and the timings, the two viewer
 Chromium; for the timings, higlass-python's environment with libfuse. The parity renders first, alone,
 so that a page that cannot render stops the run before the hours of the others; then the validation
 and the timings in one job — the timings run the validation's commands on the inputs it fetched and
-made, which no other runner holds — beside the laptop in another. Each job gathers its pages with
+made, which no other runner holds — beside the laptop in another. Each render runs through
+`notebooks/scripts/memory.sh`, which writes into the job's log, every ten seconds, the memory in use
+and available and the three programs holding the most: a runner whose memory runs out is shut down
+in the middle of a step, with no error from the command and no step after it, and the log streamed
+until then is all that is left — a standard runner for a private repository has two cores and 8 GB.
+Each job gathers its pages with
 `notebooks/scripts/pages.py`, the one table of where each page is published and which files go beside
 it, which `rendered.py` reads too, and every job keeps what it rendered as an artifact for 90 days,
 even when it fails: the validation alone, with the timing rounds it finished, when the timings fail.

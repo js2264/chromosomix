@@ -70,9 +70,8 @@ name: Notebooks
 # and yeast maps, ATAC-seq and mm10, and 4DN's 8.3 GB IMR-90 map). A cache
 # that size would evict the repository's npm and Electron caches, and the
 # buckets answer a runner at hundreds of megabytes a second. From nothing, the
-# validation renders in about an hour on a standard runner (4 cores, 16 GB —
-# the heaviest reference peaks at about 4 GB), every reference run for the
-# first time; the viewers' pictures in about twenty minutes a round, and the
+# validation renders in about an hour on a standard runner, every reference run
+# for the first time; the viewers' pictures in about twenty minutes a round, and the
 # timings in about twenty minutes a run, so four of each fit the six hours a
 # job may take — four, an even number, so that each side of a pair goes first
 # in as many rounds as the other (timing.qmd's `round_of`), and as many as
@@ -80,6 +79,21 @@ name: Notebooks
 # about an hour, half of it peak calling over the whole mouse genome. Every
 # runner is a different machine, which is why each page says which one it ran
 # on.
+#
+# **What it runs on, and the memory.** A standard runner for a private
+# repository has 2 cores and 8 GB, 7.8 of them the job's — not the 4 cores and
+# 16 GB a public one has. A reference that takes a number of processes is
+# given one a core, at most four (validation.qmd's `THREADS`). Given four on
+# two cores, six renders in nine were shut down, four of them in the cell where
+# cooltools computes the expected over the mouse genome at 10 kb, its largest
+# process alone at 3.6 GB: by every sign the log leaves, the memory ran out.
+# GitHub shuts down a runner whose memory runs out in the
+# middle of a step, with "The runner has received a shutdown signal": the
+# command reports no error, no step after it runs, `if: always()` or not, and
+# nothing is gathered or uploaded. So every render runs through
+# notebooks/scripts/memory.sh, which writes the memory in use and available
+# and the three programs holding the most into the step's log every ten
+# seconds — the log streamed until the shutdown being all that is left of it.
 #
 # **Where it is published, and why through a branch.** Pages replaces the
 # whole site on every deployment and only deploy.yml deploys it, so this
@@ -187,7 +201,7 @@ jobs:
           viewers: 'true'
 
       - name: Render the parity
-        run: quarto render notebooks/parity.qmd
+        run: bash notebooks/scripts/memory.sh quarto render notebooks/parity.qmd
 
       # Whatever rendered, after a failure too.
       - name: Gather the page and the files beside it
@@ -227,10 +241,10 @@ jobs:
           higlass: 'true'
 
       - name: Render the validation
-        run: quarto render notebooks/validation.qmd
+        run: bash notebooks/scripts/memory.sh quarto render notebooks/validation.qmd
 
       - name: Render the timings, ${{ env.VIEWER_RUNS }} rounds of pictures and ${{ env.TIMING_RUNS }} runs of each command
-        run: quarto render notebooks/timing.qmd
+        run: bash notebooks/scripts/memory.sh quarto render notebooks/timing.qmd
 
       # An hour of validation is worth keeping when the timings after it fail,
       # and the benchmark writes its table after every round, so the rounds it
@@ -266,7 +280,7 @@ jobs:
       - uses: ./.github/actions/notebooks-setup
 
       - name: Render the laptop
-        run: quarto render notebooks/laptop.qmd
+        run: bash notebooks/scripts/memory.sh quarto render notebooks/laptop.qmd
 
       # Each analysis is written to its table as it is measured, so a render
       # that failed part of the way keeps the ones it finished.

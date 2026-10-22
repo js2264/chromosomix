@@ -108,8 +108,9 @@ import os
 
 #: Run a step again even where its outputs are already on disk.
 REDO = False
-#: Processes for the reference packages that take them.
-THREADS = 4
+#: Processes for the reference packages that take them: one a core, at most four. Four on two cores are no
+#: faster than two, and on a runner of 8 GB they held more memory than it had.
+THREADS = min(4, os.cpu_count() or 1)
 #: yapc 0.1's interpreter, relative to the repository or absolute.
 YAPC_PYTHON = os.environ.get('YAPC_PYTHON', 'yapc-env/bin/python')
 #: A checkout of LeopoldC/Boost-HiC, relative to the repository or absolute.
