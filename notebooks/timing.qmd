@@ -687,8 +687,7 @@ measures({**MACHINE, 'commands timed': f"{len(JOBS)} of the {len(LISTED['command
 Each command is run as `validation.qmd` printed it, from `notebooks/work/validation/`, with its output
 sent to a scratch folder that is emptied after the run: all of them once, then all of them again, so a
 slow minute of the machine falls on every command rather than on one. `chromosomix` computes on one
-thread, but for the 3D model, whose likelihood it shares among threads; that one, and a reference that
-takes a number of processes, was given the number in the `threads` column.
+thread; a reference that takes a number of processes was given the number in the `threads` column.
 
 **The two sides of a pair take turns to go first.** The list has each analysis's `chromosomix`
 commands before its references, and the odd rounds run it so; the even rounds run each analysis's

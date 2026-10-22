@@ -453,46 +453,102 @@ export function storeWishes(counts: DenseMatrix, n: number, bias: Float64Array |
  * gradient is the exact one — pastis' dense gradient is half of it, which moves
  * SciPy's path but not the minimum. A pair whose beads have met contributes its
  * constant and no gradient, as pastis' does.
+ *
+ * Summed as {@link negBinomObjective} is, in bands of rows ({@link mdsBands}),
+ * each band's value and gradient added in band order, so that it is the same
+ * bits on one thread and on several (`analysis/likelihoodThreads.ts`).
  */
 export function mdsObjective(wishes: DenseMatrix, n: number): Objective {
+  const edges = mdsBands(n)
+  const parts = Array.from({ length: edges.length - 1 }, (_, b) => new Float64Array(3 * edges[b + 1]))
   return (vector, gradient) => {
     gradient.fill(0)
     let value = 0
-    for (let i = 1; i < n; i++) {
-      const row = i * n
-      const xi = vector[i]
-      const yi = vector[n + i]
-      const zi = vector[2 * n + i]
-      let gx = 0
-      let gy = 0
-      let gz = 0
-      for (let j = 0; j < i; j++) {
-        const w = wishes[row + j]
-        if (!(w > 0)) continue
-        const dx = xi - vector[j]
-        const dy = yi - vector[n + j]
-        const dz = zi - vector[2 * n + j]
-        const d = Math.sqrt(dx * dx + dy * dy + dz * dz)
-        const e = d * w - 1
-        value += 2 * e * e
-        if (!(d > 0)) continue
-        const coefficient = (4 * e * w) / d
-        const fx = coefficient * dx
-        const fy = coefficient * dy
-        const fz = coefficient * dz
-        gx += fx
-        gy += fy
-        gz += fz
-        gradient[j] -= fx
-        gradient[n + j] -= fy
-        gradient[2 * n + j] -= fz
-      }
-      gradient[i] += gx
-      gradient[n + i] += gy
-      gradient[2 * n + i] += gz
+    for (let b = 0; b + 1 < edges.length; b++) {
+      value += mdsBand(wishes, null, n, edges[b], edges[b + 1], vector, parts[b])
+      addBand(gradient, parts[b], n, 0, edges[b + 1])
     }
     return value
   }
+}
+
+/**
+ * The bands of rows pastis' MDS is summed over: `[edges[b], edges[b + 1])`,
+ * each holding about the same share of the pairs **below** the diagonal, where
+ * {@link storeWishes} keeps them.
+ *
+ * The likelihood's layout turned over ({@link likelihoodBands}): a function of
+ * the bead count alone, so the sum is the same bits on any number of threads.
+ * Row `i` carries `i` pairs, so the rows before `s` carry `(s/n)²` of them and
+ * the edges sit at `n√(t/B)`.
+ */
+export function mdsBands(n: number): Int32Array {
+  const count = bandCount(n)
+  const edges = [0]
+  for (let t = 1; t < count; t++) {
+    const edge = Math.round(n * Math.sqrt(t / count))
+    if (edge > edges[edges.length - 1] && edge < n) edges.push(edge)
+  }
+  edges.push(n)
+  return Int32Array.from(edges)
+}
+
+/**
+ * One band's share of {@link mdsObjective}: its value returned, its gradient
+ * written into `out`.
+ *
+ * Rows `[r0, r1)`, each with every bead before it. `wishes[offsets[i − r0] + j]`
+ * is pair `(i, j)`'s wish — `null` for a whole `n × n` matrix, where it is
+ * `i·n + j`, and a row's start in a helper's packed copy otherwise — and `out`
+ * holds the gradient of beads `0` to `r1`, which are the only ones a band's
+ * pairs touch: `x`, then `y`, then `z`, `r1` of each. It is written over.
+ */
+export function mdsBand(
+  wishes: DenseMatrix,
+  offsets: ArrayLike<number> | null,
+  n: number,
+  r0: number,
+  r1: number,
+  vector: Float64Array,
+  out: Float64Array,
+): number {
+  const len = r1
+  out.fill(0)
+  let value = 0
+  for (let i = Math.max(1, r0); i < r1; i++) {
+    const row = offsets === null ? i * n : offsets[i - r0]
+    const xi = vector[i]
+    const yi = vector[n + i]
+    const zi = vector[2 * n + i]
+    let gx = 0
+    let gy = 0
+    let gz = 0
+    for (let j = 0; j < i; j++) {
+      const w = wishes[row + j]
+      if (!(w > 0)) continue
+      const dx = xi - vector[j]
+      const dy = yi - vector[n + j]
+      const dz = zi - vector[2 * n + j]
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz)
+      const e = d * w - 1
+      value += 2 * e * e
+      if (!(d > 0)) continue
+      const coefficient = (4 * e * w) / d
+      const fx = coefficient * dx
+      const fy = coefficient * dy
+      const fz = coefficient * dz
+      gx += fx
+      gy += fy
+      gz += fz
+      out[j] -= fx
+      out[len + j] -= fy
+      out[2 * len + j] -= fz
+    }
+    out[i] += gx
+    out[len + i] += gy
+    out[2 * len + i] += gz
+  }
+  return value
 }
 
 // `lgamma(c + r) − lgamma(r) − c·log r` and `r·(ψ(c + r) − ψ(r))`, written by
@@ -596,6 +652,11 @@ const BAND_BEADS = 32
 /** Bands at most: enough to share among eight threads with room to balance them. */
 const MAX_BANDS = 64
 
+/** How many bands `n` beads are summed in: one a run of {@link BAND_BEADS}, at most {@link MAX_BANDS}. */
+function bandCount(n: number): number {
+  return Math.max(1, Math.min(MAX_BANDS, Math.round(n / BAND_BEADS)))
+}
+
 /**
  * The bands of rows the likelihood is summed over: `[edges[b], edges[b + 1])`,
  * each holding about the same share of the pairs above the diagonal.
@@ -609,7 +670,7 @@ const MAX_BANDS = 64
  * `n(1 − √(1 − t/B))`.
  */
 export function likelihoodBands(n: number): Int32Array {
-  const count = Math.max(1, Math.min(MAX_BANDS, Math.round(n / BAND_BEADS)))
+  const count = bandCount(n)
   const edges = [0]
   for (let t = 1; t < count; t++) {
     const edge = Math.round(n * (1 - Math.sqrt(1 - t / count)))
@@ -778,13 +839,16 @@ export function likelihoodBand(
   return value
 }
 
-/** A band's gradient, from {@link likelihoodBand}, added into the whole one. */
-export function addBand(gradient: Float64Array, part: Float64Array, n: number, r0: number): void {
-  const len = n - r0
-  for (let k = 0; k < len; k++) {
-    gradient[r0 + k] += part[k]
-    gradient[n + r0 + k] += part[len + k]
-    gradient[2 * n + r0 + k] += part[2 * len + k]
+/**
+ * A band's gradient added into the whole one: `part` holds beads `from` to
+ * `from + length`, `x` then `y` then `z` — `[r0, n)` for a band of the
+ * likelihood, `[0, r1)` for one of the MDS.
+ */
+export function addBand(gradient: Float64Array, part: Float64Array, n: number, from: number, length: number): void {
+  for (let k = 0; k < length; k++) {
+    gradient[from + k] += part[k]
+    gradient[n + from + k] += part[length + k]
+    gradient[2 * n + from + k] += part[2 * length + k]
   }
 }
 
@@ -807,7 +871,7 @@ export function negBinomObjective(model: NegBinomModel): Objective {
       const share = likelihoodBand(terms, counts, null, edges[b], edges[b + 1], vector, part)
       if (!Number.isFinite(share)) return Number.POSITIVE_INFINITY
       value += share
-      addBand(gradient, part, n, edges[b])
+      addBand(gradient, part, n, edges[b], n - edges[b])
     }
     return Number.isFinite(value) ? value : Number.POSITIVE_INFINITY
   }
@@ -848,13 +912,26 @@ export function fitMds(
   start: Coordinates,
   options: { iterations?: number } = {},
 ): Generator<LbfgsProgress, MdsFit, void> {
+  return answered(mdsWalk(n, start, options), mdsObjective(wishes, n))
+}
+
+/**
+ * pastis' MDS from `start`, asking for each evaluation rather than making it,
+ * as {@link likelihoodWalk} does, so whoever drives it can share each among
+ * threads. {@link fitMds} is it answered here.
+ */
+export function mdsWalk(
+  n: number,
+  start: Coordinates,
+  options: { iterations?: number } = {},
+): Generator<LbfgsAsk, MdsFit, number> {
   const walk = lbfgsWalk(packCoordinates(start), {
     iterations: options.iterations ?? PASTIS_MDS.iterations,
     history: HISTORY,
     tolerance: PASTIS_MDS.tolerance,
     gradientTolerance: PASTIS_MDS.gradient,
   })
-  return answered(fitOf(walk, n), mdsObjective(wishes, n))
+  return fitOf(walk, n)
 }
 
 /**

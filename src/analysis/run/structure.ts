@@ -34,8 +34,8 @@ import type {
 import {
   dispersionAt,
   fitDispersion,
-  fitMds,
   likelihoodWalk,
+  mdsWalk,
   momentsBySeparation,
   randomStart,
   storeWishes,
@@ -45,7 +45,7 @@ import {
   type SeparationMoments,
 } from '../../structure/negbinom'
 import { numpyRandom } from '../random'
-import { openLikelihood } from '../likelihoodThreads'
+import { openFitThreads } from '../likelihoodThreads'
 import {
   classicalMdsSweeps,
   compactInPlace,
@@ -791,39 +791,44 @@ export const runReconstruct: TaskRunner = async (job) => {
     const evidence = zerosOf(counts, n)
     storeWishes(counts, n, keptBias, alpha)
 
-    // The likelihood's helpers are started now, and sent their rows, so that
-    // they are ready by the time the MDS below has run on this thread.
-    const evaluator = iterations > 0 ? openLikelihood({ counts, n, bias: keptBias, dispersion, alpha }) : null
+    // The helpers are started now, and lent to the MDS start and then to the
+    // likelihood; each evaluation of either is shared among them and this
+    // thread, and awaited: the walk asks, and is answered when every band is
+    // in. The same bits on any number of threads, so the thread count is said
+    // in the bar and nowhere a result is written.
+    const threads = openFitThreads(n, counts)
     try {
       // pastis' start: beads uniform in a cube, numpy's draws from the reader's
       // seed, then its MDS to its own loose tolerance. Between every evaluation,
       // not inside one: the cancel lands here (`job.breathe`).
       const total = MDS_SHARE + iterations
-      const mdsWalk = fitMds(counts, n, randomStart(n, numpyRandom(seed)))
-      let mdsMove = mdsWalk.next()
-      while (mdsMove.done !== true) {
+      const mds = threads.mds(counts)
+      const mdsThreads = mds.threads === 1 ? '' : ` · ${mds.threads} threads`
+      const mdsSteps = mdsWalk(n, randomStart(n, numpyRandom(seed)))
+      let stress = Number.POSITIVE_INFINITY
+      let mdsAsk = mdsSteps.next()
+      while (mdsAsk.done !== true) {
         await job.breathe()
-        const at = mdsMove.value.iteration
+        const { point, gradient, iteration, current } = mdsAsk.value
+        const value = await mds.evaluate(point, gradient)
+        stress = Math.min(stress, current, value)
         job.progress(
-          Math.min(MDS_SHARE - 1, at),
+          Math.min(MDS_SHARE - 1, iteration),
           total,
-          `MDS start · step ${at} · stress ${mdsMove.value.value.toPrecision(3)}`,
+          `MDS start · step ${iteration}${mdsThreads} · stress ${stress.toPrecision(3)}`,
         )
-        mdsMove = mdsWalk.next()
+        mdsAsk = mdsSteps.next(value)
       }
-      const start: MdsFit = mdsMove.value
+      const start: MdsFit = mdsAsk.value
 
       // The likelihood, on top of the model the MDS just made and at its scale:
       // the wishes and the mean are in the same units, so nothing is rescaled
       // between the two.
       let likelihood: NegBinomFit | null = null
       coords = start.coords
-      if (evaluator !== null) {
-        // Each evaluation shared among the helpers and this thread, and awaited:
-        // the walk asks, and is answered when every band is in. The same bits
-        // on any number of threads, so the thread count is said in the bar and
-        // nowhere a result is written.
-        const threads = evaluator.threads === 1 ? '' : ` · ${evaluator.threads} threads`
+      if (iterations > 0) {
+        const negBinom = threads.likelihood({ counts, n, bias: keptBias, dispersion, alpha })
+        const nbThreads = negBinom.threads === 1 ? '' : ` · ${negBinom.threads} threads`
         const walk = likelihoodWalk(n, start.coords, { iterations })
         let best = Number.POSITIVE_INFINITY
         let ask = walk.next()
@@ -832,13 +837,13 @@ export const runReconstruct: TaskRunner = async (job) => {
           // be several passes over the pairs.
           await job.breathe()
           const { point, gradient, iteration, current } = ask.value
-          const value = await evaluator.evaluate(point, gradient)
+          const value = await negBinom.evaluate(point, gradient)
           best = Math.min(best, current, value)
           const at = Math.min(iterations, iteration)
           job.progress(
             MDS_SHARE + at,
             total,
-            `pastis-NB · step ${at} of at most ${iterations}${threads} · −log L ${best.toExponential(3)}`,
+            `pastis-NB · step ${at} of at most ${iterations}${nbThreads} · −log L ${best.toExponential(3)}`,
           )
           ask = walk.next(value)
         }
@@ -849,7 +854,7 @@ export const runReconstruct: TaskRunner = async (job) => {
       fit = fitOfCounts(counts, n, coords, keptBias)
       methodRows = nbRows(evidence, alpha, dispersion, moments, keptBias !== null, seed, start, likelihood, iterations)
     } finally {
-      evaluator?.close()
+      threads.close()
     }
   } else {
     // ShRec3D wants a *weight* per pair, and a pair the map counted nothing for

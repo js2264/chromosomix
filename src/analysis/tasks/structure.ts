@@ -101,7 +101,7 @@ const NB_PAIRS_PER_SECOND = PAIRS_PER_SECOND / 20
 const NB_EVALUATIONS_PER_STEP = 1.03
 
 /**
- * The threads pastis-NB's likelihood will be shared among, this one included.
+ * The threads pastis-NB's fit will be shared among, this one included.
  *
  * The analysis worker's rule (`worker/analysis.worker.ts`: one helper fewer
  * than the cores, seven at most) and `likelihoodThreads.ts`'s (one thread under
@@ -130,7 +130,7 @@ const THREAD_WORTH = 0.6
  * per pair, shared among the threads it will have, and the reader is told
  * which before pressing run rather than after. pastis' MDS start is left out:
  * it is a cheap function, stops at a part in five thousand, and costs about
- * what one likelihood step does.
+ * what four likelihood steps do.
  */
 function refineWords(beads: number, nb: boolean): string {
   const threads = nb ? likelihoodThreads(beads) : 1
@@ -162,9 +162,10 @@ function matrixWords(beads: number, nb: boolean): string {
   // size for the same allocation than the status bar does.
   const count = matricesFor(nb)
   const matrices = `${fmt.bytes(count * 4 * beads * beads)} ${count === 1 ? 'matrix' : 'of matrices'}`
-  // A page shares no memory with its workers, so each likelihood helper is sent
-  // its rows of the triangle: the helpers' share of half a matrix, this thread
-  // keeping 0.9 of a helper's (`likelihoodThreads.ts`).
+  // A page shares no memory with its workers, so each helper is sent its rows
+  // of a triangle — the MDS's, then in their place the likelihood's: the
+  // helpers' share of half a matrix, this thread keeping 0.9 of a helper's
+  // (`likelihoodThreads.ts`).
   const helpers = nb ? likelihoodThreads(beads) - 1 : 0
   if (helpers === 0) return matrices
   const copies = 2 * beads * beads * (helpers / (helpers + 0.9))

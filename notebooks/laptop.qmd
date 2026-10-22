@@ -310,9 +310,7 @@ On this machine:
   (`{python} largest['data']`).
 
 The CPU time is close to the wall-clock time because chromosomix computes on one thread; it can be
-slightly higher, as Node collects garbage and compiles on threads of its own. The 3D models are the
-exception: pastis-NB's likelihood is shared among every core, up to eight (`--threads`), so their CPU
-time is several times their wall-clock time — and the model is the same whatever the number.
+slightly higher, as Node collects garbage and compiles on threads of its own.
 
 The mouse and human Hi-C maps differ 16-fold in depth (69 million and 1.08 billion contacts), on genomes
 of about the same size. The same five analyses on each:

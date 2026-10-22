@@ -1,5 +1,5 @@
 /**
- * Where pastis-NB's likelihood helpers are constructed (`analysis/likelihoodThreads.ts`).
+ * Where pastis-NB's helpers are constructed (`analysis/likelihoodThreads.ts`).
  *
  * Its own module, for `spawnGram.ts`'s reasons: imported by the analysis worker,
  * and swapped by the standalone build for {@link ./spawnLikelihood.standalone.ts},

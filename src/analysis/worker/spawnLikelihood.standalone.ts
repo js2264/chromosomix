@@ -1,5 +1,5 @@
 /**
- * pastis-NB's likelihood helpers, for a page with no origin.
+ * pastis-NB's helpers, for a page with no origin.
  *
  * Swapped in for {@link ./spawnLikelihood.ts} by `vite.standalone.config.ts`, as
  * `spawnGram.standalone.ts` is for the correlation's: `?worker&inline` gives a

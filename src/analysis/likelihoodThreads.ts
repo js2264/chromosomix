@@ -1,51 +1,56 @@
 /**
- * pastis-NB's likelihood on several threads (§25.6).
+ * pastis-NB's fit on several threads (§25.6): its MDS start and its likelihood.
  *
  * Every step of *Model from the map*'s pastis-NB fit is a line search, and
- * every point it tries is one evaluation of the likelihood: a pass over every
- * pair of beads, four logarithms and exponentials a pair, a hundred and fifty
- * nanoseconds on one core. At 905 beads that is sixty milliseconds; at twelve
- * thousand it is ten seconds, a hundred and fifty times over. The pairs are
- * independent of each other, so the pass is shared out: the likelihood is
+ * every point it tries is one evaluation of an objective over every pair of
+ * beads — pastis' relative stress for the MDS start, a few nanoseconds a pair,
+ * then the likelihood, four logarithms and exponentials a pair and a hundred
+ * and fifty nanoseconds. At 905 beads a likelihood is sixty milliseconds; at
+ * twelve thousand it is ten seconds, a hundred and fifty times over. The pairs
+ * are independent of each other, so the pass is shared out: each objective is
  * already a sum over **bands** of rows (`structure/negbinom.ts`'s
- * `likelihoodBands`), and the bands go to helper workers, a contiguous stretch
- * each, while this thread computes a stretch of its own.
+ * `mdsBands` and `likelihoodBands`), and the bands go to helper workers, a
+ * contiguous stretch each, while this thread computes a stretch of its own.
  *
  * **The same bits, on any number of threads.** A band's value and its partial
  * gradient are computed whole, by the one function, wherever the band is; the
  * layout is a function of the bead count alone; and the bands are added here
- * in band order, as `negBinomObjective` adds them on one thread. So a fit is
- * the same model on one thread and on eight, on a machine with two cores and
- * on one with sixteen — which is the property a reproducible model needs and a
- * thread pool does not give for free: floating-point addition is not
- * associative, and a sum that grouped the bands by thread would round
- * differently on every machine.
+ * in band order, as `mdsObjective` and `negBinomObjective` add them on one
+ * thread. So a fit is the same model on one thread and on eight, on a machine
+ * with two cores and on one with sixteen — which is the property a
+ * reproducible model needs and a thread pool does not give for free:
+ * floating-point addition is not associative, and a sum that grouped the bands
+ * by thread would round differently on every machine.
  *
  * **What crosses.** The app is not served with the headers `SharedArrayBuffer`
- * needs, so a helper is sent a **copy**: once, at the start, the counts above
- * the diagonal of its own rows, packed row after row — the triangle and not the
- * square, so the copies together are at most half a matrix — and the biases.
- * Then, per evaluation, the coordinates, and back come its bands' values and
- * partial gradients, whose buffers are *transferred* there and back so that
- * nothing is allocated per evaluation. The copies are held to
- * {@link COPY_BUDGET}, and fewer helpers are used where they would not fit.
- * Where the counts are on a `SharedArrayBuffer` — the command line allocates
- * them there, Node having no headers to ask for — nothing is copied at all:
- * every helper reads the one matrix, and the budget does not bind.
+ * needs, so a helper is sent a **copy**, once per objective: the MDS's wishes
+ * below the diagonal of its own rows, then the likelihood's counts above it,
+ * packed row after row — a triangle and not the square, so the copies together
+ * are at most half a matrix, and a helper holds one objective's at a time —
+ * and, for the likelihood, the biases. Then, per evaluation, the coordinates,
+ * and back come its bands' values and partial gradients, whose buffers are
+ * *transferred* there and back so that nothing is allocated per evaluation. The
+ * copies are held to {@link COPY_BUDGET}, and fewer helpers are used where they
+ * would not fit. Where the matrix is on a `SharedArrayBuffer` — the command
+ * line allocates it there, Node having no headers to ask for — nothing is
+ * copied at all: every helper reads the one matrix, and the budget does not
+ * bind.
  *
  * **Nothing depends on the helpers.** One that cannot be started, or that fails
  * at any point, has its bands computed here instead, from the whole matrix this
- * thread still holds — the same function, so the same numbers, only later. A
- * stop, or the end of the fit, terminates every helper ({@link
- * LikelihoodEvaluator.close}): a model is not something run a hundred times a
- * minute, so they are started afresh each time — in the time the MDS start
- * takes — rather than kept holding a copy of a map nobody is fitting.
+ * thread still holds — the same function, so the same numbers, only later. So
+ * does one that has not said it is up yet: a helper takes a tenth of a second
+ * or so to start, which at a thousand beads is most of the MDS, and the first
+ * evaluations do not wait for it. A stop, or the end of the fit, terminates every helper ({@link FitThreads.close}):
+ * a model is not something run a hundred times a minute, so they are started
+ * afresh each time rather than kept holding a copy of a map nobody is fitting.
  *
  * Where helpers come from is the caller's to say ({@link useLikelihoodThreads}):
  * the analysis worker starts them as web workers (`worker/likelihood.worker.ts`),
  * the command line as Node worker threads (`cli/threads.ts`), and the tests as
- * in-process stand-ins. Anywhere it is not called the likelihood runs on one
- * thread — the same numbers, one thread's time.
+ * in-process stand-ins. Anywhere it is not called the fit runs on one thread —
+ * the same numbers, one thread's time. The command line calls it only when
+ * asked to, with `--threads`.
  */
 
 import {
@@ -53,28 +58,36 @@ import {
   likelihoodBand,
   likelihoodBands,
   likelihoodTerms,
+  mdsBand,
+  mdsBands,
   type Dispersion,
   type LikelihoodTerms,
   type NegBinomModel,
 } from '../structure/negbinom'
 import type { DenseMatrix } from '../structure/reconstruct'
 
-/** What a helper is sent once, at the start of a fit. */
+/** Which of pastis-NB's two objectives a helper is computing bands of. */
+export type FitObjective = 'mds' | 'likelihood'
+
+/** What a helper is sent once per objective, before its first evaluation. */
 export interface LikelihoodSetup {
   kind: 'setup'
   id: number
+  objective: FitObjective
   n: number
+  /** The likelihood's: unread by the MDS. */
   alpha: number
   bias: Float64Array | null
   dispersion: Dispersion | null
   /** Its bands' edges, in rows: band `k` is `[edges[k], edges[k + 1])`. */
   edges: number[]
   /**
-   * The counts of its rows above the diagonal, row after row: row `i` holds
-   * `n − 1 − i`. Or, where `shared`, the whole `n × n` matrix itself, on
-   * memory every thread can read.
+   * Its rows of the matrix, packed row after row: for the MDS the wishes below
+   * the diagonal, row `i` holding `i`; for the likelihood the counts above it,
+   * row `i` holding `n − 1 − i`. Or, where `shared`, the whole `n × n` matrix
+   * itself, on memory every thread can read.
    */
-  counts: Float32Array | Float64Array
+  values: Float32Array | Float64Array
   shared: boolean
 }
 
@@ -89,19 +102,22 @@ export interface LikelihoodEvaluate {
 
 export type LikelihoodRequest = LikelihoodSetup | LikelihoodEvaluate
 
-/** What a helper sends back. */
+/** What a helper sends back: that it is up, once, and then its shares. */
 export type LikelihoodMessage =
+  | { kind: 'ready' }
   | { kind: 'shares'; id: number; seq: number; values: number[]; parts: Float64Array[] }
   | { kind: 'error'; id: number; message: string }
 
+type Shares = Extract<LikelihoodMessage, { kind: 'shares' }>
+
 /**
- * The most the helpers' copies of the counts may add up to. At twelve thousand
- * beads the triangle is 288 MB of singles, and with three helpers they hold
- * about three-quarters of it.
+ * The most the helpers' copies of one objective's matrix may add up to. At
+ * twelve thousand beads a triangle is 288 MB of singles, and with three helpers
+ * they hold about three-quarters of it.
  */
 const COPY_BUDGET = 512 * 1024 * 1024
 
-/** Bead counts below this are fitted on one thread: at 256 beads an evaluation is five milliseconds. */
+/** Bead counts below this are fitted on one thread: at 256 beads a likelihood is five milliseconds. */
 const THREAD_FROM = 256
 
 /**
@@ -121,7 +137,7 @@ let threads: Threads | null = null
 let nextJob = 1
 
 /**
- * Let the likelihood use helper workers — called once, by whatever runs the
+ * Let pastis-NB's fit use helper workers — called once, by whatever runs the
  * analysis: the analysis worker in the app, `main` on the command line.
  * `helpers` is how many besides the calling thread; `0` is one thread.
  */
@@ -129,167 +145,197 @@ export function useLikelihoodThreads(spawn: () => Worker, helpers: number): void
   threads = helpers > 0 ? { spawn, helpers: Math.floor(helpers) } : null
 }
 
-/** One evaluation of the likelihood and its gradient, wherever it is computed. */
-export interface LikelihoodEvaluator {
-  /** Threads computing bands, this one included, as the fit started. */
+/** One objective's evaluations, wherever they are computed. */
+export interface FitEvaluator {
+  /** Threads computing its bands, this one included, as it was opened. */
   readonly threads: number
-  /** The likelihood at `point`, its gradient written into `gradient`. */
+  /** The objective at `point`, its gradient written into `gradient`. */
   evaluate(point: Float64Array, gradient: Float64Array): Promise<number>
+}
+
+/** The helpers of one fit, lent to its MDS start and then to its likelihood. */
+export interface FitThreads {
+  /** Threads started for the fit, this one included. */
+  readonly threads: number
+  /** pastis' MDS on `wishes`, the matrix `storeWishes` wrote below the diagonal of. */
+  mds(wishes: DenseMatrix): FitEvaluator
+  /** The likelihood of `model`; the MDS's evaluations end here. */
+  likelihood(model: NegBinomModel): FitEvaluator
   /** Terminate every helper. Called once the fit ends, or stops. */
   close(): void
 }
 
 interface Helper {
   worker: Worker
-  /** Its bands, as indices into the layout: `[from, to)`. */
-  from: number
-  to: number
   alive: boolean
-  /** The evaluation it owes, resolved with its answer — or `null` once it has failed. */
-  owed: ((answer: Extract<LikelihoodMessage, { kind: 'shares' }> | null) => void) | null
+  /** Whether it has said it is up; until then its bands are computed here. */
+  ready: boolean
+  /** The evaluation it owes, resolved with its answer — or with `null` once it has failed. */
+  owed: { id: number; seq: number; resolve: (answer: Shares | null) => void } | null
 }
 
 /**
- * Open the likelihood of `model` for evaluation: its bands shared between this
- * thread and as many helpers as are allowed, worth it, and fit in the copy
- * budget. The helpers are sent their rows at once, so they are ready by the
- * time the MDS start has run.
+ * Start the helpers for a fit of `n` beads whose matrix is `matrix`: as many as
+ * are allowed, worth it, and fit in the copy budget. Each objective is then
+ * opened on them in turn, its bands shared between this thread and the
+ * helpers still alive.
  */
-export function openLikelihood(model: NegBinomModel): LikelihoodEvaluator {
-  const { counts, n } = model
-  const terms = likelihoodTerms(model)
-  const edges = likelihoodBands(n)
-  const bands = edges.length - 1
-  const parts: Float64Array[] = Array.from({ length: bands }, (_, b) => new Float64Array(3 * (n - edges[b])))
-  const values = new Float64Array(bands)
-
+export function openFitThreads(n: number, matrix: DenseMatrix): FitThreads {
   const pool = threads
-  const shared = typeof SharedArrayBuffer === 'function' && counts.buffer instanceof SharedArrayBuffer
-  const plan =
-    pool === null || n < THREAD_FROM
-      ? [0, bands]
-      : shareBands(edges, n, pool.helpers, shared ? 0 : counts.BYTES_PER_ELEMENT)
-  const own = plan[1]
-  const id = nextJob++
-  let seq = 0
+  const bytesOf = (values: DenseMatrix): number => (isShared(values) ? 0 : values.BYTES_PER_ELEMENT)
+  const wanted =
+    pool === null || n < THREAD_FROM ? 0 : shareBands(likelihoodBands(n), n, pool.helpers, bytesOf(matrix)).length - 2
 
   const helpers: Helper[] = []
-  for (let t = 1; pool !== null && t + 1 < plan.length; t++) {
+  for (let t = 0; pool !== null && t < wanted; t++) {
     let worker: Worker
     try {
       worker = pool.spawn()
     } catch {
-      // None can be started here: the stretch is this thread's.
+      // None can be started here: the bands are this thread's.
       continue
     }
-    const helper: Helper = { worker, from: plan[t], to: plan[t + 1], alive: true, owed: null }
-    const failed = (): void => {
-      if (!helper.alive) return
-      helper.alive = false
-      helper.worker.onmessage = null
-      helper.worker.onerror = null
-      helper.worker.terminate()
-      const owed = helper.owed
-      helper.owed = null
-      owed?.(null)
-    }
+    const helper: Helper = { worker, alive: true, ready: false, owed: null }
     worker.onmessage = (event: MessageEvent<LikelihoodMessage>) => {
       const message = event.data
-      if (message.id !== id) return
-      if (message.kind === 'error') {
-        failed()
+      if (message.kind === 'ready') {
+        helper.ready = true
         return
       }
-      if (message.seq !== seq || helper.owed === null) return
+      if (message.kind === 'error') {
+        failed(helper)
+        return
+      }
       const owed = helper.owed
+      if (owed === null || message.id !== owed.id || message.seq !== owed.seq) return
       helper.owed = null
-      owed(message)
+      owed.resolve(message)
     }
     worker.onerror = (event) => {
       event.preventDefault()
-      failed()
+      failed(helper)
     }
-    try {
-      const setup = setupFor(id, model, edges, helper.from, helper.to, shared)
-      worker.postMessage(setup, shared ? [] : [setup.counts.buffer as ArrayBuffer])
-      helpers.push(helper)
-    } catch {
-      worker.terminate()
-    }
+    helpers.push(helper)
   }
 
-  const compute = (b: number, point: Float64Array): void => {
-    // A buffer lent to a helper that then failed went with it.
-    if (parts[b].length === 0) parts[b] = new Float64Array(3 * (n - edges[b]))
-    values[b] = likelihoodBand(terms, counts, null, edges[b], edges[b + 1], point, parts[b])
+  const open = (objective: FitObjective, model: NegBinomModel): FitEvaluator => {
+    const values = model.counts
+    const shared = isShared(values)
+    const mds = objective === 'mds'
+    const terms = mds ? null : likelihoodTerms(model)
+    const edges = mds ? mdsBands(n) : likelihoodBands(n)
+    const bands = edges.length - 1
+    // Where band `b`'s gradient starts, and how many beads it holds.
+    const from = (b: number): number => (mds ? 0 : edges[b])
+    const length = (b: number): number => (mds ? edges[b + 1] : n - edges[b])
+    const parts: Float64Array[] = Array.from({ length: bands }, (_, b) => new Float64Array(3 * length(b)))
+    const sums = new Float64Array(bands)
+    const id = nextJob++
+    let seq = 0
+
+    // The objective before this one is over: whatever it is still owed is not coming.
+    for (const helper of helpers) {
+      const owed = helper.owed
+      helper.owed = null
+      owed?.resolve(null)
+    }
+    const alive = helpers.filter((helper) => helper.alive)
+    const plan = alive.length === 0 ? [0, bands] : shareBands(edges, n, alive.length, bytesOf(values), objective)
+    const working: Array<{ helper: Helper; from: number; to: number }> = []
+    for (let t = 1; t + 1 < plan.length; t++) {
+      const helper = alive[t - 1]
+      try {
+        const setup = setupFor(id, objective, model, edges, plan[t], plan[t + 1], shared)
+        helper.worker.postMessage(setup, shared ? [] : [setup.values.buffer as ArrayBuffer])
+      } catch {
+        failed(helper)
+      }
+      working.push({ helper, from: plan[t], to: plan[t + 1] })
+    }
+
+    const compute = (b: number, point: Float64Array): void => {
+      // A buffer lent to a helper that then failed went with it.
+      if (parts[b].length === 0) parts[b] = new Float64Array(3 * length(b))
+      sums[b] =
+        terms === null
+          ? mdsBand(values, null, n, edges[b], edges[b + 1], point, parts[b])
+          : likelihoodBand(terms, values, null, edges[b], edges[b + 1], point, parts[b])
+    }
+
+    return {
+      threads: 1 + working.filter(({ helper }) => helper.alive).length,
+      async evaluate(point, gradient) {
+        seq++
+        const answers = working.map(({ helper, from: b0, to: b1 }) => {
+          if (!helper.alive || !helper.ready) return Promise.resolve(null)
+          return new Promise<Shares | null>((resolve) => {
+            helper.owed = { id, seq, resolve }
+            const lent: Float64Array[] = []
+            for (let b = b0; b < b1; b++) {
+              if (parts[b].length === 0) parts[b] = new Float64Array(3 * length(b))
+              lent.push(parts[b])
+            }
+            const request: LikelihoodEvaluate = { kind: 'evaluate', id, seq, point, parts: lent }
+            try {
+              helper.worker.postMessage(request, lent.map((part) => part.buffer))
+            } catch {
+              failed(helper)
+            }
+          })
+        })
+        for (let b = 0; b < plan[1]; b++) compute(b, point)
+        const answered = await Promise.all(answers)
+        working.forEach(({ from: b0, to: b1 }, at) => {
+          const answer = answered[at]
+          for (let b = b0; b < b1; b++) {
+            if (answer === null) {
+              compute(b, point)
+              continue
+            }
+            sums[b] = answer.values[b - b0]
+            parts[b] = answer.parts[b - b0]
+          }
+        })
+
+        // In band order, as one thread adds them (`mdsObjective`, `negBinomObjective`).
+        gradient.fill(0)
+        let value = 0
+        for (let b = 0; b < bands; b++) {
+          const share = sums[b]
+          if (!mds && !Number.isFinite(share)) return Number.POSITIVE_INFINITY
+          value += share
+          addBand(gradient, parts[b], n, from(b), length(b))
+        }
+        return mds || Number.isFinite(value) ? value : Number.POSITIVE_INFINITY
+      },
+    }
   }
 
   return {
     threads: 1 + helpers.length,
-    async evaluate(point, gradient) {
-      seq++
-      const answers = helpers.map((helper) => {
-        if (!helper.alive) return Promise.resolve(null)
-        return new Promise<Extract<LikelihoodMessage, { kind: 'shares' }> | null>((resolve) => {
-          helper.owed = resolve
-          const lent: Float64Array[] = []
-          for (let b = helper.from; b < helper.to; b++) {
-            if (parts[b].length === 0) parts[b] = new Float64Array(3 * (n - edges[b]))
-            lent.push(parts[b])
-          }
-          const request: LikelihoodEvaluate = { kind: 'evaluate', id, seq, point, parts: lent }
-          try {
-            helper.worker.postMessage(request, lent.map((part) => part.buffer))
-          } catch {
-            helper.owed = null
-            helper.alive = false
-            helper.worker.terminate()
-            resolve(null)
-          }
-        })
-      })
-      for (let b = 0; b < own; b++) compute(b, point)
-      // Bands of helpers that could not be started are this thread's too.
-      for (let t = 1; t + 1 < plan.length; t++) {
-        if (helpers.some((helper) => helper.from === plan[t])) continue
-        for (let b = plan[t]; b < plan[t + 1]; b++) compute(b, point)
-      }
-      const answered = await Promise.all(answers)
-      helpers.forEach((helper, at) => {
-        const answer = answered[at]
-        for (let b = helper.from; b < helper.to; b++) {
-          if (answer === null) {
-            compute(b, point)
-            continue
-          }
-          values[b] = answer.values[b - helper.from]
-          parts[b] = answer.parts[b - helper.from]
-        }
-      })
-
-      // In band order, as one thread adds them (`negBinomObjective`).
-      gradient.fill(0)
-      let value = 0
-      for (let b = 0; b < bands; b++) {
-        const share = values[b]
-        if (!Number.isFinite(share)) return Number.POSITIVE_INFINITY
-        value += share
-        addBand(gradient, parts[b], n, edges[b])
-      }
-      return Number.isFinite(value) ? value : Number.POSITIVE_INFINITY
-    },
+    mds: (wishes) => open('mds', { counts: wishes, n, alpha: 1, bias: null, dispersion: null }),
+    likelihood: (model) => open('likelihood', model),
     close() {
-      for (const helper of helpers) {
-        if (!helper.alive) continue
-        helper.alive = false
-        helper.worker.onmessage = null
-        helper.worker.onerror = null
-        helper.worker.terminate()
-        helper.owed?.(null)
-        helper.owed = null
-      }
+      for (const helper of helpers) failed(helper)
     },
   }
+}
+
+/** Let a helper go: terminated, and whatever it owed computed here instead. */
+function failed(helper: Helper): void {
+  if (!helper.alive) return
+  helper.alive = false
+  helper.worker.onmessage = null
+  helper.worker.onerror = null
+  helper.worker.terminate()
+  const owed = helper.owed
+  helper.owed = null
+  owed?.resolve(null)
+}
+
+/** Whether `matrix` is on memory other threads can read. */
+function isShared(matrix: DenseMatrix): boolean {
+  return typeof SharedArrayBuffer === 'function' && matrix.buffer instanceof SharedArrayBuffer
 }
 
 /**
@@ -299,7 +345,13 @@ export function openLikelihood(model: NegBinomModel): LikelihoodEvaluator {
  * work (the bands are), this thread's {@link OWN_SHARE} of one, and fewer
  * helpers where their copies would not fit in {@link COPY_BUDGET}.
  */
-export function shareBands(edges: Int32Array, n: number, helpers: number, bytes: number): number[] {
+export function shareBands(
+  edges: Int32Array,
+  n: number,
+  helpers: number,
+  bytes: number,
+  objective: FitObjective = 'likelihood',
+): number[] {
   const bands = edges.length - 1
   for (let parts = Math.min(helpers + 1, bands); parts > 1; parts--) {
     const whole = OWN_SHARE + parts - 1
@@ -310,25 +362,27 @@ export function shareBands(edges: Int32Array, n: number, helpers: number, bytes:
     }
     plan.push(bands)
     let copies = 0
-    for (let t = 1; t + 1 < plan.length; t++) copies += pairsIn(edges[plan[t]], edges[plan[t + 1]], n) * bytes
+    for (let t = 1; t + 1 < plan.length; t++) copies += pairsIn(objective, edges[plan[t]], edges[plan[t + 1]], n) * bytes
     if (plan.length > 2 && copies <= COPY_BUDGET) return plan
   }
   return [0, bands]
 }
 
-/** Pairs above the diagonal in rows `[r0, r1)`. */
-function pairsIn(r0: number, r1: number, n: number): number {
+/** Pairs in rows `[r0, r1)`: below the diagonal for the MDS, above it for the likelihood. */
+function pairsIn(objective: FitObjective, r0: number, r1: number, n: number): number {
   let pairs = 0
-  for (let i = r0; i < r1; i++) pairs += n - 1 - i
+  for (let i = r0; i < r1; i++) pairs += objective === 'mds' ? i : n - 1 - i
   return pairs
 }
 
 /**
- * A helper's setup: its bands' edges, and the counts of their rows above the
- * diagonal, packed — or the shared matrix itself, which costs nothing to send.
+ * A helper's setup: its bands' edges, and its rows of the matrix on the side
+ * its objective reads, packed — or the shared matrix itself, which costs
+ * nothing to send.
  */
 function setupFor(
   id: number,
+  objective: FitObjective,
   model: NegBinomModel,
   edges: Int32Array,
   from: number,
@@ -340,24 +394,26 @@ function setupFor(
   const r1 = edges[to]
   let sent = counts
   if (!shared) {
-    // The counts' own kind of float, so a helper reads the very numbers this thread would.
-    const packed = new (counts instanceof Float64Array ? Float64Array : Float32Array)(pairsIn(r0, r1, n))
+    // The matrix's own kind of float, so a helper reads the very numbers this thread would.
+    const packed = new (counts instanceof Float64Array ? Float64Array : Float32Array)(pairsIn(objective, r0, r1, n))
     let at = 0
     for (let i = r0; i < r1; i++) {
-      packed.set(counts.subarray(i * n + i + 1, (i + 1) * n), at)
-      at += n - 1 - i
+      const row = objective === 'mds' ? counts.subarray(i * n, i * n + i) : counts.subarray(i * n + i + 1, (i + 1) * n)
+      packed.set(row, at)
+      at += row.length
     }
     sent = packed
   }
   return {
     kind: 'setup',
     id,
+    objective,
     n,
     alpha: model.alpha,
     bias: model.bias ?? null,
     dispersion: model.dispersion,
     edges: Array.from(edges.subarray(from, to + 1)),
-    counts: sent,
+    values: sent,
     shared,
   }
 }
@@ -366,46 +422,63 @@ function setupFor(
  * A helper: what it holds between evaluations, and what it does with each
  * message. Here rather than in `worker/likelihood.worker.ts` so that the tests,
  * and the command line's worker threads, run the same code a web worker does.
+ * A setup replaces whatever it held, so it holds one objective's rows at a time.
+ * It says it is up as it is made.
  */
 export function likelihoodHelper(
   send: (message: LikelihoodMessage, transfer?: Transferable[]) => void,
 ): (request: LikelihoodRequest) => void {
+  send({ kind: 'ready' })
   let held: {
     id: number
-    terms: LikelihoodTerms
-    counts: DenseMatrix
+    n: number
+    /** `null` for the MDS. */
+    terms: LikelihoodTerms | null
+    values: DenseMatrix
     edges: number[]
-    /** Where each row of each band starts in `counts`, less its first column: `offset + j`. */
+    /** Where each row of each band starts in `values`, less its first column: `offset + j`. */
     offsets: Float64Array[]
   } | null = null
   return (request) => {
     try {
       if (request.kind === 'setup') {
-        const { n, edges, shared } = request
+        held = null
+        const { n, edges, shared, objective } = request
+        const mds = objective === 'mds'
         const offsets: Float64Array[] = []
         let start = 0
         for (let k = 0; k + 1 < edges.length; k++) {
           const rows = new Float64Array(edges[k + 1] - edges[k])
           for (let i = edges[k]; i < edges[k + 1]; i++) {
             // Row `i` of the whole matrix starts at `i·n`; of the packed copy,
-            // after the rows before it, at its first column past the diagonal.
-            rows[i - edges[k]] = shared ? i * n : start - i - 1
-            start += n - 1 - i
+            // after the rows before it — for the likelihood, at its first
+            // column past the diagonal.
+            if (mds) {
+              rows[i - edges[k]] = shared ? i * n : start
+              start += i
+            } else {
+              rows[i - edges[k]] = shared ? i * n : start - i - 1
+              start += n - 1 - i
+            }
           }
           offsets.push(rows)
         }
-        held = { id: request.id, terms: likelihoodTerms(request), counts: request.counts, edges, offsets }
+        held = { id: request.id, n, terms: mds ? null : likelihoodTerms(request), values: request.values, edges, offsets }
         return
       }
       if (held === null || held.id !== request.id) throw new Error('an evaluation before its setup')
-      const { terms, counts, edges, offsets } = held
-      const n = terms.n
+      const { n, terms, values: matrix, edges, offsets } = held
       const values: number[] = []
       const parts: Float64Array[] = []
       for (let k = 0; k + 1 < edges.length; k++) {
+        const size = 3 * (terms === null ? edges[k + 1] : n - edges[k])
         const given = request.parts[k]
-        const part = given !== undefined && given.length === 3 * (n - edges[k]) ? given : new Float64Array(3 * (n - edges[k]))
-        values.push(likelihoodBand(terms, counts, offsets[k], edges[k], edges[k + 1], request.point, part))
+        const part = given !== undefined && given.length === size ? given : new Float64Array(size)
+        values.push(
+          terms === null
+            ? mdsBand(matrix, offsets[k], n, edges[k], edges[k + 1], request.point, part)
+            : likelihoodBand(terms, matrix, offsets[k], edges[k], edges[k + 1], request.point, part),
+        )
         parts.push(part)
       }
       send({ kind: 'shares', id: request.id, seq: request.seq, values, parts }, parts.map((part) => part.buffer))

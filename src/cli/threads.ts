@@ -1,21 +1,21 @@
 /**
  * Helper threads for the command line (§22.2, `analysis/likelihoodThreads.ts`).
  *
- * The app's analysis worker starts pastis-NB's likelihood helpers as web
- * workers. Node has no web workers; it has `worker_threads`, and a thread there
- * runs a file. The command line is one file, so a helper is that file again,
- * started with a word in its `workerData` that says *you are a helper*: the
- * bundle's last lines ask {@link serveIfHelper} before anything else, and a
- * helper answers the likelihood's messages and does nothing a command would.
- * One file stays one file — no second entry for `npx chromosomix` to find —
- * and the helper runs the same code the app's helpers do.
+ * The app's analysis worker starts pastis-NB's helpers — for its MDS start and
+ * its likelihood — as web workers. Node has no web workers; it has
+ * `worker_threads`, and a thread there runs a file. The command line is one
+ * file, so a helper is that file again, started with a word in its
+ * `workerData` that says *you are a helper*: the bundle's last lines ask
+ * {@link serveIfHelper} before anything else, and a helper answers the fit's
+ * messages and does nothing a command would. One file stays one file — no
+ * second entry for `npx chromosomix` to find — and the helper runs the same
+ * code the app's helpers do.
  *
- * Results do not depend on the thread count — the likelihood is the same bits
- * on any number (`likelihoodThreads.ts`) — so `--threads` is a question about
- * this machine and is written into no provenance.
+ * Results do not depend on the thread count — the fit is the same bits on any
+ * number (`likelihoodThreads.ts`) — so `--threads` is a question about this
+ * machine and is written into no provenance.
  */
 
-import { availableParallelism } from 'node:os'
 import { Worker as NodeWorker, isMainThread, parentPort, workerData } from 'node:worker_threads'
 
 import {
@@ -28,13 +28,14 @@ import {
 /** What a helper is told it is. */
 const ROLE = 'chromosomix-likelihood-helper'
 
-/** Threads at most, by default: past eight the copies cost more than the cores give back. */
-const MOST = 8
-
-/** Every core, up to {@link MOST}: the default for `--threads`. */
-export function defaultThreads(): number {
-  return Math.max(1, Math.min(MOST, availableParallelism()))
-}
+/**
+ * The default for `--threads`: one, this thread alone, unless asked for more.
+ * A command line is what the timings run (`notebooks/timing.qmd`), and a time
+ * is only comparable to another — to the last release's, to a reference
+ * package's on one process — when both say how many cores they had; one is the
+ * number that means the same on every machine.
+ */
+export const DEFAULT_THREADS = 1
 
 /** Let the tasks that share their work use `count` threads, this one included. */
 export function useThreads(count: number): void {
@@ -59,7 +60,7 @@ export function serveIfHelper(): boolean {
 
 /**
  * A Node worker thread running this file as a helper, dressed as the web
- * `Worker` the likelihood talks to: `postMessage`, `onmessage`, `onerror` and
+ * `Worker` the fit talks to: `postMessage`, `onmessage`, `onerror` and
  * `terminate`. A thread that exits before it is terminated is an error, so its
  * bands come back to the thread that asked.
  */

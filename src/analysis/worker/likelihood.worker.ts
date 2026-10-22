@@ -1,9 +1,10 @@
 /**
- * A helper for pastis-NB's likelihood (§25.6, `analysis/likelihoodThreads.ts`).
+ * A helper for pastis-NB's fit (§25.6, `analysis/likelihoodThreads.ts`): its
+ * MDS start, then its likelihood.
  *
- * Sent its bands' rows once, and then a point per evaluation, it computes its
- * bands' values and gradients and sends them back (`likelihoodHelper`). One fit
- * per worker: the thread that started it terminates it when the fit ends, or
+ * Sent its bands' rows once per objective, and then a point per evaluation, it
+ * computes its bands' values and gradients and sends them back
+ * (`likelihoodHelper`). One fit per worker: the thread that started it terminates it when the fit ends, or
  * stops.
  */
 

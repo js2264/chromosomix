@@ -139,7 +139,7 @@ import type { FeatureSet, PairSet, StoredEntry } from '../annotations/types'
 import { hicProBinsNames, isHicProMatrix } from '../annotations/sidecar'
 import { openReference, type Reference } from './reference'
 import { Downloads, addressDirectories, displayOf, fileNameOf, isAddress } from './remote'
-import { defaultThreads, serveIfHelper, useThreads } from './threads'
+import { DEFAULT_THREADS, serveIfHelper, useThreads } from './threads'
 import { quote } from '../analysis/cliCommand'
 import { regionLabel, typedLocusToRegion } from '../genome/assembly'
 import { parseBins } from '../hicpro/parse'
@@ -2166,9 +2166,9 @@ const USAGE = `chromosomix — the Analysis panel, from a shell
       --rungs <n>          how many ladder resolutions to build from it
                            (1-2-5 series from the base). Default 1
       --threads <n>        threads for a task that shares its work —
-                           pastis-NB's likelihood in reconstruct3d. Default
-                           every core, up to eight; the results are the same
-                           bits on any number
+                           pastis-NB's MDS start and likelihood in
+                           reconstruct3d. Default 1, so a time is one core's;
+                           the results are the same bits on any number
       --quiet              no progress on stderr
       --<param> <value>    any parameter the task takes; see \`tasks\`. A choice
                            is one of its values and a number is a number: any
@@ -3041,7 +3041,7 @@ export async function main(argv: readonly string[]): Promise<number> {
     return 2
   }
   const threads = one(args, 'threads')
-  const count = threads === undefined ? defaultThreads() : Number(threads)
+  const count = threads === undefined ? DEFAULT_THREADS : Number(threads)
   if (!Number.isInteger(count) || count < 1) {
     process.stderr.write(`--threads ${threads}: a whole number of threads, 1 or more.\n`)
     return 2

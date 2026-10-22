@@ -188,9 +188,9 @@ export function* answered<R>(
  * written into the array it named.
  *
  * So the objective need not answer at once. *Model from the map* shares each
- * evaluation of its likelihood among helper threads (`analysis/
- * likelihoodThreads.ts`), which is a round trip and an `await`, and a generator
- * that called its objective itself could not wait for one. The walk is the same
+ * evaluation of pastis' MDS and of its likelihood among helper threads
+ * (`analysis/likelihoodThreads.ts`), which is a round trip and an `await`, and
+ * a generator that called its objective itself could not wait for one. The walk is the same
  * arithmetic whoever answers it, so the same answers give the same steps.
  */
 export function* lbfgsWalk(start: Float64Array, options: LbfgsOptions = {}): Generator<LbfgsAsk, LbfgsResult, number> {
