@@ -19,7 +19,7 @@
  */
 
 import { ViewerError } from '../errors'
-import { begin, RENDERED, type RenderedReport } from '../perf/rendered'
+import { begin, RENDERED, routed, type RenderedReport } from '../perf/rendered'
 import { parseViewState, serialiseViewState, viewStateEquals } from '../state/ViewState'
 import { HistoryJournal } from '../state/historyJournal'
 import { historyItems } from '../ui/historyMenu'
@@ -1012,8 +1012,18 @@ export class App implements SessionHost {
         this.channel?.rendered((event as CustomEvent<RenderedReport>).detail)
       })
       // The boot's first picture — the map the host's `src=` named, its error,
-      // or the picker — which a host's files wait for (`addFromHost`).
-      this.booted = new Promise((drawn) => window.addEventListener(RENDERED, () => drawn(), { once: true }))
+      // or the picker — which a host's files wait for (`addFromHost`): drawn,
+      // or, in a frame out of sight that makes no animation frames and so never
+      // paints, routed and read with only its paints to come.
+      this.booted = new Promise((drawn) => {
+        window.addEventListener(RENDERED, () => drawn(), { once: true })
+        const look = (): void => {
+          if (routed()) drawn()
+          else setTimeout(look, 100)
+        }
+        // After `booting()` below, which ends the boot's own wait.
+        setTimeout(look, 0)
+      })
     }
     booting()
   }
@@ -1028,9 +1038,10 @@ export class App implements SessionHost {
    * above all, or a track would arrive at a tab that is still empty and open in
    * the map's place.
    *
-   * Nothing is added before the boot's first picture is finished, either: the
-   * map a `src=` names opens through a navigation, and a session marks itself
-   * as opening only some way into it.
+   * Nothing is added before the boot's first picture is finished — or, in a
+   * frame out of sight, routed with only its paints to come — either: the map a
+   * `src=` names opens through a navigation, and a session marks itself as
+   * opening only some way into it.
    *
    * An address is canonicalised at this door as at the URL box's (§24.5), and
    * only `http:` and `https:` are kept: the list is another origin's, and those
@@ -1046,8 +1057,14 @@ export class App implements SessionHost {
       await settledOpening(session)
       const { path } = splitUri(url)
       const source = { kind: 'remote', url: path } as const
-      if (!session.hasFile && !session.isBrowsing) await session.openPicked(url, source)
-      else await session.addRemote(url, source)
+      if (!session.hasFile && !session.isBrowsing) {
+        // An empty tab takes the first as its file; a tab whose own file was
+        // refused keeps the refusal on screen. Opening a track over it would
+        // put a 1D browser where the host's map should be, and report it
+        // drawn — the failure the host most needs to hear, hidden.
+        if (session.state !== null) return
+        await session.openPicked(url, source)
+      } else await session.addRemote(url, source)
     }
   }
 

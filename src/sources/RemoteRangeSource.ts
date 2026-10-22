@@ -272,7 +272,13 @@ export class RemoteRangeSource implements ByteSource {
       )
     }
 
-    const declaredLength = numberHeader(head, 'content-length')
+    // A `HEAD` that states no bytes has stated nothing: jupyter-server-proxy —
+    // the way into a kernel's files behind JupyterHub — answers every `HEAD`
+    // with `Content-Length: 0` whatever the file is, and believing it mounted a
+    // map as a file of no bytes ("not an HDF5 file"). A file that really is
+    // empty is nothing to open either, and the probe below says which.
+    const statedLength = numberHeader(head, 'content-length')
+    const declaredLength = statedLength === 0 ? null : statedLength
     const acceptsRanges = (head?.headers.get('accept-ranges') ?? '').toLowerCase().includes('bytes')
 
     if (acceptsRanges && declaredLength !== null) {

@@ -5608,7 +5608,10 @@ with a `HEAD` before its `GET` to test range support, and that `HEAD` is skipped
 its own signature — `X-Amz-Signature`, `X-Goog-Signature`, or `sig=` beside `sv=` — since such a
 URL is signed for a single method. A presigned link therefore opens and goes on working until it
 expires (§24.6); a public bucket URL is still what a citation should point at, because a signature
-has a date on it.
+has a date on it. A `HEAD` answering `Content-Length: 0` is taken to have stated no length, and the
+one-byte probe follows it as it follows a `HEAD` that says nothing: jupyter-server-proxy, the way
+into a notebook kernel's files behind JupyterHub (§21.5), answers every `HEAD` so, and a map read
+through it was mounted as a file of no bytes and refused as "not an HDF5 file".
 
 **Private files:** a local file — dropped, picked, or in a connected folder (§20) — or the reader's
 own private bucket, Drive or Dropbox, read from the browser with their own credentials (§20.3,
@@ -10581,8 +10584,13 @@ in the state, a key sent as `null` is removed, and `state: null` is the picker; 
 typed into it (§5.5) — a track among the tracks, a map or a model beside the map, a workspace's tabs,
 and on an empty tab the first as its file. The view state has no word for a track, so this is how a
 host that frames a map puts its tracks beside it. It waits for the frame's first picture — the map
-the `src=` named — takes `http(s)` addresses only and at most 64 of them, and is answered with the
-state once every file is in, so a host knows when they are.
+the `src=` named, drawn, or in a frame out of sight routed and read with only its paints to come
+(a cross-origin frame nobody can see makes no animation frames, so it never paints, and its files
+are wanted all the same) — takes `http(s)` addresses only and at most 64 of them, and is answered
+with the state once every file is in, so a host knows when they are. A tab whose own file was
+refused keeps its refusal on screen: the first address opens as the tab's file only on an empty
+tab, never over the error of the map the host named, which would put a 1D browser in its place and
+report it drawn.
 
 **What a frame takes is in its `ready`, not in the protocol's number.** Adding a message leaves the
 number alone (a host written against it ignores what it has never heard of), so a host that needs

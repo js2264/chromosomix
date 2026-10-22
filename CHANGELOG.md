@@ -202,6 +202,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A map read through a proxy that empties a `HEAD` opens (§11).** jupyter-server-proxy, the way
+  into a notebook kernel's files behind JupyterHub, answers every `HEAD` with `Content-Length: 0`
+  and passes the server's `Accept-Ranges` through, and the reader took both at their word: a 19 MB
+  `.cool` was mounted as a file of no bytes and refused as "not an HDF5 file", while its bigWigs,
+  read by range, drew. A `HEAD` stating no bytes is now followed by the one-byte probe, whose
+  `Content-Range` gives the size.
+
 - **A map in a deck keeps its size in a short window (§16.5).** Each deck cell's map took its height
   from the window less the tracks stacked under it, with no floor, so a deck of two in a
   620-pixel-tall window — a notebook's frame, a laptop with its tools open — drew a map with three
