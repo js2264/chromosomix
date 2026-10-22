@@ -4,11 +4,13 @@
 # What the frame opens on is its address: the map and every view keyword in the
 # fragment, as the app's address bar writes them. The tracks — which the
 # fragment has no word for — go to the frame as one `chromosomix:add` once it
-# says it is ready. Moves and additions asked of it after that are requests:
-# laid on the widget before it is drawn (`chromosomix(...) |> chromosomix_goto(...)`,
-# which a static R Markdown page is made of), or sent through a Shiny proxy;
-# either way the frame makes them in order, and all of them again when it
-# reloads. What the viewer says back reaches R in Shiny, as inputs.
+# says it is ready; with no map, where the view goes — its locus, its
+# keywords — is a patch made after them. Moves and additions asked of it after
+# that are requests: laid on the widget before it is drawn
+# (`chromosomix(...) |> chromosomix_goto(...)`, which a static R Markdown page
+# is made of), or sent through a Shiny proxy; either way the frame makes them
+# in order, and all of them again when it reloads. What the viewer says back
+# reaches R in Shiny, as inputs.
 
 # The view state's keys, in the order the app writes them (`state/ViewState.ts`).
 KEY_ORDER <- c(
@@ -18,10 +20,11 @@ KEY_ORDER <- c(
 )
 
 # A value as the fragment spells it: a switch as `true` or `false`, a number
-# whole rather than in R's scientific notation.
+# whole rather than in R's scientific notation, and with a point whatever
+# `options(OutDec)` says.
 value_text <- function(value) {
   if (is.logical(value)) return(if (isTRUE(value)) "true" else "false")
-  if (is.numeric(value)) return(format(value, scientific = FALSE, trim = TRUE, digits = 15))
+  if (is.numeric(value)) return(format(value, scientific = FALSE, trim = TRUE, digits = 15, decimal.mark = "."))
   as.character(value)
 }
 
@@ -48,7 +51,7 @@ locus_text <- function(where) {
   if (is.character(where) && length(where) == 1L) return(where)
   if (length(where) == 3L) {
     parts <- as.list(where)
-    whole <- function(value) format(as.numeric(value), scientific = FALSE, trim = TRUE)
+    whole <- function(value) format(as.numeric(value), scientific = FALSE, trim = TRUE, decimal.mark = ".")
     return(sprintf("%s:%s-%s", as.character(parts[[1]]), whole(parts[[2]]), whole(parts[[3]])))
   }
   stop("A locus is a string, such as \"II:100000-200000\", or a sequence, a start and an end.", call. = FALSE)
@@ -58,6 +61,41 @@ addresses <- function(files) {
   files <- unlist(files, use.names = FALSE)
   if (length(files) == 0L) return(character())
   vapply(files, address, "", USE.NAMES = FALSE)
+}
+
+# The deck's own words among `maps`, which name a cell rather than a file: an
+# empty one, a 3D model's, a tracks cell's (`panels/deck.ts`).
+DECK_WORDS <- c("~", "3d", "tracks")
+
+# A deck as `maps` writes it, each of its files an address.
+maps_text <- function(maps) {
+  parts <- strsplit(as.character(maps), "|", fixed = TRUE)[[1]]
+  served <- vapply(parts, function(part) if (trimws(part) %in% c("", DECK_WORDS)) part else address(part), "", USE.NAMES = FALSE)
+  paste(served, collapse = "|")
+}
+
+# A view key's value as the frame is sent it: one value, as the address bar
+# writes it — a locus or a region also as a sequence, a start and an end, and
+# a file (`uri`, `uri2`, each of a deck's `maps`) as an address. `NULL` is
+# kept: it takes the key away.
+view_value <- function(key, value) {
+  if (is.null(value)) return(NULL)
+  if (key %in% c("locus", "region")) return(locus_text(value))
+  if (length(value) != 1L) {
+    stop(sprintf(
+      "`%s` is given %d values, and a key takes one, written as the address bar writes it: genomes = \"a,b\" for two genomes.",
+      key, length(value)
+    ), call. = FALSE)
+  }
+  if (key %in% c("uri", "uri2")) return(address(value))
+  if (identical(key, "maps")) return(maps_text(value))
+  value_text(value)
+}
+
+view_values <- function(values) {
+  out <- lapply(seq_along(values), function(i) view_value(names(values)[[i]], values[[i]]))
+  names(out) <- names(values)
+  out
 }
 
 #' The chromosomix viewer as an HTML widget
@@ -74,7 +112,9 @@ addresses <- function(files) {
 #'
 #' @param map The contact map the view opens on: `.cool`, `.mcool` (with
 #'   `::/resolutions/<bin>`), `.hic`, `.pairs`, … — or `NULL` for a 1D browser
-#'   of the tracks alone, whose first file becomes the tab's.
+#'   of the tracks alone, whose first file becomes the tab's. With no map,
+#'   `locus` (or else `region`) and the view keywords are laid on once the
+#'   files are in, as [chromosomix_navigate()] would.
 #' @param tracks Files put in the view once it is drawn, in order, as the
 #'   header's `+` puts them: a track beside the map, another map beside it, a 3D
 #'   model, a workspace.
@@ -83,7 +123,9 @@ addresses <- function(files) {
 #' @param locus Where a 1D browser is placed, written the same way.
 #' @param ... Any other key of the view state as the app's address bar carries
 #'   it: `transform` (`"log10"`, `"log2"`, `"log1p"`, `"none"`), `colormap`,
-#'   `balance`, `vmin`, `vmax`, `oe`, `smooth`, `view`, ….
+#'   `balance`, `vmin`, `vmax`, `oe`, `smooth`, `view`, …. One value each, as
+#'   the address bar writes it (`genomes = "a,b"`); `uri`, `uri2` and each of
+#'   the `|`-separated `maps` are files, given as [address()] takes them.
 #' @param viewer The build of the viewer in the frame; see [resolve_viewer()].
 #' @param title The frame's title, for a screen reader.
 #' @param width,height The widget's size: CSS units, or a number of pixels.
@@ -109,10 +151,12 @@ chromosomix <- function(map = NULL, tracks = character(), region = NULL, locus =
   if (length(view) > 0L && (is.null(names(view)) || any(names(view) == ""))) {
     stop("Every view keyword is named, as the address bar names it: transform = \"log10\", oe = TRUE.", call. = FALSE)
   }
+  view <- view_values(view)
   base <- resolve_viewer(viewer)
   files <- addresses(tracks)
   warn_if_refused(base, length(files))
   src <- paste0(base, "?embed=1")
+  requests <- list()
   if (!is.null(map)) {
     state <- list(uri = address(map))
     if (!is.null(region)) {
@@ -122,6 +166,20 @@ chromosomix <- function(map = NULL, tracks = character(), region = NULL, locus =
     if (!is.null(locus)) state$locus <- locus_text(locus)
     state[names(view)] <- view
     src <- paste0(src, "#", view_hash(state))
+  } else {
+    # No map: the frame opens on its picker and its first file becomes the
+    # tab's, so where the view goes is a patch, made once the files are in —
+    # the frame carries its messages out in order.
+    state <- list()
+    if (!is.null(locus)) {
+      state$locus <- locus_text(locus)
+    } else if (!is.null(region)) {
+      state$view <- "region"
+      state$region <- locus_text(region)
+    }
+    state[names(view)] <- view
+    state <- state[!vapply(state, is.null, NA)]
+    if (length(state) > 0L) requests <- list(list(type = "navigate", state = state))
   }
   x <- list(
     src = src,
@@ -129,9 +187,9 @@ chromosomix <- function(map = NULL, tracks = character(), region = NULL, locus =
     title = title,
     base = base,
     # What `chromosomix_goto()` moves until the viewer has said what it shows:
-    # with no map, the 1D browser's locus.
-    browser = is.null(map) || identical(view$view, "browser"),
-    requests = list()
+    # the view it was opened on, and with no map the 1D browser's locus.
+    browser = if (is.character(state[["view"]])) identical(state[["view"]], "browser") else is.null(map),
+    requests = requests
   )
   htmlwidgets::createWidget(
     "chromosomix", x,
@@ -155,15 +213,25 @@ chromosomix <- function(map = NULL, tracks = character(), region = NULL, locus =
 #' * `chromosomix_goto()` frames a region of the map — or places the 1D
 #'   browser, when that is what the view shows.
 #' * `chromosomix_navigate()` lays a patch over the view: any key the app's
-#'   address bar carries; `NULL` takes one away.
+#'   address bar carries, one value each as it writes it; `NULL` takes one
+#'   away.
 #' * `chromosomix_add()` puts files in the view as the header's `+` does: a track
 #'   among the tracks, another map or a 3D model beside the map, a workspace.
+#'
+#' A `goto` is made a patch as the frame's page takes it — the map's `region`,
+#' or the 1D browser's `locus`, by the view the frame last said it shows — and
+#' patches made one after another are laid on as one, the later keys over the
+#' earlier, so a frame that loads again is sent where the view was sent rather
+#' than every step on the way. An addition is never merged nor dropped.
 #'
 #' @param view A widget from [chromosomix()], or a proxy from
 #'   [chromosomixProxy()].
 #' @param where `"II:100000-200000"`, or a sequence, a start and an end.
 #' @param ... `chromosomix_navigate()`: keys of the view state and their values,
-#'   named. `chromosomix_add()`: files, as addresses or paths ([address()]).
+#'   named, one value each as the address bar writes it (`genomes = "a,b"`); a
+#'   `locus` or a `region` may also be a sequence, a start and an end; `uri`,
+#'   `uri2` and each of the `|`-separated `maps` are files ([address()]).
+#'   `chromosomix_add()`: files, as addresses or paths ([address()]).
 #' @return `view`, so the requests chain.
 #' @examples
 #' \dontrun{
@@ -187,8 +255,7 @@ chromosomix_navigate <- function(view, ...) {
   patch <- list(...)
   if (length(patch) == 0L) return(view)
   if (is.null(names(patch)) || any(names(patch) == "")) stop("Every key is named: transform = \"log2\".", call. = FALSE)
-  state <- lapply(patch, function(value) if (is.null(value)) NULL else value_text(value))
-  ask(view, list(type = "navigate", state = state))
+  ask(view, list(type = "navigate", state = view_values(patch)))
 }
 
 #' @rdname chromosomix-requests
@@ -214,7 +281,11 @@ warn_if_refused <- function(base, count) {
 
 ask <- function(view, request) {
   if (inherits(view, "chromosomix_proxy")) {
-    view$session$sendCustomMessage("chromosomix-request", list(id = view$id, request = request))
+    session <- view$session
+    message <- list(id = view$id, request = request)
+    # Once this flush's outputs are sent: a widget drawn in it is on the page
+    # before what is asked of it. One still not drawn holds it until it is.
+    session$onFlushed(function() session$sendCustomMessage("chromosomix-request", message), once = TRUE)
     return(invisible(view))
   }
   if (inherits(view, "chromosomix") && inherits(view, "htmlwidget")) {

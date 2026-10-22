@@ -8,12 +8,21 @@
 //   `?embed=1`, the view in the fragment — the files a fragment has no word for,
 //   which go to the frame as `chromosomix:add` once it says it is ready, and the
 //   requests laid on the widget before it was drawn;
-// - in Shiny, requests through `chromosomixProxy()`, as custom messages.
+// - in Shiny, requests through `chromosomixProxy()`, as custom messages. One
+//   that arrives before its widget is drawn — an output not yet bound, or bound
+//   and not yet given its value — is kept, and made after the widget's own.
 //
 // Every request is made in order, and all of them again when the frame
 // reloads — it has loaded `src` again, and nothing asked of the last one is on
-// it. What the frame says comes back, in Shiny, as `input$<id>_state`,
-// `input$<id>_rendered` and `input$<id>_version`.
+// it. A `goto` is made a patch as it is laid on: the map's `region`, or the 1D
+// browser's `locus`. Patches in a row are one patch, so a reload replays where
+// the view was sent rather than every step on the way. What the frame says
+// comes back, in Shiny, as `input$<id>_state`, `input$<id>_rendered` and
+// `input$<id>_version`.
+//
+// Every value is drawn in a new <iframe>. An old one given a `src` that differs
+// only in its fragment — another region of the same map — or not at all would
+// not load again, would never say it is ready, and would take nothing after.
 //
 // A frame that cannot take files — a build from before `chromosomix:add`, whose
 // `ready` lists no `accepts` (SPECS §21.4) — draws the map without its tracks,
@@ -28,6 +37,20 @@
   var ALLOW = 'clipboard-write; fullscreen; local-network-access; local-network; loopback-network'
   /** What a `ready` without an `accepts` list means: a build from before `add`. */
   var BEFORE_ADD = ['chromosomix:where', 'chromosomix:navigate']
+  /** Requests a proxy made of an output before its widget was drawn, by the output's id. */
+  var early = {}
+
+  function hold(id, request) {
+    if (!Object.prototype.hasOwnProperty.call(early, id)) early[id] = []
+    early[id].push(request)
+  }
+
+  function take(id) {
+    if (!id || !Object.prototype.hasOwnProperty.call(early, id)) return []
+    var held = early[id]
+    delete early[id]
+    return held
+  }
 
   function absolute(address) {
     try {
@@ -56,6 +79,22 @@
     return url
   }
 
+  /** `{}`, which is how an R `NULL` can arrive in JSON: a key taken away. */
+  function emptyObject(value) {
+    return value !== null && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0
+  }
+
+  function newFrame() {
+    var frame = document.createElement('iframe')
+    frame.setAttribute('allow', ALLOW)
+    frame.style.width = '100%'
+    frame.style.flex = '1 1 auto'
+    frame.style.minHeight = '0'
+    frame.style.border = '0'
+    frame.style.display = 'block'
+    return frame
+  }
+
   HTMLWidgets.widget({
     name: 'chromosomix',
     type: 'output',
@@ -72,19 +111,14 @@
       el.style.display = 'flex'
       el.style.flexDirection = 'column'
       el.appendChild(notice)
-      var frame = document.createElement('iframe')
-      frame.setAttribute('allow', ALLOW)
-      frame.style.width = '100%'
-      frame.style.flex = '1 1 auto'
-      frame.style.minHeight = '0'
-      frame.style.border = '0'
-      frame.style.display = 'block'
+      var frame = newFrame()
       el.appendChild(frame)
 
+      /** The value R last gave; `null` before the widget is drawn. */
       var x = null
       var origin = '*'
       var ready = false
-      /** Every request made of this view, in order: `x`'s, then a proxy's. */
+      /** Every request made of this view, in order, as the frame is sent them: patches and additions. */
       var requests = []
       /** How many of them the frame has been sent since it last loaded. */
       var posted = 0
@@ -128,12 +162,14 @@
         return Boolean(x && x.browser)
       }
 
-      function message(request) {
+      /** A request from R as the frame will be sent it — `goto` made a patch — or `null`. */
+      function prepare(request) {
+        if (request === null || typeof request !== 'object') return null
         if (request.type === 'goto') {
           var where = String(request.where)
           return {
-            type: 'chromosomix:navigate',
-            state: browsing() ? { locus: where } : { view: 'region', region: where },
+            type: 'navigate',
+            state: browsing() ? { locus: where } : { view: 'region', region: where, region2: null, focus: null },
           }
         }
         if (request.type === 'navigate') {
@@ -141,13 +177,42 @@
           var given = request.state || {}
           Object.keys(given).forEach(function (key) {
             var value = given[key]
-            // An empty object is how a `NULL` can arrive from R's JSON: a key taken away.
-            if (value !== null && typeof value === 'object') value = null
+            if (emptyObject(value)) value = null
             patch[key] = (key === 'uri' || key === 'uri2') && typeof value === 'string' ? absolute(value) : value
           })
-          return { type: 'chromosomix:navigate', state: patch }
+          return { type: 'navigate', state: patch }
         }
-        if (request.type === 'add') return addFiles([].concat(request.files || []).map(absolute))
+        if (request.type === 'add') return { type: 'add', files: [].concat(request.files || []).map(absolute) }
+        return null
+      }
+
+      /**
+       * A request laid on after the others. A patch after a patch is one patch,
+       * the later keys over the earlier — a `null` among them kept, since it
+       * takes a key away. An addition is never merged nor dropped.
+       */
+      function append(request) {
+        var last = requests.length > 0 ? requests[requests.length - 1] : null
+        if (request.type !== 'navigate' || last === null || last.type !== 'navigate') {
+          requests.push(request)
+          return
+        }
+        var merged = {}
+        Object.keys(last.state).forEach(function (key) {
+          merged[key] = last.state[key]
+        })
+        Object.keys(request.state).forEach(function (key) {
+          merged[key] = request.state[key]
+        })
+        requests[requests.length - 1] = { type: 'navigate', state: merged }
+        // The frame has the one before it already: it is sent this one's keys
+        // alone, and the two together only when it loads again.
+        if (ready && posted === requests.length) post({ type: 'chromosomix:navigate', state: request.state })
+      }
+
+      function message(request) {
+        if (request.type === 'navigate') return { type: 'chromosomix:navigate', state: request.state }
+        if (request.type === 'add') return addFiles(request.files)
         return null
       }
 
@@ -166,6 +231,9 @@
         var data = event.data
         if (data === null || typeof data !== 'object' || typeof data.type !== 'string') return
         if (data.type === 'chromosomix:ready') {
+          // The frame's own origin from here on: where `src` redirected to,
+          // if it did. An opaque one cannot be named, so it is left as it was.
+          if (event.origin && event.origin !== 'null') origin = event.origin
           ready = true
           posted = 0
           state = null
@@ -189,17 +257,28 @@
 
       return {
         renderValue: function (value) {
+          var first = x === null
           x = value
-          frame.title = x.title || 'chromosomix'
-          requests = [].concat(x.requests || [])
-          posted = 0
           ready = false
+          posted = 0
           state = null
           refused = 0
           notice.hidden = true
+          requests = []
+          // `x`'s requests, then any a proxy made before this widget was drawn.
+          ;[]
+            .concat(x.requests || [], first ? take(el.id) : [])
+            .forEach(function (request) {
+              var prepared = prepare(request)
+              if (prepared !== null) append(prepared)
+            })
           var url = frameAddress(x.src)
           origin = url.origin === 'null' ? '*' : url.origin
-          frame.src = url.href
+          var next = newFrame()
+          next.title = x.title || 'chromosomix'
+          next.src = url.href
+          el.replaceChild(next, frame)
+          frame = next
         },
 
         resize: function () {
@@ -208,7 +287,13 @@
 
         /** A request from a Shiny proxy. */
         ask: function (request) {
-          requests.push(request)
+          if (x === null) {
+            hold(el.id, request)
+            return
+          }
+          var prepared = prepare(request)
+          if (prepared === null) return
+          append(prepared)
           flush()
         },
       }
@@ -220,6 +305,7 @@
       var el = document.getElementById(message.id)
       var widget = el ? HTMLWidgets.getInstance(el) : null
       if (widget && widget.ask) widget.ask(message.request)
+      else hold(message.id, message.request)
     })
   }
 })()

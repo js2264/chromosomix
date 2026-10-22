@@ -32,7 +32,10 @@ viewer_cache <- function() {
 #' * `NULL` — the option `chromosomix.viewer` where it is set, then the
 #'   environment variable `CHROMOSOMIX_VIEWER`, then the newest build
 #'   `install_viewer()` fetched, and the site, <https://chromosomix.app/>, where
-#'   there is none of them;
+#'   there is none of them. While a page is knitted, the build
+#'   `install_viewer()` fetched is named by the release's permanent address on
+#'   the site instead of being served: the page is read after the render's R
+#'   session has ended, and its server with it;
 #' * a version, `"0.16.0"` or `"v0.16.0"` — the release the site keeps for ever
 #'   at `/v/<tag>/`, which is what a document that must draw the same picture
 #'   next year names;
@@ -47,7 +50,11 @@ viewer_cache <- function() {
 #' ([tools::R_user_dir()], or `CHROMOSOMIX_CACHE`); every widget after uses it.
 #' With files on this machine that is the build to prefer: the site reading
 #' `http://127.0.0.1` works too, but Chrome asks the reader once to let the page
-#' reach this machine.
+#' reach this machine. The tarball is checked against the sha512 npm gives for
+#' it (`dist.integrity`) where the openssl package is installed — base R has no
+#' sha512 — and put in place whole: unpacked apart, copied beside its place and
+#' renamed into it, so a download or a copy cut short leaves nothing a widget
+#' would frame.
 #'
 #' @param viewer `NULL`, a version, an address or a directory, as above.
 #' @param version The npm version to fetch, or `"latest"`.
@@ -65,6 +72,12 @@ resolve_viewer <- function(viewer = NULL) {
     installed <- installed_viewers()
     if (length(installed) == 0L) return(SITE)
     viewer <- installed[[length(installed)]]
+    # A page being knitted is read once its render has ended, and the server
+    # in this session with it: the release the site keeps for ever instead.
+    version <- sub("^v", "", basename(viewer))
+    if (isTRUE(getOption("knitr.in.progress")) && grepl(.version_pattern, version)) {
+      return(sprintf("%sv/v%s/", SITE, version))
+    }
   }
   text <- as.character(viewer)
   if (grepl("^https?://", text)) return(if (endsWith(text, "/")) text else paste0(text, "/"))
@@ -91,7 +104,8 @@ installed_viewers <- function() {
   cache <- viewer_cache()
   if (!dir.exists(cache)) return(character())
   found <- list.dirs(cache, recursive = FALSE)
-  found <- found[file.exists(file.path(found, "index.html"))]
+  # Not one still being put in place, under a name with a dot.
+  found <- found[!startsWith(basename(found), ".") & file.exists(file.path(found, "index.html"))]
   if (length(found) == 0L) return(character())
   versions <- numeric_version(sub("^v", "", sub("[-+].*$", "", basename(found))), strict = FALSE)
   found[order(versions)]
@@ -112,17 +126,66 @@ install_viewer <- function(version = "latest") {
   tarball <- tempfile(fileext = ".tgz")
   on.exit(unlink(tarball), add = TRUE)
   utils::download.file(meta$dist$tarball, tarball, mode = "wb", quiet = TRUE)
-  # The built viewer only, and nothing that would land outside it.
+  install_tarball(tarball, target, meta$dist$integrity, meta$version)
+}
+
+# npm's tarball of the package, put at `target` whole or not at all: checked
+# against the `dist.integrity` npm gave for it, unpacked in a directory of its
+# own, copied beside `target` under a name with a dot — which
+# `installed_viewers()` passes over — and renamed into place, so a download or
+# a copy cut short leaves nothing a widget would frame.
+install_tarball <- function(tarball, target, integrity = NULL, version = basename(target), sha512 = sha512_of) {
+  if (identical(intact(tarball, integrity, sha512), FALSE)) {
+    stop(sprintf(
+      "chromosomix %s from npm is not the tarball npm describes: its sha512 is not the one in dist.integrity. Nothing was installed.",
+      version
+    ), call. = FALSE)
+  }
+  # The built viewer's files only — a directory named among them would be
+  # unpacked whole and its files then not found — and nothing that would land
+  # outside it.
   members <- utils::untar(tarball, list = TRUE)
-  keep <- members[startsWith(members, "package/dist/") & !grepl("(^|/)\\.\\.(/|$)", members)]
+  keep <- members[startsWith(members, "package/dist/") & !endsWith(members, "/") & !grepl("(^|/)\\.\\.(/|$)", members)]
   staging <- tempfile("chromosomix-")
   on.exit(unlink(staging, recursive = TRUE), add = TRUE)
   utils::untar(tarball, files = keep, exdir = staging)
   built <- file.path(staging, "package", "dist")
   if (!file.exists(file.path(built, "index.html"))) {
-    stop(sprintf("chromosomix %s on npm has no dist/index.html.", meta$version), call. = FALSE)
+    stop(sprintf("chromosomix %s on npm has no dist/index.html.", version), call. = FALSE)
   }
-  dir.create(target, recursive = TRUE, showWarnings = FALSE)
-  file.copy(list.files(built, full.names = TRUE, all.files = TRUE, no.. = TRUE), target, recursive = TRUE)
+  parent <- dirname(target)
+  dir.create(parent, recursive = TRUE, showWarnings = FALSE)
+  landing <- tempfile(paste0(".", basename(target), "-"), tmpdir = parent)
+  on.exit(unlink(landing, recursive = TRUE), add = TRUE)
+  dir.create(landing)
+  copied <- file.copy(list.files(built, full.names = TRUE, all.files = TRUE, no.. = TRUE), landing, recursive = TRUE)
+  if (!all(copied)) stop(sprintf("chromosomix %s could not be copied into %s.", version, parent), call. = FALSE)
+  # Another session may have put it there meanwhile; what is there without an
+  # index.html is one cut short before this was atomic.
+  if (file.exists(file.path(target, "index.html"))) return(target)
+  if (file.exists(target)) unlink(target, recursive = TRUE)
+  if (!file.rename(landing, target) && !file.exists(file.path(target, "index.html"))) {
+    stop(sprintf("chromosomix %s could not be put in %s.", version, target), call. = FALSE)
+  }
   target
+}
+
+# Whether a file is the one an npm `integrity` describes, by its
+# `sha512-<base64>`: TRUE or FALSE, or NA where that cannot be said — no
+# sha512 named, or nothing to compute one with.
+intact <- function(file, integrity, sha512 = sha512_of) {
+  if (!is.character(integrity) || length(integrity) != 1L || is.na(integrity)) return(NA)
+  named <- regmatches(integrity, regexpr("sha512-[A-Za-z0-9+/]+=*", integrity))
+  if (length(named) == 0L) return(NA)
+  digest <- sha512(file)
+  if (is.null(digest)) return(NA)
+  # Unwrapped: jsonlite breaks its base64 into lines.
+  identical(paste0("sha512-", gsub("\n", "", jsonlite::base64_enc(digest), fixed = TRUE)), named)
+}
+
+# A file's sha512, as raw bytes, from openssl where it is installed: base R
+# has no sha512 of its own, and without one the check is skipped.
+sha512_of <- function(file) {
+  if (!requireNamespace("openssl", quietly = TRUE)) return(NULL)
+  as.vector(unclass(openssl::sha512(file(file))), "raw")
 }

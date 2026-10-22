@@ -10,7 +10,12 @@
 #'
 #' `chromosomixProxy()` drives a widget already on screen, without drawing it
 #' again: [chromosomix_goto()], [chromosomix_navigate()] and
-#' [chromosomix_add()] take it in place of a widget.
+#' [chromosomix_add()] take it in place of a widget. A request through a proxy
+#' is sent once the outputs of the flush it was made in are, so a widget drawn
+#' in that flush is on the page first; one that reaches the page before its
+#' widget is drawn is held, and made after the widget's own. Drawn again by
+#' `renderChromosomix()`, the widget is a new frame, and only the new widget's
+#' requests are made in it.
 #'
 #' @param outputId The output's id.
 #' @param width,height Its size, in CSS units.

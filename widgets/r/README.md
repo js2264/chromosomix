@@ -37,16 +37,25 @@ it is, by byte range.
 
 A file is an **address** — any the app opens: `https://`, `s3://`, `gs://`, a Dropbox or Google Drive
 share — or a **path on this machine**, which this R session serves to the viewer by byte range from a
-small server on `127.0.0.1` (`serve()`). A path's directory is what is served, under a random token, so
-a file's sidecars — `.bai`, `.fai`, `.tbi`, `.px2` — are read from beside it as the app expects.
-Nothing outside a directory you named a file in is served. A `::` after a container names a group in
-it, as in the app: `"sample.mcool::/resolutions/5000"`.
+small server on `127.0.0.1` (`serve()`). The directory a file is named in is what is served, under a
+random token, so a file's sidecars — `.bai`, `.fai`, `.tbi`, `.px2` — are read from beside it as the
+app expects. Nothing outside that directory is served but what a link in it points to, and no name
+that starts with a dot (`.git`, `.ssh`). A file is served by the name you give it, a link as itself,
+so a DataLad or git-annex file — a link into `.git/annex` — has its `.bai` read from beside the link.
+A `::` after a container names a group in it, as in the app: `"sample.mcool::/resolutions/5000"`.
 
 The server answers while R is idle: at the console, in RStudio, under Shiny. **A rendered page that
-names local files draws them only while the R session that rendered it runs**, so a page that will be
-read elsewhere names its files by address. Behind RStudio Server the server is reached through
-RStudio's own proxy (with rstudioapi installed); `CHROMOSOMIX_PUBLIC_URL` names any other way in, with
-`{port}` where the port goes.
+names local files draws them only while the R session that rendered it runs**, and a Knit or
+`quarto render` session ends as soon as the page is written, so a page for others names its files by
+address. Knitting, the first local file served says so in a warning, once a session; and a viewer
+fetched by `install_viewer()` is named by its release's permanent address on the site,
+`https://chromosomix.app/v/v<version>/`, rather than served from a session about to end.
+
+Behind RStudio Server the server is reached through RStudio's own proxy (with rstudioapi installed);
+`CHROMOSOMIX_PUBLIC_URL` names any other way in, with `{port}` where the port goes. **Behind RStudio
+Server only a viewer served by the session reads local files** — `install_viewer()`'s, or a built
+`dist/` — because RStudio's proxy asks for its login, and the public site's requests to it do not carry
+it.
 
 ## Which viewer
 
@@ -54,7 +63,7 @@ RStudio's own proxy (with rstudioapi installed); `CHROMOSOMIX_PUBLIC_URL` names 
 
 | `viewer =` | the build |
 |---|---|
-| nothing | `CHROMOSOMIX_VIEWER` if set, else a build fetched by `install_viewer()`, else https://chromosomix.app/ |
+| nothing | `CHROMOSOMIX_VIEWER` if set, else a build fetched by `install_viewer()` (while knitting, its release's permanent address on the site), else https://chromosomix.app/ |
 | `"0.17.0"` | that release, kept for ever at `https://chromosomix.app/v/v0.17.0/` — what a page that must draw the same picture next year names |
 | an address | any build, a lab's own copy of the npm package's `dist/` among them |
 | a directory | a built `dist/` on this machine, served beside the data |
@@ -67,7 +76,8 @@ release warns when the widget is made.
 **With files on this machine, prefer a build served beside them.** `install_viewer()` fetches the npm
 package once into R's user cache directory; every widget after uses it, so the app and the data are one
 origin and the page works offline. The site in the frame reading `http://127.0.0.1` works too, but
-Chrome asks the reader once to let the page reach this machine.
+Chrome asks the reader once to let the page reach this machine. The tarball is checked against the
+sha512 npm gives for it where the openssl package is installed, and put in place whole or not at all.
 
 ## Driving it
 
@@ -89,7 +99,13 @@ output$region <- renderText(input$view_state$region)   # also input$view_rendere
 ```
 
 Each request is made in order, once the one before it is done: a locus asked for after tracks were
-added is the locus on those tracks.
+added is the locus on those tracks. Moves in a row are laid on as one; additions never are. A
+request through a proxy is sent after the outputs of the same flush, and one that reaches the page
+before its widget is drawn waits for it.
+
+A key takes one value, written as the address bar writes it — `genomes = "a,b"`, not a vector — and
+`uri`, `uri2` and each of a deck's `maps` are files, served like any other. With no map, `locus` (or
+`region`) and the other keywords are laid on once the tracks are in.
 
 ## How it works
 

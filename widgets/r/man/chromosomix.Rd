@@ -9,7 +9,9 @@ chromosomix(map = NULL, tracks = character(), region = NULL, locus = NULL, ...,
 \arguments{
 \item{map}{The contact map the view opens on: \code{.cool}, \code{.mcool} (with
 \code{::/resolutions/<bin>}), \code{.hic}, \code{.pairs}, \dots{} -- or \code{NULL}
-for a 1D browser of the tracks alone, whose first file becomes the view's.}
+for a 1D browser of the tracks alone, whose first file becomes the view's. With
+no map, \code{locus} (or else \code{region}) and the view keywords are laid on as
+a patch once the files are in, as \code{\link{chromosomix_navigate}} would.}
 \item{tracks}{Files put in the view once it is drawn, in order, as the header's
 \code{+} puts them: a track beside the map, another map beside it, a 3D model,
 a workspace.}
@@ -19,7 +21,11 @@ a start and an end.}
 \item{...}{Any other key of the view state as the app's address bar carries it,
 named: \code{transform} (\code{"log10"}, \code{"log2"}, \code{"log1p"},
 \code{"none"}), \code{colormap}, \code{balance}, \code{vmin}, \code{vmax},
-\code{oe}, \code{smooth}, \code{view}, \dots}
+\code{oe}, \code{smooth}, \code{view}, \dots{} One value each, written as the
+address bar writes it -- \code{genomes = "a,b"}, not a vector -- and a number
+with a point whatever \code{options(OutDec)} says. \code{uri}, \code{uri2} and
+each of the \code{|}-separated \code{maps} are files, given as
+\code{\link{address}} takes them.}
 \item{viewer}{The build of the viewer in the frame; see \code{\link{resolve_viewer}}.}
 \item{title}{The frame's title, for a screen reader.}
 \item{width, height}{The widget's size: CSS units, or a number of pixels.}

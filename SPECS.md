@@ -10677,24 +10677,46 @@ region =, tracks =, ...)` writes the same fragment in the same order; `chromosom
 - **Requests are laid on a widget before it is drawn**, piped onto `chromosomix()` — a static page
   has no R behind it once rendered, and this is how it moves its views — or made of one on screen
   in Shiny through `chromosomixProxy()`, as custom messages. The frame makes all of them in order,
-  and all of them again when it reloads. `goto` is sent as a `goto` and made a `region` or a `locus`
-  by the widget's own script, from the view the frame last reported or, before it has, from how the
-  widget opened.
+  and all of them again when it reloads. `goto` is made a `region` or a `locus` by the widget's own
+  script as it is appended — from the view the frame last reported or, before it has, from how the
+  widget opened — and on a map it clears `region2` and `focus`, so an off-diagonal block becomes
+  the square asked for. A navigate after a navigate is merged into it rather than kept beside it,
+  so a slider's thousand moves replay as one; an add is never merged or dropped. A proxy's request
+  is sent once the outputs of its flush are, so a widget drawn in that flush is on the page first,
+  and one that still arrives before its widget — an output hidden and not yet drawn — is held and
+  made after the widget's own. **Every render is a new frame**: a `src` that differs only after the
+  `#`, or not at all, would otherwise be a navigation within the old document, which says no
+  `ready` and leaves the widget deaf. With no map, `locus` (or `region`, with `view = "region"`)
+  and the view keywords are a navigate after the files. A value is one value: a vector for a key is
+  refused by name, numbers are written with a `.` whatever `OutDec` says, and `uri`, `uri2` and the
+  files among `maps` are addresses as a map's are.
 - **What the viewer says reaches R only in Shiny**, as inputs named after the output:
   `input$<id>_state`, `input$<id>_rendered`, `input$<id>_version` — and `input$<id>_notice`, the
   same notice the widget shows above a frame too old to take files.
-- **The file server is httpuv**, on `127.0.0.1` in the R session, with the Python server's rules —
-  one `Range`, CORS for any origin, the private-network preflight, a `.gz` sent as its bytes, a
-  directory under a 128-bit token drawn from the system's random source rather than R's generator
-  (which a script's `set.seed()` makes predictable), no path out of it, a link included. It answers
-  on R's event loop — while R is idle, at the console, in RStudio and under Shiny — because httpuv's
-  static paths, which answer from a thread of their own, ignore `Range` and send a file whole. **A
-  rendered page that names local files therefore draws them only while the session that rendered it
-  runs**, and a page that will be read elsewhere names its files by address. Behind RStudio Server
-  the server is reached through `rstudioapi::translateLocalUrl()`; `CHROMOSOMIX_PUBLIC_URL` names
-  any other way in.
+- **The file server is httpuv**, on `127.0.0.1` in the R session: one `Range`, CORS for any origin,
+  the private-network preflight, a `.gz` sent as its bytes, a directory under a 128-bit token
+  (`openssl` where installed, else the system's random source, never R's generator, which a
+  script's `set.seed()` makes predictable). No name that starts with a dot is served, so a home
+  directory's `.ssh` is not under a map's token. A link in the directory is served by its own name
+  and followed wherever it points — its owner made it, and a DataLad or git-annex file finds its
+  index beside the link, not beside its object. A `Range` it cannot read — several ranges, a
+  reversed one, another unit — is ignored and the whole file sent, as RFC 9110 says; 416 is for a
+  range past the end. A file asked for whole is streamed by httpuv, never read into R; a range is
+  read. A `HEAD` that names no range says no `Accept-Ranges`, so the viewer asks for one byte and
+  takes the size from its `Content-Range` — an authenticating proxy answers `HEAD` with
+  `Content-Length: 0` (§11). It answers on R's event loop — while R is idle, at the console, in
+  RStudio and under Shiny — because httpuv's static paths, which answer from a thread of their own,
+  ignore `Range` and send a file whole. **A rendered page that names local files therefore draws
+  them only while the session that rendered it runs**, which for a Knit or a `quarto render` is not
+  at all: serving a file while knitting warns once. Behind RStudio Server the server is reached
+  through `rstudioapi::translateLocalUrl()`, and only a viewer served by the session reads it — the
+  site's requests carry no RStudio login; `CHROMOSOMIX_PUBLIC_URL` names any other way in.
 - **The viewer** resolves as Python's does, with the option `chromosomix.viewer` before
-  `CHROMOSOMIX_VIEWER`, and `install_viewer()` caches the npm package in `tools::R_user_dir()`.
+  `CHROMOSOMIX_VIEWER`, and `install_viewer()` caches the npm package in `tools::R_user_dir()` —
+  unpacked beside the cache, checked against npm's `dist.integrity` where `openssl` can, and moved
+  into place whole, so an interrupted install leaves nothing a later widget would frame. While
+  knitting, with no viewer named, an installed build is framed at its permanent address on the site
+  rather than served by a session that ends with the render.
 
 `widgets/r/inst/examples/` holds the demo: `demo.Rmd`, the yeast demo on an R Markdown page from the
 bucket — a map with its tracks, the same map moved before it is drawn, a 1D browser — and `app.R`, the

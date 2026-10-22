@@ -36,8 +36,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   follows the reader. Files on this machine are served to the viewer by byte range from the R
   session, their sidecars beside them; behind RStudio Server through RStudio's proxy. The examples are
   an R Markdown page of the yeast demo and a Shiny app driving it
-  (`system.file("examples", package = "chromosomix")`); `scripts/ui-r-widget.mjs` renders and runs
-  both and shoots every widget.
+  (`system.file("examples", package = "chromosomix")`), whose controls follow the viewer without
+  echoing back into it; `scripts/ui-r-widget.mjs` renders and runs both and shoots every widget.
+  The local file server serves no dot-named file, follows a link by its own name so a DataLad or
+  git-annex file finds its index, streams a whole file rather than read it into R, and ignores a
+  `Range` it cannot read; while knitting, an installed viewer is framed from the site rather than
+  from a session that ends with the render.
 
 - **`chromosomix:add`, a host page putting files in an embed (§21.4).** The sixth message of the
   embed's channel: a list of addresses, each put in the tab as the header's `+` puts one — a track

@@ -16,8 +16,11 @@ chromosomix_add(view, ...)
 \code{\link{chromosomixProxy}}.}
 \item{where}{\code{"II:100000-200000"}, or a sequence, a start and an end.}
 \item{...}{\code{chromosomix_navigate()}: keys of the view state and their
-values, named; \code{NULL} takes a key away. \code{chromosomix_add()}: files, as
-addresses or paths (\code{\link{address}}).}
+values, named, one value each as the address bar writes it
+(\code{genomes = "a,b"}); \code{NULL} takes a key away. A \code{locus} or a
+\code{region} may also be a sequence, a start and an end; \code{uri}, \code{uri2}
+and each of the \code{|}-separated \code{maps} are files, as addresses or paths
+(\code{\link{address}}). \code{chromosomix_add()}: files, as addresses or paths.}
 }
 \value{
 \code{view}, so the requests chain.
@@ -39,6 +42,13 @@ address bar carries.
 does: a track among the tracks, another map or a 3D model beside the map, a
 workspace.
 }
+
+A \code{goto} is made a patch as the frame's page takes it -- the map's
+\code{region}, or the 1D browser's \code{locus}, by the view the frame last said
+it shows -- and patches made one after another are laid on as one, the later
+keys over the earlier, so a frame that loads again is sent where the view was
+sent rather than every step on the way. An addition is never merged nor
+dropped.
 }
 \examples{
 \dontrun{

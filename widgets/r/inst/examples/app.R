@@ -51,8 +51,15 @@ server <- function(input, output, session) {
   )
   view <- chromosomixProxy("view")
   observeEvent(input$go, chromosomix_goto(view, input$where))
-  observeEvent(input$transform, chromosomix_navigate(view, transform = input$transform), ignoreInit = TRUE)
-  observeEvent(input$oe, chromosomix_navigate(view, oe = input$oe), ignoreInit = TRUE)
+  # What the state observer last pushed into a control: its echo is not a request.
+  pushed <- new.env()
+  echo <- function(name, value) {
+    was <- get0(name, pushed, inherits = FALSE)
+    if (!is.null(was)) rm(list = name, envir = pushed)
+    identical(was, value)
+  }
+  observeEvent(input$transform, if (!echo("transform", input$transform)) chromosomix_navigate(view, transform = input$transform), ignoreInit = TRUE)
+  observeEvent(input$oe, if (!echo("oe", input$oe)) chromosomix_navigate(view, oe = input$oe), ignoreInit = TRUE)
   observeEvent(input$model, chromosomix_add(view, data("Yeast_structure.g3d.gz")))
 
   # The controls follow the viewer: observed / expected puts the map on a log2
@@ -61,9 +68,13 @@ server <- function(input, output, session) {
   observeEvent(input$view_state, {
     state <- input$view_state
     if (!is.null(state$transform) && !identical(state$transform, input$transform)) {
+      assign("transform", state$transform, envir = pushed)
       updateRadioButtons(session, "transform", selected = state$transform)
     }
-    if (!identical(isTRUE(state$oe), input$oe)) updateCheckboxInput(session, "oe", value = isTRUE(state$oe))
+    if (!identical(isTRUE(state$oe), input$oe)) {
+      assign("oe", isTRUE(state$oe), envir = pushed)
+      updateCheckboxInput(session, "oe", value = isTRUE(state$oe))
+    }
   })
 
   # What the viewer said last, as the address bar would carry it.

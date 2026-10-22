@@ -26,7 +26,10 @@ names the build in it:
 \item \code{NULL} -- the option \code{chromosomix.viewer} where it is set, then
 the environment variable \code{CHROMOSOMIX_VIEWER}, then the newest build
 \code{install_viewer()} fetched, and the site, \url{https://chromosomix.app/},
-where there is none of them;
+where there is none of them. While a page is knitted, the build
+\code{install_viewer()} fetched is named by the release's permanent address on
+the site, \code{/v/v<version>/}, instead of being served: the page is read after
+the render's R session has ended, and its server with it;
 \item a version, \code{"0.16.0"} or \code{"v0.16.0"} -- the release the site
 keeps for ever at \code{/v/<tag>/}, which is what a document that must draw the
 same picture next year names;
@@ -43,7 +46,11 @@ app built to run from any path -- and keeps it in the user's cache directory
 (\code{\link[tools]{R_user_dir}}, or \code{CHROMOSOMIX_CACHE}); every widget after
 uses it. With files on this machine that is the build to prefer: the site
 reading \code{http://127.0.0.1} works too, but Chrome asks the reader once to let
-the page reach this machine.
+the page reach this machine. The tarball is checked against the sha512 npm gives
+for it (\code{dist.integrity}) where the openssl package is installed -- base R
+has no sha512 -- and put in place whole: unpacked apart, copied beside its place
+and renamed into it, so a download or a copy cut short leaves nothing a widget
+would frame.
 }
 \examples{
 resolve_viewer("0.16.0")
