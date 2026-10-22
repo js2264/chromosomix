@@ -10851,6 +10851,16 @@ extent, which decides only whether the block on screen can be reused, so `--wind
 the record's label and the numbers are the same either way. An imported `.pairs` writes the
 `--bin-size` it was framed at, since a contact list declares no resolution of its own (§3.7).
 
+**Threads are the machine's, not the run's.** `--threads N` is how many threads a task that shares
+its work may use — pastis-NB's MDS start and likelihood in `reconstruct3d` (§25.6), the one so far —
+and defaults to **one**: the command line is what the timings run (§18.10), and a time set beside a
+reference's is one core's unless the line says otherwise. A helper is the command's own file again, started as a Node worker
+thread with a word that says it is one (`cli/threads.ts`), so the package stays one file. The counts
+are allocated on a `SharedArrayBuffer`, which Node has with no header to ask for, and every helper
+reads the one matrix rather than a copy. The result is the same bits on any number of threads, so
+the console never writes `--threads`, no provenance carries it, and a line repeats the same run on
+a machine with two cores and on one with sixteen.
+
 **Every locus on the line is the display form**, because the shell reads every locus as a reader's
 box does (§26.1). `--window` is the framing through `formatLocus` — `--window chrIV:100,001-200,000`,
 the window the breadcrumb named — and the shell takes it back through `typedLocusToRegion` to the
@@ -12720,7 +12730,7 @@ the same thing by it.
 
 **pastis-NB** (Varoquaux, Ay, Noble & Vert 2014 for the Poisson models; Varoquaux, Noble & Vert
 2023 for the overdispersed one) reads a pair of beads `d` apart as having been counted
-`c ~ NegativeBinomial(mean β·bᵢ·bⱼ·d^(−α), dispersion r)` times, and the model is the one that makes
+`c ~ NegativeBinomial(mean bᵢ·bⱼ·d^(−α), dispersion r)` times, and the model is the one that makes
 the counts most probable. Two things follow, and they are why it is the default. **A zero is
 evidence** — weak evidence, that the beads are far apart — rather than a distance of `0^(−1/α)`
 that has to be dropped or invented, so **nothing is filled in**; on a map that is three-quarters
@@ -12728,38 +12738,57 @@ zeros this is the difference between a model and a guess. And **a count's precis
 likelihood**, so a pair seen ten thousand times holds its beads ten thousand times as firmly with
 nothing weighted by hand.
 
-**It is solved on the raw counts**, whatever the view is balanced with, and the balancing weights go
-where pastis puts them — into the mean, as `bᵢ = 1/wᵢ`. This is not a preference: a balanced value is
-a count times two weights, and **overdispersion is a statement about a count**. `variance > mean`
-compares a squared quantity with a linear one, so scaling the data scales the two sides differently
-and a balanced map is never found overdispersed whatever it actually is; handed balanced values the
-negative binomial would silently become a Poisson. The coverage is still corrected — in the mean
-rather than in the data — and the run says so, in a note and in the table. A bin the balancer
-**rejected** (a `NaN` weight) is left out of the model, because the balanced view of the same map
-does not draw it either and reading raw counts would otherwise put it back; it is counted in the
-same note as a gap. A pooled cell's bias is the mean of its bins'. A file with no `/bins/weight` has
-no bias to fold and the mean is `β·d^(−α)`. One consequence for the reader: a **balanced view cannot
-be borrowed** by this method, so a run on one reads its blocks from the file, and the estimate says
-so. The dispersion is **fitted from the counts, per genomic separation**, by
-the method of moments (`r = m²/(v − m)`) over log-spaced separation bins — which is pastis-NB's one
-claim over pastis-PM2, that overdispersion is not one number for a map but grows as the counts thin
-out with distance; a bin with too few pairs to believe takes the nearest that had them, and a
-separation whose counts are not overdispersed at all takes `r = 10⁶`, which is a Poisson to six
-figures and is reported as *none*. The whole of the negative binomial over the Poisson is one
-factor: the force on a pair is the Poisson's own `μ − c`, **shrunk by `r/(r + μ)`**. What is
-optimised is three coordinates per bead and `log β`, by **L-BFGS** with a strong-Wolfe line search
-— the optimiser pastis reaches for through SciPy — started from the MDS model ShRec3D would have
-given, which is pastis' own initialisation and is why this method stands on the other rather than
-replacing it. `β` is a variable rather than a constant because the scale of the model and the scale
-of the mean are one degree of freedom, and the normalisation below fixes it. Three departures from
-the paper are deliberate and named here: the dispersion is a **moment estimate per separation bin**
-rather than their parametric fit of dispersion against the mean, and it is taken **once** rather
-than alternated with the structure; there are **no restarts**, so the answer is one deterministic
-model rather than the best of several local optima; and `α` is the reader's control rather than a
-fitted parameter. The **MDS start is sixty SMACOF steps**, fixed, because it has only to land in
-the right basin — **Refinement steps** under this method is the likelihood's budget.
+**It is pastis-NB as pastis runs it** (GitHub `6888ac2`, as its pipeline is called with α = 3 and
+`use_zero_entries`), function for function, so that a model made here and one made by pastis answer
+the same question in the same words and, from the same seed, give the same model. **The counts are
+raw**, whatever the view is balanced with, and the balancing weights go where pastis puts them —
+into the mean, as `bᵢ = 1/wᵢ`, **scaled to a mean of 1** as pastis' pipeline scales them. This is
+not a preference: a balanced value is a count times two weights, and **overdispersion is a
+statement about a count**. `variance > mean` compares a squared quantity with a linear one, so
+scaling the data scales the two sides differently and a balanced map is never found overdispersed
+whatever it actually is; handed balanced values the negative binomial would silently become a
+Poisson. The coverage is still corrected — in the mean rather than in the data — and the run says
+so, in a note and in the table. A bin the balancer **rejected** (a `NaN` weight) is left out of the
+model, because the balanced view of the same map does not draw it either and reading raw counts
+would otherwise put it back; it is counted in the same note as a gap. A pooled cell's bias is the
+mean of its bins'. A file with no `/bins/weight` has no bias to fold and the mean is `d^(−α)`. One
+consequence for the reader: a **balanced view cannot be borrowed** by this method, so a run on one
+reads its blocks from the file, and the estimate says so. **The dispersion is a curve against the
+mean**, fitted as pastis fits it: the bias-corrected counts' mean `m` and variance `v` at each
+genomic separation within a sequence, counted in beads and up to two-thirds of the longest
+(`compute_mean_variance`, zeros counted, gaps not); the dispersion each implies, `r = m²/(v − m)`;
+and through them, by least squares on `r` weighted by the square root of each separation's pair
+count, `r = exp(c₀ + c₁·log λ)` (`ExponentialDispersion(degree=1)`). During the fit every pair's
+`r` is read off that curve **at the model's own mean for the pair**, times `bᵢbⱼ`, so it moves with
+the beads and its derivative is in the gradient: pastis-NB's one claim over pastis-PM2 is that
+overdispersion is not one number for a map, and on the validation's yeast map `r` runs from 12.7
+at the near diagonal's mean to 5 at the farthest separation's. The likelihood is the **whole
+negative binomial**, gamma functions and all, so its value is the number pastis' objective returns.
+`β` is pastis' 1, so the model's size is fitted rather than chosen: a distance of 1 is where a pair
+of average coverage expects one contact. **The start is pastis' MDS**: the relative stress
+`Σ (d − δ)²/δ²` over the pairs the map counted, `δ = (c/(bᵢbⱼ))^(−1/α)`, from beads placed
+uniformly at random in a cube — by numpy's own generator, so **Seed** `s` places every bead where
+pastis' `random_state=s` does. Both are solved by **L-BFGS** with a strong-Wolfe line search and
+SciPy's L-BFGS-B constants — the optimiser pastis reaches for — to pastis' own tolerances: the MDS
+to `factr = 10¹²`, a part in five thousand, since it has only to land in the right basin, and the
+likelihood to `factr = 10` and `pgtol = 1`, or until **Refinement steps** run out, which under this
+method is the likelihood's budget. 150 by default: pastis' own runs on the validation's map end,
+by its relative-reduction test, at 125 to 148 steps. **Seed**, shown only under this method, is the
+one control pastis-NB adds: another seed can settle in another optimum, as pastis' own seeds do,
+and comparing two is how a reader sees which of a model's features the map pins down.
 
-**ShRec3D** (Lesne et al. 2014) is the same pipeline with the refinement every MDS toolkit ends
+One thing departs from pastis, deliberately, and is named here. **A separation whose counts are
+not overdispersed beyond sampling noise** — variance above the mean by less than three standard
+errors of a Poisson's sample variance, `√((m + 2m²)/N)` — is left out of the dispersion's fit, and
+with fewer than three left the counts are read as **Poisson**: pastis-PM2, the `r = ∞` corner of
+the same likelihood, reported as *none*. A real map clears that floor by orders of magnitude at
+every separation (the validation's yeast map by hundreds), so there the curve is pastis' to seven
+figures; pastis enters every separation as it comes, and on counts with no overdispersion a
+separation a hair over its mean gives an `r` in the thousands and one under it a negative one, and
+a curve forced through both calls the most Poisson counts on the map the most overdispersed and
+loses the model. **No restarts**: the answer is one model per seed, as pastis' is.
+
+**ShRec3D** (Lesne et al. 2014) is the pipeline with the refinement every MDS toolkit ends
 with: a contact count `c` is read as a distance `d = c^(−1/α)` — the law *Model versus map* assumes
 the other way round; the pairs the map never counted (a zero, a `NaN`) are filled so the matrix is
 complete; classical MDS (Torgerson: double-centred squared distances, three leading eigenvectors by
@@ -12784,7 +12813,7 @@ full weighted Guttman transform is a linear solve in the weight Laplacian, and t
 costs a pass over the pairs like the unweighted one does, and never raises the stress.
 
 Either way the model is centred and scaled to a unit root-mean-square radius: a map carries no
-physical unit, and neither `c^(−1/α)` nor a `β` fitted against it is in one (§25.8).
+physical unit, and neither `c^(−1/α)` nor pastis' `β = 1` puts one in (§25.8).
 
 **What it is solved over** is what the **Sequences** box names, seeded from what the map shows
 (a locus, or every sequence on screen): where the view's block **as drawn** covers it — the loaded
@@ -12807,25 +12836,54 @@ what the estimate does about it is *say so* — the bead count and its bin width
 hundred refinement steps and the gigabytes of matrices — for the reader to confirm before pressing
 run. A number chosen in the source could only be a guess about somebody else's machine. What is
 still refused is the allocation that cannot succeed: the matrices are asked for inside a `try` and a
-browser that will not give them leaves a note naming the size, rather than a tab that dies. **Either
-method holds two** dense `n × n` matrices of singles and no more — under ShRec3D the pairs' weights,
-under pastis-NB the counts with a zero still distinct from a gap, and in both cases the counts
-turned into the distances they imply over the buffer they already occupy, compacted onto the kept
-beads in place and then filled over themselves — so twelve thousand beads is about a gigabyte. The
-likelihood adds **vectors and not squares**: L-BFGS at depth eight keeps twenty vectors of `3n + 1`
-doubles, six megabytes beside that gigabyte, where the Hessian a full quasi-Newton method would
-write down is thirty terabytes. What it does cost is time — a likelihood evaluation is about 2.3
-passes' worth of a SMACOF step, and a step is a line search of just over one evaluation — and the
-estimate prices the method the reader picked rather than an average of the two.
+browser that will not give them leaves a note naming the size, rather than a tab that dies.
+**ShRec3D holds two** dense `n × n` matrices of singles and no more — the pairs' weights, and the
+counts turned into the distances they imply over the buffer they already occupy, compacted onto
+the kept beads in place and then filled over themselves — so twelve thousand beads is about a
+gigabyte. **pastis-NB holds one**: the counts, a zero still distinct from a gap, compacted over the
+buffer they were read into; the likelihood reads them above the diagonal and the MDS start its
+wishes below it, and no distance is ever filled in — so twelve thousand beads is half a gigabyte.
+**Its MDS start and its likelihood are shared among threads** (`analysis/likelihoodThreads.ts`):
+each sums its pairs in **bands** of rows — the likelihood's above the diagonal, the MDS's below — as
+many as there are runs of 32 beads and at most 64, each about the same share of the pairs, laid out
+by the bead count alone; the bands go to helper workers, a stretch each, while the thread that
+asked computes a slightly smaller stretch of its own, and every evaluation adds the bands' values
+and gradients **in band order**, as one thread adds them. So the model is the same bits on one
+thread and on eight, in the app and from the command line, which the tests hold to the
+bit and the command line's `--threads 1` and `--threads 4` show file for file. The app starts one
+helper fewer than the cores, seven at most, as the correlation does (§18.6), and none under 256
+beads, where a round trip costs more than it saves; the same helpers serve the MDS and then the
+likelihood. A page shares no memory with its workers, so each helper is sent its rows of a triangle
+once per objective — the MDS's wishes, then in their place the likelihood's counts, the helpers'
+copies together at most half a matrix, held to 512 MB, fewer helpers where they would not fit — and
+then the coordinates per evaluation, its bands' buffers transferred there and back; the command line
+shares the matrix itself, and runs on one thread unless given `--threads` (§23.1). A helper that
+cannot start, or fails, has its bands computed by the thread that asked, the same numbers later, and
+so does one that has not yet said it is up, so the first evaluations of the MDS wait for nobody; the
+fit's end, or a stop, terminates them all.
+The likelihood adds **vectors and not squares**: L-BFGS at SciPy's depth of ten keeps twenty-two
+vectors of `3n` doubles, six megabytes beside that matrix, where the Hessian a full quasi-Newton
+method would write down is thirty terabytes. What it does cost is time — a likelihood evaluation is
+about twenty passes' worth of a SMACOF stress, a logarithm and an exponential for the dispersion's
+power of the mean, a logarithm for the spread and one for the gamma functions per pair, and a step
+is a line search of just over one evaluation; pastis' MDS start, fifty-odd evaluations of a
+function a fifteenth of the price, costs about what four likelihood steps do — and the estimate
+prices the method the reader picked rather than an average of the two, on the threads it will
+have, each past the first counted at six-tenths of a core, and adds the helpers' copies to the
+memory. On the validation's yeast map at 12.8 kb, 905 beads, a run of the
+default 150 steps takes twelve and a half seconds from the command line on one thread — four and a
+half to five with `--threads 4` — where pastis takes a minute or more (`notebooks/timing.qmd`); at
+6.4 kb, 1,807 beads, forty-one seconds on one and thirteen on four.
 **Every phase reports progress and breathes between units of work**: each rectangle read, each of
 the eighty sweeps of the classical start, each SMACOF step, and under pastis-NB each *evaluation*
-of the likelihood rather than each step, since a line search is several of them and each is as long
-as a SMACOF step. The run's other output is a table, and it says which method ran: where the
+of the MDS and of the likelihood rather than each step, since a line search can be several of them.
+The run's other output is a table, and it says which method ran: where the
 contacts came from, the bead count and width, the pairs counted, and then either the law, the
 weighting, the steps and the final weighted stress, or — under pastis-NB — the mean's law, how many
-zeros were used as evidence, the fitted overdispersion near the diagonal and far from it (or
-*none*, where the counts turned out Poisson and the run is a pastis-PM2), the MDS start, the
-likelihood steps and evaluations, why the optimiser stopped, the final `−log L` and the fitted `β`.
+zeros were used as evidence, the dispersion's curve against the mean with the `r` it gives near the
+diagonal and at the farthest separation (or *none*, where the counts turned out Poisson and the run
+is a pastis-PM2), the MDS start and its seed, the likelihood steps and evaluations, why the
+optimiser stopped, and the final `−log L` less `Σ log c!` — the number pastis' objective returns.
 Both end with Spearman's ρ between `1/d` in the model and the contacts — **against `raw/(bᵢbⱼ)`
 where a bias was divided out**, which is exactly the balanced value, since balancing is `raw·wᵢwⱼ`;
 ranking against the raw counts would score the model on coverage it was right to have removed. So it
@@ -12839,8 +12897,8 @@ reconstructed-model` (per map on a deck, as every computed row is), labelled `3D
 carrying the task and the framing as provenance. **It never replaces the last run's row.** Every
 other computed row does — running insulation again with a wider window means the reader wants the
 *new* boundaries — and a model is the one thing an analysis makes that is not stored anywhere else
-and is made **to be compared**: two methods, two exponents, or two framings of one map (the same
-settings twice give the same model, the run being deterministic, above). So a run takes the next
+and is made **to be compared**: two methods, two exponents, two seeds, or two framings of one map
+(the same settings twice give the same model, the run being deterministic, above). So a run takes the next
 free id in the series `…reconstructed-model`, `…#2`, `…#3`, numbered from what is on the card
 so closing the second of three gives that number back, and the label carries the same `(2)` because
 two rows under one name are two rows nobody can tell apart on the card, in *compare with* or in
@@ -12853,13 +12911,18 @@ as itself up to a rigid motion, a chain with most far pairs uncounted comes back
 and a helix whose weak far pairs were corrupted keeps its near pairs when weighted by the count
 and loses them when every pair weighs the same. For pastis-NB (`structure-negbinom.test.ts`, with
 the optimiser held separately in `structure-lbfgs.test.ts` against Rosenbrock and a badly
-conditioned quadratic): the gradient agrees with a central difference at every coordinate and at
-`log β`; the objective is the Poisson's as `r → ∞`, and is stationary exactly where the mean equals
-the count, for every `r`; a counted zero moves the likelihood and an unobservable pair does not; the
-pull on a pair is the Poisson's shrunk by exactly `r/(r + μ)`; a helix whose counts were **drawn**
-Poisson at the law's own mean, three-quarters of them zeros, comes back with ρ above 0.9 from a
-classical start that was below 0.4; and a helix whose far counts were corrupted holds its near
-diagonal about twice as well under the fitted dispersion as under a flat Poisson one.
+conditioned quadratic): **pastis' own numbers**, computed once by pastis at `6888ac2` and written
+into the test — the likelihood to twelve figures and its gradient to nine at α = 3 and α = 2, on
+counts with zeros, ones, many and one not whole; the MDS objective; the moments at each separation,
+a gap among them; the dispersion's fit, at no greater cost than SciPy's; and numpy's draws, past
+the first twist of its state; then the gradient against a central difference with the dispersion
+moving with the mean; the objective as the Poisson's as `r → ∞`; a pair's pull the Poisson's
+shrunk by exactly `r/(r + μ)` where `r` does not move with the mean; a counted zero moving the
+likelihood and an unobservable pair not; counts that do not scatter, and a separation within a
+Poisson's own scatter, read as no overdispersion; pastis' MDS finding a helix from random positions;
+a helix whose counts were **drawn** Poisson at the law's own mean, three-quarters of them zeros,
+back with ρ above 0.85; and helices whose counts were drawn negative binomial with `r = 2·λ^0.15`,
+the curve found with its exponent and the model at least as close to the truth as a Poisson's.
 
 ### 25.7 Export
 
@@ -12969,10 +13032,10 @@ tooltip, and the shell writes the bed3d alone with the reason on stderr — the 
 - ~~**Inference** — computing a structure from the map.~~ Built as *Model from the map* (§25.6), as
   a port of pastis-NB and one of ShRec3D with SMACOF refinement, chosen by **Method**. What stays
   refused is a **physical unit** for it: the model is in its own units at unit radius, and a
-  nanometre would be invented. Also refused, and named in §25.6: **restarts**, so one deterministic
-  model rather than the best of several local optima; **fitting α**, which is the reader's control
-  and is what makes a model here comparable with one from either published tool; and pastis-NB's
-  **alternation** between the dispersion and the structure, where the dispersion is estimated once.
+  nanometre would be invented. Also refused, and named in §25.6: **restarts**, so one model per
+  seed, as pastis gives, rather than the best of several local optima; and **fitting α**, which is
+  the reader's control and is what makes a model here comparable with one from either published
+  tool.
 - **A PDB that does not say where its beads are on the genome** (§25.2) — pastis', and every
   solver's that writes atoms in bin order and nothing else. Placing them would mean numbering the
   atoms against a map's bins and trusting the count, which is the one claim a model beside a map

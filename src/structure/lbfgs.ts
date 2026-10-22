@@ -14,8 +14,8 @@
  * `fmin_l_bfgs_b`). It keeps the last `history` pairs of *step* and *gradient
  * change* and builds an implicit inverse Hessian out of them by the two-loop
  * recursion, which costs `O(history · n)` per iteration and no matrix at all.
- * For a structure that is three coordinates per bead plus one scale, `n` is
- * `3 · beads + 1` and the whole history at depth six is fourteen vectors — four
+ * For a structure that is three coordinates per bead, `n` is `3 · beads` and
+ * the whole history at SciPy's depth of ten is twenty-two vectors — six
  * megabytes at twelve thousand beads, beside the half-gigabyte matrix of
  * counts. The Hessian a full BFGS would write down is `(3n)²`, which at that
  * size is thirty **terabytes**, so the "limited-memory" is not an optimisation
@@ -27,18 +27,27 @@
  * guarantees the sufficient *decrease* — not the curvature condition `sᵀy > 0`
  * that makes the Hessian approximation positive definite. Without it the
  * history poisons itself on exactly the functions this is here for: a negative
- * binomial whose dispersion varies over six orders of magnitude between the
- * near diagonal and the far pairs is badly scaled, and a badly scaled problem
- * is where a rejected curvature pair costs an iteration and an *accepted* bad
- * one costs the run.
+ * binomial whose counts run from thousands on the near diagonal to nothing far
+ * from it is badly scaled, and a badly scaled problem is where a rejected
+ * curvature pair costs an iteration and an *accepted* bad one costs the run.
+ *
+ * **Its constants are SciPy's**, the ones every pastis run is made with: a
+ * step must buy a thousandth of the decrease its slope promised, its slope
+ * must fall to 0.9 of where it began, a search has twenty probes, the history
+ * is ten pairs deep, a failed search throws the history away and tries once
+ * more by steepest descent, and the run stops once an iteration buys less than
+ * `tolerance` of the value — L-BFGS-B's `factr · ε` — or the largest gradient
+ * component is under `gradientTolerance`, its `pgtol`. So a caller that hands
+ * it pastis' tolerances stops where pastis would.
  *
  * **A generator, a value at a time**, for the same reason `classicalMdsSweeps`
- * is one: at ten thousand beads a single evaluation is a hundred million pair
- * visits and a line search is several of them, so a caller that runs this where
- * somebody is watching needs somewhere to move a bar and somewhere to let a
- * cancel land. It yields *before every evaluation*, not once per iteration,
- * because the evaluation is the unit of work and an iteration is up to a
- * dozen of them.
+ * is one: at ten thousand beads a single evaluation is fifty million pair
+ * visits and a line search is one or more of them, so a caller that runs this
+ * where somebody is watching needs somewhere to move a bar and somewhere to let
+ * a cancel land. It stops at *every evaluation*, not once per iteration,
+ * because the evaluation is the unit of work. {@link lbfgsWalk} stops to *ask*
+ * for it — the caller evaluates, on as many threads as it likes, and hands the
+ * value back — and {@link lbfgs} is that walk answered by a plain function.
  *
  * Arrays in and arrays out — no worker, no store, no DOM — so the test can hold
  * the arithmetic still against functions whose minima are known (§18.9).
@@ -90,7 +99,7 @@ export interface LbfgsResult {
 export interface LbfgsOptions {
   /** Iterations, not evaluations: each costs one line search. Default 200. */
   iterations?: number
-  /** Curvature pairs kept. Default 6; more is a better Hessian and more memory. */
+  /** Curvature pairs kept. Default 10, SciPy's; more is a better Hessian and more memory. */
   history?: number
   /** Stop once an iteration improves the value by less than this share of it. Default 1e-9. */
   tolerance?: number
@@ -98,14 +107,39 @@ export interface LbfgsOptions {
   gradientTolerance?: number
 }
 
-/** Armijo's constant: how much of the predicted decrease a step must deliver. */
-const SUFFICIENT_DECREASE = 1e-4
-/** Wolfe's curvature constant. 0.9 is the standard for a quasi-Newton method. */
+/**
+ * Armijo's constant: how much of the predicted decrease a step must deliver.
+ * SciPy's L-BFGS-B line search asks for a thousandth (`ftol = 1e-3`), and that
+ * is the optimiser pastis calls, so it is the one this is held to.
+ */
+const SUFFICIENT_DECREASE = 1e-3
+/** Wolfe's curvature constant. 0.9 is the standard for a quasi-Newton method, and SciPy's. */
 const CURVATURE = 0.9
-/** Line-search steps before giving up on one direction. */
-const SEARCH_STEPS = 40
+/** Line-search steps before giving up on one direction: SciPy's `maxls`. */
+const SEARCH_STEPS = 20
 /** A curvature pair flatter than this is dropped rather than inverted. */
 const CURVATURE_FLOOR = 1e-12
+
+/**
+ * One evaluation the walk asks for: the objective's value at `point`, with its
+ * gradient written into `gradient`, handed back by `next(value)`.
+ *
+ * Both arrays are the walk's own and are read the moment the value comes back,
+ * so a caller that answers later — after a round trip to other threads — must
+ * not let them change meanwhile, and a caller that sends `point` elsewhere
+ * sends a copy.
+ */
+export interface LbfgsAsk {
+  point: Float64Array
+  gradient: Float64Array
+  /** Completed iterations; `0` while the first line search is running. */
+  iteration: number
+  iterations: number
+  /** Evaluations so far, this one included. */
+  evaluations: number
+  /** The value at the point the walk stands on: `+∞` before the first evaluation. */
+  current: number
+}
 
 /**
  * Minimise `objective` from `start`, a value at a time.
@@ -113,15 +147,55 @@ const CURVATURE_FLOOR = 1e-12
  * The vector is copied, so the caller's `start` is never written over: a run
  * that is cancelled halfway leaves the model it began from intact, which is
  * what lets the runner fall back to its initialisation and still return
- * something.
+ * something. The walk itself is {@link lbfgsWalk}; this is it driven by a
+ * function that answers at once, yielding after every evaluation.
  */
-export function* lbfgs(
+export function lbfgs(
   objective: Objective,
   start: Float64Array,
   options: LbfgsOptions = {},
 ): Generator<LbfgsProgress, LbfgsResult, void> {
+  return answered(lbfgsWalk(start, options), objective)
+}
+
+/**
+ * A walk that asks ({@link lbfgsWalk}, or one built on it) answered by a plain
+ * function: it evaluates each point the walk asks for and yields how far it has
+ * got after every evaluation, the value the best so far.
+ */
+export function* answered<R>(
+  walk: Generator<LbfgsAsk, R, number>,
+  objective: Objective,
+): Generator<LbfgsProgress, R, void> {
+  let step = walk.next()
+  while (step.done !== true) {
+    const request = step.value
+    const value = objective(request.point, request.gradient)
+    yield {
+      iteration: request.iteration,
+      iterations: request.iterations,
+      evaluations: request.evaluations,
+      value: Math.min(request.current, Number.isNaN(value) ? Number.POSITIVE_INFINITY : value),
+    }
+    step = walk.next(value)
+  }
+  return step.value
+}
+
+/**
+ * The walk, asking for each evaluation rather than making it: it yields an
+ * {@link LbfgsAsk} and is handed the value back by `next(value)`, the gradient
+ * written into the array it named.
+ *
+ * So the objective need not answer at once. *Model from the map* shares each
+ * evaluation of pastis' MDS and of its likelihood among helper threads
+ * (`analysis/likelihoodThreads.ts`), which is a round trip and an `await`, and
+ * a generator that called its objective itself could not wait for one. The walk is the same
+ * arithmetic whoever answers it, so the same answers give the same steps.
+ */
+export function* lbfgsWalk(start: Float64Array, options: LbfgsOptions = {}): Generator<LbfgsAsk, LbfgsResult, number> {
   const iterations = Math.max(0, Math.round(options.iterations ?? 200))
-  const depth = Math.max(1, Math.round(options.history ?? 6))
+  const depth = Math.max(1, Math.round(options.history ?? 10))
   const tolerance = options.tolerance ?? 1e-9
   const gradientTolerance = options.gradientTolerance ?? 1e-10
   const n = start.length
@@ -138,8 +212,7 @@ export function* lbfgs(
   const coefficients = new Float64Array(depth)
 
   const counter = { evaluations: 0 }
-  let value = evaluate(objective, point, gradient, counter)
-  yield { iteration: 0, iterations, evaluations: counter.evaluations, value }
+  let value = yield* ask(point, gradient, counter, 0, iterations, Number.POSITIVE_INFINITY)
   if (!Number.isFinite(value)) {
     return { point, value, iterations: 0, evaluations: counter.evaluations, stop: 'search' }
   }
@@ -194,10 +267,10 @@ export function* lbfgs(
     }
 
     // Steepest descent has no scale of its own, so the first step is sized to
-    // the gradient; a quasi-Newton direction carries its own and starts at 1.
-    const first = steps.length === 0 ? Math.min(1, 1 / sumAbs(gradient)) : 1
+    // the gradient — a unit move, `1/‖∇f‖`, as L-BFGS-B sizes it; a
+    // quasi-Newton direction carries its own and starts at 1.
+    const first = steps.length === 0 ? Math.min(1e10, 1 / Math.sqrt(dot(gradient, gradient))) : 1
     const search = yield* lineSearch(
-      objective,
       point,
       direction,
       trial,
@@ -210,6 +283,17 @@ export function* lbfgs(
       iterations,
     )
     if (!search.ok) {
+      // L-BFGS-B's answer to a failed search: the history may be what pointed
+      // the step somewhere useless, so it is thrown away and the iteration
+      // tried again by steepest descent. Only a search that fails *without* a
+      // history ends the run.
+      if (steps.length > 0) {
+        steps.length = 0
+        changes.length = 0
+        rho.length = 0
+        done--
+        continue
+      }
       stop = 'search'
       break
     }
@@ -242,7 +326,7 @@ export function* lbfgs(
       }
     }
 
-    if (before - value <= tolerance * Math.max(1, Math.abs(before))) {
+    if (before - value <= tolerance * Math.max(1, Math.abs(before), Math.abs(value))) {
       done++
       stop = 'value'
       break
@@ -265,7 +349,6 @@ export function* lbfgs(
  * them as whatever the last evaluation wrote, and the caller keeps its point.
  */
 function* lineSearch(
-  objective: Objective,
   point: Float64Array,
   direction: Float64Array,
   trial: Float64Array,
@@ -276,7 +359,7 @@ function* lineSearch(
   counter: { evaluations: number },
   iteration: number,
   iterations: number,
-): Generator<LbfgsProgress, { ok: boolean; step: number; value: number }, void> {
+): Generator<LbfgsAsk, { ok: boolean; step: number; value: number }, number> {
   const n = point.length
   const at = (step: number): void => {
     for (let i = 0; i < n; i++) trial[i] = point[i] + step * direction[i]
@@ -291,14 +374,12 @@ function* lineSearch(
 
   for (let probe = 0; probe < SEARCH_STEPS; probe++) {
     at(step)
-    const value = evaluate(objective, trial, trialGradient, counter)
+    const value = yield* ask(trial, trialGradient, counter, iteration, iterations, value0)
     lastStep = step
-    yield { iteration, iterations, evaluations: counter.evaluations, value: Math.min(value0, value) }
 
     const failsArmijo = !Number.isFinite(value) || value > value0 + SUFFICIENT_DECREASE * step * slope0
     if (failsArmijo || (probe > 0 && value >= previousValue)) {
       const found = yield* zoom(
-        objective,
         point,
         direction,
         trial,
@@ -319,7 +400,6 @@ function* lineSearch(
     if (Math.abs(slope) <= -CURVATURE * slope0) return { ok: true, step, value }
     if (slope >= 0) {
       const found = yield* zoom(
-        objective,
         point,
         direction,
         trial,
@@ -347,8 +427,7 @@ function* lineSearch(
   // guard above will simply drop the pair it produces.
   if (Number.isFinite(lastStep)) {
     at(lastStep)
-    const value = evaluate(objective, trial, trialGradient, counter)
-    yield { iteration, iterations, evaluations: counter.evaluations, value: Math.min(value0, value) }
+    const value = yield* ask(trial, trialGradient, counter, iteration, iterations, value0)
     if (Number.isFinite(value) && value < value0) return { ok: true, step: lastStep, value }
   }
   return { ok: false, step: 0, value: value0 }
@@ -363,11 +442,10 @@ function* lineSearch(
  * but the failure mode of an interpolant on a function with a pole — which this
  * one has, since a pair of beads on one point makes the mean infinite — is a
  * trial step outside the bracket, and the safeguard that puts it back is most
- * of what interpolation saved. The bracket halves every probe, so forty probes
- * is a step known to a part in `2⁴⁰` and the loop is never the run's cost.
+ * of what interpolation saved. The bracket halves every probe, so twenty probes
+ * is a step known to a part in a million and the loop is never the run's cost.
  */
 function* zoom(
-  objective: Objective,
   point: Float64Array,
   direction: Float64Array,
   trial: Float64Array,
@@ -380,7 +458,7 @@ function* zoom(
   counter: { evaluations: number },
   iteration: number,
   iterations: number,
-): Generator<LbfgsProgress, { ok: boolean; step: number; value: number }, void> {
+): Generator<LbfgsAsk, { ok: boolean; step: number; value: number }, number> {
   const n = point.length
   let low = lowStart
   let lowValue = lowValueStart
@@ -390,8 +468,7 @@ function* zoom(
     const step = (low + high) / 2
     if (!Number.isFinite(step) || step <= 0) break
     for (let i = 0; i < n; i++) trial[i] = point[i] + step * direction[i]
-    const value = evaluate(objective, trial, trialGradient, counter)
-    yield { iteration, iterations, evaluations: counter.evaluations, value: Math.min(value0, value) }
+    const value = yield* ask(trial, trialGradient, counter, iteration, iterations, value0)
 
     const failsArmijo = !Number.isFinite(value) || value > value0 + SUFFICIENT_DECREASE * step * slope0
     if (failsArmijo || value >= lowValue) {
@@ -410,21 +487,26 @@ function* zoom(
   // condition wanted is a slower iteration, not a wrong one.
   if (low > 0 && lowValue < value0) {
     for (let i = 0; i < n; i++) trial[i] = point[i] + low * direction[i]
-    const value = evaluate(objective, trial, trialGradient, counter)
-    yield { iteration, iterations, evaluations: counter.evaluations, value: Math.min(value0, value) }
+    const value = yield* ask(trial, trialGradient, counter, iteration, iterations, value0)
     if (Number.isFinite(value)) return { ok: true, step: low, value }
   }
   return { ok: false, step: 0, value: value0 }
 }
 
-function evaluate(
-  objective: Objective,
+/**
+ * Ask for one evaluation and take its answer, a `NaN` read as `+∞` — outside
+ * the domain — so that it shortens the search rather than entering the history.
+ */
+function* ask(
   point: Float64Array,
   gradient: Float64Array,
   counter: { evaluations: number },
-): number {
+  iteration: number,
+  iterations: number,
+  current: number,
+): Generator<LbfgsAsk, number, number> {
   counter.evaluations++
-  const value = objective(point, gradient)
+  const value = yield { point, gradient, iteration, iterations, evaluations: counter.evaluations, current }
   return Number.isNaN(value) ? Number.POSITIVE_INFINITY : value
 }
 
@@ -445,10 +527,4 @@ function maxAbs(v: Float64Array): number {
     if (a > most) most = a
   }
   return most
-}
-
-function sumAbs(v: Float64Array): number {
-  let sum = 0
-  for (let i = 0; i < v.length; i++) sum += Math.abs(v[i])
-  return sum
 }

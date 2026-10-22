@@ -19,116 +19,112 @@
  * distance between the two beads:
  *
  * ```
- *   c_ij ~ NegativeBinomial(mean = β · b_i · b_j · d_ij^(−α), dispersion r_ij)
+ *   c_ij ~ NegativeBinomial(mean μ = b_i · b_j · d_ij^(−α), dispersion r_ij)
+ *   r_ij = b_i · b_j · exp(c₀ + c₁ · log λ_ij),      λ_ij = d_ij^(−α)
  * ```
  *
  * where `b` is each bead's coverage bias — pastis' own place for it, and the
  * reason this takes **raw counts** and never a balanced matrix ({@link
- * NegBinomModel.bias}) —
+ * NegBinomModel.bias}) — and the model is the one that makes the counts most
+ * probable. Both costs go away at once. A zero is **evidence**, and weak
+ * evidence at that — it says *probably far*, it needs no filling, and past a
+ * certain distance it stops caring how far, which is exactly right for a pair a
+ * shallow experiment missed. And a count's precision is in the likelihood
+ * itself: the curvature of `−log P` at a pair seen ten thousand times is ten
+ * thousand times that of a pair seen once, so the near diagonal holds the beads
+ * without anybody weighting anything.
  *
- * and the model is the one that makes the counts most probable. Both costs go
- * away at once. A zero is **evidence**, and weak evidence at that — it says
- * *probably far*, it needs no filling, and past a certain distance it stops
- * caring how far, which is exactly right for a pair a shallow experiment
- * missed. And a count's precision is in the likelihood itself: the curvature of
- * `−log P` at a pair seen ten thousand times is ten thousand times that of a
- * pair seen once, so the near diagonal holds the beads without anybody
- * weighting anything.
+ * **This is pastis-NB as pastis runs it**, function for function, so that a
+ * model made here and one made by `pastis.optimization.negative_binomial_
+ * structure.estimate_X` answer the same question in the same words:
  *
- * **Why negative binomial and not Poisson.** A Poisson has one parameter, so
- * its variance is its mean — and Hi-C counts are not like that. They are
- * **overdispersed**, and by an amount that itself varies with genomic
- * separation: replicate variance near the diagonal is a few times the mean,
- * and far from it can be orders of magnitude more. A Poisson fit to such data
- * believes the far, noisy pairs far more than it should, which is the same
- * failure the unweighted SMACOF has, arrived at by a different road. The
- * negative binomial adds the one parameter that fixes it — `r`, where the
- * variance is `μ + μ²/r` — and pastis-NB's contribution is to let `r` **vary
- * with genomic separation** rather than be one number for the map. That is what
- * {@link dispersionBySeparation} estimates, and it is why this module is
- * pastis-NB and not pastis-PM2. As `r → ∞` the negative binomial *is* the
- * Poisson, so PM2 is the `r = ∞` corner of what is written here, and the test
- * holds it to that.
+ * - **The dispersion is a function of the mean**, not of the separation. The
+ *   counts' mean and variance are taken at each genomic separation
+ *   ({@link momentsBySeparation}, pastis' `compute_mean_variance`), the
+ *   dispersion each pair of moments implies, `r = m²/(v − m)`, is fitted
+ *   against the mean as `r = exp(c₀ + c₁ log m)` ({@link fitDispersion}, its
+ *   `ExponentialDispersion(degree=1)`), and during the fit every pair's `r` is
+ *   read off that curve **at the model's own mean for the pair** — so it moves
+ *   with the beads, and its derivative is part of the gradient.
+ * - **The likelihood is the whole negative binomial**, gamma functions and all
+ *   ({@link negBinomObjective}), so its value is the number pastis reports.
+ * - **`β` is 1 and the biases are scaled to a mean of 1**, as pastis' pipeline
+ *   scales them. The scale of the model is then fitted rather than chosen: a
+ *   distance of 1 is where a pair of average coverage expects one contact.
+ * - **The start is pastis' MDS** ({@link mdsObjective}): the relative stress
+ *   `Σ (d − δ)²/δ²` over the pairs the map counted, `δ = (c/(b_i b_j))^(−1/α)`,
+ *   from beads placed uniformly at random in a cube by a seeded generator —
+ *   {@link randomStart}, whose draws are numpy's, so seed `s` starts from the
+ *   very coordinates pastis' `random_state=s` does.
+ * - **Both are solved by L-BFGS to pastis' own tolerances** (`structure/
+ *   lbfgs.ts`, with SciPy's line-search constants): the MDS to
+ *   `factr = 10¹²`, the likelihood to `factr = 10` and a largest gradient
+ *   component of 1 — or at the reader's step budget, whichever comes first.
+ *   The default budget, 150, is about where pastis' own L-BFGS-B stops on
+ *   the validation's yeast map (125 to 148 steps, by its relative-reduction
+ *   test); run on to the gradient, the likelihood keeps climbing slowly for
+ *   several hundred more.
  *
- * **What is optimised.** Three coordinates per bead and `log β`, by L-BFGS
- * (`structure/lbfgs.ts`) — which is the optimiser pastis reaches for too,
- * through SciPy. `α` is not optimised: it is the reader's control, the same
- * number *Model from the map* and *Model versus map* already share, and
- * estimating it here would make the one parameter a reader sets mean something
- * different depending on which method they picked. `β` is a variable rather
- * than a constant because the scale of the model and the scale of the mean are
- * the same degree of freedom — `X → kX` with `β → k^α β` is the identical
- * likelihood — and the honest way to handle a degeneracy is to let the
- * optimiser sit anywhere along it and to fix the scale afterwards, which
- * `normaliseCoordinates` does.
+ * One thing differs, and is named in §25.6: a separation whose counts are not
+ * overdispersed beyond sampling noise is left out of the dispersion's fit
+ * ({@link fitDispersion}), and if fewer than three remain the counts are read
+ * as Poisson — pastis-PM2, the `r = ∞` corner of what is written here. On a
+ * real map every separation is in, and the curve is pastis'.
  *
- * **What it is started from.** The MDS model — classical scaling and weighted
- * SMACOF, which is to say the whole of `reconstruct.ts`. That is pastis' own
- * procedure: its Poisson and NB solvers are initialised from its MDS mode,
- * because a likelihood surface with a pole at every collided pair is not
- * something to enter from noise. So this module does not replace ShRec3D here;
- * it stands on it.
+ * **What is optimised.** Three coordinates per bead. `α` is not optimised: it
+ * is the reader's control, the same number *Model from the map* and *Model
+ * versus map* already share, and estimating it here would make the one
+ * parameter a reader sets mean something different depending on which method
+ * they picked. pastis fixes it too, at the 3 its pipeline is run with.
  *
  * Arrays in and arrays out — no worker, no store, no DOM (§18.9).
  */
 
-import { lbfgs, type LbfgsProgress, type LbfgsResult, type LbfgsStop, type Objective } from './lbfgs'
+import { answered, lbfgsWalk, type LbfgsAsk, type LbfgsProgress, type LbfgsResult, type LbfgsStop, type Objective } from './lbfgs'
 import type { Coordinates, DenseMatrix } from './reconstruct'
 
-/**
- * The dispersion `r` the counts show, by genomic separation.
- *
- * Large `r` is Poisson — variance equal to mean; small `r` is heavy
- * overdispersion. Held per **cis separation in beads** and once for every trans
- * pair, which is the shape pastis-NB's dispersion-against-genomic-distance fit
- * has and the shape a Hi-C map's overdispersion actually takes.
- */
-export interface Dispersion {
-  /** `r` at cis separation `s`; `cis[0]` is the diagonal and never read. */
-  cis: Float64Array
-  /** `r` for a pair whose two beads are on different sequences. */
-  trans: number
-}
+/** The machine epsilon SciPy's L-BFGS-B multiplies `factr` by. */
+const EPSILON = 2.220446049250313e-16
 
 /**
- * The `r` standing for *no overdispersion at all*.
+ * How each phase stops: pastis' arguments to SciPy, translated.
  *
- * A separation whose counts are no more variable than a Poisson's would be —
- * which happens on a shallow map, on simulated counts, and at separations with
- * too few pairs to tell — gets this rather than an infinity, because an
- * infinity is not a number the objective can carry. At a million, and with
- * means of order one, `μ/r` is a millionth and the likelihood is a Poisson's to
- * six figures; {@link negBinomObjective} is written in `log1p` precisely so
- * that this stays true instead of vanishing into the rounding of a large
- * constant.
+ * `tolerance` is `factr · ε`, the share of the value an iteration must still
+ * buy; `gradient` is `pgtol`, the largest gradient component at which the
+ * problem counts as solved; `iterations` is `maxiter`. The MDS stops early on
+ * purpose — `factr = 10¹²` is a part in five thousand — because it only has to
+ * land the likelihood in the right basin; the likelihood itself runs until an
+ * iteration buys nothing a double can hold.
  */
-export const POISSON_DISPERSION = 1e6
+export const PASTIS_MDS = { tolerance: 1e12 * EPSILON, gradient: 1e-5, iterations: 10000 } as const
+export const PASTIS_NB = { tolerance: 10 * EPSILON, gradient: 1 } as const
 
-/** How far apart two separations may be and still share a dispersion estimate. */
-const BIN_GROWTH = 1.25
-/** Pairs a separation bin needs before its variance is believed. */
-const BIN_PAIRS = 32
+/** Curvature pairs L-BFGS keeps: SciPy's `maxcor`, which pastis leaves at its default. */
+const HISTORY = 10
+
+/** Overdispersed separations a curve of two coefficients is fitted through, at the fewest. */
+const MIN_SEPARATIONS = 3
+
+/** Of the longest sequence, the share of separations the moments are taken over: pastis' `f`. */
+const SEPARATION_SHARE = 2 / 3
 
 /** Everything the likelihood is a function of, besides the coordinates. */
 export interface NegBinomModel {
   /**
-   * The counts, `n × n`, symmetrised.
+   * The counts, `n × n`, **read above the diagonal only**.
    *
    * **`NaN` and `0` are different here**, and the difference is the whole point
    * of the method: `0` is a pair the map looked at and counted nothing for,
    * which is evidence that the two beads are far apart, and `NaN` is a pair the
    * map could not look at — a filtered bin, a gap — which is no evidence at
-   * all. A `NaN` pair is skipped; a zero pair pushes.
+   * all. A `NaN` pair is skipped; a zero pair pushes. Below the diagonal is
+   * free for {@link storeWishes} to use.
    */
   counts: DenseMatrix
   n: number
-  /** The sequence each bead lies on, for telling a cis pair from a trans one. */
-  group: Int32Array
-  /** The bead's position along its sequence, for the separation. */
-  index: Int32Array
-  dispersion: Dispersion
   /**
-   * Each bead's coverage bias, or `null` where the file has no weights.
+   * Each bead's coverage bias, scaled to a mean of 1, or `null` where the file
+   * has no weights.
    *
    * A Hi-C bin is not read as often as its neighbour: mappability, restriction
    * density and copy number all scale how many pairs land on it, by a factor
@@ -139,7 +135,7 @@ export interface NegBinomModel {
    * **A likelihood cannot be handed the balanced matrix**, which is why this
    * field exists rather than the run simply reading balanced values. A balanced
    * value is not a count: it is not an integer, it is scaled by an arbitrary
-   * constant, and — fatally for {@link dispersionBySeparation} — *overdispersion
+   * constant, and — fatally for {@link momentsBySeparation} — *overdispersion
    * is a statement about a count*. `variance > mean` compares a squared quantity
    * with a linear one, so scaling the data by `k` scales the two sides
    * differently and a balanced map is never found overdispersed, whatever it
@@ -147,10 +143,13 @@ export interface NegBinomModel {
    * a Poisson.
    *
    * So the counts stay raw and the bias goes where pastis puts it — **into the
-   * mean**, `μ_ij = β·b_i·b_j·d^(−α)` with `b_i = 1/w_i`. The counts are then
+   * mean**, `μ_ij = b_i·b_j·d^(−α)` with `b_i = 1/w_i` — and into the
+   * dispersion, which pastis scales by the same product. The counts are then
    * counts, the dispersion is measurable, and the coverage is still corrected.
    */
   bias?: Float64Array | null
+  /** The dispersion's curve against the mean, or `null` for none: a Poisson. */
+  dispersion: Dispersion | null
   /**
    * The reader's exponent, positive, as in `d = c^(−1/α)`.
    *
@@ -161,362 +160,828 @@ export interface NegBinomModel {
   alpha: number
 }
 
-/** What the fit ends with. */
+/**
+ * The dispersion as a curve against the mean: `r(λ) = exp(c₀ + c₁ log λ)`.
+ *
+ * pastis' `ExponentialDispersion(degree=1)`. Large `r` is Poisson — variance
+ * equal to mean; small `r` is heavy overdispersion. `λ` is the mean a pair of
+ * average coverage would have; a pair's own `r` is this times `b_i·b_j`.
+ */
+export interface Dispersion {
+  c0: number
+  c1: number
+}
+
+/** The moments of the counts at each genomic separation, as pastis takes them. */
+export interface SeparationMoments {
+  /** The separation, in bins along a sequence. */
+  separation: Int32Array
+  /** The mean of `c / (b_i b_j)` over the pairs that far apart. */
+  mean: Float64Array
+  /** Their unbiased variance, over the mean of `1 / (b_i b_j)`. */
+  variance: Float64Array
+  /** How many pairs were seen at it, zeros included. */
+  pairs: Float64Array
+}
+
+/** What a fit ends with. */
 export interface NegBinomFit {
   coords: Coordinates
-  /** The scale of the mean: `μ = β d^(−α)`. */
-  beta: number
-  /** The negative log-likelihood, up to the terms no structure can change. */
+  /** The negative log-likelihood, less `Σ log c!` — the number pastis' objective returns. */
   value: number
   iterations: number
   evaluations: number
   stop: LbfgsStop
 }
 
+/** What the MDS start ends with: the same shape, its value the relative stress. */
+export type MdsFit = NegBinomFit
+
 /**
- * The dispersion of the counts at each separation, by the method of moments.
+ * pastis' `compute_mean_variance`: the counts' mean and variance at each
+ * genomic separation within a sequence.
  *
- * A negative binomial with mean `μ` has variance `μ + μ²/r`, so a set of counts
- * with sample mean `m` and sample variance `v` implies `r = m² / (v − m)`.
- * That is the estimator, applied **per genomic separation** — which is the
- * claim pastis-NB makes and tests: overdispersion is not one number for a map,
- * it grows as the counts thin out with distance.
+ * Over the separations up to two-thirds of the longest sequence, and over the
+ * pairs within one sequence only. Each count is divided by its pair's bias
+ * product before the moments are taken, and the variance is then divided by the
+ * mean of `1/(b_i b_j)`: if a pair's count is negative binomial with mean
+ * `bλ` and dispersion `b·r`, its corrected count has variance `(λ + λ²/r)/b`,
+ * and averaging `1/b` out is what leaves the `λ + λ²/r` the dispersion is read
+ * from. **Zeros are counted** — they are observations of the count at that
+ * separation, and leaving them out would overstate the mean and understate the
+ * dispersion. A `NaN`, a pair the map could not see, is not.
  *
- * Separations are pooled into **log-spaced bins** before the moments are taken,
- * for the same reason P(s) is drawn on log bins: a separation near the length
- * of a sequence has a handful of pairs and a variance computed from a handful
- * of numbers is noise, and the bins are wide exactly where the pairs are few.
- * A bin with too few pairs to believe, or one whose counts are not overdispersed
- * at all, takes {@link POISSON_DISPERSION}; a bin with no pairs takes the
- * nearest bin that has an answer, walking outward, which is the rule
- * `fillDistances` already uses for the same problem.
- *
- * **Zeros are counted.** They are observations of the count at that separation
- * and leaving them out would understate the mean and overstate the dispersion.
- * A `NaN` — a pair the map could not see — is not an observation and is left
- * out. One pass over the matrix.
+ * The separation is counted **in beads**, as pastis counts it: it is handed
+ * the beads and their sequences' lengths and nothing else, so two beads either
+ * side of a filtered bin are one apart to it. `index` orders the beads along
+ * their sequence and is not otherwise read.
  */
-export function dispersionBySeparation(
+export function momentsBySeparation(
   counts: DenseMatrix,
   n: number,
   group: Int32Array,
   index: Int32Array,
-): Dispersion {
-  let maxSeparation = 0
-  for (let i = 0; i < n; i++) if (index[i] > maxSeparation) maxSeparation = index[i]
-
-  // Sums per separation: how many pairs, their total, and their total squared —
-  // everything a mean and a variance need, in one pass and in `O(separations)`.
-  const pairs = new Float64Array(maxSeparation + 1)
-  const sum = new Float64Array(maxSeparation + 1)
-  const square = new Float64Array(maxSeparation + 1)
-  let transPairs = 0
-  let transSum = 0
-  let transSquare = 0
+  bias: Float64Array | null = null,
+): SeparationMoments {
+  // Each sequence's beads in their order along it, so a separation is a walk
+  // down one diagonal rather than a pass over every pair — and counted in
+  // beads, as pastis counts it, a filtered bin being no bead at all.
+  const byGroup = new Map<number, number[]>()
   for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      const c = counts[i * n + j]
-      if (!Number.isFinite(c)) continue
-      if (group[i] === group[j]) {
-        const s = Math.abs(index[i] - index[j])
-        pairs[s] += 1
-        sum[s] += c
-        square[s] += c * c
-      } else {
-        transPairs += 1
-        transSum += c
-        transSquare += c * c
+    const held = byGroup.get(group[i])
+    if (held === undefined) byGroup.set(group[i], [i])
+    else held.push(i)
+  }
+  let longest = 0
+  const along: Int32Array[] = []
+  for (const beads of byGroup.values()) {
+    beads.sort((a, b) => index[a] - index[b])
+    along.push(Int32Array.from(beads))
+    longest = Math.max(longest, beads.length)
+  }
+
+  const separation: number[] = []
+  const mean: number[] = []
+  const variance: number[] = []
+  const pairs: number[] = []
+  // `range(1, int(min_size))`: up to, and not including, two-thirds of the longest.
+  const last = Math.floor(longest * SEPARATION_SHARE)
+  for (let s = 1; s < last; s++) {
+    let seen = 0
+    let sum = 0
+    let inverse = 0
+    for (const beads of along) {
+      for (let p = 0; p + s < beads.length; p++) {
+        const i = beads[p]
+        const j = beads[p + s]
+        const c = counts[i < j ? i * n + j : j * n + i]
+        if (!Number.isFinite(c)) continue
+        const b = bias === null ? 1 : bias[i] * bias[j]
+        seen++
+        sum += c / b
+        inverse += 1 / b
       }
     }
-  }
-
-  // Log-spaced bins over the separations, widening as the pairs thin out.
-  const cis = new Float64Array(maxSeparation + 1).fill(Number.NaN)
-  const edges: number[] = []
-  for (let edge = 1; edge <= maxSeparation; edge = Math.max(edge + 1, Math.ceil(edge * BIN_GROWTH))) {
-    edges.push(edge)
-  }
-  edges.push(maxSeparation + 1)
-  for (let b = 0; b + 1 < edges.length; b++) {
-    let np = 0
-    let ns = 0
-    let nq = 0
-    for (let s = edges[b]; s < edges[b + 1]; s++) {
-      np += pairs[s]
-      ns += sum[s]
-      nq += square[s]
+    if (seen < 2) continue
+    const m = sum / seen
+    // The second pass, about the mean, as numpy takes it: a sum of squares
+    // less `n·m²` would lose to cancellation exactly where a map is nearly
+    // Poisson and the variance is a small difference of large numbers.
+    let squares = 0
+    for (const beads of along) {
+      for (let p = 0; p + s < beads.length; p++) {
+        const i = beads[p]
+        const j = beads[p + s]
+        const c = counts[i < j ? i * n + j : j * n + i]
+        if (!Number.isFinite(c)) continue
+        const deviation = c / (bias === null ? 1 : bias[i] * bias[j]) - m
+        squares += deviation * deviation
+      }
     }
-    const r = momentDispersion(np, ns, nq)
-    if (Number.isNaN(r)) continue
-    for (let s = edges[b]; s < edges[b + 1]; s++) cis[s] = r
+    separation.push(s)
+    mean.push(m)
+    variance.push(squares / (seen - 1) / (inverse / seen))
+    pairs.push(seen)
   }
-
-  // A separation nothing was estimated for reads the nearest that was, either
-  // way — the same walk `fillDistances` does, and for the same reason: a gap in
-  // the middle of a decay should read its neighbours rather than a default.
-  for (let s = 1; s <= maxSeparation; s++) {
-    if (!Number.isNaN(cis[s])) continue
-    let found = Number.NaN
-    for (let step = 1; step <= maxSeparation && Number.isNaN(found); step++) {
-      const lo = s - step
-      const hi = s + step
-      if (lo >= 1 && !Number.isNaN(cis[lo])) found = cis[lo]
-      else if (hi <= maxSeparation && !Number.isNaN(cis[hi])) found = cis[hi]
-    }
-    cis[s] = Number.isNaN(found) ? POISSON_DISPERSION : found
+  return {
+    separation: Int32Array.from(separation),
+    mean: Float64Array.from(mean),
+    variance: Float64Array.from(variance),
+    pairs: Float64Array.from(pairs),
   }
-  if (maxSeparation >= 0) cis[0] = POISSON_DISPERSION
-
-  const trans = momentDispersion(transPairs, transSum, transSquare)
-  return { cis, trans: Number.isNaN(trans) ? POISSON_DISPERSION : trans }
 }
 
 /**
- * `r = m² / (v − m)`, or {@link POISSON_DISPERSION} where the counts are not
- * overdispersed; `NaN` where there is not enough to say.
+ * pastis' `ExponentialDispersion(degree=1).fit`, weighted as its pipeline
+ * weights it: the curve `r = exp(c₀ + c₁ log m)` through the dispersion each
+ * separation's moments imply, `r = m²/(v − m)`, by least squares with each
+ * residual weighted by the square root of the separation's pair count.
  *
- * The sample variance is the unbiased one, and the guard is on the *pair count*
- * rather than on the variance: a bin of five pairs can show a variance ten
- * times its mean by luck, and believing it would give the far pairs a dispersion
- * that says the map knows nothing about them.
+ * Least squares **on `r` itself**, not on its logarithm, and from `(0, 0)`, as
+ * SciPy's `least_squares` is called there — so the separations with the most
+ * pairs and the largest `r` steer it, which is pastis' choice and is kept. The
+ * solver is Levenberg–Marquardt on the two coefficients, which lands on the
+ * minimum SciPy's trust region does wherever there is one.
+ *
+ * A separation whose counts are **not overdispersed** is left out: one whose
+ * variance is not above its mean by more than three standard errors of a
+ * Poisson's sample variance, `√((m + 2m²)/N)`. A real Hi-C map clears that by
+ * orders of magnitude at every separation — the validation's yeast map by a
+ * factor of hundreds — so there it changes nothing. Poisson counts clear it one
+ * time in a thousand, and pastis, entering every separation as it comes, reads
+ * them otherwise: `v ≤ m` gives a negative `r` that drags the curve towards
+ * zero, and `v` a hair above `m` an `r` in the thousands, and a curve forced
+ * through both calls the most Poisson counts on the map the most overdispersed
+ * and loses the model. With fewer than three separations left there is no
+ * curve worth drawing, and the answer is `null`: no overdispersion, a Poisson.
  */
-function momentDispersion(pairs: number, sum: number, square: number): number {
-  if (pairs < BIN_PAIRS) return Number.NaN
-  const mean = sum / pairs
-  if (!(mean > 0)) return POISSON_DISPERSION
-  const variance = (square - pairs * mean * mean) / (pairs - 1)
-  if (!(variance > mean)) return POISSON_DISPERSION
-  const r = (mean * mean) / (variance - mean)
-  return Number.isFinite(r) && r > 0 ? Math.min(r, POISSON_DISPERSION) : POISSON_DISPERSION
+export function fitDispersion(moments: SeparationMoments): Dispersion | null {
+  const logs: number[] = []
+  const targets: number[] = []
+  const weights: number[] = []
+  for (let k = 0; k < moments.mean.length; k++) {
+    const m = moments.mean[k]
+    const v = moments.variance[k]
+    // Above the mean by more than three standard errors of a Poisson's sample
+    // variance, `√((m + 2m²)/N)`: a real map clears it by orders of magnitude
+    // at every separation, and Poisson counts clear it one time in a thousand.
+    if (!(m > 0) || !(v > m + 3 * Math.sqrt((m + 2 * m * m) / moments.pairs[k]))) continue
+    const r = (m * m) / (v - m)
+    if (!Number.isFinite(r)) continue
+    logs.push(Math.log(m))
+    targets.push(r)
+    weights.push(moments.pairs[k])
+  }
+  if (logs.length < MIN_SEPARATIONS) return null
+
+  const cost = (c0: number, c1: number): number => {
+    let sum = 0
+    for (let k = 0; k < logs.length; k++) {
+      const residual = Math.exp(c0 + c1 * logs[k]) - targets[k]
+      sum += weights[k] * residual * residual
+    }
+    return sum
+  }
+  let c0 = 0
+  let c1 = 0
+  let current = cost(c0, c1)
+  let damping = 1e-3
+  for (let iteration = 0; iteration < 500 && Number.isFinite(current); iteration++) {
+    // The normal equations of the linearised residuals, `JᵀJ δ = −Jᵀρ`, two by two.
+    let a00 = 0
+    let a01 = 0
+    let a11 = 0
+    let g0 = 0
+    let g1 = 0
+    for (let k = 0; k < logs.length; k++) {
+      const fitted = Math.exp(c0 + c1 * logs[k])
+      const residual = fitted - targets[k]
+      const w = weights[k]
+      a00 += w * fitted * fitted
+      a01 += w * fitted * fitted * logs[k]
+      a11 += w * fitted * fitted * logs[k] * logs[k]
+      g0 += w * fitted * residual
+      g1 += w * fitted * residual * logs[k]
+    }
+    let moved = false
+    while (damping < 1e16) {
+      const d00 = a00 * (1 + damping)
+      const d11 = a11 * (1 + damping)
+      const det = d00 * d11 - a01 * a01
+      if (!(Math.abs(det) > 0)) {
+        damping *= 10
+        continue
+      }
+      const step0 = -(d11 * g0 - a01 * g1) / det
+      const step1 = -(d00 * g1 - a01 * g0) / det
+      const tried = cost(c0 + step0, c1 + step1)
+      if (Number.isFinite(tried) && tried < current) {
+        c0 += step0
+        c1 += step1
+        const gain = current - tried
+        current = tried
+        damping = Math.max(damping / 10, 1e-12)
+        moved = gain > 1e-15 * current && Math.abs(step0) + Math.abs(step1) > 1e-15 * (1 + Math.abs(c0) + Math.abs(c1))
+        break
+      }
+      damping *= 10
+    }
+    if (!moved) break
+  }
+  return Number.isFinite(c0) && Number.isFinite(c1) ? { c0, c1 } : null
+}
+
+/** `r` at a mean of `λ`, for a pair of average coverage. */
+export function dispersionAt(dispersion: Dispersion, lambda: number): number {
+  return Math.exp(dispersion.c0 + dispersion.c1 * Math.log(lambda))
 }
 
 /**
- * The scale the counts imply for a given model: `β = Σc / Σd^(−α)`.
+ * pastis' random start: every coordinate uniform in `[−1, 1)`, drawn as
+ * `1 − 2·rand(3n)` and read three to a bead.
  *
- * The Poisson maximum-likelihood estimate of `β` holding the structure fixed,
- * which is pastis' own seed and is a moment match — the model's predicted total
- * is made equal to the observed total. It is only a start; `log β` is a
- * variable of the fit and moves from here.
+ * Handed numpy's own generator (`analysis/random.ts`'s `numpyRandom`), seed `s`
+ * gives the coordinates `RandomState(s)` gives pastis, to the last bit — so the
+ * one place a run of pastis and a run here could part at the very first step is
+ * closed, and what is left between them is the optimiser's path.
  */
-export function seedBeta(model: NegBinomModel, coords: Coordinates): number {
-  const { counts, n, alpha } = model
-  const bias = model.bias ?? null
-  const half = -alpha / 2
-  const cube = alpha === 3
-  const { x, y, z } = coords
-  let observed = 0
-  let predicted = 0
+export function randomStart(n: number, rng: () => number): Coordinates {
+  const x = new Float64Array(n)
+  const y = new Float64Array(n)
+  const z = new Float64Array(n)
   for (let i = 0; i < n; i++) {
-    const bi = bias === null ? 1 : bias[i]
+    x[i] = 1 - 2 * rng()
+    y[i] = 1 - 2 * rng()
+    z[i] = 1 - 2 * rng()
+  }
+  return { x, y, z }
+}
+
+/**
+ * The reciprocal of each counted pair's wish distance, `1/δ = (c/(b_i b_j))^(1/α)`,
+ * written **below the diagonal** of the counts, `0` where the map counted nothing.
+ *
+ * pastis' `compute_wish_distances` on the bias-corrected counts with `β = 1`.
+ * Below the diagonal because the likelihood reads only above it: the matrix is
+ * symmetric, its lower half holds nothing the counts above do not, and storing
+ * the wishes there costs the MDS no matrix of its own and no `pow` per pair per
+ * evaluation. Singles, which hold a wish to a part in ten million — far past
+ * where an MDS that stops at a part in five thousand can tell.
+ */
+export function storeWishes(counts: DenseMatrix, n: number, bias: Float64Array | null, alpha: number): void {
+  const power = 1 / alpha
+  for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       const c = counts[i * n + j]
-      if (!Number.isFinite(c)) continue
-      const dx = x[i] - x[j]
-      const dy = y[i] - y[j]
-      const dz = z[i] - z[j]
-      const d2 = dx * dx + dy * dy + dz * dz
-      if (!(d2 > 0)) continue
-      observed += c
-      predicted += (bias === null ? 1 : bi * bias[j]) * (cube ? 1 / (d2 * Math.sqrt(d2)) : Math.pow(d2, half))
+      const wish = Number.isFinite(c) && c > 0 ? c / (bias === null ? 1 : bias[i] * bias[j]) : 0
+      counts[j * n + i] = wish > 0 ? (alpha === 3 ? Math.cbrt(wish) : Math.pow(wish, power)) : 0
     }
   }
-  return predicted > 0 && observed > 0 ? observed / predicted : 1
-}
-
-/** The optimiser's vector: `x`, then `y`, then `z`, then `log β`. */
-export function packModel(coords: Coordinates, beta: number): Float64Array {
-  const n = coords.x.length
-  const out = new Float64Array(3 * n + 1)
-  out.set(coords.x, 0)
-  out.set(coords.y, n)
-  out.set(coords.z, 2 * n)
-  out[3 * n] = Math.log(beta > 0 ? beta : 1)
-  return out
-}
-
-/** The vector back as coordinates and a `β`; `into` is written over. */
-export function readModel(vector: Float64Array, into: Coordinates): number {
-  const n = into.x.length
-  into.x.set(vector.subarray(0, n))
-  into.y.set(vector.subarray(n, 2 * n))
-  into.z.set(vector.subarray(2 * n, 3 * n))
-  return Math.exp(vector[3 * n])
 }
 
 /**
- * The negative log-likelihood and its gradient, in one pass over the pairs.
+ * pastis' MDS objective: the relative stress over the counted pairs.
  *
  * ```
- *   f    = Σ_{i<j} (r + c)·log(1 + μ/r) − c·log μ ,    μ = β·d^(−α)
- *   ∂f/∂x_i = Σ_j  (−α)·k_ij·(x_i − x_j)/d²  ,          k = r·(μ − c)/(r + μ)
- *   ∂f/∂logβ = Σ_{i<j} k_ij
+ *   f = Σ_{i≠j} (d_ij − δ_ij)² / δ_ij²  =  2 Σ_{i>j} (d_ij · w_ij − 1)²,   w = 1/δ
  * ```
  *
- * **What `k` says.** Written out, `∂f/∂μ · μ` is `μ(r + c)/(r + μ) − c`, and
- * that collapses to `r(μ − c)/(r + μ)` — which is the Poisson's own `μ − c`
- * **shrunk by `r/(r + μ)`**. So the negative binomial is not a different force
- * on the beads; it is the same force, turned down at every pair in proportion
- * to how overdispersed that pair's separation was found to be. A pair with no
- * overdispersion (`r ≫ μ`) pulls with its full Poisson weight; a pair at a
- * separation where the counts scattered far more than their mean pulls with a
- * fraction of it. That is the entire content of pastis-NB over pastis-PM2, in
- * one factor, and it is why the collapsed form is the one written below: it is
- * both cheaper and exact where the long form loses digits to `r + c` at large
- * `r`.
+ * Over ordered pairs, as pastis' dense objective sums it, so the value is
+ * pastis'. Relative rather than absolute because a near pair's wish is small and
+ * a far pair's large, and an absolute stress would spend the model on the far
+ * pairs' errors; this one asks every pair to be right to the same share. The
+ * gradient is the exact one — pastis' dense gradient is half of it, which moves
+ * SciPy's path but not the minimum. A pair whose beads have met contributes its
+ * constant and no gradient, as pastis' does.
  *
- * `f` is the true negative log-likelihood **less `Σ (r + c)·log r`**, a
- * constant no structure can change. Dropping it is not cosmetic: at
- * {@link POISSON_DISPERSION} that constant is a billion and the part that
- * depends on the model is of order one, so keeping it would spend nine of the
- * sixteen digits a double has on a number the optimiser must not move, and the
- * line search would be comparing decreases against rounding. Written with
- * `log1p` the constant never appears and the Poisson limit is exact: as
- * `r → ∞`, `(r + c)·log1p(μ/r) → μ` and `f → Σ μ − c·log μ`, which is
- * pastis-PM2's objective.
- *
- * **No square root is taken.** Every term wants `d²` or a power of it — `μ` is
- * `β (d²)^(−α/2)` and the gradient divides by `d²` — so the distance itself is
- * never needed. At the default `α = 3` that power is one `sqrt` of `d²` and a
- * division, which is why the pass costs about what a SMACOF step costs.
- *
- * A pair with a non-finite count is skipped: the map could not look at it, and
- * a model should not be pushed by a pair nobody observed. A pair whose beads
- * have collided has an infinite mean, and the whole objective is returned as
- * infinite so the line search shortens instead of stepping into the pole.
+ * Summed as {@link negBinomObjective} is, in bands of rows ({@link mdsBands}),
+ * each band's value and gradient added in band order, so that it is the same
+ * bits on one thread and on several (`analysis/likelihoodThreads.ts`).
  */
-export function negBinomObjective(model: NegBinomModel): Objective {
-  const { counts, n, group, index, dispersion, alpha } = model
-  const bias = model.bias ?? null
-  const power = -alpha
-  const half = power / 2
-  const cube = alpha === 3
-  const { cis, trans } = dispersion
-
+export function mdsObjective(wishes: DenseMatrix, n: number): Objective {
+  const edges = mdsBands(n)
+  const parts = Array.from({ length: edges.length - 1 }, (_, b) => new Float64Array(3 * edges[b + 1]))
   return (vector, gradient) => {
-    const beta = Math.exp(vector[3 * n])
-    if (!Number.isFinite(beta) || beta <= 0) return Number.POSITIVE_INFINITY
     gradient.fill(0)
     let value = 0
-    let betaGradient = 0
-
-    for (let i = 0; i < n; i++) {
-      const row = i * n
-      const xi = vector[i]
-      const yi = vector[n + i]
-      const zi = vector[2 * n + i]
-      const gi = group[i]
-      const ii = index[i]
-      const bi = bias === null ? 1 : bias[i]
-      // Accumulated for `i` and flushed once, rather than read and written
-      // `n` times through the gradient array.
-      let gx = 0
-      let gy = 0
-      let gz = 0
-      for (let j = i + 1; j < n; j++) {
-        const c = counts[row + j]
-        if (!Number.isFinite(c)) continue
-        const dx = xi - vector[j]
-        const dy = yi - vector[n + j]
-        const dz = zi - vector[2 * n + j]
-        const d2 = dx * dx + dy * dy + dz * dz
-        if (!(d2 > 0)) return Number.POSITIVE_INFINITY
-        const scale = bias === null ? beta : beta * bi * bias[j]
-        const mu = scale * (cube ? 1 / (d2 * Math.sqrt(d2)) : Math.pow(d2, half))
-        if (!Number.isFinite(mu) || mu <= 0) return Number.POSITIVE_INFINITY
-        const r = gi === group[j] ? cis[Math.abs(ii - index[j])] : trans
-
-        value += (r + c) * Math.log1p(mu / r)
-        if (c > 0) value -= c * Math.log(mu)
-
-        const k = (r * (mu - c)) / (r + mu)
-        betaGradient += k
-        const coefficient = (power * k) / d2
-        const fx = coefficient * dx
-        const fy = coefficient * dy
-        const fz = coefficient * dz
-        gx += fx
-        gy += fy
-        gz += fz
-        gradient[j] -= fx
-        gradient[n + j] -= fy
-        gradient[2 * n + j] -= fz
-      }
-      gradient[i] += gx
-      gradient[n + i] += gy
-      gradient[2 * n + i] += gz
+    for (let b = 0; b + 1 < edges.length; b++) {
+      value += mdsBand(wishes, null, n, edges[b], edges[b + 1], vector, parts[b])
+      addBand(gradient, parts[b], n, 0, edges[b + 1])
     }
+    return value
+  }
+}
 
-    gradient[3 * n] = betaGradient
+/**
+ * The bands of rows pastis' MDS is summed over: `[edges[b], edges[b + 1])`,
+ * each holding about the same share of the pairs **below** the diagonal, where
+ * {@link storeWishes} keeps them.
+ *
+ * The likelihood's layout turned over ({@link likelihoodBands}): a function of
+ * the bead count alone, so the sum is the same bits on any number of threads.
+ * Row `i` carries `i` pairs, so the rows before `s` carry `(s/n)²` of them and
+ * the edges sit at `n√(t/B)`.
+ */
+export function mdsBands(n: number): Int32Array {
+  const count = bandCount(n)
+  const edges = [0]
+  for (let t = 1; t < count; t++) {
+    const edge = Math.round(n * Math.sqrt(t / count))
+    if (edge > edges[edges.length - 1] && edge < n) edges.push(edge)
+  }
+  edges.push(n)
+  return Int32Array.from(edges)
+}
+
+/**
+ * One band's share of {@link mdsObjective}: its value returned, its gradient
+ * written into `out`.
+ *
+ * Rows `[r0, r1)`, each with every bead before it. `wishes[offsets[i − r0] + j]`
+ * is pair `(i, j)`'s wish — `null` for a whole `n × n` matrix, where it is
+ * `i·n + j`, and a row's start in a helper's packed copy otherwise — and `out`
+ * holds the gradient of beads `0` to `r1`, which are the only ones a band's
+ * pairs touch: `x`, then `y`, then `z`, `r1` of each. It is written over.
+ */
+export function mdsBand(
+  wishes: DenseMatrix,
+  offsets: ArrayLike<number> | null,
+  n: number,
+  r0: number,
+  r1: number,
+  vector: Float64Array,
+  out: Float64Array,
+): number {
+  const len = r1
+  out.fill(0)
+  let value = 0
+  for (let i = Math.max(1, r0); i < r1; i++) {
+    const row = offsets === null ? i * n : offsets[i - r0]
+    const xi = vector[i]
+    const yi = vector[n + i]
+    const zi = vector[2 * n + i]
+    let gx = 0
+    let gy = 0
+    let gz = 0
+    for (let j = 0; j < i; j++) {
+      const w = wishes[row + j]
+      if (!(w > 0)) continue
+      const dx = xi - vector[j]
+      const dy = yi - vector[n + j]
+      const dz = zi - vector[2 * n + j]
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz)
+      const e = d * w - 1
+      value += 2 * e * e
+      if (!(d > 0)) continue
+      const coefficient = (4 * e * w) / d
+      const fx = coefficient * dx
+      const fy = coefficient * dy
+      const fz = coefficient * dz
+      gx += fx
+      gy += fy
+      gz += fz
+      out[j] -= fx
+      out[len + j] -= fy
+      out[2 * len + j] -= fz
+    }
+    out[i] += gx
+    out[len + i] += gy
+    out[2 * len + i] += gz
+  }
+  return value
+}
+
+// `lgamma(c + r) − lgamma(r) − c·log r` and `r·(ψ(c + r) − ψ(r))`, written by
+// `countTerms` for the objective's inner loop to read: two numbers out of a
+// function called a hundred million times an evaluation, without an object
+// allocated for each.
+let termG = 0
+let termH = 0
+
+/** Below this a gamma function is shifted up by its recurrence before its series is summed. */
+const STIRLING = 7
+/** Up to this a whole count's terms are summed exactly, factor by factor. */
+const SMALL_COUNT = 16
+/** …while `r` is below this, so that `(r + c)^c` stays far inside a double. */
+const SMALL_RATE = 1e9
+
+/**
+ * The two parts of a count's likelihood that need the gamma function, into
+ * `termG` and `termH`:
+ *
+ * ```
+ *   G = lgamma(c + r) − lgamma(r) − c·log r      (the log-likelihood's count term)
+ *   H = r · (ψ(c + r) − ψ(r))                    (its derivative, times r)
+ * ```
+ *
+ * A whole count up to {@link SMALL_COUNT} never comes here: the objective sums
+ * it exactly, inline, as `G = log Π_{k<c} (r + k) − c·log r` and
+ * `H = r Σ_{k<c} 1/(r + k)` — most pairs of most maps, whose far counts are a
+ * handful. Everything else is Stirling's series for both, each argument first lifted to {@link STIRLING}
+ * by the recurrence, written so that the `c·log r` cancels on paper rather
+ * than in rounding — `G` is a few units where `lgamma(r)` is thousands, and the
+ * difference of two large numbers is where a likelihood's digits go. To seven
+ * terms at seven the series is good to a part in 10¹³.
+ */
+function countTerms(c: number, r: number, logR: number): void {
+  // ψ(r) = ψ(r + m) − Σ 1/(r + k) and lgamma(r) = lgamma(r + m) − log Π (r + k).
+  let x = r
+  let px = 1
+  let sx = 0
+  while (x < STIRLING) {
+    px *= x
+    sx += 1 / x
+    x += 1
+  }
+  let y = c + r
+  let py = 1
+  let sy = 0
+  while (y < STIRLING) {
+    py *= y
+    sy += 1 / y
+    y += 1
+  }
+  const lx = x === r ? logR : Math.log(x)
+  const ratio = Math.log1p((y - x) / x) // log y − log x, without losing it to their difference
+  const ix = 1 / x
+  const iy = 1 / y
+  const ix2 = ix * ix
+  const iy2 = iy * iy
+  // lgamma(z) = (z − ½) log z − z + ½ log 2π + gammaTail(z)
+  const tailX = ix * (1 / 12 - ix2 * (1 / 360 - ix2 * (1 / 1260 - ix2 * (1 / 1680 - ix2 * (1 / 1188 - (ix2 * 691) / 360360)))))
+  const tailY = iy * (1 / 12 - iy2 * (1 / 360 - iy2 * (1 / 1260 - iy2 * (1 / 1680 - iy2 * (1 / 1188 - (iy2 * 691) / 360360)))))
+  // ψ(z) = log z − 1/(2z) − psiTail(z)
+  const psiX = ix2 * (1 / 12 - ix2 * (1 / 120 - ix2 * (1 / 252 - ix2 * (1 / 240 - ix2 * (1 / 132 - (ix2 * 691) / 32760)))))
+  const psiY = iy2 * (1 / 12 - iy2 * (1 / 120 - iy2 * (1 / 252 - iy2 * (1 / 240 - iy2 * (1 / 132 - (iy2 * 691) / 32760)))))
+  const shift = px === py ? 0 : Math.log(px / py)
+  // (y − ½) log y − (x − ½) log x  =  (y − ½)(log y − log x) + (y − x) log x, and
+  // where neither was lifted `(y − x) log x` is the `c log r` taken off after:
+  // the two are dropped together rather than subtracted.
+  const carried = px === 1 && py === 1 ? 0 : (y - x) * lx - c * logR
+  termG = (y - 0.5) * ratio - (px === 1 && py === 1 ? c : y - x) + tailY - tailX + shift + carried
+  termH = r * (ratio - 0.5 * (iy - ix) - psiY + psiX - sy + sx)
+}
+
+/**
+ * Everything a band of the likelihood reads besides the counts and the
+ * coordinates, prepared once: the same numbers on every thread that computes a
+ * band, so that a band is the same sum wherever it is computed.
+ */
+export interface LikelihoodTerms {
+  n: number
+  alpha: number
+  bias: Float64Array | null
+  /** `log bᵢ`, taken once rather than once a pair. */
+  logBias: Float64Array | null
+  dispersion: Dispersion | null
+}
+
+export function likelihoodTerms(model: Pick<NegBinomModel, 'n' | 'alpha' | 'bias' | 'dispersion'>): LikelihoodTerms {
+  const bias = model.bias ?? null
+  return {
+    n: model.n,
+    alpha: model.alpha,
+    bias,
+    logBias: bias === null ? null : Float64Array.from(bias, (b) => Math.log(b)),
+    dispersion: model.dispersion,
+  }
+}
+
+/** Beads to a band, roughly: the layout's grain. */
+const BAND_BEADS = 32
+/** Bands at most: enough to share among eight threads with room to balance them. */
+const MAX_BANDS = 64
+
+/** How many bands `n` beads are summed in: one a run of {@link BAND_BEADS}, at most {@link MAX_BANDS}. */
+function bandCount(n: number): number {
+  return Math.max(1, Math.min(MAX_BANDS, Math.round(n / BAND_BEADS)))
+}
+
+/**
+ * The bands of rows the likelihood is summed over: `[edges[b], edges[b + 1])`,
+ * each holding about the same share of the pairs above the diagonal.
+ *
+ * **A function of the bead count alone**, and that is the property that
+ * matters: a band's sum is computed whole, wherever it is computed, and the
+ * bands are added in this order whatever the threads, so the likelihood and
+ * its gradient are the same bits on one thread and on eight
+ * (`analysis/likelihoodThreads.ts`). Row `i` carries `n − 1 − i` pairs, so the
+ * rows before `s` carry `1 − (1 − s/n)²` of them and the edges sit at
+ * `n(1 − √(1 − t/B))`.
+ */
+export function likelihoodBands(n: number): Int32Array {
+  const count = bandCount(n)
+  const edges = [0]
+  for (let t = 1; t < count; t++) {
+    const edge = Math.round(n * (1 - Math.sqrt(1 - t / count)))
+    if (edge > edges[edges.length - 1] && edge < n) edges.push(edge)
+  }
+  edges.push(n)
+  return Int32Array.from(edges)
+}
+
+/**
+ * One band's share of the negative log-likelihood and its gradient, in one pass
+ * over its pairs — pastis' `negative_binomial_obj` and
+ * `negative_binomial_gradient`, with every pair of beads the map could see,
+ * zeros included (`use_zero_entries=True`).
+ *
+ * Rows `[r0, r1)`, each with every bead after it. `counts[offsets[i − r0] + j]`
+ * is pair `(i, j)`'s count — `null` for a whole `n × n` matrix, where it is
+ * `i·n + j`, and a row's start in a helper's packed copy otherwise — and `out`
+ * holds the gradient of beads `r0` onward, which are the only ones a band's
+ * pairs touch: `x`, then `y`, then `z`, `n − r0` of each. It is written over,
+ * and the band's value is returned.
+ *
+ * Per pair, with `λ = d^(−α)`, `s = b_i b_j`, `μ = s·λ`, `r = s·exp(c₀ + c₁ log λ)`
+ * and `q = μ/r = exp((1 − c₁) log λ − c₀)`, which the bias cancels out of:
+ *
+ * ```
+ *   f      = −G(c, r) + (c + r)·log(1 + q) − c·log μ
+ *   ∂f/∂log λ = (1 − c₁)·(μ − c)/(1 + q) + c₁·(r·log(1 + q) − H(c, r))
+ *   ∂f/∂x_i  = −α · ∂f/∂log λ · (x_i − x_j)/d²
+ * ```
+ *
+ * That `f` is pastis' `−lgamma(c + r) + lgamma(r) − c log μ − r log r +
+ * (c + r) log(r + μ)` rearranged so that nothing large is subtracted from
+ * anything large: `G` is {@link countTerms}', and the `r log r` that would be
+ * a billion at a near-Poisson pair is folded into `log(1 + q)`.
+ *
+ * **What the derivative says.** At `c₁ = 0` the dispersion is one number and
+ * the pull on a pair is the Poisson's `μ − c` shrunk by `r/(r + μ)`: the same
+ * force, turned down where the counts scatter. pastis-NB's `r` grows with the
+ * mean, `c₁` of it per unit of `log λ`, so moving the beads also moves how much
+ * the map is believed there — that is the second term, and it is why a
+ * dispersion read off a curve against the mean cannot be held fixed per pair.
+ *
+ * `dispersion: null` is the Poisson, `f = μ − c log μ` and `∂f/∂log λ = μ − c`:
+ * pastis-PM2, and the limit of the above as `r → ∞`.
+ *
+ * **One logarithm per pair, and no square root but at `α = 3`.** `log d²` gives
+ * `log λ`, `log μ` and `log r` with the biases' logarithms taken once; at
+ * `α = 3`, `λ` itself is a square root and a division. A pair with a
+ * non-finite count is skipped: the map could not look at it. A pair whose beads
+ * have collided has an infinite mean, and the band is returned as infinite so
+ * the line search shortens instead of stepping into the pole.
+ */
+export function likelihoodBand(
+  terms: LikelihoodTerms,
+  counts: DenseMatrix,
+  offsets: ArrayLike<number> | null,
+  r0: number,
+  r1: number,
+  vector: Float64Array,
+  out: Float64Array,
+): number {
+  const { n, dispersion, alpha, bias, logBias } = terms
+  const half = alpha / 2
+  const cube = alpha === 3
+  const nb = dispersion !== null
+  const c0 = nb ? dispersion.c0 : 0
+  const c1 = nb ? dispersion.c1 : 0
+  const slope = 1 - c1
+  const len = n - r0
+  out.fill(0)
+  let value = 0
+  for (let i = r0; i < r1; i++) {
+    const row = offsets === null ? i * n : offsets[i - r0]
+    const xi = vector[i]
+    const yi = vector[n + i]
+    const zi = vector[2 * n + i]
+    const bi = bias === null ? 1 : bias[i]
+    const li = logBias === null ? 0 : logBias[i]
+    // Accumulated for `i` and flushed once, rather than read and written
+    // `n` times through the gradient array.
+    let gx = 0
+    let gy = 0
+    let gz = 0
+    for (let j = i + 1; j < n; j++) {
+      const c = counts[row + j]
+      if (!(c >= 0)) continue
+      const dx = xi - vector[j]
+      const dy = yi - vector[n + j]
+      const dz = zi - vector[2 * n + j]
+      const d2 = dx * dx + dy * dy + dz * dz
+      if (!(d2 > 0)) return Number.POSITIVE_INFINITY
+      const logLambda = -half * Math.log(d2)
+      const lambda = cube ? 1 / (d2 * Math.sqrt(d2)) : Math.exp(logLambda)
+      const mu = (bias === null ? 1 : bi * bias[j]) * lambda
+      let k: number
+      if (nb) {
+        const logQ = slope * logLambda - c0
+        const q = Math.exp(logQ)
+        const r = mu / q
+        // `log1p` only where it is needed: above a thousandth `log(1 + q)`
+        // loses nothing a double holds, and costs half as much.
+        const spread = q > 1e-3 ? Math.log(1 + q) : Math.log1p(q)
+        value += (c + r) * spread
+        k = (slope * (mu - c)) / (1 + q) + c1 * r * spread
+        if (c > 0) {
+          const logMu = li + (logBias === null ? 0 : logBias[j]) + logLambda
+          const logR = logMu - logQ
+          // The gamma terms, `G` and `H` ({@link countTerms}). A whole count
+          // up to {@link SMALL_COUNT} — most pairs of most maps — is summed
+          // exactly here rather than in a call: `Π_{k<c} (r + k)` and
+          // `Σ 1/(r + k)` as one running fraction over it, four factors at a
+          // time so the chain of products each waits on is a quarter as long.
+          let g = 0
+          let h = 1
+          if (c > 1 && c <= SMALL_COUNT && c === Math.floor(c) && r < SMALL_RATE) {
+            let product = 1
+            let numerator = 0
+            let m = 0
+            for (; m + 4 <= c; m += 4) {
+              const a = r + m
+              const b = a + 1
+              const e = a + 2
+              const f = a + 3
+              const ab = a * b
+              const ef = e * f
+              const block = ab * ef
+              numerator = numerator * block + ((a + b) * ef + (e + f) * ab) * product
+              product *= block
+            }
+            for (; m < c; m++) {
+              const a = r + m
+              numerator = numerator * a + product
+              product *= a
+            }
+            g = Math.log(product) - c * logR
+            h = (r * numerator) / product
+          } else if (c !== 1) {
+            countTerms(c, r, logR)
+            g = termG
+            h = termH
+          }
+          value -= g + c * logMu
+          k -= c1 * h
+        }
+      } else {
+        value += mu
+        k = mu - c
+        if (c > 0) value -= c * (li + (logBias === null ? 0 : logBias[j]) + logLambda)
+      }
+      const coefficient = (-alpha * k) / d2
+      const fx = coefficient * dx
+      const fy = coefficient * dy
+      const fz = coefficient * dz
+      gx += fx
+      gy += fy
+      gz += fz
+      out[j - r0] -= fx
+      out[len + j - r0] -= fy
+      out[2 * len + j - r0] -= fz
+    }
+    out[i - r0] += gx
+    out[len + i - r0] += gy
+    out[2 * len + i - r0] += gz
+  }
+  return value
+}
+
+/**
+ * A band's gradient added into the whole one: `part` holds beads `from` to
+ * `from + length`, `x` then `y` then `z` — `[r0, n)` for a band of the
+ * likelihood, `[0, r1)` for one of the MDS.
+ */
+export function addBand(gradient: Float64Array, part: Float64Array, n: number, from: number, length: number): void {
+  for (let k = 0; k < length; k++) {
+    gradient[from + k] += part[k]
+    gradient[n + from + k] += part[length + k]
+    gradient[2 * n + from + k] += part[2 * length + k]
+  }
+}
+
+/**
+ * The negative log-likelihood and its gradient, as the sum of its bands
+ * ({@link likelihoodBands}), each band's value and gradient added in band
+ * order — the same sums `analysis/likelihoodThreads.ts` makes of bands it had
+ * computed on other threads, so the two agree to the bit.
+ */
+export function negBinomObjective(model: NegBinomModel): Objective {
+  const terms = likelihoodTerms(model)
+  const { counts, n } = model
+  const edges = likelihoodBands(n)
+  const parts = Array.from({ length: edges.length - 1 }, (_, b) => new Float64Array(3 * (n - edges[b])))
+  return (vector, gradient) => {
+    gradient.fill(0)
+    let value = 0
+    for (let b = 0; b + 1 < edges.length; b++) {
+      const part = parts[b]
+      const share = likelihoodBand(terms, counts, null, edges[b], edges[b + 1], vector, part)
+      if (!Number.isFinite(share)) return Number.POSITIVE_INFINITY
+      value += share
+      addBand(gradient, part, n, edges[b], n - edges[b])
+    }
     return Number.isFinite(value) ? value : Number.POSITIVE_INFINITY
   }
 }
 
-/**
- * The likelihood at a model, without moving it — for a caller that wants the
- * number rather than the fit.
- */
-export function negBinomValue(model: NegBinomModel, coords: Coordinates, beta: number): number {
-  const objective = negBinomObjective(model)
-  return objective(packModel(coords, beta), new Float64Array(3 * model.n + 1))
+/** The optimiser's vector: `x`, then `y`, then `z`. */
+export function packCoordinates(coords: Coordinates): Float64Array {
+  const n = coords.x.length
+  const out = new Float64Array(3 * n)
+  out.set(coords.x, 0)
+  out.set(coords.y, n)
+  out.set(coords.z, 2 * n)
+  return out
+}
+
+/** The vector back as coordinates, in new arrays. */
+export function readCoordinates(vector: Float64Array, n: number): Coordinates {
+  return {
+    x: Float64Array.from(vector.subarray(0, n)),
+    y: Float64Array.from(vector.subarray(n, 2 * n)),
+    z: Float64Array.from(vector.subarray(2 * n, 3 * n)),
+  }
+}
+
+/** The likelihood at a model, without moving it — for a caller that wants the number rather than the fit. */
+export function negBinomValue(model: NegBinomModel, coords: Coordinates): number {
+  return negBinomObjective(model)(packCoordinates(coords), new Float64Array(3 * model.n))
 }
 
 /**
- * Fit the model from `start`, an evaluation at a time.
+ * pastis' MDS from `start`, an evaluation at a time: L-BFGS on
+ * {@link mdsObjective} to pastis' `factr = 10¹²`. `wishes` is the matrix
+ * {@link storeWishes} wrote below the diagonal of.
+ */
+export function fitMds(
+  wishes: DenseMatrix,
+  n: number,
+  start: Coordinates,
+  options: { iterations?: number } = {},
+): Generator<LbfgsProgress, MdsFit, void> {
+  return answered(mdsWalk(n, start, options), mdsObjective(wishes, n))
+}
+
+/**
+ * pastis' MDS from `start`, asking for each evaluation rather than making it,
+ * as {@link likelihoodWalk} does, so whoever drives it can share each among
+ * threads. {@link fitMds} is it answered here.
+ */
+export function mdsWalk(
+  n: number,
+  start: Coordinates,
+  options: { iterations?: number } = {},
+): Generator<LbfgsAsk, MdsFit, number> {
+  const walk = lbfgsWalk(packCoordinates(start), {
+    iterations: options.iterations ?? PASTIS_MDS.iterations,
+    history: HISTORY,
+    tolerance: PASTIS_MDS.tolerance,
+    gradientTolerance: PASTIS_MDS.gradient,
+  })
+  return fitOf(walk, n)
+}
+
+/**
+ * The likelihood's fit from `start`, to pastis' `factr = 10` and `pgtol = 1`,
+ * or until `iterations` run out — asking for each evaluation rather than
+ * making it (`lbfgsWalk`), so that whoever drives it can share each among
+ * threads and `await` them. {@link fitNegativeBinomial} is it answered here, by
+ * {@link negBinomObjective}; the two give the same steps and the same model.
+ *
+ * `start` is not written over — a cancelled fit leaves the MDS model it began
+ * from intact.
+ */
+export function likelihoodWalk(
+  n: number,
+  start: Coordinates,
+  options: { iterations?: number } = {},
+): Generator<LbfgsAsk, NegBinomFit, number> {
+  const walk = lbfgsWalk(packCoordinates(start), {
+    iterations: options.iterations ?? 100000,
+    history: HISTORY,
+    tolerance: PASTIS_NB.tolerance,
+    gradientTolerance: PASTIS_NB.gradient,
+  })
+  return fitOf(walk, n)
+}
+
+/**
+ * Fit the model from `start`, an evaluation at a time, on this thread.
  *
  * The generator is the caller's way to breathe: at ten thousand beads one
- * evaluation is a hundred million pair visits, a line search is several of
+ * evaluation is fifty million pair visits, a line search is one or more of
  * them, and a run that did not yield between them would freeze the tab for the
- * whole of a fit and leave a cancel nowhere to land. `start` is not written
- * over — a cancelled fit leaves the MDS model it began from intact.
+ * whole of a fit and leave a cancel nowhere to land.
  */
-export function* fitNegativeBinomial(
+export function fitNegativeBinomial(
   model: NegBinomModel,
   start: Coordinates,
-  options: { iterations?: number; history?: number; beta?: number } = {},
+  options: { iterations?: number } = {},
 ): Generator<LbfgsProgress, NegBinomFit, void> {
-  const n = model.n
-  const beta = options.beta ?? seedBeta(model, start)
-  const objective = negBinomObjective(model)
-  const walk = lbfgs(objective, packModel(start, beta), {
-    iterations: options.iterations ?? 200,
-    history: options.history ?? 8,
-  })
-  let step = walk.next()
-  while (step.done !== true) {
-    yield step.value
-    step = walk.next()
-  }
-  const result: LbfgsResult = step.value
-  const coords: Coordinates = {
-    x: new Float64Array(n),
-    y: new Float64Array(n),
-    z: new Float64Array(n),
-  }
-  const fitted = readModel(result.point, coords)
+  return answered(likelihoodWalk(model.n, start, options), negBinomObjective(model))
+}
+
+/** A walk's result as coordinates. */
+function* fitOf(walk: Generator<LbfgsAsk, LbfgsResult, number>, n: number): Generator<LbfgsAsk, NegBinomFit, number> {
+  const result = yield* walk
   return {
-    coords,
-    beta: fitted,
+    coords: readCoordinates(result.point, n),
     value: result.value,
     iterations: result.iterations,
     evaluations: result.evaluations,
     stop: result.stop,
   }
-}
-
-/**
- * What to tell the reader about the dispersion that was fitted.
- *
- * The near diagonal and the far pairs, because the one claim pastis-NB makes
- * over pastis-PM2 is that those two numbers differ — and a run that reports
- * them lets a reader see whether, on *their* map, they did. Where they are both
- * {@link POISSON_DISPERSION} the negative binomial found no overdispersion and
- * the answer is a Poisson's, which is worth knowing before reading anything
- * into it.
- */
-export function dispersionRange(dispersion: Dispersion): { near: number; far: number; poisson: boolean } {
-  const { cis } = dispersion
-  const last = cis.length - 1
-  const near = cis.length > 1 ? cis[1] : POISSON_DISPERSION
-  const far = last >= 1 ? cis[last] : near
-  return { near, far, poisson: near >= POISSON_DISPERSION && far >= POISSON_DISPERSION }
 }

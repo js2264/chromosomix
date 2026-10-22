@@ -231,6 +231,11 @@ export default defineConfig({
         find: /^(.*)\/spawnGram$/,
         replacement: fileURLToPath(new URL('./src/analysis/worker/spawnGram.standalone.ts', import.meta.url)),
       },
+      // …and pastis-NB's likelihood helpers (`analysis/worker/spawnLikelihood.ts`).
+      {
+        find: /^(.*)\/spawnLikelihood$/,
+        replacement: fileURLToPath(new URL('./src/analysis/worker/spawnLikelihood.standalone.ts', import.meta.url)),
+      },
       { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
     ],
   },

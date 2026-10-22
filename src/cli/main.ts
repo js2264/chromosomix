@@ -81,6 +81,7 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises'
 import { deflateSync } from 'node:zlib'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { isMainThread } from 'node:worker_threads'
 
 import { MetaCooler } from '../metacooler/MetaCooler'
 import { LocalFileSource } from '../sources/LocalFileSource'
@@ -138,6 +139,7 @@ import type { FeatureSet, PairSet, StoredEntry } from '../annotations/types'
 import { hicProBinsNames, isHicProMatrix } from '../annotations/sidecar'
 import { openReference, type Reference } from './reference'
 import { Downloads, addressDirectories, displayOf, fileNameOf, isAddress } from './remote'
+import { DEFAULT_THREADS, serveIfHelper, useThreads } from './threads'
 import { quote } from '../analysis/cliCommand'
 import { regionLabel, typedLocusToRegion } from '../genome/assembly'
 import { parseBins } from '../hicpro/parse'
@@ -806,6 +808,10 @@ const RESERVED = new Set([
   'origin',
   'cell',
   'over',
+  // How many threads the tasks that share their work may use (`cli/threads.ts`).
+  // A property of the machine, not of the run: the results are the same bits on
+  // any number, so a line without it repeats the same run.
+  'threads',
   'quiet',
   'help',
   'version',
@@ -2159,6 +2165,10 @@ const USAGE = `chromosomix — the Analysis panel, from a shell
                            resolution of its own; ignored for every other format
       --rungs <n>          how many ladder resolutions to build from it
                            (1-2-5 series from the base). Default 1
+      --threads <n>        threads for a task that shares its work —
+                           pastis-NB's MDS start and likelihood in
+                           reconstruct3d. Default 1, so a time is one core's;
+                           the results are the same bits on any number
       --quiet              no progress on stderr
       --<param> <value>    any parameter the task takes; see \`tasks\`. A choice
                            is one of its values and a number is a number: any
@@ -3030,6 +3040,13 @@ export async function main(argv: readonly string[]): Promise<number> {
     )
     return 2
   }
+  const threads = one(args, 'threads')
+  const count = threads === undefined ? DEFAULT_THREADS : Number(threads)
+  if (!Number.isInteger(count) || count < 1) {
+    process.stderr.write(`--threads ${threads}: a whole number of threads, 1 or more.\n`)
+    return 2
+  }
+  useThreads(count)
   // One directory of fetched addresses per command, gone when it ends — after
   // a failure as after a success, which is what the `finally` is for.
   const downloads = new Downloads({ quiet: flag(args, 'quiet') })
@@ -3082,7 +3099,9 @@ export function ignoreClosedPipe(stream: NodeJS.WritableStream): void {
   })
 }
 
-const invoked = isEntryPoint(process.argv[1])
+// A helper thread runs this same file (`cli/threads.ts`), and has the same
+// `argv[1]`: it serves the thread that started it, and is no command at all.
+const invoked = !serveIfHelper() && isMainThread && isEntryPoint(process.argv[1])
 if (invoked) {
   ignoreClosedPipe(process.stdout)
   ignoreClosedPipe(process.stderr)

@@ -55,6 +55,67 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **pastis-NB's fit runs on every core, and gives the same model on any number of them (§25.6,
+  §23.1).** Each evaluation of the likelihood, and of pastis' MDS start before it, is now summed in
+  bands of rows laid out by the bead count alone, and the bands are shared among helper workers —
+  web workers in the app, one fewer than the cores and seven at most, as the correlation's are, and
+  Node worker threads on the command line — while the thread that asked computes a stretch of its
+  own. The same helpers serve the MDS and then the likelihood, and a helper still starting is not
+  waited for: the thread that asked computes its bands until it says it is up. The bands' values and
+  gradients are added in band order whatever the threads, so the model is the same bits on one
+  thread and on eight: the command line's `--threads 1` and `--threads 4` write the same bed3d, and
+  the app's model, made with three helpers, is the command line's on one thread. On the validation's
+  yeast Micro-C at 12.8 kb (905 beads) a model takes 4.6 s with `--threads 4` where it takes 12.5 s
+  on one, at 6.4 kb (1,807 beads) 13 s where it takes 41, and in Chromium a model of chromosome IV
+  at 1 kb (1,400 beads) 9 s where it took 20.7 — on a four-core machine that draws the page on the
+  same cores. A page shares no memory with its workers, so each helper is sent its rows of a
+  triangle once per objective, the copies held to 512 MB; the command line allocates the counts on
+  a `SharedArrayBuffer` and its helpers read the one matrix. A helper that cannot start, or fails,
+  has its bands computed by the thread that asked, with the same numbers. The command line gains
+  `--threads N`, **one by default**, so that the times `notebooks/timing.qmd` sets beside the
+  references' are one core's; the estimate prices a hundred steps on the threads the run will have
+  and counts the helpers' copies in its memory. The walk underneath (`structure/lbfgs.ts`) now asks
+  for each evaluation rather than making it, so the threads can be awaited.
+
+- **pastis-NB is now pastis-NB as pastis runs it, and from the same seed gives pastis' model
+  (§25.6).** *Model from the map* departed from pastis on purpose in three places, and no longer
+  does in any of them. **The dispersion** was a moment estimate per separation, held fixed; it is
+  now pastis' curve against the mean — the bias-corrected counts' mean and variance at each
+  separation (`compute_mean_variance`), and `r = exp(c₀ + c₁ log λ)` fitted through them
+  (`ExponentialDispersion(degree=1)`) — read off at each pair's own mean as the beads move, its
+  derivative in the gradient. On the validation's yeast map it is pastis' curve to seven figures,
+  `r = 3.22 · λ^0.151`, where the old estimate ran the other way (11 near the diagonal, 123 far).
+  **The likelihood** is the whole negative binomial, gamma functions and all, with pastis' `β = 1`
+  and the biases scaled to a mean of 1: at pastis' own final model its value is pastis' to ten
+  figures. **The start** was ShRec3D's classical scaling and sixty SMACOF steps; it is now pastis'
+  MDS — the relative stress over the counted pairs — from beads placed at random by numpy's own
+  Mersenne Twister, so a new **seed** control, shown under pastis-NB, places every bead where
+  pastis' `random_state` does. Both are solved to pastis' tolerances by an L-BFGS that now uses
+  SciPy's L-BFGS-B constants (a thousandth for Armijo, twenty probes, ten pairs of history, a
+  restart on a failed search). The fit table shows the curve, the seed, the MDS's steps and the
+  `−log L` pastis would report; the scale β row is gone, β being 1.
+
+  **What that buys, on the validation's yeast Micro-C at 12.8 kb (905 beads), against pastis from
+  the same seed:** distances within chromosomes agree at Spearman ρ = 0.988, 0.993 and 0.978 for
+  seeds 0, 1 and 2, between chromosomes at 0.982, 0.997 and 0.901, and the per-chromosome Procrustes
+  disparity is 0.016, 0.002 and 0.036 — where pastis agrees with *itself* across seeds at 0.94–0.95,
+  0.50–0.57 and 0.085–0.094, and the old port agreed with pastis at 0.87–0.88, 0.40–0.47 and
+  0.22–0.24, outside pastis' own spread. The old port ranked the contacts within chromosomes better
+  (ρ 0.945 against pastis' 0.868–0.873); the new one ranks them as pastis does (0.872).
+
+  **And the time.** The default 150 steps take about 12 seconds from the command line on that map
+  (7 before, 65–80 for pastis): a pastis evaluation is a logarithm and an exponential per pair for
+  the dispersion's power of the mean, a logarithm for the spread and one for the gamma functions,
+  about twenty passes' worth of a SMACOF stress where the old one was eight. Its MDS start costs a
+  third of a second where pastis' costs nine, and the counts are the only matrix it holds — one
+  `n²` matrix where both methods held two, so twelve thousand beads is half a gigabyte, not one.
+  150 steps is where pastis' own runs end on that map (125–148); raised to pastis' gradient
+  tolerance a run goes on to a likelihood about a thousand units better than pastis', in 900 steps.
+  One small difference is new, and deliberate: a separation whose variance is within a Poisson's own scatter
+  of its mean is left out of the curve, and with fewer than three left the counts are read as
+  Poisson — on a real map every separation is in, and on Poisson counts pastis would fit a curve
+  that loses the model.
+
 - **The notebooks render a job each, and the run's summary has a section each (§18.10).**
   `.github/workflows/notebooks.yml` renders the parity first, then the validation with the timings
   (which run the validation's commands on its inputs) beside the laptop, each job on a runner of its

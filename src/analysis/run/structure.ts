@@ -32,13 +32,20 @@ import type {
   TaskOutput,
 } from '../types'
 import {
-  POISSON_DISPERSION,
-  dispersionBySeparation,
-  dispersionRange,
-  fitNegativeBinomial,
+  dispersionAt,
+  fitDispersion,
+  likelihoodWalk,
+  mdsWalk,
+  momentsBySeparation,
+  randomStart,
+  storeWishes,
   type Dispersion,
+  type MdsFit,
   type NegBinomFit,
+  type SeparationMoments,
 } from '../../structure/negbinom'
+import { numpyRandom } from '../random'
+import { openFitThreads } from '../likelihoodThreads'
 import {
   classicalMdsSweeps,
   compactInPlace,
@@ -70,22 +77,18 @@ import { formatBp } from './labels'
 import { regionLabel } from '../../genome/assembly'
 
 /**
- * SMACOF steps pastis-NB takes before the likelihood starts.
+ * The bar's share of pastis' MDS start, in the units the likelihood's steps are.
  *
- * Fixed rather than the reader's **Refinement steps**, which under this method
- * is the likelihood's budget and not the MDS's. A likelihood surface with a
- * pole at every collided pair is not somewhere to enter from noise, so pastis
- * starts its solvers from an MDS model — but that model only has to be in the
- * right basin, not to be right, and sixty steps is past where the stress of a
- * Hi-C map has stopped moving. Spending more of them would be spending the
- * reader's seconds on the answer that is about to be replaced.
+ * The MDS stops on pastis' tolerance rather than on a count, so it has no
+ * denominator to walk; it usually stops within a hundred steps, so the first
+ * hundred units are its and anything after them waits at the last.
  */
-const NB_INIT_STEPS = 60
+const MDS_SHARE = 100
 
 /** What a run says about why the optimiser stopped. */
 const STOP_WORDS: Record<NegBinomFit['stop'], string> = {
   gradient: 'the gradient: a maximum of the likelihood',
-  value: 'the steps stopped buying anything',
+  value: 'pastis’ tolerance: a step bought less than a double can hold',
   steps: 'the step budget — raise it for a closer fit',
   search: 'a line search that found nowhere better to go',
 }
@@ -460,6 +463,8 @@ async function contactCells(
   spans: Span[] | null,
   balance: boolean,
   value: string,
+  /** The `n²` matrices the method will hold, for the note if the first will not fit. */
+  matrices: number,
 ): Promise<{ cells: Cells; how: string } | { refusal: string }> {
   const block = job.inputs.block
   // **Never a pooled block**, which is `usableBlock`'s rule and every other
@@ -496,7 +501,7 @@ async function contactCells(
     }
     const n = rows.length
     const values = allocate(n)
-    if (values === null) return { refusal: tooBig(n) }
+    if (values === null) return { refusal: tooBig(n, matrices) }
     for (let a = 0; a < n; a++) {
       const at = rows[a] * block.ncols
       for (let b = 0; b < n; b++) values[a * n + b] = block.values[at + rows[b]]
@@ -524,7 +529,7 @@ async function contactCells(
   if (n === 0) return { refusal: 'The framing holds no bins to model.' }
   const values = allocate(n)
   const counts = values === null ? null : allocate(n)
-  if (values === null || counts === null) return { refusal: tooBig(n) }
+  if (values === null || counts === null) return { refusal: tooBig(n, matrices) }
   const total = (wanted.length * (wanted.length + 1)) / 2
   let done = 0
   for (let a = 0; a < wanted.length; a++) {
@@ -577,16 +582,33 @@ async function contactCells(
  */
 function allocate(n: number): Float32Array | null {
   try {
+    // On memory other threads can read, where this one may share it — the
+    // command line; a page is not served with the headers that allow it — so
+    // that pastis-NB's helpers read the counts rather than copies of them
+    // (`analysis/likelihoodThreads.ts`). A refusal falls back to a buffer of
+    // this thread's own, which is the same matrix to everything but a helper.
+    const isolated = (globalThis as { crossOriginIsolated?: boolean }).crossOriginIsolated
+    if (typeof SharedArrayBuffer === 'function' && isolated !== false) {
+      try {
+        return new Float32Array(new SharedArrayBuffer(4 * n * n))
+      } catch {
+        // An ordinary buffer, then.
+      }
+    }
     return new Float32Array(n * n)
   } catch {
     return null
   }
 }
 
-function tooBig(n: number): string {
-  const gb = (2 * 4 * n * n) / 1e9
+/**
+ * The note for a browser that would not give the run its matrices: `matrices`
+ * of them, `n²` singles each — two under ShRec3D, one under pastis-NB.
+ */
+function tooBig(n: number, matrices: number): string {
+  const gb = (matrices * 4 * n * n) / 1e9
   return (
-    `${n.toLocaleString()} beads needs about ${gb.toFixed(1)} GB of matrices, and this browser ` +
+    `${n.toLocaleString()} beads needs about ${gb.toFixed(1)} GB ${matrices === 1 ? 'for its matrix' : 'of matrices'}, and this browser ` +
     'would not give it. Select a coarser resolution, or name fewer sequences.'
   )
 }
@@ -634,6 +656,8 @@ export const runReconstruct: TaskRunner = async (job) => {
   // through a form, and a stored session may name a method a later version
   // dropped. Anything that is not ShRec3D is the default, which is pastis-NB.
   const nb = strParam(job.params, 'method', 'nb') !== 'shrec3d'
+  // pastis' `random_state`: where its MDS places the beads before it starts.
+  const seed = Math.max(0, Math.round(numParam(job.params, 'seed', 0)))
   const regionText = strParam(job.params, 'region', '').trim()
   const spans = regionSpans(job, regionText)
   if (spans !== null && !Array.isArray(spans)) {
@@ -653,7 +677,7 @@ export const runReconstruct: TaskRunner = async (job) => {
   // distance from `c^(−1/α)` is a ratio, and balancing is what makes those
   // ratios comparable between bins.
   const readBalanced = nb ? false : balance
-  const source = await contactCells(job, spans, readBalanced, value)
+  const source = await contactCells(job, spans, readBalanced, value, nb ? 1 : 2)
   if ('refusal' in source) {
     job.note(source.refusal)
     return []
@@ -668,8 +692,8 @@ export const runReconstruct: TaskRunner = async (job) => {
   if (nb && balance) {
     job.note(
       'The view is drawn balanced and pastis-NB is solved on the raw counts underneath, with the ' +
-        'file’s weights folded into each pair’s expected count instead (μ = β·bᵢ·bⱼ·d^(−α), ' +
-        'bᵢ = 1/wᵢ). A balanced value is a count times two weights, and overdispersion is a ' +
+        'file’s weights folded into each pair’s expected count instead (μ = bᵢ·bⱼ·d^(−α), ' +
+        'bᵢ = 1/wᵢ scaled to a mean of 1, as pastis scales them). A balanced value is a count times two weights, and overdispersion is a ' +
         'statement about a count: handed one, the negative binomial would find none and become a ' +
         'Poisson. The coverage is still corrected — it is corrected in the mean rather than in ' +
         'the data (§25.6).',
@@ -729,7 +753,7 @@ export const runReconstruct: TaskRunner = async (job) => {
   const beadOfCell = new Int32Array(cells.n).fill(-1)
   for (let b = 0; b < cellOf.length; b++) beadOfCell[cellOf[b]] = b
 
-  job.progress(0, iterations + 2, 'contacts to distances')
+  job.progress(0, 1, nb ? 'the counts' : 'contacts to distances')
   await job.breathe()
   // The cells that are on a sequence **and** have a counted pair, in one list,
   // and every matrix built once at that size.
@@ -748,103 +772,161 @@ export const runReconstruct: TaskRunner = async (job) => {
   const n = pick.length
   const keptGroup = Int32Array.from(pick, (i) => group[i])
   const keptIndex = Int32Array.from(pick, (i) => index[i])
-  const keptBias = bias === null ? null : Float64Array.from(pick, (i) => bias[i])
-  // The counts are wanted twice and never again: as what each pair says about
-  // where its beads are, and as the distance its count implies. **Two matrices
-  // and not three**: the first is taken while the counts are still counts, and
-  // they are then turned into the distances where they already lie — compacted
-  // onto the kept beads and put through the law, both over the buffer they are
-  // read from. At twelve thousand beads a matrix is half a gigabyte, so the
-  // third one is the difference between a model and a tab that dies making one.
-  //
-  // **What that first matrix holds depends on the method**, and the difference
-  // is the difference between the two. ShRec3D wants a *weight* per pair, and a
-  // pair the map counted nothing for has no weight because it has no distance.
-  // pastis-NB wants the *counts themselves*, and it needs to tell a counted
-  // zero — evidence that two beads are far apart — from a pair the map could
-  // not look at, which is no evidence at all. `weightsOf` collapses both to
-  // nothing; `countsOf` keeps them apart.
-  const pairs = nb ? countsOf(cells.values, cells.n, pick) : weightsOf(cells.values, cells.n, pick, weightMode)
-  if (pairs === null) return refuse(job, n)
-  // The overdispersion, per genomic separation, read off the counts before
-  // anything is done to them — and before the buffer they share becomes the
-  // distances below.
-  const dispersion = nb ? dispersionBySeparation(pairs, n, keptGroup, keptIndex) : null
-  compactInPlace(cells.values, cells.n, pick)
-  const kept = cells.values.subarray(0, n * n)
-  distancesOverContacts(kept, n, alpha)
-  // The whole of the work, as one scale the bar can walk: the sweeps of the
-  // classical start, the MDS refinement, and — under pastis-NB — the likelihood
-  // on top of it. The MDS phase is the *whole* of the ShRec3D method and is
-  // pastis' own initialisation, so it runs either way; what changes is whether
-  // it is the answer or the starting point.
-  const sweeps = 80
-  const mdsSteps = nb ? NB_INIT_STEPS : iterations
-  const total = sweeps + mdsSteps + (nb ? iterations : 0) + 1
-  job.progress(0, total, 'classical scaling')
-  await job.breathe()
-  // Filled over itself: which pairs the map counted is what the `NaN`s said,
-  // and the weights say it too — zero for a pair it never saw — so the copy
-  // that kept them was a second matrix holding a fact already held.
-  fillDistancesInPlace(kept, n, keptGroup, keptIndex)
-  const scaling = classicalMdsSweeps(kept, n, sweeps)
-  let sweep = scaling.next()
-  while (sweep.done !== true) {
-    // Between every sweep, for the same two reasons the refinement breathes
-    // between steps: the bar moves, and a cancel has somewhere to land.
-    await job.breathe()
-    job.progress(sweep.value.sweep, total, `classical scaling · sweep ${sweep.value.sweep} of ${sweep.value.sweeps}`)
-    sweep = scaling.next()
-  }
-  let coords = sweep.value
-  let stress = stressOf(kept, n, coords, pairs)
-  let steps = 0
-  for (; steps < mdsSteps; steps++) {
-    // Between every step, not inside: the cancel lands here (`job.breathe`).
-    await job.breathe()
-    const before = stress
-    smacofStep(kept, n, coords, pairs, before)
-    const after = stressOf(kept, n, coords, pairs)
-    stress = after
-    const what = nb ? 'MDS start' : 'refining'
-    job.progress(sweeps + steps + 1, total, `${what} · step ${steps + 1} of ${mdsSteps} · stress ${after.toPrecision(3)}`)
-    if (before - after < 1e-6 * before) {
-      steps++
-      break
-    }
-  }
 
-  // The likelihood, on top of the model MDS just made. The scale is fixed
-  // first: the coordinates go in at unit root-mean-square radius so that `β`
-  // starts from a number of order one and the pole at a collided pair is a
-  // known distance away, rather than wherever `c^(−1/α)` happened to land.
-  let likelihood: NegBinomFit | null = null
-  if (nb && dispersion !== null) {
-    normaliseCoordinates(coords)
-    const walk = fitNegativeBinomial(
-      { counts: pairs, n, group: keptGroup, index: keptIndex, dispersion, bias: keptBias, alpha },
-      coords,
-      { iterations },
-    )
-    let move = walk.next()
-    while (move.done !== true) {
-      // Between every *evaluation*, not every iteration: a line search is
-      // several passes over the pairs and each is as long as a SMACOF step.
-      await job.breathe()
-      const at = Math.min(iterations, move.value.iteration)
-      job.progress(
-        sweeps + steps + at + 1,
-        total,
-        `pastis-NB · step ${at} of ${iterations} · −log L ${move.value.value.toExponential(3)}`,
-      )
-      move = walk.next()
+  let coords: Coordinates
+  let methodRows: Array<Record<string, string>>
+  let fit: { rho: number; pairs: number }
+  if (nb) {
+    // **One matrix**: the counts, compacted onto the kept beads over the buffer
+    // they were read into. The likelihood reads them above the diagonal and
+    // pastis' MDS start reads its wishes below it, so neither needs a matrix of
+    // its own and no distance is ever filled in.
+    const counts = countsInPlace(cells.values, cells.n, pick)
+    // pastis scales the biases to a mean of one, which is what lets `β` be one:
+    // a distance of 1 is then where a pair of average coverage expects one
+    // contact, and the model's size is fitted rather than chosen.
+    const keptBias = bias === null ? null : meanOne(Float64Array.from(pick, (i) => bias[i]))
+    const moments = momentsBySeparation(counts, n, keptGroup, keptIndex, keptBias)
+    const dispersion = fitDispersion(moments)
+    const evidence = zerosOf(counts, n)
+    storeWishes(counts, n, keptBias, alpha)
+
+    // The helpers are started now, and lent to the MDS start and then to the
+    // likelihood; each evaluation of either is shared among them and this
+    // thread, and awaited: the walk asks, and is answered when every band is
+    // in. The same bits on any number of threads, so the thread count is said
+    // in the bar and nowhere a result is written.
+    const threads = openFitThreads(n, counts)
+    try {
+      // pastis' start: beads uniform in a cube, numpy's draws from the reader's
+      // seed, then its MDS to its own loose tolerance. Between every evaluation,
+      // not inside one: the cancel lands here (`job.breathe`).
+      const total = MDS_SHARE + iterations
+      const mds = threads.mds(counts)
+      const mdsThreads = mds.threads === 1 ? '' : ` · ${mds.threads} threads`
+      const mdsSteps = mdsWalk(n, randomStart(n, numpyRandom(seed)))
+      let stress = Number.POSITIVE_INFINITY
+      let mdsAsk = mdsSteps.next()
+      while (mdsAsk.done !== true) {
+        await job.breathe()
+        const { point, gradient, iteration, current } = mdsAsk.value
+        const value = await mds.evaluate(point, gradient)
+        stress = Math.min(stress, current, value)
+        job.progress(
+          Math.min(MDS_SHARE - 1, iteration),
+          total,
+          `MDS start · step ${iteration}${mdsThreads} · stress ${stress.toPrecision(3)}`,
+        )
+        mdsAsk = mdsSteps.next(value)
+      }
+      const start: MdsFit = mdsAsk.value
+
+      // The likelihood, on top of the model the MDS just made and at its scale:
+      // the wishes and the mean are in the same units, so nothing is rescaled
+      // between the two.
+      let likelihood: NegBinomFit | null = null
+      coords = start.coords
+      if (iterations > 0) {
+        const negBinom = threads.likelihood({ counts, n, bias: keptBias, dispersion, alpha })
+        const nbThreads = negBinom.threads === 1 ? '' : ` · ${negBinom.threads} threads`
+        const walk = likelihoodWalk(n, start.coords, { iterations })
+        let best = Number.POSITIVE_INFINITY
+        let ask = walk.next()
+        while (ask.done !== true) {
+          // Between every *evaluation*, not every iteration: a line search can
+          // be several passes over the pairs.
+          await job.breathe()
+          const { point, gradient, iteration, current } = ask.value
+          const value = await negBinom.evaluate(point, gradient)
+          best = Math.min(best, current, value)
+          const at = Math.min(iterations, iteration)
+          job.progress(
+            MDS_SHARE + at,
+            total,
+            `pastis-NB · step ${at} of at most ${iterations}${nbThreads} · −log L ${best.toExponential(3)}`,
+          )
+          ask = walk.next(value)
+        }
+        likelihood = ask.value
+        coords = likelihood.coords
+      }
+      job.progress(total, total)
+      fit = fitOfCounts(counts, n, coords, keptBias)
+      methodRows = nbRows(evidence, alpha, dispersion, moments, keptBias !== null, seed, start, likelihood, iterations)
+    } finally {
+      threads.close()
     }
-    likelihood = move.value
-    coords = likelihood.coords
+  } else {
+    // ShRec3D wants a *weight* per pair, and a pair the map counted nothing for
+    // has no weight because it has no distance. The weights are taken while the
+    // counts are still counts, and the counts are then turned into the
+    // distances where they already lie — compacted onto the kept beads and put
+    // through the law, both over the buffer they are read from. At twelve
+    // thousand beads a matrix is half a gigabyte, so a third one is the
+    // difference between a model and a tab that dies making one.
+    const pairs = weightsOf(cells.values, cells.n, pick, weightMode)
+    if (pairs === null) return refuse(job, n)
+    compactInPlace(cells.values, cells.n, pick)
+    const kept = cells.values.subarray(0, n * n)
+    distancesOverContacts(kept, n, alpha)
+    // The whole of the work, as one scale the bar can walk: the sweeps of the
+    // classical start, then the refinement.
+    const sweeps = 80
+    const total = sweeps + iterations + 1
+    job.progress(0, total, 'classical scaling')
+    await job.breathe()
+    // Filled over itself: which pairs the map counted is what the `NaN`s said,
+    // and the weights say it too — zero for a pair it never saw — so the copy
+    // that kept them was a second matrix holding a fact already held.
+    fillDistancesInPlace(kept, n, keptGroup, keptIndex)
+    const scaling = classicalMdsSweeps(kept, n, sweeps)
+    let sweep = scaling.next()
+    while (sweep.done !== true) {
+      // Between every sweep, for the same two reasons the refinement breathes
+      // between steps: the bar moves, and a cancel has somewhere to land.
+      await job.breathe()
+      job.progress(sweep.value.sweep, total, `classical scaling · sweep ${sweep.value.sweep} of ${sweep.value.sweeps}`)
+      sweep = scaling.next()
+    }
+    coords = sweep.value
+    let stress = stressOf(kept, n, coords, pairs)
+    let steps = 0
+    for (; steps < iterations; steps++) {
+      // Between every step, not inside: the cancel lands here (`job.breathe`).
+      await job.breathe()
+      const before = stress
+      smacofStep(kept, n, coords, pairs, before)
+      const after = stressOf(kept, n, coords, pairs)
+      stress = after
+      job.progress(sweeps + steps + 1, total, `refining · step ${steps + 1} of ${iterations} · stress ${after.toPrecision(3)}`)
+      if (before - after < 1e-6 * before) {
+        steps++
+        break
+      }
+    }
+    job.progress(total, total)
+    fit = fitOf(kept, n, coords, pairs)
+    methodRows = [
+      { what: 'Distance law', value: `d = c^(−1/${alpha})` },
+      {
+        what: 'Pairs weighted by',
+        value:
+          weightMode === 'contacts'
+            ? 'the contact count'
+            : weightMode === 'sqrt'
+              ? 'the square root of the contact count'
+              : 'nothing: every counted pair alike',
+      },
+      { what: 'Refinement steps', value: `${steps.toLocaleString()}` },
+      // Three significant digits rather than an exponent: `3.994e-2` beside
+      // `0.881` reads as a number on a different scale, and a stress is read
+      // as the fraction it is. `toPrecision` keeps the exponent only for the
+      // magnitudes where a fixed point would be all zeros.
+      { what: 'Weighted stress', value: stress.toPrecision(3) },
+    ]
   }
 
   normaliseCoordinates(coords)
-  job.progress(total, total)
 
   const placed: ModelBead[] = []
   for (let b = 0; b < n; b++) {
@@ -859,7 +941,6 @@ export const runReconstruct: TaskRunner = async (job) => {
         ? [...sequences][0]
         : `${sequences.size} sequences`
       : locusName(regionText)
-  const fit = fitOf(kept, n, coords, pairs, alpha, keptBias)
 
   if (dropped > 0) {
     job.note(
@@ -889,27 +970,7 @@ export const runReconstruct: TaskRunner = async (job) => {
       { what: 'Beads', value: `${n.toLocaleString()} of ${cells.n.toLocaleString()} cells, ${formatBp(binsize)} each` },
       { what: 'Sequences', value: `${sequences.size.toLocaleString()}` },
       { what: 'Pairs counted', value: `${fit.pairs.toLocaleString()} of ${((n * (n - 1)) / 2).toLocaleString()}` },
-      ...(nb
-        ? nbRows(pairs, n, alpha, dispersion, keptBias !== null, likelihood, iterations, steps)
-        : [
-            { what: 'Distance law', value: `d = c^(−1/${alpha})` },
-            {
-              what: 'Pairs weighted by',
-              value:
-                weightMode === 'contacts'
-                  ? 'the contact count'
-                  : weightMode === 'sqrt'
-                    ? 'the square root of the contact count'
-                    : 'nothing: every counted pair alike',
-            },
-            { what: 'Refinement steps', value: `${steps.toLocaleString()}` },
-            // Three significant digits rather than an exponent: `3.994e-2`
-            // beside `0.881` reads as a number on a different scale, and a
-            // stress is read as the fraction it is. `toPrecision` keeps the
-            // exponent only for the magnitudes where a fixed point would be
-            // all zeros.
-            { what: 'Weighted stress', value: stress.toPrecision(3) },
-          ]),
+      ...methodRows,
       { what: 'Spearman ρ (1/d vs contacts)', value: Number.isNaN(fit.rho) ? '—' : fit.rho.toFixed(3) },
     ],
   }
@@ -922,8 +983,9 @@ export const runReconstruct: TaskRunner = async (job) => {
  *
  * This is where the balancing goes under pastis-NB, and it has to go *somewhere*
  * because the counts themselves must stay raw ({@link NegBinomModel.bias}): the
- * mean of a pair becomes `β·b_i·b_j·d^(−α)`, which is pastis' own handling of
- * ICE biases and leaves the counts as counts.
+ * mean of a pair becomes `b_i·b_j·d^(−α)`, which is pastis' own handling of
+ * ICE biases and leaves the counts as counts. The runner scales them to a mean
+ * of one, as pastis' pipeline does, once the kept beads are known.
  *
  * A pooled cell is several bins, so its bias is the **mean of its bins'**, over
  * the bins the balancer kept. A cell it kept none of gets `NaN`, which the
@@ -967,38 +1029,36 @@ function biasForCells(job: JobContext, cells: Cells): Float64Array | null {
 }
 
 /**
- * The counts over the kept beads, **with a zero and a gap still distinct**.
+ * The counts over the kept beads, **with a zero and a gap still distinct**,
+ * compacted over the buffer they were read into.
  *
- * {@link weightsOf}'s shape, and one predicate apart from it: it asks whether a
- * cell is finite, where that one asks whether it is positive. The difference is
- * the whole of what pastis-NB reads a map for. A cell holding `0` is a pair the
- * map looked at and counted nothing on — under a likelihood that is *evidence*,
- * and the pair pushes its beads apart — while a `NaN` is a pair a filtered bin
- * or a gap made unobservable, which says nothing and is skipped. ShRec3D cannot
- * tell them apart because neither is a distance; that is why it has to fill.
+ * {@link weightsOf}'s question asked differently: whether a cell is finite,
+ * where that one asks whether it is positive. The difference is the whole of
+ * what pastis-NB reads a map for. A cell holding `0` is a pair the map looked
+ * at and counted nothing on — under a likelihood that is *evidence*, and the
+ * pair pushes its beads apart — while a `NaN` is a pair a filtered bin or a gap
+ * made unobservable, which says nothing and is skipped. ShRec3D cannot tell
+ * them apart because neither is a distance; that is why it has to fill.
  *
- * Read at the counts' own indices, before they are compacted and turned into
- * the distances over themselves.
+ * In place, so the method holds one `n²` matrix and not two: the read was
+ * already a private copy (`contactCells`), and nothing else wants it.
  */
-function countsOf(values: Float32Array, n: number, keep: Int32Array): Float32Array | null {
+function countsInPlace(values: Float32Array, n: number, keep: Int32Array): Float32Array {
+  compactInPlace(values, n, keep)
   const m = keep.length
-  const out = allocate(m)
-  if (out === null) return null
-  out.fill(Number.NaN)
+  const out = values.subarray(0, m * m)
   for (let a = 0; a < m; a++) {
     out[a * m + a] = 0
-    const row = keep[a] * n
     for (let b = a + 1; b < m; b++) {
-      const p = values[row + keep[b]]
-      const q = values[keep[b] * n + keep[a]]
+      const p = out[a * m + b]
+      const q = out[b * m + a]
       const okP = Number.isFinite(p)
       const okQ = Number.isFinite(q)
-      if (!okP && !okQ) continue
-      const c = okP && okQ ? (p + q) / 2 : okP ? p : q
+      const c = !okP && !okQ ? Number.NaN : okP && okQ ? (p + q) / 2 : okP ? p : q
       // A balanced cell is a count times two positive weights and cannot be
       // negative; a rounding at the bottom of one can be, and a negative count
       // is not a thing the likelihood has a value for.
-      const kept = c > 0 ? c : 0
+      const kept = Number.isNaN(c) ? c : c > 0 ? c : 0
       out[a * m + b] = kept
       out[b * m + a] = kept
     }
@@ -1006,34 +1066,17 @@ function countsOf(values: Float32Array, n: number, keep: Int32Array): Float32Arr
   return out
 }
 
-/** An `r` as a reader should see it: a number, or the word for *no overdispersion*. */
-function dispersionWords(r: number): string {
-  if (!(r < POISSON_DISPERSION)) return 'none'
-  return r >= 10 ? r.toFixed(0) : r.toFixed(2)
+/** The biases over their mean, as pastis' pipeline scales them (`bias /= bias.mean()`). */
+function meanOne(bias: Float64Array): Float64Array {
+  let sum = 0
+  for (const b of bias) sum += b
+  const mean = sum / bias.length
+  if (mean > 0) for (let i = 0; i < bias.length; i++) bias[i] /= mean
+  return bias
 }
 
-/**
- * What a pastis-NB run has to say for itself, as rows of the fit table.
- *
- * Three of these are here because they are the only way a reader can tell
- * whether the method did anything a Poisson would not have. **Zeros used as
- * evidence** is the count of pairs ShRec3D would have had to invent a distance
- * for. **Overdispersion** is the one parameter pastis-NB adds over pastis-PM2,
- * and where it reports *none* the two methods have converged and the reader
- * should read the model as a Poisson's. **Stopped on** is whether the fit
- * finished or ran out of steps, which on a big model is the difference between
- * a maximum and a waypoint.
- */
-function nbRows(
-  counts: DenseMatrix,
-  n: number,
-  alpha: number,
-  dispersion: Dispersion | null,
-  balanced: boolean,
-  fit: NegBinomFit | null,
-  iterations: number,
-  mdsSteps: number,
-): Array<Record<string, string>> {
+/** The pairs the map could see, and how many of them it counted nothing on. */
+function zerosOf(counts: DenseMatrix, n: number): { observed: number; zeros: number } {
   let observed = 0
   let zeros = 0
   for (let i = 0; i < n; i++) {
@@ -1044,48 +1087,82 @@ function nbRows(
       if (c === 0) zeros++
     }
   }
-  const range = dispersion === null ? null : dispersionRange(dispersion)
+  return { observed, zeros }
+}
+
+/** A number as a reader should see it in a sentence: three figures, no exponent where none is needed. */
+function figure(value: number): string {
+  return value >= 100 ? value.toFixed(0) : value >= 10 ? value.toFixed(1) : value.toPrecision(3)
+}
+
+/**
+ * What a pastis-NB run has to say for itself, as rows of the fit table.
+ *
+ * Three of these are here because they are the only way a reader can tell
+ * whether the method did anything a Poisson would not have. **Zeros used as
+ * evidence** is the count of pairs ShRec3D would have had to invent a distance
+ * for. **Overdispersion** is the one curve pastis-NB adds over pastis-PM2,
+ * written out with the `r` it gives near the diagonal and far from it; where it
+ * reports *none* the two methods have converged and the reader should read the
+ * model as a Poisson's. **Stopped on** is whether the fit finished or ran out
+ * of steps, which on a big model is the difference between a maximum and a
+ * waypoint.
+ */
+function nbRows(
+  evidence: { observed: number; zeros: number },
+  alpha: number,
+  dispersion: Dispersion | null,
+  moments: SeparationMoments,
+  balanced: boolean,
+  seed: number,
+  start: MdsFit,
+  fit: NegBinomFit | null,
+  iterations: number,
+): Array<Record<string, string>> {
+  const last = moments.mean.length - 1
   const rows: Array<Record<string, string>> = [
     {
       what: 'Mean of a pair',
-      value: balanced ? `μ = β · bᵢ · bⱼ · d^(−${alpha})` : `μ = β · d^(−${alpha})`,
+      value: balanced ? `μ = bᵢ · bⱼ · d^(−${alpha})` : `μ = d^(−${alpha})`,
     },
     {
       what: 'Counts',
       value: balanced
-        ? 'raw, with the file’s balancing weights folded into the mean as bᵢ = 1/wᵢ'
+        ? 'raw, with the file’s balancing weights folded into the mean as bᵢ = 1/wᵢ, scaled to a mean of 1'
         : 'raw: this file carries no balancing weights',
     },
     {
       what: 'Zeros used as evidence',
-      value: `${zeros.toLocaleString()} of the ${observed.toLocaleString()} pairs the map could see`,
+      value: `${evidence.zeros.toLocaleString()} of the ${evidence.observed.toLocaleString()} pairs the map could see`,
     },
     {
       what: 'Overdispersion (r)',
       value:
-        range === null
-          ? '—'
-          : range.poisson
-            ? 'none: these counts are Poisson, so this is pastis-PM2'
-            : `${dispersionWords(range.near)} near the diagonal, ${dispersionWords(range.far)} far from it ` +
-              '— a smaller r is more overdispersed, and pulls its pairs less',
+        dispersion === null
+          ? 'none: these counts are Poisson, so this is pastis-PM2'
+          : `r = ${figure(Math.exp(dispersion.c0))} · λ^${dispersion.c1.toFixed(3)}, λ the mean, fitted over ` +
+            `${moments.mean.length.toLocaleString()} separations: ` +
+            `${figure(dispersionAt(dispersion, moments.mean[0]))} near the diagonal, ` +
+            `${figure(dispersionAt(dispersion, moments.mean[last]))} at ${moments.separation[last].toLocaleString()} bins ` +
+            '— a smaller r is more overdispersed',
     },
-    { what: 'MDS start', value: `${mdsSteps.toLocaleString()} SMACOF steps` },
+    {
+      what: 'MDS start',
+      value:
+        `pastis’ MDS from random positions, seed ${seed}: ${start.iterations.toLocaleString()} steps, ` +
+        `${start.evaluations.toLocaleString()} evaluations`,
+    },
   ]
   if (fit === null) return rows
   rows.push(
     {
       what: 'Likelihood steps',
-      value: `${fit.iterations.toLocaleString()} of ${iterations.toLocaleString()}, over ${fit.evaluations.toLocaleString()} evaluations`,
+      value: `${fit.iterations.toLocaleString()} of at most ${iterations.toLocaleString()}, over ${fit.evaluations.toLocaleString()} evaluations`,
     },
     { what: 'Stopped on', value: STOP_WORDS[fit.stop] },
-    // Up to `Σ (r + c) log r`, which no structure can change and which is
-    // dropped for the precision it would otherwise eat (`negBinomObjective`).
-    // So it can be negative, and only differences between runs on one map mean
-    // anything — which is what the label has to say, or a reader reasonably
-    // reads a negative log-likelihood as a bug.
-    { what: '−log L (to within a constant)', value: fit.value.toExponential(4) },
-    { what: 'Scale β', value: fit.beta.toExponential(3) },
+    // Less `Σ log c!`, which no structure can change and pastis leaves out too,
+    // so this is the very number its objective returns and can be negative.
+    { what: '−log L (less Σ log c!, as pastis gives it)', value: fit.value.toExponential(4) },
   )
   return rows
 }
@@ -1120,7 +1197,7 @@ function weightsOf(values: Float32Array, n: number, keep: Int32Array, mode: Weig
 
 /** The note a run leaves when the browser will not give it the matrices it needs. */
 function refuse(job: JobContext, n: number): TaskOutput[] {
-  job.note(tooBig(n))
+  job.note(tooBig(n, 2))
   return []
 }
 
@@ -1153,16 +1230,8 @@ function constrainedIn(values: Float32Array, n: number, within: Int32Array): Int
 /**
  * How the model orders the counted pairs against the map: Spearman's ρ between
  * `1/d` in the model and the contact each pair had, over at most 200,000 pairs
- * taken at an even stride so a big block does not sort millions.
- *
- * **`bias` is what makes the number comparable across the two methods.** Where
- * pastis-NB read raw counts and put the balancing weights into the mean, the
- * quantity its model is fitted against is `raw/(bᵢbⱼ)` — which is precisely the
- * *balanced* value, since balancing is `raw·wᵢwⱼ` and `b = 1/w`. Ranking
- * against the raw counts instead would score the model on coverage it was right
- * to have divided out, and would report a worse fit the more uneven the file
- * is. Given the bias, this is the same number *Model versus map* computes for a
- * loaded model on a balanced map.
+ * taken at an even stride so a big block does not sort millions. ShRec3D's
+ * reading, over the distances its counts became.
  */
 function fitOf(
   target: DenseMatrix,
@@ -1170,10 +1239,6 @@ function fitOf(
   coords: Coordinates,
   /** Which pairs the map counted: non-zero where it did. The filled matrix no longer says. */
   weights: DenseMatrix,
-  /** The law that turns a distance back into the count it came from. */
-  alpha: number,
-  /** Each bead's coverage bias, where the run divided one out; `null` where it did not. */
-  bias: Float64Array | null = null,
 ): { rho: number; pairs: number } {
   let pairs = 0
   for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (weights[i * n + j] > 0) pairs++
@@ -1186,14 +1251,53 @@ function fitOf(
       const delta = target[i * n + j]
       if (!(weights[i * n + j] > 0)) continue
       if (seen++ % stride !== 0) continue
-      const d = Math.hypot(coords.x[i] - coords.x[j], coords.y[i] - coords.y[j], coords.z[i] - coords.z[j])
-      a.push(d > 0 ? 1 / d : Number.POSITIVE_INFINITY)
+      a.push(inverseDistance(coords, i, j))
       // The count is the distance undone; its rank is the count's rank, so
-      // `−delta` ranks as the count does and costs no `pow`. With a bias there
-      // is arithmetic to do rather than a rank to borrow, and the `pow` is paid
-      // on the sampled pairs only.
-      b.push(bias === null ? -delta : Math.pow(delta, -alpha) / (bias[i] * bias[j]))
+      // `−delta` ranks as the count does and costs no `pow`.
+      b.push(-delta)
     }
   }
   return { rho: spearman(a, b), pairs }
+}
+
+/**
+ * The same ρ under pastis-NB, read off the counts above the diagonal.
+ *
+ * **Against `raw/(bᵢbⱼ)`**, which is what makes the number comparable across
+ * the two methods. pastis-NB read raw counts and put the balancing weights into
+ * the mean, so the quantity its model is fitted against is `raw/(bᵢbⱼ)` —
+ * precisely the *balanced* value, since balancing is `raw·wᵢwⱼ` and `b = 1/w`,
+ * up to the one constant the biases were scaled by, which no rank sees.
+ * Ranking against the raw counts instead would score the model on coverage it
+ * was right to have divided out, and would report a worse fit the more uneven
+ * the file is. Given the bias, this is the same number *Model versus map*
+ * computes for a loaded model on a balanced map.
+ */
+function fitOfCounts(
+  counts: DenseMatrix,
+  n: number,
+  coords: Coordinates,
+  bias: Float64Array | null,
+): { rho: number; pairs: number } {
+  let pairs = 0
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (counts[i * n + j] > 0) pairs++
+  const stride = Math.max(1, Math.ceil(pairs / 200000))
+  const a: number[] = []
+  const b: number[] = []
+  let seen = 0
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const c = counts[i * n + j]
+      if (!(c > 0)) continue
+      if (seen++ % stride !== 0) continue
+      a.push(inverseDistance(coords, i, j))
+      b.push(bias === null ? c : c / (bias[i] * bias[j]))
+    }
+  }
+  return { rho: spearman(a, b), pairs }
+}
+
+function inverseDistance(coords: Coordinates, i: number, j: number): number {
+  const d = Math.hypot(coords.x[i] - coords.x[j], coords.y[i] - coords.y[j], coords.z[i] - coords.z[j])
+  return d > 0 ? 1 / d : Number.POSITIVE_INFINITY
 }
