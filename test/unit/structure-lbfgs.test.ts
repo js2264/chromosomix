@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { lbfgs, type LbfgsResult, type Objective } from '@/structure/lbfgs'
+import { lbfgs, lbfgsWalk, type LbfgsResult, type Objective } from '@/structure/lbfgs'
 
 /** Drain the generator, counting the yields so the breathing can be checked. */
 function run(objective: Objective, start: number[], options = {}): { result: LbfgsResult; yields: number } {
@@ -47,6 +47,28 @@ function quadratic(scales: number[]): Objective {
 }
 
 describe('L-BFGS', () => {
+  it('asks for each evaluation and takes the same steps whoever answers, however late', async () => {
+    // The walk the likelihood's threads drive (`analysis/likelihoodThreads.ts`):
+    // answered a task apart, as a round trip to other threads would be, it is
+    // the same walk the plain driver takes, point for point.
+    const objective = quadratic([1, 1e3, 1e6, 10])
+    const { result } = run(objective, [5, -3, 2, 7], { iterations: 50 })
+    const walk = lbfgsWalk(Float64Array.from([5, -3, 2, 7]), { iterations: 50 })
+    let asks = 0
+    let step = walk.next()
+    while (step.done !== true) {
+      asks++
+      expect(step.value.evaluations).toBe(asks)
+      const { point, gradient } = step.value
+      const value = await new Promise<number>((resolve) => setTimeout(() => resolve(objective(point, gradient)), 0))
+      step = walk.next(value)
+    }
+    expect(Array.from(step.value.point)).toEqual(Array.from(result.point))
+    expect(step.value.value).toBe(result.value)
+    expect(step.value.evaluations).toBe(result.evaluations)
+    expect(asks).toBe(result.evaluations)
+  })
+
   it('finds Rosenbrock’s minimum from the textbook’s hard start', () => {
     // Run to the gradient rather than to the value tolerance, so what is
     // measured is the method's accuracy and not where it chose to stop.

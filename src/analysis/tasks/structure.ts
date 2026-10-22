@@ -101,21 +101,46 @@ const NB_PAIRS_PER_SECOND = PAIRS_PER_SECOND / 20
 const NB_EVALUATIONS_PER_STEP = 1.03
 
 /**
+ * The threads pastis-NB's likelihood will be shared among, this one included.
+ *
+ * The analysis worker's rule (`worker/analysis.worker.ts`: one helper fewer
+ * than the cores, seven at most) and `likelihoodThreads.ts`'s (one thread under
+ * 256 beads), written here rather than imported: the panel's half of the tree
+ * does not load the likelihood to read two numbers off it.
+ */
+function likelihoodThreads(beads: number): number {
+  if (beads < 256) return 1
+  const cores = typeof navigator === 'undefined' ? 1 : navigator.hardwareConcurrency || 1
+  return 1 + Math.max(0, Math.min(7, cores - 1))
+}
+
+/**
+ * What the threads buy: each one past the first about six-tenths of a core.
+ * Measured in Chromium on four cores, where the page draws on the same cores
+ * the helpers compute on: a likelihood evaluation 2.7 times as fast on four
+ * threads as on one (`likelihoodThreads.ts`).
+ */
+const THREAD_WORTH = 0.6
+
+/**
  * How long a hundred refinement steps take at that rate.
  *
  * A ShRec3D step is the move and its stress, both a pass over every pair; a
  * pastis-NB step is a line search over a function that costs ten times as much
- * per pair, and the reader is told which before pressing run rather than
- * after. pastis' MDS start is left out: it is a cheap function, stops at a
- * part in five thousand, and costs about what one likelihood step does.
+ * per pair, shared among the threads it will have, and the reader is told
+ * which before pressing run rather than after. pastis' MDS start is left out:
+ * it is a cheap function, stops at a part in five thousand, and costs about
+ * what one likelihood step does.
  */
 function refineWords(beads: number, nb: boolean): string {
+  const threads = nb ? likelihoodThreads(beads) : 1
   const seconds = nb
-    ? (100 * NB_EVALUATIONS_PER_STEP * beads * beads) / NB_PAIRS_PER_SECOND
+    ? (100 * NB_EVALUATIONS_PER_STEP * beads * beads) / NB_PAIRS_PER_SECOND / (1 + THREAD_WORTH * (threads - 1))
     : (100 * 2 * beads * beads) / PAIRS_PER_SECOND
-  if (seconds < 1) return 'well under a second per hundred steps'
-  if (seconds < 90) return `about ${Math.round(seconds)} seconds per hundred steps`
-  return `about ${Math.round(seconds / 60)} minutes per hundred steps`
+  const on = threads > 1 ? ` on ${threads} threads` : ''
+  if (seconds < 1) return `well under a second per hundred steps${on}`
+  if (seconds < 90) return `about ${Math.round(seconds)} seconds per hundred steps${on}`
+  return `about ${Math.round(seconds / 60)} minutes per hundred steps${on}`
 }
 
 /**
@@ -136,7 +161,14 @@ function matrixWords(beads: number, nb: boolean): string {
   // byte count, in thousands, and a second one here would report a different
   // size for the same allocation than the status bar does.
   const count = matricesFor(nb)
-  return `${fmt.bytes(count * 4 * beads * beads)} ${count === 1 ? 'matrix' : 'of matrices'}`
+  const matrices = `${fmt.bytes(count * 4 * beads * beads)} ${count === 1 ? 'matrix' : 'of matrices'}`
+  // A page shares no memory with its workers, so each likelihood helper is sent
+  // its rows of the triangle: the helpers' share of half a matrix, this thread
+  // keeping 0.9 of a helper's (`likelihoodThreads.ts`).
+  const helpers = nb ? likelihoodThreads(beads) - 1 : 0
+  if (helpers === 0) return matrices
+  const copies = 2 * beads * beads * (helpers / (helpers + 0.9))
+  return `${matrices}, ${fmt.bytes(copies)} more copied to ${plural(helpers, 'helper')}`
 }
 
 /** The structure row, offered as the feature set it also is. */

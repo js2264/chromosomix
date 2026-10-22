@@ -55,6 +55,26 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **pastis-NB's likelihood runs on every core, and gives the same model on any number of them
+  (§25.6, §23.1).** Each evaluation of the likelihood is now summed in bands of rows, laid out by
+  the bead count alone, and the bands are shared among helper workers — web workers in the app,
+  one fewer than the cores and seven at most, as the correlation's are, and Node worker threads on
+  the command line — while the thread that asked computes a stretch of its own. The bands' values
+  and gradients are added in band order whatever the threads, so the model is the same bits on one
+  thread and on eight: the command line's `--threads 1` and `--threads 4` write the same bed3d, and
+  the app's model, made with three helpers, is the command line's on one thread. On the validation's
+  yeast Micro-C at 12.8 kb (905 beads) a model takes 4.5 s on four cores where it took 12.5 s, at
+  6.4 kb (1,807 beads) 13 s where it took 41, and in Chromium a model of chromosome IV at 1 kb
+  (1,400 beads) 9.2 s where it took 20.7 — on a four-core machine that draws the page on the same
+  cores. A page shares no memory with its workers, so each helper is sent its rows of the triangle
+  once, the copies held to 512 MB; the command line allocates the counts on a `SharedArrayBuffer`
+  and its helpers read the one matrix. A helper that cannot start, or fails, has its bands computed
+  by the thread that asked, with the same numbers. The command line gains `--threads N`, every core
+  up to eight by default, and the estimate prices a hundred steps on the threads the run will have
+  and counts the helpers' copies in its memory. The walk underneath (`structure/lbfgs.ts`) now asks
+  for each evaluation rather than making it, so the threads can be awaited; the MDS start stays on
+  one thread.
+
 - **pastis-NB is now pastis-NB as pastis runs it, and from the same seed gives pastis' model
   (§25.6).** *Model from the map* departed from pastis on purpose in three places, and no longer
   does in any of them. **The dispersion** was a moment estimate per separation, held fixed; it is

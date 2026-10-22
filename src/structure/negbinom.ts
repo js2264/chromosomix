@@ -80,7 +80,7 @@
  * Arrays in and arrays out — no worker, no store, no DOM (§18.9).
  */
 
-import { lbfgs, type LbfgsProgress, type LbfgsResult, type LbfgsStop, type Objective } from './lbfgs'
+import { answered, lbfgsWalk, type LbfgsAsk, type LbfgsProgress, type LbfgsResult, type LbfgsStop, type Objective } from './lbfgs'
 import type { Coordinates, DenseMatrix } from './reconstruct'
 
 /** The machine epsilon SciPy's L-BFGS-B multiplies `factr` by. */
@@ -567,9 +567,70 @@ function countTerms(c: number, r: number, logR: number): void {
 }
 
 /**
- * The negative log-likelihood and its gradient, in one pass over the pairs —
- * pastis' `negative_binomial_obj` and `negative_binomial_gradient`, with every
- * pair of beads the map could see, zeros included (`use_zero_entries=True`).
+ * Everything a band of the likelihood reads besides the counts and the
+ * coordinates, prepared once: the same numbers on every thread that computes a
+ * band, so that a band is the same sum wherever it is computed.
+ */
+export interface LikelihoodTerms {
+  n: number
+  alpha: number
+  bias: Float64Array | null
+  /** `log bᵢ`, taken once rather than once a pair. */
+  logBias: Float64Array | null
+  dispersion: Dispersion | null
+}
+
+export function likelihoodTerms(model: Pick<NegBinomModel, 'n' | 'alpha' | 'bias' | 'dispersion'>): LikelihoodTerms {
+  const bias = model.bias ?? null
+  return {
+    n: model.n,
+    alpha: model.alpha,
+    bias,
+    logBias: bias === null ? null : Float64Array.from(bias, (b) => Math.log(b)),
+    dispersion: model.dispersion,
+  }
+}
+
+/** Beads to a band, roughly: the layout's grain. */
+const BAND_BEADS = 32
+/** Bands at most: enough to share among eight threads with room to balance them. */
+const MAX_BANDS = 64
+
+/**
+ * The bands of rows the likelihood is summed over: `[edges[b], edges[b + 1])`,
+ * each holding about the same share of the pairs above the diagonal.
+ *
+ * **A function of the bead count alone**, and that is the property that
+ * matters: a band's sum is computed whole, wherever it is computed, and the
+ * bands are added in this order whatever the threads, so the likelihood and
+ * its gradient are the same bits on one thread and on eight
+ * (`analysis/likelihoodThreads.ts`). Row `i` carries `n − 1 − i` pairs, so the
+ * rows before `s` carry `1 − (1 − s/n)²` of them and the edges sit at
+ * `n(1 − √(1 − t/B))`.
+ */
+export function likelihoodBands(n: number): Int32Array {
+  const count = Math.max(1, Math.min(MAX_BANDS, Math.round(n / BAND_BEADS)))
+  const edges = [0]
+  for (let t = 1; t < count; t++) {
+    const edge = Math.round(n * (1 - Math.sqrt(1 - t / count)))
+    if (edge > edges[edges.length - 1] && edge < n) edges.push(edge)
+  }
+  edges.push(n)
+  return Int32Array.from(edges)
+}
+
+/**
+ * One band's share of the negative log-likelihood and its gradient, in one pass
+ * over its pairs — pastis' `negative_binomial_obj` and
+ * `negative_binomial_gradient`, with every pair of beads the map could see,
+ * zeros included (`use_zero_entries=True`).
+ *
+ * Rows `[r0, r1)`, each with every bead after it. `counts[offsets[i − r0] + j]`
+ * is pair `(i, j)`'s count — `null` for a whole `n × n` matrix, where it is
+ * `i·n + j`, and a row's start in a helper's packed copy otherwise — and `out`
+ * holds the gradient of beads `r0` onward, which are the only ones a band's
+ * pairs touch: `x`, then `y`, then `z`, `n − r0` of each. It is written over,
+ * and the band's value is returned.
  *
  * Per pair, with `λ = d^(−α)`, `s = b_i b_j`, `μ = s·λ`, `r = s·exp(c₀ + c₁ log λ)`
  * and `q = μ/r = exp((1 − c₁) log λ − c₀)`, which the bias cancels out of:
@@ -599,115 +660,154 @@ function countTerms(c: number, r: number, logR: number): void {
  * `log λ`, `log μ` and `log r` with the biases' logarithms taken once; at
  * `α = 3`, `λ` itself is a square root and a division. A pair with a
  * non-finite count is skipped: the map could not look at it. A pair whose beads
- * have collided has an infinite mean, and the whole objective is returned as
- * infinite so the line search shortens instead of stepping into the pole.
+ * have collided has an infinite mean, and the band is returned as infinite so
+ * the line search shortens instead of stepping into the pole.
  */
-export function negBinomObjective(model: NegBinomModel): Objective {
-  const { counts, n, dispersion, alpha } = model
-  const bias = model.bias ?? null
-  const logBias = bias === null ? null : Float64Array.from(bias, (b) => Math.log(b))
+export function likelihoodBand(
+  terms: LikelihoodTerms,
+  counts: DenseMatrix,
+  offsets: ArrayLike<number> | null,
+  r0: number,
+  r1: number,
+  vector: Float64Array,
+  out: Float64Array,
+): number {
+  const { n, dispersion, alpha, bias, logBias } = terms
   const half = alpha / 2
   const cube = alpha === 3
   const nb = dispersion !== null
   const c0 = nb ? dispersion.c0 : 0
   const c1 = nb ? dispersion.c1 : 0
   const slope = 1 - c1
+  const len = n - r0
+  out.fill(0)
+  let value = 0
+  for (let i = r0; i < r1; i++) {
+    const row = offsets === null ? i * n : offsets[i - r0]
+    const xi = vector[i]
+    const yi = vector[n + i]
+    const zi = vector[2 * n + i]
+    const bi = bias === null ? 1 : bias[i]
+    const li = logBias === null ? 0 : logBias[i]
+    // Accumulated for `i` and flushed once, rather than read and written
+    // `n` times through the gradient array.
+    let gx = 0
+    let gy = 0
+    let gz = 0
+    for (let j = i + 1; j < n; j++) {
+      const c = counts[row + j]
+      if (!(c >= 0)) continue
+      const dx = xi - vector[j]
+      const dy = yi - vector[n + j]
+      const dz = zi - vector[2 * n + j]
+      const d2 = dx * dx + dy * dy + dz * dz
+      if (!(d2 > 0)) return Number.POSITIVE_INFINITY
+      const logLambda = -half * Math.log(d2)
+      const lambda = cube ? 1 / (d2 * Math.sqrt(d2)) : Math.exp(logLambda)
+      const mu = (bias === null ? 1 : bi * bias[j]) * lambda
+      let k: number
+      if (nb) {
+        const logQ = slope * logLambda - c0
+        const q = Math.exp(logQ)
+        const r = mu / q
+        // `log1p` only where it is needed: above a thousandth `log(1 + q)`
+        // loses nothing a double holds, and costs half as much.
+        const spread = q > 1e-3 ? Math.log(1 + q) : Math.log1p(q)
+        value += (c + r) * spread
+        k = (slope * (mu - c)) / (1 + q) + c1 * r * spread
+        if (c > 0) {
+          const logMu = li + (logBias === null ? 0 : logBias[j]) + logLambda
+          const logR = logMu - logQ
+          // The gamma terms, `G` and `H` ({@link countTerms}). A whole count
+          // up to {@link SMALL_COUNT} — most pairs of most maps — is summed
+          // exactly here rather than in a call: `Π_{k<c} (r + k)` and
+          // `Σ 1/(r + k)` as one running fraction over it, four factors at a
+          // time so the chain of products each waits on is a quarter as long.
+          let g = 0
+          let h = 1
+          if (c > 1 && c <= SMALL_COUNT && c === Math.floor(c) && r < SMALL_RATE) {
+            let product = 1
+            let numerator = 0
+            let m = 0
+            for (; m + 4 <= c; m += 4) {
+              const a = r + m
+              const b = a + 1
+              const e = a + 2
+              const f = a + 3
+              const ab = a * b
+              const ef = e * f
+              const block = ab * ef
+              numerator = numerator * block + ((a + b) * ef + (e + f) * ab) * product
+              product *= block
+            }
+            for (; m < c; m++) {
+              const a = r + m
+              numerator = numerator * a + product
+              product *= a
+            }
+            g = Math.log(product) - c * logR
+            h = (r * numerator) / product
+          } else if (c !== 1) {
+            countTerms(c, r, logR)
+            g = termG
+            h = termH
+          }
+          value -= g + c * logMu
+          k -= c1 * h
+        }
+      } else {
+        value += mu
+        k = mu - c
+        if (c > 0) value -= c * (li + (logBias === null ? 0 : logBias[j]) + logLambda)
+      }
+      const coefficient = (-alpha * k) / d2
+      const fx = coefficient * dx
+      const fy = coefficient * dy
+      const fz = coefficient * dz
+      gx += fx
+      gy += fy
+      gz += fz
+      out[j - r0] -= fx
+      out[len + j - r0] -= fy
+      out[2 * len + j - r0] -= fz
+    }
+    out[i - r0] += gx
+    out[len + i - r0] += gy
+    out[2 * len + i - r0] += gz
+  }
+  return value
+}
 
+/** A band's gradient, from {@link likelihoodBand}, added into the whole one. */
+export function addBand(gradient: Float64Array, part: Float64Array, n: number, r0: number): void {
+  const len = n - r0
+  for (let k = 0; k < len; k++) {
+    gradient[r0 + k] += part[k]
+    gradient[n + r0 + k] += part[len + k]
+    gradient[2 * n + r0 + k] += part[2 * len + k]
+  }
+}
+
+/**
+ * The negative log-likelihood and its gradient, as the sum of its bands
+ * ({@link likelihoodBands}), each band's value and gradient added in band
+ * order — the same sums `analysis/likelihoodThreads.ts` makes of bands it had
+ * computed on other threads, so the two agree to the bit.
+ */
+export function negBinomObjective(model: NegBinomModel): Objective {
+  const terms = likelihoodTerms(model)
+  const { counts, n } = model
+  const edges = likelihoodBands(n)
+  const parts = Array.from({ length: edges.length - 1 }, (_, b) => new Float64Array(3 * (n - edges[b])))
   return (vector, gradient) => {
     gradient.fill(0)
     let value = 0
-    for (let i = 0; i < n; i++) {
-      const row = i * n
-      const xi = vector[i]
-      const yi = vector[n + i]
-      const zi = vector[2 * n + i]
-      const bi = bias === null ? 1 : bias[i]
-      const li = logBias === null ? 0 : logBias[i]
-      // Accumulated for `i` and flushed once, rather than read and written
-      // `n` times through the gradient array.
-      let gx = 0
-      let gy = 0
-      let gz = 0
-      for (let j = i + 1; j < n; j++) {
-        const c = counts[row + j]
-        if (!(c >= 0)) continue
-        const dx = xi - vector[j]
-        const dy = yi - vector[n + j]
-        const dz = zi - vector[2 * n + j]
-        const d2 = dx * dx + dy * dy + dz * dz
-        if (!(d2 > 0)) return Number.POSITIVE_INFINITY
-        const logLambda = -half * Math.log(d2)
-        const lambda = cube ? 1 / (d2 * Math.sqrt(d2)) : Math.exp(logLambda)
-        const mu = (bias === null ? 1 : bi * bias[j]) * lambda
-        let k: number
-        if (nb) {
-          const logQ = slope * logLambda - c0
-          const q = Math.exp(logQ)
-          const r = mu / q
-          // `log1p` only where it is needed: above a thousandth `log(1 + q)`
-          // loses nothing a double holds, and costs half as much.
-          const spread = q > 1e-3 ? Math.log(1 + q) : Math.log1p(q)
-          value += (c + r) * spread
-          k = (slope * (mu - c)) / (1 + q) + c1 * r * spread
-          if (c > 0) {
-            const logMu = li + (logBias === null ? 0 : logBias[j]) + logLambda
-            const logR = logMu - logQ
-            // The gamma terms, `G` and `H` ({@link countTerms}). A whole count
-            // up to {@link SMALL_COUNT} — most pairs of most maps — is summed
-            // exactly here rather than in a call: `Π_{k<c} (r + k)` and
-            // `Σ 1/(r + k)` as one running fraction over it, four factors at a
-            // time so the chain of products each waits on is a quarter as long.
-            let g = 0
-            let h = 1
-            if (c > 1 && c <= SMALL_COUNT && c === Math.floor(c) && r < SMALL_RATE) {
-              let product = 1
-              let numerator = 0
-              let m = 0
-              for (; m + 4 <= c; m += 4) {
-                const a = r + m
-                const b = a + 1
-                const e = a + 2
-                const f = a + 3
-                const ab = a * b
-                const ef = e * f
-                const block = ab * ef
-                numerator = numerator * block + ((a + b) * ef + (e + f) * ab) * product
-                product *= block
-              }
-              for (; m < c; m++) {
-                const a = r + m
-                numerator = numerator * a + product
-                product *= a
-              }
-              g = Math.log(product) - c * logR
-              h = (r * numerator) / product
-            } else if (c !== 1) {
-              countTerms(c, r, logR)
-              g = termG
-              h = termH
-            }
-            value -= g + c * logMu
-            k -= c1 * h
-          }
-        } else {
-          value += mu
-          k = mu - c
-          if (c > 0) value -= c * (li + (logBias === null ? 0 : logBias[j]) + logLambda)
-        }
-        const coefficient = (-alpha * k) / d2
-        const fx = coefficient * dx
-        const fy = coefficient * dy
-        const fz = coefficient * dz
-        gx += fx
-        gy += fy
-        gz += fz
-        gradient[j] -= fx
-        gradient[n + j] -= fy
-        gradient[2 * n + j] -= fz
-      }
-      gradient[i] += gx
-      gradient[n + i] += gy
-      gradient[2 * n + i] += gz
+    for (let b = 0; b + 1 < edges.length; b++) {
+      const part = parts[b]
+      const share = likelihoodBand(terms, counts, null, edges[b], edges[b + 1], vector, part)
+      if (!Number.isFinite(share)) return Number.POSITIVE_INFINITY
+      value += share
+      addBand(gradient, part, n, edges[b])
     }
     return Number.isFinite(value) ? value : Number.POSITIVE_INFINITY
   }
@@ -742,55 +842,64 @@ export function negBinomValue(model: NegBinomModel, coords: Coordinates): number
  * {@link mdsObjective} to pastis' `factr = 10¹²`. `wishes` is the matrix
  * {@link storeWishes} wrote below the diagonal of.
  */
-export function* fitMds(
+export function fitMds(
   wishes: DenseMatrix,
   n: number,
   start: Coordinates,
   options: { iterations?: number } = {},
 ): Generator<LbfgsProgress, MdsFit, void> {
-  const walk = lbfgs(mdsObjective(wishes, n), packCoordinates(start), {
+  const walk = lbfgsWalk(packCoordinates(start), {
     iterations: options.iterations ?? PASTIS_MDS.iterations,
     history: HISTORY,
     tolerance: PASTIS_MDS.tolerance,
     gradientTolerance: PASTIS_MDS.gradient,
   })
-  return yield* finish(walk, n)
+  return answered(fitOf(walk, n), mdsObjective(wishes, n))
 }
 
 /**
- * Fit the model from `start`, an evaluation at a time, to pastis' `factr = 10`
- * and `pgtol = 1`, or until `iterations` run out.
+ * The likelihood's fit from `start`, to pastis' `factr = 10` and `pgtol = 1`,
+ * or until `iterations` run out — asking for each evaluation rather than
+ * making it (`lbfgsWalk`), so that whoever drives it can share each among
+ * threads and `await` them. {@link fitNegativeBinomial} is it answered here, by
+ * {@link negBinomObjective}; the two give the same steps and the same model.
  *
- * The generator is the caller's way to breathe: at ten thousand beads one
- * evaluation is fifty million pair visits, a line search is one or more of
- * them, and a run that did not yield between them would freeze the tab for the
- * whole of a fit and leave a cancel nowhere to land. `start` is not written
- * over — a cancelled fit leaves the MDS model it began from intact.
+ * `start` is not written over — a cancelled fit leaves the MDS model it began
+ * from intact.
  */
-export function* fitNegativeBinomial(
-  model: NegBinomModel,
+export function likelihoodWalk(
+  n: number,
   start: Coordinates,
   options: { iterations?: number } = {},
-): Generator<LbfgsProgress, NegBinomFit, void> {
-  const walk = lbfgs(negBinomObjective(model), packCoordinates(start), {
+): Generator<LbfgsAsk, NegBinomFit, number> {
+  const walk = lbfgsWalk(packCoordinates(start), {
     iterations: options.iterations ?? 100000,
     history: HISTORY,
     tolerance: PASTIS_NB.tolerance,
     gradientTolerance: PASTIS_NB.gradient,
   })
-  return yield* finish(walk, model.n)
+  return fitOf(walk, n)
 }
 
-function* finish(
-  walk: Generator<LbfgsProgress, LbfgsResult, void>,
-  n: number,
+/**
+ * Fit the model from `start`, an evaluation at a time, on this thread.
+ *
+ * The generator is the caller's way to breathe: at ten thousand beads one
+ * evaluation is fifty million pair visits, a line search is one or more of
+ * them, and a run that did not yield between them would freeze the tab for the
+ * whole of a fit and leave a cancel nowhere to land.
+ */
+export function fitNegativeBinomial(
+  model: NegBinomModel,
+  start: Coordinates,
+  options: { iterations?: number } = {},
 ): Generator<LbfgsProgress, NegBinomFit, void> {
-  let step = walk.next()
-  while (step.done !== true) {
-    yield step.value
-    step = walk.next()
-  }
-  const result = step.value
+  return answered(likelihoodWalk(model.n, start, options), negBinomObjective(model))
+}
+
+/** A walk's result as coordinates. */
+function* fitOf(walk: Generator<LbfgsAsk, LbfgsResult, number>, n: number): Generator<LbfgsAsk, NegBinomFit, number> {
+  const result = yield* walk
   return {
     coords: readCoordinates(result.point, n),
     value: result.value,

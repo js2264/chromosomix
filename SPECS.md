@@ -10851,6 +10851,15 @@ extent, which decides only whether the block on screen can be reused, so `--wind
 the record's label and the numbers are the same either way. An imported `.pairs` writes the
 `--bin-size` it was framed at, since a contact list declares no resolution of its own (§3.7).
 
+**Threads are the machine's, not the run's.** `--threads N` is how many threads a task that shares
+its work may use — pastis-NB's likelihood in `reconstruct3d` (§25.6), the one so far — and defaults
+to every core, up to eight. A helper is the command's own file again, started as a Node worker
+thread with a word that says it is one (`cli/threads.ts`), so the package stays one file. The counts
+are allocated on a `SharedArrayBuffer`, which Node has with no header to ask for, and every helper
+reads the one matrix rather than a copy. The result is the same bits on any number of threads, so
+the console never writes `--threads`, no provenance carries it, and a line repeats the same run on
+a machine with two cores and on one with sixteen.
+
 **Every locus on the line is the display form**, because the shell reads every locus as a reader's
 box does (§26.1). `--window` is the framing through `formatLocus` — `--window chrIV:100,001-200,000`,
 the window the breadcrumb named — and the shell takes it back through `typedLocusToRegion` to the
@@ -12833,6 +12842,21 @@ the kept beads in place and then filled over themselves — so twelve thousand b
 gigabyte. **pastis-NB holds one**: the counts, a zero still distinct from a gap, compacted over the
 buffer they were read into; the likelihood reads them above the diagonal and the MDS start its
 wishes below it, and no distance is ever filled in — so twelve thousand beads is half a gigabyte.
+**Its likelihood is shared among threads** (`analysis/likelihoodThreads.ts`): the pairs are summed
+in **bands** of rows, as many as there are runs of 32 beads and at most 64, each about the same share
+of the pairs, laid out by the bead count alone; the bands go to helper workers, a stretch each, while
+the thread that asked computes a slightly smaller stretch of its own, and every evaluation adds the
+bands' values and gradients **in band order**, as one thread adds them. So the model is the same
+bits on one thread and on eight, in the app and from the command line, which the tests hold to the
+bit and the command line's `--threads 1` and `--threads 4` show file for file. The app starts one
+helper fewer than the cores, seven at most, as the correlation does (§18.6), and none under 256
+beads, where a round trip costs more than it saves. A page shares no memory with its workers, so
+each helper is sent its rows of the triangle once — the helpers' copies together at most half a
+matrix, held to 512 MB, fewer helpers where they would not fit — and then the coordinates per
+evaluation, its bands' buffers transferred there and back; the command line shares the matrix
+itself (§23.1). A helper that cannot start, or fails, has its bands computed by the thread that asked,
+the same numbers later; the fit's end, or a stop, terminates them all. pastis' MDS start stays on one
+thread: a cheap function, about what one likelihood step costs.
 The likelihood adds **vectors and not squares**: L-BFGS at SciPy's depth of ten keeps twenty-two
 vectors of `3n` doubles, six megabytes beside that matrix, where the Hessian a full quasi-Newton
 method would write down is thirty terabytes. What it does cost is time — a likelihood evaluation is
@@ -12840,9 +12864,11 @@ about twenty passes' worth of a SMACOF stress, a logarithm and an exponential fo
 power of the mean, a logarithm for the spread and one for the gamma functions per pair, and a step
 is a line search of just over one evaluation; pastis' MDS start costs about what one likelihood
 step does — and the estimate prices the method the reader picked rather than an average of the
-two. On the validation's yeast map at 12.8 kb, 905 beads, a run of the default 150 steps takes
-about twelve seconds from the command line where pastis takes a minute or more (`notebooks/
-timing.qmd`).
+two, on the threads it will have, each past the first counted at six-tenths of a core, and adds the
+helpers' copies to the memory. On the validation's yeast map at 12.8 kb, 905 beads, a run of the
+default 150 steps takes four and a half seconds from the command line on four cores — twelve and a
+half on one — where pastis takes a minute or more (`notebooks/timing.qmd`); at 6.4 kb, 1,807 beads,
+thirteen seconds on four and forty-one on one.
 **Every phase reports progress and breathes between units of work**: each rectangle read, each of
 the eighty sweeps of the classical start, each SMACOF step, and under pastis-NB each *evaluation*
 of the MDS and of the likelihood rather than each step, since a line search can be several of them.

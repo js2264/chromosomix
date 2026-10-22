@@ -295,6 +295,10 @@ describe('model from the map', () => {
       const [, count, unit] = /about (\d+) (seconds|minutes) per hundred steps/.exec(note) ?? []
       return Number(count) * (unit === 'minutes' ? 60 : 1)
     }
+    // Priced on the threads the likelihood will have here, and saying so.
+    const cores = navigator.hardwareConcurrency || 1
+    if (cores > 1) expect(nb.note).toMatch(new RegExp(`per hundred steps on ${Math.min(8, cores)} threads`))
+    expect(shrec.note).not.toMatch(/threads/)
     expect(seconds(nb.note ?? '')).toBeGreaterThan(seconds(shrec.note ?? ''))
     // pastis-NB holds one matrix, the counts, where ShRec3D holds two: the
     // likelihood adds vectors, not squares, and fills in no distance.

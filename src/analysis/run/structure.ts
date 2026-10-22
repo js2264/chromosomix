@@ -35,7 +35,7 @@ import {
   dispersionAt,
   fitDispersion,
   fitMds,
-  fitNegativeBinomial,
+  likelihoodWalk,
   momentsBySeparation,
   randomStart,
   storeWishes,
@@ -45,6 +45,7 @@ import {
   type SeparationMoments,
 } from '../../structure/negbinom'
 import { numpyRandom } from '../random'
+import { openLikelihood } from '../likelihoodThreads'
 import {
   classicalMdsSweeps,
   compactInPlace,
@@ -581,6 +582,19 @@ async function contactCells(
  */
 function allocate(n: number): Float32Array | null {
   try {
+    // On memory other threads can read, where this one may share it — the
+    // command line; a page is not served with the headers that allow it — so
+    // that pastis-NB's helpers read the counts rather than copies of them
+    // (`analysis/likelihoodThreads.ts`). A refusal falls back to a buffer of
+    // this thread's own, which is the same matrix to everything but a helper.
+    const isolated = (globalThis as { crossOriginIsolated?: boolean }).crossOriginIsolated
+    if (typeof SharedArrayBuffer === 'function' && isolated !== false) {
+      try {
+        return new Float32Array(new SharedArrayBuffer(4 * n * n))
+      } catch {
+        // An ordinary buffer, then.
+      }
+    }
     return new Float32Array(n * n)
   } catch {
     return null
@@ -777,54 +791,66 @@ export const runReconstruct: TaskRunner = async (job) => {
     const evidence = zerosOf(counts, n)
     storeWishes(counts, n, keptBias, alpha)
 
-    // pastis' start: beads uniform in a cube, numpy's draws from the reader's
-    // seed, then its MDS to its own loose tolerance. Between every evaluation,
-    // not inside one: the cancel lands here (`job.breathe`).
-    const total = MDS_SHARE + iterations
-    const mdsWalk = fitMds(counts, n, randomStart(n, numpyRandom(seed)))
-    let mdsMove = mdsWalk.next()
-    while (mdsMove.done !== true) {
-      await job.breathe()
-      const at = mdsMove.value.iteration
-      job.progress(
-        Math.min(MDS_SHARE - 1, at),
-        total,
-        `MDS start · step ${at} · stress ${mdsMove.value.value.toPrecision(3)}`,
-      )
-      mdsMove = mdsWalk.next()
-    }
-    const start: MdsFit = mdsMove.value
-
-    // The likelihood, on top of the model the MDS just made and at its scale:
-    // the wishes and the mean are in the same units, so nothing is rescaled
-    // between the two.
-    let likelihood: NegBinomFit | null = null
-    coords = start.coords
-    if (iterations > 0) {
-      const walk = fitNegativeBinomial(
-        { counts, n, bias: keptBias, dispersion, alpha },
-        start.coords,
-        { iterations },
-      )
-      let move = walk.next()
-      while (move.done !== true) {
-        // Between every *evaluation*, not every iteration: a line search can
-        // be several passes over the pairs.
+    // The likelihood's helpers are started now, and sent their rows, so that
+    // they are ready by the time the MDS below has run on this thread.
+    const evaluator = iterations > 0 ? openLikelihood({ counts, n, bias: keptBias, dispersion, alpha }) : null
+    try {
+      // pastis' start: beads uniform in a cube, numpy's draws from the reader's
+      // seed, then its MDS to its own loose tolerance. Between every evaluation,
+      // not inside one: the cancel lands here (`job.breathe`).
+      const total = MDS_SHARE + iterations
+      const mdsWalk = fitMds(counts, n, randomStart(n, numpyRandom(seed)))
+      let mdsMove = mdsWalk.next()
+      while (mdsMove.done !== true) {
         await job.breathe()
-        const at = Math.min(iterations, move.value.iteration)
+        const at = mdsMove.value.iteration
         job.progress(
-          MDS_SHARE + at,
+          Math.min(MDS_SHARE - 1, at),
           total,
-          `pastis-NB · step ${at} of at most ${iterations} · −log L ${move.value.value.toExponential(3)}`,
+          `MDS start · step ${at} · stress ${mdsMove.value.value.toPrecision(3)}`,
         )
-        move = walk.next()
+        mdsMove = mdsWalk.next()
       }
-      likelihood = move.value
-      coords = likelihood.coords
+      const start: MdsFit = mdsMove.value
+
+      // The likelihood, on top of the model the MDS just made and at its scale:
+      // the wishes and the mean are in the same units, so nothing is rescaled
+      // between the two.
+      let likelihood: NegBinomFit | null = null
+      coords = start.coords
+      if (evaluator !== null) {
+        // Each evaluation shared among the helpers and this thread, and awaited:
+        // the walk asks, and is answered when every band is in. The same bits
+        // on any number of threads, so the thread count is said in the bar and
+        // nowhere a result is written.
+        const threads = evaluator.threads === 1 ? '' : ` · ${evaluator.threads} threads`
+        const walk = likelihoodWalk(n, start.coords, { iterations })
+        let best = Number.POSITIVE_INFINITY
+        let ask = walk.next()
+        while (ask.done !== true) {
+          // Between every *evaluation*, not every iteration: a line search can
+          // be several passes over the pairs.
+          await job.breathe()
+          const { point, gradient, iteration, current } = ask.value
+          const value = await evaluator.evaluate(point, gradient)
+          best = Math.min(best, current, value)
+          const at = Math.min(iterations, iteration)
+          job.progress(
+            MDS_SHARE + at,
+            total,
+            `pastis-NB · step ${at} of at most ${iterations}${threads} · −log L ${best.toExponential(3)}`,
+          )
+          ask = walk.next(value)
+        }
+        likelihood = ask.value
+        coords = likelihood.coords
+      }
+      job.progress(total, total)
+      fit = fitOfCounts(counts, n, coords, keptBias)
+      methodRows = nbRows(evidence, alpha, dispersion, moments, keptBias !== null, seed, start, likelihood, iterations)
+    } finally {
+      evaluator?.close()
     }
-    job.progress(total, total)
-    fit = fitOfCounts(counts, n, coords, keptBias)
-    methodRows = nbRows(evidence, alpha, dispersion, moments, keptBias !== null, seed, start, likelihood, iterations)
   } else {
     // ShRec3D wants a *weight* per pair, and a pair the map counted nothing for
     // has no weight because it has no distance. The weights are taken while the

@@ -234,16 +234,17 @@ OUT = '<out>'
 STAMPS = WORK / '.stamps'
 
 
-def mr(task, *args, out, name, analysis, label='', group=None, bench=True):
+def mr(task, *args, out, name, analysis, label='', group=None, bench=True, threads=1):
     """One chromosomix command into `out`, skipped when `out` holds what this same command wrote at
     this same commit of chromosomix — a pileup cached from an older build is the older build's.
 
-    `group` pairs it with the reference commands it is timed against; its label by default."""
+    `group` pairs it with the reference commands it is timed against; its label by default. `threads`
+    is what the command was given with `--threads`, for the one task that shares its work."""
     out = Path(out)
     argv = ['node', str(CLI), task, *[arg(a) for a in args]]
     full = argv + ['--out', rel(out)]
     APP[name] = dict(analysis=analysis, tool='chromosomix', label=label, group=label if group is None else group,
-                     argv=argv, bench=bench, threads=1, shown=typed(full))
+                     argv=argv, bench=bench, threads=threads, shown=typed(full))
     print('$', typed(full))
     stamp = f'{typed(full)}\n# chromosomix {APP_VERSION}\n'
     held = (out / '.command').read_text() if (out / '.command').exists() else ''
@@ -1366,7 +1367,10 @@ functions — the moments at each separation and the dispersion fitted against t
 `negative_binomial_structure.estimate_X` — on the same beads (bins with a weight and a contact).
 chromosomix ports each of those functions, draws its random start with numpy's own generator so a
 seed places the beads where pastis' does, and runs its default 150 steps, about where pastis' own
-L-BFGS-B stops on this map; pastis runs to its own tolerances. A structure has no unique solution,
+L-BFGS-B stops on this map; pastis runs to its own tolerances. chromosomix shares the likelihood
+among as many threads as the references get processes (`--threads`), and its model is the same bits
+on any number of them; pastis' numpy computes through a BLAS that takes every core. A structure has no
+unique solution,
 so each runs from the same three seeds: the two from one seed should be one model, and pastis from
 three seeds is the yardstick for how alike two models of this map can be.
 
@@ -1374,8 +1378,9 @@ three seeds is the yardstick for how alike two models of this map can be.
 P3 = WORK / 'pastis'
 YEAST_12K = f'{rel(YEAST)}::/resolutions/12800'
 for seed in (0, 1, 2):
-    mr('reconstruct3d', YEAST_12K, '--method', 'nb', '--alpha', 3, '--seed', seed, out=P3 / f'app-seed{seed}',
-       name=f'reconstruct3d-seed{seed}', analysis='3D model (pastis-NB)', label=f'seed {seed}', bench=seed == 0)
+    mr('reconstruct3d', YEAST_12K, '--method', 'nb', '--alpha', 3, '--seed', seed, '--threads', THREADS,
+       out=P3 / f'app-seed{seed}', name=f'reconstruct3d-seed{seed}', analysis='3D model (pastis-NB)',
+       label=f'seed {seed}', bench=seed == 0, threads=THREADS)
 PASTIS = script('pastis_nb')
 for seed in (0, 1, 2):
     reference(f'pastis-seed{seed}', '3D model (pastis-NB)', 'pastis', [PYTHON, PASTIS, YEAST_12K, OUT, seed],
@@ -3504,7 +3509,8 @@ def manifest():
         for name, app in APP.items():
             if app['analysis'] == analysis:
                 out.append(dict(name=name, section=section, analysis=analysis, data=about, tool='chromosomix',
-                                version=APP_VERSION, variant=app['label'], group=app['group'], threads=1,
+                                version=APP_VERSION, variant=app['label'], group=app['group'],
+                                threads=app['threads'],
                                 bench=app['bench'], argv=app['argv'], out=None, env=None, command=app['shown']))
         for name, ref in REFS.items():
             if ref['analysis'] == analysis:

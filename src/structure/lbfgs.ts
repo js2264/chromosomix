@@ -41,12 +41,13 @@
  * it pastis' tolerances stops where pastis would.
  *
  * **A generator, a value at a time**, for the same reason `classicalMdsSweeps`
- * is one: at ten thousand beads a single evaluation is a hundred million pair
- * visits and a line search is several of them, so a caller that runs this where
- * somebody is watching needs somewhere to move a bar and somewhere to let a
- * cancel land. It yields *before every evaluation*, not once per iteration,
- * because the evaluation is the unit of work and an iteration is up to a
- * dozen of them.
+ * is one: at ten thousand beads a single evaluation is fifty million pair
+ * visits and a line search is one or more of them, so a caller that runs this
+ * where somebody is watching needs somewhere to move a bar and somewhere to let
+ * a cancel land. It stops at *every evaluation*, not once per iteration,
+ * because the evaluation is the unit of work. {@link lbfgsWalk} stops to *ask*
+ * for it — the caller evaluates, on as many threads as it likes, and hands the
+ * value back — and {@link lbfgs} is that walk answered by a plain function.
  *
  * Arrays in and arrays out — no worker, no store, no DOM — so the test can hold
  * the arithmetic still against functions whose minima are known (§18.9).
@@ -120,18 +121,79 @@ const SEARCH_STEPS = 20
 const CURVATURE_FLOOR = 1e-12
 
 /**
+ * One evaluation the walk asks for: the objective's value at `point`, with its
+ * gradient written into `gradient`, handed back by `next(value)`.
+ *
+ * Both arrays are the walk's own and are read the moment the value comes back,
+ * so a caller that answers later — after a round trip to other threads — must
+ * not let them change meanwhile, and a caller that sends `point` elsewhere
+ * sends a copy.
+ */
+export interface LbfgsAsk {
+  point: Float64Array
+  gradient: Float64Array
+  /** Completed iterations; `0` while the first line search is running. */
+  iteration: number
+  iterations: number
+  /** Evaluations so far, this one included. */
+  evaluations: number
+  /** The value at the point the walk stands on: `+∞` before the first evaluation. */
+  current: number
+}
+
+/**
  * Minimise `objective` from `start`, a value at a time.
  *
  * The vector is copied, so the caller's `start` is never written over: a run
  * that is cancelled halfway leaves the model it began from intact, which is
  * what lets the runner fall back to its initialisation and still return
- * something.
+ * something. The walk itself is {@link lbfgsWalk}; this is it driven by a
+ * function that answers at once, yielding after every evaluation.
  */
-export function* lbfgs(
+export function lbfgs(
   objective: Objective,
   start: Float64Array,
   options: LbfgsOptions = {},
 ): Generator<LbfgsProgress, LbfgsResult, void> {
+  return answered(lbfgsWalk(start, options), objective)
+}
+
+/**
+ * A walk that asks ({@link lbfgsWalk}, or one built on it) answered by a plain
+ * function: it evaluates each point the walk asks for and yields how far it has
+ * got after every evaluation, the value the best so far.
+ */
+export function* answered<R>(
+  walk: Generator<LbfgsAsk, R, number>,
+  objective: Objective,
+): Generator<LbfgsProgress, R, void> {
+  let step = walk.next()
+  while (step.done !== true) {
+    const request = step.value
+    const value = objective(request.point, request.gradient)
+    yield {
+      iteration: request.iteration,
+      iterations: request.iterations,
+      evaluations: request.evaluations,
+      value: Math.min(request.current, Number.isNaN(value) ? Number.POSITIVE_INFINITY : value),
+    }
+    step = walk.next(value)
+  }
+  return step.value
+}
+
+/**
+ * The walk, asking for each evaluation rather than making it: it yields an
+ * {@link LbfgsAsk} and is handed the value back by `next(value)`, the gradient
+ * written into the array it named.
+ *
+ * So the objective need not answer at once. *Model from the map* shares each
+ * evaluation of its likelihood among helper threads (`analysis/
+ * likelihoodThreads.ts`), which is a round trip and an `await`, and a generator
+ * that called its objective itself could not wait for one. The walk is the same
+ * arithmetic whoever answers it, so the same answers give the same steps.
+ */
+export function* lbfgsWalk(start: Float64Array, options: LbfgsOptions = {}): Generator<LbfgsAsk, LbfgsResult, number> {
   const iterations = Math.max(0, Math.round(options.iterations ?? 200))
   const depth = Math.max(1, Math.round(options.history ?? 10))
   const tolerance = options.tolerance ?? 1e-9
@@ -150,8 +212,7 @@ export function* lbfgs(
   const coefficients = new Float64Array(depth)
 
   const counter = { evaluations: 0 }
-  let value = evaluate(objective, point, gradient, counter)
-  yield { iteration: 0, iterations, evaluations: counter.evaluations, value }
+  let value = yield* ask(point, gradient, counter, 0, iterations, Number.POSITIVE_INFINITY)
   if (!Number.isFinite(value)) {
     return { point, value, iterations: 0, evaluations: counter.evaluations, stop: 'search' }
   }
@@ -210,7 +271,6 @@ export function* lbfgs(
     // quasi-Newton direction carries its own and starts at 1.
     const first = steps.length === 0 ? Math.min(1e10, 1 / Math.sqrt(dot(gradient, gradient))) : 1
     const search = yield* lineSearch(
-      objective,
       point,
       direction,
       trial,
@@ -289,7 +349,6 @@ export function* lbfgs(
  * them as whatever the last evaluation wrote, and the caller keeps its point.
  */
 function* lineSearch(
-  objective: Objective,
   point: Float64Array,
   direction: Float64Array,
   trial: Float64Array,
@@ -300,7 +359,7 @@ function* lineSearch(
   counter: { evaluations: number },
   iteration: number,
   iterations: number,
-): Generator<LbfgsProgress, { ok: boolean; step: number; value: number }, void> {
+): Generator<LbfgsAsk, { ok: boolean; step: number; value: number }, number> {
   const n = point.length
   const at = (step: number): void => {
     for (let i = 0; i < n; i++) trial[i] = point[i] + step * direction[i]
@@ -315,14 +374,12 @@ function* lineSearch(
 
   for (let probe = 0; probe < SEARCH_STEPS; probe++) {
     at(step)
-    const value = evaluate(objective, trial, trialGradient, counter)
+    const value = yield* ask(trial, trialGradient, counter, iteration, iterations, value0)
     lastStep = step
-    yield { iteration, iterations, evaluations: counter.evaluations, value: Math.min(value0, value) }
 
     const failsArmijo = !Number.isFinite(value) || value > value0 + SUFFICIENT_DECREASE * step * slope0
     if (failsArmijo || (probe > 0 && value >= previousValue)) {
       const found = yield* zoom(
-        objective,
         point,
         direction,
         trial,
@@ -343,7 +400,6 @@ function* lineSearch(
     if (Math.abs(slope) <= -CURVATURE * slope0) return { ok: true, step, value }
     if (slope >= 0) {
       const found = yield* zoom(
-        objective,
         point,
         direction,
         trial,
@@ -371,8 +427,7 @@ function* lineSearch(
   // guard above will simply drop the pair it produces.
   if (Number.isFinite(lastStep)) {
     at(lastStep)
-    const value = evaluate(objective, trial, trialGradient, counter)
-    yield { iteration, iterations, evaluations: counter.evaluations, value: Math.min(value0, value) }
+    const value = yield* ask(trial, trialGradient, counter, iteration, iterations, value0)
     if (Number.isFinite(value) && value < value0) return { ok: true, step: lastStep, value }
   }
   return { ok: false, step: 0, value: value0 }
@@ -391,7 +446,6 @@ function* lineSearch(
  * is a step known to a part in a million and the loop is never the run's cost.
  */
 function* zoom(
-  objective: Objective,
   point: Float64Array,
   direction: Float64Array,
   trial: Float64Array,
@@ -404,7 +458,7 @@ function* zoom(
   counter: { evaluations: number },
   iteration: number,
   iterations: number,
-): Generator<LbfgsProgress, { ok: boolean; step: number; value: number }, void> {
+): Generator<LbfgsAsk, { ok: boolean; step: number; value: number }, number> {
   const n = point.length
   let low = lowStart
   let lowValue = lowValueStart
@@ -414,8 +468,7 @@ function* zoom(
     const step = (low + high) / 2
     if (!Number.isFinite(step) || step <= 0) break
     for (let i = 0; i < n; i++) trial[i] = point[i] + step * direction[i]
-    const value = evaluate(objective, trial, trialGradient, counter)
-    yield { iteration, iterations, evaluations: counter.evaluations, value: Math.min(value0, value) }
+    const value = yield* ask(trial, trialGradient, counter, iteration, iterations, value0)
 
     const failsArmijo = !Number.isFinite(value) || value > value0 + SUFFICIENT_DECREASE * step * slope0
     if (failsArmijo || value >= lowValue) {
@@ -434,21 +487,26 @@ function* zoom(
   // condition wanted is a slower iteration, not a wrong one.
   if (low > 0 && lowValue < value0) {
     for (let i = 0; i < n; i++) trial[i] = point[i] + low * direction[i]
-    const value = evaluate(objective, trial, trialGradient, counter)
-    yield { iteration, iterations, evaluations: counter.evaluations, value: Math.min(value0, value) }
+    const value = yield* ask(trial, trialGradient, counter, iteration, iterations, value0)
     if (Number.isFinite(value)) return { ok: true, step: low, value }
   }
   return { ok: false, step: 0, value: value0 }
 }
 
-function evaluate(
-  objective: Objective,
+/**
+ * Ask for one evaluation and take its answer, a `NaN` read as `+∞` — outside
+ * the domain — so that it shortens the search rather than entering the history.
+ */
+function* ask(
   point: Float64Array,
   gradient: Float64Array,
   counter: { evaluations: number },
-): number {
+  iteration: number,
+  iterations: number,
+  current: number,
+): Generator<LbfgsAsk, number, number> {
   counter.evaluations++
-  const value = objective(point, gradient)
+  const value = yield { point, gradient, iteration, iterations, evaluations: counter.evaluations, current }
   return Number.isNaN(value) ? Number.POSITIVE_INFINITY : value
 }
 
