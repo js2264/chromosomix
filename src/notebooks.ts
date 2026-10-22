@@ -1,12 +1,14 @@
 /**
- * The notebooks GitHub Actions renders and publishes beside the app, as
- * *About* names them (SPECS §18.10).
+ * The notebooks published beside the app, as *About* names them (SPECS §18.10).
  *
- * `.github/workflows/notebooks.yml` renders four Quarto notebooks with every
- * release — the validation, the timings, the parity and the laptop — and
- * publishes each at `<site>/<path>/` with a `rendered.json` beside it: when it
- * was rendered, from which build, by which run, on what machine, and the one
- * line of what it found (`notebooks/scripts/rendered.py`). This module is what
+ * Four Quarto notebooks, each published at `<site>/<path>/` with a
+ * `rendered.json` beside it: when it was rendered, from which build, by which
+ * run, on what machine, and the one line of what it found
+ * (`notebooks/scripts/rendered.py`). `.github/workflows/notebooks.yml` renders
+ * and publishes the validation, the timings and the parity with every release.
+ * The laptop is rendered by hand, on a laptop, and committed as
+ * `notebooks/laptop.html`, which is what the site publishes; the workflow's
+ * own render of it is a run's artifact and nothing more. This module is what
  * the app knows of that: which pages there are, what each is for, where the
  * site holding them is, and how to read a stamp without believing it.
  *
@@ -32,6 +34,11 @@ export interface Notebook {
   title: string
   /** What it holds chromosomix to, in a sentence. */
   what: string
+  /**
+   * Rendered by hand and committed rather than by the workflow: `local` in
+   * `pages.py`'s table.
+   */
+  byHand?: true
 }
 
 /** In the order the workflow lists them, and `NOTEBOOK_SEGMENTS` with it. */
@@ -62,8 +69,9 @@ export const NOTEBOOKS: readonly Notebook[] = [
     path: 'laptop',
     title: 'Laptop',
     what:
-      'What a genome-wide analysis costs on a machine like yours: 23 of them run once each, with their ' +
-      'time and peak memory. Render it on your own laptop to measure yours.',
+      'What a genome-wide analysis costs on a laptop: 23 of them run once each, with their time and ' +
+      'peak memory. Render it on your own to measure yours.',
+    byHand: true,
   },
 ]
 

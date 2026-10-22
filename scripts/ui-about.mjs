@@ -10,13 +10,19 @@
  * the tab mid-read, one page whose stamp is missing, the dark theme, a laptop's
  * window on the Licences tab, and a phone's, and prints what each step found.
  *
+ * The laptop's page is rendered by hand and committed (SPECS §18.10), so its
+ * stamp is the one the deploy will unpack from `notebooks/laptop.html` when
+ * that is committed — or from the render `LAPTOP_HTML` names, to see one
+ * before committing it — and the site's otherwise.
+ *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-about.mjs [out-dir]     # ab01 … ab09
  */
 
 import { createRequire } from 'node:module'
-import { execSync } from 'node:child_process'
-import { existsSync, mkdirSync } from 'node:fs'
+import { execSync, spawnSync } from 'node:child_process'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, copyFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const require = createRequire(import.meta.url)
@@ -54,6 +60,25 @@ for (const path of ['validation', 'timings', 'parity', 'laptop']) {
   } catch (error) {
     console.log(`${path}: no stamp read (${error.cause?.code ?? error.message})`)
   }
+}
+
+// The laptop's, as the deploy will publish it: unpacked from the page by `pages.py committed`.
+const LAPTOP = process.env.LAPTOP_HTML ?? 'notebooks/laptop.html'
+if (existsSync(LAPTOP)) {
+  const scratch = mkdtempSync(join(tmpdir(), 'ui-about-'))
+  mkdirSync(join(scratch, 'source'))
+  copyFileSync(LAPTOP, join(scratch, 'source', 'laptop.html'))
+  const run = spawnSync('python3', ['notebooks/scripts/pages.py', 'committed', join(scratch, 'site'), join(scratch, 'source')], {
+    encoding: 'utf8',
+  })
+  const stamp = join(scratch, 'site', 'laptop', 'rendered.json')
+  if (run.status === 0 && existsSync(stamp)) {
+    STAMPS.laptop = readFileSync(stamp, 'utf8')
+    console.log(`laptop: the stamp ${LAPTOP} carries`)
+  } else {
+    console.log(`laptop: ${LAPTOP} carries no stamp; ${run.stderr.trim()}`)
+  }
+  rmSync(scratch, { recursive: true, force: true })
 }
 console.log(`stamps read: ${Object.keys(STAMPS).join(', ') || 'none'}`)
 

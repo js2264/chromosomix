@@ -9537,6 +9537,21 @@ measured, with the machine and the build, and a second render of the same build 
 of running again. The page is a table of all 23, the five analyses side by side at the two depths, a
 figure, and every command in one block at the end.
 
+**The laptop's published page is rendered on a laptop.** What it measures is a reader's machine, so
+the page at `<site>/laptop/` is rendered by hand, on one, and committed as `notebooks/laptop.html` —
+the one rendered page `.gitignore` lets through; its data and the measurements a second render reads
+back stay in `notebooks/work/`, uncommitted, since a runner of the same build would read those back
+instead of measuring itself. The page is one file that is the whole of it: it links the other pages
+on the site (NOTEBOOKS_SITE, or `package.json`'s `homepage`) rather than as files beside it, which a
+laptop does not have, and it **carries** what is published beside it rather than linking it — its
+table under the results and its `rendered.json` in its closing line, each a link that downloads the
+file from the page itself (`Render.attach()`) — so the page reads the same from the disk it was
+rendered on and from the site, and its table cannot disagree with its picture. Its block says it was
+rendered by hand, on the machine named under it, as the page is published. Publishing a render is
+committing that file: every deploy writes it as `laptop/index.html` and unpacks the table and the
+stamp beside it (`pages.py committed`), the names its entry lists and nothing else, and makes no
+`laptop/` until one is committed.
+
 They are documents, not tests: they need the data (about 6 GB for the analyses, 15 GB for the
 viewers, 160 MB for the parity and 13.7 GB for the laptop), the reference packages, yapc's own
 environment and higlass-python's, the two viewers and Playwright's Chromium, and nothing in the suite
@@ -9551,7 +9566,8 @@ and Ubuntu's bedtools and seqkit; for the parity and the timings, the two viewer
 Chromium; for the timings, higlass-python's environment with libfuse. The parity renders first, alone,
 so that a page that cannot render stops the run before the hours of the others; then the validation
 and the timings in one job — the timings run the validation's commands on the inputs it fetched and
-made, which no other runner holds — beside the laptop in another. Each render runs through
+made, which no other runner holds — beside the laptop in another, which sets the committed page aside
+first so that what it gathers is its own render or nothing. Each render runs through
 `notebooks/scripts/memory.sh`, which writes into the job's log, every ten seconds, the memory in use
 and available and the three programs holding the most: a runner whose memory runs out is shut down
 in the middle of a step, with no error from the command and no step after it, and the log streamed
@@ -9560,19 +9576,23 @@ Each job gathers its pages with
 `notebooks/scripts/pages.py`, the one table of where each page is published and which files go beside
 it, which `rendered.py` reads too, and every job keeps what it rendered as an artifact for 90 days,
 even when it fails: the validation alone, with the timing rounds it finished, when the timings fail.
-A last job publishes them only if all four rendered, at `<site>/validation/`, `<site>/timings/`,
-`<site>/parity/` and `<site>/laptop/`, each a self-contained page with its tables beside it
-(`commands.json`, `summary.tsv` and `validation.txt`, every command, every verdict and every number its
-figures draw; `timings.tsv` and `viewers.tsv`; the parity's `summary.tsv`, every file compared; the
-laptop's `timings.tsv`, every analysis measured); a release keeps its own copies of the four pages and
-of the six tables as assets. It runs when a release is published and on demand. Each page opens on a
+A last job publishes the validation, the timings and the parity only if the three rendered —
+`pages.py published` names them — at `<site>/validation/`, `<site>/timings/` and `<site>/parity/`,
+each a self-contained page with its tables beside it (`commands.json`, `summary.tsv` and
+`validation.txt`, every command, every verdict and every number its figures draw; `timings.tsv` and
+`viewers.tsv`; the parity's `summary.tsv`, every file compared); a release keeps its own copies of the
+three pages and of the five tables as assets. **The runner's laptop is published nowhere**: not to the
+site, whose `laptop/` is the committed page, nor to a release, whose laptop is the one committed in its
+source; it is the run's artifact, and its section of the run's summary, and whether it rendered decides
+nothing about publishing the others. It runs when a release is published and on demand. Each page opens on a
 block saying when it was rendered, from which version, commit and release, by which run or by hand,
 and on what machine, and closes on how long it took, writing the same to `rendered.json` beside it with
 **one line of what it found** — how many analyses reproduce their reference, how much less time
 chromosomix takes than the references and the other viewers, how many files the app and the command
 line write alike, how many analyses finish within a minute and the most memory any takes. The run's
 summary is a section a notebook: where it is, from what and in how long, that line, and its table,
-folded. The pages link to each other there and on a reader's disk alike. They are no build of the app,
+folded. The pages link to each other there and on a reader's disk alike, but for the laptop, which
+links the site's from either. They are no build of the app,
 so the service worker leaves those four addresses to the network, as it does `v/` and `pr/`, and the
 app, from this version on, finding itself at any of them unregisters its worker and reloads once
 (`recoverPinnedNavigation`), as at `v/`; a worker from before answers there with its own app until its
@@ -9586,10 +9606,12 @@ one stop walked with ← and →, Home and End. **The Notebooks tab** says in a 
 notebooks are, then gives each a block: its title, linking to its page in a new tab, and its address;
 what it holds chromosomix to; and, read from the `rendered.json` beside the page, the one line of what
 it found, set off by a rule, and a quiet line saying when it was rendered, from which version and
-commit, in how long, on how many cores and how much memory, and by which run of the workflow, linked.
-The list is `src/notebooks.ts`, held by `test/unit/notebooks.test.ts` to `pages.py`'s table and to the
-segments the service worker leaves alone, so a fifth notebook cannot be published without the tab
-naming it. The pages are this site's, when the app is served from one — an archived pin and a preview
+commit, in how long, on how many cores and how much memory, and by which run of the workflow, linked —
+or *by hand*, which is how the laptop's is rendered, and the tab's sentence says which pages GitHub
+Actions renders and which one is rendered by hand, on a laptop. The list is `src/notebooks.ts`, held
+by `test/unit/notebooks.test.ts` to `pages.py`'s table — its pages, their titles, and which is rendered
+by hand — and to the segments the service worker leaves alone, so a fifth notebook cannot be published
+without the tab naming it. The pages are this site's, when the app is served from one — an archived pin and a preview
 reach up to its root — and the deployed site's, by `package.json`'s `homepage`, from the desktop, the
 single file, the package's copy and a dev server; a build that can name neither has no Notebooks tab.
 **The stamps are read when the tab is first chosen, never when *About* opens**, all four at once; until

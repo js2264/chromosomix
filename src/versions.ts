@@ -50,8 +50,9 @@ export const PULL_SEGMENT = 'pr'
 
 /**
  * The path segments the rendered notebooks are published under, beside `v/`
- * and `pr/`: the validation, the timings, the parity and the laptop
- * (`.github/workflows/notebooks.yml`, SPECS §18.10). Pages of their own rather than builds — named here so that a
+ * and `pr/`: the validation, the timings and the parity, which
+ * `.github/workflows/notebooks.yml` renders, and the laptop, rendered by hand
+ * and committed (SPECS §18.10). Pages of their own rather than builds — named here so that a
  * service worker that answered one with this app's shell can be undone
  * (`recoverPinnedNavigation()` in `src/pwa.ts`); `src/sw.js` keeps the same
  * list, since it imports nothing.

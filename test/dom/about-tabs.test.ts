@@ -49,9 +49,12 @@ function site(missing: string[] = []): AboutNotebooks & { read: ReturnType<typeo
 }
 
 const tabs = (): HTMLButtonElement[] => [...document.querySelectorAll<HTMLButtonElement>('.about-tab')]
-const tab = (id: string): HTMLButtonElement => document.querySelector(`.about-tab[data-tab="${id}"]`) as HTMLButtonElement
+const tab = (id: string): HTMLButtonElement =>
+  document.querySelector(`.about-tab[data-tab="${id}"]`) as HTMLButtonElement
 const shown = (): string[] =>
-  [...document.querySelectorAll<HTMLElement>('[role="tabpanel"]')].filter((panel) => !panel.hidden).map((panel) => panel.id)
+  [...document.querySelectorAll<HTMLElement>('[role="tabpanel"]')]
+    .filter((panel) => !panel.hidden)
+    .map((panel) => panel.id)
 /** Let every stamp's promise settle. */
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 
@@ -137,7 +140,7 @@ describe('the notebooks', () => {
     expect(validation.querySelector('.about-notebook-found')?.textContent).toBe('What validation found.')
     expect(validation.querySelector('.about-notebook-found')?.classList.contains('hidden')).toBe(false)
     const line = validation.querySelector('.about-notebook-stamp')?.textContent ?? ''
-    expect(line).toMatch(/^Rendered .*2026 from chromosomix 0\.16\.0 at 8621d90, in 45 min on 2 cores and 7\.7 GB · run 8$/)
+    expect(line).toMatch(/^Rendered .*2026 from chromosomix 0\.16\.0 at 8621d90, in 45 min on 2 cores and 7\.7 GB · run 8$/u)
     expect(validation.querySelector('.about-notebook-stamp a')?.getAttribute('href')).toBe(
       'https://github.com/js2264/chromosomix/actions/runs/39629629016',
     )
@@ -162,5 +165,29 @@ describe('the notebooks', () => {
     expect(document.querySelectorAll('.about-notebook')).toHaveLength(NOTEBOOKS.length)
     expect(document.querySelector('.about-notebook-stamp')).toBeNull()
     expect(document.querySelector('.about-notebooks')?.textContent).toMatch(/^Four notebooks hold chromosomix/)
+  })
+
+  it('says which pages the workflow renders and which is rendered by hand', async () => {
+    const notebooks = site()
+    // The laptop's stamp as a render by hand writes it: no run.
+    notebooks.read.mockImplementation(async (url: string) => {
+      const path = new URL(url).pathname.split('/')[1] ?? ''
+      const written = { ...stamp(path), ...(path === 'laptop' ? { run: null } : {}) }
+      return new Response(JSON.stringify(written), { status: 200 })
+    })
+    openAbout('https://example.org/repo', null, undefined, null, notebooks)
+    tab('notebooks').click()
+    expect(document.querySelector('.about-notebooks > p')?.textContent).toBe(
+      'Four notebooks hold chromosomix to the packages it reproduces, to its own command line and to a ' +
+        'machine like yours. GitHub Actions renders the validation, the timings and the parity on a fresh ' +
+        'runner with every release; the laptop is rendered by hand, on a laptop. Each is published beside ' +
+        'the app, with its tables.',
+    )
+    await settle()
+    const line = (path: string): string =>
+      document.querySelector(`.about-notebook[data-notebook="${path}"] .about-notebook-stamp`)?.textContent ?? ''
+    expect(line('laptop')).toMatch(/ · by hand$/)
+    expect(document.querySelector('.about-notebook[data-notebook="laptop"] .about-notebook-stamp a')).toBeNull()
+    expect(line('parity')).toMatch(/ · run 8$/)
   })
 })

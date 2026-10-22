@@ -14,7 +14,16 @@ they are published on, a link goes to the other's page there, and a download to 
 beside the page; rendered by hand, to the other's HTML file and to the file in the page's own
 folder of work/ — work/validation/ for the validation and the timings, which share it, work/parity/
 for the parity and work/laptop/ for the laptop. Which page is where is `pages.py`'s table.
+
+**A page published as rendered by hand** — the laptop, committed as notebooks/laptop.html — is read
+in two places, from the disk it was rendered on and at its address on the site, so nothing it links
+may depend on which. It links the other pages on the site, NOTEBOOKS_SITE or else package.json's
+`homepage`, since a laptop has no timings beside it; and it carries its files rather than linking
+them: `Render.attach()` writes a table into the page as a link that downloads it, and `foot()` does
+the same with the page's own `rendered.json`, which `pages.py committed` unpacks beside the page when
+the site is built.
 """
+import base64
 import datetime
 import json
 import os
@@ -93,7 +102,8 @@ class Render:
         self.tag = (os.environ['GITHUB_REF_NAME'] if os.environ.get('GITHUB_REF_TYPE') == 'tag'
                     else _git('describe', '--tags', '--exact-match', 'HEAD')) or None
         self.source = _source(package)
-        self.site = os.environ.get('NOTEBOOKS_SITE', '').strip()
+        self.local = PAGES[page].local
+        self.site = os.environ.get('NOTEBOOKS_SITE', '').strip() or (package.get('homepage', '') if self.local else '')
         if self.site and not self.site.endswith('/'):
             self.site += '/'
         run_id = os.environ.get('GITHUB_RUN_ID')
@@ -118,6 +128,12 @@ class Render:
         """The same, for an inline expression: `{python} R.link('timing')`."""
         return Markdown(self.anchor(page, text))
 
+    def attach(self, name, content, text=None):
+        """A file carried inside the page, as a Markdown link that downloads it: `content` is its text."""
+        data = base64.b64encode(content.encode('utf-8')).decode('ascii')
+        kind = {'.json': 'application/json', '.tsv': 'text/tab-separated-values'}.get(Path(name).suffix, 'text/plain')
+        return f'[{text or f"`{name}`"}](data:{kind};base64,{data}){{download="{name}"}}'
+
     def download(self, name, text=None):
         """A file published beside this page; rendered by hand, the one in the page's folder of work/."""
         target = name if self.site else os.path.relpath(self.work / name, NOTEBOOKS)
@@ -133,6 +149,8 @@ class Render:
         return f'**chromosomix** {self.version}{release} at {commit}'
 
     def _by(self):
+        if self.run is None and self.local:
+            return '**By** hand, on the machine below, as this page is published'
         if self.run is None:
             return '**By** hand, not by the workflow that publishes these pages'
         how = {'release': 'for its release', 'workflow_dispatch': f'on demand of {self.run["actor"]}'}.get(
@@ -173,5 +191,8 @@ class Render:
         minutes, seconds = divmod(facts['seconds'], 60)
         took = f'{minutes} min {seconds} s' if minutes else f'{seconds} s'
         finished = datetime.datetime.fromisoformat(facts['finished'])
+        # Carried, not linked, by a page published as rendered by hand: see the module's docstring.
+        stamp = (f' {self.attach("rendered.json", json.dumps(facts, indent=2) + chr(10), "This render, as JSON")}.'
+                 if self.local else '')
         return (f'\n---\n\n*Rendered in {took}, from {_when(self.started)} to {finished.strftime("%H:%M UTC")}, '
-                f'by chromosomix {self.version} at `{self.short}`.*\n')
+                f'by chromosomix {self.version} at `{self.short}`.*{stamp}\n')

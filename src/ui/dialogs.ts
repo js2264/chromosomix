@@ -20,6 +20,7 @@ import {
   notebookUrl,
   notebooksSite,
   stampUrl,
+  type Notebook,
   type NotebookStamp,
   type StampReader,
 } from '../notebooks'
@@ -459,6 +460,12 @@ function overview(repoUrl: string, tutorial: AboutTutorial | null | undefined, c
   )
 }
 
+/** *the validation, the timings and the parity*: notebooks named in a sentence. */
+function phrase(notebooks: readonly Notebook[]): string {
+  const names = notebooks.map((notebook) => `the ${notebook.title.toLowerCase()}`)
+  return names.length < 2 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+}
+
 /** "Four", for a sentence that counts the notebooks rather than assuming them. */
 const COUNT_WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine']
 
@@ -476,14 +483,18 @@ const COUNT_WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven'
 export function notebooksPanel(notebooks: AboutNotebooks): HTMLElement {
   const outside = { target: '_blank', rel: 'noopener noreferrer' }
   const count = COUNT_WORDS[NOTEBOOKS.length] ?? String(NOTEBOOKS.length)
+  const byHand = NOTEBOOKS.filter((notebook) => notebook.byHand === true)
+  const byWorkflow = NOTEBOOKS.filter((notebook) => notebook.byHand !== true)
+  const laptop =
+    byHand.length === 0 ? '' : `; ${phrase(byHand)} ${byHand.length === 1 ? 'is' : 'are'} rendered by hand, on a laptop`
   return el(
     'section',
     { class: 'about-notebooks', attrs: { 'aria-label': 'Notebooks' } },
     el('p', {
       text:
         `${count} notebooks hold chromosomix to the packages it reproduces, to its own command line ` +
-        'and to a machine like yours. GitHub Actions renders them on a fresh runner with every ' +
-        'release and publishes each beside the app, with its tables.',
+        `and to a machine like yours. GitHub Actions renders ${phrase(byWorkflow)} on a fresh runner ` +
+        `with every release${laptop}. Each is published beside the app, with its tables.`,
     }),
     el(
       'ul',
@@ -536,7 +547,7 @@ export function notebooksPanel(notebooks: AboutNotebooks): HTMLElement {
  * A stamp as one quiet line: *Rendered 21 October 2026 from chromosomix 0.16.0
  * at 8621d90, in 45 min on 2 cores and 7.7 GB · run 8* — the date in the
  * reader's own words and to the day, and the run linked, since it is where the
- * log of a render that went wrong is.
+ * log of a render that went wrong is; or *· by hand*, where no run rendered it.
  */
 function stampLine(stamp: NotebookStamp): Array<string | Node> {
   const when = new Date(stamp.finished).toLocaleDateString(undefined, {
@@ -553,6 +564,8 @@ function stampLine(stamp: NotebookStamp): Array<string | Node> {
         (stamp.machine.memoryGb === null ? '' : ` and ${trimNumber(stamp.machine.memoryGb, 1)} GB`)
   const how = took === '' && machine === '' ? '' : `,${took}${machine}`
   const line: Array<string | Node> = [`Rendered ${when} from chromosomix ${build}${how}`]
+  // A render with no run is one done by hand, which for the laptop is the point (§18.10).
+  if (stamp.run === null) line.push(' · by hand')
   if (stamp.run !== null) {
     line.push(
       ' · ',
