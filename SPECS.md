@@ -6333,6 +6333,13 @@ does not fit **scrolls sideways inside the cell** instead of being painted over 
 off out of reach, and the scroll starts with the map in the middle of the cell — left at its start,
 a cell with a stack down its left edge showed that stack and no map at all.
 
+**And a short window does not shrink the map away.** A deck map's side is the window's height less
+the stacks over and under it, as the single view's is — and has the single view's 20rem floor, past
+which the page scrolls rather than the map giving way. Without it a deck of two in a 620-pixel-tall
+window — a notebook's frame (§21.5), a laptop with its tools open — drew a map with three tracks
+under it as a 42-pixel thumbnail. The map's measured size is still bounded by its cell, so the floor
+never pushes one out of its column.
+
 **Rearranging is a drag, not a pair of arrows.** Every cell but an empty one has a grip before its
 name, **the first map's included** — an empty cell is where the others are dragged *to*; taking hold
 of one shows the tiling, and dropping it on a cell **exchanges** the two. `◀` `▶` could only say
@@ -10563,13 +10570,25 @@ those four things would be asking a reader to trust a picture with no provenance
 
 ### 21.4 The channel
 
-An embed that can only be linked to is a picture. `postMessage` is the other half, and it is five
+An embed that can only be linked to is a picture. `postMessage` is the other half, and it is six
 messages (`app/EmbedChannel.ts`). Out: `chromosomix:ready`, once, carrying the protocol version and
 the build and **nothing about the session**; `chromosomix:state`, the view state as the hash is
 written from; and `chromosomix:rendered`, the report of a finished picture (§12), which is what a
-host takes a screenshot on. In: `chromosomix:where`, answered with the state; and `chromosomix:navigate`, a **patch**
+host takes a screenshot on. In: `chromosomix:where`, answered with the state; `chromosomix:navigate`, a **patch**
 laid over what is on screen — `{ locus: … }` moves the browser without the host knowing what else is
-in the state, a key sent as `null` is removed, and `state: null` is the picker.
+in the state, a key sent as `null` is removed, and `state: null` is the picker; and
+`chromosomix:add`, a list of addresses put in the tab one by one as the header's `+` puts an address
+typed into it (§5.5) — a track among the tracks, a map or a model beside the map, a workspace's tabs,
+and on an empty tab the first as its file. The view state has no word for a track, so this is how a
+host that frames a map puts its tracks beside it. It waits for the frame's first picture — the map
+the `src=` named — takes `http(s)` addresses only and at most 64 of them, and is answered with the
+state once every file is in, so a host knows when they are.
+
+**A host's messages are carried out in the order they came.** An `add` takes as long as its files
+take to open, and a `navigate` sent after one waits for it: a host that adds a 1D browser's tracks
+and then asks for a locus means the locus on those tracks, not on the picker they are opening over,
+and the patch is laid over the state on screen when its turn comes. With nothing in flight a
+`where` or a `navigate` is answered at once, as it always was.
 
 Two rules decide the rest. **Only the window that framed this one is answered**, and only after it
 has spoken — `ready` is the single exception and the reason the handshake terminates. Replies and
@@ -10584,6 +10603,46 @@ one reader that validates every key, clamps what needs clamping and drops what i
 A `view` this build has never heard of falls back; a smoothing radius it does not offer is dropped;
 an array where a genome name should be is not stringified into one. What the host is told afterwards
 is where the view actually **went**, which for a trimmed patch is not always where it asked to go.
+
+### 21.5 In a notebook
+
+The channel is what a notebook widget is made of, and the repository carries one: `widgets/python/`,
+the `chromosomix` package on PyPI, an [anywidget](https://anywidget.dev/) that works wherever
+anywidget does — JupyterLab, Notebook 7, VS Code, Colab, marimo. It is the embed in an `<iframe>` and
+nothing else: no second renderer, no kernel-side reader, no data through the kernel's comm.
+
+- **What to open is the `src=`.** `Chromosomix(map, region=…, tracks=[…], **view)` writes the map and
+  every view keyword into the frame's fragment in the app's own key order and spelling (§5.5), and the
+  tracks — which the fragment has no word for — go to the frame as one `add` once it says it is ready.
+  With no map the frame opens on its picker and the first file becomes the tab's.
+- **Python to the viewer is state, not messages.** `goto`, `navigate` and `add` append a numbered
+  request to a synced list, and every view of the widget posts the ones past the last it posted —
+  all of them again when the frame reloads, which a notebook detaching and re-attaching an output
+  does. A message would reach only the views that exist when it is sent, and "Run all" sends a later
+  cell's `goto` before the browser has drawn the first cell's frame. `goto` moves the map's `region`,
+  or the 1D browser's `locus`: by the view the viewer last reported, or, before it has reported one,
+  by how the cell opened it. The newest 64 are kept.
+- **The viewer to Python is traitlets.** Every `state` lands in `state`, a traitlet a cell can
+  `observe`; every finished picture's report in `rendered`; the build's version in `version`.
+- **A file on the kernel's disk is served by the kernel**, by byte range, from a server on
+  `127.0.0.1`: a `ThreadingHTTPServer` that answers one `Range`, sends `Access-Control-Allow-Origin: *`
+  and `Access-Control-Allow-Private-Network`, never sends a `.gz` with a `Content-Encoding`, and
+  serves the *directory* a file was named in — so its sidecars are read from beside it — under a
+  random token, refusing any path out of it. Behind JupyterHub it is reached through
+  jupyter-server-proxy at `<prefix>/proxy/<port>/`, in Colab through Colab's port proxy, and
+  `CHROMOSOMIX_PUBLIC_URL` names any other way in; the widget makes a relative address absolute
+  against the notebook's page before the frame sees it. Nothing is uploaded and nothing leaves the
+  machine the kernel runs on (C1).
+- **Which build is in the frame is the reader's to pin.** The site by default; a release by its
+  permanent address (`viewer='0.16.0'` is `…/v/v0.16.0/`, §21); any address; or a built `dist/` on
+  the kernel's disk (§22), served beside the data. `install_viewer()` fetches the npm package once
+  into `~/.cache/chromosomix/` and every widget after uses it — the app and the data are then one
+  origin and the notebook works offline, where the site reading `http://127.0.0.1` has Chrome ask the
+  reader once to let the page reach this machine. `CHROMOSOMIX_VIEWER` names one for every widget.
+
+`widgets/python/demo.ipynb` is the yeast demo driven from Python, and `scripts/ui-jupyter-widget.mjs`
+runs it whole in JupyterLab and shoots each frame once it has reported a finished picture of what
+was asked of it.
 
 ## 22. The package: the copy that goes to npm
 

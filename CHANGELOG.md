@@ -14,6 +14,26 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The viewer in a Jupyter notebook (§21.5).** `pip install chromosomix` (from a clone,
+  `pip install -e widgets/python`) gives `Chromosomix`, the app itself in a cell — the map, its
+  tracks, its side panels and its gestures — as an anywidget for JupyterLab, Notebook 7, VS Code,
+  Colab and marimo: `Chromosomix('sample.mcool::/resolutions/5000', region='chr2:10-14Mb',
+  tracks=['ATAC.bw'], transform='log10')`. `goto`, `navigate` and `add` drive it from Python, and
+  `state` — a traitlet a cell can `observe` — follows where the reader takes it. A file on the
+  kernel's disk is served to the viewer by byte range from a server on `127.0.0.1`, its sidecars
+  beside it; behind JupyterHub through jupyter-server-proxy, in Colab through Colab's proxy. The
+  frame holds the site, a release by its permanent address (`viewer='0.16.0'`), any build, or the
+  npm package fetched once by `install_viewer()` so the notebook works offline.
+  `widgets/python/demo.ipynb` drives the yeast demo; `scripts/ui-jupyter-widget.mjs` runs it in
+  JupyterLab and shoots every frame.
+
+- **`chromosomix:add`, a host page putting files in an embed (§21.4).** The sixth message of the
+  embed's channel: a list of addresses, each put in the tab as the header's `+` puts one — a track
+  beside the map, another map or a model beside it, a workspace — once the map the `src=` named is
+  drawn, and answered with the state once they are in. The view state has no word for a track; this
+  is how a page that frames a map puts its tracks beside it. A host's messages are now carried out
+  in the order they came, so a `navigate` sent after an `add` lands on what the add opened.
+
 - **The app held to its own command line, in a notebook (§18.10).** `notebooks/parity.qmd` runs ten
   tasks in the app, in headless Chromium — insulation, compartments, P(s), coverage, virtual 4C, loop
   calling, a motif search and APA on GEO's yeast Micro-C at 1.6 kb, framed on chrIV, and peak calling
@@ -166,6 +186,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   validation's comparison with yapc 0.1 on chr19 is unchanged to the last digit.
 
 ### Fixed
+
+- **A map in a deck keeps its size in a short window (§16.5).** Each deck cell's map took its height
+  from the window less the tracks stacked under it, with no floor, so a deck of two in a
+  620-pixel-tall window — a notebook's frame, a laptop with its tools open — drew a map with three
+  tracks under it as a 42-pixel thumbnail. It now has the single view's 20rem floor, and the page
+  scrolls, as the single view's does.
 
 - **Signal by group's stretches are their exact means (§18.8).** A stretch was read at a twentieth
   of a typical stretch's width, from a zoom level wherever the file had one that fine, and a zoom

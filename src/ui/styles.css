@@ -10570,11 +10570,18 @@ body.is-carrying-card * {
    size the panel *measured* (`ui/mapSize.ts`), already clamped to this cell and
    to the height budget, so it is both definite and correct; the floor is what a
    panel that has not measured itself yet draws for one frame, and it is small
-   rather than overflowing. `test/unit/deck-plot-css.test.ts` keeps it a number. */
+   rather than overflowing. `test/unit/deck-plot-css.test.ts` keeps it a number.
+
+   **The window's share has a floor**, the single view's 20rem. Without one a
+   short window — a notebook's 620-pixel frame, a laptop with its tools open —
+   took the lane stacks out of the height and handed the map what was left: a
+   map with three tracks under it in a deck of two drew a 42-pixel thumbnail.
+   The page scrolls instead, as the single view's does; `--map-size` is already
+   clamped to the cell, so the floor never pushes a map out of its column. */
 .deck .heatmap-wrap {
   width: min(
     var(--map-size, 20rem),
-    calc(100vh - 16rem - var(--tabstrip-h) - var(--lane-bottom, 0px) - var(--lane-top, 0px))
+    max(20rem, calc(100vh - 16rem - var(--tabstrip-h) - var(--lane-bottom, 0px) - var(--lane-top, 0px)))
   );
 }
 

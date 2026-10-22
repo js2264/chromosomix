@@ -22,6 +22,10 @@ release/
 *.log
 .DS_Store
 __pycache__/
+.pytest_cache/
+*.egg-info/
+# JupyterLab's autosaves beside a notebook it opened (widgets/python/demo.ipynb).
+.ipynb_checkpoints/
 
 # The icon size ladder `npm run icons:app` draws alongside the five icons the
 # app actually installs. Those five are committed (see the script's docstring);

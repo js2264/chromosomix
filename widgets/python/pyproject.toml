@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "chromosomix"
+version = "0.16.0"
+description = "The chromosomix viewer as a Jupyter widget: contact maps, genome tracks and 3D models in a notebook cell, driven from Python."
+readme = "README.md"
+license = "GPL-3.0-or-later"
+authors = [{ name = "Jacques Serizay" }]
+requires-python = ">=3.10"
+dependencies = ["anywidget>=0.9", "traitlets>=5"]
+keywords = ["hi-c", "genomics", "genome browser", "contact map", "jupyter", "widget"]
+classifiers = [
+  "Framework :: Jupyter",
+  "Framework :: Jupyter :: JupyterLab",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.urls]
+Homepage = "https://chromosomix.app/"
+Source = "https://github.com/js2264/chromosomix"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/chromosomix"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -2,7 +2,7 @@
 /**
  * The conversation between an embedded viewer and the page holding it.
  *
- * Four messages, and every one of them is a decision about somebody else's page
+ * Six messages, and every one of them is a decision about somebody else's page
  * — so what is asserted here is mostly the refusals. A channel that answered a
  * sibling frame, or pushed the reader's own file URL at whoever framed the
  * window, would work perfectly in the demo it was written for and be wrong in
@@ -17,6 +17,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
+  EMBED_ADD,
+  EMBED_ADD_MAX,
   EMBED_NAVIGATE,
   EMBED_PROTOCOL,
   EMBED_READY,
@@ -272,5 +274,120 @@ describe('who is allowed to speak', () => {
     move({ ...A, view: 'contigs' })
     events.deliver(message({ type: EMBED_WHERE }, { from: parent }))
     expect(parent.seen).toHaveLength(2)
+  })
+})
+
+describe('being handed files (§21.4)', () => {
+  /** A channel whose host records what it was asked to add, and when it finished. */
+  function adding(): ReturnType<typeof channelOn> & { added: string[][]; finish: () => void } {
+    const parent = hostWindow()
+    const events = source()
+    const added: string[][] = []
+    let finish = (): void => {}
+    const channel = new EmbedChannel(
+      {
+        state: () => A,
+        navigate: () => {},
+        add: (files) => {
+          added.push(files)
+          return new Promise<void>((done) => {
+            finish = done
+          })
+        },
+      },
+      parent,
+      events,
+    )
+    return {
+      channel,
+      parent,
+      events,
+      at: () => A,
+      went: [],
+      move: () => {},
+      added,
+      finish: () => finish(),
+    }
+  }
+
+  it('hands the host its addresses, in order, and answers once they are in', async () => {
+    const view = adding()
+    view.channel.start()
+    view.events.deliver(message({ type: EMBED_WHERE }, { from: view.parent }))
+    const told = view.parent.seen.length
+    view.events.deliver(
+      message({ type: EMBED_ADD, files: ['https://data.example/a.bw', 'https://data.example/b.bed'] }, { from: view.parent }),
+    )
+    expect(view.added).toEqual([['https://data.example/a.bw', 'https://data.example/b.bed']])
+    // Nothing until the files are in, and then the state — even unchanged, since
+    // the answer is what tells the host they are.
+    expect(view.parent.seen.length).toBe(told)
+    view.finish()
+    await new Promise((settled) => setTimeout(settled, 0))
+    expect(view.parent.seen.at(-1)).toEqual({ message: { type: EMBED_STATE, state: A }, origin: HOST })
+  })
+
+  it('moves the view only once the files sent before the move are in', async () => {
+    const parent = hostWindow()
+    const events = source()
+    const went: Array<ViewState | null> = []
+    let at: ViewState = A
+    let finish = (): void => {}
+    const channel = new EmbedChannel(
+      {
+        state: () => at,
+        navigate: (state) => {
+          went.push(state)
+          if (state !== null) at = state
+        },
+        add: () =>
+          new Promise<void>((done) => {
+            finish = () => {
+              // The add opened a browser of tracks: what the move is laid over.
+              at = { uri: 'https://data.example/a.bw', view: 'browser' }
+              done()
+            }
+          }),
+      },
+      parent,
+      events,
+    )
+    channel.start()
+    events.deliver(message({ type: EMBED_ADD, files: ['https://data.example/a.bw'] }, { from: parent }))
+    events.deliver(message({ type: EMBED_NAVIGATE, state: { locus: 'II:100-200' } }, { from: parent }))
+    expect(went).toEqual([])
+    finish()
+    await new Promise((settled) => setTimeout(settled, 0))
+    expect(went).toHaveLength(1)
+    expect(went[0]?.view).toBe('browser')
+    expect(went[0]?.locus).toBe('II:100-200')
+    // With nothing in flight, a move is carried out at once, as it always was.
+    events.deliver(message({ type: EMBED_NAVIGATE, state: { locus: 'II:300-400' } }, { from: parent }))
+    expect(went).toHaveLength(2)
+  })
+
+  it('takes only strings, and no more than a bounded number of them', () => {
+    const view = adding()
+    view.channel.start()
+    const many = Array.from({ length: EMBED_ADD_MAX + 10 }, (_, i) => `https://data.example/${i}.bw`)
+    view.events.deliver(message({ type: EMBED_ADD, files: [42, { url: 'x' }, ...many] }, { from: view.parent }))
+    expect(view.added[0]).toHaveLength(EMBED_ADD_MAX)
+    expect(view.added[0][0]).toBe('https://data.example/0.bw')
+  })
+
+  it('ignores an add with nothing in it, and one from a window that is not its host', () => {
+    const view = adding()
+    view.channel.start()
+    view.events.deliver(message({ type: EMBED_ADD, files: 'https://data.example/a.bw' }, { from: view.parent }))
+    view.events.deliver(message({ type: EMBED_ADD, files: [] }, { from: view.parent }))
+    view.events.deliver(message({ type: EMBED_ADD, files: ['https://data.example/a.bw'] }, { from: hostWindow() }))
+    expect(view.added).toEqual([])
+  })
+
+  it('ignores an add where the window cannot take one', () => {
+    const view = channelOn()
+    view.channel.start()
+    view.events.deliver(message({ type: EMBED_ADD, files: ['https://data.example/a.bw'] }, { from: view.parent }))
+    expect(view.went).toEqual([])
   })
 })

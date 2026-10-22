@@ -86,4 +86,13 @@ describe('the width of a map’s box', () => {
     expect(narrow.length).toBeGreaterThan(0)
     for (const rule of narrow) expect(rule.selector.includes('deck')).toBe(false)
   })
+
+  it('keeps the window’s share of a deck map above the single view’s floor', () => {
+    // A short window less the lane stacks under a map is a few pixels: a deck of
+    // two in a 620-pixel notebook frame, three tracks under the map, drew a
+    // 42-pixel thumbnail. The share has the single view's 20rem floor, and the
+    // measured `--map-size` still bounds it to the cell.
+    const deck = widthRules().find((rule) => rule.selector === '.deck .heatmap-wrap')
+    expect(deck?.width).toMatch(/^min\( var\(--map-size, 20rem\), max\(20rem, calc\(100vh/)
+  })
 })

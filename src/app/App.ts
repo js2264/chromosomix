@@ -34,6 +34,7 @@ import { StoreDrawer } from '../ui/StoreDrawer'
 import { registerShelf } from '../ui/examples'
 import type { StoreEntry } from '../state/store'
 import { splitUri } from '../ui/labels'
+import { canonicalUrl } from '../sources/rewrite'
 import {
   AESTHETICS_PANEL,
   ANALYSIS_PANEL,
@@ -343,6 +344,8 @@ export class App implements SessionHost {
    * the whole window and the host it would be answering is the reader.
    */
   private readonly channel: EmbedChannel | null = null
+  /** The boot's first picture finished, in an embed: what a host's files wait for. */
+  private booted: Promise<void> = Promise.resolve()
   /**
    * The embed bar's brand, which is also the way out to the full viewer.
    *
@@ -993,6 +996,7 @@ export class App implements SessionHost {
       this.channel = embedChannel({
         state: () => this.current?.state ?? null,
         navigate: (state) => this.goTo(state),
+        add: (files) => this.addFromHost(files),
       })
     }
 
@@ -1007,8 +1011,44 @@ export class App implements SessionHost {
       window.addEventListener(RENDERED, (event) => {
         this.channel?.rendered((event as CustomEvent<RenderedReport>).detail)
       })
+      // The boot's first picture — the map the host's `src=` named, its error,
+      // or the picker — which a host's files wait for (`addFromHost`).
+      this.booted = new Promise((drawn) => window.addEventListener(RENDERED, () => drawn(), { once: true }))
     }
     booting()
+  }
+
+  /**
+   * Files a host page put in this tab (`chromosomix:add`, §21.4), by address.
+   *
+   * The header's `+` with an address typed into it, once per address and in
+   * order: the first opens as the tab's file where the tab has none, and every
+   * other is added — a map beside the map, a track among the tracks. Each waits
+   * for whatever is opening to finish first, the map the host's `src=` named
+   * above all, or a track would arrive at a tab that is still empty and open in
+   * the map's place.
+   *
+   * Nothing is added before the boot's first picture is finished, either: the
+   * map a `src=` names opens through a navigation, and a session marks itself
+   * as opening only some way into it.
+   *
+   * An address is canonicalised at this door as at the URL box's (§24.5), and
+   * only `http:` and `https:` are kept: the list is another origin's, and those
+   * are the schemes with a server on the other end — the rule `?config=` keeps.
+   */
+  private async addFromHost(files: string[]): Promise<void> {
+    await this.booted
+    for (const raw of files) {
+      const url = canonicalUrl(raw.trim())
+      if (!/^https?:\/\//i.test(url)) continue
+      const session = this.current
+      if (session === undefined) return
+      await settledOpening(session)
+      const { path } = splitUri(url)
+      const source = { kind: 'remote', url: path } as const
+      if (!session.hasFile && !session.isBrowsing) await session.openPicked(url, source)
+      else await session.addRemote(url, source)
+    }
   }
 
   /**
@@ -2816,4 +2856,21 @@ function sessionStorageOrNull(): Storage | null {
   } catch {
     return null
   }
+}
+
+/**
+ * Resolve once `session` is opening nothing: what {@link App.addFromHost} waits
+ * on before each file. Asked, not subscribed to — an open is announced nowhere
+ * a caller could await, and the one a host's `src=` started was begun before
+ * the host had said anything — a few times a second, for as long as an open
+ * may take, which a `.pairs` import measures in minutes.
+ */
+function settledOpening(session: { opening: string | null }, poll = 100): Promise<void> {
+  return new Promise((settled) => {
+    const check = (): void => {
+      if (session.opening === null) settled()
+      else setTimeout(check, poll)
+    }
+    check()
+  })
 }
