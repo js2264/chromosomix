@@ -39,9 +39,11 @@
  * count, so there is nothing to consent to (§31 says why). The About dialog
  * turns it off, for this browser, at once — the queue is dropped as well — and
  * *forget everything* keeps that answer, since forgetting a refusal would be
- * the one way the sweep could make the page send more. A browser that already
- * says "do not track me" (Global Privacy Control, or Do Not Track) is taken at
- * its word and sends nothing, without being asked either.
+ * the one way the sweep could make the page send more. A browser that sends
+ * Global Privacy Control is taken at its word and sends nothing, without being
+ * asked either. Do Not Track is not read: the browsers that offered it have
+ * retired it — Safari in 2019, Firefox in 2025, pointing its users to GPC — and
+ * GPC is the signal a reader can still set and the one the law now names.
  */
 
 import type { LayoutKind } from './types'
@@ -258,11 +260,15 @@ export function telemetryHost(): string {
   }
 }
 
-/** `true` when the browser itself asks not to be tracked: Global Privacy Control, or Do Not Track. */
+/**
+ * `true` when the browser sends Global Privacy Control — Brave and DuckDuckGo
+ * by default, Firefox in its private windows, any browser where the reader
+ * turned it on. Do Not Track is not read; the module's header says why.
+ */
 export function browserDeclines(): boolean {
   if (typeof navigator === 'undefined') return false
   const nav = navigator as Navigator & { globalPrivacyControl?: boolean }
-  return nav.globalPrivacyControl === true || nav.doNotTrack === '1'
+  return nav.globalPrivacyControl === true
 }
 
 /** The reader's switch: on unless turned off in this browser. */

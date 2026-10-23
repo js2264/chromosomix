@@ -14956,5 +14956,11 @@ owed instead is to say it and to make it easy to stop:
   It is kept in `localStorage` (`chromosomix:telemetry`), and *forget everything* keeps it: every other
   key is something kept on the reader's behalf, and this one is a refusal, whose loss would be the
   one way that button could make the page send more than it did before it was pressed.
-- **A browser that already asks not to be tracked is taken at its word**, unasked: Global Privacy
-  Control or Do Not Track, and the site sends nothing. About then says so in place of the switch.
+- **A browser that sends Global Privacy Control is taken at its word**, unasked, and the site sends
+  nothing: Brave and DuckDuckGo by default, Firefox in its private windows, and any browser where
+  the reader turned it on. About then says so in place of the switch. **Do Not Track is not read.**
+  The browsers that offered it have retired it — Safari in 2019, Firefox in 2025, which points its
+  users to GPC instead — so what still sends it is mostly an old setting nobody remembers choosing,
+  and the European Data Protection Board has said GDPR's objection by automated means (Art. 21(5))
+  does not make a site bound to honour it. GPC is the signal a reader can still set, and the one
+  the law names: a binding opt-out in California and a dozen other states.
