@@ -214,13 +214,6 @@
   ],
   "pulls": [
     {
-      "number": 132,
-      "commit": "4acc2c9",
-      "title": "Add Notebooks tab to About dialog with task reference citations",
-      "branch": "js/sharp-rubin-wqs2es",
-      "date": "2026-10-22T15:46:52Z"
-    },
-    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
