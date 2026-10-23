@@ -70,7 +70,9 @@ UCSC_HG38 = "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/"
 GM, GM_UUID = "4DNFIXP4QG5B", "d6abea45-b0bb-4154-9854-1d3075b98097"
 #: ENCODE's GM12878 files the paper reads, GRCh38: accession → (key under encode-public, MD5, what).
 #: The two CTCF tracks are two labs' experiments, each its replicates pooled, which the app's peak
-#: caller reads as two replicates; RNA-seq is one replicate's two strands.
+#: caller reads as two replicates; RNA-seq is one replicate's two strands. The ChIA-PET is Fig. 1a's lower
+#: triangle: a Juicer .hic (1.7.5, version 8) of the Ruan lab's library LHG0052H, at 1 kb, 5 kb and up —
+#: no 2 kb — over hg38's 1–22, X, Y and M, which is 4DN's list with chrM after it.
 GM_ENCODE = {
     "ENCFF734CUT": ("2020/10/01/a42c46dc-c33f-4906-8469-ba93e2cf30d3/ENCFF734CUT.bigWig",
                     "b68aeffbebeae3d03e734b51f43c0cb8",
@@ -89,6 +91,9 @@ GM_ENCODE = {
                     "Total RNA-seq, plus strand, Gingeras lab, CSHL (ENCODE ENCSR000AEC)"),
     "ENCFF005BFP": ("2021/04/06/7bb368f1-3e6b-4b91-86a5-45ce68da0d94/ENCFF005BFP.bigWig",
                     "ec4c60a9be0dd8fc42621447b557e566", "Total RNA-seq, minus strand (ENCODE ENCSR000AEC)"),
+    "ENCFF379AWZ": ("2020/12/29/12d36023-4ea1-4b2a-9716-59eb557c799d/ENCFF379AWZ.hic",
+                    "4d419aafa535258c2abaad02054decf9",
+                    "In situ CTCF ChIA-PET, contact matrix, Ruan lab, JAX (ENCODE ENCSR184YZV)"),
 }
 #: What the app computes on them (`write_gm12878`), under the store's `chromosomix_paper/human/`.
 GM_PEAKS, GM_PAIRS = "GM12878_CTCF.peaks.bed", "GM12878_CTCF.consecutive.bedpe"
@@ -1124,7 +1129,9 @@ def paper_figS3c() -> dict:
 
 
 GM_MAP = f"human/{GM}.mcool"
-GM_NAMES = {GM_MAP: "Hi-C · GM12878 (Rao et al. 2014, 4DN)"}
+GM_CHIAPET = "human/ENCFF379AWZ.hic"
+GM_NAMES = {GM_MAP: "Hi-C · GM12878 (Rao et al. 2014, 4DN)",
+            GM_CHIAPET: "CTCF ChIA-PET · GM12878 (Ruan lab, ENCODE)"}
 GM_COLOURS = {"insulation": "#1aa0b8", "e1": "#8c8c8c", "ab": "#d62728", "fourc": "#c45a9a", "ctcf": "#d55e00",
               "ctcf2": "#b2182b", "peaks": "#d55e00", "motifs": "#d55e00", "rna+": "#e69f00", "rna-": "#3a8fd0",
               "atac": "#9c6b1e", "genes": COLOURS["genes"], "sequence": COLOURS["genes"], "model": "#c45a9a"}
@@ -1148,10 +1155,19 @@ def tracks_cell(seat: int = 0) -> str:
 
 
 def paper_fig1a() -> dict:
-    """GM12878 at 2 kb over chr14:88.55–90.10 Mb, as Fig. 1a draws the window: three cells across.
+    """GM12878 at 5 kb over chr14:88.55–90.10 Mb, as Fig. 1a draws the window: three cells across.
 
     `circular` is declared, empty: the junction test the first open runs reads two human chromosomes as
     circles on this map, and a declaration is what records it as run.
+
+    The map is two files in one square (§5.7): 4DN's Hi-C .mcool above the diagonal and ENCODE's CTCF
+    ChIA-PET .hic below it, each as its observed over its own expected, on one log2 scale, smoothed
+    adaptively — the ChIA-PET holds 38,464 contacts in the window, one or two a cell at a TAD's reach.
+    Each file's balancing is in a unit of its own (a cooler's rows sum to one, Juicer's KR to the
+    library's depth, 295 a bin on chr14), so balanced counts on one scale would draw the ChIA-PET
+    saturated; the ratio to each file's own decay is the one reading the two share. 5 kb because the .hic
+    has no 2-kb level, and a square is one bin size. No clip: a link that lands on a map's O/E hands its
+    clip back to auto (§7.5), a range symmetric about an O/E of one.
 
     The map, with the insulation and its borders above it, the compartments and E1 at its left and the
     4C profile from chr14:89,150,001-89,180,000 under it; a tracks cell with CTCF and its motif, the two
@@ -1189,9 +1205,9 @@ def paper_fig1a() -> dict:
                   card="structure", bottom=False,
                   structure={"beads": False, "sticks": True, "tube": False, "colourBy": "distance", "pin": FIG1A_PIN,
                              "colormap": "default"})
-    state = {"uri": f"{GM_MAP}::resolutions/2000", "maps": "tracks|3d", "view": "region",
-             "region": machine(FIG1A_REGION), **MAP_LOOK, "vmin": -4, "vmax": -2.2}
-    return tab("Fig. 1a · GM12878, chr14:88.55–90.10 Mb at 2 kb: the map, its tracks and its model", state,
+    state = {"uri": f"{GM_MAP}::resolutions/5000", "uri2": f"{GM_CHIAPET}::resolutions/5000", "maps": "tracks|3d",
+             "view": "region", "region": machine(FIG1A_REGION), **MAP_LOOK, "oe": True, "smooth": "a50"}
+    return tab("Fig. 1a · GM12878, chr14:88.55–90.10 Mb at 5 kb: the map, its tracks and its model", state,
                on_map + in_cell + [model], lanes=lanes, deck={"columns": 3}, groups={"rna": "stacked"},
                scaling={"rna": "shared"}, circular=[], manual=FIG1A_MARKS, mapNames=GM_NAMES)
 
@@ -1234,7 +1250,8 @@ def paper_fig2() -> dict:
     ]
     state = {"uri": f"{GM_MAP}::resolutions/10000", "view": "region", "region": machine(FIG2_REGION), **MAP_LOOK}
     return tab("Fig. 2 · CTCF sites in GM12878, chr19: the map, two labs’ CTCF and ATAC — insulation, peaks, APA "
-               "and metaplots run here", state, tracks, analysis=FIG2_RECIPES, circular=[], mapNames=GM_NAMES)
+               "and metaplots run here", state, tracks, analysis=FIG2_RECIPES, circular=[],
+               mapNames={GM_MAP: GM_NAMES[GM_MAP]})
 
 
 def chromosomix_paper() -> dict:
@@ -1319,6 +1336,8 @@ def stage(out: Path, local: str, work_dir: Path | None) -> None:
         for t in ws["tabs"]:
             st = t["state"]
             st["uri"] = absolute(st["uri"])
+            if st.get("uri2"):
+                st["uri2"] = absolute(st["uri2"])
             if st.get("maps"):
                 st["maps"] = "|".join(m if m in ("3d", "tracks") else absolute(m) for m in st["maps"].split("|"))
             for e in t["tracks"]:

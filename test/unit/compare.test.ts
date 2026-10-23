@@ -256,12 +256,43 @@ describe('compareRefusal', () => {
     expect(refusal).toContain('2,500')
   })
 
-  it('refuses two different chromosome counts', () => {
+  it('refuses a second file that carries fewer chromosomes than the first', () => {
     const refusal = compareRefusal(opened(), opened(), {
       primary: CONTIGS,
       second: [['I', 1000]],
     })
     expect(refusal).toContain('counts differ')
+    expect(refusal).toContain('opened the other way round, this pair is drawn')
+  })
+
+  it('accepts a second file whose list runs on past the first’s', () => {
+    // A Juicer `.hic` keeps the mitochondrion after the last chromosome, where
+    // a 4DN cooler of the same assembly stops: every bin the picture reads is
+    // the first file's, and indexes the same locus in both.
+    expect(
+      compareRefusal(opened(), opened(), {
+        primary: CONTIGS,
+        second: [
+          ['chrI', 1000],
+          ['chrII', 2000],
+          ['chrM', 86],
+        ],
+      }),
+    ).toBeNull()
+  })
+
+  it('refuses an extra chromosome anywhere but after the first file’s', () => {
+    // In the middle it moves every bin after it, so the second file's
+    // triangle would be drawn shifted under the first one's labels.
+    const refusal = compareRefusal(opened(), opened(), {
+      primary: CONTIGS,
+      second: [
+        ['I', 1000],
+        ['M', 86],
+        ['II', 2000],
+      ],
+    })
+    expect(refusal).toContain('“II” in this file and “M” in the other')
   })
 })
 

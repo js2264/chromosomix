@@ -30,8 +30,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **The paper's GM12878 panels in the lab store (§24.2, §24.3).** *The Chromosomix paper* opens on
   two new tabs over 4DN's in situ Hi-C of GM12878 (Rao et al. 2014, 4DNFIXP4QG5B: 4,010,478,943
-  contacts, 27 GB, read in place). **Fig. 1a**: chr14:88.55–90.10 Mb at 2 kb, three cells across —
-  the map with its insulation and borders above it, its compartments and E1 at 250 kb at its left, the
+  contacts, 27 GB, read in place). **Fig. 1a**: chr14:88.55–90.10 Mb at 5 kb, three cells across —
+  the map, with ENCODE's CTCF ChIA-PET of GM12878 in its lower triangle (Ruan lab, ENCSR184YZV, a
+  Juicer `.hic`: two formats out of two consortia in one square, §5.7), both as O/E smoothed
+  adaptively, with its insulation and borders above it, its compartments and E1 at 250 kb at its left, the
   4C profile from chr14:89,150,001-89,180,000 under it, and the TAD and its borders marked; a tracks
   cell with ENCODE's CTCF, ATAC-seq and its peaks, both strands of total RNA-seq, CTCF's motif, UCSC's
   refGene and hg38 sequence; and the pastis-NB model of the window, drawn as sticks, its TAD borders as
@@ -149,6 +151,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   The map is committed, so this runs on every push with nothing to build.
 
 ### Changed
+
+- **A second file whose chromosomes run on past the first's opens in the lower triangle (§5.7).** A
+  Juicer `.hic` keeps the mitochondrion after `Y`, where a 4DN cooler of the same assembly stops at
+  `chrY`, and the two were refused for counting 25 sequences against 24. While the second list opens
+  with the whole of the first, every bin the picture reads is the same locus in both, so the pair is
+  drawn; the other way round is still refused, and the refusal now says which way round to open it.
+  §5.7 also says what balanced means beside a `.hic`: Juicer's KR is in the library's depth where a
+  cooler's balancing sums to one, so the two are compared as O/E.
 
 - **The paper's bacterial panels are Fig. S3a–c (§24.2).** The three tabs that were Fig. 2a–c — *C.
   necator* along both arms, the *B. subtilis* ParB time course and *P. aeruginosa*'s condensin

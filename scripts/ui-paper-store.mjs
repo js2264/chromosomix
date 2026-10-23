@@ -1,7 +1,7 @@
 /**
  * The paper's card of the lab store (§24.2), opened from its address as the card opens it: Fig. 1a's
- * three cells — GM12878 at 2 kb with its insulation above, its compartments at its left and its 4C
- * under it; the tracks cell the workspace put eight tracks on (§16.11); the model — then the same tab
+ * three cells — GM12878 at 5 kb, ENCODE's CTCF ChIA-PET .hic in the map's lower triangle, both as O/E,
+ * with its insulation above, its compartments at its left and its 4C under it; the tracks cell the workspace put eight tracks on (§16.11); the model — then the same tab
  * after a reload, its tracks cell still filled; Fig. 2 on chr19, nothing computed; and Fig. S3c, the bacteria renamed.
  *
  * The workspace is the store's, staged so that every name points at where its file is today

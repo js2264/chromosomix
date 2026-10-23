@@ -7,9 +7,10 @@
     {
       "version": 1,
       "createdAt": "2026-10-07T00:00:00.000Z",
-      "name": "Fig. 1a · GM12878, chr14:88.55–90.10 Mb at 2 kb: the map, its tracks and its model",
+      "name": "Fig. 1a · GM12878, chr14:88.55–90.10 Mb at 5 kb: the map, its tracks and its model",
       "state": {
-        "uri": "human/4DNFIXP4QG5B.mcool::resolutions/2000",
+        "uri": "human/4DNFIXP4QG5B.mcool::resolutions/5000",
+        "uri2": "human/ENCFF379AWZ.hic::resolutions/5000",
         "maps": "tracks|3d",
         "view": "region",
         "region": "chr14:88550000-90100000",
@@ -17,8 +18,8 @@
         "balance": true,
         "transform": "log10",
         "colormap": "default",
-        "vmin": -4,
-        "vmax": -2.2
+        "oe": true,
+        "smooth": "a50"
       },
       "tracks": [
         {
@@ -664,7 +665,8 @@
       },
       "circular": [],
       "mapNames": {
-        "human/4DNFIXP4QG5B.mcool": "Hi-C · GM12878 (Rao et al. 2014, 4DN)"
+        "human/4DNFIXP4QG5B.mcool": "Hi-C · GM12878 (Rao et al. 2014, 4DN)",
+        "human/ENCFF379AWZ.hic": "CTCF ChIA-PET · GM12878 (Ruan lab, ENCODE)"
       }
     },
     {

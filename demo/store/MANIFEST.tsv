@@ -63,6 +63,7 @@ chromosomix_paper/human/ENCFF487LOB.bigWig	s3://encode-public/2021/02/24/4c49a77
 chromosomix_paper/human/ENCFF928SQL.bigBed	s3://encode-public/2021/02/24/534b1381-d8a8-4ce3-b6c2-5745076db38b/ENCFF928SQL.bigBed	ATAC-seq peaks, replicated (ENCODE ENCSR095QNB)
 chromosomix_paper/human/ENCFF990PUN.bigWig	s3://encode-public/2021/04/06/b69b32c0-0298-484c-b218-37f22ebb0309/ENCFF990PUN.bigWig	Total RNA-seq, plus strand, Gingeras lab, CSHL (ENCODE ENCSR000AEC)
 chromosomix_paper/human/ENCFF005BFP.bigWig	s3://encode-public/2021/04/06/7bb368f1-3e6b-4b91-86a5-45ce68da0d94/ENCFF005BFP.bigWig	Total RNA-seq, minus strand (ENCODE ENCSR000AEC)
+chromosomix_paper/human/ENCFF379AWZ.hic	s3://encode-public/2020/12/29/12d36023-4ea1-4b2a-9716-59eb557c799d/ENCFF379AWZ.hic	In situ CTCF ChIA-PET, contact matrix, Ruan lab, JAX (ENCODE ENCSR184YZV)
 chromosomix_paper/human/hg38.2bit	work:hg38.2bit	Human genome hg38, UCSC (bigZips)
 chromosomix_paper/human/hg38.refGene.txt.gz	work:hg38.refGene.txt.gz	RefSeq genes, UCSC hg38 refGene table
 chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w5.bw	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w5.bw	Diamond insulation at 10 kb, 50-kb window, genome-wide, computed by the app

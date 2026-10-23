@@ -1307,9 +1307,14 @@ Three refusals, each because the merged picture would otherwise be a lie rather 
 
 - **a genome layer** — §8.5's argument applied to a whole matrix rather than to a track;
 - **a different bin size** — one grid cannot be two resolutions;
-- **a chromosome list differing in count, order, name or length** — every coordinate in the picture
-  is an index into one such list. Two spellings of one name, `chr1` against `1`, are not a
-  difference (§5.9); one name at two lengths is.
+- **a chromosome list differing in order, name or length, or missing any of the first file's** —
+  every coordinate in the picture is an index into one such list. Two spellings of one name, `chr1`
+  against `1`, are not a difference (§5.9); one name at two lengths is. **The second file's list may
+  run on past the first's**: a `.hic` out of Juicer keeps the mitochondrion after `Y`, where a 4DN
+  cooler of the same assembly stops at `chrY`, and while the second list opens with the whole of the
+  first, every bin the picture reads is the same locus in both and the rest is never asked for. The
+  other way round is refused, since the first file's last sequences would have a lower triangle with
+  nothing to read, and the refusal says that the other way round the pair is drawn.
 
 **The card asks for it only once there is a first map.** The zone is labelled *Load a map into the
 lower triangle* — not *a second map*, which is what §16's companion cell is called — and it is
@@ -1346,6 +1351,14 @@ colours of one. The second key carries the first's numbers, which is what it say
 are on one scale. A **match depth** switch used to scale the second file so its 99th percentile met
 the first's; it is gone, because it matched the picture and nothing else — the number under the
 pointer, and every task run on either file, were still each file's own depth.
+
+**Balanced is each file's own balancing, in its own unit**, and two containers do not share one. A
+cooler balanced by `cooler balance` has rows that sum to one; a `.hic` balanced by Juicer's KR or
+SCALE has rows that sum to the library's depth a bin — 295 on chr14 for ENCODE's GM12878 CTCF
+ChIA-PET at 5 kb — and is read exactly as straw reads it (`hic/HicFile.ts`), so that a number under
+the pointer is the one Juicebox prints. Beside a cooler, balanced, such a file is drawn hundreds of
+times over the scale and saturates. Their **O/E**, each over its own expected, is the reading two
+such files share, and the one the paper's Fig. 1a draws them with (§24.2).
 
 This is the design for **two** files and it stays exactly as it is. §16 is the design for N, which is
 a weaker claim on the files and therefore a different picture; the two compose, and a session may
@@ -11597,8 +11610,10 @@ why one table for all of them was the wrong shape and is gone:
   Hi-C, micro-C and PCP of one locus in a deck of three; splicing on human chrX in the 1D browser;
   a mitotic Hi-C time course in three tabs of decks; and the metagenome, a dev feature (§29).
   **Papers**: this viewer's own paper, one workspace of seven tabs, a panel each — Fig. 1a's GM12878
-  window at 2 kb as three cells (the map with its insulation, compartments, 4C and marks, a tracks cell
-  of ENCODE's and UCSC's tracks, and the model coloured by distance to a pinned bead), Fig. 1c's mouse
+  window at 5 kb as three cells (the map — 4DN's Hi-C `.mcool` above the diagonal and ENCODE's CTCF
+  ChIA-PET `.hic` below it, both as O/E smoothed adaptively (§5.7) — with its insulation,
+  compartments, 4C and marks, a tracks cell of ENCODE's and UCSC's tracks, and the model coloured by
+  distance to a pinned bead), Fig. 1c's mouse
   map at five scales with a model under each, Fig. 1d's insulation chain beside chromosome 3's model,
   Fig. 2's GM12878 map on chr19 with two labs' CTCF and ATAC-seq and nothing computed, each task of its
   chain — insulation at four scales, peaks on both CTCF tracks, the APA between consecutive peaks, the

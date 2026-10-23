@@ -94,10 +94,12 @@ export type DemoSection = 'Demo' | 'Papers'
 
 /**
  * The paper's GM12878 files (Figs. 1a and 2): the folder's path, its label, its kind, its format and its
- * assembly — 4DN's map, ENCODE's tracks, UCSC's sequence and genes, and what the app computed on them.
+ * assembly — 4DN's map, ENCODE's ChIA-PET map and tracks, UCSC's sequence and genes, and what the app
+ * computed on them.
  */
 const PAPER_HUMAN = [
   ['human/4DNFIXP4QG5B.mcool', 'GM12878 Hi-C, 4.0 billion contacts (Rao et al. 2014, 4DN)', 'map', 'mcool', 'hg38'],
+  ['human/ENCFF379AWZ.hic', 'GM12878 CTCF ChIA-PET, Ruan lab (ENCODE ENCSR184YZV)', 'map', 'hic', 'hg38'],
   ['human/hg38.2bit', 'Human sequence, UCSC hg38', 'genome', '2bit', 'hg38'],
   ['human/hg38.refGene.txt.gz', 'RefSeq genes, UCSC hg38', 'genome', 'genepred', 'hg38'],
   ['human/ENCFF734CUT.bigWig', 'CTCF ChIP-seq, Broad (ENCODE ENCSR000AKB)', 'genome', 'bigwig', 'hg38'],
@@ -324,7 +326,8 @@ const DEMO: Array<{
     provenance: '4DN 4DNFIXP4QG5B · Rao et al. 2014 · ENCODE · 4DN 4DNFI5QJNFAT · Kubo et al. 2021 · Huang et al. 2021 · GEO GSE76513',
     detail:
       'The data of the paper’s figures, a tab a panel. Fig. 1a: in situ Hi-C of GM12878 (Rao et al. 2014, a 27-GB ' +
-      '.mcool of 4.0 billion contacts, from 4DN) at 2 kb over chr14:88.55–90.10 Mb, three cells across: the map with ' +
+      '.mcool of 4.0 billion contacts, from 4DN) at 5 kb over chr14:88.55–90.10 Mb, three cells across: the map, ' +
+      'with ENCODE’s CTCF ChIA-PET of GM12878 (a .hic) in its lower triangle and both as observed over expected, ' +
       'its insulation and borders above it, its compartments and E1 at its left and the 4C profile from ' +
       'chr14:89,150,001-89,180,000 under it, and the TAD and its borders marked; a tracks cell with ENCODE’s CTCF, ' +
       'ATAC-seq and RNA-seq, CTCF’s motif, ATAC peaks, UCSC’s refGene and hg38 sequence; and the model the app ' +
