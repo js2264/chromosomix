@@ -878,6 +878,23 @@ describe('the lanes a track may be on', () => {
     made.deck.grow('beside')
     expect(made.noted[made.noted.length - 1]).toEqual([])
   })
+
+  /**
+   * A tracks cell shows no file, and the tracks put on it were kept against
+   * nothing: a reload or a workspace opened again brought the cell back empty.
+   * It is named by its seat instead — the first tracks cell from the left,
+   * the second — which is what its name and its height are remembered by.
+   */
+  it('names a tracks cell by its seat, and hands it what was parked there', () => {
+    const made = make()
+    made.deck.add({ kind: 'tracks' })
+    made.deck.add({ kind: 'structure' })
+    made.deck.add({ kind: 'tracks' })
+    const last = made.noted[made.noted.length - 1]
+    expect(last.map((each) => each.split('=')[1])).toEqual(['tracks:1', 'tracks:2'])
+    expect(made.adopted.some((each) => each.endsWith('=tracks:1'))).toBe(true)
+    expect(made.adopted.some((each) => each.endsWith('=tracks:2'))).toBe(true)
+  })
 })
 
 describe('the lock’s window', () => {

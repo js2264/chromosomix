@@ -92,7 +92,38 @@ const DEMO_BASE: string = typeof __DEMO_BASE__ === 'string' ? __DEMO_BASE__ : ''
  */
 export type DemoSection = 'Demo' | 'Papers'
 
-/** The paper's *B. subtilis* time course, a map a condition: the store's name, and the condition as Fig. 2b says it. */
+/**
+ * The paper's GM12878 files (Figs. 1a and 2): the folder's path, its label, its kind, its format and its
+ * assembly — 4DN's map, ENCODE's tracks, UCSC's sequence and genes, and what the app computed on them.
+ */
+const PAPER_HUMAN = [
+  ['human/4DNFIXP4QG5B.mcool', 'GM12878 Hi-C, 4.0 billion contacts (Rao et al. 2014, 4DN)', 'map', 'mcool', 'hg38'],
+  ['human/hg38.2bit', 'Human sequence, UCSC hg38', 'genome', '2bit', 'hg38'],
+  ['human/hg38.refGene.txt.gz', 'RefSeq genes, UCSC hg38', 'genome', 'genepred', 'hg38'],
+  ['human/ENCFF734CUT.bigWig', 'CTCF ChIP-seq, Broad (ENCODE ENCSR000AKB)', 'genome', 'bigwig', 'hg38'],
+  ['human/ENCFF485CGE.bigWig', 'CTCF ChIP-seq, Stanford (ENCODE ENCSR000DZN)', 'genome', 'bigwig', 'hg38'],
+  ['human/ENCFF156URE.bigBed', 'CTCF peaks, conservative IDR (ENCODE)', 'genome', 'bigbed', 'hg38'],
+  ['human/ENCFF487LOB.bigWig', 'ATAC-seq (ENCODE ENCSR095QNB)', 'genome', 'bigwig', 'hg38'],
+  ['human/ENCFF928SQL.bigBed', 'ATAC-seq peaks (ENCODE)', 'genome', 'bigbed', 'hg38'],
+  ['human/ENCFF990PUN.bigWig', 'Total RNA-seq, plus strand (ENCODE ENCSR000AEC)', 'genome', 'bigwig', 'hg38'],
+  ['human/ENCFF005BFP.bigWig', 'Total RNA-seq, minus strand (ENCODE ENCSR000AEC)', 'genome', 'bigwig', 'hg38'],
+  ...([5, 10, 20, 40] as const).map(
+    (w) =>
+      [`human/4DNFIXP4QG5B_10000.insulation-w${w}.bw`, `Diamond insulation, 10 kb, ${w * 10}-kb window`, 'genome', 'bigwig', 'hg38'] as const,
+  ),
+  ['human/4DNFIXP4QG5B_10000.borders.bed', 'Borders on the insulation, 10 kb', 'genome', 'bed', 'hg38'],
+  ['human/GM12878_CTCF.peaks.bed', 'CTCF peaks called on both labs’ ChIP-seq, IDR ≤ 0.05', 'genome', 'bed', 'hg38'],
+  ['human/GM12878_CTCF.consecutive.bedpe', 'Consecutive CTCF peaks, paired', 'genome', 'bedpe', 'hg38'],
+  ['human/4DNFIXP4QG5B_2000.chr14.insulation-w50.bw', 'Diamond insulation of chr14, 2 kb', 'genome', 'bigwig', 'hg38'],
+  ['human/4DNFIXP4QG5B_2000.chr14.borders.bed', 'Borders on chr14’s insulation, 2 kb', 'genome', 'bed', 'hg38'],
+  ['human/4DNFIXP4QG5B_250000.compartments-e1.bw', 'Compartments (E1), 250 kb', 'genome', 'bigwig', 'hg38'],
+  ['human/4DNFIXP4QG5B_250000.compartments-ab.bed', 'A and B compartments, 250 kb', 'genome', 'bed', 'hg38'],
+  ['human/4DNFIXP4QG5B_5000.4c-chr14-89150001-89180000.bw', '4C from chr14:89,150,001-89,180,000, O/E', 'genome', 'bigwig', 'hg38'],
+  ['human/4DNFIXP4QG5B_2000.chr14-88.55-90.10Mb.bed3d', '3D model of chr14:88.55–90.10 Mb, 2 kb', 'genome', 'bed3d', 'hg38'],
+  ['human/hg38.CTCF-motifs.bed', 'CTCF motif sites, hg38', 'genome', 'bed', 'hg38'],
+] as const
+
+/** The paper's *B. subtilis* time course, a map a condition: the store's name, and the condition as Fig. S3b says it. */
 const PAPER_SUBTILIS = [
   ['WT', 'WT'],
   ['dparAB', 'ΔparAB'],
@@ -104,7 +135,7 @@ const PAPER_SUBTILIS = [
   ['induction_45min', '+parB 45 min'],
 ] as const
 
-/** The paper's *P. aeruginosa* maps, a strain each: the lab's sample, and the genotype as Fig. 2c says it. */
+/** The paper's *P. aeruginosa* maps, a strain each: the lab's sample, and the genotype as Fig. S3c says it. */
 const PAPER_AERUGINOSA = [
   ['PAO1_v3_MM38', 'WT'],
   ['PAO1_v3_FG0235', 'SMC-ScpAB–'],
@@ -288,23 +319,32 @@ const DEMO: Array<{
     folder: 'store/chromosomix_paper',
     file: 'Chromosomix_paper.chromosomix.json',
     title: 'The Chromosomix paper',
-    line: 'Five tabs, a panel each: mouse ES-cell Hi-C from the whole genome down to Sox2 (Fig. 1c, d), and three bacteria read along their arms (Fig. 2a–c).',
-    assembly: 'mm10 · C. necator N-1 · B. subtilis PY79 · P. aeruginosa',
-    provenance: '4DN 4DNFI5QJNFAT · Kubo et al. 2021 · Huang et al. 2021 · GEO GSE76513',
+    line: 'Seven tabs, a panel each: GM12878 Hi-C with its tracks and model (Fig. 1a) and at CTCF’s sites (Fig. 2), mouse ES-cell Hi-C from the whole genome down to Sox2 (Fig. 1c, d), and three bacteria read along their arms (Fig. S3a–c).',
+    assembly: 'hg38 · mm10 · C. necator N-1 · B. subtilis PY79 · P. aeruginosa',
+    provenance: '4DN 4DNFIXP4QG5B · Rao et al. 2014 · ENCODE · 4DN 4DNFI5QJNFAT · Kubo et al. 2021 · Huang et al. 2021 · GEO GSE76513',
     detail:
-      'The data of the paper’s Figs. 1 and 2, a tab a panel. Fig. 1c: in situ Hi-C of F123 mouse embryonic stem ' +
+      'The data of the paper’s figures, a tab a panel. Fig. 1a: in situ Hi-C of GM12878 (Rao et al. 2014, a 27-GB ' +
+      '.mcool of 4.0 billion contacts, from 4DN) at 2 kb over chr14:88.55–90.10 Mb, three cells across: the map with ' +
+      'its insulation and borders above it, its compartments and E1 at its left and the 4C profile from ' +
+      'chr14:89,150,001-89,180,000 under it, and the TAD and its borders marked; a tracks cell with ENCODE’s CTCF, ' +
+      'ATAC-seq and RNA-seq, CTCF’s motif, ATAC peaks, UCSC’s refGene and hg38 sequence; and the model the app ' +
+      'inferred from the map, its TAD borders as beads and every bead coloured by its distance to one pinned in the ' +
+      'central sub-TAD. Fig. 2: the same map ' +
+      'at 10 kb with two labs’ CTCF ChIP-seq, the peaks the app called on the two, insulation at four scales and ' +
+      'ATAC-seq, each peak paired with the next for APA. Fig. 1c: in situ Hi-C of F123 mouse embryonic stem ' +
       'cells (a 7-GB .mcool of 1.07 billion contacts) at five scales side by side — the genome at 2.5 Mb, chromosome 3 ' +
       'as the correlation of its observed/expected at 250 kb, chr3:27–37 Mb at 10 kb, the Sox2 locus as ' +
       'observed/expected at 5 kb with its loops, and Sox2 with its control region at 2 kb — each with the tracks the ' +
       'panel draws under it, and under each the model the app inferred at that scale. Fig. 1d: chr3:32–36 Mb at 10 kb ' +
-      'with its insulation, borders and CTCF, beside chromosome 3’s model coloured by CTCF. Fig. 2a: C. necator’s ' +
+      'with its insulation, borders and CTCF, beside chromosome 3’s model coloured by CTCF. Fig. S3a: C. necator’s ' +
       'first chromosome, its origin in the middle, over the decay along the diagonal and then along both arms. ' +
-      'Fig. 2b: B. subtilis wild type, ΔparAB, and six times after ParB is induced. Fig. 2c: P. aeruginosa wild type, ' +
+      'Fig. S3b: B. subtilis wild type, ΔparAB, and six times after ParB is induced. Fig. S3c: P. aeruginosa wild type, ' +
       'SMC-ScpAB– and MksBEF–, as the correlation along both arms, with each strain’s E1 under its map and the ' +
       'wild type’s RNA-seq (PAK, GEO GSE76513) under its own. A deck keeps ' +
       'one look a map, so a panel reading one map several ways opens on one of them; each map’s score picker has the ' +
       'others.',
     files: [
+      ...PAPER_HUMAN.map(([file]) => file),
       'mouse/4DNFI5QJNFAT.mcool',
       'mouse/mm10_genes.gtf.gz',
       'mouse/4DNFIFFXFV82.bw',
@@ -486,6 +526,7 @@ const DEMO_DATA: Array<{
   })),
   ...(
     [
+      ...PAPER_HUMAN,
       ['mouse/4DNFI5QJNFAT.mcool', 'Mouse ES-cell Hi-C (4DN)', 'map', 'mcool', 'mm10'],
       ['mouse/mm10_genes.gtf.gz', 'Genes, UCSC mm10', 'genome', 'gtf', 'mm10'],
       ['mouse/4DNFIFFXFV82.bw', 'CTCF ChIP-seq', 'genome', 'bigwig', 'mm10'],

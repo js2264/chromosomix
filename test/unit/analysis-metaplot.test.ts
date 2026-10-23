@@ -117,6 +117,48 @@ describe('referenceWindows', () => {
     expect(windows[0].slotTo).toBe(20)
   })
 
+  it('centres an odd-length feature where deepTools does, half its length rounded down from its start', () => {
+    // `chopRegionsFromMiddle`: a 211 bp peak at 282,054 is centred on 282,159,
+    // not on the rounded midpoint one base to the right — which on a sharp
+    // CTCF peak in 50 bp columns moved a column's mean by a percent.
+    const [odd] = referenceWindows([{ contig: 'chrI', start: 1000, end: 1211, strand: 1 }], {
+      at: 'centre',
+      flank: 100,
+      step: 50,
+      lengthOf,
+    }).windows
+    expect(odd.start).toBe(1005)
+    expect(odd.end).toBe(1205)
+  })
+
+  it('keeps a column step-wide when the sequence ends part of the way through it', () => {
+    // A 1 kb flank about 350: 650 bp of it is off the chromosome, six whole
+    // columns and half of the seventh. The seventh is kept, for the half it
+    // has, and the row's columns stay 100 bp each from the anchor — where
+    // rounding the loss to seven and spreading 1,350 bp over thirteen columns
+    // drew every column of the row a few base pairs off its place.
+    const { windows } = referenceWindows([{ contig: 'chrI', start: 350, end: 400, strand: 1 }], {
+      at: 'start',
+      flank: 1000,
+      step: 100,
+      lengthOf,
+    })
+    expect(windows[0].start).toBe(0)
+    expect(windows[0].slotFrom).toBe(6)
+    expect(windows[0].span).toEqual({ start: -50, end: 1350 })
+    const row = windowRow(
+      { ...samples('chrI', 0, 1350), starts: Int32Array.from([0, 50]), ends: Int32Array.from([50, 1350]),
+        values: Float32Array.from([4, 1]) },
+      windows[0],
+      20,
+    )
+    // The seventh column is 50 bp of 4 and 50 bp past the end: 4, not a mean
+    // diluted by the bases that are not there.
+    expect(row[6]).toBe(4)
+    expect(row[7]).toBe(1)
+    expect(Number.isNaN(row[5])).toBe(true)
+  })
+
   it('puts the clipping on the far side for a minus-strand feature', () => {
     const { windows } = referenceWindows(
       [{ contig: 'chrI', start: 300, end: 400, strand: -1 }],

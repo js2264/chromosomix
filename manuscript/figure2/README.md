@@ -8,7 +8,8 @@ facing one. Type is Helvetica/Arial (Liberation Sans where neither is installed)
 
 The data are the paper store's — the card *The Chromosomix paper*, folder
 `demo/store/chromosomix_paper/`, listed in `demo/store/MANIFEST.tsv` — so a reader who opens the
-store's tabs 2a, 2b and 2c sees these maps in the app.
+store's tabs S3a, S3b and S3c sees these maps in the app. The store files these panels as Fig. S3:
+its Fig. 2 is now GM12878's CTCF sites (`scripts/make_rsg_store.py`, `paper_fig2`).
 
 ## What it shows
 

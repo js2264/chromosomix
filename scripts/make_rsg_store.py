@@ -2,6 +2,8 @@
 """The RSG lab's data store: the files its cards are made of, and the workspaces that open them.
 
     python3 scripts/make_rsg_store.py derive --work DIR    # the files the store computes (needs pysam)
+    python3 scripts/make_rsg_store.py derive --work DIR --steps gm12878
+                                                           # only GM12878's (needs cooler, h5py, requests)
     python3 scripts/make_rsg_store.py workspaces           # demo/store/**/*.chromosomix.json and MANIFEST.tsv
     python3 scripts/make_rsg_store.py stage --out DIR --local URL
                                                            # the same workspaces, pointed at where each
@@ -16,7 +18,8 @@ it. The test that checks the store (`test/unit/demo-examples.test.ts`) reads the
 workspace uses must be in it.
 
 Nothing here invents data. `derive` reshapes six files, calls loops on one map and compartments on
-three (it needs pysam, numpy and `hictkpy[pyarrow]`, and `npm run build:cli` for the loops and E1):
+three (it needs pysam, numpy and `hictkpy[pyarrow]`, and `npm run build:cli` for the loops and E1),
+fetches UCSC's hg38 and computes GM12878's tracks:
 
 - ``Yeast_RNAseq.barChart`` — the counts table in `demo/store/yeastRNAseq_counts.txt`, as counts
   per million per sample, one chart per gene at the gene's coordinates in `S288c.gtf` (§8.17).
@@ -25,13 +28,20 @@ three (it needs pysam, numpy and `hictkpy[pyarrow]`, and `npm run build:cli` for
 - ``mm10_genes.gtf.gz`` and its ``.tbi`` — iGenomes' UCSC mm10 `genes.gtf`, sorted, bgzipped and
   indexed, for the paper card's map of a 2.7-Gb genome.
 - ``PAO1_v3_*_8000.e1-arms.bw`` — E1 along both arms of the three *P. aeruginosa* maps of the paper's
-  Fig. 2c, by `chromosomix compartments` as the DNA Bacterial Zoo runs it.
+  Fig. S3c, by `chromosomix compartments` as the DNA Bacterial Zoo runs it.
 - ``Yeast_microC_loops.bedpe`` — loops called on the micro-C map the card opens, with this app's
   own Chromosight port (`chromosomix chromosight`), replacing the calls the old demo carried,
   which were made on a map with a synthetic chromosome XIII.
 - ``S288c.2bit`` — `S288c.fa` at two bits a base, and ``GSE151553_A364_merged.hic`` — the micro-C
   map's counts as a Juicer .hic: the two files the paste box's hub example names (`exampleHubText`),
   which an assembly hub can only name in these formats.
+- ``hg38.2bit`` and ``hg38.refGene.txt.gz`` — UCSC's, as UCSC publishes them (`--steps ucsc`).
+- What the paper's GM12878 panels draw (`--steps gm12878`, `write_gm12878`): insulation at four scales
+  and CTCF peaks over the genome (Fig. 2), and insulation, compartments, a 4C profile, a model and
+  CTCF's motif at Fig. 1a's window, all by the chromosomix command. 4DN's map is 27 GB and is never
+  fetched whole: each task reads one rung of it, of one sequence or near the diagonal, fetched by range
+  (`notebooks/scripts/cool_subset.py`). About a quarter of an hour on four cores, reading about 6 GB of
+  the map by range and 0.7 GB of ENCODE's files.
 """
 
 from __future__ import annotations
@@ -51,6 +61,62 @@ STORE = ROOT / "demo" / "store"
 BUCKET = "https://rsglab-data.s3.eu-west-3.amazonaws.com/"
 FOURDN = "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/"
 IGENOMES = "https://ngi-igenomes.s3.amazonaws.com/igenomes/Mus_musculus/UCSC/mm10/"
+ENCODE = "https://encode-public.s3.amazonaws.com/"
+UCSC_HG38 = "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/"
+
+# GM12878, the paper's Figs. 1a and 2. The map is 4DN's in situ Hi-C of Rao et al. 2014, every
+# replicate merged (4DNES3JX38V5): 4,010,478,943 contacts, 1 kb to 10 Mb, hg38's sequences.
+GM, GM_UUID = "4DNFIXP4QG5B", "d6abea45-b0bb-4154-9854-1d3075b98097"
+#: ENCODE's GM12878 files the paper reads, GRCh38: accession → (key under encode-public, MD5, what).
+#: The two CTCF tracks are two labs' experiments, each its replicates pooled, which the app's peak
+#: caller reads as two replicates; RNA-seq is one replicate's two strands.
+GM_ENCODE = {
+    "ENCFF734CUT": ("2020/10/01/a42c46dc-c33f-4906-8469-ba93e2cf30d3/ENCFF734CUT.bigWig",
+                    "b68aeffbebeae3d03e734b51f43c0cb8",
+                    "CTCF ChIP-seq, fold change over control, Bernstein lab, Broad (ENCODE ENCSR000AKB)"),
+    "ENCFF485CGE": ("2020/09/25/ee64f56a-89ba-4f40-84f8-733a1994ea35/ENCFF485CGE.bigWig",
+                    "ba43f52311258b2491d795504f6cfacc",
+                    "CTCF ChIP-seq, fold change over control, Snyder lab, Stanford (ENCODE ENCSR000DZN)"),
+    "ENCFF156URE": ("2020/10/01/bc71c9d1-2a24-421e-9a32-f78eaf297764/ENCFF156URE.bigBed",
+                    "f999218d47dc27475c51d54869f3070f", "CTCF peaks, conservative IDR thresholded (ENCODE ENCSR000AKB)"),
+    "ENCFF487LOB": ("2021/02/24/4c49a77a-edb2-4766-8328-d44ebe7446eb/ENCFF487LOB.bigWig",
+                    "f95a4eeec1156e2e1dc392ab988ae28a", "ATAC-seq, fold change over control (ENCODE ENCSR095QNB)"),
+    "ENCFF928SQL": ("2021/02/24/534b1381-d8a8-4ce3-b6c2-5745076db38b/ENCFF928SQL.bigBed",
+                    "fcb25eef5ad745dd542994054a6f3cee", "ATAC-seq peaks, replicated (ENCODE ENCSR095QNB)"),
+    "ENCFF990PUN": ("2021/04/06/b69b32c0-0298-484c-b218-37f22ebb0309/ENCFF990PUN.bigWig",
+                    "24fc37e5048a519d74e31dbb90c94714",
+                    "Total RNA-seq, plus strand, Gingeras lab, CSHL (ENCODE ENCSR000AEC)"),
+    "ENCFF005BFP": ("2021/04/06/7bb368f1-3e6b-4b91-86a5-45ce68da0d94/ENCFF005BFP.bigWig",
+                    "ec4c60a9be0dd8fc42621447b557e566", "Total RNA-seq, minus strand (ENCODE ENCSR000AEC)"),
+}
+#: What the app computes on them (`write_gm12878`), under the store's `chromosomix_paper/human/`.
+GM_PEAKS, GM_PAIRS = "GM12878_CTCF.peaks.bed", "GM12878_CTCF.consecutive.bedpe"
+#: Fig. 1a's window, the 4C anchor in it, and what is computed over them.
+FIG1A_REGION, FIG1A_ANCHOR = "chr14:88,550,001-90,100,000", "chr14:89,150,001-89,180,000"
+FIG1A_MODEL = f"{GM}_2000.chr14-88.55-90.10Mb.bed3d"
+#: The TAD in Fig. 1a's window and its four sub-TADs, by the borders insulation calls on chr14 at 2 kb
+#: (100-kb window), each written at the middle of its 2-kb bin: 89,021,000 | 89,165,000 | 89,431,000 |
+#: 89,769,000 | 89,919,000.
+FIG1A_TAD = (89_021_000, 89_919_000)
+FIG1A_SUBTAD_BORDER = 89_165_000
+#: The model's pinned bead: the middle bead of the central sub-TAD, 89.431–89.769 Mb, which holds the
+#: TAD's own middle. The model is coloured by each bead's spatial distance to it.
+FIG1A_PIN = "chr14:89601000"
+#: The marks Fig. 1a draws on the map (§8.1), in the palette marks are drawn in: the TAD as a box, its
+#: borders as green lines and the sub-TAD border by the 4C anchor as a black one.
+FIG1A_MARKS = [
+    {"id": "m-tad", "kind": "rect", "a": {"contig": "chr14", "from": FIG1A_TAD[0], "to": FIG1A_TAD[1]},
+     "b": {"contig": "chr14", "from": FIG1A_TAD[0], "to": FIG1A_TAD[1]}, "colour": "#111318"},
+    *[{"id": f"m-border-{k}", "kind": "line", "axis": "vertical", "at": {"contig": "chr14", "bp": bp},
+       "colour": "#0f8a5f"} for k, bp in enumerate(FIG1A_TAD, 1)],
+    {"id": "m-subtad", "kind": "line", "axis": "vertical", "at": {"contig": "chr14", "bp": FIG1A_SUBTAD_BORDER},
+     "colour": "#111318"},
+]
+FIG1A_4C = f"{GM}_5000.4c-chr14-89150001-89180000.bw"
+#: CTCF's core motif in IUPAC, read with one mismatch: about the density of the bound sites.
+CTCF_MOTIF, CTCF_MOTIFS = "RCCASYAGRKGGCRS", "hg38.CTCF-motifs.bed"
+HG38_AUTOSOMES_X = ",".join([*(f"chr{n}" for n in range(1, 23)), "chrX"])
+HG38_PRIMARY = HG38_AUTOSOMES_X + ",chrY"
 
 YEAST_ORDER = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X",
                "XI", "XII", "XIII", "XIV", "XV", "XVI", "Mito"]
@@ -233,7 +299,7 @@ def write_hic(mcool: Path, resolution: int, out: Path, work: Path) -> str:
 
 
 def write_e1_arms(work: Path) -> str:
-    """E1 along both arms of each P. aeruginosa map (Fig. 2c), as the zoo computes it (`dbz-store.sh`'s
+    """E1 along both arms of each P. aeruginosa map (Fig. S3c), as the zoo computes it (`dbz-store.sh`'s
     compartments-arms): 8 kb, the decay along both arms within 400 kb, three components, E1 the largest
     eigenvalue's, signed by GC content."""
     cli = ROOT / "dist-cli" / "chromosomix.mjs"
@@ -256,8 +322,137 @@ def write_e1_arms(work: Path) -> str:
     return f"E1 along both arms: {', '.join(sample for sample, _ in PAO1_STRAINS)} at {BACTERIA_RES} bp"
 
 
-def derive(work: Path) -> None:
+def fetch_checked(url: str, to: Path, md5: str) -> Path:
+    """Download once, and refuse a file that is not the one its publisher's MD5 names."""
+    import hashlib  # noqa: PLC0415
+
+    fetch(url, to)
+    digest = hashlib.md5()
+    with to.open("rb") as fh:
+        for block in iter(lambda: fh.read(1 << 22), b""):
+            digest.update(block)
+    if digest.hexdigest() != md5:
+        raise SystemExit(f"{to} is not {url}: its MD5 is {digest.hexdigest()}, not {md5}. Delete it to fetch it again.")
+    return to
+
+
+def map_subset(work: Path, resolution: int, name: str, *, sequences: str | None = None,
+               band: int | None = None) -> Path:
+    """One rung of the GM12878 map, cis contacts only, read by range from 4DN's bucket into a .cool
+    (`notebooks/scripts/cool_subset.py`): the 27-GB file never comes down whole, and every task run on
+    the subset reads contacts within one sequence, which are the file's own, with its own weights."""
+    out = work / name
+    if out.exists():
+        return out
+    args = [sys.executable, str(ROOT / "notebooks" / "scripts" / "cool_subset.py"), FOURDN + f"{GM_UUID}/{GM}.mcool",
+            str(resolution), str(out)]
+    if sequences is not None:
+        args += ["--sequences", sequences]
+    if band is not None:
+        args += ["--band", str(band)]
+    subprocess.run(args, check=True)
+    return out
+
+
+def consecutive_pairs(peaks: Path, out: Path) -> int:
+    """Every peak with the next one along its sequence, as a BEDPE: the pairs Fig. 2's APA piles up."""
+    rows = [line.rstrip("\n").split("\t") for line in peaks.open() if line.strip() and not line.startswith("#")]
+    rows.sort(key=lambda r: (r[0], int(r[1]), int(r[2])))
+    pairs = [(a, b) for a, b in zip(rows, rows[1:]) if a[0] == b[0]]
+    with out.open("w") as fh:
+        fh.write(f"# Each CTCF peak of {peaks.name} with the next one along its sequence, {len(pairs):,} pairs: "
+                 "chrom1 start1 end1 chrom2 start2 end2 name separation\n")
+        for a, b in pairs:
+            fh.write("\t".join([*a[:3], *b[:3], f"{a[3]}-{b[3]}", str(int(b[1]) - int(a[1]))]) + "\n")
+    return len(pairs)
+
+
+def write_gm12878(work: Path, sequence: Path | None) -> str:
+    """What the app computes on GM12878 for the paper's Figs. 1a and 2, into the store's `human/` folder.
+
+    Fig. 2: diamond insulation at four scales (50, 100, 200 and 400 kb windows at 10 kb) over the whole
+    genome, and CTCF peaks called by the app's yapc on two labs' CTCF ChIP-seq (fold change over
+    control, ENCSR000AKB and ENCSR000DZN) with IDR between them, and each peak paired with the next one
+    along its sequence. Fig. 1a, chr14:88,550,001-90,100,000: insulation at 2 kb (100-kb window) and its
+    borders, compartments at 250 kb phased by GC content, the 4C profile from chr14:89,150,001-89,180,000
+    over the decay (5 kb, the finest rung whose chromosome-wide square the app will hold), the
+    pastis-NB model of the window at 2 kb, and CTCF's core motif over the genome.
+
+    `sequence` is any copy of UCSC's hg38 the app reads by range — the 2bit, or a FASTA with its .fai;
+    UCSC's 2bit is fetched when none is given.
+    """
+    cli = ROOT / "dist-cli" / "chromosomix.mjs"
+    if not cli.exists():
+        raise SystemExit("npm run build:cli first: GM12878's tracks are computed with the chromosomix command")
+    out = STORE / PAPER / "human"
+    out.mkdir(parents=True, exist_ok=True)
+    gm = work / "gm12878"
+    gm.mkdir(parents=True, exist_ok=True)
+    files = {acc: fetch_checked(ENCODE + key, work / key.rsplit("/", 1)[-1], md5)
+             for acc, (key, md5, _) in GM_ENCODE.items() if acc in ("ENCFF734CUT", "ENCFF485CGE")}
+    if sequence is None:
+        sequence = fetch(UCSC_HG38 + "bigZips/hg38.2bit", work / "hg38.2bit")
+
+    def run(task: str, *args, dest: str) -> Path:
+        folder = gm / dest
+        shutil.rmtree(folder, ignore_errors=True)
+        subprocess.run(["node", str(cli), task, *[str(a) for a in args], "--out", str(folder), "--quiet"], check=True)
+        return folder
+
+    def keep(folder: Path, pattern: str, name: str) -> None:
+        shutil.copyfile(next(folder.glob(pattern)), out / name)
+
+    # Fig. 2 — the whole genome at 10 kb, every contact within 2 Mb of the diagonal: the widest diamond,
+    # 40 bins a side, reaches 79 bins out.
+    near = map_subset(work, 10000, f"{GM}_10000.band2Mb.cool", band=2_000_000)
+    folder = run("insulation", near, "--window", 5, "--scales", 4, dest="insulation-10k")
+    for window in (5, 10, 20, 40):
+        keep(folder, f"*insulation-w{window}.bw", f"{GM}_10000.insulation-w{window}.bw")
+    keep(folder, "*insulation-boundaries.bed", f"{GM}_10000.borders.bed")
+    folder = run("peaks", "--signal", files["ENCFF734CUT"], "--replicate", files["ENCFF485CGE"], dest="peaks")
+    keep(folder, "*.bed", GM_PEAKS)
+    pairs = consecutive_pairs(out / GM_PEAKS, out / GM_PAIRS)
+
+    # Fig. 1a — chr14 at 2 kb, and the genome at 100 kb for its compartments.
+    chr14 = map_subset(work, 2000, f"{GM}_2000.chr14.cool", sequences="chr14")
+    folder = run("insulation", chr14, "--window", 50, dest="insulation-2k")
+    keep(folder, "*insulation-w50.bw", f"{GM}_2000.chr14.insulation-w50.bw")
+    keep(folder, "*insulation-boundaries.bed", f"{GM}_2000.chr14.borders.bed")
+    folder = run("reconstruct3d", chr14, "--method", "nb", "--region", FIG1A_REGION, "--threads", 4, dest="model")
+    keep(folder, "*.bed3d", FIG1A_MODEL)
+    folder = run("fourc", map_subset(work, 5000, f"{GM}_5000.chr14.cool", sequences="chr14"),
+                 "--anchor", FIG1A_ANCHOR, "--normalise", "ps", dest="fourc")
+    keep(folder, "*.bw", FIG1A_4C)
+    folder = run("compartments", map_subset(work, 250000, f"{GM}_250000.cis.cool"), "--sequences", HG38_AUTOSOMES_X,
+                 "--sequence", sequence, "--phaseSequence", sequence, "--saddle=false", dest="compartments")
+    keep(folder, "*compartment-e1.bw", f"{GM}_250000.compartments-e1.bw")
+    keep(folder, "*compartment-ab.bed", f"{GM}_250000.compartments-ab.bed")
+    folder = run("motif", "--sequence", sequence, "--pattern", CTCF_MOTIF, "--mismatches", 1,
+                 "--sequences", HG38_PRIMARY, dest="motif")
+    keep(folder, "*.bed", CTCF_MOTIFS)
+    return f"GM12878: insulation at four scales, {pairs:,} consecutive CTCF peak pairs, and Fig. 1a's tracks and model"
+
+
+def fetch_ucsc(work: Path) -> str:
+    """UCSC's hg38 sequence and RefSeq genes, as UCSC publishes them, for the store to copy."""
+    fetch(UCSC_HG38 + "bigZips/hg38.2bit", work / "hg38.2bit")
+    fetch(UCSC_HG38 + "database/refGene.txt.gz", work / "hg38.refGene.txt.gz")
+    return "hg38.2bit and hg38.refGene.txt.gz, from UCSC"
+
+
+def derive(work: Path, steps: list[str] | None = None, hg38: Path | None = None) -> None:
+    """Every derived file, or only the `steps` named (`gm12878`, `ucsc`, `demo`)."""
     work.mkdir(parents=True, exist_ok=True)
+    steps = steps or ["demo", "ucsc", "gm12878"]
+    if "ucsc" in steps:
+        print(fetch_ucsc(work))
+    if "gm12878" in steps:
+        print(write_gm12878(work, hg38 if hg38 is not None else (work / "hg38.2bit" if "ucsc" in steps else None)))
+    if "demo" in steps:
+        derive_demo(work)
+
+
+def derive_demo(work: Path) -> None:
     yeast = STORE / "yeast"
     yeast.mkdir(parents=True, exist_ok=True)
     src = lambda key: fetch(BUCKET + key, work / key.split("/")[-1])  # noqa: E731
@@ -290,6 +485,11 @@ def fourdn(uuid: str, name: str) -> str:
     return f"s3://4dn-open-data-public/fourfront-webprod/wfoutput/{uuid}/{name}"
 
 
+def encode(key: str) -> str:
+    """A copy from ENCODE's open-data bucket."""
+    return f"s3://encode-public/{key}"
+
+
 def repo(path: str) -> str:
     """A file of this repository."""
     return f"repo:{path}"
@@ -309,7 +509,7 @@ PAK = "demo/pak/"
 #: The paper's folder under demo/store/.
 PAPER = "chromosomix_paper/"
 
-#: B. subtilis PY79, a map a condition: (the store's name, the bucket's, the condition as Fig. 2b says it).
+#: B. subtilis PY79, a map a condition: (the store's name, the bucket's, the condition as Fig. S3b says it).
 SUBTILIS_COURSE = [
     ("WT", "WT^mapped_PY79^FKEBR7", "WT"),
     ("dparAB", "dparAB^mapped_PY79^NT9IOH", "ΔparAB"),
@@ -320,7 +520,7 @@ SUBTILIS_COURSE = [
     ("induction_35min", "induction_35min^mapped_PY79^FSTYHN", "+parB 35 min"),
     ("induction_45min", "induction_45min^mapped_PY79^LW6QCG", "+parB 45 min"),
 ]
-#: P. aeruginosa, a map a strain: (the lab's sample, the genotype as Fig. 2c says it).
+#: P. aeruginosa, a map a strain: (the lab's sample, the genotype as Fig. S3c says it).
 PAO1_STRAINS = [
     ("PAO1_v3_MM38", "WT"),
     ("PAO1_v3_FG0235", "SMC-ScpAB–"),
@@ -401,8 +601,31 @@ FILES: list[tuple[str, str, str]] = [
         ("genome_references/W303_Mmmyco.gff3", "Genes, W303 with the M. mycoides chromosome"),
         ("genome_references/S288c_Mpneumo.gtf", "Genes, S288C with the M. pneumoniae chromosome"),
     ]],
-    # -- The Chromosomix paper: the data of Figs. 1 and 2, a folder an organism. Mouse (Fig. 1): 4DN's
-    #    ES-cell Hi-C and ChIP-seq, and what the app computed on them (manuscript/figure1/results/).
+    # -- The Chromosomix paper: the data of its figures, a folder an organism. Human (Figs. 1a and 2): 4DN's
+    #    GM12878 map, ENCODE's GM12878 tracks, UCSC's hg38, and what the app computed on them (`derive`).
+    (PAPER + f"human/{GM}.mcool", fourdn(GM_UUID, f"{GM}.mcool"),
+     "In situ Hi-C, GM12878, 4,010,478,943 contacts (Rao et al. 2014; 4DN 4DNES3JX38V5)"),
+    *[(PAPER + f"human/{key.rsplit('/', 1)[-1]}", encode(key), what) for key, _, what in GM_ENCODE.values()],
+    (PAPER + "human/hg38.2bit", work("hg38.2bit"), "Human genome hg38, UCSC (bigZips)"),
+    (PAPER + "human/hg38.refGene.txt.gz", work("hg38.refGene.txt.gz"), "RefSeq genes, UCSC hg38 refGene table"),
+    *[(PAPER + f"human/{name}", repo(f"demo/store/{PAPER}human/{name}"), what) for name, what in [
+        (f"{GM}_10000.insulation-w5.bw", "Diamond insulation at 10 kb, 50-kb window, computed by the app (Fig. 2)"),
+        (f"{GM}_10000.insulation-w10.bw", "Diamond insulation at 10 kb, 100-kb window, computed by the app (Fig. 2)"),
+        (f"{GM}_10000.insulation-w20.bw", "Diamond insulation at 10 kb, 200-kb window, computed by the app (Fig. 2)"),
+        (f"{GM}_10000.insulation-w40.bw", "Diamond insulation at 10 kb, 400-kb window, computed by the app (Fig. 2)"),
+        (f"{GM}_10000.borders.bed", "Borders called on the 50-kb insulation (Fig. 2)"),
+        (GM_PEAKS, "CTCF peaks called by the app's yapc on ENCFF734CUT and ENCFF485CGE, IDR ≤ 0.05 (Fig. 2)"),
+        (GM_PAIRS, "Each CTCF peak with the next one along its sequence (Fig. 2)"),
+        (f"{GM}_2000.chr14.insulation-w50.bw", "Diamond insulation of chr14 at 2 kb, 100-kb window (Fig. 1a)"),
+        (f"{GM}_2000.chr14.borders.bed", "Borders called on chr14's insulation at 2 kb (Fig. 1a)"),
+        (f"{GM}_250000.compartments-e1.bw", "Compartments (E1) at 250 kb, phased by GC content (Fig. 1a)"),
+        (f"{GM}_250000.compartments-ab.bed", "A and B compartments at 250 kb (Fig. 1a)"),
+        (FIG1A_4C, "4C from chr14:89,150,001-89,180,000 over the decay, 5 kb (Fig. 1a)"),
+        (FIG1A_MODEL, "pastis-NB model of chr14:88,550,001-90,100,000 at 2 kb (Fig. 1a)"),
+        (CTCF_MOTIFS, f"CTCF's core motif {CTCF_MOTIF}, at most one mismatch, on hg38's chr1–22, X and Y (Fig. 1a)"),
+    ]],
+    #    Mouse (Fig. 1c, d): 4DN's ES-cell Hi-C and ChIP-seq, and what the app computed on them
+    #    (manuscript/figure1/results/).
     (PAPER + "mouse/4DNFI5QJNFAT.mcool", fourdn("ef0eba47-ada0-42bc-9329-5145b57ff33a", "4DNFI5QJNFAT.mcool"),
      "In situ Hi-C, F123 mouse ES cells (Kubo et al. 2021)"),
     (PAPER + "mouse/4DNFIFFXFV82.bw", fourdn("6dd5c984-eccf-4d2d-8118-38ea2a4d30fb", "4DNFIFFXFV82.bw"),
@@ -437,7 +660,7 @@ FILES: list[tuple[str, str, str]] = [
         ("2000.Sox2-SCR.bed3d", "model-gene/4DNFI5QJNFAT_2000.reconstruct3d.reconstructed-model.bed3d",
          "pastis-NB model of chr3:34.55–34.80 Mb, Sox2 and its control region, at 2 kb (Fig. 1c)"),
     ]],
-    #    C. necator N-1 (Fig. 2a): the lab's map, its reference, and its origin and GC skew as the app
+    #    C. necator N-1 (Fig. S3a): the lab's map, its reference, and its origin and GC skew as the app
     #    called them — copied from where the DNA Bacterial Zoo keeps them, which this card does not name.
     *[(PAPER + f"C_necator/{name}", s3(CNECATOR + source), what) for name, source, what in [
         ("C_necator_N1_VJ_MM260.mcool", "C_necator_N1_VJ_MM260.mcool", "Hi-C, C. necator N-1 (MM260)"),
@@ -448,12 +671,12 @@ FILES: list[tuple[str, str, str]] = [
          "composition/C_necator_N1_VJ_MM260_4000.composition.composition-cumulative.bw",
          "Cumulative GC skew, 4 kb"),
     ]],
-    #    B. subtilis PY79 (Fig. 2b): wild type, ΔparAB, and the time course after ParB is induced.
+    #    B. subtilis PY79 (Fig. S3b): wild type, ΔparAB, and the time course after ParB is induced.
     *[(PAPER + f"B_subtilis/Bsubtilis_{name}.mcool", s3(f"{SUBTILIS}Bsubtilis_{source}.mcool"), f"Hi-C, {label}")
       for name, source, label in SUBTILIS_COURSE],
     (PAPER + "B_subtilis/PY79.fa", s3(SUBTILIS + "PY79.fa"), "B. subtilis PY79"),
     (PAPER + "B_subtilis/PY79.gff3", s3(SUBTILIS + "PY79.gff3"), "Genes, B. subtilis PY79"),
-    #    P. aeruginosa (Fig. 2c): wild type and two condensin mutants, and E1 along both arms of each.
+    #    P. aeruginosa (Fig. S3c): wild type and two condensin mutants, and E1 along both arms of each.
     *[(PAPER + f"P_aeruginosa/{sample}.mcool", s3(f"{PAK}{sample}.mcool"), f"Hi-C, {label} ({sample.split('_')[-1]})")
       for sample, label in PAO1_STRAINS],
     (PAPER + "P_aeruginosa/PAO1_v3.fa", s3(PAK + "PAO1_v3.fa"), "P. aeruginosa, the maps' reference"),
@@ -477,23 +700,24 @@ PLOT_BROWSER = {**PLOT_MAP, "gutter": True, "dividers": False, "labels": False}
 
 
 def track(tid: str, kind: str, label: str, url: str, colour: str, size: int, *,
-          card: str = "linear", bottom: bool = True, right: bool = False, primary: bool = False,
-          **style) -> dict:
+          card: str = "linear", bottom: bool = True, right: bool = False, top: bool = False, left: bool = False,
+          primary: bool = False, visible: bool = True, **style) -> dict:
     """One `StoredEntry`, written in full: `readTab` fills nothing in for a track."""
     base = {"colour": colour, "size": size, "mode": "line" if kind == "sequence" else "area",
             "limits": {"auto": kind != "sequence", "min": 0, "max": 1}, "group": "", "shape": "element",
             "radius": 7, "opacity": 0.9 if kind == "pairs" else 1, "flip": False}
     entry = {"id": tid, "card": card, "kind": kind, "label": label,
              "source": {"kind": "remote", "name": url.rsplit("/", 1)[-1], "url": url},
-             "visible": True, "placement": edges(bottom=bottom, right=right), "style": {**base, **style}}
+             "visible": visible, "placement": edges(bottom=bottom, right=right, top=top, left=left),
+             "style": {**base, **style}}
     if primary:
         entry["primary"] = True
     return entry
 
 
-def edges(*, bottom: bool = False, right: bool = False) -> dict:
+def edges(*, bottom: bool = False, right: bool = False, top: bool = False, left: bool = False) -> dict:
     """A placement with all four edges said, as the app writes one."""
-    return {"top": False, "right": right, "bottom": bottom, "left": False}
+    return {"top": top, "right": right, "bottom": bottom, "left": left}
 
 
 def limits(lo: float, hi: float) -> dict:
@@ -714,7 +938,7 @@ def meneu() -> dict:
 # The Chromosomix paper: one tab a panel, each a deck of the panel's maps.
 #
 # A deck remembers one look a file (`DeckLook`, §16.2), so a panel that draws one map several ways —
-# Fig. 2a's six readings of one map, Fig. 2c's three of each strain — is drawn here the one way of
+# Fig. S3a's six readings of one map, Fig. S3c's three of each strain — is drawn here the one way of
 # each file that the panel reads last, and the cell's own score picker has the others.
 
 MOUSE_MAP = "mouse/4DNFI5QJNFAT.mcool"
@@ -828,7 +1052,7 @@ def centred(name: str, length: int, origin: int) -> str:
     return f"{name}:{start}-{(start - 1 + length) % length}"
 
 
-#: The bin size every bacterial map of Fig. 2 is read at but the time course's, and how far along the
+#: The bin size every bacterial map of Fig. S3 is read at but the time course's, and how far along the
 #: arms the decay along both arms reaches, in bins: 400 kb (Methods, "Analysis of bacterial genomes").
 BACTERIA_RES, ARM_WINDOW = 8000, 50
 #: C. necator N-1. Origins are 0-based, as a workspace stores them (`state/origins.ts`), as *Origin and
@@ -843,7 +1067,7 @@ SUBTILIS_CHROM, SUBTILIS_LENGTH, SUBTILIS_RES = "NC_022898.1", 4033459, 10000
 PAO1_CHROM, PAO1_LENGTH, PAO1_ORIGIN = "PAO1", 6271000, 6250500
 
 
-def paper_fig2a() -> dict:
+def paper_figS3a() -> dict:
     """C. necator's first chromosome, origin in the middle, over the two decays the panel compares.
 
     One map, so one look (`DeckLook`): the first map divides by the decay along the diagonal, the
@@ -857,23 +1081,23 @@ def paper_fig2a() -> dict:
     state = {"uri": uri, "maps": uri, "view": "region", "region": centred("chromosome1", CNECATOR_CHR1, 8500),
              **MAP_LOOK, "oe": True, "transform": "log2"}
     looks = [{"uri": uri, "oe": True, "arms": ARM_WINDOW, "transform": "log2"}]
-    return tab("Fig. 2a · C. necator, obs./exp.: the decay along the diagonal, then along both arms", state,
+    return tab("Fig. S3a · C. necator, obs./exp.: the decay along the diagonal, then along both arms", state,
                tracks, deck={"columns": 2, "looks": looks}, circular=list(CNECATOR_ORIGINS),
                origins=CNECATOR_ORIGINS, mapNames={CNECATOR_MAP: "C. necator N-1 (MM260)"})
 
 
-def paper_fig2b() -> dict:
+def paper_figS3b() -> dict:
     """The B. subtilis time course, a map a condition, at 10 kb, the origin in the middle."""
     files = [f"B_subtilis/Bsubtilis_{name}.mcool" for name, _, _ in SUBTILIS_COURSE]
     rung = f"::resolutions/{SUBTILIS_RES}"
     names = {f: label for f, (_, _, label) in zip(files, SUBTILIS_COURSE)}
     state = {"uri": files[0] + rung, "maps": "|".join(f + rung for f in files[1:]), "view": "region",
              "region": centred(SUBTILIS_CHROM, SUBTILIS_LENGTH, 0), **MAP_LOOK}
-    return tab("Fig. 2b · B. subtilis: WT, ΔparAB, and after ParB is induced", state, [], deck={"columns": 4},
+    return tab("Fig. S3b · B. subtilis: WT, ΔparAB, and after ParB is induced", state, [], deck={"columns": 4},
                circular=[SUBTILIS_CHROM], origins={SUBTILIS_CHROM: 0}, mapNames=names)
 
 
-def paper_fig2c() -> dict:
+def paper_figS3c() -> dict:
     """P. aeruginosa, wild type and two condensin mutants: the correlation over the decay along both
     arms, with each strain's E1 under its map and the wild type's RNA-seq under its own.
 
@@ -893,13 +1117,115 @@ def paper_fig2c() -> dict:
     state = {"uri": files[0] + rung, "maps": "|".join(f + rung for f in files[1:]), "view": "region",
              "region": centred(PAO1_CHROM, PAO1_LENGTH, PAO1_ORIGIN), **MAP_LOOK,
              "score": "correlation", "arms": ARM_WINDOW, "transform": "none"}
-    return tab("Fig. 2c · P. aeruginosa: WT, SMC-ScpAB– and MksBEF–, the correlation along both arms", state, tracks,
+    return tab("Fig. S3c · P. aeruginosa: WT, SMC-ScpAB– and MksBEF–, the correlation along both arms", state, tracks,
                lanes=lanes, deck={"columns": 3}, circular=[PAO1_CHROM], origins={PAO1_CHROM: PAO1_ORIGIN},
                mapNames={f: label for f, (_, label) in zip(files, PAO1_STRAINS)})
 
 
+GM_MAP = f"human/{GM}.mcool"
+GM_NAMES = {GM_MAP: "Hi-C · GM12878 (Rao et al. 2014, 4DN)"}
+GM_COLOURS = {"insulation": "#1aa0b8", "e1": "#8c8c8c", "ab": "#d62728", "fourc": "#c45a9a", "ctcf": "#d55e00",
+              "ctcf2": "#b2182b", "peaks": "#d55e00", "motifs": "#d55e00", "rna+": "#e69f00", "rna-": "#3a8fd0",
+              "atac": "#9c6b1e", "genes": COLOURS["genes"], "sequence": COLOURS["genes"], "model": "#c45a9a"}
+
+
+def gm(name: str) -> str:
+    return f"human/{name}"
+
+
+def machine(region: str) -> str:
+    """A window as a reader writes it — 1-based, closed, with separators — in the form a session holds,
+    0-based and half-open (§26.1): `chr14:88,550,001-90,100,000` is `chr14:88550000-90100000`."""
+    contig, span = region.rsplit(":", 1)
+    start, end = (int(x.replace(",", "")) for x in span.split("-"))
+    return f"{contig}:{start - 1}-{end}"
+
+
+def tracks_cell(seat: int = 0) -> str:
+    """What a track on a deck's tracks cell is kept under: its seat (`tracksCellKey`, §16.11)."""
+    return f"tracks:{seat + 1}"
+
+
+def paper_fig1a() -> dict:
+    """GM12878 at 2 kb over chr14:88.55–90.10 Mb, as Fig. 1a draws the window: three cells across.
+
+    `circular` is declared, empty: the junction test the first open runs reads two human chromosomes as
+    circles on this map, and a declaration is what records it as run.
+
+    The map, with the insulation and its borders above it, the compartments and E1 at its left and the
+    4C profile from chr14:89,150,001-89,180,000 under it; a tracks cell with CTCF and its motif, the two
+    strands of RNA-seq, ATAC-seq and its peaks, the genes and the sequence; and the model inferred from
+    the map, drawn as sticks and coloured by each bead's distance to one pinned inside the central
+    sub-TAD, on the map's own ramp. The marks are the TAD, a box over it, and lines at its two borders and at the sub-TAD
+    border by the 4C anchor: drawn across the map and its lanes, and as beads on the model.
+    """
+    on_map = [
+        # An edge stacks its lanes outwards from the map in the list's order: the insulation next to the
+        # map and its borders above it, E1 next to the map and the A/B calls beyond it, as Fig. 1a has them.
+        track("a-insulation", "track", "diamond insulation · 100 kb", gm(f"{GM}_2000.chr14.insulation-w50.bw"),
+              GM_COLOURS["insulation"], 48, top=True, bottom=False),
+        track("a-borders", "segments", "insulation boundaries", gm(f"{GM}_2000.chr14.borders.bed"),
+              GM_COLOURS["insulation"], 18, top=True, bottom=False),
+        track("a-e1", "track", "E1 · 250 kb", gm(f"{GM}_250000.compartments-e1.bw"), GM_COLOURS["e1"], 48,
+              left=True, bottom=False),
+        track("a-ab", "segments", "compartments", gm(f"{GM}_250000.compartments-ab.bed"), GM_COLOURS["ab"], 18,
+              left=True, bottom=False),
+        track("a-4c", "track", f"4C · {FIG1A_ANCHOR} · O/E", gm(FIG1A_4C), GM_COLOURS["fourc"], 64),
+    ]
+    in_cell = [
+        track("a-ctcf", "track", "CTCF", gm("ENCFF734CUT.bigWig"), GM_COLOURS["ctcf"], 44),
+        track("a-motifs", "segments", "CTCF motifs", gm(CTCF_MOTIFS), GM_COLOURS["motifs"], 22),
+        track("a-rna-plus", "track", "RNA+", gm("ENCFF990PUN.bigWig"), GM_COLOURS["rna+"], 40, group="rna"),
+        track("a-rna-minus", "track", "RNA−", gm("ENCFF005BFP.bigWig"), GM_COLOURS["rna-"], 40, group="rna",
+              flip=True),
+        track("a-atac", "track", "ATAC", gm("ENCFF487LOB.bigWig"), GM_COLOURS["atac"], 44),
+        track("a-atac-peaks", "segments", "ATAC peaks", gm("ENCFF928SQL.bigBed"), GM_COLOURS["atac"], 18),
+        track("a-genes", "gtf", "hg38.refGene", gm("hg38.refGene.txt.gz"), GM_COLOURS["genes"], 56, primary=True),
+        track("a-sequence", "sequence", "hg38.2bit", gm("hg38.2bit"), GM_COLOURS["sequence"], 40),
+    ]
+    lanes = [on(t, tracks_cell(0)) for t in in_cell]
+    model = track("a-model", "structure", f"pastis-NB · {FIG1A_REGION}", gm(FIG1A_MODEL), GM_COLOURS["model"], 24,
+                  card="structure", bottom=False,
+                  structure={"beads": False, "sticks": True, "tube": False, "colourBy": "distance", "pin": FIG1A_PIN,
+                             "colormap": "default"})
+    state = {"uri": f"{GM_MAP}::resolutions/2000", "maps": "tracks|3d", "view": "region",
+             "region": machine(FIG1A_REGION), **MAP_LOOK, "vmin": -4, "vmax": -2.2}
+    return tab("Fig. 1a · GM12878, chr14:88.55–90.10 Mb at 2 kb: the map, its tracks and its model", state,
+               on_map + in_cell + [model], lanes=lanes, deck={"columns": 3}, groups={"rna": "stacked"},
+               scaling={"rna": "shared"}, circular=[], manual=FIG1A_MARKS, mapNames=GM_NAMES)
+
+
+#: Where Fig. 2's tab opens: Fig. 1a's window and the domains either side of it, at 10 kb.
+FIG2_REGION = "chr14:86,000,001-93,000,000"
+
+
+def paper_fig2() -> dict:
+    """GM12878 at 10 kb with what Fig. 2 aggregates at CTCF's sites: two labs' CTCF, the peaks the app
+    called on the two, the insulation at four scales and ATAC-seq — and each peak paired with the next,
+    loaded and not drawn, for APA to pile up (*every pair of a feature set* pairs every peak within a
+    range; *consecutive* is this set)."""
+    tracks = [
+        track("b-ctcf-broad", "track", "CTCF · Broad", gm("ENCFF734CUT.bigWig"), GM_COLOURS["ctcf"], 44),
+        track("b-ctcf-stanford", "track", "CTCF · Stanford", gm("ENCFF485CGE.bigWig"), GM_COLOURS["ctcf2"], 44),
+        track("b-peaks", "segments", "CTCF peaks · IDR ≤ 0.05", gm(GM_PEAKS), GM_COLOURS["peaks"], 18),
+        *[track(f"b-insulation-w{w}", "track", f"insulation · {w * 10} kb", gm(f"{GM}_10000.insulation-w{w}.bw"),
+                GM_COLOURS["insulation"], 36, group="insulation") for w in (40, 20, 10, 5)],
+        # The widest window on top, as the app stacks a run of four scales: a border that survives every
+        # scale reads as a column down the stack, ending on the borders called on the narrowest.
+        track("b-borders", "segments", "borders · 50 kb", gm(f"{GM}_10000.borders.bed"), GM_COLOURS["insulation"], 18),
+        track("b-atac", "track", "ATAC", gm("ENCFF487LOB.bigWig"), GM_COLOURS["atac"], 44),
+        track("b-pairs", "pairs", "consecutive CTCF peaks", gm(GM_PAIRS), "#000000", 16, card="overlay",
+              visible=False),
+    ]
+    state = {"uri": f"{GM_MAP}::resolutions/10000", "view": "region", "region": machine(FIG2_REGION), **MAP_LOOK}
+    return tab("Fig. 2 · CTCF sites in GM12878: two labs’ CTCF, the peaks called on both, insulation at four "
+               "scales and ATAC", state, tracks, groups={"insulation": "stacked"}, scaling={"insulation": "each"},
+               circular=[], mapNames=GM_NAMES)
+
+
 def chromosomix_paper() -> dict:
-    return workspace(paper_fig1c(), paper_fig1d(), paper_fig2a(), paper_fig2b(), paper_fig2c())
+    return workspace(paper_fig1a(), paper_fig1c(), paper_fig1d(), paper_fig2(), paper_figS3a(), paper_figS3b(),
+                     paper_figS3c())
 
 
 #: path under demo/store/ → the workspace written there
@@ -921,7 +1247,9 @@ def named_files(path: str, ws: dict) -> set[str]:
     out = set()
     for t in ws["tabs"]:
         uris = [t["state"]["uri"], *[m for m in t["state"].get("maps", "").split("|") if m and m not in ("3d", "tracks")]]
-        uris += [e["source"]["url"] for e in t["tracks"]] + [lane["uri"] for lane in t.get("lanes", [])]
+        # A lane on a tracks cell is kept under the cell's seat, `tracks:1`, which is not a file.
+        uris += [e["source"]["url"] for e in t["tracks"]] + [lane["uri"] for lane in t.get("lanes", [])
+                                                             if not lane["uri"].startswith("tracks:")]
         for u in uris:
             out.add(posixpath.normpath(posixpath.join(folder, u.split("::")[0])))
     return out
@@ -959,6 +1287,8 @@ def stage(out: Path, local: str, work_dir: Path | None) -> None:
             where[dest] = BUCKET + quote(source[len("s3://rsglab-data/"):])
         elif source.startswith("s3://4dn-open-data-public/"):
             where[dest] = "https://4dn-open-data-public.s3.amazonaws.com/" + source[len("s3://4dn-open-data-public/"):]
+        elif source.startswith("s3://encode-public/"):
+            where[dest] = ENCODE + source[len("s3://encode-public/"):]
         elif source.startswith("repo:"):
             where[dest] = local.rstrip("/") + "/" + source[len("repo:"):]
         elif source.startswith("work:"):
@@ -980,7 +1310,8 @@ def stage(out: Path, local: str, work_dir: Path | None) -> None:
             for e in t["tracks"]:
                 e["source"]["url"] = absolute(e["source"]["url"])
             for lane in t.get("lanes", []):
-                lane["uri"] = absolute(lane["uri"])
+                if not lane["uri"].startswith("tracks:"):
+                    lane["uri"] = absolute(lane["uri"])
             for look in t.get("deck", {}).get("looks", []):
                 look["uri"] = absolute(look["uri"])
             if "mapNames" in t:
@@ -996,6 +1327,9 @@ def main(argv: list[str]) -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
     d = sub.add_parser("derive")
     d.add_argument("--work", type=Path, required=True)
+    d.add_argument("--steps", help="comma-separated: demo, ucsc, gm12878 (default: every one)")
+    d.add_argument("--hg38", type=Path, help="a copy of UCSC's hg38 the app reads by range (a 2bit, or a FASTA "
+                   "with its .fai) for GM12878's GC phasing and motif, rather than the 2bit fetched from UCSC")
     sub.add_parser("workspaces")
     st = sub.add_parser("stage")
     st.add_argument("--out", type=Path, required=True, help="a folder the dev server serves")
@@ -1003,7 +1337,7 @@ def main(argv: list[str]) -> int:
     st.add_argument("--work", type=Path, help="derive's work directory, for the files it wrote")
     args = parser.parse_args(argv)
     if args.cmd == "derive":
-        derive(args.work)
+        derive(args.work, args.steps.split(",") if args.steps else None, args.hg38)
     elif args.cmd == "workspaces":
         write_workspaces()
     else:

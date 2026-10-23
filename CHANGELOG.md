@@ -14,6 +14,29 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The paper's GM12878 panels in the lab store (§24.2, §24.3).** *The Chromosomix paper* opens on
+  two new tabs over 4DN's in situ Hi-C of GM12878 (Rao et al. 2014, 4DNFIXP4QG5B: 4,010,478,943
+  contacts, 27 GB, read in place). **Fig. 1a**: chr14:88.55–90.10 Mb at 2 kb, three cells across —
+  the map with its insulation and borders above it, its compartments and E1 at 250 kb at its left, the
+  4C profile from chr14:89,150,001-89,180,000 under it, and the TAD and its borders marked; a tracks
+  cell with ENCODE's CTCF, ATAC-seq and its peaks, both strands of total RNA-seq, CTCF's motif, UCSC's
+  refGene and hg38 sequence; and the pastis-NB model of the window, drawn as sticks, its TAD borders as
+  beads and every bead coloured by its distance to one pinned inside the central sub-TAD. **Fig. 2**:
+  the map at 10 kb with two labs' CTCF ChIP-seq (ENCSR000AKB and ENCSR000DZN, fold change over
+  control), the 25,432 peaks the app's yapc calls on the two at IDR ≤ 0.05, insulation at four scales
+  (50 to 400 kb) and ATAC-seq, and each peak paired with the next for APA. Everything not a
+  consortium's file is the app's own output, made by `scripts/make_rsg_store.py derive --steps
+  gm12878` on the map's rungs read by range (`notebooks/scripts/cool_subset.py`), never the 27 GB.
+
+- **Fig. 2's chain, held to its references (§18.10).** The validation notebook's § 24 runs what the
+  paper's Fig. 2 runs on GM12878, each link by chromosomix and by the package it reproduces, each fed
+  what the one before it wrote in chromosomix: insulation at four scales against `cooltools.insulation`,
+  CTCF's peaks on two labs' ChIP-seq as replicates against yapc 0.1 with IDR 2.0.3, APA between
+  consecutive peaks against coolpuppy, and the metaplot of CTCF, ATAC-seq and the insulation about
+  the peaks against deepTools' `computeMatrix`, `plotProfile` and `plotHeatmap`. It reads chr19 of
+  4DN's 27-GB map by range (`notebooks/scripts/cool_subset.py`), ENCODE's tracks held to their MD5s,
+  and its commands are timed with the rest.
+
 - **What a task re-implements, on its row (§18.1).** A `?` in a circle at the right of a task's title
   in the Analysis column names the published method it follows, how it came out against it in the
   validation notebook, and the paper's DOI as a link, in a small tip shown on hover. Green where the
@@ -100,6 +123,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   The map is committed, so this runs on every push with nothing to build.
 
 ### Changed
+
+- **The paper's bacterial panels are Fig. S3a–c (§24.2).** The three tabs that were Fig. 2a–c — *C.
+  necator* along both arms, the *B. subtilis* ParB time course and *P. aeruginosa*'s condensin
+  mutants — are named for the supplementary figure they now make, behind Fig. 2's new tab.
 
 - **About is three tabs, and the licences are one of them (§22.4).** *Overview* — what the viewer is,
   the tutorial and the source, with the build stamp and the version picker in a footer under it that
@@ -223,6 +250,29 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   validation's comparison with yapc 0.1 on chr19 is unchanged to the last digit.
 
 ### Fixed
+
+- **A tracks cell keeps its tracks (§16.11).** A track placed on a deck's tracks cell was kept against
+  the file of the map it was on, and a tracks cell has none: a reload, a saved workspace opened again
+  or a link brought the cell back empty and the track drawn nowhere. A tracks cell's tracks are kept by
+  its seat — `tracks:1` for the first from the left, as its name and its height already were — and
+  come back with the cell.
+
+- **A model's pinned bead is kept with it (§25.5).** *Spatial distance to pinned bin* and *contacts
+  with pinned bin* colour a model from the bead the reader pinned, and the pin went with the page: a
+  model saved coloured by distance came back coloured from nothing. The pin is kept on the model's row,
+  by the sequence and base pair at its middle, and comes back with a session, a workspace or a link.
+
+- **A metaplot's columns are deepTools' (§18.8).** Three things put a profile off `computeMatrix`'s by
+  up to a percent. An odd-length feature's centre was its midpoint rounded up, one base right of
+  deepTools'; a window a sequence end clipped spread what was left over whole columns, so every column
+  of that row stood a little off its place; and a track was read at the column's width, which takes a
+  zoom level up to twice as wide, whose records straddle the columns' edges — 0.7 % on the insulation
+  about CTCF peaks in 10-kb columns. The centre is now deepTools', a clipped window keeps step-wide
+  columns, and a track is read at its own resolution a megabase at a time: over GM12878's CTCF peaks
+  the profiles of CTCF, ATAC-seq and the insulation agree with deepTools within 5·10⁻⁶ (§ 24 of the
+  validation notebook), at 1.7 s rather than 1.1 s for the insulation, in 210 MB rather than 300;
+  mouse ATAC-seq about all 35,034 RefSeq TSSs (§ 14) stays identical and takes the 5.5 s it took, in
+  350 MB rather than 410.
 
 - **Signal by group's stretches are their exact means (§18.8).** A stretch was read at a twentieth
   of a typical stretch's width, from a zoom level wherever the file had one that fine, and a zoom

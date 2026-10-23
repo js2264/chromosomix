@@ -1,6 +1,6 @@
 ---
 title: "chromosomix against reference implementations"
-subtitle: "Twenty-three analyses on public data, each run by chromosomix and by the package it reproduces"
+subtitle: "Twenty-four analyses on public data, each run by chromosomix and by the package it reproduces"
 format:
   html:
     toc: true
@@ -26,7 +26,7 @@ sys.path.append(str((_here if _here.name == 'notebooks' else _here / 'notebooks'
 from rendered import Render
 
 R = Render('validation')
-print(R.head(also=f"Every command of §§ 1–19 below, run again and timed: "
+print(R.head(also=f"Every command of §§ 1–19 and 24 below, run again and timed: "
                   f"{R.anchor('timing', 'the timings')}. "
                   f"Beside this page: {R.download('commands.json')}, every command as it ran; "
                   f"{R.download('summary.tsv')}, every verdict; and {R.download('validation.txt')}, every "
@@ -75,6 +75,7 @@ the mean of 100, which is what is written.
 | 21 | Saddle | mouse Hi-C, 100 kb, § 3's E1 | `cooltools.saddle` |
 | 22 | Fraction of signal in features | mouse ATAC-seq, two replicates, chr19; peaks and promoters | pyBigWig and NumPy |
 | 23 | Signal by group | mouse ATAC-seq, two replicates, chr19; § 3's compartments | pyBigWig, NumPy and SciPy |
+| 24 | CTCF sites in GM12878 (Fig. 2): insulation at four scales, peaks, APA between consecutive peaks, metaplot | GM12878 Hi-C, 10 kb; CTCF ChIP-seq of two labs and ATAC-seq; chr19 | `cooltools.insulation`; yapc 0.1 with IDR 2.0.3; coolpuppy; deepTools `computeMatrix`, `plotProfile`, `plotHeatmap` |
 
 **To render.** `npm run build:cli` at the repository root builds this checkout's `chromosomix`.
 yapc needs an environment of its own (numpy < 1.24; the recipe is in the yapc section of
@@ -99,7 +100,7 @@ both and renders this page and the timings on every release, publishing them at
 <https://chromosomix.app/validation/> and <https://chromosomix.app/timings/>; the block under the
 title says which render this is.
 
-The data (6 GB) are fetched once into `notebooks/work/validation/data/`. Outputs are kept beside them,
+The data (8 GB) are fetched once into `notebooks/work/validation/data/`. Outputs are kept beside them,
 so a second render reads rather than recomputes (`REDO`).
 
 ```{python}
@@ -568,14 +569,17 @@ Every file is public, read by its accession and fetched from the URL listed. 4DN
 4DN Data Portal's open-data bucket on AWS; the mm10 sequence, used to phase compartments by GC
 content and read for composition and motifs, and the RefSeq genes, for the metaplot's TSS and the
 promoters, are UCSC's as distributed by Illumina iGenomes; the yeast Micro-C map is GEO's
-GSE151553, fetched from GEO. Two are also held to an MD5, and a file of either name that does not
-match is refused rather than compared: the yeast map, and 4DN's insulation score for § 18, to the
-MD5 4DN publishes for it.
+GSE151553, fetched from GEO; § 24's ChIP-seq and ATAC-seq of GM12878 are ENCODE's, from its
+open-data bucket, and its map is 4DN's, of which only what § 24 reads is fetched, by range. Five are
+also held to an MD5, and a file of any of those names that does not match is refused rather than
+compared: the yeast map, 4DN's insulation score for § 18, to the MD5 4DN publishes for it, and
+ENCODE's three tracks, to theirs.
 
 ```{python}
 FOURDN = 'https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput'
 IGENOMES = 'https://ngi-igenomes.s3.amazonaws.com/igenomes/Mus_musculus/UCSC/mm10'
 GEO = 'https://ftp.ncbi.nlm.nih.gov/geo/series'
+ENCODE = 'https://encode-public.s3.amazonaws.com'
 DATASETS = [
     dict(data='Mouse Hi-C (mm10)', accession='4DNFIOZ1TRUS', source='4DN',
          url=f'{FOURDN}/727b405d-c9f5-4b13-ae58-1dbf29d19a8f/4DNFIOZ1TRUS.mcool'),
@@ -597,6 +601,15 @@ DATASETS = [
          url=f'{IGENOMES}/Sequence/WholeGenomeFasta/genome.fa'),
     dict(data='Mouse RefSeq genes (Illumina iGenomes copy)', accession='refGene', source='UCSC mm10',
          name='mm10.genes.gtf', url=f'{IGENOMES}/Annotation/Genes/genes.gtf'),
+    dict(data='GM12878 CTCF ChIP-seq, fold change over control (GRCh38; Bernstein lab, ENCSR000AKB)',
+         accession='ENCFF734CUT', source='ENCODE', md5='b68aeffbebeae3d03e734b51f43c0cb8',
+         url=f'{ENCODE}/2020/10/01/a42c46dc-c33f-4906-8469-ba93e2cf30d3/ENCFF734CUT.bigWig'),
+    dict(data='GM12878 CTCF ChIP-seq, fold change over control (GRCh38; Snyder lab, ENCSR000DZN)',
+         accession='ENCFF485CGE', source='ENCODE', md5='ba43f52311258b2491d795504f6cfacc',
+         url=f'{ENCODE}/2020/09/25/ee64f56a-89ba-4f40-84f8-733a1994ea35/ENCFF485CGE.bigWig'),
+    dict(data='GM12878 ATAC-seq, fold change over control (GRCh38; ENCSR095QNB)', accession='ENCFF487LOB',
+         source='ENCODE', md5='f95a4eeec1156e2e1dc392ab988ae28a',
+         url=f'{ENCODE}/2021/02/24/4c49a77a-edb2-4766-8328-d44ebe7446eb/ENCFF487LOB.bigWig'),
 ]
 PATHS = {d['accession']: fetch(d['url'], d.get('name'), d.get('md5')) for d in DATASETS}
 MOUSE, YEAST, MM10, GENES = PATHS['4DNFIOZ1TRUS'], PATHS['GSE151553'], PATHS['mm10'], PATHS['refGene']
@@ -3464,6 +3477,401 @@ record('Signal by group', "mouse ATAC-seq, 2 replicates, chr19, by § 3's compar
        "as written",
        'Identical (to the digits written)' if GS_EXACT else 'Differs',
        apps=['groupsignal'], refs=['pybigwig-groupsignal'])
+```
+
+## 24 · CTCF sites in GM12878 (Fig. 2)
+
+Fig. 2 chains four tasks, and this section runs the chain twice, each link by chromosomix and by the
+package it reproduces, on the same inputs: in situ Hi-C of GM12878 (Rao et al. 2014; 4DN's
+4DNFIXP4QG5B, every replicate merged, 4,010,478,943 contacts) at 10 kb; CTCF ChIP-seq of two labs as
+the two replicates — ENCODE's ENCSR000AKB (Bernstein lab, Broad) and ENCSR000DZN (Snyder lab,
+Stanford), each the fold change over control of its pooled replicates; and ATAC-seq (ENCSR095QNB).
+The map is 27 GB, and what both sides read of it is the 10-kb rung of chr19, every contact within it
+with the file's own weights, read by range from 4DN's bucket into a `.cool`
+(`notebooks/scripts/cool_subset.py`, which writes a pixel the file stores twice once, as the sum
+both tools read it as); the tracks are cut to chr19 interval for interval, as § 5 cuts its
+replicates, and for § 5's reason: yapc holds the second derivative of everything it is given in
+memory and writes it out, 700 MB a seed for two chromosomes. Each link is fed what the one before it wrote **in chromosomix**, so the
+chain is the app's and every reference is held to one step of it.
+
+1. **Insulation at four scales**: windows of 50, 100, 200 and 400 kb, against `cooltools.insulation`
+   with the four, and the boundaries called on the narrowest, which is the window the app calls them on.
+2. **CTCF's peaks**: the two labs' tracks as replicates, against yapc 0.1 with IDR 2.0.3 at § 5's
+   settings, five seeds.
+3. **APA between consecutive peaks**: each peak of 2 paired with the next along its chromosome, piled
+   up raw and over the expected, at coolpuppy's defaults and with every pair, against coolpuppy
+   with § 11's script and settings.
+4. **The signal at CTCF's sites**: the metaplot of both CTCF tracks and ATAC-seq about each peak's
+   centre, ±2 kb in 50-bp bins, and of the insulation at its four scales, ±500 kb in 10-kb bins,
+   against deepTools' `computeMatrix reference-point`, `plotProfile` and `plotHeatmap`.
+
+| | chromosomix | reference |
+|---|---|---|
+| insulation | `insulation --window 5 --scales 4` | `cooltools.insulation(…, [50_000, 100_000, 200_000, 400_000])`, § 1's other settings |
+| peaks | `peaks --signal ENCFF734CUT --replicate ENCFF485CGE`, § 5's settings | `yapc`, § 5's settings, seeds 0–4 |
+| pairs | each peak and the next on its chromosome | the same BEDPE |
+| APA | `apa --pairs --mode fixed --window 5 --minDiag 2 --minDist 12` (or `0`), `--norm none` or `oe` | `coolpup.pileup(…, flank=50_000)`, `mindist` `'auto'` (or `0`), raw or over § 4's expected for this map |
+| metaplot | `metaplot --at centre --stranded=false --band none`, `--flank 2000 --step 50` or `--flank 500000 --step 10000` | `computeMatrix reference-point --referencePoint center`, `-b/-a 2000 --binSize 50` or `-b/-a 500000 --binSize 10000` |
+
+```{python}
+GM = WORK / 'gm12878'
+GM_ANALYSIS = 'CTCF sites in GM12878 (Fig. 2)'
+GM_SEQUENCES = ['chr19']
+GM_MAP = f'{FOURDN}/d6abea45-b0bb-4154-9854-1d3075b98097/4DNFIXP4QG5B.mcool'
+GM_COOL = DATA / '4DNFIXP4QG5B_10000.chr19.cool'
+if not GM_COOL.exists():
+    subprocess.run([PYTHON, str(SCRIPTS / 'cool_subset.py'), GM_MAP, '10000', str(GM_COOL), '--sequences',
+                    ','.join(GM_SEQUENCES)], check=True)
+GM_10K = rel(GM_COOL)
+
+
+def cut(source, sequences=GM_SEQUENCES):
+    """The track with these sequences only, interval for interval: § 5's cut, for more than one."""
+    target = DATA / f"{source.stem}.{'-'.join(sequences)}.bw"
+    if target.exists() and not REDO:
+        return target
+    handle = pyBigWig.open(str(source))
+    out = pyBigWig.open(str(target), 'w')
+    out.addHeader([(name, handle.chroms()[name]) for name in sequences])
+    for name in sequences:
+        entries = handle.intervals(name) or ()
+        out.addEntries([name] * len(entries), [int(a) for a, _, _ in entries],
+                       ends=[int(b) for _, b, _ in entries], values=[float(v) for _, _, v in entries])
+    out.close()
+    handle.close()
+    return target
+
+
+CTCF = [cut(PATHS[a]) for a in ('ENCFF734CUT', 'ENCFF485CGE')]
+GM_ATAC = cut(PATHS['ENCFF487LOB'])
+clr_gm = cooler.Cooler(str(GM_COOL))
+gm_bins = clr_gm.bins()[:]
+measures({'map': f"4DNFIXP4QG5B, {', '.join(GM_SEQUENCES)} at 10 kb: {len(gm_bins):,} bins, "
+                 f"{clr_gm.info['nnz']:,} pixels, {clr_gm.info['sum']:,} contacts",
+          'CTCF, the two replicates': ', '.join(rel(path) for path in CTCF), 'ATAC-seq': rel(GM_ATAC)})
+```
+
+### Insulation at four scales
+
+```{python}
+GI = GM / 'insulation'
+GM_WINDOWS = [5, 10, 20, 40]
+mr('insulation', GM_10K, '--window', 5, '--scales', 4, out=GI / 'app', name='gm-insulation', analysis=GM_ANALYSIS,
+   label='insulation, four scales', group='insulation')
+reference('gm-cooltools-insulation', GM_ANALYSIS, 'cooltools',
+          [PYTHON, script('cooltools_insulation_scales'), GM_10K, OUT, THREADS, *[w * 10_000 for w in GM_WINDOWS]],
+          out=GI / 'cooltools.tsv', label='insulation, four scales', group='insulation', threads=THREADS)
+
+gm_ref_ins = pd.read_csv(GI / 'cooltools.tsv', sep='\t')
+gm_ins = {}
+for w in GM_WINDOWS:
+    app_w = table(one(GI / 'app', f'*.insulation-w{w}.tsv'))
+    assert (app_w['bin'].to_numpy() == np.arange(len(gm_bins))).all()
+    gm_ins[w] = (app_w['value'].to_numpy(float), gm_ref_ins[f'log2_insulation_score_{w * 10_000}'].to_numpy(float))
+gm_both = {w: np.isfinite(a) & np.isfinite(b) for w, (a, b) in gm_ins.items()}
+gm_one = {w: int((np.isfinite(a) != np.isfinite(b)).sum()) for w, (a, b) in gm_ins.items()}
+gm_diff = {w: np.abs(a[gm_both[w]] - b[gm_both[w]]) for w, (a, b) in gm_ins.items()}
+gm_app_b = table(one(GI / 'app', '*.insulation-boundaries.tsv'))
+gm_ref_b = gm_ref_ins.loc[gm_ref_ins['is_boundary_50000'].astype(bool), ['chrom', 'start', 'boundary_strength_50000']]
+gm_calls = gm_app_b[['chrom', 'start', 'score']].merge(gm_ref_b, on=['chrom', 'start'], how='outer', indicator=True)
+gm_same = gm_calls[gm_calls['_merge'] == 'both']
+gm_strength = np.abs(gm_same['score'] - gm_same['boundary_strength_50000'])
+measures({
+    **{f'{w * 10} kb: bins both score; only one; max |difference|':
+       f'{gm_both[w].sum():,}; {gm_one[w]}; {gm_diff[w].max():.1e}' for w in GM_WINDOWS},
+    'boundaries on 50 kb, chromosomix / cooltools; at the same bin': f'{len(gm_app_b):,} / {len(gm_ref_b):,}; {len(gm_same):,}',
+    'boundary strength, max |difference|': f'{gm_strength.max():.1e}',
+})
+```
+
+```{python}
+#| label: fig-gm-insulation
+#| fig-cap: "Insulation of GM12878 at 10 kb, chr19. a–d, every bin at each window; e, every boundary both call on the 50-kb window; f, chr19 at 30–35 Mb, the four scales."
+TEXT['gm_ins_n'] = f"{sum(gm_both[w].sum() for w in GM_WINDOWS):,}"
+TEXT['gm_ins_max'] = f'{max(d.max() for d in gm_diff.values()):.1e}'
+TEXT['gm_ins_one'] = f'{sum(gm_one.values())}'
+TEXT['gm_calls'] = f'{len(gm_same):,}'
+TEXT['gm_calls_only'] = f"{int((gm_calls['_merge'] != 'both').sum())}"
+TEXT['gm_strength'] = f'{gm_strength.max():.1e}'
+
+fig = plt.figure(figsize=(12, 7.4), layout='constrained')
+grid = fig.add_gridspec(2, 4, height_ratios=[1, 1.05])
+for k, w in enumerate(GM_WINDOWS):
+    a, b = gm_ins[w]
+    agreement(fig.add_subplot(grid[0, k]), b[gm_both[w]], a[gm_both[w]], 'cooltools (log2)',
+              'chromosomix (log2)' if k == 0 else '', f'{"abcd"[k]}  {w * 10} kb')
+ax = fig.add_subplot(grid[1, 0])
+ax.scatter(gm_same['boundary_strength_50000'], gm_same['score'], s=6, color=APP_COLOUR, alpha=0.4, lw=0)
+identity(ax, 0, gm_same['boundary_strength_50000'].max())
+ax.set(xlabel='cooltools boundary strength', ylabel='chromosomix prominence', title='e  every boundary')
+ax = fig.add_subplot(grid[1, 1:])
+lo, _ = clr_gm.extent('chr19')
+stretch = slice(lo + 3_000, lo + 3_500)
+x = gm_bins['start'].to_numpy()[stretch] / 1e6
+for k, w in enumerate(GM_WINDOWS):
+    a, b = gm_ins[w]
+    ax.plot(x, b[stretch] - 1.5 * k, color=REF, lw=3, label='cooltools' if k == 0 else None, gid=f'cooltools, {w * 10} kb')
+    ax.plot(x, a[stretch] - 1.5 * k, color=APP_COLOUR, lw=1.2, label='chromosomix' if k == 0 else None,
+            gid=f'chromosomix, {w * 10} kb')
+ax.set_yticks([-1.5 * k for k in range(len(GM_WINDOWS))], [f'{w * 10} kb' for w in GM_WINDOWS])
+ax.set(xlabel='chr19 (Mb)', ylabel='insulation (log2), offset by window', title='f  chr19, 30–35 Mb')
+ax.legend(loc='lower left', ncols=2)
+drawn('fig-gm-insulation')
+```
+
+At the four windows, `{python} TEXT['gm_ins_n']` scores in all differ by at most `{python} TEXT['gm_ins_max']`,
+with `{python} TEXT['gm_ins_one']` scored by one tool only; on the 50-kb window the same
+`{python} TEXT['gm_calls']` boundaries are called, `{python} TEXT['gm_calls_only']` by one only, with
+strengths within `{python} TEXT['gm_strength']`.
+
+### CTCF's peaks
+
+```{python}
+GY = GM / 'yapc'
+mr('peaks', '--signal', CTCF[0], '--replicate', CTCF[1], '--perPeak', '--width', 150, '--times', 3, '--minWidth', 75,
+   '--truncate', 100000, '--idr', 0.05, out=GY / 'app', name='gm-peaks', analysis=GM_ANALYSIS, label='peaks',
+   group='peaks')
+GM_SEEDS = {seed: GY / f'seed{seed}' for seed in range(5)}
+for seed, folder in GM_SEEDS.items():
+    reference(f'gm-yapc-seed{seed}', GM_ANALYSIS, 'yapc 0.1', [
+        str(YAPC_PYTHON), YAPC_SCRIPT, seed, OUT, 'cond', *CTCF, '--smoothing-window-width', 150,
+        '--smoothing-times', 3, '--min-concave-region-width', 75, '--truncate-idr-input', 100000],
+        out=folder / 'yapc', made=folder / 'yapc_0.05.bed', env=YAPC_ENV, label=f'peaks, seed {seed}', group='peaks',
+        bench=seed == 0)
+
+gm_peaksall = pd.read_csv(GM_SEEDS[0] / 'yapc_peaksall.tsv', sep='\t')
+gm_tested = pd.read_csv(GM_SEEDS[0] / 'yapc.tsv', sep='\t')
+gm_listing = table(one(GY / 'app', '*.peaks-list.tsv')).rename(columns={'sequence': 'chrom'})
+gm_counts = table(one(GY / 'app', '*.peaks-idr.tsv'))
+gm_called = pd.read_csv(one(GY / 'app', '*.bed'), sep='\t', header=None, comment='#',
+                        names=['chrom', 'start', 'end', 'name', 'score', 'strand'])
+gm_m = gm_listing.merge(gm_tested.drop(columns=['start', 'end']), left_on=key, right_on=bounds, how='outer',
+                        indicator=True)
+gm_shared = gm_m[gm_m['_merge'] == 'both']
+gm_curvature = np.abs(np.r_[gm_shared['curvature0'] - gm_shared['cond_rep1_score'],
+                            gm_shared['curvature1'] - gm_shared['cond_rep2_score']])
+
+
+def gm_bed(th, seed=0):
+    out = pd.read_csv(GM_SEEDS[seed] / f'yapc_{th}.bed', sep='\t', header=None, comment='#').iloc[:, :3]
+    out.columns = key
+    return out
+
+
+gm_called_ref = gm_bed(0.05)
+gm_same_called = gm_called[key].merge(gm_called_ref, on=key)
+gm_idr = gm_called.merge(gm_tested, left_on=key, right_on=bounds)
+gm_runs = {seed: pd.read_csv(folder / 'yapc.tsv', sep='\t').set_index(bounds)['cond_globalIDR']
+           for seed, folder in GM_SEEDS.items()}
+gm_app_idr = gm_called.set_index(key)['score'].rename_axis(bounds)
+gm_idr_app = [np.abs(gm_runs[seed].reindex(gm_app_idr.index) - gm_app_idr).max() for seed in GM_SEEDS]
+gm_idr_self = [np.abs(gm_runs[a].reindex(gm_app_idr.index) - gm_runs[b].reindex(gm_app_idr.index)).max()
+               for a in GM_SEEDS for b in GM_SEEDS if a < b]
+gm_counts_agree = all(
+    len(gm_bed(th, seed)) == int(gm_counts.loc[np.isclose(gm_counts['threshold'], th), 'peaks'].iloc[0])
+    for th in THRESHOLDS for seed in GM_SEEDS)
+measures({
+    'given to IDR, chromosomix / yapc': f'{len(gm_listing):,} / {len(gm_tested):,}',
+    'same bounds; in one only': f"{len(gm_shared):,}; {int((gm_m['_merge'] != 'both').sum())}",
+    'same summit': f"{(gm_shared['summit'] == gm_shared['mode']).mean():.2%}",
+    'curvature, max |difference| (two decimals written)': f'{gm_curvature.max():.4f}',
+    'peaks at IDR ≤ 0.05, chromosomix / yapc; same': f'{len(gm_called):,} / {len(gm_called_ref):,}; {len(gm_same_called):,}',
+    '−log10 IDR of those peaks, max |difference| to each yapc seed': f'{min(gm_idr_app):.1e} to {max(gm_idr_app):.1e}',
+    '−log10 IDR, yapc seeds against one another': f'{min(gm_idr_self):.1e} to {max(gm_idr_self):.1e}',
+    'peaks at each of yapc\'s six thresholds, against every seed': 'the same' if gm_counts_agree else 'not the same',
+})
+```
+
+### APA between consecutive peaks
+
+```{python}
+GP = GM / 'apa'
+GP.mkdir(parents=True, exist_ok=True)
+# The peaks chromosomix called, each with the next one along its chromosome.
+gm_sorted = gm_called.sort_values(['chrom', 'start', 'end']).reset_index(drop=True)
+gm_next = gm_sorted.shift(-1)
+gm_pairs = gm_sorted[gm_sorted['chrom'] == gm_next['chrom']].assign(
+    chrom2=gm_next['chrom'], start2=gm_next['start'].astype('Int64'), end2=gm_next['end'].astype('Int64'))
+GM_PAIRS = GP / 'consecutive.bedpe'
+gm_pairs[['chrom', 'start', 'end', 'chrom2', 'start2', 'end2']].to_csv(GM_PAIRS, sep='\t', header=False, index=False)
+gm_apart = ((gm_pairs['start2'].astype(int) - gm_pairs['start'].astype(int)) // clr_gm.binsize).to_numpy()
+reference('gm-expected', GM_ANALYSIS, 'cooltools', [PYTHON, EXPECTED, GM_10K, OUT, THREADS], out=GP / 'expected.tsv',
+          label='the expected, for coolpuppy', group='APA', threads=THREADS, bench=False)
+GM_CUTS = {
+    'raw': ('raw', ['--norm', 'none', '--minDist', MIN_DIST], []),
+    'oe': ('over the expected', ['--norm', 'oe', '--minDist', MIN_DIST], ['--expected', GP / 'expected.tsv']),
+    'raw-every': ('raw, every pair', ['--norm', 'none', '--minDist', 0], ['--mindist', 0]),
+    'oe-every': ('over the expected, every pair', ['--norm', 'oe', '--minDist', 0],
+                 ['--expected', GP / 'expected.tsv', '--mindist', 0]),
+}
+for cut_key, (label, app_args, options) in GM_CUTS.items():
+    # Timed raw, not over the expected, for § 11's reason: coolpuppy is handed the expected and the app
+    # computes its own.
+    timed = 'oe' not in cut_key.split('-')
+    mr('apa', GM_10K, '--pairs', GM_PAIRS, *app_args, '--mode', 'fixed', '--window', FLANK, '--minDiag', MIN_DIAG,
+       out=GP / cut_key, name=f'gm-apa-{cut_key}', analysis=GM_ANALYSIS, label=f'APA, {label}', group='APA',
+       bench=timed)
+    reference(f'gm-coolpuppy-{cut_key}', GM_ANALYSIS, 'coolpuppy',
+              [PYTHON, PILEUP, GM_10K, GM_PAIRS, FLANK * clr_gm.binsize, OUT, THREADS, *options],
+              out=GP / f'coolpuppy-{cut_key}.tsv', label=f'APA, {label}', group='APA', threads=THREADS, bench=timed)
+
+gm_cut_app = {k: pileup_of(GP / k) for k in GM_CUTS}
+gm_cut_ref = {k: np.loadtxt(GP / f'coolpuppy-{k}.tsv') for k in GM_CUTS}
+gm_same_gaps = {k: bool((np.isnan(gm_cut_app[k]) == np.isnan(gm_cut_ref[k])).all()) for k in GM_CUTS}
+gm_cut_rel = {k: relative_difference(gm_cut_app[k], gm_cut_ref[k])[np.isfinite(gm_cut_ref[k])] for k in GM_CUTS}
+measures({
+    'consecutive pairs; nearer than coolpuppy\'s floor; median separation':
+        f'{len(gm_pairs):,}; {int((gm_apart < MIN_DIST).sum()):,}; {np.median(gm_apart) * clr_gm.binsize / 1e3:,.0f} kb',
+    **{f'{GM_CUTS[k][0]}: max relative difference; cells left as gaps, chromosomix / coolpuppy':
+       f'{gm_cut_rel[k].max():.1e}; {int(np.isnan(gm_cut_app[k]).sum())} / {int(np.isnan(gm_cut_ref[k]).sum())}'
+       for k in GM_CUTS},
+    'over the expected, at coolpuppy\'s floor: centre; P2LL': f"{gm_cut_app['oe'][FLANK, FLANK]:.3f}; {p2ll(gm_cut_app['oe']):.3f}",
+})
+```
+
+### The signal at CTCF's sites
+
+```{python}
+GMP = GM / 'metaplot'
+GMP.mkdir(parents=True, exist_ok=True)
+# Each peak chromosomix called, as the sites both tools pile up about: its centre, no strand.
+GM_SITES = GMP / 'sites.bed'
+gm_sorted[['chrom', 'start', 'end', 'name']].assign(score=0, strand='.').to_csv(GM_SITES, sep='\t', header=False,
+                                                                                 index=False)
+GM_INSULATION = [one(GI / 'app', f'*.insulation-w{w}.bw') for w in GM_WINDOWS]
+#: name: (what, the tracks, flank and bin in bp)
+GM_PLOTS = {'signal': ('CTCF and ATAC-seq, ±2 kb', [*CTCF, GM_ATAC], 2000, 50),
+            'insulation': ('insulation at four scales, ±500 kb', GM_INSULATION, 500_000, 10_000)}
+gm_plot = {}
+for plot_key, (label, tracks, flank, step) in GM_PLOTS.items():
+    mr('metaplot', *[x for t in tracks for x in ('--tracks', t)], '--features', GM_SITES, '--mode', 'reference',
+       '--at', 'centre', '--stranded=false', '--flank', flank, '--step', step, '--band', 'none', out=GMP / f'app-{plot_key}',
+       name=f'gm-metaplot-{plot_key}', analysis=GM_ANALYSIS, label=f'metaplot, {label}', group=f'metaplot, {plot_key}')
+    reference(f'gm-computematrix-{plot_key}', GM_ANALYSIS, 'deepTools',
+              [COMPUTEMATRIX, 'reference-point', '-S', *tracks, '-R', GM_SITES, '--referencePoint', 'center',
+               '-b', flank, '-a', flank, '--binSize', step, '-p', THREADS, '-o', OUT],
+              out=GMP / f'deeptools-{plot_key}.mat.gz', label='computeMatrix', group=f'metaplot, {plot_key}',
+              threads=THREADS)
+    reference(f'gm-plotprofile-{plot_key}', GM_ANALYSIS, 'deepTools',
+              [PLOTPROFILE, '-m', GMP / f'deeptools-{plot_key}.mat.gz', '-out', f'{OUT}.png', '--outFileNameData',
+               f'{OUT}.tab'],
+              out=GMP / f'deeptools-{plot_key}-profile', made=GMP / f'deeptools-{plot_key}-profile.tab',
+              label='plotProfile', group=f'metaplot, {plot_key}')
+    reference(f'gm-plotheatmap-{plot_key}', GM_ANALYSIS, 'deepTools',
+              [PLOTHEATMAP, '-m', GMP / f'deeptools-{plot_key}.mat.gz', '-out', f'{OUT}.png', '--outFileSortedRegions',
+               f'{OUT}.bed'],
+              out=GMP / f'deeptools-{plot_key}-heatmap', made=GMP / f'deeptools-{plot_key}-heatmap.bed',
+              label='plotHeatmap', group=f'metaplot, {plot_key}')
+
+    curves_ = table(one(GMP / f'app-{plot_key}', '*.metaplot.tsv'))
+    offsets_ = curves_.iloc[:, 0].to_numpy(float)
+    mine_ = curves_[[c for c in curves_.columns[1:] if not c.endswith(('_low', '_high'))]].to_numpy(float).T
+    theirs_ = pd.read_csv(GMP / f'deeptools-{plot_key}-profile.tab', sep='\t', header=None,
+                          skiprows=2).iloc[:, 2:].to_numpy(float)
+    # The heatmaps side by side, as computeMatrix writes several samples: a row's bins of the first track,
+    # then the second's.
+    names_ = ['metaplot-heatmap', *[f'metaplot-heatmap-{k}' for k in range(2, len(tracks) + 1)]]
+    rows_mine = np.hstack([table(one(GMP / f'app-{plot_key}', f'*.{n}.tsv')).iloc[:, 1:].to_numpy(float)
+                           for n in names_])
+    regions_ = pd.read_csv(GMP / f'deeptools-{plot_key}.mat.gz', sep='\t', header=None, skiprows=1)
+    rows_theirs = regions_.iloc[:, 6:].to_numpy(float)
+    listed_ = pd.read_csv(GMP / f'deeptools-{plot_key}-heatmap.bed', sep='\t', header=None, comment='#')
+    order_ = pd.Series(np.arange(len(regions_)), index=place(regions_))[place(listed_)].to_numpy()
+    with np.errstate(invalid='ignore'):
+        key_mine, key_theirs = np.nanmean(rows_mine, axis=1), np.nanmean(rows_theirs[order_], axis=1)
+    none_mine, none_theirs = np.isnan(key_mine), np.isnan(key_theirs)
+    uncovered_ = int(none_mine.sum())
+    same_order = bool(none_theirs.sum() == uncovered_ and none_mine[len(none_mine) - uncovered_:].all()
+                      and none_theirs[:uncovered_].all()
+                      and (np.abs(key_mine[~none_mine] - key_theirs[~none_theirs]) <= written(key_theirs[~none_theirs])).all())
+    match_ = cached(GMP / f'paired-{plot_key}.npy', lambda: paired_rows(rows_mine, rows_theirs)).astype(int)
+    excess_ = past(rows_mine, rows_theirs[match_])
+    gm_plot[plot_key] = dict(offsets=offsets_, mine=mine_, theirs=theirs_, rows=len(rows_mine),
+                             one_to_one=len(set(match_)) == len(match_) == len(rows_theirs),
+                             profile=relative_difference(mine_, theirs_).max(), past=int((excess_ > 0).sum()),
+                             cells=excess_.size, order=same_order, uncovered=uncovered_,
+                             heat_mine=rows_mine.ravel(), heat_theirs=rows_theirs[match_].ravel())
+measures({key_: f"{v['rows']:,} sites, rows paired one to one: {'yes' if v['one_to_one'] else 'no'}; profiles within "
+                f"{v['profile']:.1e}; cells past both tools' rounding {v['past']:,} of {v['cells']:,}; order "
+                f"{'plotHeatmap’s' if v['order'] else 'not plotHeatmap’s'}; {v['uncovered']} sites no track covers"
+          for key_, v in gm_plot.items()})
+```
+
+```{python}
+#| label: fig-gm-fig2
+#| fig-cap: "The rest of Fig. 2's chain on GM12878, chr19. a, the pileup over consecutive CTCF peaks, every pair, over the expected, as chromosomix draws it; b, every cell of the four pileups against coolpuppy's; c, −log10 IDR of every peak both call at IDR ≤ 0.05; d, CTCF's two tracks and ATAC-seq about the peaks; e, the insulation at its four scales about them; f, every cell of both metaplots' heatmaps against computeMatrix's."
+TEXT['gm_pairs'] = f'{len(gm_pairs):,}'
+TEXT['gm_apa_rel'] = f'{max(v.max() for v in gm_cut_rel.values()):.1e}'
+GM_APA_GAPS = all(gm_same_gaps.values())
+TEXT['gm_apa_gaps'] = 'the same cells left as gaps' if GM_APA_GAPS else 'different cells left as gaps'
+TEXT['gm_peaks'] = f'{len(gm_called):,}'
+TEXT['gm_peaks_same'] = f'{len(gm_same_called):,}'
+TEXT['gm_idr'] = f'{max(gm_idr_app):.1e}'
+TEXT['gm_idr_self'] = f'{max(gm_idr_self):.1e}'
+GM_IDR_WITHIN = max(gm_idr_app) <= max(gm_idr_self) + 1e-5
+GM_PEAKS_SAME = len(gm_same_called) == len(gm_called) == len(gm_called_ref) and gm_counts_agree
+TEXT['gm_mp_profile'] = f"{max(v['profile'] for v in gm_plot.values()):.1e}"
+TEXT['gm_mp_past'] = f"{sum(v['past'] for v in gm_plot.values()):,}"
+TEXT['gm_mp_sites'] = f"{gm_plot['signal']['rows']:,}"
+GM_METAPLOT_OK = all(v['past'] == 0 and v['one_to_one'] and v['order'] for v in gm_plot.values())
+
+fig, axes = plt.subplots(2, 3, figsize=(12, 7.6), layout='constrained')
+ax = axes[0, 0]
+grey_gm = plt.get_cmap('RdBu_r').copy()
+grey_gm.set_bad(MISSING)
+bar = square(ax, gm_cut_app['oe-every'], 'a  consecutive peaks, over the expected', cmap=grey_gm,
+             norm=LogNorm(1 / 2, 2), label='observed / expected')
+bar.set_ticks([1 / 2, 1, 2], labels=['½', '1', '2'])
+bar.minorticks_off()
+ax = axes[0, 1]
+for k, cut_key in enumerate(GM_CUTS):
+    values = np.maximum(gm_cut_rel[cut_key], 1e-9)
+    ax.scatter(k + np.linspace(-0.25, 0.25, values.size), values, s=6, color=APP_COLOUR, lw=0, gid=GM_CUTS[cut_key][0])
+ax.set(yscale='log', ylim=(1e-9, 1e-3), ylabel='|chromosomix / coolpuppy − 1|', title='b  every cell, four pileups')
+ax.set_xticks(range(len(GM_CUTS)), ['raw', 'O/E', 'raw,\nevery\npair', 'O/E,\nevery\npair'], fontsize=8)
+agreement(axes[0, 2], gm_idr['cond_globalIDR'].to_numpy(float), gm_idr['score'].to_numpy(float), 'yapc 0.1',
+          'chromosomix', 'c  −log10 IDR, called peaks')
+names_signal = ['CTCF · Broad', 'CTCF · Stanford', 'ATAC-seq']
+for ax, plot_key, names_, unit in ((axes[1, 0], 'signal', names_signal, 'from the peak (bp)'),
+                                   (axes[1, 1], 'insulation', [f'{w * 10} kb' for w in GM_WINDOWS], 'from the peak (kb)')):
+    v = gm_plot[plot_key]
+    x = v['offsets'] / (1e3 if plot_key == 'insulation' else 1)
+    for i, (mine_, theirs_, name_) in enumerate(zip(v['mine'], v['theirs'], names_)):
+        ax.plot(x, theirs_, color=REF, lw=3, label='deepTools plotProfile' if i == 0 else None,
+                gid=f'deepTools plotProfile, {name_}')
+        ax.plot(x, mine_, color=APP_COLOUR, lw=1.2, label='chromosomix' if i == 0 else None, gid=f'chromosomix, {name_}')
+        ax.text(x[-1], mine_[-1], f' {name_}', fontsize=7, color=INK2, va='center')
+    ax.set(xlabel=unit, ylabel='fold change over control' if plot_key == 'signal' else 'insulation (log2)',
+           title='d  CTCF and ATAC-seq' if plot_key == 'signal' else 'e  insulation, four scales')
+    ax.legend(loc='upper left')
+agreement(axes[1, 2], np.r_[gm_plot['signal']['heat_theirs'], gm_plot['insulation']['heat_theirs']],
+          np.r_[gm_plot['signal']['heat_mine'], gm_plot['insulation']['heat_mine']], 'deepTools computeMatrix',
+          'chromosomix', 'f  every bin of every row')
+drawn('fig-gm-fig2')
+```
+
+The chain agrees link by link. The same `{python} TEXT['gm_peaks_same']` of the
+`{python} TEXT['gm_peaks']` CTCF peaks pass IDR ≤ 0.05 in both, their −log10 IDR within
+`{python} TEXT['gm_idr']` of every yapc run, whose seeds differ from one another by up to
+`{python} TEXT['gm_idr_self']`. Over the `{python} TEXT['gm_pairs']` pairs of consecutive peaks the
+four pileups draw `{python} TEXT['gm_apa_gaps']` and every other cell within
+`{python} TEXT['gm_apa_rel']` of coolpuppy's. About the `{python} TEXT['gm_mp_sites']` peaks, every
+profile is within `{python} TEXT['gm_mp_profile']` of `plotProfile`'s, and
+`{python} TEXT['gm_mp_past']` cells of the heatmaps lie past the two tools' rounding.
+
+```{python}
+GM_OK = (max(d.max() for d in gm_diff.values()) < 1e-5 and int((gm_calls['_merge'] != 'both').sum()) == 0
+         and GM_PEAKS_SAME and GM_APA_GAPS and max(v.max() for v in gm_cut_rel.values()) < 1e-5 and GM_METAPLOT_OK)
+record(GM_ANALYSIS, 'GM12878 Hi-C, 10 kb; CTCF ChIP-seq of two labs and ATAC-seq; chr19',
+       f"cooltools {VERSIONS['cooltools']}, yapc {YAPC}, coolpuppy {VERSIONS['coolpuppy']}, deepTools {VERSIONS['deeptools']}",
+       f"insulation at four scales within {TEXT['gm_ins_max']}, the same {TEXT['gm_calls']} boundaries; "
+       f"the same {TEXT['gm_peaks_same']} peaks at IDR ≤ 0.05, −log10 IDR within {TEXT['gm_idr']} "
+       f"(seeds among themselves: up to {TEXT['gm_idr_self']}); APA over {TEXT['gm_pairs']} consecutive pairs within "
+       f"{TEXT['gm_apa_rel']}; metaplots within {TEXT['gm_mp_profile']}, {TEXT['gm_mp_past']} cells past the rounding",
+       ('Identical (float32)' + ('; IDR within yapc\'s seed-to-seed spread' if GM_IDR_WITHIN else '')) if GM_OK
+       else 'Differs',
+       apps=[name for name, app in APP.items() if app['analysis'] == GM_ANALYSIS],
+       refs=[name for name, ref in REFS.items() if ref['analysis'] == GM_ANALYSIS])
 ```
 
 ## Summary

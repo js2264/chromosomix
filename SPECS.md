@@ -5813,7 +5813,7 @@ satisfy and is therefore the one that is tested first:
 | APA, k windows, local file | 0 network; ≤ k bounded reads after coalescing |
 | APA, k windows, remote | ≤ 2 range requests per *coalesced* window, with the estimate shown before **Run** |
 | APA over the expected | the windows, and one band per sequence the anchors sit on, read in tiles as deep as its farthest window reaches and never held whole; the estimate says so in words, since the depth is the loop set's |
-| Metaplot, k features | 0 matrix reads; ≤ 1 `sample` request per contig touched |
+| Metaplot, k features | 0 matrix reads; ≤ 1 `sample` request per contig touched and per megabase (or 4,096 windows) of its windows, read at the track's own resolution |
 | Correlation / eigenvectors | 0 range requests beyond the block; refused above the bin-count gate (§18.6) |
 | Adaptive smoothing of a block | 0 range requests; the arrays go over and back. Inline below 1 M cells (78 ms at 353²); on the analysis thread above it — 1.5 s at 4 M, 7.4 s at the 16 M cap. The map draws **unsmoothed** meanwhile, never blank and never captioned as smoothed |
 | Analysis worker mount | opened on first use, never at session open |
@@ -6893,7 +6893,15 @@ of a row opened by a button saying *add* read as kinds of thing the URL box take
 more cells to open.
 
 In the link a structure cell is `3d` and a tracks cell `tracks`, in the `maps=` list where the
-maps and the `~` of a vacancy are. A deck holds **as many structure cells as the reader asks for** —
+maps and the `~` of a vacancy are. **A track placed on a tracks cell is kept by the cell's seat**:
+a lane is remembered against the file of the map it is drawn on (§16.9), because a cell's id is
+minted per deck and names nothing after a reload, and a tracks cell has no file — so a track put on
+one was kept against nothing, and a reload, a saved workspace opened again or a link brought the cell
+back empty with the track drawn nowhere. The cell's seat, which tracks cell it is counting from the
+left, is the one thing about it that survives, and its name and its height were already kept by it;
+its lanes are kept under `tracks:1`, `tracks:2` and so on (`tracksCellKey`), a word with a colon so
+that a workspace resolving its relative names against its own address leaves it alone, and a link
+carries them, since they name no file of anybody's. A deck holds **as many structure cells as the reader asks for** —
 a second `3d` opens a second cell, and two cells of one model are two views of it (§25.3) — and as
 many tracks cells as the reader opens, named apart in the location control: by the name the reader
 gave the cell (§25.3), or numbered where they gave none.
@@ -8863,6 +8871,22 @@ normalised by **observed/expected by default**, by distance-matched controls, by
 not at all; with the P2LL enrichment reported under it and a per-feature score table that can leave
 the app.
 
+**A metaplot's columns are deepTools'.** A reference point's *centre* is `computeMatrix`'s: half the
+feature's length, rounded down, from its start — rounding the midpoint put an odd-length feature one
+base to the right, which on a CTCF peak in 50-bp columns moved the profile by up to a percent. A window
+a sequence end clips keeps columns `step` base pairs wide, counted from the anchor, and the column the
+sequence ends in is the mean over the bases it has, as deepTools pads the rest with gaps; spreading what
+was left over a whole number of columns drew every column of a telomeric row a few percent off its
+place. And each track is read **at its own resolution**, never a zoom level: a column is the mean over
+the bases it covers and a zoom record is a mean over its own span, which straddles the column's edges —
+asked for at the column's width, a 10-kb column took records up to 20 kb wide (bbi's rule), and the
+insulation's profile about CTCF peaks was 0.7 % off. The windows of a sequence are read in order, a
+megabase or 4,096 windows to a request, so what is held is one batch's records. Over GM12878's 2,101
+CTCF peaks (§18.10, § 24 of the notebook) the profiles of CTCF, ATAC-seq and the insulation are
+deepTools' within 5·10⁻⁶ and no cell of half a million differs past both tools' rounding; the
+insulation's run went from 1.1 s to 1.7 s, its peak memory from 300 MB to 210 MB; about mouse RefSeq's
+35,034 TSSs (§ 14) the time is what it was, 5.5 s, in 350 MB rather than 410.
+
 **A pileup's axes are distances, in base pairs.** `-21 kb`, `0`, `+21 kb` — five labels along each
 axis, the ends at the ends, the sign written out on both sides because what a label says is *which
 side of the anchor*. They were counts of **bins**, which is a number only a reader holding the
@@ -9484,9 +9508,9 @@ edge, whose region at its first base yapc drops. The generated module carries th
 was built from, and a test fails until `npm run wasm:yapc` is run after `yapc.c` changes.
 
 **And beside the goldens, two notebooks at full size.** `notebooks/validation.qmd`, rendered with
-Quarto, runs twenty-three analyses twice over public data, each file named by its accession and fetched
-from where it was published (4DN's; GEO's yeast Micro-C; and UCSC's mm10 sequence and RefSeq genes
-as Illumina iGenomes distributes them) — once through `chromosomix`, once through the package each
+Quarto, runs twenty-four analyses twice over public data, each file named by its accession and fetched
+from where it was published (4DN's; GEO's yeast Micro-C; ENCODE's GM12878 ChIP-seq and ATAC-seq; and
+UCSC's mm10 sequence and RefSeq genes as Illumina iGenomes distributes them) — once through `chromosomix`, once through the package each
 reproduces, called as it is meant to be called and never re-implemented — and lines the two up bin
 by bin or call by call: insulation, compartments, P(s), coverage and virtual 4C against cooltools;
 the directionality index against `domaincaller`; peak calling with IDR on two replicates against
@@ -9504,7 +9528,13 @@ ratio to indifference against NumPy over them; the compartment call's saddle aga
 `cooltools.saddle` over chromosomix's own E1, cut into its groups by cooltools' `digitize`; the
 fraction of signal in features against pyBigWig's exact sums and NumPy, the whole track's own read
 from a zoom level and measured apart; and signal by group against pyBigWig's exact stretch means,
-rank for rank in each group, and its summaries and tests against NumPy's and SciPy's. Where a
+rank for rank in each group, and its summaries and tests against NumPy's and SciPy's; and the chain the
+paper's Fig. 2 runs on GM12878 (§ 24), each link fed what the one before it wrote in chromosomix —
+insulation at four scales against `cooltools.insulation`, CTCF's peaks on two labs' ChIP-seq as
+replicates against yapc, APA between consecutive peaks against coolpuppy, and the metaplot of CTCF,
+ATAC-seq and the insulation about the peaks against deepTools — over 4DN's 27-GB map of 4.0 billion
+contacts, of which what the section reads, chr19 at 10 kb, is fetched by range
+(`notebooks/scripts/cool_subset.py`). Where a
 reference draws at random — a pileup's controls, an overlap's shuffles, IDR's ties — two
 distributions are compared, the reference's own spread from seed to seed the yardstick. A reference
 that takes a number of processes is given one a core of the machine, at most four (`THREADS`). **Every
@@ -11474,10 +11504,13 @@ why one table for all of them was the wrong shape and is gone:
   micro-C map with its tracks; the same tracks with no map, close enough for the reading frames;
   Hi-C, micro-C and PCP of one locus in a deck of three; splicing on human chrX in the 1D browser;
   a mitotic Hi-C time course in three tabs of decks; and the metagenome, a dev feature (§29).
-  **Papers**: this viewer's own paper, one workspace of five tabs, a panel each — Fig. 1c's mouse map
-  at five scales with a model under each, Fig. 1d's insulation chain beside chromosome 3's model, and
-  Fig. 2a–c's bacteria read along their arms — and Meneu et al. 2025's bacterial chromosomes in
-  yeast. Inline, so it costs no request; where its files live is §24.3.
+  **Papers**: this viewer's own paper, one workspace of seven tabs, a panel each — Fig. 1a's GM12878
+  window at 2 kb as three cells (the map with its insulation, compartments, 4C and marks, a tracks cell
+  of ENCODE's and UCSC's tracks, and the model coloured by distance to a pinned bead), Fig. 1c's mouse
+  map at five scales with a model under each, Fig. 1d's insulation chain beside chromosome 3's model,
+  Fig. 2's GM12878 map with two labs' CTCF, the peaks called on both, insulation at four scales and
+  ATAC-seq, and Fig. S3a–c's bacteria read along their arms — and Meneu et al. 2025's bacterial
+  chromosomes in yeast. Inline, so it costs no request; where its files live is §24.3.
 - **DNA Bacterial Zoo** — a dev feature (§29), published with the multi-genome format: switched
   off, it has no tile. The genome gallery's cards over **one** file: a card a species, whose
   button is the species' session, with its sample and its replicon count as chips and its map, its
@@ -11801,13 +11834,21 @@ the files its cards open are one folder on the lab's bucket, `demo/store/`, a di
 dataset — `yeast/`, `human/`, `gibcus2018/`, `meneu2025/`, `chromosomix_paper/` — with every name inside
 a workspace relative, so the folder opens wherever it is copied. Unlike the rest of `demo/`, it is
 not a copy of a directory of this repository: its maps run to seven gigabytes, and they are copied
-into it **on the bucket** — from the lab's own published data and from 4DN's open-data bucket — and
-never pass through git. What the repository keeps is the folder's workspaces and
+into it **on the bucket** — from the lab's own published data and from 4DN's and ENCODE's open-data
+buckets — and never pass through git. What the repository keeps is the folder's workspaces and
 `demo/store/MANIFEST.tsv`, one line a file naming where it comes from: a key on a bucket, a file of
 this repository, or a file `scripts/make_rsg_store.py derive` computes (the RNA-seq counts as a
 barChart, the SNPs bgzipped and indexed, the loops called on the micro-C map by this viewer's own
-Chromosight, the sequence as a `.2bit` and the map as a `.hic` for the hub example, and E1 along both
-arms of the paper's three *P. aeruginosa* maps). The paper's folder holds a subfolder an organism, its
+Chromosight, the sequence as a `.2bit` and the map as a `.hic` for the hub example, E1 along both
+arms of the paper's three *P. aeruginosa* maps, UCSC's hg38 sequence and refGene as UCSC publishes
+them, and what the paper's GM12878 panels draw: insulation, compartments, the 4C profile and the model
+at Fig. 1a's window, CTCF's motif, and insulation at four scales and CTCF peaks over the genome for
+Fig. 2). The GM12878 map is 27 GB, and none of that reads it whole: `notebooks/scripts/cool_subset.py`
+reads the one rung a task needs — of one sequence, or of every sequence near the diagonal — by range
+from 4DN's bucket into a `.cool` with the file's own weights, every contact within a sequence written
+as the file holds it, so a task that reads contacts within a sequence, as each of these does, reads the
+same numbers there as in the whole file. Those outputs are files of this repository, under
+`demo/store/chromosomix_paper/human/`. The paper's folder holds a subfolder an organism, its
 bacterial maps and the *P. aeruginosa* RNA-seq copied there from where the lab keeps them — the zoo's
 among them — so that it names
 none of those places and opens with the zoo switched off. The same script
@@ -12755,6 +12796,15 @@ picture beside it cell for cell. **A pair the map never counted is the bottom of
 scale here is the map's *transformed* range and a balanced map's runs from about −3.6 to about 0 —
 so the clamp drew every uncounted pair at the dark end, and a 4C in space came out with its darkest
 beads exactly where there was no contact at all.
+
+**The pin is kept with the model.** It is the one place two colourings read from, and it was the
+cell's alone: a model saved coloured by distance came back from a reload, a workspace or a link
+coloured from nothing, every bead the colour of no value. It is kept on the model's row
+(`StructureStyle.pin`), with its colouring and its camera axes, as the sequence and base pair at the
+pinned bead's middle — `chr14:89601000` — rather than as the bead's index, so it still names the same
+place on a model of the same window at another resolution, and a pin naming no bead of the model is
+no pin. Pinning and unpinning write it; a loop or a measurement, which light their first bead the
+way a pin does, give the pinned bead back when they end.
 
 The same row was also drawn as **chords** from the pinned bead, under a *pin contacts* toggle and a
 threshold. That is gone: the colouring says the same thing in the representation the model is

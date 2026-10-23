@@ -66,6 +66,17 @@ export interface Window {
   slotFrom: number
   slotTo: number
   /**
+   * The stretch the slots from {@link slotFrom} to {@link slotTo} stand for,
+   * where it is not `start` to `end`: a reference-point window clipped at a
+   * sequence end part of the way through a column. Its columns are still
+   * `step` base pairs each, counted from the anchor, and the one the sequence
+   * ends in is the mean over the bases it has — as deepTools' `computeMatrix`
+   * pads the bases past the end with gaps — rather than the rest of the window
+   * spread over a whole number of columns, which drew every column of a
+   * telomeric feature's row a few percent off its place.
+   */
+  span?: { start: number; end: number }
+  /**
    * The feature's own extent, and the columns it owns — a scaled-region window
    * only.
    *
@@ -132,20 +143,34 @@ export function referenceWindows(
           ? feature.strand < 0
             ? feature.start
             : feature.end
-          : Math.round((feature.start + feature.end) / 2)
+          : // deepTools' centre (`chopRegionsFromMiddle`): half the length, rounded down, from the
+            // start. Rounding the midpoint instead put an odd-length feature one base to the right,
+            // which on a sharp peak in 50 bp columns moved its mean by a percent.
+            feature.start + Math.floor((feature.end - feature.start) / 2)
     const length = options.lengthOf(feature.contig)
     const wanted = { from: anchor - perSide * options.step, to: anchor + perSide * options.step }
     const start = Math.max(0, wanted.from)
     const end = Math.min(length, wanted.to)
     if (!(end > start)) continue
-    // How much was clipped, in slots, on the side that is *upstream in reading
-    // order* — which is the far side for a minus-strand feature.
-    const lostLow = Math.round((start - wanted.from) / options.step)
-    const lostHigh = Math.round((wanted.to - end) / options.step)
+    // How much was clipped, in whole slots, on the side that is *upstream in
+    // reading order* — which is the far side for a minus-strand feature. A slot
+    // the sequence ends part of the way through is kept, its stretch the
+    // `span` past `start` or `end`.
+    const lostLow = Math.floor((start - wanted.from) / options.step)
+    const lostHigh = Math.floor((wanted.to - end) / options.step)
     const slotFrom = feature.strand < 0 ? lostHigh : lostLow
     const slotTo = slots - (feature.strand < 0 ? lostLow : lostHigh)
     if (!(slotTo > slotFrom)) continue
-    windows.push({ contig: feature.contig, start, end, strand: feature.strand, slotFrom, slotTo })
+    const span = { start: wanted.from + lostLow * options.step, end: wanted.to - lostHigh * options.step }
+    windows.push({
+      contig: feature.contig,
+      start,
+      end,
+      strand: feature.strand,
+      slotFrom,
+      slotTo,
+      ...(span.start === start && span.end === end ? {} : { span }),
+    })
   }
   return { windows, layout }
 }
@@ -264,8 +289,8 @@ export function windowRow(
   // arithmetic is `positionOf`'s and the slots' own, in the same order, so a
   // row is the same to the last bit.
   const { values, starts, ends } = samples
-  const lo = window.start
-  const hi = window.end
+  const lo = window.span?.start ?? window.start
+  const hi = window.span?.end ?? window.end
   const back = window.strand < 0
   const linear = window.body === undefined
   for (let i = 0; i < values.length; i++) {
@@ -349,7 +374,9 @@ function slotEdges(covered: number): Float64Array {
 function positionOf(window: Window, bp: number): number {
   const body = window.body
   if (body === undefined) {
-    const through = (bp - window.start) / (window.end - window.start)
+    const lo = window.span?.start ?? window.start
+    const hi = window.span?.end ?? window.end
+    const through = (bp - lo) / (hi - lo)
     return window.strand < 0 ? 1 - through : through
   }
   const back = window.strand < 0
