@@ -214,6 +214,13 @@
   ],
   "pulls": [
     {
+      "number": 137,
+      "commit": "8cdb025",
+      "title": "The lower triangle in a reading of its own (§5.10)",
+      "branch": "ccr-ff1dfdeb-fklimu",
+      "date": "2026-10-23T17:29:09Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
