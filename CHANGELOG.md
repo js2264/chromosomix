@@ -14,6 +14,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **What a task re-implements, on its row (§18.1).** A `?` in a circle at the right of a task's title
+  in the Analysis column names the published method it follows, how it came out against it in the
+  validation notebook, and the paper's DOI as a link, in a small tip shown on hover. Green where the
+  validation found it identical or equivalent — 20 tasks, from coverage and insulation to pastis-NB
+  and the metaplot — and in the text's colour where it is untested: the scalogram, the HiC score and
+  per-cell contact QC. A mark, not a button: a press on it opens no task. Tasks that follow no
+  published method have none.
+
+- **The notebooks, in *About* (§18.10).** A *Notebooks* tab names the four published notebooks — the
+  validation, the timings and the parity, which GitHub Actions renders with every release, and the
+  laptop, rendered by hand — each linking to its page, with a sentence on what it holds chromosomix
+  to and, read from the `rendered.json` published beside it, the one line of what it found and when,
+  from which build, on what machine and by which run, or by hand, it was rendered. The stamps are read when the tab is chosen, never when *About* opens;
+  one that cannot be read leaves the link alone. The desktop app, the single file, the package's copy
+  and a dev server link the deployed site's pages; the single file reads no stamp.
+
 - **The app held to its own command line, in a notebook (§18.10).** `notebooks/parity.qmd` runs ten
   tasks in the app, in headless Chromium — insulation, compartments, P(s), coverage, virtual 4C, loop
   calling, a motif search and APA on GEO's yeast Micro-C at 1.6 kb, framed on chrIV, and peak calling
@@ -42,7 +58,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   each, with the machine it ran on, a figure, and every command at the end. It needs Quarto with
   pandas, matplotlib and pyfaidx, and a built command line; the data, about 13.7 GB, are downloaded
   once, each held to its MD5. Render it on your own laptop, or read it at
-  <https://chromosomix.app/laptop/>, rendered with every release on a GitHub runner.
+  <https://chromosomix.app/laptop/>: a render made by hand, on a laptop, and committed as
+  `notebooks/laptop.html`, the one rendered page `.gitignore` lets through. The page is one file that
+  carries its table and its `rendered.json`, and the deploy unpacks the two beside it, so publishing
+  a render is committing the file. The Notebooks workflow renders it on a GitHub runner with every
+  release too, and keeps that as the run's artifact and in its summary only: never on the site, nor
+  on a release, and whether it rendered no longer holds back the other pages.
 
 - **The `.hic` reader held to `hic-straw` on a file Juicer Tools wrote (§3.6).**
   `test/unit/hic-straw-oracle.test.ts` read only fixtures this repository's own writer produced, so
@@ -54,6 +75,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   The map is committed, so this runs on every push with nothing to build.
 
 ### Changed
+
+- **About is three tabs, and the licences are one of them (§22.4).** *Overview* — what the viewer is,
+  the tutorial and the source — then *Notebooks* and *Licences*, with the build stamp and the version
+  picker under every tab rather than under the licences, which had pushed them out of sight on a
+  laptop. The row of tabs is walked with ← and →, Home and End.
 
 - **pastis-NB's fit runs on every core, and gives the same model on any number of them (§25.6,
   §23.1).** Each evaluation of the likelihood, and of pastis' MDS start before it, is now summed in

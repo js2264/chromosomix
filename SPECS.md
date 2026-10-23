@@ -7264,6 +7264,21 @@ run, queued, running, done, failed, cancelled. It carries no controls — bar a 
 is queued or running — because a panel that both lists twenty tasks and configures them is a panel
 that does neither.
 
+**A task that re-implements a published method says which**, with a `?` in a circle at the right of
+its title's line, after the state: a mark and not a control — not in the caret's walk, and a press on
+it opens no task. Hovering it shows a small tip: the method and whose it is, how the task came out
+against it, and the paper's DOI as a link — *Diamond insulation (Crane et al. 2015), as cooltools
+computes it. Identical in the validation · doi:10.1038/nature14450*. The `?` is **green** where
+`notebooks/validation.qmd` found the task identical or equivalent to its reference (§18.10), and in
+the text's colour where it is **untested**: the scalogram, the HiC score and per-cell contact QC. A task
+whose code follows no published method — the arms' alignment, the origin and terminus, the
+metagenome's tables, the model against the map, the dot plot — has none, since a citation there would
+claim what the code does not. The tip hangs from the page rather than from the row, which is a button a
+link cannot sit in, and stays while the pointer is on the `?` or on the tip, so it can be followed to
+the DOI; on a touch screen a tap shows it and a tap elsewhere puts it away. The table is
+`src/analysis/references.ts`, and `test/unit/references.test.ts` holds each line to a task, each green
+one to a section of the validation's own table, and the tasks without one to having none.
+
 **Over the cards, a box narrows the list** — `filter 25 tasks…` — because thirty tasks in four cards
 is a list read top to bottom by somebody who already knows the one they want. It is a filter over the
 list rather than a control over any task: every word typed must be found in a task's title, its
@@ -8161,7 +8176,7 @@ The decay curve averages every bin of a sequence into one line and answers *how 
 the scalogram keeps the bins apart and answers *where does this genome fold differently from itself*.
 At each bin it accumulates the cumulative distribution of its contacts over separation — the two cells
 either side of it at each distance, which on a circular sequence are the two ways round — and reports
-the separation at which that cumulative reaches each of a set of quantiles. Cournac et al. (2012)'s
+the separation at which that cumulative reaches each of a set of quantiles. Lioy et al. (2018)'s
 reading, and `HiContacts::scalogram()`'s quantity. It is a **distribution** and not a mean, because
 contact probability has a heavy tail by construction: the mean separation of a bin's contacts moves by
 a factor of two when the balancer drops a single distant cell, and its median does not. The quantile is
@@ -9537,6 +9552,21 @@ measured, with the machine and the build, and a second render of the same build 
 of running again. The page is a table of all 23, the five analyses side by side at the two depths, a
 figure, and every command in one block at the end.
 
+**The laptop's published page is rendered on a laptop.** What it measures is a reader's machine, so
+the page at `<site>/laptop/` is rendered by hand, on one, and committed as `notebooks/laptop.html` —
+the one rendered page `.gitignore` lets through; its data and the measurements a second render reads
+back stay in `notebooks/work/`, uncommitted, since a runner of the same build would read those back
+instead of measuring itself. The page is one file that is the whole of it: it links the other pages
+on the site (NOTEBOOKS_SITE, or `package.json`'s `homepage`) rather than as files beside it, which a
+laptop does not have, and it **carries** what is published beside it rather than linking it — its
+table under the results and its `rendered.json` in its closing line, each a link that downloads the
+file from the page itself (`Render.attach()`) — so the page reads the same from the disk it was
+rendered on and from the site, and its table cannot disagree with its picture. Its block says it was
+rendered by hand, on the machine named under it, as the page is published. Publishing a render is
+committing that file: every deploy writes it as `laptop/index.html` and unpacks the table and the
+stamp beside it (`pages.py committed`), the names its entry lists and nothing else, and makes no
+`laptop/` until one is committed.
+
 They are documents, not tests: they need the data (about 6 GB for the analyses, 15 GB for the
 viewers, 160 MB for the parity and 13.7 GB for the laptop), the reference packages, yapc's own
 environment and higlass-python's, the two viewers and Playwright's Chromium, and nothing in the suite
@@ -9551,7 +9581,8 @@ and Ubuntu's bedtools and seqkit; for the parity and the timings, the two viewer
 Chromium; for the timings, higlass-python's environment with libfuse. The parity renders first, alone,
 so that a page that cannot render stops the run before the hours of the others; then the validation
 and the timings in one job — the timings run the validation's commands on the inputs it fetched and
-made, which no other runner holds — beside the laptop in another. Each render runs through
+made, which no other runner holds — beside the laptop in another, which sets the committed page aside
+first so that what it gathers is its own render or nothing. Each render runs through
 `notebooks/scripts/memory.sh`, which writes into the job's log, every ten seconds, the memory in use
 and available and the three programs holding the most: a runner whose memory runs out is shut down
 in the middle of a step, with no error from the command and no step after it, and the log streamed
@@ -9560,23 +9591,50 @@ Each job gathers its pages with
 `notebooks/scripts/pages.py`, the one table of where each page is published and which files go beside
 it, which `rendered.py` reads too, and every job keeps what it rendered as an artifact for 90 days,
 even when it fails: the validation alone, with the timing rounds it finished, when the timings fail.
-A last job publishes them only if all four rendered, at `<site>/validation/`, `<site>/timings/`,
-`<site>/parity/` and `<site>/laptop/`, each a self-contained page with its tables beside it
-(`commands.json`, `summary.tsv` and `validation.txt`, every command, every verdict and every number its
-figures draw; `timings.tsv` and `viewers.tsv`; the parity's `summary.tsv`, every file compared; the
-laptop's `timings.tsv`, every analysis measured); a release keeps its own copies of the four pages and
-of the six tables as assets. It runs when a release is published and on demand. Each page opens on a
+A last job publishes the validation, the timings and the parity only if the three rendered —
+`pages.py published` names them — at `<site>/validation/`, `<site>/timings/` and `<site>/parity/`,
+each a self-contained page with its tables beside it (`commands.json`, `summary.tsv` and
+`validation.txt`, every command, every verdict and every number its figures draw; `timings.tsv` and
+`viewers.tsv`; the parity's `summary.tsv`, every file compared); a release keeps its own copies of the
+three pages and of the five tables as assets. **The runner's laptop is published nowhere**: not to the
+site, whose `laptop/` is the committed page, nor to a release, whose laptop is the one committed in its
+source; it is the run's artifact, and its section of the run's summary, and whether it rendered decides
+nothing about publishing the others. It runs when a release is published and on demand. Each page opens on a
 block saying when it was rendered, from which version, commit and release, by which run or by hand,
 and on what machine, and closes on how long it took, writing the same to `rendered.json` beside it with
 **one line of what it found** — how many analyses reproduce their reference, how much less time
 chromosomix takes than the references and the other viewers, how many files the app and the command
 line write alike, how many analyses finish within a minute and the most memory any takes. The run's
 summary is a section a notebook: where it is, from what and in how long, that line, and its table,
-folded. The pages link to each other there and on a reader's disk alike. They are no build of the app,
+folded. The pages link to each other there and on a reader's disk alike, but for the laptop, which
+links the site's from either. They are no build of the app,
 so the service worker leaves those four addresses to the network, as it does `v/` and `pr/`, and the
 app, from this version on, finding itself at any of them unregisters its worker and reloads once
 (`recoverPinnedNavigation`), as at `v/`; a worker from before answers there with its own app until its
 reader takes the update it offers.
+
+**And the app names them, in *About*.** The dialog is three tabs — *Overview*, what the viewer is, the
+tutorial (§30.1) and the source; *Notebooks*; and *Licences* (§22.4) — over the build stamp and the
+version picker, which stay under every tab and outside the part that scrolls, so a tab as long as the
+licences never takes the stamp off screen. It opens on *Overview*, with the caret on the row of tabs,
+one stop walked with ← and →, Home and End. **The Notebooks tab** says in a sentence what the
+notebooks are, then gives each a block: its title, linking to its page in a new tab, and its address;
+what it holds chromosomix to; and, read from the `rendered.json` beside the page, the one line of what
+it found, set off by a rule, and a quiet line saying when it was rendered, from which version and
+commit, in how long, on how many cores and how much memory, and by which run of the workflow, linked —
+or *by hand*, which is how the laptop's is rendered, and the tab's sentence says which pages GitHub
+Actions renders and which one is rendered by hand, on a laptop. The list is `src/notebooks.ts`, held
+by `test/unit/notebooks.test.ts` to `pages.py`'s table — its pages, their titles, and which is rendered
+by hand — and to the segments the service worker leaves alone, so a fifth notebook cannot be published
+without the tab naming it. The pages are this site's, when the app is served from one — an archived pin and a preview
+reach up to its root — and the deployed site's, by `package.json`'s `homepage`, from the desktop, the
+single file, the package's copy and a dev server; a build that can name neither has no Notebooks tab.
+**The stamps are read when the tab is first chosen, never when *About* opens**, all four at once; until
+one answers its block says it is being read, and one that cannot be read — offline, a page not
+published yet, a file that does not parse — takes its two lines away and leaves the link. A stamp is
+untrusted input that ends up on screen: a field that fails its check is dropped rather than repaired, a
+run is linked only on GitHub, and a stamp with no finishing time or no version is none. The single
+file, whose policy allows no request (§19), links the pages and reads nothing.
 
 ### 18.11 A set of scales is one picture
 
@@ -10737,15 +10795,17 @@ carry no `LICENSE` beside them. **A package that ships no licence text** — `ge
 which declares MIT and has no text of it in its tarball or its repository — has the licence it
 declares, naming the author it names, committed under `licenses/` and reproduced in its place.
 
-**About names them too**, under *Licences*: chromosomix's own licence, the GPL, then one line per project —
-its name linking to its home, what it does in this viewer, and its licence — with a dependency folded
-in beside what pulls it in, and a link to the build's own `THIRD-PARTY-NOTICES.txt` (the site's, from
-the desktop and the standalone page, which have none a link can open). The list is
+**About names them too**, under *Licences*, the last of its three tabs (§18.10): chromosomix's own
+licence, the GPL, then one line per project — its name linking to its home, what it does in this
+viewer, and its licence — with a dependency folded in beside what pulls it in, and a link to the
+build's own `THIRD-PARTY-NOTICES.txt` (the site's, from the desktop and the standalone page, which
+have none a link can open). The list is
 `src/licences.ts`, and `test/unit/licences.test.ts` holds it to every package the source imports and
 everything those pull in, to every entry the notices name as copied or ported, and to the README's
 *Licence* section. Then one line on the marks of the stores and services the interface shows. The
-dialog is wider than a plain one for its three columns, and taller, so the build stamp under them is
-on screen on a laptop.
+dialog is wider than a plain one for its three columns. The licences are a tab of their own because
+on the one page they shared with what the viewer is they pushed the build stamp out of sight on a
+laptop; the stamp is now under every tab.
 
 Each check asserts the notices are there — the package's (§22.3), the archived pin's (§21), the
 desktop renderer's (§15) and the standalone page's (§19) — because a notice that stopped being
@@ -14557,11 +14617,11 @@ itself**: a reader who came to open a file is not asked first whether they would
 says what *About* says (below), and steps out of sight while a tour is on screen, since under the grey
 an offer to play the tutorial is one more thing to read.
 
-**In *About*, straight after what the viewer is** — the answer to the question a reader who has just
-read that asks next, and the one way in a newcomer finds without being told where to look. One
-sentence, and one filled button that says what it will do: *play the tutorial* for a reader who has
-not begun it, *resume at step 32 of 50* for one who left it, with a quiet *start over* beside it, and
-*play the tutorial again* for one who finished it. The palette has it too, as *Guided tutorial* under
+**In *About*, straight after what the viewer is**, on its first tab — the answer to the question a
+reader who has just read that asks next, and the one way in a newcomer finds without being told where
+to look. One sentence, and one filled button that says what it will do: *play the tutorial* for a
+reader who has not begun it, *resume at step 32 of 50* for one who left it, with a quiet *start over*
+beside it, and *play the tutorial again* for one who finished it. The palette has it too, as *Guided tutorial* under
 Help, its hint saying which of the three a press will do.
 
 **Only where its first step is.** It opens on a store, so it is offered wherever the store drawer is:

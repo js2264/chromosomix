@@ -603,24 +603,40 @@ once, hence the test in the assembly step.
 
 ### So are the rendered notebooks
 
-`/validation/`, `/timings/`, `/parity/` and `/laptop/` are `notebooks/validation.qmd`,
-`notebooks/timing.qmd`, `notebooks/parity.qmd` and `notebooks/laptop.qmd` as
-`.github/workflows/notebooks.yml` last rendered them (SPECS §18.10). That workflow runs when a
-release is published — `release.yml` makes the release a draft and a person publishes it, which is
-the event that reaches it — and from **Actions → Notebooks → Run workflow** on any branch or tag,
-with the number of timed runs (four by default) and whether to publish. Each notebook renders in a
-job of its own, on a fresh runner, through the setup in `.github/actions/notebooks-setup`: the
-parity first, in about ten minutes, then the validation and the timings in one job (about three
-hours, the timings running the validation's commands on its inputs) beside the laptop (about an
-hour). A last job publishes only if every page rendered: it force-pushes the four pages and the
-files beside them to the `notebooks` branch as one commit, attaches them to the release with the
-tables beside them — among them `validation.txt`, every number the validation's figures draw — and
-dispatches this deploy, which copies `validation/`, `timings/`, `parity/` and `laptop/` from that
-branch on every run after — the stores' arrangement exactly. Every job also keeps what it rendered
-as an artifact for 90 days, even when it fails — the validation alone, with the timing rounds it
-finished, when the timings fail — and the run's summary has a section a notebook: where it is,
-from what, in how long, the line of findings it wrote, and its table. Which page is published
-where, with which files beside it, is one table, `notebooks/scripts/pages.py`.
+`/validation/`, `/timings/` and `/parity/` are `notebooks/validation.qmd`, `notebooks/timing.qmd`
+and `notebooks/parity.qmd` as `.github/workflows/notebooks.yml` last rendered them (SPECS §18.10).
+That workflow runs when a release is published — `release.yml` makes the release a draft and a
+person publishes it, which is the event that reaches it — and from **Actions → Notebooks → Run
+workflow** on any branch or tag, with the number of timed runs (four by default) and whether to
+publish. Each notebook renders in a job of its own, on a fresh runner, through the setup in
+`.github/actions/notebooks-setup`: the parity first, in about ten minutes, then the validation and
+the timings in one job (about three hours, the timings running the validation's commands on its
+inputs) beside the laptop (about an hour). A last job publishes only if the three pages rendered: it
+force-pushes them and the files beside them to the `notebooks` branch as one commit, attaches them
+to the release with the tables beside them — among them `validation.txt`, every number the
+validation's figures draw — and dispatches this deploy, which copies `validation/`, `timings/` and
+`parity/` from that branch on every run after — the stores' arrangement exactly. Every job also
+keeps what it rendered as an artifact for 90 days, even when it fails — the validation alone, with
+the timing rounds it finished, when the timings fail — and the run's summary has a section a
+notebook: where it is, from what, in how long, the line of findings it wrote, and its table. Which
+page is published where, with which files beside it, is one table, `notebooks/scripts/pages.py`.
+
+**`/laptop/` is not the workflow's.** `notebooks/laptop.qmd` measures a genome-wide analysis on a
+laptop, so the page the site publishes is rendered by hand on one and committed as
+`notebooks/laptop.html` — the one page `.gitignore` lets through. To publish a new one, render it from
+the root of a clone and commit the file:
+
+```bash
+npm ci && npm run build:cli
+quarto render notebooks/laptop.qmd
+git add notebooks/laptop.html
+```
+
+The page carries its table and its `rendered.json` inside it, as links that download them, so the one
+file is the whole of it; this deploy writes it as `laptop/index.html` and unpacks the two beside it
+(`python3 notebooks/scripts/pages.py committed dist`). The workflow renders the laptop on a runner
+too, keeps that as the run's artifact and in its summary, and publishes it nowhere — not to the
+branch, not to a release. No `/laptop/` until a render is committed.
 
 Each page says, in a block under its title, when it was rendered, from which version, commit and
 release, by which run, and on what machine; `rendered.json` beside it says the same for a script.

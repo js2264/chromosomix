@@ -2,7 +2,7 @@ name: Notebooks
 
 # Renders the four notebooks that hold chromosomix to the packages it reproduces,
 # to its own command line, and to a machine like a reader's (SPECS §18.10), and
-# publishes them beside the app:
+# publishes three of them beside the app:
 #
 #   https://chromosomix.app/validation/   notebooks/validation.qmd — every
 #                                         analysis run twice, by chromosomix and
@@ -15,9 +15,14 @@ name: Notebooks
 #                                         in the app in headless Chromium, then
 #                                         from the line its console wrote, and
 #                                         the files the two wrote compared
-#   https://chromosomix.app/laptop/       notebooks/laptop.qmd — 23 analyses
-#                                         run genome-wide, once each, with their
-#                                         time and peak memory
+#
+# The fourth, notebooks/laptop.qmd — 23 analyses run genome-wide, once each,
+# with their time and peak memory — is meant for a laptop. The page at
+# https://chromosomix.app/laptop/ is rendered by hand on one and committed as
+# notebooks/laptop.html, and deploy.yml publishes that file. This workflow
+# renders it on a runner too, keeps it as the run's artifact and writes it into
+# the run's summary, and never publishes it: not to the branch, not to a
+# release.
 #
 # **When.** On every release, once it is published — release.yml makes the
 # release a draft from the tag and a person publishes it, and that act is what
@@ -32,6 +37,8 @@ name: Notebooks
 # links between them. `parity` renders first, in about ten minutes, so that a
 # page that cannot render fails the run before the hours of the others; then
 # `validation` and `laptop` run side by side, each on a runner of its own.
+# `laptop` takes the committed page out of the way first, so that what it
+# gathers is its own render or nothing.
 # The validation and the timings share a job because the timings run the
 # validation's own commands again, on the inputs the validation fetched and
 # made: about 6 GB that would otherwise go from one job to the next as an
@@ -41,9 +48,10 @@ name: Notebooks
 # published and which files go beside it — and keeps them as an artifact for
 # 90 days, even when it fails: the validation alone, and the timing rounds it
 # finished, when the timings are what failed. `publish` waits for all three,
-# publishes only if every page rendered, and writes the run's summary either
-# way: each notebook's address, version and time, the one line of findings
-# it wrote, and its table.
+# publishes the three pages it publishes only if every one of them rendered —
+# the laptop's render, published or not, is not one — and writes the run's
+# summary either way: each notebook's address, version and time, the one line
+# of findings it wrote, and its table.
 #
 # **What it installs**, and why pinned. The references are the versions the
 # notebooks' prose names: `notebooks/requirements.txt` is the reference
@@ -97,11 +105,11 @@ name: Notebooks
 #
 # **Where it is published, and why through a branch.** Pages replaces the
 # whole site on every deployment and only deploy.yml deploys it, so this
-# workflow does what stores.yml does: it force-pushes the four pages, and the
+# workflow does what stores.yml does: it force-pushes the three pages, and the
 # files beside them, to an orphan `notebooks` branch as one commit, and asks
 # deploy.yml to publish; the deploy copies them into `validation/`,
-# `timings/`, `parity/` and `laptop/` on every run after that, so a push to
-# `main` keeps them. Beside each page: `rendered.json`, what the stamp at its
+# `timings/` and `parity/` on every run after that, so a push to `main` keeps
+# them. Which pages those are is `pages.py published`. Beside each page: `rendered.json`, what the stamp at its
 # top says (when, from which commit and release, by which run, on what
 # machine) and its line of findings; `commands.json`, `summary.tsv` and
 # `validation.txt` beside the validation, every command it ran, every verdict
@@ -109,12 +117,11 @@ name: Notebooks
 # Boost-HiC's two maps of chr19 and the metaplot over two tracks);
 # `timings.tsv` beside the timings, every timed run, one row each, and
 # `viewers.tsv`, every picture timed in a viewer; `summary.tsv` beside the
-# parity, every file the app and the command line wrote, and its verdict;
-# `timings.tsv` beside the laptop, every analysis measured. A release also
-# gets the four pages and the six tables as assets of its own —
-# `validation-<tag>.tsv` and `.txt`, `timings-<tag>.tsv`, `viewers-<tag>.tsv`,
-# `parity-<tag>.tsv` and `laptop-<tag>.tsv` — so a release's numbers outlive
-# the next release's pages.
+# parity, every file the app and the command line wrote, and its verdict. A
+# release also gets the three pages and the five tables as assets of its own —
+# `validation-<tag>.tsv` and `.txt`, `timings-<tag>.tsv`, `viewers-<tag>.tsv`
+# and `parity-<tag>.tsv` — so a release's numbers outlive the next release's
+# pages; its laptop page is the one committed in its source.
 
 on:
   release:
@@ -130,7 +137,7 @@ on:
         type: number
         default: 4
       publish:
-        description: 'Publish the pages at <site>/validation/, <site>/timings/, <site>/parity/ and <site>/laptop/'
+        description: 'Publish the pages at <site>/validation/, <site>/timings/ and <site>/parity/ (never the laptop’s)'
         type: boolean
         default: true
 
@@ -279,6 +286,12 @@ jobs:
 
       - uses: ./.github/actions/notebooks-setup
 
+      # The committed page is a render from a laptop, and the one the site
+      # publishes. Out of the way, so that a render that fails before it writes
+      # its page leaves this run's artifact without one rather than with that.
+      - name: Set the committed page aside
+        run: rm -f notebooks/laptop.html
+
       - name: Render the laptop
         run: bash notebooks/scripts/memory.sh quarto render notebooks/laptop.qmd
 
@@ -296,8 +309,8 @@ jobs:
           retention-days: 90
           overwrite: true
 
-  # Every page, published together or not at all, and the run's summary in
-  # any case.
+  # Every page the workflow publishes, together or not at all, and the run's
+  # summary in any case.
   publish:
     name: publish
     needs: [site, parity, validation, laptop]
@@ -310,7 +323,9 @@ jobs:
       # The deploy it asks for at the end.
       actions: write
     env:
-      RENDERED: ${{ needs.parity.result == 'success' && needs.validation.result == 'success' && needs.laptop.result == 'success' }}
+      # The laptop's render is never published, so whether it rendered decides
+      # nothing here; the summary still says.
+      RENDERED: ${{ needs.parity.result == 'success' && needs.validation.result == 'success' }}
       PUBLISH: ${{ github.event_name == 'release' || inputs.publish }}
     steps:
       - uses: actions/checkout@v4
@@ -336,7 +351,7 @@ jobs:
         run: |
           set -euo pipefail
           git init --quiet --initial-branch "$NOTEBOOKS_BRANCH" published
-          cp -R pages/* published/
+          for page in $(python3 notebooks/scripts/pages.py published); do cp -R "pages/$page" published/; done
           cd published
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'

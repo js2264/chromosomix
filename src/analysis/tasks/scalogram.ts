@@ -12,7 +12,7 @@
  * ## Two parameters, and both are about cost
  *
  * **The quantiles** decide how many bands the picture has. Five is the default
- * and is what Cournac's figures and `HiContacts`' `scalogram()` draw: a tenth, a
+ * and is what Lioy et al.'s figures and `HiContacts`' `scalogram()` draw: a tenth, a
  * quarter, a half, three quarters, nine tenths. They are offered as *sets*
  * rather than as a list to type, for the reason `tasks/insulation.ts` gives about
  * its window ladder — a free-text list needs a control this form has not got and
@@ -100,7 +100,7 @@ const PARAMS: readonly ParamSpec[] = [
       {
         value: 'standard',
         label: 'five (10, 25, 50, 75, 90 %)',
-        hint: 'Cournac et al.’s bands, and what HiContacts draws.',
+        hint: 'Lioy et al.’s bands, and what HiContacts draws.',
       },
       { value: 'quartiles', label: 'three (25, 50, 75 %)', hint: 'The quartiles alone.' },
       { value: 'deciles', label: 'nine (every 10 %)', hint: 'A finer picture; nine lanes of ink.' },
