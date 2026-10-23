@@ -102,9 +102,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 ### Changed
 
 - **About is three tabs, and the licences are one of them (§22.4).** *Overview* — what the viewer is,
-  the tutorial and the source — then *Notebooks* and *Licences*, with the build stamp and the version
-  picker under every tab rather than under the licences, which had pushed them out of sight on a
-  laptop. The row of tabs is walked with ← and →, Home and End.
+  the tutorial and the source, with the build stamp and the version picker in a footer under it that
+  never scrolls away — then *Notebooks* and *Licences*, each about that alone. The stamp used to sit
+  under the licences, which had pushed it out of sight on a laptop. The row of tabs is walked with
+  ← and →, Home and End.
 
 - **C1 is "no server-side component of our own" (§1).** It was "of any kind"; the site's telemetry
   (§31) goes to a third-party endpoint the app never reads from or waits on. The landing page's

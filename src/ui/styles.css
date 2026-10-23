@@ -5659,9 +5659,11 @@ canvas.is-frozen {
   font-size: var(--step--1);
 }
 
-/* About is three tabs over one footer: the row of tabs and the build stamp stay
-   put, and only the chosen tab's panel scrolls, so a tab as long as the
-   licences never takes the stamp off screen with it. */
+/* About is three tabs: the row of tabs stays put and only the chosen tab's
+   panel scrolls. The Overview tab carries the build stamp and the version
+   picker in a footer of its own, under the part that scrolls, so the stamp is
+   never scrolled off screen; the Notebooks and Licences tabs have none, being
+   about one thing each. */
 .about-body {
   display: flex;
   flex-direction: column;
@@ -5725,6 +5727,10 @@ canvas.is-frozen {
   padding: 0.3rem 0.9rem 0.6rem;
 }
 
+.about-feet {
+  flex: 0 0 auto;
+}
+
 .about-foot {
   flex: 0 0 auto;
   padding: 0 0.9rem 0.85rem;
@@ -5734,8 +5740,8 @@ canvas.is-frozen {
   margin-top: 0;
 }
 
-/* What the site counts, and the switch (§31): set off by the same rule as the
-   licences under it, since it is the same kind of answer — what this page does
+/* What the site sends, and the switch (§31), closing the Overview tab: set off
+   by a rule, since it is a different kind of answer — what this page does
    besides what it shows. */
 .about-telemetry {
   border-top: 1px solid var(--border);

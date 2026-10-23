@@ -9659,9 +9659,10 @@ reader takes the update it offers.
 
 **And the app names them, in *About*.** The dialog is three tabs — *Overview*, what the viewer is, the
 tutorial (§30.1), the source and, on the site, its telemetry and the switch (§31.4); *Notebooks*; and
-*Licences* (§22.4) — over the build stamp and the
-version picker, which stay under every tab and outside the part that scrolls, so a tab as long as the
-licences never takes the stamp off screen. It opens on *Overview*, with the caret on the row of tabs,
+*Licences* (§22.4). **The build stamp and the version picker are the Overview's alone**, in a footer
+under the part that scrolls, so however far the overview is scrolled the stamp stays on screen; the
+other two tabs are about one thing each, the notebooks and the licences, and carry nothing else — a
+stamp and a picker under them were a third subject on each. It opens on *Overview*, with the caret on the row of tabs,
 one stop walked with ← and →, Home and End. **The Notebooks tab** says in a sentence what the
 notebooks are, then gives each a block: its title, linking to its page in a new tab, and its address;
 what it holds chromosomix to; and, read from the `rendered.json` beside the page, the one line of what
@@ -10850,7 +10851,7 @@ everything those pull in, to every entry the notices name as copied or ported, a
 *Licence* section. Then one line on the marks of the stores and services the interface shows. The
 dialog is wider than a plain one for its three columns. The licences are a tab of their own because
 on the one page they shared with what the viewer is they pushed the build stamp out of sight on a
-laptop; the stamp is now under every tab.
+laptop; the stamp is now the Overview tab's footer, and the Licences tab holds the licences alone.
 
 Each check asserts the notices are there — the package's (§22.3), the archived pin's (§21), the
 desktop renderer's (§15) and the standalone page's (§19) — because a notice that stopped being
