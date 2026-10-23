@@ -3840,10 +3840,14 @@ for ax, plot_key, names_, unit in ((axes[1, 0], 'signal', names_signal, 'from th
         ax.plot(x, theirs_, color=REF, lw=3, label='deepTools plotProfile' if i == 0 else None,
                 gid=f'deepTools plotProfile, {name_}')
         ax.plot(x, mine_, color=APP_COLOUR, lw=1.2, label='chromosomix' if i == 0 else None, gid=f'chromosomix, {name_}')
-        ax.text(x[-1], mine_[-1], f' {name_}', fontsize=7, color=INK2, va='center')
+        # The signal's three curves meet at their ends and part at the peak: each is named beside its summit.
+        at = int(np.nanargmax(mine_)) if plot_key == 'signal' else -1
+        ax.annotate(name_, (x[at], mine_[at]), xytext=(12 if plot_key == 'signal' else 2, 0),
+                    textcoords='offset points', fontsize=7, color=INK2, va='center')
     ax.set(xlabel=unit, ylabel='fold change over control' if plot_key == 'signal' else 'insulation (log2)',
            title='d  CTCF and ATAC-seq' if plot_key == 'signal' else 'e  insulation, four scales')
-    ax.legend(loc='upper left')
+# One key for both, where d has room for it.
+axes[1, 0].legend(loc='center right', fontsize=7, handlelength=1.5)
 agreement(axes[1, 2], np.r_[gm_plot['signal']['heat_theirs'], gm_plot['insulation']['heat_theirs']],
           np.r_[gm_plot['signal']['heat_mine'], gm_plot['insulation']['heat_mine']], 'deepTools computeMatrix',
           'chromosomix', 'f  every bin of every row')
