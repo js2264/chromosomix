@@ -138,27 +138,33 @@ sign-in to work from there; the Dropbox key needs nothing registered per address
 
 The site sends anonymous telemetry about how it is used — a visit, a format opened, a task run, an
 error met — as words from fixed lists, with no cookie and nothing that identifies a reader, and
-About has the switch that turns it off (SPECS §31). Where it goes is one more **repository
-variable**:
+About has the switch that turns it off (SPECS §31). It goes to [Umami](https://umami.is), whose
+cloud's Hobby plan is free, and where it goes is two more **repository variables**:
 
 | Variable | What it holds | What it does |
 |---|---|---|
-| `TELEMETRY_ENDPOINT` | an endpoint speaking the [Plausible Events API](https://plausible.io/docs/events-api): `https://plausible.io/api/event` for Plausible's own service, or `https://<host>/api/event` for a self-hosted Plausible Community Edition | the site's build sends its telemetry there; unset, the site sends nothing and About says nothing about it |
+| `TELEMETRY_ENDPOINT` | `https://cloud.umami.is/api/send` for Umami Cloud, or `https://<host>/api/send` for a self-hosted Umami | the site's build sends its telemetry there |
+| `TELEMETRY_WEBSITE` | the site's **website id** in Umami, a UUID — under the website's settings, and in the snippet Umami offers as `data-website-id` | names the site the telemetry is filed under; not a secret, it authorises nothing |
 
-Register the site's domain with the service first (`chromosomix.app`, or the fork's own): every
-count names the site's root as its page and its host as its `domain`, and a service drops counts
-for a domain it does not know. Custom properties — `format`, `task`, `code` and the rest — appear
-once they are added under the site's settings in Plausible.
+Both or nothing: with either unset, or a website id that is not a UUID, the site sends nothing and
+About says nothing about it.
 
-Only the site's build is given it. The archived copy built beside it, the pull-request previews,
-the installers, the single file and the package write the endpoint empty in their own configs, so
-none of them can send on the site's behalf, and the site's build sends only at the site's own
-address (`homepage` in `package.json`) — a fork serving it from elsewhere sends nothing until it
-changes both. A dev server with the variable set offers the switch in About, which is how the
-screenshot of it is taken, and sends nothing, since `localhost` is not the site:
+In Umami, add a website whose domain is the site's (`chromosomix.app`, or the fork's own). Skip the
+tracking snippet it offers: the site posts to the endpoint itself. Visits appear on the website's
+dashboard as pageviews of `/`, with countries, browsers, systems and devices; the other counts —
+`open`, `task`, `error`, `allow`, `install` — appear under **Events** with nothing to set up, and
+their values (`format`, `task`, `code` and the rest) under each event's properties. Umami counts
+every value against the plan as an event of its own, so an `open` with its three values costs four.
+
+Only the site's build is given them. The archived copy built beside it, the pull-request previews,
+the installers, the single file and the package write both empty in their own configs, so none of
+them can send on the site's behalf, and the site's build sends only at the site's own address
+(`homepage` in `package.json`) — a fork serving it from elsewhere sends nothing until it changes
+both. A dev server with the variables set offers the switch in About, which is how the screenshot
+of it is taken, and sends nothing, since `localhost` is not the site:
 
 ```bash
-TELEMETRY_ENDPOINT=https://plausible.io/api/event npm run dev
+TELEMETRY_ENDPOINT=https://cloud.umami.is/api/send TELEMETRY_WEBSITE=<uuid> npm run dev
 ```
 
 ## The demo files

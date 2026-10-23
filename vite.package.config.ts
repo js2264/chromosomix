@@ -80,6 +80,7 @@ export default defineConfig({
   define: {
     ...base.define,
     __TELEMETRY_ENDPOINT__: JSON.stringify(''),
+    __TELEMETRY_WEBSITE__: JSON.stringify(''),
   },
   build: {
     ...base.build,

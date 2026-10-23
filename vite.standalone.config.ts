@@ -207,6 +207,7 @@ export default defineConfig({
     __DROPBOX_APP_KEY__: JSON.stringify(''),
     // Nothing to count to, and a policy that could not reach it (§19, §31).
     __TELEMETRY_ENDPOINT__: JSON.stringify(''),
+    __TELEMETRY_WEBSITE__: JSON.stringify(''),
     __STANDALONE__: 'true',
     // The mark, inline. `vite.pinned.config.ts` answers the same question by
     // emitting the file beside the build; this target may not emit a second

@@ -31,11 +31,12 @@ import {
 import { TASKS } from '@/analysis/registry'
 import { resetMounting } from '@/embed'
 
-const ENDPOINT = 'https://plausible.io/api/event'
+const ENDPOINT = 'https://cloud.umami.is/api/send'
+const WEBSITE = '4fb3a1c2-6d0e-4b7a-9c35-1e2f3a4b5c6d'
 
 /** The site is wherever jsdom says this page is, so the address check passes. */
 function asTheSite(): void {
-  resetTelemetryForTests({ endpoint: ENDPOINT, site: `${window.location.origin}/` })
+  resetTelemetryForTests({ endpoint: ENDPOINT, website: WEBSITE, site: `${window.location.origin}/` })
 }
 
 function setNavigator(field: string, value: unknown): void {
@@ -131,14 +132,21 @@ describe('tookBucket', () => {
 
 describe('where it counts', () => {
   it('counts nothing in a build with no endpoint, which is every build but the site', () => {
-    resetTelemetryForTests({ endpoint: '', site: `${window.location.origin}/` })
+    resetTelemetryForTests({ endpoint: '', website: WEBSITE, site: `${window.location.origin}/` })
     expect(telemetryOffered()).toBe(false)
     recordTelemetry({ name: 'install' })
     expect(queuedForTests()).toHaveLength(0)
   })
 
+  it('counts nothing without a website id, or with one that is not a UUID', () => {
+    for (const website of ['', 'chromosomix.app', '4fb3a1c2-6d0e-4b7a-9c35']) {
+      resetTelemetryForTests({ endpoint: ENDPOINT, website, site: `${window.location.origin}/` })
+      expect(telemetryOffered(), website).toBe(false)
+    }
+  })
+
   it('counts nothing away from the site’s own address — a fork, a mirror, a preview', () => {
-    resetTelemetryForTests({ endpoint: ENDPOINT, site: 'https://chromosomix.app/' })
+    resetTelemetryForTests({ endpoint: ENDPOINT, website: WEBSITE, site: 'https://chromosomix.app/' })
     expect(telemetryOffered()).toBe(true)
     expect(telemetrySending()).toBe(false)
     recordTelemetry({ name: 'install' })
@@ -169,7 +177,7 @@ describe('where it counts', () => {
   })
 
   it('names the endpoint’s host for the sentence in About', () => {
-    expect(telemetryHost()).toBe('plausible.io')
+    expect(telemetryHost()).toBe('cloud.umami.is')
   })
 })
 
@@ -202,8 +210,8 @@ describe('what goes out', () => {
     resetMounting()
     recordTelemetry({ name: 'open', what: 'map', format: 'mcool', from: 'local' })
     const [body] = queuedForTests()
-    expect(body.url).toBe(`${window.location.origin}/`)
-    expect(body.domain).toBe(window.location.hostname)
+    expect(body.payload.url).toBe('/')
+    expect(body.payload.hostname).toBe(window.location.hostname)
     const text = JSON.stringify(queuedForTests())
     expect(text).not.toContain('patient_04')
     expect(text).not.toContain('private.example')
@@ -224,11 +232,34 @@ describe('what goes out', () => {
       referrerPolicy: 'no-referrer',
       keepalive: true,
     })
+    // Umami's shape: the site's id, its host, the root, the count's name and
+    // its values as event data — and nothing else.
     expect(JSON.parse(String(init.body))).toEqual({
-      name: 'error',
-      url: `${window.location.origin}/`,
-      domain: window.location.hostname,
-      props: { code: 'remote-cors' },
+      type: 'event',
+      payload: {
+        website: WEBSITE,
+        hostname: window.location.hostname,
+        url: '/',
+        name: 'error',
+        data: { code: 'remote-cors' },
+      },
+    })
+  })
+
+  it('sends the visit with no name, which is what Umami files as a pageview', () => {
+    startTelemetry()
+    const [visit] = queuedForTests()
+    expect(visit.payload.name).toBeUndefined()
+    expect(Object.keys(visit.payload.data ?? {}).sort()).toEqual(['installed', 'version'])
+  })
+
+  it('sends a count with no values without a data field', () => {
+    recordTelemetry({ name: 'install' })
+    expect(queuedForTests()[0].payload).toEqual({
+      website: WEBSITE,
+      hostname: window.location.hostname,
+      url: '/',
+      name: 'install',
     })
   })
 
@@ -249,6 +280,6 @@ describe('what goes out', () => {
   it('counts the visit once, however often it is started', () => {
     startTelemetry()
     startTelemetry()
-    expect(queuedForTests().filter((body) => body.name === 'pageview')).toHaveLength(1)
+    expect(queuedForTests().filter((body) => body.payload.name === undefined)).toHaveLength(1)
   })
 })

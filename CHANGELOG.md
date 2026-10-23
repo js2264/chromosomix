@@ -47,8 +47,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   format opened, a task run and how long it took, an error code met, an install and an *allow access*
   answered — each a word from a fixed list, checked against it before it is sent, and never a file
   name, a URL, a locus, a message or the page's own address. Posted with no cookie and no referrer to
-  the endpoint in the repository's `TELEMETRY_ENDPOINT` variable (the Plausible Events API;
-  docs/deploy.md), when the page is idle, at most two hundred a page. On by default with no banner;
+  Umami (`https://cloud.umami.is/api/send`, free up to its Hobby plan's limit, or a self-hosted
+  Umami), named by the repository's `TELEMETRY_ENDPOINT` and `TELEMETRY_WEBSITE` variables
+  (docs/deploy.md), when the page is idle, at most two hundred a page. On by default with no banner;
   **About → telemetry** turns it off at once, *forget everything* keeps it off, and Global Privacy
   Control or Do Not Track sends nothing. Only the site's own build at the site's own address sends any:
   the archived pins, the previews, the package, the desktop app, the single file, embeds and

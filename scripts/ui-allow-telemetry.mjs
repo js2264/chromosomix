@@ -19,7 +19,8 @@
  * back, its track's row still asking, and its own button pressed (aa03 … aa05).
  *
  * **telemetry** (on a build). It is sent only by the site's own build at
- * the site's own address, so this builds the site with `TELEMETRY_ENDPOINT` set
+ * the site's own address, so this builds the site with `TELEMETRY_ENDPOINT` and
+ * `TELEMETRY_WEBSITE` set — Umami Cloud's endpoint and a made-up website id
  * (into the out-dir, under its policy), serves it as `https://chromosomix.app/`
  * by routing that origin to the files, and catches every request to the
  * endpoint instead of sending it — printing each body and its headers and
@@ -51,7 +52,9 @@ const OUT = resolve(process.argv[2] ?? 'gallery')
 const BASE = process.env.GALLERY_BASE ?? 'http://127.0.0.1:5173'
 const ONLY = process.env.GALLERY_ONLY ?? ''
 const SITE = 'https://chromosomix.app'
-const ENDPOINT = 'https://plausible.io/api/event'
+const ENDPOINT = 'https://cloud.umami.is/api/send'
+/** A website id of the right shape, filed nowhere: every request to the endpoint is caught. */
+const WEBSITE = '4fb3a1c2-6d0e-4b7a-9c35-1e2f3a4b5c6d'
 mkdirSync(OUT, { recursive: true })
 const browsers = process.env.PLAYWRIGHT_BROWSERS_PATH
 const executablePath =
@@ -279,10 +282,10 @@ const TYPES = {
 
 async function telemetryPart() {
   const dist = join(OUT, 'dist-telemetry')
-  console.log('building the site with TELEMETRY_ENDPOINT set…')
+  console.log('building the site with TELEMETRY_ENDPOINT and TELEMETRY_WEBSITE set…')
   execSync(`npx vite build --outDir ${JSON.stringify(dist)} --emptyOutDir`, {
     stdio: 'inherit',
-    env: { ...process.env, TELEMETRY_ENDPOINT: ENDPOINT },
+    env: { ...process.env, TELEMETRY_ENDPOINT: ENDPOINT, TELEMETRY_WEBSITE: WEBSITE },
   })
 
   // Service workers blocked: they would fetch around the routing below.
@@ -383,8 +386,13 @@ async function telemetryPart() {
   if (/Yeast|patient|secret|demo|\.cool|\.bw/i.test(text)) fail('a count carries a file name')
   if (counts.some((count) => count.cookie !== null || count.referer !== null)) fail('a count carried a cookie or a referrer')
   if (counts.some((count) => count.at > off + 1000)) fail('a count went out with the switch off')
+  // Umami's shape: a nameless payload is the visit, every other count by its name.
+  const named = (name) => bodies.some((body) => (name === 'pageview' ? body?.payload?.name === undefined : body?.payload?.name === name))
   for (const name of ['pageview', 'open', 'task', 'error']) {
-    if (!bodies.some((body) => body?.name === name)) fail(`no ${name} count was caught`)
+    if (!named(name)) fail(`no ${name} count was caught`)
+  }
+  if (bodies.some((body) => body?.type !== 'event' || body?.payload?.website !== WEBSITE || body?.payload?.url !== '/')) {
+    fail('a count is not in the shape Umami takes')
   }
   if (refusals.length > 0) console.log('policy refusals:', refusals)
   await context.close()

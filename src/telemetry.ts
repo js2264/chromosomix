@@ -19,14 +19,16 @@
  * (every count names the site's root, never `location`), the referring page.
  * No cookie is set and none is sent (`credentials: 'omit'`), nothing is written
  * to identify this browser, and the request carries no referrer. What tells
- * visitors apart, if anything does, is the analytics service's own daily-salted
- * hash of the request, which it documents and does not store.
+ * visitors apart is the analytics service's own: Umami hashes the request's
+ * address and browser with a salt it rotates every month, places the visit in a
+ * country, region and city from the address, and stores the address nowhere.
  *
  * ## Where it runs
  *
  * The site, as deployed, and nothing else: the web target, built with an
- * endpoint (`TELEMETRY_ENDPOINT`, a repository variable the deploy passes, empty in
- * every other build), at the site's own address, not an archived or package
+ * endpoint and the site's id there (`TELEMETRY_ENDPOINT` and `TELEMETRY_WEBSITE`,
+ * repository variables the deploy passes, empty in every other build), at the
+ * site's own address, not an archived or package
  * copy, not inside somebody else's page, and not under automation — a test, the
  * gallery, a crawler that says it is one. The desktop app and the single file
  * never send any; the single file could not if it tried (§19's policy).
@@ -51,9 +53,20 @@ import { HOMEPAGE, TARGET, VERSION } from './version'
 import { IS_PINNED, IS_PORTABLE } from './versions'
 
 declare const __TELEMETRY_ENDPOINT__: string
+declare const __TELEMETRY_WEBSITE__: string
 
 /** The endpoint this build counts to, or `''`: the site's build alone carries one. */
 let endpoint = (typeof __TELEMETRY_ENDPOINT__ === 'string' ? __TELEMETRY_ENDPOINT__ : '').trim()
+
+/**
+ * The site's id at that endpoint — Umami's *website id*, a UUID it shows in the
+ * site's settings — or `''`. Not a secret: it names where counts are filed and
+ * authorises nothing, which is why Umami's own snippet prints it in the page.
+ */
+let website = (typeof __TELEMETRY_WEBSITE__ === 'string' ? __TELEMETRY_WEBSITE__ : '').trim()
+
+/** A website id as Umami writes one; anything else is a build that counts nothing. */
+const WEBSITE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** The site's own address, from `package.json`'s `homepage`; replaced only by a test. */
 let homepage = HOMEPAGE
@@ -220,13 +233,20 @@ function siteUrl(): URL | null {
 }
 
 /**
- * Whether this build counts at all: the site's build, with an endpoint, not an
- * archived or package copy, not inside somebody else's page. The About dialog
+ * Whether this build counts at all: the site's build, with an endpoint and a
+ * website id, not an archived or package copy, not inside somebody else's page. The About dialog
  * offers the switch where this is true and says nothing where it is not — a
  * build that never counts has nothing to turn off (§8.5).
  */
 export function telemetryOffered(): boolean {
-  return endpoint !== '' && TARGET === 'web' && !IS_PINNED && !IS_PORTABLE && !embedded()
+  return (
+    endpoint !== '' &&
+    WEBSITE_ID.test(website) &&
+    TARGET === 'web' &&
+    !IS_PINNED &&
+    !IS_PORTABLE &&
+    !embedded()
+  )
 }
 
 /** The endpoint's host, for the sentence that says where the counts go. */
@@ -289,11 +309,22 @@ export function telemetrySending(): boolean {
 // Sending
 // ---------------------------------------------------------------------------
 
+/**
+ * One count, in the shape Umami's `/api/send` takes. A payload with no `name`
+ * is a pageview there, so the visit is sent nameless and every other count
+ * under its own name, with its values as `data` — each of which Umami counts
+ * against the plan as an event of its own, so a count carries no value it
+ * does not need.
+ */
 interface Body {
-  name: string
-  url: string
-  domain: string
-  props: Record<string, string>
+  type: 'event'
+  payload: {
+    website: string
+    hostname: string
+    url: '/'
+    name?: string
+    data?: Record<string, string>
+  }
 }
 
 const queue: Body[] = []
@@ -315,7 +346,16 @@ export function recordTelemetry(event: TelemetryEvent): void {
   const site = siteUrl()
   if (props === null || site === null || sent >= MAX_PER_PAGE) return
   sent += 1
-  queue.push({ name: event.name, url: site.href, domain: site.hostname, props })
+  queue.push({
+    type: 'event',
+    payload: {
+      website,
+      hostname: site.hostname,
+      url: '/',
+      ...(event.name === 'pageview' ? {} : { name: event.name }),
+      ...(Object.keys(props).length === 0 ? {} : { data: props }),
+    },
+  })
   schedule()
 }
 
@@ -345,7 +385,8 @@ function flush(): void {
  * endpoint's cookies and this must carry none: `credentials: 'omit'`, no
  * referrer, `no-cors` so nothing is preflighted and nothing is read back, and
  * `keepalive` so a count queued as the page closes still leaves. The body is
- * plain text, which is what the endpoint parses as JSON.
+ * JSON sent as plain text, which keeps the request simple enough to need no
+ * preflight; Umami reads the body as JSON whatever its type.
  */
 function post(body: Body): void {
   try {
@@ -375,9 +416,12 @@ export function startTelemetry(): void {
   window.addEventListener('pagehide', flush)
 }
 
-/** Back to a fresh page, counting to `endpoint` for a site at `site`. **Tests only.** */
-export function resetTelemetryForTests(options: { endpoint?: string; site?: string } = {}): void {
+/** Back to a fresh page, counting to `endpoint` as `website` for a site at `site`. **Tests only.** */
+export function resetTelemetryForTests(
+  options: { endpoint?: string; website?: string; site?: string } = {},
+): void {
   endpoint = options.endpoint ?? ''
+  website = options.website ?? ''
   homepage = options.site ?? ''
   queue.length = 0
   sent = 0

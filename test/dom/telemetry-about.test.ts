@@ -28,6 +28,8 @@ afterEach(() => {
   resetTelemetryForTests()
 })
 
+const WEBSITE = '4fb3a1c2-6d0e-4b7a-9c35-1e2f3a4b5c6d'
+
 const section = (): HTMLElement | null => document.querySelector('.about-telemetry')
 const toggle = (): HTMLButtonElement | null => document.querySelector('.about-telemetry .btn-toggle')
 
@@ -39,18 +41,18 @@ describe('About, on the subject of telemetry', () => {
   })
 
   it('says what is counted, where it goes and what never is, with the switch lit', () => {
-    resetTelemetryForTests({ endpoint: 'https://plausible.io/api/event' })
+    resetTelemetryForTests({ endpoint: 'https://cloud.umami.is/api/send', website: WEBSITE })
     openAbout('https://example.org/repo')
     const text = section()?.textContent ?? ''
     expect(text).toContain('Telemetry')
-    expect(text).toContain('plausible.io')
+    expect(text).toContain('cloud.umami.is')
     expect(text).toContain('never a file name, an address, a place on the genome')
     expect(toggle()?.textContent).toBe('telemetry')
     expect(toggle()?.getAttribute('aria-pressed')).toBe('true')
   })
 
   it('turns them off for this browser, and on again', () => {
-    resetTelemetryForTests({ endpoint: 'https://plausible.io/api/event' })
+    resetTelemetryForTests({ endpoint: 'https://cloud.umami.is/api/send', website: WEBSITE })
     openAbout('https://example.org/repo')
     toggle()?.click()
     expect(toggle()?.getAttribute('aria-pressed')).toBe('false')
@@ -62,7 +64,7 @@ describe('About, on the subject of telemetry', () => {
 
   it('offers no switch to a browser that already asks not to be tracked, and says it is obeyed', () => {
     setNavigator('globalPrivacyControl', true)
-    resetTelemetryForTests({ endpoint: 'https://plausible.io/api/event' })
+    resetTelemetryForTests({ endpoint: 'https://cloud.umami.is/api/send', website: WEBSITE })
     openAbout('https://example.org/repo')
     expect(toggle()).toBeNull()
     expect(section()?.textContent).toContain('so this one sends nothing')

@@ -14906,23 +14906,30 @@ an error's message, which names the file. Every count names the site's root as i
 
 ### 31.2 How it is sent
 
-One `POST` a count, to the endpoint the build names, in the Plausible Events API's shape — `name`,
-`url`, `domain` and `props` as JSON in a plain-text body — with `credentials: 'omit'`, so no cookie
+One `POST` a count, to the endpoint the build names, in the shape Umami's `/api/send` takes —
+`{type: 'event', payload: {website, hostname, url: '/', name, data}}` as JSON in a plain-text body,
+which Umami reads as JSON whatever its type. The visit is sent with no `name`, which Umami files as
+a pageview; every other count goes under its name with its values as `data`, and since Umami counts
+each value against its plan as an event of its own, a count carries no value it does not need. The
+`website` is the site's id at Umami, a UUID it prints in its own snippet: it names where counts are
+filed and authorises nothing. The request goes with `credentials: 'omit'`, so no cookie
 goes either way; `referrerPolicy: 'no-referrer'`; `no-cors`, so nothing is preflighted and nothing
 is read back; and `keepalive`, so a count queued as the page closes still leaves. Not `sendBeacon`,
 which always carries the endpoint's cookies. Counts are queued and sent when the page is idle,
 behind whatever the reader is waiting on, so none shares a connection with a map's first read; at
 most two hundred go from one page, since a loop of errors is not a usage pattern. Nothing is
-written to tell this browser from another: what tells visitors apart, if anything does, is the
-service's own daily-salted hash of the request, which Plausible documents and does not store. The
+written to tell this browser from another: what tells visitors apart is the service's own — Umami
+hashes the request's address and browser with a salt it rotates every month, places the visit in a
+country, region and city from the address, and stores the address nowhere. The
 app never waits on a count and never reads one back, which is what keeps C1 true (§1).
 
 ### 31.3 Where it runs
 
 **The site, as deployed, and nothing else.** The deploy passes the repository's `TELEMETRY_ENDPOINT`
-variable to the site's build alone (docs/deploy.md); every other config writes the endpoint empty
-— the archived pins and the pull-request previews, the package, the desktop app, the single file
-and the command line — and a build with no endpoint counts nothing. At run time it also takes the
+and `TELEMETRY_WEBSITE` variables to the site's build alone (docs/deploy.md); every other config
+writes both empty — the archived pins and the pull-request previews, the package, the desktop app,
+the single file and the command line — and a build without an endpoint and a website id shaped as
+a UUID counts nothing. At run time it also takes the
 web target, a page that is not a pin or a package copy, not inside somebody else's page (§21), at
 the site's own address — a fork, a lab's mirror or `vite preview` serves the same build from
 another — and not under automation, which keeps tests, the gallery and the notebooks' runs out. The

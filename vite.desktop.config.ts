@@ -61,6 +61,7 @@ export default defineConfig({
     __APP_TARGET__: JSON.stringify('desktop'),
     // The desktop app counts nothing (§31).
     __TELEMETRY_ENDPOINT__: JSON.stringify(''),
+    __TELEMETRY_WEBSITE__: JSON.stringify(''),
     // `__DEMO_BASE__` is deliberately *not* overridden any more. It used to name the website,
     // because the demos were published beside the app and a renderer served
     // from `app://viewer` had to be told where the website was — and it had to
