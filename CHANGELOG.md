@@ -25,6 +25,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   it (`test/unit/pairs-stats.test.ts`, `npm run fixtures:pairstats`): every key and every count and
   fraction the same, the library estimate to 1e-12. The pair type is counted and nothing is decided
   from it — the map is the same with the column or without it.
+  The card draws three small charts from the same counts, with no run: the pair types as one bar,
+  cis and cis past 1–40 kb as columns, and P(s) by orientation with where the four meet — in the
+  theme's colours, dark included.
 
 - **The app held to its own command line, in a notebook (§18.10).** `notebooks/parity.qmd` runs ten
   tasks in the app, in headless Chromium — insulation, compartments, P(s), coverage, virtual 4C, loop

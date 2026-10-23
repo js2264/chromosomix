@@ -580,10 +580,21 @@ says that too.
 
 It lands as the **Pairs statistics** card in the General column, under the File card's own facts and
 over the stored metadata: the rows a library is judged by — records, mapped, one side, unmapped,
-duplicates, cis, trans, cis past each distance, the library's size and where the orientations meet —
-each a count and the share pairtools and MultiQC give it, over pairtools' own denominator (said on the
-key's tooltip, so the value stays short enough for a narrow column); the pair types as one line of
-chips, a type to a chip; and **save .stats**, which writes everything pairtools counts in pairtools'
+duplicates, cis, trans, the library's size and where the orientations meet — each a count and the
+share pairtools and MultiQC give it, over pairtools' own denominator (said on the key's tooltip, so the
+value stays short enough for a narrow column); and **three small charts**, drawn from the same counts
+with no run, each under the rows it pictures:
+- the pair types, as one bar of every record by its type, with the chips under it as its key — the
+  three commonest types of at least 2 % in colour, the rest folded into one grey;
+- cis, and cis at least 1, 2, 4, 10, 20 and 40 kb apart, as columns of their shares of the unique
+  mapped pairs, each labelled with its share;
+- P(s) by orientation, the four `dist_freq` curves pairtools counts, each bin's count over its width,
+  log against log, a dash as well as a colour for each, with a rule where the four meet.
+
+They are drawn by hand in SVG at the column's own width, in the theme's colours (the analysis figures'
+palette is pinned light, which a side column must not be), and each is an image with a label saying
+what it shows; a chart with nothing to draw — no `pair_type` column, no strands, no cis pair — is left
+out rather than drawn empty. **save .stats** which writes everything pairtools counts in pairtools'
 own format, key and value a line in its order and its spelling of a number (`0.05`, `1e-05`, `inf`), so
 MultiQC and `pairtools stats --merge` read it as theirs. The shell's answer is `chromosomix stats
 <file.pairs.gz>`, through the same pass at one bin a sequence, which writes `<name>.stats` into `--out`

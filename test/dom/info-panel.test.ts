@@ -455,12 +455,16 @@ describe('the pairs statistics (§3.7)', () => {
   })
 
   it('says what pairtools would, each share over pairtools’ own denominator', () => {
-    const rows = rowsOf(panel(pairsResult(counted())))
+    const view = panel(pairsResult(counted()))
+    const rows = rowsOf(view)
     expect(rows['records']).toBe('1,000')
     expect(rows['mapped']).toBe('900 · 90.0%')
     expect(rows['duplicates']).toBe('90 · 10.0%')
     expect(rows['cis']).toBe('720 · 88.9%')
-    expect(rows['cis ≥ 10 kb']).toBe('19.8%')
+    // The shares past each distance are the cis chart's columns, not rows.
+    expect(rows['cis ≥ 10 kb']).toBeUndefined()
+    const cisChart = view.el.querySelector('.pairs-stats-cis-block svg')
+    expect(cisChart?.getAttribute('aria-label')).toContain('19.8% at least 10 kb apart')
     expect(rows['library size']).toMatch(/molecules$/)
     // The four orientations agree everywhere in this library.
     expect(rows['strands meet']).toBe('everywhere')

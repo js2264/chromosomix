@@ -8670,6 +8670,177 @@ body.is-carrying-card * {
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * The card's three charts (`ui/pairsCharts.ts`) and their own series.
+ *
+ * A side card follows the theme, so these cannot be the analysis figures'
+ * Okabe–Ito, which is pinned light with the figures. Blue, orange and green
+ * from one validated set, each with its own dark step, and the fourth a
+ * neutral ink: four hues cannot all be told apart pairwise under a colour-
+ * vision deficiency, and lines that cross are compared pairwise. The dashes
+ * (`pairsCharts.ts`) carry the four apart without colour at all. `--pairs-other`
+ * is the pair types folded into one segment, a grey a step off the border.
+ */
+.pairs-stats {
+  --pairs-s1: #2a78d6;
+  --pairs-s2: #eb6834;
+  --pairs-s3: #179f70;
+  --pairs-s4: #54565a;
+  --pairs-other: #a6a8ac;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .pairs-stats {
+    --pairs-s1: #3987e5;
+    --pairs-s2: #d95926;
+    --pairs-s3: #199e70;
+    --pairs-s4: #b3b5b9;
+    --pairs-other: #6b6d71;
+  }
+}
+
+:root[data-theme='dark'] .pairs-stats {
+  --pairs-s1: #3987e5;
+  --pairs-s2: #d95926;
+  --pairs-s3: #199e70;
+  --pairs-s4: #b3b5b9;
+  --pairs-other: #6b6d71;
+}
+
+/* A chart is a row of the table that spans both its columns, under the rows
+   it pictures, so the keys either side of it keep one column. */
+.pairs-stats-chart {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0.3rem 0 0.45rem;
+}
+
+.pairs-stats-caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.1rem 0.6rem;
+  color: var(--text-dim);
+  margin: 0 0 0.25rem;
+}
+
+.pairs-stats-svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+.pairs-stats-label {
+  font-family: var(--sans);
+  font-variant-numeric: tabular-nums;
+  fill: var(--text-dim);
+}
+
+.pairs-stats-grid line {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.pairs-stats-grid .pairs-stats-axis {
+  stroke: var(--border-strong);
+}
+
+.pairs-stats-line {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.pairs-stats-rule {
+  stroke: var(--text-faint);
+  stroke-width: 1;
+}
+
+/* The convergence's value is read over the lines, so it is ink with a halo
+   of the card under it. */
+.pairs-stats-meet-label {
+  fill: var(--text);
+  paint-order: stroke;
+  stroke: var(--bg-raised);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.pairs-stats-line.is-s1,
+.pairs-stats-key-line .is-s1 {
+  stroke: var(--pairs-s1);
+}
+
+.pairs-stats-line.is-s2,
+.pairs-stats-key-line .is-s2 {
+  stroke: var(--pairs-s2);
+}
+
+.pairs-stats-line.is-s3,
+.pairs-stats-key-line .is-s3 {
+  stroke: var(--pairs-s3);
+}
+
+.pairs-stats-line.is-s4,
+.pairs-stats-key-line .is-s4 {
+  stroke: var(--pairs-s4);
+}
+
+/* Further between two keys than between a key's line and its name, so each
+   name reads as the line's on its left. */
+.pairs-stats-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.65rem;
+  font-family: var(--mono);
+}
+
+.pairs-stats-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.pairs-stats-key-line {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.pairs-stats-seg.is-s1,
+.pairs-stats-swatch.is-s1 {
+  fill: var(--pairs-s1);
+  background: var(--pairs-s1);
+}
+
+.pairs-stats-seg.is-s2,
+.pairs-stats-swatch.is-s2 {
+  fill: var(--pairs-s2);
+  background: var(--pairs-s2);
+}
+
+.pairs-stats-seg.is-s3,
+.pairs-stats-swatch.is-s3 {
+  fill: var(--pairs-s3);
+  background: var(--pairs-s3);
+}
+
+.pairs-stats-seg.is-other,
+.pairs-stats-swatch.is-other {
+  fill: var(--pairs-other);
+  background: var(--pairs-other);
+}
+
+.pairs-stats-track {
+  fill: var(--bg-muted);
+}
+
+.pairs-stats-fill {
+  fill: var(--accent);
+}
+
 .pairs-stats-types {
   display: flex;
   flex-wrap: wrap;
@@ -8677,16 +8848,21 @@ body.is-carrying-card * {
   font-family: var(--mono);
   font-size: var(--step--1);
   color: var(--text-dim);
-  margin: 0.45rem 0 0;
-}
-
-.pairs-stats-types-key {
-  font-family: var(--sans);
-  width: 100%;
+  margin: 0.35rem 0 0;
 }
 
 .pairs-stats-type {
+  display: inline-flex;
+  align-items: center;
   white-space: nowrap;
+}
+
+.pairs-stats-swatch {
+  flex: 0 0 auto;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 2px;
+  margin-right: 0.25rem;
 }
 
 .pairs-stats > .hint {
