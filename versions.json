@@ -1,6 +1,13 @@
 {
-  "latest": "48b7c94",
+  "latest": "8ba9a22",
   "versions": [
+    {
+      "commit": "8ba9a22",
+      "version": "0.16.0",
+      "date": "2026-10-23T21:12:08+02:00",
+      "subject": "The lower triangle in a reading of its own (§5.10) (#137)",
+      "tag": ""
+    },
     {
       "commit": "48b7c94",
       "version": "0.16.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "478b1c8",
-      "version": "0.13.0",
-      "date": "2026-10-16T09:45:13+02:00",
-      "subject": "Validation and timing notebooks, published at /validation/ and /timings/ with every release (#109)",
-      "tag": ""
-    },
-    {
       "commit": "7a6fea2",
       "version": "0.13.0",
       "date": "2026-09-20T22:39:26+02:00",
@@ -213,13 +213,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 137,
-      "commit": "8cdb025",
-      "title": "The lower triangle in a reading of its own (§5.10)",
-      "branch": "ccr-ff1dfdeb-fklimu",
-      "date": "2026-10-23T17:29:09Z"
-    },
     {
       "number": 122,
       "commit": "e818753",
