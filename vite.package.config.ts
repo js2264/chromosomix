@@ -79,7 +79,7 @@ export default defineConfig({
   // A copy on somebody else's server counts nothing on the site's behalf (§31).
   define: {
     ...base.define,
-    __USAGE_ENDPOINT__: JSON.stringify(''),
+    __TELEMETRY_ENDPOINT__: JSON.stringify(''),
   },
   build: {
     ...base.build,

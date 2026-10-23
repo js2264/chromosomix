@@ -206,7 +206,7 @@ export default defineConfig({
     __GOOGLE_API_KEY__: JSON.stringify(''),
     __DROPBOX_APP_KEY__: JSON.stringify(''),
     // Nothing to count to, and a policy that could not reach it (§19, §31).
-    __USAGE_ENDPOINT__: JSON.stringify(''),
+    __TELEMETRY_ENDPOINT__: JSON.stringify(''),
     __STANDALONE__: 'true',
     // The mark, inline. `vite.pinned.config.ts` answers the same question by
     // emitting the file beside the build; this target may not emit a second

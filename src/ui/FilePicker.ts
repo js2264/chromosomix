@@ -39,7 +39,7 @@
  */
 
 import { IS_STANDALONE } from '../version'
-import { usageCountsSending } from '../telemetry'
+import { telemetrySending } from '../telemetry'
 import { icon, iconButton, markButton } from './icons'
 import type { IconName } from './icons'
 import { button, el } from './dom'
@@ -376,15 +376,15 @@ export class FilePicker {
             'in place, a few kilobytes at a time, by code running on your own computer. Quit ' +
             'and nothing remains.',
         }),
-        // Said where the site does count (§31), and nowhere else: a promise
-        // about files that left out a count going out would be the one thing on
-        // this line a reader could later call misleading.
-        ...(usageCountsSending()
+        // Said where the site does send telemetry (§31), and nowhere else: a
+        // promise about files that left out the telemetry going out would be the
+        // one thing on this line a reader could later call misleading.
+        ...(telemetrySending()
           ? [
               el('span', {
                 text:
-                  ' The site does count which kinds of file are opened and which analyses run — ' +
-                  'never a name or an address — and About turns that off.',
+                  ' The site does send anonymous telemetry — which kinds of file are opened and which ' +
+                  'analyses run, never a name or an address — and About turns it off.',
               }),
             ]
           : []),

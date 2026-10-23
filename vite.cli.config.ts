@@ -94,7 +94,7 @@ export default defineConfig({
     __GOOGLE_CLIENT_ID__: JSON.stringify(''),
     __GOOGLE_API_KEY__: JSON.stringify(''),
     __DROPBOX_APP_KEY__: JSON.stringify(''),
-    __USAGE_ENDPOINT__: JSON.stringify(''),
+    __TELEMETRY_ENDPOINT__: JSON.stringify(''),
   },
   // Nothing in `public/` belongs beside a command-line program; without this
   // the icons and the web manifest are copied into `dist-cli/`.

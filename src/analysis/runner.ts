@@ -39,7 +39,7 @@ import { isCancellation, type Cancellable } from '../worker/client'
 import type { OrientationSummary, PairsBinning, SourceSpec } from '../worker/protocol'
 import { abortError, idParam, listParam, runnerParams } from './job'
 import { taskById } from './registry'
-import { countUsage } from '../telemetry'
+import { recordTelemetry } from '../telemetry'
 import {
   defaultParams,
   readsMap,
@@ -1111,11 +1111,11 @@ export class AnalysisRunner {
       // back `interrupted` after a reload, which would be this bookkeeping
       // blaming the browser.
       endAction(recorded, outcome ?? { status: 'cancelled' })
-      // The usage count (§31): the task's registry id, how it ended and how long
-      // it took, bucketed. Only a registered id is ever a count.
+      // Telemetry (§31): the task's registry id, how it ended and how long it
+      // took, bucketed. Only a registered id is ever sent.
       if (taskById(job.task.id) !== undefined) {
         const status = outcome?.status ?? 'cancelled'
-        countUsage({
+        recordTelemetry({
           name: 'task',
           task: job.task.id,
           outcome: status === 'ok' ? 'done' : status === 'failed' ? 'failed' : 'cancelled',

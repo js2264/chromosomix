@@ -34,22 +34,23 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   dropped or chosen file's grant across a restart but asks again before handing the file over, and
   asking needs a click the restore path does not have — so a restored tab landed on *drop the same
   file below* for a file the browser still knew, under a red note saying no page could re-open it.
-  In that note's place the picker now says *This browser remembers rep1.cool and only needs your
-  permission to read it again* beside **allow access to rep1.cool**, and a detached track reads
-  *remembered file — allow access to draw it again* with **allow access** before *or re-open this
-  file*. One yes answers for every file the site held a grant for, and offers
-  *allow on every visit*: the tab's map and tracks reopen, and so does every other tab on screen
-  waiting on a file — a tab restored and never looked at stays unopened until clicked. Firefox and
-  Safari keep no grants, and show no button.
+  In that note's place the picker now says *This browser remembers rep1.cool and 4 other files, and
+  only needs your permission to read them again* beside **allow access to all 5 files**, and a
+  detached track reads *remembered file — allow access to draw it again* with **allow access** before
+  *or re-open this file*. One press asks for every file the browser remembers, the one the tab is
+  waiting on first, and Chromium's prompt offers *allow on every visit*: the tab's map, its tracks
+  and their indexes reopen, and so does every other tab on screen waiting on a file — a tab restored
+  and never looked at stays unopened until clicked. Firefox and Safari keep no grants, and show no
+  button.
 
-- **Usage counts on the website, with a switch in About (§31).** The site counts a visit, a format
-  opened, a task run and how long it took, an error code met, an install and an *allow access*
+- **Anonymous telemetry on the website, with a switch in About (§31).** The site sends a visit, a
+  format opened, a task run and how long it took, an error code met, an install and an *allow access*
   answered — each a word from a fixed list, checked against it before it is sent, and never a file
   name, a URL, a locus, a message or the page's own address. Posted with no cookie and no referrer to
-  the endpoint in the repository's `USAGE_ENDPOINT` variable (the Plausible Events API;
+  the endpoint in the repository's `TELEMETRY_ENDPOINT` variable (the Plausible Events API;
   docs/deploy.md), when the page is idle, at most two hundred a page. On by default with no banner;
-  **About → usage counts** turns it off at once, *forget everything* keeps it off, and Global Privacy
-  Control or Do Not Track sends nothing. Only the site's own build at the site's own address counts:
+  **About → telemetry** turns it off at once, *forget everything* keeps it off, and Global Privacy
+  Control or Do Not Track sends nothing. Only the site's own build at the site's own address sends any:
   the archived pins, the previews, the package, the desktop app, the single file, embeds and
   automated browsers never do.
 
@@ -104,10 +105,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   picker under every tab rather than under the licences, which had pushed them out of sight on a
   laptop. The row of tabs is walked with ← and →, Home and End.
 
-- **C1 is "no server-side component of our own" (§1).** It was "of any kind"; the site's usage
-  counts (§31) go to a third-party endpoint the app never reads from or waits on. The landing page's
-  privacy note says no server ever sees a file, and adds a clause on the counts where the site is
-  counting; the README says the same.
+- **C1 is "no server-side component of our own" (§1).** It was "of any kind"; the site's telemetry
+  (§31) goes to a third-party endpoint the app never reads from or waits on. The landing page's
+  privacy note says no server ever sees a file, and adds a clause on the telemetry where the site
+  sends it; the README says the same.
 
 - **pastis-NB's fit runs on every core, and gives the same model on any number of them (§25.6,
   §23.1).** Each evaluation of the likelihood, and of pastis' MDS start before it, is now summed in

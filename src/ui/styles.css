@@ -5737,12 +5737,12 @@ canvas.is-frozen {
 /* What the site counts, and the switch (§31): set off by the same rule as the
    licences under it, since it is the same kind of answer — what this page does
    besides what it shows. */
-.about-usage {
+.about-telemetry {
   border-top: 1px solid var(--border);
   margin-top: 0.9rem;
 }
 
-.about-usage-switch {
+.about-telemetry-switch {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -5750,7 +5750,7 @@ canvas.is-frozen {
   margin: 0.4rem 0 0.2rem;
 }
 
-.about-usage-switch .hint {
+.about-telemetry-switch .hint {
   margin: 0;
 }
 

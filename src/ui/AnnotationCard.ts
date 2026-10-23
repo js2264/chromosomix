@@ -36,8 +36,8 @@ import { OVERLAY_DRAG_TYPE, TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt } fro
 import { tabAmong } from './tabWalk'
 import { dragHasFileRow } from './fileDrag'
 import { chooseFiles, filesFrom } from './chooseFiles'
-import { allowHandle, hasHandle } from '../state/handles'
-import { countUsage } from '../telemetry'
+import { allowHandles, hasHandle } from '../state/handles'
+import { recordTelemetry } from '../telemetry'
 import { pairIndexes } from '../annotations/loader'
 import { cardTitle, icon, iconButton } from './icons'
 import { batchFields } from './batchSettings'
@@ -620,9 +620,11 @@ export class AnnotationCard {
 
   /**
    * *allow access*, where this browser still holds a grant for the file that
-   * has lapsed to ask first (§5.6) — the click the permission prompt needs.
-   * The row comes back through the announcement every tab hears, along with
-   * every other file the browser's answer covers, so nothing is reattached here.
+   * has lapsed to ask first (§5.6) — the click the permission prompt needs, spent
+   * on this file and then on every other one the browser remembers, as the
+   * picker's button spends it. The row comes back through the announcement every
+   * tab hears, with every other file the answer covers, so nothing is
+   * reattached here.
    * A grant forgotten on the way — the file moved, or reading it refused for
    * good — takes the button away, and `gone` the word that joined it to the next.
    */
@@ -632,8 +634,8 @@ export class AnnotationCard {
       'allow access',
       () => {
         allow.disabled = true
-        void allowHandle(name).then((file) => {
-          countUsage({ name: 'allow', outcome: file === null ? 'refused' : 'allowed' })
+        void allowHandles(name).then((file) => {
+          recordTelemetry({ name: 'allow', outcome: file === null ? 'refused' : 'allowed' })
           if (file !== null) return
           if (hasHandle(name)) {
             allow.disabled = false
@@ -645,7 +647,9 @@ export class AnnotationCard {
       },
       {
         class: 'btn btn-quiet',
-        title: 'This browser remembers the file and only needs your permission to read it again.',
+        title:
+          'This browser remembers the file and only needs your permission to read it again — and ' +
+          'every other file it remembers, at the same time.',
       },
     )
     return allow

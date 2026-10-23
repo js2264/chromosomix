@@ -21,7 +21,7 @@ These are hard, and everything below follows from them.
 
 | # | Constraint | Consequence |
 |---|---|---|
-| C1 | No server-side component of our own, and nothing that waits on one | No tile server, no metacooler on a host, no accounts, no uploads, no update service. The one request the site makes on its own behalf is a usage count to a third-party analytics endpoint — a word from a fixed list, never a file, a name or an address — and nothing in the app waits on its answer (§31) |
+| C1 | No server-side component of our own, and nothing that waits on one | No tile server, no metacooler on a host, no accounts, no uploads, no update service. The one request the site makes on its own behalf is anonymous telemetry to a third-party analytics endpoint — words from fixed lists, never a file, a name or an address — and nothing in the app waits on its answer (§31) |
 | C2 | No new metacooler API | The app consumes files exactly as current metacooler writes them |
 | C3 | No required preprocessing | A file straight from `metacooler create` must open and work |
 | C4 | `genome-then-length` ordering only | Every genome is one contiguous bin range; no scattered-run handling exists |
@@ -40,10 +40,10 @@ Every other format keeps the rule unchanged, and the opportunism at §8.11 is un
 C4 means a whole class of code — run gathering, fallback query planners, `genome_extent` failure
 paths — is deleted rather than written.
 
-C1 was *no server-side component of any kind* until the site began counting how it is used (§31).
-What it protects is unchanged: no server reads a file, holds a session, answers a request the
-picture needs, or knows who anybody is. The counts go out after the page is idle, to an endpoint
-the app never reads a reply from, and a site whose endpoint vanished tomorrow would draw every
+C1 was *no server-side component of any kind* until the site began sending telemetry (§31). What
+it protects is unchanged: no server reads a file, holds a session, answers a request the picture
+needs, or knows who anybody is. The telemetry goes out after the page is idle, to an endpoint the
+app never reads a reply from, and a site whose endpoint vanished tomorrow would draw every
 picture exactly as it does today.
 
 ---
@@ -1222,17 +1222,26 @@ file's grant across a restart but hands the file over again only once the reader
 saying so needs a gesture — the restore path has none, so it finds the grant at *ask first* and
 the tab lands on the picker. There, in place of the red note — which said no page could re-open
 the file, a sentence the browser had just made untrue — a callout in the accent's wash says *This
-browser remembers rep1.cool and only needs your permission to read it again — or drop the same file
-below* beside **allow access to rep1.cool**, the page's one primary button; and a detached track
-(§8.6) carries **allow access**, then *or re-open this file* as one piece, so a narrow column wraps
-it whole. The button is the
-gesture: it asks the browser, whose prompt answers for every file the site held a grant for and
-offers to *allow on every visit*, after which a restart asks nothing at all. On a yes every tab on
-screen tries its waiting map and its detached tracks again, without a gesture, and finds them; a
-tab restored and never looked at stays named, and its own click reads its file, now allowed —
-retrying it with the others would open every remembered tab at once, a worker and a matrix each.
-A prompt dismissed keeps the button, saying the browser did not allow it; a file that has moved, or
-a grant refused for good, forgets the grant, and the picker is then the way back. Where there is no
+browser remembers rep1.cool and 4 other files, and only needs your permission to read them again —
+or drop the same file below* beside **allow access to all 5 files**, the page's one primary button
+(*allow access to rep1.cool* where it is the only one, and its tooltip naming the files); and a
+detached track (§8.6) carries **allow access**, then *or re-open this file* as one piece, so a narrow
+column wraps it whole.
+
+**One press allows every file this browser remembers** (`allowHandles`). The button is the gesture,
+and it is spent on the file the tab is waiting on first, so the prompt names the file the reader was
+looking at, and then on every other grant this browser holds — the map's tracks, their indexes, every
+other tab's files. Chromium's restore prompt answers for all of them at once and offers to *allow on
+every visit*, after which a restart asks nothing at all; the asks after the first then find the
+grant given and show nothing. A browser that asks file by file is asked for each while the click's
+activation lasts, and a file it does not reach keeps its own button. A refusal of the first stops
+there: the reader said no to the file they pressed for, and has not asked to be asked about the rest.
+A track row's *allow access* does the same, its own file first. On a yes every tab on screen tries
+its waiting map and its detached tracks again, without a gesture, and finds them; a tab restored and
+never looked at stays named, and its own click reads its file, now allowed — retrying it with the
+others would open every remembered tab at once, a worker and a matrix each. A prompt dismissed keeps
+the button, saying the browser did not allow it; a file that has moved, or a grant refused for good,
+forgets the grant, and the picker is then the way back. Where there is no
 grant — every file in Firefox and Safari, and every file that arrived through a plain file input —
 there is no button, and the picker reads as it always did. The installed app is not asked: Chromium
 keeps an installed app's grants without asking again, and the desktop build allows its own page to
@@ -5644,7 +5653,7 @@ own private bucket, Drive or Dropbox, read from the browser with their own crede
 §24.7, §24.9). Identical code path, different byte source. Nothing is uploaded, so there are no
 accounts, no storage and no hosting cost. Stated prominently in the UI and in the paper.
 
-**The site counts how it is used, and nothing about whom or on what (§31).** A visit, a format
+**The site sends telemetry about how it is used, and nothing about whom or on what (§31).** A visit, a format
 opened, a task run, an error met: each a word from a fixed list, posted with no cookie and no
 referrer to the endpoint the deploy names, with a switch in About. The policy below needs nothing
 new for it — `connect-src` already takes any `https:` host — and the builds that are not the site
@@ -5913,7 +5922,7 @@ down without saying so — which is looked for four times a second while somethi
 
 Stated so they are decisions rather than omissions: tile server; user accounts; file upload; server-side
 computation of any kind; tracking of any kind — a cookie, an identifier, a value drawn from a file or
-from anything the reader typed, which §31's counts are built to be unable to carry; required companion files **for a contact map** (§1 states the scope, and
+from anything the reader typed, which §31's telemetry is built to be unable to carry; required companion files **for a contact map** (§1 states the scope, and
 §8.13 the one format that falls outside it: where an index is a format's only bounded read, its
 absence is refused by name); required preprocessing; support for orderings other
 than `genome-then-length`; whole-genome views that do not fit in memory (§9 — the limit is measured,
@@ -14864,13 +14873,13 @@ starts the tutorial from the beginning.
 **It is in a chunk of its own**, fetched by the press that plays it: a reader who never asks for it
 pays for one `localStorage` read when the landing page or *About* is drawn.
 
-## 31. Usage counts
+## 31. Telemetry
 
-The site counts how it is used, so that the work spent on it goes where its readers are: which
-formats are opened, which tasks run and how long they take, which refusals people meet, how many
-install it. `src/telemetry.ts` is the whole of it. **The word on screen is *usage counts***, never
-*telemetry* or *analytics*: it says what is sent, and a reader deciding whether to turn it off
-should not have to look a word up first.
+The site sends anonymous telemetry — a handful of counts of how it is used — so that the work spent
+on it goes where its readers are: which formats are opened, which tasks run and how long they take,
+which refusals people meet, how many install it. `src/telemetry.ts` is the whole of it. **The word
+on screen is *telemetry***, the one a reader looking for this switch in any app's settings looks for;
+the sentences beside it say what it holds, so the word is never the only explanation.
 
 ### 31.1 What is counted, and what a count can carry
 
@@ -14910,7 +14919,7 @@ app never waits on a count and never reads one back, which is what keeps C1 true
 
 ### 31.3 Where it runs
 
-**The site, as deployed, and nothing else.** The deploy passes the repository's `USAGE_ENDPOINT`
+**The site, as deployed, and nothing else.** The deploy passes the repository's `TELEMETRY_ENDPOINT`
 variable to the site's build alone (docs/deploy.md); every other config writes the endpoint empty
 — the archived pins and the pull-request previews, the package, the desktop app, the single file
 and the command line — and a build with no endpoint counts nothing. At run time it also takes the
@@ -14926,14 +14935,15 @@ identifier, no cookie, nothing drawn from a file — so there is nothing to cons
 asking would be a question with no stake in it, put to every reader before their first map. What is
 owed instead is to say it and to make it easy to stop:
 
-- **About says what is counted, where it goes and what never is, with the switch**: *usage counts*,
-  a toggle (§26.3), lit while on, and *Off sends nothing from this browser.* Absent from every build
-  that counts nothing, which has nothing to turn off (§8.5).
-- **The landing page's privacy note says so in a clause** while the site is counting — *never a
-  name or an address — and About turns that off* — since a promise about files that left out a count
-  going out would be the one thing on that line a reader could later call misleading.
+- **About says what is sent, where it goes and what never is, under *Telemetry*, with the switch**:
+  *telemetry*, a toggle (§26.3), lit while on, and *Off sends nothing from this browser.* Absent from
+  every build that sends nothing, which has nothing to turn off (§8.5).
+- **The landing page's privacy note says so in a clause** while the site is sending — *The site does
+  send anonymous telemetry … never a name or an address — and About turns it off* — since a promise
+  about files that left the telemetry out would be the one thing on that line a reader could later
+  call misleading.
 - **Off is immediate**: what was queued is dropped, and nothing more is sent from this browser.
-  It is kept in `localStorage` (`chromosomix:usage`), and *forget everything* keeps it: every other
+  It is kept in `localStorage` (`chromosomix:telemetry`), and *forget everything* keeps it: every other
   key is something kept on the reader's behalf, and this one is a refusal, whose loss would be the
   one way that button could make the page send more than it did before it was pressed.
 - **A browser that already asks not to be tracked is taken at its word**, unasked: Global Privacy

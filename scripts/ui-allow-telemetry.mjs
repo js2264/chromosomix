@@ -1,9 +1,9 @@
 /**
- * Drive *allow access* (§5.6, §8.6) and the usage counts (§31) in headless
+ * Drive *allow access* (§5.6, §8.6) and the telemetry (§31) in headless
  * Chromium, and shoot both.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-allow-usage.mjs [out-dir]
+ *   node scripts/ui-allow-telemetry.mjs [out-dir]
  *
  * **allow** (on the dev server). A headless browser cannot be restarted with a
  * grant waiting, so two stand-ins, in an init script, as the saves gallery
@@ -11,22 +11,24 @@
  * `FileSystemFileHandle` of a copy written to the origin-private file system,
  * and the permission a handle answers with is read from a key this script sets —
  * everything granted while the files are first opened, and after the "restart"
- * each file asks first until its own `requestPermission`, which grants that file
- * alone. So the map's button is pressed, the map opens, and its track — a file of
- * its own, still asking — shows the row's button, which is pressed in turn. The
- * yeast cooler and its ATAC bigWig, from `demo/yeast/`: aa01 … aa04.
+ * each file asks first until its own `requestPermission`. The yeast cooler and
+ * its ATAC bigWig, from `demo/yeast/`. First a browser that grants whatever it is
+ * asked: the picker's button counts both files, and one press must bring back
+ * the map *and* its track (aa01, aa02). Then a browser that grants one file a
+ * click, as one would whose activation is spent by the first prompt: the map
+ * back, its track's row still asking, and its own button pressed (aa03 … aa05).
  *
- * **usage** (on a build). The counts are sent only by the site's own build at
- * the site's own address, so this builds the site with `USAGE_ENDPOINT` set
+ * **telemetry** (on a build). It is sent only by the site's own build at
+ * the site's own address, so this builds the site with `TELEMETRY_ENDPOINT` set
  * (into the out-dir, under its policy), serves it as `https://chromosomix.app/`
  * by routing that origin to the files, and catches every request to the
  * endpoint instead of sending it — printing each body and its headers and
  * failing if one carries a file's name or a cookie, or if any arrives after the
  * switch is turned off. The landing page's note, a map and a track dropped, P(s)
- * run, a file refused, About with the switch on and off: uc01 … uc04, and
- * `usage-counts.json` beside them.
+ * run, a file refused, About with the switch on and off: te01 … te04, and
+ * `telemetry.json` beside them.
  *
- * `GALLERY_ONLY=allow` or `usage` runs one part.
+ * `GALLERY_ONLY=allow` or `telemetry` runs one part.
  */
 
 import { createRequire } from 'node:module'
@@ -125,8 +127,10 @@ const ATAC = 'Yeast_ATAC.bw'
 
 /**
  * The two stand-ins. `gallery:permission` is this script's own key, outside the
- * app's prefix: `granted` while the files are first opened, anything else after
- * the "restart", where each file asks until its own request.
+ * app's prefix: `granted` while the files are first opened; after the "restart",
+ * `prompt` — each file asks until it is requested, and every request is granted
+ * — or `one-per-click`, where a click buys one grant and every further request
+ * in it answers `prompt`, as a browser whose activation the first prompt spent.
  */
 const STAND_INS = () => {
   if (typeof window.showOpenFilePicker !== 'function') {
@@ -135,11 +139,17 @@ const STAND_INS = () => {
     }
   }
   const allowed = new Set()
-  const everything = () => window.localStorage.getItem('gallery:permission') === 'granted'
+  const mode = () => window.localStorage.getItem('gallery:permission')
+  let budget = 0
+  document.addEventListener('click', () => (budget = 1), true)
   FileSystemHandle.prototype.queryPermission = async function () {
-    return everything() || allowed.has(this.name) ? 'granted' : 'prompt'
+    return mode() === 'granted' || allowed.has(this.name) ? 'granted' : 'prompt'
   }
   FileSystemHandle.prototype.requestPermission = async function () {
+    if (mode() === 'one-per-click') {
+      if (budget === 0) return 'prompt'
+      budget -= 1
+    }
     allowed.add(this.name)
     return 'granted'
   }
@@ -184,64 +194,72 @@ async function allowPart() {
   await sleep(2000)
   await fold(page, 'Show the Annotations panel')
   await drop(page, `/demo/yeast/${ATAC}`, ATAC, '.ann-drop', 'Load a track')
-  await page
-    .waitForFunction(() => document.querySelector('.ann-row.ann-ready') !== null, null, { timeout: 60000 })
-    .catch(async (err) => {
-      await page.screenshot({ path: `${OUT}/debug-track-drop.png` })
-      console.log('page errors:', errors)
-      console.log(
-        await page.evaluate(() => {
-          const hit = [...document.querySelectorAll('*')].filter((node) => /16 sequences/.test(node.textContent ?? '') && node.children.length < 3)
-          return hit.map((node) => `${node.tagName}.${node.className} < ${node.parentElement?.className} < ${node.parentElement?.parentElement?.className}`).slice(0, 5)
-        }),
-      )
-      throw err
-    })
+  await page.waitForFunction(() => document.querySelector('.ann-row.ann-ready') !== null, null, { timeout: 60000 })
   await sleep(4000)
 
-  // The restart: a reload with every grant asking first.
+  /** The detached rows on the Tracks card, and whether each offers its own button. */
+  const detached = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('.ann-detached')].map((node) => ({
+        text: node.textContent?.replace(/\s+/g, ' ').trim(),
+        allow: [...node.querySelectorAll('button')].some((b) => b.textContent === 'allow access'),
+      })),
+    )
+
+  // The restart: a reload with every grant asking first, in a browser that
+  // grants whatever it is asked.
   await page.evaluate(() => window.localStorage.setItem('gallery:permission', 'prompt'))
   await page.reload()
   const asked = page.locator('button', { hasText: /^allow access to / })
   await asked.waitFor({ timeout: 60000 })
   await sleep(1500)
   const note = await page.locator('.allow-asked').first().innerText()
-  console.log('the picker asks:', JSON.stringify(note))
-  if (!/only needs your permission/.test(note)) fail('the picker does not say the browser remembers the file')
+  console.log('the picker asks:', JSON.stringify(note), '· tooltip:', JSON.stringify(await asked.getAttribute('title')))
+  if (!/all 2 files/.test(note)) fail('the button does not count both remembered files')
   await shot('aa01-asked-after-a-restart')
 
+  // One press: the map and its track.
   await asked.click()
   await mapDrawn(page)
-  await sleep(4000)
   await fold(page, 'Show the Annotations panel')
-  await sleep(1500)
-  const row = await page.evaluate(() => {
-    const allow = [...document.querySelectorAll('.ann-detached button')].find((b) => b.textContent === 'allow access')
-    return {
-      summary: document.body.innerText.match(/remembered file — allow access to draw it again/)?.[0] ?? null,
-      button: allow !== undefined,
-    }
-  })
-  console.log('the track, still asking:', JSON.stringify(row))
-  if (!row.button) fail('the detached track offers no allow access')
-  await shot('aa02-map-allowed-track-asking')
+  await page.waitForFunction(() => document.querySelector('.ann-row.ann-ready') !== null, null, { timeout: 60000 })
+  await sleep(4000)
+  const afterOne = await detached()
+  console.log('after one press, detached rows:', JSON.stringify(afterOne))
+  if (afterOne.length !== 0) fail('one press left a track waiting')
+  await shot('aa02-one-press-everything-back')
+
+  // Another restart, in a browser that grants one file a click.
+  await page.evaluate(() => window.localStorage.setItem('gallery:permission', 'one-per-click'))
+  await page.reload()
+  await asked.waitFor({ timeout: 60000 })
+  await sleep(1000)
+  await asked.click()
+  await mapDrawn(page)
+  await fold(page, 'Show the Annotations panel')
+  await page.waitForFunction(() => document.querySelector('.ann-detached') !== null, null, { timeout: 60000 })
+  await sleep(2500)
+  const still = await detached()
+  console.log('one file a click, the track still asking:', JSON.stringify(still))
+  if (!still.some((row) => row.allow)) fail('the detached track offers no allow access')
+  await shot('aa03-one-per-click-track-asking')
   const card = await page.locator('.ann-detached').first().evaluate((node) => {
     const box = (node.closest('.card') ?? node).getBoundingClientRect()
     return { x: box.x, y: box.y, width: box.width, height: Math.min(box.height, 420) }
   })
-  await shot('aa03-track-row-asking', card)
+  await shot('aa04-track-row-asking', card)
 
   await page.locator('.ann-detached button', { hasText: /^allow access$/ }).first().click()
   await page.waitForFunction(() => document.querySelector('.ann-detached') === null, null, { timeout: 60000 })
   await sleep(4000)
-  console.log('the track, allowed: detached rows left =', await page.locator('.ann-detached').count())
-  await shot('aa04-track-allowed')
+  console.log('the track, allowed: detached rows left =', (await detached()).length)
+  await shot('aa05-track-allowed')
   if (errors.length > 0) console.log('page errors:', errors)
   await context.close()
 }
 
 // ---------------------------------------------------------------------------
-// usage counts
+// telemetry
 // ---------------------------------------------------------------------------
 
 const TYPES = {
@@ -259,12 +277,12 @@ const TYPES = {
   '.woff2': 'font/woff2',
 }
 
-async function usagePart() {
-  const dist = join(OUT, 'dist-usage')
-  console.log('building the site with USAGE_ENDPOINT set…')
+async function telemetryPart() {
+  const dist = join(OUT, 'dist-telemetry')
+  console.log('building the site with TELEMETRY_ENDPOINT set…')
   execSync(`npx vite build --outDir ${JSON.stringify(dist)} --emptyOutDir`, {
     stdio: 'inherit',
-    env: { ...process.env, USAGE_ENDPOINT: ENDPOINT },
+    env: { ...process.env, TELEMETRY_ENDPOINT: ENDPOINT },
   })
 
   // Service workers blocked: they would fetch around the routing below.
@@ -306,7 +324,7 @@ async function usagePart() {
   await page.waitForSelector('.dropzone')
   await sleep(1500)
   console.log('the privacy note:', JSON.stringify(await page.locator('.privacy-text').first().innerText()))
-  await shot('uc01-landing-note')
+  await shot('te01-landing-note')
 
   await drop(page, `/demo/yeast/${COOLER}`, COOLER, '.dropzone')
   await toRegion(page)
@@ -334,17 +352,17 @@ async function usagePart() {
   await sleep(4000)
 
   await page.click('button[title="About this viewer"]')
-  await page.waitForSelector('.about-usage')
-  await page.locator('.about-usage').scrollIntoViewIfNeeded()
+  await page.waitForSelector('.about-telemetry')
+  await page.locator('.about-telemetry').scrollIntoViewIfNeeded()
   await sleep(800)
-  console.log('About:', JSON.stringify(await page.locator('.about-usage').innerText()))
+  console.log('About:', JSON.stringify(await page.locator('.about-telemetry').innerText()))
   // Idle sends: give the page its moment to post what it queued.
   await sleep(12000)
-  await shot('uc02-about-counting')
-  await page.locator('.about-usage .btn-toggle').click()
+  await shot('te02-about-on')
+  await page.locator('.about-telemetry .btn-toggle').click()
   await sleep(500)
-  console.log('switch after a press:', await page.locator('.about-usage .btn-toggle').getAttribute('aria-pressed'))
-  await shot('uc03-about-off')
+  console.log('switch after a press:', await page.locator('.about-telemetry .btn-toggle').getAttribute('aria-pressed'))
+  await shot('te03-about-off')
   const off = Date.now()
   await page.keyboard.press('Escape')
   await sleep(600)
@@ -355,10 +373,10 @@ async function usagePart() {
   await drop(page, `/demo/yeast/${COOLER}`, COOLER, '.dropzone')
   await page.waitForFunction(() => /Yeast_microC_G2M_1kb\.cool/.test(window.location.hash), null, { timeout: 120000 })
   await sleep(13000)
-  await shot('uc04-counting-off')
+  await shot('te04-sending-nothing')
 
   const bodies = counts.map((count) => count.body)
-  writeFileSync(join(OUT, 'usage-counts.json'), `${JSON.stringify(counts, null, 2)}\n`)
+  writeFileSync(join(OUT, 'telemetry.json'), `${JSON.stringify(counts, null, 2)}\n`)
   console.log(`${counts.length} counts caught:`)
   for (const count of counts) console.log(' ', JSON.stringify(count.body), '· cookie', count.cookie, '· referer', count.referer)
   const text = JSON.stringify(bodies)
@@ -374,7 +392,7 @@ async function usagePart() {
 
 try {
   if (ONLY === '' || ONLY === 'allow') await allowPart()
-  if (ONLY === '' || ONLY === 'usage') await usagePart()
+  if (ONLY === '' || ONLY === 'telemetry') await telemetryPart()
 } finally {
   await browser.close()
 }

@@ -260,23 +260,40 @@ export function subscribeGrants(listener: () => void): () => void {
 }
 
 /**
- * Ask the reader to allow a remembered file again — the *allow access* button,
- * and nothing else.
+ * Ask the reader to allow **every** remembered file again — the *allow access*
+ * button, and nothing else.
  *
  * After a restart a stored grant comes back as `'prompt'`: the browser still
  * knows the file and will not hand it over until the reader says so, and saying
  * so needs the live gesture {@link resolveHandle} documents. So this is called
  * from inside a click, and is the one caller that passes `prompt`.
  *
- * Chromium's restore prompt answers for **every** file the site held a grant
- * for, not only the one asked about, so a success is announced: each tab tries
- * its waiting map and its detached tracks again without a gesture, and finds
- * them readable. Where a browser grants only the one, the others keep their own
- * buttons.
+ * The file the button was pressed for is asked first, so the prompt the reader
+ * sees names the file they were looking at; then every other grant this browser
+ * holds, in the same gesture, so one press brings back the map, its tracks,
+ * their indexes and every other tab's files. Chromium's restore prompt answers
+ * for all of them at once, and each later ask is then already granted and shows
+ * nothing; a browser that asks file by file asks each while the click's
+ * activation lasts, and any it does not reach keeps a button of its own. A
+ * refusal of the first stops there: a reader who said no to the file they
+ * pressed for has not asked to be asked about the rest.
+ *
+ * A success is announced, and each tab tries its waiting map and its detached
+ * tracks again without a gesture.
  */
-export async function allowHandle(uri: string): Promise<File | null> {
-  const file = await resolveHandle(uri, { prompt: true })
-  if (file !== null) for (const listener of listeners) listener()
+export async function allowHandles(first: string): Promise<File | null> {
+  const file = await resolveHandle(first, { prompt: true })
+  if (file === null) return null
+  const pressed = handleKey(first)
+  for (const key of [...rows.keys()]) {
+    if (key === pressed) continue
+    try {
+      await resolveHandle(key, { prompt: true })
+    } catch {
+      /* one file the browser would not answer about costs that file alone */
+    }
+  }
+  for (const listener of listeners) listener()
   return file
 }
 

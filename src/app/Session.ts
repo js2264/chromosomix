@@ -216,8 +216,8 @@ import { SessionCommands } from './SessionCommands'
 import { SessionCompare, withoutSecond } from './SessionCompare'
 import { SessionDeck } from './SessionDeck'
 import { SessionRouter } from './SessionRouter'
-import { allowHandle, hasHandle, rememberHandle, subscribeGrants } from '../state/handles'
-import { countUsage } from '../telemetry'
+import { allowHandles, handleKey, hasHandle, knownPaths, rememberHandle, subscribeGrants } from '../state/handles'
+import { recordTelemetry } from '../telemetry'
 import { grantFor } from '../ui/chooseFiles'
 
 /**
@@ -2370,7 +2370,7 @@ export class Session {
       // let go of. `hideMap` is about *this* file and nothing else.
       this.parkedMap = null
       if (openedBefore !== splitUri(uri).path) {
-        countUsage({ name: 'open', what: 'map', format: info.layout.kind, from: source.kind })
+        recordTelemetry({ name: 'open', what: 'map', format: info.layout.kind, from: source.kind })
       }
       this.file = {
         uri,
@@ -8354,31 +8354,45 @@ export class Session {
    * re-open one by name" above "this browser remembers it" was the page
    * contradicting itself, and the red read as an error for what is one click.
    *
-   * The button is the gesture `requestPermission` needs, and the only road that
-   * spends one on a single file. What it opens arrives through
-   * {@link grantsChanged}, in every tab waiting on a file the answer covers, so
-   * the click does not open anything itself.
+   * The button is the gesture `requestPermission` needs, and it spends it on
+   * **every** file this browser remembers, this one first (`allowHandles`): one
+   * press, and the map, its tracks and every other tab's files are readable
+   * again. What it opens arrives through {@link grantsChanged}, in every tab
+   * waiting on a file the answer covers, so the click does not open anything
+   * itself. Its words count the files, so a reader asked about five is told so
+   * before the browser asks.
    */
   private allowAsked(uri: string): HTMLElement | null {
     if (!hasHandle(uri)) return null
     const label = fileLabel(uri)
+    const own = handleKey(uri)
+    const others = [...knownPaths()].filter((path) => path !== own)
+    const files = others.length + 1
     const hint = el('p', {
       class: 'allow-asked-text',
       text:
-        `This browser remembers ${label} and only needs your permission to read it again — or ` +
-        'drop the same file below. The rest of the view comes back with it.',
+        (others.length === 0
+          ? `This browser remembers ${label} and only needs your permission to read it again`
+          : `This browser remembers ${label} and ${fmt.int(others.length)} other ` +
+            `${others.length === 1 ? 'file' : 'files'}, and only needs your permission to read them again`) +
+        ' — or drop the same file below. The rest of the view comes back with it.',
     })
     const box = el('div', { class: 'allow-asked' }, hint)
+    // The names behind the count, a few of them, for a reader who wants to know
+    // what they are agreeing to before the browser asks.
+    const named = [own, ...others]
     const button = el('button', {
       class: 'btn btn-primary',
       type: 'button',
-      text: `allow access to ${label}`,
-      title: 'The browser asks once, and the other files it remembers are reopened with it.',
+      text: others.length === 0 ? `allow access to ${label}` : `allow access to all ${fmt.int(files)} files`,
+      title:
+        `The browser asks once for ${named.slice(0, 8).join(', ')}` +
+        (named.length > 8 ? ` and ${fmt.int(named.length - 8)} more.` : '.'),
     })
     button.addEventListener('click', () => {
       button.disabled = true
-      void allowHandle(uri).then((file) => {
-        countUsage({ name: 'allow', outcome: file === null ? 'refused' : 'allowed' })
+      void allowHandles(uri).then((file) => {
+        recordTelemetry({ name: 'allow', outcome: file === null ? 'refused' : 'allowed' })
         if (file !== null || this.destroyed) return
         if (hasHandle(uri)) {
           // Dismissed rather than refused: the grant is still there to ask about.
@@ -8418,9 +8432,9 @@ export class Session {
   }
 
   private showError(err: unknown, uri?: string, source?: SourceSpec): void {
-    // The usage count (§31): the refusal's code, never its message, which names
-    // the file. Anything without one is counted as `other`.
-    countUsage({ name: 'error', code: err instanceof ViewerError ? err.code : 'other' })
+    // Telemetry (§31): the refusal's code, never its message, which names the
+    // file. Anything without one is sent as `other`.
+    recordTelemetry({ name: 'error', code: err instanceof ViewerError ? err.code : 'other' })
     const entries =
       err instanceof ViewerError && Array.isArray(err.detail['entries'])
         ? (err.detail['entries'] as string[])

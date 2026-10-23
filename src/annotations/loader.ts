@@ -25,7 +25,7 @@ import type {
 import type { AnnotationClient } from './worker/client'
 import type { DetectedFormat, WireSource } from './worker/protocol'
 import { hasHandle, rememberHandle } from '../state/handles'
-import { countUsage } from '../telemetry'
+import { recordTelemetry } from '../telemetry'
 import { hasLocation, resolveLocal } from '../state/locations'
 import {
   basesForIndex,
@@ -761,7 +761,7 @@ export class AnnotationLoader {
       if (guessed && kind === 'alignments') this.pileFor(id)
       // A track added, counted by its format and where it was read from (§31);
       // a restored row is the same track again and is not.
-      if (guessed) countUsage({ name: 'open', what: 'track', format: result.format, from: source.kind })
+      if (guessed) recordTelemetry({ name: 'open', what: 'track', format: result.format, from: source.kind })
     } catch (err) {
       this.store.update(id, {
         status: 'error',

@@ -1,6 +1,6 @@
 /**
- * Usage counts: what the site is used for, counted, and nothing about who used
- * it or on what (§31).
+ * Telemetry: what the site is used for, counted, and nothing about who used it
+ * or on what (§31).
  *
  * The site sends a handful of small counts to an analytics endpoint — a visit,
  * a file opened, a task run, an error met, the app installed, a remembered file
@@ -25,11 +25,11 @@
  * ## Where it runs
  *
  * The site, as deployed, and nothing else: the web target, built with an
- * endpoint (`USAGE_ENDPOINT`, a repository variable the deploy passes, empty in
+ * endpoint (`TELEMETRY_ENDPOINT`, a repository variable the deploy passes, empty in
  * every other build), at the site's own address, not an archived or package
  * copy, not inside somebody else's page, and not under automation — a test, the
  * gallery, a crawler that says it is one. The desktop app and the single file
- * never count; the single file could not if it tried (§19's policy).
+ * never send any; the single file could not if it tried (§19's policy).
  *
  * ## The reader's switch, and the browser's
  *
@@ -50,16 +50,16 @@ import { installedApp } from './installed'
 import { HOMEPAGE, TARGET, VERSION } from './version'
 import { IS_PINNED, IS_PORTABLE } from './versions'
 
-declare const __USAGE_ENDPOINT__: string
+declare const __TELEMETRY_ENDPOINT__: string
 
 /** The endpoint this build counts to, or `''`: the site's build alone carries one. */
-let endpoint = (typeof __USAGE_ENDPOINT__ === 'string' ? __USAGE_ENDPOINT__ : '').trim()
+let endpoint = (typeof __TELEMETRY_ENDPOINT__ === 'string' ? __TELEMETRY_ENDPOINT__ : '').trim()
 
 /** The site's own address, from `package.json`'s `homepage`; replaced only by a test. */
 let homepage = HOMEPAGE
 
 /** The one key the switch is kept under, under the prefix `state/stored.ts` sweeps. */
-const KEY = 'chromosomix:usage'
+const KEY = 'chromosomix:telemetry'
 
 /** How many counts one page load sends at most: a loop of errors is not a usage pattern. */
 const MAX_PER_PAGE = 200
@@ -153,7 +153,7 @@ export function tookBucket(ms: number): Took {
 }
 
 /** Everything the app can count, and nothing else. */
-export type UsageEvent =
+export type TelemetryEvent =
   | { name: 'open'; what: 'map'; format: LayoutKind; from: 'local' | 'remote' }
   | { name: 'open'; what: 'track'; format: DetectedFormat; from: 'local' | 'remote' }
   | { name: 'task'; task: string; outcome: 'done' | 'failed' | 'cancelled'; ms: number }
@@ -178,7 +178,7 @@ const oneOf = (value: unknown, ...allowed: string[]): boolean =>
  * offending value blanked, because a count with a hole in it is a count of
  * something else.
  */
-export function wire(event: UsageEvent): Record<string, string> | null {
+export function wire(event: TelemetryEvent): Record<string, string> | null {
   switch (event.name) {
     case 'open': {
       const formats = event.what === 'map' ? MAP_FORMATS : event.what === 'track' ? TRACK_FORMATS : null
@@ -225,12 +225,12 @@ function siteUrl(): URL | null {
  * offers the switch where this is true and says nothing where it is not — a
  * build that never counts has nothing to turn off (§8.5).
  */
-export function usageCountsOffered(): boolean {
+export function telemetryOffered(): boolean {
   return endpoint !== '' && TARGET === 'web' && !IS_PINNED && !IS_PORTABLE && !embedded()
 }
 
 /** The endpoint's host, for the sentence that says where the counts go. */
-export function usageCountsHost(): string {
+export function telemetryHost(): string {
   try {
     return new URL(endpoint).hostname
   } catch {
@@ -246,7 +246,7 @@ export function browserDeclines(): boolean {
 }
 
 /** The reader's switch: on unless turned off in this browser. */
-export function usageCountsWanted(): boolean {
+export function telemetryWanted(): boolean {
   try {
     return window.localStorage.getItem(KEY) !== 'off'
   } catch {
@@ -255,7 +255,7 @@ export function usageCountsWanted(): boolean {
 }
 
 /** Turn the counts on or off for this browser, at once. */
-export function setUsageCounts(on: boolean): void {
+export function setTelemetry(on: boolean): void {
   try {
     if (on) window.localStorage.removeItem(KEY)
     else window.localStorage.setItem(KEY, 'off')
@@ -277,8 +277,8 @@ let refusedForPage = false
  * build can be served from anywhere — a fork, a lab's mirror, `vite preview`
  * on a laptop — and none of those is the site whose counts these are.
  */
-export function usageCountsSending(): boolean {
-  if (!usageCountsOffered() || refusedForPage || !usageCountsWanted() || browserDeclines()) return false
+export function telemetrySending(): boolean {
+  if (!telemetryOffered() || refusedForPage || !telemetryWanted() || browserDeclines()) return false
   if (typeof window === 'undefined' || typeof navigator === 'undefined') return false
   if (navigator.webdriver === true) return false
   const site = siteUrl()
@@ -309,8 +309,8 @@ let started = false
  * behind whatever the reader is waiting on, so it never shares a connection
  * with a map's first read.
  */
-export function countUsage(event: UsageEvent): void {
-  if (!usageCountsSending()) return
+export function recordTelemetry(event: TelemetryEvent): void {
+  if (!telemetrySending()) return
   const props = wire(event)
   const site = siteUrl()
   if (props === null || site === null || sent >= MAX_PER_PAGE) return
@@ -331,7 +331,7 @@ function schedule(): void {
 function flush(): void {
   scheduled = false
   // Asked again: the switch may have been turned off while the count waited.
-  if (!usageCountsSending()) {
+  if (!telemetrySending()) {
     queue.length = 0
     return
   }
@@ -367,16 +367,16 @@ function post(body: Body): void {
  * Start counting, once, at boot: the visit itself, an install when the
  * browser reports one, and whatever is still queued when the page goes.
  */
-export function startUsageCounts(): void {
-  if (started || !usageCountsSending()) return
+export function startTelemetry(): void {
+  if (started || !telemetrySending()) return
   started = true
-  countUsage({ name: 'pageview' })
-  window.addEventListener('appinstalled', () => countUsage({ name: 'install' }))
+  recordTelemetry({ name: 'pageview' })
+  window.addEventListener('appinstalled', () => recordTelemetry({ name: 'install' }))
   window.addEventListener('pagehide', flush)
 }
 
 /** Back to a fresh page, counting to `endpoint` for a site at `site`. **Tests only.** */
-export function resetUsageForTests(options: { endpoint?: string; site?: string } = {}): void {
+export function resetTelemetryForTests(options: { endpoint?: string; site?: string } = {}): void {
   endpoint = options.endpoint ?? ''
   homepage = options.site ?? ''
   queue.length = 0

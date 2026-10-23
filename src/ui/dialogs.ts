@@ -29,11 +29,11 @@ import type { TourProgress } from '../state/tour'
 import { tutorialButtons } from './tutorialOffer'
 import {
   browserDeclines,
-  setUsageCounts,
-  startUsageCounts,
-  usageCountsHost,
-  usageCountsOffered,
-  usageCountsWanted,
+  setTelemetry,
+  startTelemetry,
+  telemetryHost,
+  telemetryOffered,
+  telemetryWanted,
 } from '../telemetry'
 
 /**
@@ -465,10 +465,10 @@ function overview(repoUrl: string, tutorial: AboutTutorial | null | undefined, c
       'Source, issues and the format specification: ',
       el('a', { href: repoUrl, text: repoUrl, class: 'link' }),
     ),
-    // What the site counts and where it goes, with the switch (§31): on the tab
-    // About opens on, as the other thing a reader asks of a page before trusting
-    // it with their data. Absent where nothing is counted.
-    ...(usageCountsOffered() ? [usageSection()] : []),
+    // What the site's telemetry holds and where it goes, with the switch (§31):
+    // on the tab About opens on, as the other thing a reader asks of a page
+    // before trusting it with their data. Absent where nothing is sent.
+    ...(telemetryOffered() ? [telemetrySection()] : []),
   )
 }
 
@@ -600,22 +600,22 @@ function renderTime(seconds: number): string {
 }
 
 /**
- * The usage counts (§31): what is counted, where it goes, and the switch that
- * stops it for this browser.
+ * The telemetry (§31): what is sent, where it goes, and the switch that stops
+ * it for this browser.
  *
  * The sentence names the endpoint's host rather than a product, so it stays
- * true of whatever the site is built to count to. A browser that already asks
+ * true of whatever the site is built to send to. A browser that already asks
  * not to be tracked is told it is being taken at its word, and offered no
  * switch, since there is nothing left for one to turn off.
  */
-function usageSection(): HTMLElement {
-  const host = usageCountsHost()
+function telemetrySection(): HTMLElement {
+  const host = telemetryHost()
   const what = el('p', {
     text:
-      'This site counts how it is used — which kinds of file are opened, which analyses run and ' +
-      `how long they take, which errors are met — and sends those counts to ${host}. Each is a ` +
-      'word from a fixed list: never a file name, an address, a place on the genome or anything ' +
-      'you typed, with no cookie and nothing that tells one visitor from another.',
+      'This site sends anonymous telemetry about how it is used — which kinds of file are opened, ' +
+      `which analyses run and how long they take, which errors are met — to ${host}. Every value ` +
+      'is a word from a fixed list: never a file name, an address, a place on the genome or ' +
+      'anything you typed, with no cookie and nothing that tells one visitor from another.',
   })
   let control: HTMLElement
   if (browserDeclines()) {
@@ -627,28 +627,28 @@ function usageSection(): HTMLElement {
     const toggle = el('button', {
       class: 'btn btn-toggle',
       type: 'button',
-      text: 'usage counts',
-      title: 'Count how this site is used. Off sends nothing from this browser.',
-      attrs: { 'aria-pressed': String(usageCountsWanted()) },
+      text: 'telemetry',
+      title: 'Send anonymous telemetry about how this site is used. Off sends nothing from this browser.',
+      attrs: { 'aria-pressed': String(telemetryWanted()) },
     })
     toggle.addEventListener('click', () => {
       const on = toggle.getAttribute('aria-pressed') !== 'true'
-      setUsageCounts(on)
+      setTelemetry(on)
       toggle.setAttribute('aria-pressed', String(on))
-      // Turned on from off: this visit starts counting from here.
-      if (on) startUsageCounts()
+      // Turned on from off: this visit is sent from here on.
+      if (on) startTelemetry()
     })
     control = el(
       'div',
-      { class: 'about-usage-switch' },
+      { class: 'about-telemetry-switch' },
       toggle,
       el('span', { class: 'hint', text: 'Off sends nothing from this browser.' }),
     )
   }
   return el(
     'section',
-    { class: 'about-usage', attrs: { 'aria-labelledby': 'about-usage-title' } },
-    el('h3', { class: 'about-heading', text: 'Usage counts', attrs: { id: 'about-usage-title' } }),
+    { class: 'about-telemetry', attrs: { 'aria-labelledby': 'about-telemetry-title' } },
+    el('h3', { class: 'about-heading', text: 'Telemetry', attrs: { id: 'about-telemetry-title' } }),
     what,
     control,
   )

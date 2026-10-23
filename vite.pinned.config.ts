@@ -94,7 +94,7 @@ export default defineConfig({
     ...base.define,
     // An archived copy counts nothing: its readers are reading a link, and its
     // counts would be the live site's under an old version (§31).
-    __USAGE_ENDPOINT__: JSON.stringify(''),
+    __TELEMETRY_ENDPOINT__: JSON.stringify(''),
     // `__DEMO_BASE__` is deliberately *not* overridden. It used to be
     // `SITE_BASE` — root-relative, because an archived build was served from the
     // same site as the 250 MB of data it pointed at, and a hard-coded origin

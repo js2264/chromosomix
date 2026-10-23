@@ -1,5 +1,5 @@
 /**
- * Usage counts (§31): what may be sent, where, and the switches that stop it.
+ * Telemetry (§31): what may be sent, where, and the switches that stop it.
  *
  * The refusals are the subject, as in `handles.test.ts`. A count that goes
  * out is one line of `fetch`; what is worth pinning is everything that must
@@ -14,19 +14,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   browserDeclines,
-  countUsage,
+  recordTelemetry,
   flushForTests,
   queuedForTests,
-  resetUsageForTests,
-  setUsageCounts,
-  startUsageCounts,
+  resetTelemetryForTests,
+  setTelemetry,
+  startTelemetry,
   tookBucket,
-  usageCountsHost,
-  usageCountsOffered,
-  usageCountsSending,
-  usageCountsWanted,
+  telemetryHost,
+  telemetryOffered,
+  telemetrySending,
+  telemetryWanted,
   wire,
-  type UsageEvent,
+  type TelemetryEvent,
 } from '@/telemetry'
 import { TASKS } from '@/analysis/registry'
 import { resetMounting } from '@/embed'
@@ -35,7 +35,7 @@ const ENDPOINT = 'https://plausible.io/api/event'
 
 /** The site is wherever jsdom says this page is, so the address check passes. */
 function asTheSite(): void {
-  resetUsageForTests({ endpoint: ENDPOINT, site: `${window.location.origin}/` })
+  resetTelemetryForTests({ endpoint: ENDPOINT, site: `${window.location.origin}/` })
 }
 
 function setNavigator(field: string, value: unknown): void {
@@ -54,7 +54,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  resetUsageForTests()
+  resetTelemetryForTests()
 })
 
 describe('wire — the last line of defence', () => {
@@ -100,7 +100,7 @@ describe('wire — the last line of defence', () => {
       { name: 'error', code: 'rep1.cool is not an HDF5 file' },
       { name: 'allow', outcome: 'rep1.cool' },
       { name: 'open-file', file: 'rep1.cool' },
-    ] as unknown as UsageEvent[]
+    ] as unknown as TelemetryEvent[]
     for (const event of bad) expect(wire(event), JSON.stringify(event)).toBeNull()
   })
 
@@ -131,65 +131,65 @@ describe('tookBucket', () => {
 
 describe('where it counts', () => {
   it('counts nothing in a build with no endpoint, which is every build but the site', () => {
-    resetUsageForTests({ endpoint: '', site: `${window.location.origin}/` })
-    expect(usageCountsOffered()).toBe(false)
-    countUsage({ name: 'install' })
+    resetTelemetryForTests({ endpoint: '', site: `${window.location.origin}/` })
+    expect(telemetryOffered()).toBe(false)
+    recordTelemetry({ name: 'install' })
     expect(queuedForTests()).toHaveLength(0)
   })
 
   it('counts nothing away from the site’s own address — a fork, a mirror, a preview', () => {
-    resetUsageForTests({ endpoint: ENDPOINT, site: 'https://chromosomix.app/' })
-    expect(usageCountsOffered()).toBe(true)
-    expect(usageCountsSending()).toBe(false)
-    countUsage({ name: 'install' })
+    resetTelemetryForTests({ endpoint: ENDPOINT, site: 'https://chromosomix.app/' })
+    expect(telemetryOffered()).toBe(true)
+    expect(telemetrySending()).toBe(false)
+    recordTelemetry({ name: 'install' })
     expect(queuedForTests()).toHaveLength(0)
   })
 
   it('counts nothing inside somebody else’s page', () => {
     window.history.replaceState(null, '', '/?embed=1')
     resetMounting()
-    expect(usageCountsOffered()).toBe(false)
-    expect(usageCountsSending()).toBe(false)
+    expect(telemetryOffered()).toBe(false)
+    expect(telemetrySending()).toBe(false)
   })
 
   it('counts nothing under automation', () => {
     setNavigator('webdriver', true)
-    expect(usageCountsSending()).toBe(false)
+    expect(telemetrySending()).toBe(false)
   })
 
   it('takes Global Privacy Control and Do Not Track at their word, without asking', () => {
     setNavigator('globalPrivacyControl', true)
     expect(browserDeclines()).toBe(true)
-    expect(usageCountsSending()).toBe(false)
+    expect(telemetrySending()).toBe(false)
     setNavigator('globalPrivacyControl', undefined)
     setNavigator('doNotTrack', '1')
-    expect(usageCountsSending()).toBe(false)
+    expect(telemetrySending()).toBe(false)
     setNavigator('doNotTrack', null)
-    expect(usageCountsSending()).toBe(true)
+    expect(telemetrySending()).toBe(true)
   })
 
   it('names the endpoint’s host for the sentence in About', () => {
-    expect(usageCountsHost()).toBe('plausible.io')
+    expect(telemetryHost()).toBe('plausible.io')
   })
 })
 
 describe('the switch', () => {
   it('is on by default, with nothing asked and nothing stored', () => {
-    expect(usageCountsWanted()).toBe(true)
+    expect(telemetryWanted()).toBe(true)
     expect(window.localStorage.length).toBe(0)
   })
 
   it('stops counting at once, and drops what was waiting', () => {
-    countUsage({ name: 'install' })
+    recordTelemetry({ name: 'install' })
     expect(queuedForTests()).toHaveLength(1)
-    setUsageCounts(false)
+    setTelemetry(false)
     expect(queuedForTests()).toHaveLength(0)
-    expect(window.localStorage.getItem('chromosomix:usage')).toBe('off')
-    countUsage({ name: 'install' })
+    expect(window.localStorage.getItem('chromosomix:telemetry')).toBe('off')
+    recordTelemetry({ name: 'install' })
     expect(queuedForTests()).toHaveLength(0)
-    setUsageCounts(true)
-    expect(window.localStorage.getItem('chromosomix:usage')).toBeNull()
-    countUsage({ name: 'install' })
+    setTelemetry(true)
+    expect(window.localStorage.getItem('chromosomix:telemetry')).toBeNull()
+    recordTelemetry({ name: 'install' })
     expect(queuedForTests()).toHaveLength(1)
   })
 })
@@ -200,7 +200,7 @@ describe('what goes out', () => {
     // are on the page's URL, and neither may reach a count.
     window.history.replaceState(null, '', '/?config=https://private.example/ws.json#uri=patient_04.mcool')
     resetMounting()
-    countUsage({ name: 'open', what: 'map', format: 'mcool', from: 'local' })
+    recordTelemetry({ name: 'open', what: 'map', format: 'mcool', from: 'local' })
     const [body] = queuedForTests()
     expect(body.url).toBe(`${window.location.origin}/`)
     expect(body.domain).toBe(window.location.hostname)
@@ -212,7 +212,7 @@ describe('what goes out', () => {
   it('posts with no cookie, no referrer and nothing read back', () => {
     const fetched = vi.fn(async () => new Response(null, { status: 202 }))
     vi.stubGlobal('fetch', fetched)
-    countUsage({ name: 'error', code: 'remote-cors' })
+    recordTelemetry({ name: 'error', code: 'remote-cors' })
     flushForTests()
     expect(fetched).toHaveBeenCalledTimes(1)
     const [url, init] = fetched.mock.calls[0] as unknown as [string, RequestInit]
@@ -235,20 +235,20 @@ describe('what goes out', () => {
   it('sends nothing that waited while the switch was turned off', () => {
     const fetched = vi.fn(async () => new Response(null, { status: 202 }))
     vi.stubGlobal('fetch', fetched)
-    countUsage({ name: 'install' })
-    window.localStorage.setItem('chromosomix:usage', 'off')
+    recordTelemetry({ name: 'install' })
+    window.localStorage.setItem('chromosomix:telemetry', 'off')
     flushForTests()
     expect(fetched).not.toHaveBeenCalled()
   })
 
   it('stops at two hundred counts a page', () => {
-    for (let n = 0; n < 250; n++) countUsage({ name: 'error', code: 'other' })
+    for (let n = 0; n < 250; n++) recordTelemetry({ name: 'error', code: 'other' })
     expect(queuedForTests()).toHaveLength(200)
   })
 
   it('counts the visit once, however often it is started', () => {
-    startUsageCounts()
-    startUsageCounts()
+    startTelemetry()
+    startTelemetry()
     expect(queuedForTests().filter((body) => body.name === 'pageview')).toHaveLength(1)
   })
 })

@@ -114,6 +114,25 @@ describe('the picker asking for a remembered file', () => {
     expect(page.querySelector('.inline-error')).toBeNull()
   })
 
+  it('counts every remembered file on the button, which asks for all of them', async () => {
+    const map = lapsedHandle('rep1.cool')
+    const track = lapsedHandle('ATAC.bw')
+    await rememberHandle('rep1.cool', map, new File(['b'], 'rep1.cool'))
+    await rememberHandle('ATAC.bw', track, new File(['b'], 'ATAC.bw'))
+    const { session, renders } = waitingTab()
+    const page = session.pickerWithNote('rep1.cool')
+    const button = allowButton(page)
+    expect(button?.textContent).toBe('allow access to all 2 files')
+    expect(page.textContent).toContain('rep1.cool and 1 other file, and only needs your permission to read them again')
+    expect(button?.title).toContain('rep1.cool, ATAC.bw')
+    button?.click()
+    await settle()
+    await settle()
+    expect(map.requestPermission).toHaveBeenCalledTimes(1)
+    expect(track.requestPermission).toHaveBeenCalledTimes(1)
+    expect(renders.map((state) => state.uri)).toEqual(['rep1.cool'])
+  })
+
   it('offers nothing where there is no grant — every file in Firefox and Safari', () => {
     const { session } = waitingTab()
     const page = session.pickerWithNote('rep1.cool')

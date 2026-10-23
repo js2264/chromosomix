@@ -18,7 +18,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { AnnotationLoader } from '@/annotations/loader'
 import { AnnotationStore } from '@/annotations/store'
-import { allowHandle, forgetAllHandles, rememberHandle, resetHandlesForTests } from '@/state/handles'
+import { allowHandles, forgetAllHandles, rememberHandle, resetHandlesForTests } from '@/state/handles'
 import { useMemoryStores } from '@/state/idb'
 import type { StoredEntry } from '@/annotations/types'
 
@@ -197,7 +197,7 @@ describe('a restored local track whose grant asks first', () => {
     expect(store.byId('a1')?.status).toBe('detached')
 
     // The button's click, then the retry every tab makes on hearing of it.
-    expect(await allowHandle('ATAC.bw')).not.toBeNull()
+    expect(await allowHandles('ATAC.bw')).not.toBeNull()
     loader.refind()
     await settle()
 
