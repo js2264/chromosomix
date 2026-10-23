@@ -1,6 +1,13 @@
 {
-  "latest": "3614aa6",
+  "latest": "9b0479b",
   "versions": [
+    {
+      "commit": "9b0479b",
+      "version": "0.16.0",
+      "date": "2026-10-23T11:17:54+02:00",
+      "subject": "Add Notebooks tab to About dialog with task reference citations (#132)",
+      "tag": ""
+    },
     {
       "commit": "3614aa6",
       "version": "0.16.0",
@@ -132,13 +139,6 @@
       "version": "0.13.0",
       "date": "2026-10-15T01:54:14+02:00",
       "subject": "Code review: CI oracles, security, CLI, capped readers, render cancellation, PDF paths, and the Session and MatrixPanel splits (#105)",
-      "tag": ""
-    },
-    {
-      "commit": "35123b0",
-      "version": "0.13.0",
-      "date": "2026-10-14T18:20:22+02:00",
-      "subject": "Serve the site from chromosomix.app, and keep every archived build working there (#106)",
       "tag": ""
     },
     {
