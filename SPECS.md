@@ -9658,7 +9658,8 @@ app, from this version on, finding itself at any of them unregisters its worker 
 reader takes the update it offers.
 
 **And the app names them, in *About*.** The dialog is three tabs — *Overview*, what the viewer is, the
-tutorial (§30.1) and the source; *Notebooks*; and *Licences* (§22.4) — over the build stamp and the
+tutorial (§30.1), the source and, on the site, its telemetry and the switch (§31.4); *Notebooks*; and
+*Licences* (§22.4) — over the build stamp and the
 version picker, which stay under every tab and outside the part that scrolls, so a tab as long as the
 licences never takes the stamp off screen. It opens on *Overview*, with the caret on the row of tabs,
 one stop walked with ← and →, Home and End. **The Notebooks tab** says in a sentence what the
@@ -14942,9 +14943,10 @@ identifier, no cookie, nothing drawn from a file — so there is nothing to cons
 asking would be a question with no stake in it, put to every reader before their first map. What is
 owed instead is to say it and to make it easy to stop:
 
-- **About says what is sent, where it goes and what never is, under *Telemetry*, with the switch**:
-  *telemetry*, a toggle (§26.3), lit while on, and *Off sends nothing from this browser.* Absent from
-  every build that sends nothing, which has nothing to turn off (§8.5).
+- **About says what is sent, where it goes and what never is, under *Telemetry*, with the switch**,
+  last on the *Overview* tab it opens on: *telemetry*, a toggle (§26.3), lit while on, and *Off sends
+  nothing from this browser.* Absent from every build that sends nothing, which has nothing to turn
+  off (§8.5).
 - **The landing page's privacy note says so in a clause** while the site is sending — *The site does
   send anonymous telemetry … never a name or an address — and About turns it off* — since a promise
   about files that left the telemetry out would be the one thing on that line a reader could later
