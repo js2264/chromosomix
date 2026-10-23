@@ -3498,9 +3498,10 @@ chain is the app's and every reference is held to one step of it.
    with the four, and the boundaries called on the narrowest, which is the window the app calls them on.
 2. **CTCF's peaks**: the two labs' tracks as replicates, against yapc 0.1 with IDR 2.0.3 at § 5's
    settings, five seeds.
-3. **APA between consecutive peaks**: each peak of 2 paired with the next along its chromosome, piled
-   up raw and over the expected, at coolpuppy's defaults and with every pair, against coolpuppy
-   with § 11's script and settings.
+3. **APA between consecutive peaks**: each peak of 2 paired with the next along its chromosome — by
+   the app's own *each feature with the next*, and for coolpuppy by a BEDPE of the same pairs written
+   here — piled up raw and over the expected, at coolpuppy's defaults and with every pair, against
+   coolpuppy with § 11's script and settings.
 4. **The signal at CTCF's sites**: the metaplot of both CTCF tracks and ATAC-seq about each peak's
    centre, ±2 kb in 50-bp bins, and of the insulation at its four scales, ±500 kb in 10-kb bins,
    against deepTools' `computeMatrix reference-point`, `plotProfile` and `plotHeatmap`.
@@ -3509,8 +3510,8 @@ chain is the app's and every reference is held to one step of it.
 |---|---|---|
 | insulation | `insulation --window 5 --scales 4` | `cooltools.insulation(…, [50_000, 100_000, 200_000, 400_000])`, § 1's other settings |
 | peaks | `peaks --signal ENCFF734CUT --replicate ENCFF485CGE`, § 5's settings | `yapc`, § 5's settings, seeds 0–4 |
-| pairs | each peak and the next on its chromosome | the same BEDPE |
-| APA | `apa --pairs --mode fixed --window 5 --minDiag 2 --minDist 12` (or `0`), `--norm none` or `oe` | `coolpup.pileup(…, flank=50_000)`, `mindist` `'auto'` (or `0`), raw or over § 4's expected for this map |
+| pairs | `apa --anchors consecutive --features` the peaks: each and the next on its chromosome | a BEDPE of each peak and the next, written here |
+| APA | `apa --anchors consecutive --mode fixed --window 5 --minDiag 2 --minDist 12` (or `0`), `--norm none` or `oe` | `coolpup.pileup(…, flank=50_000)`, `mindist` `'auto'` (or `0`), raw or over § 4's expected for this map |
 | metaplot | `metaplot --at centre --stranded=false --band none`, `--flank 2000 --step 50` or `--flank 500000 --step 10000` | `computeMatrix reference-point --referencePoint center`, `-b/-a 2000 --binSize 50` or `-b/-a 500000 --binSize 10000` |
 
 ```{python}
@@ -3687,7 +3688,9 @@ measures({
 ```{python}
 GP = GM / 'apa'
 GP.mkdir(parents=True, exist_ok=True)
-# The peaks chromosomix called, each with the next one along its chromosome.
+# The peaks chromosomix called, each with the next one along its chromosome: the app pairs them itself
+# (`--anchors consecutive`), and coolpuppy is handed the same pairs as a BEDPE written here.
+GM_PEAKS_BED = rel(one(GY / 'app', '*.bed'))
 gm_sorted = gm_called.sort_values(['chrom', 'start', 'end']).reset_index(drop=True)
 gm_next = gm_sorted.shift(-1)
 gm_pairs = gm_sorted[gm_sorted['chrom'] == gm_next['chrom']].assign(
@@ -3708,7 +3711,8 @@ for cut_key, (label, app_args, options) in GM_CUTS.items():
     # Timed raw, not over the expected, for § 11's reason: coolpuppy is handed the expected and the app
     # computes its own.
     timed = 'oe' not in cut_key.split('-')
-    mr('apa', GM_10K, '--pairs', GM_PAIRS, *app_args, '--mode', 'fixed', '--window', FLANK, '--minDiag', MIN_DIAG,
+    mr('apa', GM_10K, '--anchors', 'consecutive', '--features', GM_PEAKS_BED, *app_args, '--mode', 'fixed',
+       '--window', FLANK, '--minDiag', MIN_DIAG,
        out=GP / cut_key, name=f'gm-apa-{cut_key}', analysis=GM_ANALYSIS, label=f'APA, {label}', group='APA',
        bench=timed)
     reference(f'gm-coolpuppy-{cut_key}', GM_ANALYSIS, 'coolpuppy',

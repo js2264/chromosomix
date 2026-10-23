@@ -65,13 +65,13 @@ chromosomix_paper/human/ENCFF990PUN.bigWig	s3://encode-public/2021/04/06/b69b32c
 chromosomix_paper/human/ENCFF005BFP.bigWig	s3://encode-public/2021/04/06/7bb368f1-3e6b-4b91-86a5-45ce68da0d94/ENCFF005BFP.bigWig	Total RNA-seq, minus strand (ENCODE ENCSR000AEC)
 chromosomix_paper/human/hg38.2bit	work:hg38.2bit	Human genome hg38, UCSC (bigZips)
 chromosomix_paper/human/hg38.refGene.txt.gz	work:hg38.refGene.txt.gz	RefSeq genes, UCSC hg38 refGene table
-chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w5.bw	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w5.bw	Diamond insulation at 10 kb, 50-kb window, computed by the app (Fig. 2)
-chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w10.bw	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w10.bw	Diamond insulation at 10 kb, 100-kb window, computed by the app (Fig. 2)
-chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w20.bw	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w20.bw	Diamond insulation at 10 kb, 200-kb window, computed by the app (Fig. 2)
-chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w40.bw	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w40.bw	Diamond insulation at 10 kb, 400-kb window, computed by the app (Fig. 2)
-chromosomix_paper/human/4DNFIXP4QG5B_10000.borders.bed	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_10000.borders.bed	Borders called on the 50-kb insulation (Fig. 2)
-chromosomix_paper/human/GM12878_CTCF.peaks.bed	repo:demo/store/chromosomix_paper/human/GM12878_CTCF.peaks.bed	CTCF peaks called by the app's yapc on ENCFF734CUT and ENCFF485CGE, IDR ≤ 0.05 (Fig. 2)
-chromosomix_paper/human/GM12878_CTCF.consecutive.bedpe	repo:demo/store/chromosomix_paper/human/GM12878_CTCF.consecutive.bedpe	Each CTCF peak with the next one along its sequence (Fig. 2)
+chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w5.bw	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w5.bw	Diamond insulation at 10 kb, 50-kb window, genome-wide, computed by the app
+chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w10.bw	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w10.bw	Diamond insulation at 10 kb, 100-kb window, genome-wide, computed by the app
+chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w20.bw	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w20.bw	Diamond insulation at 10 kb, 200-kb window, genome-wide, computed by the app
+chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w40.bw	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w40.bw	Diamond insulation at 10 kb, 400-kb window, genome-wide, computed by the app
+chromosomix_paper/human/4DNFIXP4QG5B_10000.borders.bed	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_10000.borders.bed	Borders called on the 50-kb insulation, genome-wide
+chromosomix_paper/human/GM12878_CTCF.peaks.bed	repo:demo/store/chromosomix_paper/human/GM12878_CTCF.peaks.bed	CTCF peaks called by the app's yapc on ENCFF734CUT and ENCFF485CGE, IDR ≤ 0.05, genome-wide
+chromosomix_paper/human/GM12878_CTCF.consecutive.bedpe	repo:demo/store/chromosomix_paper/human/GM12878_CTCF.consecutive.bedpe	Each CTCF peak with the next one along its sequence, genome-wide
 chromosomix_paper/human/4DNFIXP4QG5B_2000.chr14.insulation-w50.bw	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_2000.chr14.insulation-w50.bw	Diamond insulation of chr14 at 2 kb, 100-kb window (Fig. 1a)
 chromosomix_paper/human/4DNFIXP4QG5B_2000.chr14.borders.bed	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_2000.chr14.borders.bed	Borders called on chr14's insulation at 2 kb (Fig. 1a)
 chromosomix_paper/human/4DNFIXP4QG5B_250000.compartments-e1.bw	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_250000.compartments-e1.bw	Compartments (E1) at 250 kb, phased by GC content (Fig. 1a)

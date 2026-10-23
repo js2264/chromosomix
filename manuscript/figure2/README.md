@@ -1,73 +1,77 @@
-# Fig. 2 — CTCF's sites in GM12878
+# Fig. 2 — CTCF's sites in GM12878, chromosomix beside the reference tools
 
-`figure2.pdf` (vector, the pile-up and the heatmaps as images) · `figure2.svg` · `figure2.png` (a
-300-dpi preview) · `numbers.tsv` (every number the figure draws or quotes).
+`figure2.pdf` (vector, the heatmaps as images) · `figure2.svg` · `figure2.png` (a 300-dpi preview) ·
+`numbers.tsv` (what each side reports). `chromosomix/` holds the app's own exports, `reference/` the
+reference packages' own figures, and the page sets each panel of the one beside the same panel of the
+other.
 
-180 × 100 mm. Type is Helvetica/Arial (Liberation Sans where neither is installed), 4.5–7 pt, panel
-letters 8 pt bold.
-
-The data are the paper store's GM12878 files — the card *The Chromosomix paper*, folder
-`demo/store/chromosomix_paper/human/`, listed in `demo/store/MANIFEST.tsv` — which its tab *Fig. 2*
-opens: 4DN's in situ Hi-C of Rao et al. 2014 (4DNFIXP4QG5B, 4,010,478,943 contacts), ENCODE's CTCF
-ChIP-seq of two labs (Bernstein, Broad, ENCSR000AKB; Snyder, Stanford, ENCSR000DZN) and ATAC-seq
-(ENCSR095QNB) as fold change over control, the CTCF peaks the app's yapc called on the two ChIP-seq
-experiments as replicates (IDR ≤ 0.05), each peak paired with the next along its sequence, and the
-map's diamond insulation at four windows. The bacterial figure that was Fig. 2 is now Fig. S3
-(`manuscript/figureS3/`).
+The data are the paper store's GM12878 files — the card *The Chromosomix paper*, tab **Fig. 2** — on
+chr19: 4DN's in situ Hi-C of Rao et al. 2014 (4DNFIXP4QG5B, 4.0 billion contacts, 27 GB, read in
+place), ENCODE's CTCF ChIP-seq of two labs (Bernstein, Broad, ENCSR000AKB; Snyder, Stanford,
+ENCSR000DZN) and ATAC-seq (ENCSR095QNB), each the fold change over control. The bacterial figure that
+was Fig. 2 is now Fig. S3 (`manuscript/figureS3/`).
 
 ## What it shows
 
-| panel | what | how |
+| panel | chromosomix, in the browser | the reference tools |
 | --- | --- | --- |
-| **a** | APA between consecutive CTCF peaks | The map at 2 kb, ten bins either side of every pair, each window divided by its sequence's expected (`--norm oe`, the app's default; coolpuppy's `ooe`). Pairs on chr1–22 and X, from 22 bins (44 kb, coolpuppy's floor for this window: no window reaches the two diagonals left out) to 1 Mb apart. Rows are the upstream peak, columns the downstream one; RdBu_r centred on 1, symmetric about it over the furthest cell, as the app scales a pile-up over its expected. |
-| **b** | CTCF and ATAC-seq at CTCF peaks | The metaplot about every peak's centre, ±2 kb in 50-bp columns, unstranded: the mean of each track with its 95% bootstrap band (200 draws over peaks, the app's default), and under it each track's heatmap, one row a peak, in one order for the three — strongest first by its mean over every column of every track, as the app and `plotHeatmap` sort a run of several tracks. |
-| **c** | Insulation at CTCF peaks | The same about the same peaks for the map's diamond insulation at 10 kb with windows of 50, 100, 200 and 400 kb (the store's tracks, computed by the app), ±500 kb in 10-kb columns. |
+| **a** | *Aggregate peak analysis*: each CTCF peak with the next (*each feature with the next*), the map at 2 kb, ten bins either side, over the expected, from 22 bins (44 kb) apart | coolpuppy 1.1.0: `coolpup.pileup` of a BEDPE of each yapc peak with the next, `flank=20000`, `mindist='auto'` (22 bins), over cooltools' `expected_cis`; drawn by `plotpup.plot` |
+| **b** | *Metaplot over a feature set*: both CTCF tracks and ATAC-seq about the peaks' centres, ±2 kb in 50-bp columns — the mean with its 95% bootstrap band, and a heatmap a track, the peaks strongest first over the three | deepTools 4.0.0: `computeMatrix reference-point --referencePoint center`, `-b/-a 2000 --binSize 50`; `plotProfile --perGroup --plotType se` (the mean and its standard error: deepTools has no bootstrap) and `plotHeatmap`, sorted by its default, the mean over every sample, descending, its heatmaps alone |
+| **c** | the same over the four insulation tracks, ±500 kb in 10-kb columns | the same over cooltools' insulation at the four windows, `-b/-a 500000 --binSize 10000` |
 
-Every number drawn is the `chromosomix` command's (`apa` and `metaplot`), run by `make_figure.py`
-and kept in `build/runs/`. Each heatmap is coloured as the app colours it — viridis from 0 to its
-99th percentile, or for the insulation, a signed track, symmetric about 0 over its 1st and 99th —
-and drawn as a picture can draw 25,432 rows: each line is the mean of 26 consecutive rows.
+Upstream of those, each side runs its own chain on chr19: insulation at 50, 100, 200 and 400 kb on
+the 10-kb map (the app's *Diamond insulation*; `cooltools.insulation`), and the CTCF peaks on the two
+labs' tracks as replicates at IDR ≤ 0.05 (the app's *Peak calling*; yapc 0.1 with IDR 2.0.3, seed 0),
+both at the validation notebook's settings. Every link is held to its reference there, number for
+number (`notebooks/validation.qmd`, § 24); this page is the same comparison as pictures.
 
-## Numbers drawn
+Each side draws its own figure. What is set alike is only what lets two pictures be read side by
+side: the colour maps and their ranges, by the app's rules (RdBu_r symmetric about 1 for the pile-up;
+viridis from 0 to the 99th percentile for a heatmap, symmetric about 0 for a signed one), and the
+curves' colours, the app's palette in the app's order.
 
-| in the figure | value |
-| --- | --- |
-| CTCF peaks (yapc on both experiments, IDR ≤ 0.05) | 25,432 |
-| consecutive pairs; on chr1–22 and X; of those, at most 1 Mb apart | 25,399; 25,394; 25,206 |
-| **a**: pairs piled up (44 kb to 1 Mb apart) | 14,121 |
-| **a**: P2LL, the centre over the lower-left corner | 1.31 |
-| **a**: the centre pixel, observed / expected; the colour scale | 1.88; 0.12 to 1.88 |
-| **b**: summit (the column at −50 to 0 bp), mean fold change [95% CI] | CTCF Broad 34.07 [33.77, 34.33]; CTCF Stanford 30.27 [30.06, 30.44]; ATAC-seq 8.38 [8.31, 8.47] |
-| **b**: heatmap scales, 0 to | 78.9; 69.5; 22.5 |
-| **c**: trough (the column at −10 to 0 kb), mean insulation (log2) [95% CI] | 50 kb −0.074 [−0.077, −0.070]; 100 kb −0.070 [−0.074, −0.065]; 200 kb −0.081 [−0.086, −0.077]; 400 kb −0.124 [−0.129, −0.120] |
-| **c**: heatmap scales, ± | 0.71; 0.83; 0.84; 0.92 |
+## In the browser, end to end
+
+Open the lab store's card *The Chromosomix paper*, tab **Fig. 2**: the map on chr19 at 10 kb with the
+two CTCF tracks and ATAC-seq, nothing computed. Show the Analysis column; each task opens on the
+figure's recipe.
+
+1. **Diamond insulation** → Run. Four insulation tracks, their boundaries and domains.
+2. **Peak calling** → Run. *Peaks · CTCF · Broad + CTCF · Stanford · IDR ≤ 0.05*, 2,101 peaks.
+3. Switch the map to **2 kb**. **Aggregate peak analysis**, features: the peaks → Run. Save the
+   pile-up with its **PDF** button (panel a).
+4. **Metaplot over a feature set**, features: the peaks → Run. Save the profile and the three
+   heatmaps (panel b).
+5. Tick the four insulation tracks instead, flank **500000**, resolution **10000** → Run. Save the
+   profile and the four heatmaps (panel c).
+
+About five minutes from a laptop, most of it the 2-kb map read for the expected.
+`chromosomix_panels.mjs` does exactly this in headless Chromium and writes `chromosomix/`.
 
 ## To check before it goes in
 
-- **The pile-up is at 2 kb, ±10 bins (±20 kb)**, as asked. Pairs nearer than 44 kb are left out, as
-  coolpuppy leaves them out at this window by default; 11,085 of the 25,206 consecutive pairs on
-  chr1–22 and X within 1 Mb are, and 188 pairs further apart than 1 Mb are not piled up (the band of the map
-  read for the expected stops at 1.05 Mb). Say if the pile-up should keep them, or take the near ones
-  with a smaller floor.
-- **c's rows are in c's own order**: strongest first by the mean insulation over the four windows,
-  which is what the app draws for a run of those four tracks — so the top rows are the peaks in the
-  most insulated stretches, not the strongest CTCF peaks. The app has no way to borrow b's order for
-  c; if the figure should show c in b's order (by CTCF), say so and it is drawn that way here.
-- **The peaks are the app's yapc calls** on the two CTCF experiments as replicates (25,432 at
-  IDR ≤ 0.05), not ENCODE's own peak sets.
-- **Colours** of the three tracks and the insulation are the store's (`GM_COLOURS` in
-  `scripts/make_rsg_store.py`), the insulation's four windows shaded from light (50 kb) to dark
-  (400 kb).
+- **The two sides' bands are different statistics**: the app's is a 95% percentile bootstrap over
+  peaks, deepTools' the standard error of the mean. The means are the same numbers (§ 24).
+- **plotHeatmap's heatmaps are drawn without the profile it puts over them by default**
+  (`--whatToShow 'heatmap and colorbar'`), since `plotProfile`'s is the panel above them, as the app
+  draws its profile apart from its heatmaps. deepTools' labels are one word each (`CTCF-Broad`): it
+  breaks a label at its spaces and reads its matrix's header as ASCII.
+- **The pile-up is at 2 kb, ±10 bins**, as asked for the genome-wide version; on chr19 it piles 327
+  of the 2,100 pairs (those at least 44 kb apart). Say if it should be at 5 or 10 kb, where more
+  pairs clear the floor.
 
 ## Rebuild
 
 ```bash
 npm ci && npm run build:cli
-python -m pip install numpy matplotlib h5py cooler pandas requests
-python manuscript/figure2/make_figure.py    # figure2.pdf, figure2.svg, figure2.png, numbers.tsv
+python3 scripts/make_rsg_store.py stage --out gallery/stage --local http://127.0.0.1:5173
+npm run dev -- --host 127.0.0.1 --port 5173 &
+node manuscript/figure2/chromosomix_panels.mjs                                  # chromosomix/
+YAPC_PYTHON=yapc-env/bin/python refs/bin/python manuscript/figure2/reference.py  # reference/
+refs/bin/python manuscript/figure2/make_figure.py                                # figure2.*
 ```
 
-The first render reads the map's 2-kb rung by range from 4DN's open-data bucket, every contact of
-chr1–22 and X within 1.05 Mb of the diagonal (`notebooks/scripts/cool_subset.py`: 6.1 GB read in
-9 minutes here, 405 million contacts in a 407-MB .cool written to `build/data/`), and the three ENCODE bigWigs (1.6 GB),
-each held to its MD5. The commands' outputs are kept in `build/runs/`, so a second render only draws.
+The environments are the validation notebook's (`refs` and yapc's, *To render* there).
+`reference.py` reads chr19 of the map's 10-kb and 2-kb rungs by range from 4DN's bucket
+(`notebooks/scripts/cool_subset.py`, 0.3 GB) and ENCODE's three bigWigs (1.6 GB, each held to its
+MD5) into `build/`, and keeps the tools' working files there; yapc takes about five minutes.

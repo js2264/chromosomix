@@ -2,7 +2,7 @@
  * The paper's card of the lab store (§24.2), opened from its address as the card opens it: Fig. 1a's
  * three cells — GM12878 at 2 kb with its insulation above, its compartments at its left and its 4C
  * under it; the tracks cell the workspace put eight tracks on (§16.11); the model — then the same tab
- * after a reload, its tracks cell still filled; Fig. 2 at 10 kb; and Fig. S3c, the bacteria renamed.
+ * after a reload, its tracks cell still filled; Fig. 2 on chr19, nothing computed; and Fig. S3c, the bacteria renamed.
  *
  * The workspace is the store's, staged so that every name points at where its file is today
  * (`make_rsg_store.py stage`), the 4DN and ENCODE files read in place through the session's proxy:

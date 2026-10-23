@@ -148,7 +148,7 @@ export function isDomainPileup(params: Params): boolean {
  * the two stopped being the same answer when the third mode arrived.
  */
 export function onDiagonal(params: Params): boolean {
-  return params.anchors !== 'pairs' && params.anchors !== 'allpairs'
+  return params.anchors !== 'pairs' && params.anchors !== 'allpairs' && params.anchors !== 'consecutive'
 }
 
 /**
@@ -206,6 +206,20 @@ export function allPairs(params: Params): boolean {
   return params.anchors === 'allpairs'
 }
 
+/**
+ * Whether the pairs are **each feature with the next** along its sequence.
+ *
+ * Made from one feature set like {@link allPairs}, and read like a loaded loop
+ * set once made: one pair a neighbour, no separation range of its own, and the
+ * nearest loop (`minDist`) as the one floor — which is what a BEDPE of the same
+ * pairs gets, here and in coolpuppy. It is the pairing a set of boundary sites
+ * is asked about — are two consecutive CTCF peaks in contact — and the one no
+ * range over *every* pair can give: between two neighbours lies no third site.
+ */
+export function consecutivePairs(params: Params): boolean {
+  return params.anchors === 'consecutive'
+}
+
 /** How many separation bins the run splits its pairs into; 1 is a single pileup. */
 export function distanceBins(params: Params): number {
   if (onDiagonal(params)) return 1
@@ -252,6 +266,14 @@ const PARAMS: readonly ParamSpec[] = [
         hint:
           'Off the diagonal, between every two features within a separation range — the test of ' +
           'whether a set of places contacts itself.',
+      },
+      {
+        value: 'consecutive',
+        label: 'each feature with the next',
+        needsKinds: INTERVAL_KINDS,
+        hint:
+          'Off the diagonal, between each feature and the next one along its sequence — the pairs ' +
+          'of neighbouring sites, such as consecutive CTCF peaks.',
       },
     ],
   },
@@ -492,9 +514,10 @@ const PARAMS: readonly ParamSpec[] = [
     section: 'Control',
   },
   // **The nearest loop, coolpuppy's `mindist`**, five bins by default
-  // ({@link MIN_DIST_DEFAULT}). A loop set only, and the fixed mode only: *every
-  // pair* has a separation range of its own just below, and a scaled window is a
-  // fraction of its separation, which never reaches the diagonal. Measured
+  // ({@link MIN_DIST_DEFAULT}). A loop set, or the neighbours of a feature set,
+  // and the fixed mode only: *every pair* has a separation range of its own just
+  // below, and a scaled window is a fraction of its separation, which never
+  // reaches the diagonal. Measured
   // between the two anchors' centres, in base pairs against this many bins of
   // the file, which is how coolpuppy measures it.
   {
@@ -508,7 +531,8 @@ const PARAMS: readonly ParamSpec[] = [
     min: 0,
     integer: true,
     unit: 'bins',
-    when: (params) => usesPairSet(params) && !isScaled(params) && params.norm !== 'chromosight',
+    when: (params) =>
+      (usesPairSet(params) || consecutivePairs(params)) && !isScaled(params) && params.norm !== 'chromosight',
     section: 'Separation',
   },
   // **The range two features may be apart is a range of bin offsets**, which is
@@ -553,7 +577,7 @@ const PARAMS: readonly ParamSpec[] = [
     max: MAX_DISTANCE_BINS,
     integer: true,
     slider: true,
-    when: (params) => params.anchors === 'pairs' || params.anchors === 'allpairs',
+    when: (params) => !onDiagonal(params),
     section: 'Separation',
   },
   {
@@ -679,7 +703,9 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
         ? 'Choose a loop set. A BEDPE dropped on the Annotations panel becomes one.'
         : allPairs(params)
           ? 'Choose the feature set to pair with itself.'
-          : 'Choose a feature set to pile up on the diagonal.',
+          : consecutivePairs(params)
+            ? 'Choose the feature set whose neighbours to pair.'
+            : 'Choose a feature set to pile up on the diagonal.',
     }
   }
 

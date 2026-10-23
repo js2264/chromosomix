@@ -7511,7 +7511,11 @@ list is ticked back to the star, because nothing ticked there is a Run that cann
 used to be one rule, so the drawer's round trip around a run ticked the reader's unticked track back on.
 
 Parameters are remembered per file and per task, and travel in an exported session, so that reproducing
-a figure is opening the session and pressing Run.
+a figure is opening the session and pressing Run. **Per file means the session's key for it** — the tab
+and the file, whatever resolution is drawn — which is the key a workspace's `analysis` is put back
+under and saved from, and a figure's style with it (`AnalysisContext.memoryKey`). The drawer kept them
+under the file's address with its resolution, which nothing else read: a workspace opened its tasks on
+their defaults, saved none of what they were run with, and a change of resolution forgot them.
 
 **A number can take its default from the file.** Base composition's bin size, and *Signal by group*'s,
 is the open map's resolution until the reader types another, and 10 kb where no map is open; *Loop
@@ -8856,7 +8860,8 @@ takes 3 minutes and 290 MB.
 **Over tracks and feature sets.** *Metaplot over a feature set*, in both **reference-point** (a
 point ± a flank) and
 **scaled-region** (flank, body resampled to a fixed width, flank) modes, strand-aware, over any number
-of bigWig or synthetic tracks, with a bootstrap band and a per-feature heatmap for every curve — because
+of bigWig or synthetic tracks, with a bootstrap band — drawn about its line whatever its sign, which a
+band below zero once was not — and a per-feature heatmap for every curve — because
 the mean of a bimodal set is a line that describes nothing. The heatmaps of one run list the features in
 one order, by each one's mean over every bin of every track and strongest first, which is how deepTools'
 `plotHeatmap` orders several samples: a row is the same feature in each of them, and each has colours of
@@ -8866,7 +8871,8 @@ transcripts of a gene that start at one TSS, a fifth of the RefSeq set — is as
 and its row made once, then given to each of them. *Aggregate peak analysis*, likewise in both
 **fixed** (centre ± W bins) and **scaled-region** (the domain, or the rectangle between two anchors,
 resampled to a fixed grid) modes; on-diagonal from a feature set, off-diagonal from a pair set, and
-off-diagonal from **every pair of one feature set** inside a separation range;
+off-diagonal from **every pair of one feature set** inside a separation range, and off-diagonal from
+**each feature of one set with the next** along its sequence;
 normalised by **observed/expected by default**, by distance-matched controls, by **chromosight**, or
 not at all; with the P2LL enrichment reported under it and a per-feature score table that can leave
 the app.
@@ -9094,7 +9100,17 @@ the run's own seed rather than truncated**, for §18.8's reason about the anchor
 here: taking the first two hundred thousand is taking whichever sequences sort first, and a pileup of
 chromosome I captioned *200,000 pairs* is a change of subject.
 
-**And either off-diagonal mode may be split by separation**, into log-spaced bands with a pileup and
+**The fourth pairs each feature with the next one along its sequence** — consecutive CTCF peaks, the
+pairs of neighbouring sites a loop-extrusion figure asks about, which no range over *every* pair can
+give, since between two neighbours lies no third site. It is made from one feature set and read as a
+loaded loop set of the same pairs is: n − 1 pairs on a sequence of n features, no separation range
+and no sampling, and the nearest loop (`minDist`, coolpuppy's `mindist`) as the one floor, measured
+between the two features' own centres as coolpuppy measures a BEDPE's. So its pileup is the pileup of
+a BEDPE listing those pairs, here and in coolpuppy, to the last bit: § 24 of the validation notebook
+pairs GM12878's CTCF peaks this way and holds them to coolpuppy over a BEDPE written in Python, within
+5·10⁻⁶ in every cell, at the cost of a loaded pair set.
+
+**And any off-diagonal mode may be split by separation**, into log-spaced bands with a pileup and
 a control apiece. One pileup over pairs spanning 30 kb to 2 Mb is an average of a strong short-range
 contact and a weak long-range one, which is a picture of neither — and the bands are log-spaced on
 the observed range rather than by equal counts, because contact falls off with separation as a power
@@ -11508,8 +11524,9 @@ why one table for all of them was the wrong shape and is gone:
   window at 2 kb as three cells (the map with its insulation, compartments, 4C and marks, a tracks cell
   of ENCODE's and UCSC's tracks, and the model coloured by distance to a pinned bead), Fig. 1c's mouse
   map at five scales with a model under each, Fig. 1d's insulation chain beside chromosome 3's model,
-  Fig. 2's GM12878 map with two labs' CTCF, the peaks called on both, insulation at four scales and
-  ATAC-seq, and Fig. S3a–c's bacteria read along their arms — and Meneu et al. 2025's bacterial
+  Fig. 2's GM12878 map on chr19 with two labs' CTCF and ATAC-seq and nothing computed, each task of its
+  chain — insulation at four scales, peaks on both CTCF tracks, the APA between consecutive peaks, the
+  metaplots — opening on the figure's recipe (`analysis`, §18.2), and Fig. S3a–c's bacteria read along their arms — and Meneu et al. 2025's bacterial
   chromosomes in yeast. Inline, so it costs no request; where its files live is §24.3.
 - **DNA Bacterial Zoo** — a dev feature (§29), published with the multi-genome format: switched
   off, it has no tile. The genome gallery's cards over **one** file: a card a species, whose
@@ -11842,8 +11859,8 @@ barChart, the SNPs bgzipped and indexed, the loops called on the micro-C map by 
 Chromosight, the sequence as a `.2bit` and the map as a `.hic` for the hub example, E1 along both
 arms of the paper's three *P. aeruginosa* maps, UCSC's hg38 sequence and refGene as UCSC publishes
 them, and what the paper's GM12878 panels draw: insulation, compartments, the 4C profile and the model
-at Fig. 1a's window, CTCF's motif, and insulation at four scales and CTCF peaks over the genome for
-Fig. 2). The GM12878 map is 27 GB, and none of that reads it whole: `notebooks/scripts/cool_subset.py`
+at Fig. 1a's window, CTCF's motif, and insulation at four scales and CTCF peaks over the whole genome,
+which Fig. 2's tab computes in the app on chr19). The GM12878 map is 27 GB, and none of that reads it whole: `notebooks/scripts/cool_subset.py`
 reads the one rung a task needs — of one sequence, or of every sequence near the diagonal — by range
 from 4DN's bucket into a `.cool` with the file's own weights, every contact within a sequence written
 as the file holds it, so a task that reads contacts within a sequence, as each of these does, reads the

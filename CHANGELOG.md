@@ -22,11 +22,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   cell with ENCODE's CTCF, ATAC-seq and its peaks, both strands of total RNA-seq, CTCF's motif, UCSC's
   refGene and hg38 sequence; and the pastis-NB model of the window, drawn as sticks, its TAD borders as
   beads and every bead coloured by its distance to one pinned inside the central sub-TAD. **Fig. 2**:
-  the map at 10 kb with two labs' CTCF ChIP-seq (ENCSR000AKB and ENCSR000DZN, fold change over
-  control), the 25,432 peaks the app's yapc calls on the two at IDR ≤ 0.05, insulation at four scales
-  (50 to 400 kb) and ATAC-seq, and each peak paired with the next for APA. Everything not a
-  consortium's file is the app's own output, made by `scripts/make_rsg_store.py derive --steps
-  gm12878` on the map's rungs read by range (`notebooks/scripts/cool_subset.py`), never the 27 GB.
+  the map on chr19 at 10 kb with two labs' CTCF ChIP-seq (ENCSR000AKB and ENCSR000DZN, fold change
+  over control) and ATAC-seq, and nothing computed: each task of the figure's chain opens on its
+  recipe — insulation at four scales, the peaks on the two CTCF tracks as replicates, the APA between
+  each peak and the next at 2 kb, the metaplots — so the figure's chromosomix panels are made in the
+  browser from the map and the tracks alone. Everything else not a consortium's file is the app's own
+  output — and genome-wide, the peaks (25,432) and the insulation at four scales — made by
+  `scripts/make_rsg_store.py derive --steps gm12878` on the map's rungs read by range
+  (`notebooks/scripts/cool_subset.py`), never the 27 GB.
 
 - **Fig. 2's chain, held to its references (§18.10).** The validation notebook's § 24 runs what the
   paper's Fig. 2 runs on GM12878, each link by chromosomix and by the package it reproduces, each fed
@@ -36,6 +39,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the peaks against deepTools' `computeMatrix`, `plotProfile` and `plotHeatmap`. It reads chr19 of
   4DN's 27-GB map by range (`notebooks/scripts/cool_subset.py`), ENCODE's tracks held to their MD5s,
   and its commands are timed with the rest.
+
+- **APA between each feature and the next (§18.8).** A fourth choice of anchors, *each feature with
+  the next*, pairs every feature of a set with its neighbour along the sequence — consecutive CTCF
+  peaks — and piles the pairs up off the diagonal, held to the nearest loop as a loaded loop set is.
+  Its pileup is coolpuppy's over a BEDPE of the same pairs within 5·10⁻⁶ (validation notebook § 24),
+  so Fig. 2's chain — insulation, peaks, the APA between them and the metaplots — runs in the app from
+  the map and the tracks alone, with no pair file made outside it.
 
 - **What a task re-implements, on its row (§18.1).** A `?` in a circle at the right of a task's title
   in the Analysis column names the published method it follows, how it came out against it in the
@@ -250,6 +260,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   validation's comparison with yapc 0.1 on chr19 is unchanged to the last digit.
 
 ### Fixed
+
+- **A band below zero is drawn about its line (§18.13).** A curve's band is two stacked edges, and
+  the chart library stacks only values of one sign unless told otherwise: a band whose lower edge was
+  negative had its width stacked on zero, a strip from 0 to the band's width far from its line. Every
+  metaplot of an insulation track, a log ratio, drew its bands so; they are stacked whatever the signs.
+
+- **A workspace's analysis recipes come back (§18.2).** What each task was last set to, and how its
+  figures were styled, are saved in a workspace so that reproducing a figure is opening it and pressing
+  Run — and the drawer kept them under the map's address with its resolution, where a workspace
+  neither put them back nor looked for them: every task opened on its defaults, a saved workspace
+  carried none of what was run, and switching resolution forgot the form. They are kept under the
+  tab's key for the file, which is the workspace's own, so the paper's Fig. 2 tab opens each task of
+  its chain on the figure's recipe.
 
 - **A tracks cell keeps its tracks (§16.11).** A track placed on a deck's tracks cell was kept against
   the file of the map it was on, and a tracks cell has none: a reload, a saved workspace opened again

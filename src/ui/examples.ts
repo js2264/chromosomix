@@ -330,8 +330,9 @@ const DEMO: Array<{
       'ATAC-seq and RNA-seq, CTCF’s motif, ATAC peaks, UCSC’s refGene and hg38 sequence; and the model the app ' +
       'inferred from the map, its TAD borders as beads and every bead coloured by its distance to one pinned in the ' +
       'central sub-TAD. Fig. 2: the same map ' +
-      'at 10 kb with two labs’ CTCF ChIP-seq, the peaks the app called on the two, insulation at four scales and ' +
-      'ATAC-seq, each peak paired with the next for APA. Fig. 1c: in situ Hi-C of F123 mouse embryonic stem ' +
+      'on chr19 at 10 kb with two labs’ CTCF ChIP-seq and ATAC-seq, and nothing computed: the Analysis column opens ' +
+      'each task of the figure’s chain on its recipe — insulation at four scales, the peaks on the two CTCF tracks, ' +
+      'the APA between each peak and the next at 2 kb, and the metaplots. Fig. 1c: in situ Hi-C of F123 mouse embryonic stem ' +
       'cells (a 7-GB .mcool of 1.07 billion contacts) at five scales side by side — the genome at 2.5 Mb, chromosome 3 ' +
       'as the correlation of its observed/expected at 250 kb, chr3:27–37 Mb at 10 kb, the Sox2 locus as ' +
       'observed/expected at 5 kb with its loops, and Sox2 with its control region at 2 kb — each with the tracks the ' +

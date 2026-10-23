@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest'
 
 import { runApa } from '@/analysis/run/apa'
 import type { JobContext } from '@/analysis/job'
-import { anchorAt } from '@/analysis/tasks/apa'
+import { anchorAt, consecutivePairs, onDiagonal, usesPairSet } from '@/analysis/tasks/apa'
 import type { AnalysisFraming, MatrixOutput, Params } from '@/analysis/types'
 import type { FeatureSet } from '@/annotations/types'
 
@@ -233,5 +233,58 @@ describe('pairs made from a feature set', () => {
     // Centre to centre is 4,150 bins — past the top of the range.
     const byCentre = await runApa(job({ ...near, at: 'centre' }, { genes: pair }))
     expect(byCentre.some((out) => out.kind === 'matrix')).toBe(false)
+  })
+})
+
+describe('each feature with the next', () => {
+  /** Where every window was cut, as (row, column) about its centre, in order. */
+  async function pairsCut(params: Params, genes: Gene[]): Promise<Array<[number, number]>> {
+    const reads: Read[] = []
+    await runApa(job(params, { reads, genes }))
+    return reads
+      .map((read): [number, number] => [read.rows[0] + 2, read.cols[0] + 2])
+      .sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  }
+  const neighbours: Params = {
+    anchors: 'consecutive',
+    features: 'features',
+    mode: 'fixed',
+    window: 2,
+    norm: 'none',
+    balance: false,
+    minDist: 0,
+    byDistance: 0,
+  }
+  // Far enough apart that no two windows are read together (`MERGE_CAP_BINS`).
+  const sites: Gene[] = [
+    { from: 1_000, to: 1_100, strand: 0 },
+    { from: 3_000, to: 3_100, strand: 0 },
+    { from: 6_000, to: 6_100, strand: 0 },
+    { from: 10_000, to: 10_100, strand: 0 },
+  ]
+
+  it('pairs each feature with the next along its sequence, and no other two', async () => {
+    // Every pair of the four is six windows; the neighbours are three.
+    expect(await pairsCut(neighbours, sites)).toEqual([
+      [1_050, 3_050],
+      [3_050, 6_050],
+      [6_050, 10_050],
+    ])
+  })
+
+  it('keeps the nearest loop as a loaded loop set does, centre to centre', async () => {
+    // The first two 2,000 bins apart by their centres: inside a 2,000-bin floor,
+    // exactly, which is kept — coolpuppy's rule — and left out of one a bin further.
+    expect(await pairsCut({ ...neighbours, minDist: 2_000 }, sites)).toHaveLength(3)
+    expect(await pairsCut({ ...neighbours, minDist: 2_001 }, sites)).toEqual([
+      [3_050, 6_050],
+      [6_050, 10_050],
+    ])
+  })
+
+  it('draws off the diagonal, from a feature set', () => {
+    expect(onDiagonal(neighbours)).toBe(false)
+    expect(consecutivePairs(neighbours)).toBe(true)
+    expect(usesPairSet(neighbours)).toBe(false)
   })
 })

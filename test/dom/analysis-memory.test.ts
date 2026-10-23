@@ -125,10 +125,10 @@ const RUNNER = {
   cancel: () => {},
 } as unknown as AnalysisRunner
 
-function open(task: AnalysisTask): { el: HTMLElement; destroy(): void } {
+function open(task: AnalysisTask, context: AnalysisContext = CONTEXT): { el: HTMLElement; destroy(): void } {
   const drawer = new AnalysisDrawer({
     runner: RUNNER,
-    context: () => CONTEXT,
+    context: () => context,
     framing: () => FRAMING,
     onClose: () => {},
     hasLanes: () => true,
@@ -299,5 +299,34 @@ describe('what comes out of storage is untrusted', () => {
     )
     expect(Object.keys(readAnalysisMemory(URI))).toEqual(['insulation'])
     expect(recallParams(URI, 'ps')).toBeNull()
+  })
+})
+
+describe('the key it writes under, in a session', () => {
+  // A session keys every fact about its file by the tab and the file
+  // (`Session.memoryKey`), and that key is where `applyConfig` puts a
+  // workspace's `analysis` and `buildConfig` reads it back. The drawer kept the
+  // recipes under the file's URI with its resolution instead, so a workspace
+  // opened every task on its defaults and saved none of what it was run with.
+  const KEY = 'session-1|yeast.mcool'
+  const SESSION: AnalysisContext = { ...CONTEXT, memoryKey: KEY }
+
+  it('opens on the recipe a workspace put back', () => {
+    // What `applyConfig` does with a tab's `analysis`.
+    window.sessionStorage.clear()
+    const restored = { insulation: { window: 25_000, balance: true } }
+    rememberParams(KEY, 'insulation', restored.insulation)
+    const view = open(TASK, SESSION)
+    expect(numberBox(view.el, 'window').value).toBe('25000')
+    expect(pressed(view.el, 'balance')).toBe(true)
+    view.destroy()
+  })
+
+  it('writes where a saved workspace reads, and not under the file’s URI', () => {
+    const view = open(TASK, SESSION)
+    typeInto(numberBox(view.el, 'window'), '40000')
+    expect(recallParams(KEY, 'insulation')?.window).toBe(40_000)
+    expect(recallParams(URI, 'insulation')).toBeNull()
+    view.destroy()
   })
 })

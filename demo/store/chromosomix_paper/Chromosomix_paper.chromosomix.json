@@ -1588,11 +1588,11 @@
     {
       "version": 1,
       "createdAt": "2026-10-07T00:00:00.000Z",
-      "name": "Fig. 2 · CTCF sites in GM12878: two labs’ CTCF, the peaks called on both, insulation at four scales and ATAC",
+      "name": "Fig. 2 · CTCF sites in GM12878, chr19: the map, two labs’ CTCF and ATAC — insulation, peaks, APA and metaplots run here",
       "state": {
         "uri": "human/4DNFIXP4QG5B.mcool::resolutions/10000",
         "view": "region",
-        "region": "chr14:86000000-93000000",
+        "region": "chr19:0-58617616",
         "level": "bin",
         "balance": true,
         "transform": "log10",
@@ -1666,204 +1666,6 @@
           }
         },
         {
-          "id": "b-peaks",
-          "card": "linear",
-          "kind": "segments",
-          "label": "CTCF peaks · IDR ≤ 0.05",
-          "source": {
-            "kind": "remote",
-            "name": "GM12878_CTCF.peaks.bed",
-            "url": "human/GM12878_CTCF.peaks.bed"
-          },
-          "visible": true,
-          "placement": {
-            "top": false,
-            "right": false,
-            "bottom": true,
-            "left": false
-          },
-          "style": {
-            "colour": "#d55e00",
-            "size": 18,
-            "mode": "area",
-            "limits": {
-              "auto": true,
-              "min": 0,
-              "max": 1
-            },
-            "group": "",
-            "shape": "element",
-            "radius": 7,
-            "opacity": 1,
-            "flip": false
-          }
-        },
-        {
-          "id": "b-insulation-w40",
-          "card": "linear",
-          "kind": "track",
-          "label": "insulation · 400 kb",
-          "source": {
-            "kind": "remote",
-            "name": "4DNFIXP4QG5B_10000.insulation-w40.bw",
-            "url": "human/4DNFIXP4QG5B_10000.insulation-w40.bw"
-          },
-          "visible": true,
-          "placement": {
-            "top": false,
-            "right": false,
-            "bottom": true,
-            "left": false
-          },
-          "style": {
-            "colour": "#1aa0b8",
-            "size": 36,
-            "mode": "area",
-            "limits": {
-              "auto": true,
-              "min": 0,
-              "max": 1
-            },
-            "group": "insulation",
-            "shape": "element",
-            "radius": 7,
-            "opacity": 1,
-            "flip": false
-          }
-        },
-        {
-          "id": "b-insulation-w20",
-          "card": "linear",
-          "kind": "track",
-          "label": "insulation · 200 kb",
-          "source": {
-            "kind": "remote",
-            "name": "4DNFIXP4QG5B_10000.insulation-w20.bw",
-            "url": "human/4DNFIXP4QG5B_10000.insulation-w20.bw"
-          },
-          "visible": true,
-          "placement": {
-            "top": false,
-            "right": false,
-            "bottom": true,
-            "left": false
-          },
-          "style": {
-            "colour": "#1aa0b8",
-            "size": 36,
-            "mode": "area",
-            "limits": {
-              "auto": true,
-              "min": 0,
-              "max": 1
-            },
-            "group": "insulation",
-            "shape": "element",
-            "radius": 7,
-            "opacity": 1,
-            "flip": false
-          }
-        },
-        {
-          "id": "b-insulation-w10",
-          "card": "linear",
-          "kind": "track",
-          "label": "insulation · 100 kb",
-          "source": {
-            "kind": "remote",
-            "name": "4DNFIXP4QG5B_10000.insulation-w10.bw",
-            "url": "human/4DNFIXP4QG5B_10000.insulation-w10.bw"
-          },
-          "visible": true,
-          "placement": {
-            "top": false,
-            "right": false,
-            "bottom": true,
-            "left": false
-          },
-          "style": {
-            "colour": "#1aa0b8",
-            "size": 36,
-            "mode": "area",
-            "limits": {
-              "auto": true,
-              "min": 0,
-              "max": 1
-            },
-            "group": "insulation",
-            "shape": "element",
-            "radius": 7,
-            "opacity": 1,
-            "flip": false
-          }
-        },
-        {
-          "id": "b-insulation-w5",
-          "card": "linear",
-          "kind": "track",
-          "label": "insulation · 50 kb",
-          "source": {
-            "kind": "remote",
-            "name": "4DNFIXP4QG5B_10000.insulation-w5.bw",
-            "url": "human/4DNFIXP4QG5B_10000.insulation-w5.bw"
-          },
-          "visible": true,
-          "placement": {
-            "top": false,
-            "right": false,
-            "bottom": true,
-            "left": false
-          },
-          "style": {
-            "colour": "#1aa0b8",
-            "size": 36,
-            "mode": "area",
-            "limits": {
-              "auto": true,
-              "min": 0,
-              "max": 1
-            },
-            "group": "insulation",
-            "shape": "element",
-            "radius": 7,
-            "opacity": 1,
-            "flip": false
-          }
-        },
-        {
-          "id": "b-borders",
-          "card": "linear",
-          "kind": "segments",
-          "label": "borders · 50 kb",
-          "source": {
-            "kind": "remote",
-            "name": "4DNFIXP4QG5B_10000.borders.bed",
-            "url": "human/4DNFIXP4QG5B_10000.borders.bed"
-          },
-          "visible": true,
-          "placement": {
-            "top": false,
-            "right": false,
-            "bottom": true,
-            "left": false
-          },
-          "style": {
-            "colour": "#1aa0b8",
-            "size": 18,
-            "mode": "area",
-            "limits": {
-              "auto": true,
-              "min": 0,
-              "max": 1
-            },
-            "group": "",
-            "shape": "element",
-            "radius": 7,
-            "opacity": 1,
-            "flip": false
-          }
-        },
-        {
           "id": "b-atac",
           "card": "linear",
           "kind": "track",
@@ -1895,49 +1697,12 @@
             "opacity": 1,
             "flip": false
           }
-        },
-        {
-          "id": "b-pairs",
-          "card": "overlay",
-          "kind": "pairs",
-          "label": "consecutive CTCF peaks",
-          "source": {
-            "kind": "remote",
-            "name": "GM12878_CTCF.consecutive.bedpe",
-            "url": "human/GM12878_CTCF.consecutive.bedpe"
-          },
-          "visible": false,
-          "placement": {
-            "top": false,
-            "right": false,
-            "bottom": true,
-            "left": false
-          },
-          "style": {
-            "colour": "#000000",
-            "size": 16,
-            "mode": "area",
-            "limits": {
-              "auto": true,
-              "min": 0,
-              "max": 1
-            },
-            "group": "",
-            "shape": "element",
-            "radius": 7,
-            "opacity": 0.9,
-            "flip": false
-          }
         }
       ],
       "manual": [],
       "sequences": [],
-      "groups": {
-        "insulation": "stacked"
-      },
-      "scaling": {
-        "insulation": "each"
-      },
+      "groups": {},
+      "scaling": {},
       "compareNormalise": false,
       "tables": {},
       "plot": {
@@ -1951,6 +1716,72 @@
         "breaks": true,
         "labels": true,
         "ticks": true
+      },
+      "analysis": {
+        "insulation": {
+          "window": 5,
+          "scales": 4,
+          "sequences": [
+            "chr19"
+          ]
+        },
+        "peaks": {
+          "signal": "b-ctcf-broad",
+          "replicate": "b-ctcf-stanford",
+          "idr": 0.05,
+          "perPeak": true,
+          "width": 150,
+          "times": 3,
+          "minWidth": 75,
+          "truncate": 100000,
+          "sequences": [
+            "chr19"
+          ]
+        },
+        "apa": {
+          "anchors": "consecutive",
+          "at": "centre",
+          "mode": "fixed",
+          "window": 10,
+          "minDist": 22,
+          "minDiag": 2,
+          "norm": "oe",
+          "tracks": []
+        },
+        "metaplot": {
+          "tracks": [
+            "b-ctcf-broad",
+            "b-ctcf-stanford",
+            "b-atac"
+          ],
+          "mode": "reference",
+          "at": "centre",
+          "stranded": false,
+          "flank": 2000,
+          "step": 50,
+          "band": "bootstrap",
+          "heatmap": true
+        }
+      },
+      "figures": {
+        "apa::apa-0": {
+          "fontSize": 16
+        },
+        "metaplot::metaplot": {
+          "fontSize": 16
+        },
+        "metaplot::metaplot-heatmap": {
+          "fontSize": 22
+        },
+        "metaplot::metaplot-heatmap-2": {
+          "fontSize": 22
+        },
+        "metaplot::metaplot-heatmap-3": {
+          "fontSize": 22
+        },
+        "metaplot::metaplot-heatmap-4": {
+          "fontSize": 22
+        }
       },
       "circular": [],
       "mapNames": {

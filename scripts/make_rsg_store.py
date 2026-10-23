@@ -36,9 +36,10 @@ fetches UCSC's hg38 and computes GM12878's tracks:
   map's counts as a Juicer .hic: the two files the paste box's hub example names (`exampleHubText`),
   which an assembly hub can only name in these formats.
 - ``hg38.2bit`` and ``hg38.refGene.txt.gz`` — UCSC's, as UCSC publishes them (`--steps ucsc`).
-- What the paper's GM12878 panels draw (`--steps gm12878`, `write_gm12878`): insulation at four scales
-  and CTCF peaks over the genome (Fig. 2), and insulation, compartments, a 4C profile, a model and
-  CTCF's motif at Fig. 1a's window, all by the chromosomix command. 4DN's map is 27 GB and is never
+- What the paper's GM12878 panels draw (`--steps gm12878`, `write_gm12878`): insulation, compartments,
+  a 4C profile, a model and CTCF's motif at Fig. 1a's window, and insulation at four scales and CTCF
+  peaks over the whole genome — what Fig. 2's tab runs in the app on chr19 — all by the chromosomix
+  command. 4DN's map is 27 GB and is never
   fetched whole: each task reads one rung of it, of one sequence or near the diagonal, fetched by range
   (`notebooks/scripts/cool_subset.py`). About a quarter of an hour on four cores, reading about 6 GB of
   the map by range and 0.7 GB of ENCODE's files.
@@ -609,13 +610,13 @@ FILES: list[tuple[str, str, str]] = [
     (PAPER + "human/hg38.2bit", work("hg38.2bit"), "Human genome hg38, UCSC (bigZips)"),
     (PAPER + "human/hg38.refGene.txt.gz", work("hg38.refGene.txt.gz"), "RefSeq genes, UCSC hg38 refGene table"),
     *[(PAPER + f"human/{name}", repo(f"demo/store/{PAPER}human/{name}"), what) for name, what in [
-        (f"{GM}_10000.insulation-w5.bw", "Diamond insulation at 10 kb, 50-kb window, computed by the app (Fig. 2)"),
-        (f"{GM}_10000.insulation-w10.bw", "Diamond insulation at 10 kb, 100-kb window, computed by the app (Fig. 2)"),
-        (f"{GM}_10000.insulation-w20.bw", "Diamond insulation at 10 kb, 200-kb window, computed by the app (Fig. 2)"),
-        (f"{GM}_10000.insulation-w40.bw", "Diamond insulation at 10 kb, 400-kb window, computed by the app (Fig. 2)"),
-        (f"{GM}_10000.borders.bed", "Borders called on the 50-kb insulation (Fig. 2)"),
-        (GM_PEAKS, "CTCF peaks called by the app's yapc on ENCFF734CUT and ENCFF485CGE, IDR ≤ 0.05 (Fig. 2)"),
-        (GM_PAIRS, "Each CTCF peak with the next one along its sequence (Fig. 2)"),
+        (f"{GM}_10000.insulation-w5.bw", "Diamond insulation at 10 kb, 50-kb window, genome-wide, computed by the app"),
+        (f"{GM}_10000.insulation-w10.bw", "Diamond insulation at 10 kb, 100-kb window, genome-wide, computed by the app"),
+        (f"{GM}_10000.insulation-w20.bw", "Diamond insulation at 10 kb, 200-kb window, genome-wide, computed by the app"),
+        (f"{GM}_10000.insulation-w40.bw", "Diamond insulation at 10 kb, 400-kb window, genome-wide, computed by the app"),
+        (f"{GM}_10000.borders.bed", "Borders called on the 50-kb insulation, genome-wide"),
+        (GM_PEAKS, "CTCF peaks called by the app's yapc on ENCFF734CUT and ENCFF485CGE, IDR ≤ 0.05, genome-wide"),
+        (GM_PAIRS, "Each CTCF peak with the next one along its sequence, genome-wide"),
         (f"{GM}_2000.chr14.insulation-w50.bw", "Diamond insulation of chr14 at 2 kb, 100-kb window (Fig. 1a)"),
         (f"{GM}_2000.chr14.borders.bed", "Borders called on chr14's insulation at 2 kb (Fig. 1a)"),
         (f"{GM}_250000.compartments-e1.bw", "Compartments (E1) at 250 kb, phased by GC content (Fig. 1a)"),
@@ -1195,32 +1196,57 @@ def paper_fig1a() -> dict:
                scaling={"rna": "shared"}, circular=[], manual=FIG1A_MARKS, mapNames=GM_NAMES)
 
 
-#: Where Fig. 2's tab opens: Fig. 1a's window and the domains either side of it, at 10 kb.
-FIG2_REGION = "chr14:86,000,001-93,000,000"
+#: Where Fig. 2's tab opens: chr19 whole, at 10 kb — the sequence the figure and the validation
+#: notebook's § 24 hold every link of the chain on.
+FIG2_SEQUENCE = "chr19"
+FIG2_REGION = "chr19:1-58,617,616"
+
+#: What each task of Fig. 2's chain is set to when the tab opens (`analysis`, by task id, §18.2): run in
+#: this order, the four give the figure's chromosomix panels. The peaks are called on the two labs' CTCF
+#: as replicates at § 5's settings; the APA pairs each called peak with the next — the map switched to
+#: 2 kb first — ten bins either side and from coolpuppy's floor for that window, 22 bins, with no track
+#: profiled along its edges, as coolpuppy draws none; the metaplot
+#: is of both CTCF tracks and ATAC-seq about the peaks' centres, and run again over the four insulation
+#: tracks at ±500 kb in 10-kb columns.
+FIG2_RECIPES = {
+    "insulation": {"window": 5, "scales": 4, "sequences": [FIG2_SEQUENCE]},
+    "peaks": {"signal": "b-ctcf-broad", "replicate": "b-ctcf-stanford", "idr": 0.05, "perPeak": True, "width": 150,
+              "times": 3, "minWidth": 75, "truncate": 100_000, "sequences": [FIG2_SEQUENCE]},
+    "apa": {"anchors": "consecutive", "at": "centre", "mode": "fixed", "window": 10, "minDist": 22, "minDiag": 2,
+            "norm": "oe", "tracks": []},
+    "metaplot": {"tracks": ["b-ctcf-broad", "b-ctcf-stanford", "b-atac"], "mode": "reference", "at": "centre",
+                 "stranded": False, "flank": 2000, "step": 50, "band": "bootstrap", "heatmap": True},
+}
+
+
+#: How each of those figures is styled when it is drawn (`figures`, by task and output, §18.13): its type
+#: at 16 px, and a heatmap's at 22, so that a figure exported from the drawer — at the size it is drawn —
+#: reads at 4–6 pt set beside the reference tools' own, a heatmap a third of half a page wide
+#: (manuscript/figure2/).
+FIG2_FIGURES = {
+    "apa::apa-0": {"fontSize": 16},
+    "metaplot::metaplot": {"fontSize": 16},
+    **{f"metaplot::{output}": {"fontSize": 22}
+       for output in ("metaplot-heatmap", "metaplot-heatmap-2", "metaplot-heatmap-3", "metaplot-heatmap-4")},
+}
 
 
 def paper_fig2() -> dict:
-    """GM12878 at 10 kb with what Fig. 2 aggregates at CTCF's sites: two labs' CTCF, the peaks the app
-    called on the two, the insulation at four scales and ATAC-seq — and each peak paired with the next,
-    loaded and not drawn, for APA to pile up (*every pair of a feature set* pairs every peak within a
-    range; *consecutive* is this set)."""
+    """GM12878 on chr19 at 10 kb with Fig. 2's inputs and nothing computed: two labs' CTCF and ATAC-seq
+    beside the map. The chain is the reader's to run, in the app, from the Analysis column — insulation
+    at four scales, the peaks on the two CTCF tracks, the APA between consecutive peaks, the metaplots —
+    each task opening on the recipe the figure was made with (`FIG2_RECIPES`); what it makes is drawn
+    here and is what `manuscript/figure2/` sets beside the reference tools' own figures. The same
+    results over the whole genome, computed by the command line, are in the store's human folder."""
     tracks = [
         track("b-ctcf-broad", "track", "CTCF · Broad", gm("ENCFF734CUT.bigWig"), GM_COLOURS["ctcf"], 44),
         track("b-ctcf-stanford", "track", "CTCF · Stanford", gm("ENCFF485CGE.bigWig"), GM_COLOURS["ctcf2"], 44),
-        track("b-peaks", "segments", "CTCF peaks · IDR ≤ 0.05", gm(GM_PEAKS), GM_COLOURS["peaks"], 18),
-        *[track(f"b-insulation-w{w}", "track", f"insulation · {w * 10} kb", gm(f"{GM}_10000.insulation-w{w}.bw"),
-                GM_COLOURS["insulation"], 36, group="insulation") for w in (40, 20, 10, 5)],
-        # The widest window on top, as the app stacks a run of four scales: a border that survives every
-        # scale reads as a column down the stack, ending on the borders called on the narrowest.
-        track("b-borders", "segments", "borders · 50 kb", gm(f"{GM}_10000.borders.bed"), GM_COLOURS["insulation"], 18),
         track("b-atac", "track", "ATAC", gm("ENCFF487LOB.bigWig"), GM_COLOURS["atac"], 44),
-        track("b-pairs", "pairs", "consecutive CTCF peaks", gm(GM_PAIRS), "#000000", 16, card="overlay",
-              visible=False),
     ]
     state = {"uri": f"{GM_MAP}::resolutions/10000", "view": "region", "region": machine(FIG2_REGION), **MAP_LOOK}
-    return tab("Fig. 2 · CTCF sites in GM12878: two labs’ CTCF, the peaks called on both, insulation at four "
-               "scales and ATAC", state, tracks, groups={"insulation": "stacked"}, scaling={"insulation": "each"},
-               circular=[], mapNames=GM_NAMES)
+    return tab("Fig. 2 · CTCF sites in GM12878, chr19: the map, two labs’ CTCF and ATAC — insulation, peaks, APA "
+               "and metaplots run here", state, tracks, analysis=FIG2_RECIPES, figures=FIG2_FIGURES, circular=[],
+               mapNames=GM_NAMES)
 
 
 def chromosomix_paper() -> dict:
