@@ -214,6 +214,13 @@
   ],
   "pulls": [
     {
+      "number": 136,
+      "commit": "e5f3e7b",
+      "title": "Telemetry: honour Global Privacy Control, not Do Not Track; shorter About blurb",
+      "branch": "ccr-7d5d65bd-wkyknd",
+      "date": "2026-10-23T11:56:37Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
