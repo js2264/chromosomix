@@ -27,7 +27,9 @@
  * failing if one carries a file's name or a cookie, or if any arrives after the
  * switch is turned off. The landing page's note, a map and a track dropped, P(s)
  * run, a file refused, About with the switch on and off: te01 … te04, and
- * `telemetry.json` beside them.
+ * `telemetry.json` beside them. Then a browser sending Do Not Track, whose visit
+ * must be caught, and one sending Global Privacy Control, which must send
+ * nothing and find About saying so: te05, te06.
  *
  * `GALLERY_ONLY=allow` or `telemetry` runs one part.
  */
@@ -280,14 +282,12 @@ const TYPES = {
   '.woff2': 'font/woff2',
 }
 
-async function telemetryPart() {
-  const dist = join(OUT, 'dist-telemetry')
-  console.log('building the site with TELEMETRY_ENDPOINT and TELEMETRY_WEBSITE set…')
-  execSync(`npx vite build --outDir ${JSON.stringify(dist)} --emptyOutDir`, {
-    stdio: 'inherit',
-    env: { ...process.env, TELEMETRY_ENDPOINT: ENDPOINT, TELEMETRY_WEBSITE: WEBSITE },
-  })
-
+/**
+ * A browser on the built site at its own address, with every request to the
+ * endpoint caught into `counts`. `signal` is what the browser says about
+ * tracking: nothing, Do Not Track, or Global Privacy Control.
+ */
+async function servedSite(dist, signal = null) {
   // Service workers blocked: they would fetch around the routing below.
   const context = await browser.newContext({
     viewport: { width: 1600, height: 1000 },
@@ -295,9 +295,11 @@ async function telemetryPart() {
     serviceWorkers: 'block',
   })
   // A real reader's browser says it is not automated; this one has to be told to.
-  await context.addInitScript(() => {
+  await context.addInitScript((signal) => {
     Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => false, configurable: true })
-  })
+    if (signal === 'dnt') Object.defineProperty(Navigator.prototype, 'doNotTrack', { get: () => '1', configurable: true })
+    if (signal === 'gpc') Object.defineProperty(Navigator.prototype, 'globalPrivacyControl', { get: () => true, configurable: true })
+  }, signal)
   const counts = []
   await context.route(`${ENDPOINT}*`, async (route) => {
     const request = route.request()
@@ -313,6 +315,47 @@ async function telemetryPart() {
     if (!existsSync(file)) return route.fulfill({ status: 404, body: 'not found' })
     await route.fulfill({ status: 200, body: readFileSync(file), headers: { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' } })
   })
+  return { context, counts }
+}
+
+/**
+ * The two signals a browser can send about tracking (§31.4): Do Not Track,
+ * which is not read — its visit must be caught — and Global Privacy Control,
+ * which is obeyed — nothing caught, and About saying so in place of the switch.
+ */
+async function signalsPart(dist) {
+  for (const signal of ['dnt', 'gpc']) {
+    const { context, counts } = await servedSite(dist, signal)
+    const page = await context.newPage()
+    await page.goto(`${SITE}/`)
+    await page.waitForSelector('.dropzone')
+    // The visit goes out when the page is idle: at most ten seconds.
+    await sleep(12000)
+    await page.click('button[title="About this viewer"]')
+    await page.waitForSelector('.about-telemetry')
+    await sleep(600)
+    const about = await page.locator('.about-telemetry').innerText()
+    const toggle = await page.locator('.about-telemetry .btn-toggle').count()
+    console.log(`${signal}: ${counts.length} caught · switch offered: ${toggle === 1} · About: ${JSON.stringify(about.split('\n').at(-1))}`)
+    if (signal === 'dnt' && !counts.some((count) => count.body?.payload?.name === undefined)) fail('a browser sending Do Not Track sent no visit')
+    if (signal === 'dnt' && toggle !== 1) fail('a browser sending Do Not Track was offered no switch')
+    if (signal === 'gpc' && counts.length !== 0) fail('a browser sending Global Privacy Control sent something')
+    if (signal === 'gpc' && !/Global Privacy Control/.test(about)) fail('About does not say Global Privacy Control is obeyed')
+    await page.screenshot({ path: `${OUT}/te0${signal === 'dnt' ? 5 : 6}-about-${signal}.png` })
+    console.log('shot', `te0${signal === 'dnt' ? 5 : 6}-about-${signal}`)
+    await context.close()
+  }
+}
+
+async function telemetryPart() {
+  const dist = join(OUT, 'dist-telemetry')
+  console.log('building the site with TELEMETRY_ENDPOINT and TELEMETRY_WEBSITE set…')
+  execSync(`npx vite build --outDir ${JSON.stringify(dist)} --emptyOutDir`, {
+    stdio: 'inherit',
+    env: { ...process.env, TELEMETRY_ENDPOINT: ENDPOINT, TELEMETRY_WEBSITE: WEBSITE },
+  })
+
+  const { context, counts } = await servedSite(dist)
   const page = await context.newPage()
   const refusals = []
   page.on('console', (m) => {
@@ -396,6 +439,7 @@ async function telemetryPart() {
   }
   if (refusals.length > 0) console.log('policy refusals:', refusals)
   await context.close()
+  await signalsPart(dist)
 }
 
 try {

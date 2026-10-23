@@ -165,15 +165,22 @@ describe('where it counts', () => {
     expect(telemetrySending()).toBe(false)
   })
 
-  it('takes Global Privacy Control and Do Not Track at their word, without asking', () => {
+  it('takes Global Privacy Control at its word, without asking', () => {
     setNavigator('globalPrivacyControl', true)
     expect(browserDeclines()).toBe(true)
     expect(telemetrySending()).toBe(false)
+    recordTelemetry({ name: 'install' })
+    expect(queuedForTests()).toHaveLength(0)
     setNavigator('globalPrivacyControl', undefined)
-    setNavigator('doNotTrack', '1')
-    expect(telemetrySending()).toBe(false)
-    setNavigator('doNotTrack', null)
     expect(telemetrySending()).toBe(true)
+  })
+
+  it('does not read Do Not Track, which the browsers that offered it have retired', () => {
+    setNavigator('doNotTrack', '1')
+    expect(browserDeclines()).toBe(false)
+    expect(telemetrySending()).toBe(true)
+    recordTelemetry({ name: 'install' })
+    expect(queuedForTests()).toHaveLength(1)
   })
 
   it('names the endpoint’s host for the sentence in About', () => {

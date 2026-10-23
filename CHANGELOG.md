@@ -50,8 +50,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   Umami (`https://cloud.umami.is/api/send`, free up to its Hobby plan's limit, or a self-hosted
   Umami), named by the repository's `TELEMETRY_ENDPOINT` and `TELEMETRY_WEBSITE` variables
   (docs/deploy.md), when the page is idle, at most two hundred a page. On by default with no banner;
-  **About → telemetry** turns it off at once, *forget everything* keeps it off, and Global Privacy
-  Control or Do Not Track sends nothing. Only the site's own build at the site's own address sends any:
+  **About → telemetry** turns it off at once, *forget everything* keeps it off, and a browser
+  sending Global Privacy Control sends nothing; Do Not Track, which Safari and Firefox have
+  retired, is not read. Only the site's own build at the site's own address sends any:
   the archived pins, the previews, the package, the desktop app, the single file, embeds and
   automated browsers never do.
 

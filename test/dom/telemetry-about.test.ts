@@ -46,7 +46,9 @@ describe('About, on the subject of telemetry', () => {
     const text = section()?.textContent ?? ''
     expect(text).toContain('Telemetry')
     expect(text).toContain('cloud.umami.is')
-    expect(text).toContain('never a file name, an address, a place on the genome')
+    expect(text).toContain('Never a file name, an address or a place on the genome')
+    // Short, and in sentences rather than asides: no dash anywhere in it.
+    expect(text).not.toMatch(/[—–]/)
     expect(toggle()?.textContent).toBe('telemetry')
     expect(toggle()?.getAttribute('aria-pressed')).toBe('true')
   })
@@ -62,11 +64,18 @@ describe('About, on the subject of telemetry', () => {
     expect(telemetryWanted()).toBe(true)
   })
 
-  it('offers no switch to a browser that already asks not to be tracked, and says it is obeyed', () => {
+  it('offers no switch to a browser sending Global Privacy Control, and says it is obeyed', () => {
     setNavigator('globalPrivacyControl', true)
     resetTelemetryForTests({ endpoint: 'https://cloud.umami.is/api/send', website: WEBSITE })
     openAbout('https://example.org/repo')
     expect(toggle()).toBeNull()
-    expect(section()?.textContent).toContain('so this one sends nothing')
+    expect(section()?.textContent).toContain('Your browser sends Global Privacy Control, so this site sends nothing')
+  })
+
+  it('offers the switch to a browser sending Do Not Track, which is not read', () => {
+    setNavigator('doNotTrack', '1')
+    resetTelemetryForTests({ endpoint: 'https://cloud.umami.is/api/send', website: WEBSITE })
+    openAbout('https://example.org/repo')
+    expect(toggle()?.getAttribute('aria-pressed')).toBe('true')
   })
 })
