@@ -14,6 +14,27 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Pairs QC: a library's quality from its `.pairs`, and its restriction fragments (§18.8).** A new
+  task in the 2D card for a map binned from a `.pairs` — or any map, given the `.pairs` it came from.
+  It draws the four orientations' P(s) (moved here from P(s)), the pair types, cis and trans past
+  1–40 kb and the `pairtools stats` table, from the import's own counts at no cost. With a FASTA or
+  `.2bit` and an enzyme it adds the restriction-fragment statistics HiCUP readers look for: pair
+  classes by orientation (dangling end, self-circle, same strand, re-ligation, valid, trans), the
+  distance from each read to the next cut, the fragments seen, and coverage against sites per bin
+  with Spearman ρ. Each read end is placed by the cut on its **own strand** — a `−` read's 5′ end
+  sits `L − 2k` past the top-strand cut once an overhang is filled in, 3 bp for DpnII — so a dangling
+  end is counted as one. `chromosomix pairsqc sample.pairs.gz --bin-size 10000 --sequence ref.fa
+  --enzyme DpnII --out qc/`. Held to `pairtools stats`, `pairtools restrict` (once per strand) and
+  `cooltools.coverage` on a yeast library and its R64 reference in `notebooks/validation.qmd` §25:
+  every count identical.
+
+- **Restriction sites: a reference digested by an enzyme, a kit or typed sites (§18.8).** DpnII
+  (MboI, Sau3AI), HindIII, NcoI, EcoRI, BglII, HinfI, DdeI, MseI, NlaIII, CviQI and AluI, the Arima
+  kit, or names and IUPAC sites with the cut marked (`G^ANTC`). A lane of the cuts and the cuts per
+  bin, read by range from a large reference as *find a motif* is. Its cuts are `bioframe.digest`'s
+  and `cooler digest`'s **less two**: both add 1 to Biopython's already 1-based position, so every
+  fragment boundary they write is 2 bp late.
+
 - **`pairtools stats` for every `.pairs` the app imports, and a command that writes it (§3.7).** The
   import counts, in the pass that bins the map, everything `pairtools stats` counts — records mapped
   on both sides, on one and on neither, duplicates, cis and trans and cis past 1 to 40 kb, every pair
@@ -69,6 +90,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   The map is committed, so this runs on every push with nothing to build.
 
 ### Changed
+
+- **P(s)'s four orientations moved to Pairs QC (§18.8).** The toggle and its `.pairs` box left the
+  P(s) form; a stored run, a link or a `chromosomix expected --stranded` line still draws the same
+  curves, with a note saying where they live now. A composite's required task can now take the
+  answers its own form asked (`upstreamParams`), which is how Pairs QC hands the reference and the
+  enzyme to the digest.
 
 - **The command line reads an address by range, as the app does, rather than downloading it whole
   (§23.1).** A map — a cooler, an `.mcool` rung, a `.hic`, an `.scool`, a `.pairs` and its `.px2` —

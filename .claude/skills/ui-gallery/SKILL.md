@@ -54,8 +54,9 @@ node scripts/ui-insulation-hicrep.mjs gallery  # the Analysis column with Reprod
 node scripts/ui-overlay-maps.mjs gallery     # a loop set's maps field on a deck of three, a row and a file dropped on a map's middle, the batch box: om01 … om19
 node scripts/ui-deck-drops.mjs gallery       # the header's + before back (§5.5) on the landing page and on a dropped cooler, its dialog, a map and a bigWig added by URL; a Files row let go on the second map's lanes and on a tracks cell, each cell outlined in the air; a store's rows (gallery/_drops-store.json) dragged out of the drawer onto the same two cells, its workspace row not draggable: dd01 … dd11
 node scripts/ui-contacts.mjs gallery         # the breadcrumb's contacts box: 10M typed, the figure and a task on the drawn map, a deck's chevrons down and up, two files in one square, a Boost-HiC refusal and its two ways out: ct01 … ct18
-node scripts/ui-stranded.mjs gallery         # P(s)'s four orientations on the lab's toy library: the .pairs binned on the fly, then a .pairs dropped on the .mcool's form, and an address: st01 … st09
-node scripts/ui-pairs-stats.mjs gallery      # the General column's Pairs statistics card (§3.7) on the committed pairtools golden's .pairs, binned through the dialog: the column, the card, its save .stats through a stand-in dialog (written under files/, its first lines printed — pairtools' own keys), the dark theme, and a copy with no pair_type column, which counts no duplicate: ps01 … ps05
+node scripts/ui-stranded.mjs gallery         # the four orientations' P(s), now Pairs QC's (§18.8): a .pairs binned on the fly, then a .pairs dropped on an .mcool's Pairs QC form, and an address; P(s)'s form with no orientation controls: st01 … st09
+node scripts/ui-pairsqc.mjs gallery          # Pairs QC (§18.8) and Restriction sites on a 1-in-20 sample of the validation's CH128 with its .mcool and Ensembl's R64 (staged under out/pairsqc/, see the script's header): the two catalogue rows, the binned form priced free, the orientation curves, types, cis and the pairtools table, P(s)'s form without the toggle, the enzyme chosen and priced as a pass, the classes stacked by orientation, the distance histograms and ends per fragment, coverage against sites with ρ, a typed site refused, then the .mcool's form asking for the .pairs, the file held, and the same figures from it: q01 … q18
+node scripts/ui-pairs-stats.mjs gallery      # the General column's Pairs statistics card (§3.7) with its three charts — pair types, cis past 1–40 kb, P(s) by orientation with where the four meet — on the committed golden's .pairs, in light and dark, at the narrowest and a wide column, without a pair_type column and without strands, and with GALLERY_LIBRARY on the head of a real library; every shot measured for clipped or overlapping labels and contrast: ps01 … ps07b
 node scripts/ui-turned-marks.mjs gallery     # the reader's lines on a turned map: a V on the band, straight on down the lanes, re-cut by a zoom, an arm from off the side; then a hovered bead's echo, the same V dashed: tm01 … tm06
 node scripts/ui-dev-features.mjs gallery     # dev features (§29): the store tiles, the lab store, About and a .metacool refused without them, then the same four with them, About carrying no switch either way: d00 … d07
 node scripts/ui-edit.mjs gallery             # the stage that edits the reference (§27, dev): the heading's word, the whole genome, a snap, a stretch selected and turned, the bow-tie zoomed, a drag with the map rearranged, a box, the set-aside menu, an undo, the heading edited, dark, and dev off: e01 … e14
@@ -353,9 +354,11 @@ box's value, placeholder, title and chevrons, and the hash. `GALLERY_ONLY=map`, 
 `refusal` runs one part. Run it after any change to the box, to resampling, or to what names a drawn
 map.
 
-`scripts/ui-stranded.mjs` drives **P(s)'s four orientations** (§18.8) on the lab's toy *Lachancea
-kluyveri* library at the root of the `rsglab-data` bucket, which is there as a contact list and as the
-`.mcool` binned from it. First the `.pairs` opened and binned on the fly: the form with *four
+`scripts/ui-stranded.mjs` drives **the four orientations' P(s)** (§18.8), which moved from P(s) to
+Pairs QC, on a contact list and the `.mcool` binned from it. Its default is still the lab's toy
+*Lachancea kluyveri* pair at the root of the `rsglab-data` bucket, which the bucket no longer holds
+(404): name another pair with `GALLERY_DATA`, `GALLERY_STEM` or `GALLERY_PAIRS`, such as the CH128
+sample and `.mcool` that `scripts/ui-pairsqc.mjs`'s header says how to stage under `/out/pairsqc/`. First the `.pairs` opened and binned on the fly: the form with *four
 orientations* on, which must ask for no file, the price line naming the import the curves were counted
 in, and a plain Run's figure — four unbroken curves, with no notch where they fell by half together.
 Then the `.mcool`: the drop area empty, lit under a drag, holding the dropped `.pairs`, the run's

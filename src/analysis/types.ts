@@ -114,11 +114,11 @@ interface ParamBase {
    * Whether the file in hand asks this question at all.
    *
    * {@link needsNoGenomes} generalised, for a question some files have already
-   * answered. The case is P(s)'s `.pairs` (§18.8): a map binned from one on
-   * open had its four orientations counted in that same pass (§3.7), so a
-   * control asking the reader for the file they opened it from is a question
-   * whose answer is on screen — and it read as if the curves could not be had
-   * without one. `false` hides the control as `needsNoGenomes` does, and
+   * answered. The case is Pairs QC's `.pairs` (§18.8), which was P(s)'s: a map
+   * binned from one on open had its records counted in that same pass (§3.7),
+   * so a control asking the reader for the file they opened it from is a
+   * question whose answer is on screen — and it read as if the curves could not
+   * be had without one. `false` hides the control as `needsNoGenomes` does, and
    * {@link settled} is what the run is then recorded as.
    *
    * Pure, and about the file rather than the form: `when` is for the other
@@ -141,6 +141,21 @@ interface ParamBase {
    * as, not about what it does.
    */
   settled?: ParamValue
+  /**
+   * A question this task **no longer asks**, kept so that the answers already
+   * given still mean what they meant.
+   *
+   * P(s)'s four orientations are the case (§18.8). They moved to Pairs QC, which
+   * reads the records the curves are counted from and draws them beside the rest
+   * of a library's statistics; but a stored session, a shared link and a
+   * `chromosomix expected --stranded` line all carry the old two keys, and a run
+   * of any of them must come out as it did. So the parameter stays a parameter
+   * — defaulted, recalled, posted to the runner, accepted as a flag and written
+   * into the provenance — and is simply not drawn: the form builds no control
+   * for it, and the command a run writes leaves it out while it is at its
+   * default, as a question nobody was asked.
+   */
+  retired?: boolean
   /**
    * Group heading this control sits under, for tasks with more than a handful.
    *
@@ -330,8 +345,8 @@ export interface TextParam extends ParamBase {
 }
 
 /**
- * A file the task **reads** and the app does not open — a `.pairs` for P(s)'s
- * four orientations (§18.8), whose records matter and whose map does not.
+ * A file the task **reads** and the app does not open — the `.pairs` Pairs QC
+ * reads (§18.8), whose records matter and whose map does not.
  *
  * Drawn as a drop area that is also a button, with an address box under it: a
  * local file is dropped on it or chosen through the picker it opens, and a file
@@ -1439,9 +1454,10 @@ export interface AnalysisContext {
    * The `.pairs` this map was binned from on open (§3.7), where it was one.
    *
    * `orientation` is whether that pass counted the four orientation curves —
-   * it did wherever the records carried strands — which is what lets P(s) take
-   * them from the import instead of asking for the file the reader opened
-   * (§18.8). Absent on every map that was opened rather than binned.
+   * it did wherever the records carried strands — which is what lets Pairs QC
+   * (and a stored P(s) run that still asks for them) take them from the import
+   * instead of asking for the file the reader opened (§18.8). Absent on every
+   * map that was opened rather than binned.
    */
   binnedFrom?: { name: string; orientation: boolean }
 }
@@ -1535,6 +1551,23 @@ export interface AnalysisTask {
   /** Ids of tasks whose results are inputs to this one (§18.2's composites). */
   requires?: readonly string[]
   /**
+   * What this form answered on behalf of a task it {@link requires}, or `null`
+   * to run without that step.
+   *
+   * A required task runs at its own defaults, because the reader configured the
+   * leaf and not what is under it. The exception is a question the leaf's own
+   * form asks for the step: Pairs QC asks for a reference and an enzyme, which
+   * are the restriction step's `sequence`, `enzyme` and `sites` — so they are
+   * laid over that task's defaults here, and nothing the reader did not answer
+   * is invented. `null` is the step skipped (no reference, or no enzyme): the
+   * leaf then runs without it in `inputs.upstream`, and says what that cost.
+   *
+   * Pure, and asked once per required id each time the chain is planned — by
+   * `AnalysisRunner.plan` and by the command line's mirror of it alike. Absent
+   * is every requirement at its defaults, which is what it always was.
+   */
+  upstreamParams?(id: string, params: Params): Params | null
+  /**
    * The dev feature this task belongs to (§29), if it is one: absent from the
    * Analysis panel — not greyed, not waiting — while the switch is off. The
    * command line runs it regardless, having no switch.
@@ -1557,4 +1590,18 @@ export interface AnalysisTask {
  */
 export function readsMap(task: Pick<AnalysisTask, 'venue' | 'mapless'>): boolean {
   return task.venue === 'analysis' && task.mapless !== true
+}
+
+/**
+ * What `task`'s form answered for the step `id` it requires, or `null` to leave
+ * that step out — {@link AnalysisTask.upstreamParams}, with *nothing answered*
+ * (`{}`, every default) for a task that declares none.
+ *
+ * One function for the two places a chain is planned, `AnalysisRunner.plan` and
+ * the command line's mirror of it, so that a run in the app and the same run
+ * from a shell skip the same steps and give the rest the same parameters.
+ */
+export function upstreamParamsOf(task: AnalysisTask, id: string, params: Params): Params | null {
+  if (task.upstreamParams === undefined) return {}
+  return task.upstreamParams(id, params)
 }

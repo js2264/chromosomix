@@ -339,6 +339,36 @@ describe('the file the analysis worker is asked to mount', () => {
     runner.destroy()
   })
 
+  it('hands a task the records a map was binned from, and what their import counted', async () => {
+    // Pairs QC reads the map's own `.pairs` again for its fragments, and draws
+    // the import's `pairtools stats` as it draws the curves (§3.7). A map that
+    // was opened rather than binned has neither, and is handed neither.
+    const file = new File(['## pairs format v1.0\n'], 'library.pairs.gz')
+    const stats = { total: 12 } as unknown as NonNullable<RunTarget['pairsStats']>
+    const binned = harness(FRAMING, null, [], { block: null, map: 'lead' }, {
+      source: () => ({
+        uri: 'library.pairs.gz',
+        source: { kind: 'local', file },
+        binning: { base: 1000, rungs: 1 },
+        pairsStats: stats,
+      }),
+    })
+    binned.runner.run(task('pairsqc'), {})
+    await settle()
+    const run = binned.fake.seen.find((request) => request.kind === 'run')
+    expect(run?.kind === 'run' ? run.inputs.mapSource : undefined).toEqual({ kind: 'local', file })
+    expect(run?.kind === 'run' ? run.inputs.pairsStats : undefined).toBe(stats)
+    binned.runner.destroy()
+
+    const opened = harness()
+    opened.runner.run(task('pairsqc'), {})
+    await settle()
+    const plain = opened.fake.seen.find((request) => request.kind === 'run')
+    expect(plain?.kind === 'run' ? plain.inputs.mapSource : 'missing').toBeUndefined()
+    expect(plain?.kind === 'run' ? plain.inputs.pairsStats : 'missing').toBeUndefined()
+    opened.runner.destroy()
+  })
+
   it('hands a job the file a form was given, while its parameter still names it', async () => {
     const file = new File(['## pairs format v1.0\n'], 'library.pairs.gz')
     const withFile = task('expected', {
@@ -1100,6 +1130,128 @@ describe('composites', () => {
     fake.finish()
     await settle()
     expect(fake.seen.filter((message) => message.kind === 'run')).toHaveLength(3)
+    runner.destroy()
+  })
+})
+
+/**
+ * **What the leaf's own form asked on a step's behalf** (`upstreamParams`).
+ *
+ * A required task runs at its own defaults, except for the questions the leaf's
+ * form asked for it — Pairs QC's reference and enzyme are the restriction
+ * step's — which are laid over those defaults; and a step the leaf says to leave
+ * out (`null`) is not run at all. The cache sees the step's parameters as they
+ * ran, so a digest with one enzyme is never reused for another.
+ */
+describe('composites that answer for their steps', () => {
+  const runsOf = (fake: FakeAnalysisWorker): Array<Extract<AnalysisRequest, { kind: 'run' }>> =>
+    fake.seen.filter((message): message is Extract<AnalysisRequest, { kind: 'run' }> => message.kind === 'run')
+
+  /** A digest step and a leaf that hands it two answers, or none. */
+  function digestChain(): { leaf: AnalysisTask; digest: AnalysisTask } {
+    const digest = task('digest', {
+      params: [
+        { kind: 'text', key: 'sequence', label: 'reference', default: '' },
+        { kind: 'choice', key: 'enzyme', label: 'enzyme', default: 'none', options: [] },
+        { kind: 'number', key: 'limit', label: 'most', default: 7 },
+      ],
+    })
+    const leaf = task('qc', {
+      requires: ['digest'],
+      upstreamParams: (id, params) =>
+        id !== 'digest' || params.enzyme === 'none' || params.reference === ''
+          ? null
+          : { sequence: params.reference, enzyme: params.enzyme },
+    })
+    return { leaf, digest }
+  }
+
+  it('lays the answers over the step’s defaults, and the step runs with them', async () => {
+    const { runner, fake, catalogue } = harness()
+    const { leaf, digest } = digestChain()
+    catalogue.set('digest', digest)
+    runner.run(leaf, { reference: 'ref.fa', enzyme: 'DpnII' })
+    await settle()
+    expect(fake.running()).toEqual(['digest'])
+    // Answered where the leaf answered, and the step's own default elsewhere.
+    expect(runsOf(fake)[0].params).toEqual({ sequence: 'ref.fa', enzyme: 'DpnII', limit: 7 })
+    fake.finish()
+    await settle()
+    expect(Object.keys(runsOf(fake)[1].inputs.upstream ?? {})).toEqual(['digest'])
+    fake.finish()
+    await settle()
+    // Recorded as it ran, which is what the cache compares.
+    expect(runner.resultOf('digest')?.provenance.params).toEqual({
+      sequence: 'ref.fa',
+      enzyme: 'DpnII',
+      limit: 7,
+    })
+    runner.destroy()
+  })
+
+  it('leaves the step out where the leaf says to, and runs the leaf alone', async () => {
+    const { runner, fake, catalogue } = harness()
+    const { leaf, digest } = digestChain()
+    catalogue.set('digest', digest)
+    runner.run(leaf, { reference: 'ref.fa', enzyme: 'none' })
+    await settle()
+    expect(fake.running()).toEqual(['qc'])
+    expect(runsOf(fake)[0].inputs.upstream).toBeUndefined()
+    fake.finish()
+    await settle()
+    expect(runner.stateOf('qc').status).toBe('done')
+    expect(runner.resultOf('digest')).toBeNull()
+    runner.destroy()
+  })
+
+  it('reuses the step for the same answers, and digests again for another enzyme', async () => {
+    const { runner, fake, catalogue } = harness()
+    const { leaf, digest } = digestChain()
+    catalogue.set('digest', digest)
+    const finishChain = async (): Promise<void> => {
+      while (fake.held.length > 0) {
+        fake.finish()
+        await settle()
+      }
+    }
+    runner.run(leaf, { reference: 'ref.fa', enzyme: 'DpnII' })
+    await settle()
+    await finishChain()
+    expect(runsOf(fake).map((run) => run.task)).toEqual(['digest', 'qc'])
+
+    runner.run(leaf, { reference: 'ref.fa', enzyme: 'DpnII' })
+    await settle()
+    await finishChain()
+    expect(runsOf(fake).map((run) => run.task)).toEqual(['digest', 'qc', 'qc'])
+
+    runner.run(leaf, { reference: 'ref.fa', enzyme: 'HindIII' })
+    await settle()
+    await finishChain()
+    expect(runsOf(fake).map((run) => run.task)).toEqual(['digest', 'qc', 'qc', 'digest', 'qc'])
+    expect(runsOf(fake)[3].params.enzyme).toBe('HindIII')
+    runner.destroy()
+  })
+
+  it('runs a step in the other venue first, and hands it to the leaf in this one', async () => {
+    const sent: Array<{ task: string; params: unknown }> = []
+    const tracks = trackClient((payload) => {
+      const run = payload as { task: string; params: unknown }
+      sent.push({ task: run.task, params: run.params })
+      return Promise.resolve(trackResult(run.task))
+    })
+    const { runner, fake, catalogue } = harness(FRAMING, null, [], { block: null, map: 'lead' }, {
+      annotations: () => tracks as unknown as ReturnType<NonNullable<RunnerHost['annotations']>>,
+    })
+    const { leaf, digest } = digestChain()
+    catalogue.set('digest', { ...digest, venue: 'annotations', group: '1d' })
+    runner.run(leaf, { reference: 'ref.fa', enzyme: 'DpnII' })
+    await settle()
+    expect(sent).toEqual([{ task: 'digest', params: { sequence: 'ref.fa', enzyme: 'DpnII', limit: 7 } }])
+    expect(fake.running()).toEqual(['qc'])
+    expect(Object.keys(runsOf(fake)[0].inputs.upstream ?? {})).toEqual(['digest'])
+    fake.finish()
+    await settle()
+    expect(runner.stateOf('qc').status).toBe('done')
     runner.destroy()
   })
 })

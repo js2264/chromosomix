@@ -173,9 +173,14 @@ chromosomix tasks
 ##       --factor (default 1.1)  log bins per step
 ##       --minSeparation (default 2)  minimum separation
 ##       --derivative (default true)  log-log slope
-##       --stranded (default false)  four orientations
-##       --pairsUri  .pairs file
 ##       --no-balance  read the raw counts (balanced by default where the file carries weights)
+## 
+## pairsqc
+##     Pairs QC
+##       --pairs  .pairs file
+##       --reference  reference
+##       --enzyme (default "none")  enzyme
+##       --sites (default "")  sites
 ## 
 ## scalogram
 ##     Scalogram
@@ -324,6 +329,7 @@ chromosomix tasks
 ##       --region  sequences
 ##       --alpha (default 3)  exponent α
 ##       --weights (default "contacts")  weight pairs by
+##       --seed (default 0)  seed
 ##       --iterations (default 150)  refinement steps
 ##       --no-balance  read the raw counts (balanced by default where the file carries weights)
 ## 
@@ -348,6 +354,13 @@ chromosomix tasks
 ##       --bothStrands (default true)  both strands
 ##       --mismatches (default 0)  mismatches
 ##       --limit (default 500000)  most sites
+## 
+## restriction
+##     Restriction sites
+##       --sequence  reference
+##       --sequences  sequences
+##       --enzyme (default "none")  enzyme
+##       --sites (default "")  sites
 ## 
 ## peaks
 ##     Peak calling
@@ -529,6 +542,13 @@ chromosomix apa sample.cool --features domains.bed --anchors features \
 # sites as a BED-shaped table, and their density on the open map's bin grid.
 chromosomix motif sample.cool --sequence ref.fa.gz --pattern GGTCANNNTGACC --mismatches 1 --out results/
 chromosomix overlap sample.cool --features peaks.bed --features boundaries.bed --a peaks.bed --b boundaries.bed
+
+# A library's quality from its contact list: the pairtools counts as figures,
+# the four orientations' P(s), and — with a reference and an enzyme — pair
+# classes, distance to the cut, fragments seen and coverage against sites.
+# Restriction sites alone digests the reference into a lane of cuts.
+chromosomix pairsqc sample.pairs.gz --bin-size 10000 --sequence ref.fa.gz --enzyme DpnII --out qc/
+chromosomix restriction sample.cool --sequence ref.fa.gz --enzyme Arima --out results/
 
 # The tasks that read tracks take them as --tracks: a bigWig, a bedGraph, a
 # wig, or a FASTA read as GC content. Repeat the flag or separate with commas.

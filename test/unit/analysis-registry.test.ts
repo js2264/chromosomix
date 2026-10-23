@@ -404,6 +404,9 @@ describe('the cards', () => {
       'cistrans',
       'cellqc',
       'expected',
+      // The library under the map, beside the decay whose four orientations
+      // it took over: how short a separation P(s) can be believed at.
+      'pairsqc',
       'scalogram',
       'fourc',
       'insulation',
@@ -429,11 +432,14 @@ describe('the cards', () => {
   })
 
   it('opens the 1D card with the tasks that make an interval set', () => {
-    // A motif search and a peak call produce exactly the input the tasks below
-    // them take — one from the sequence, the other from a track. Two sequence
+    // A motif search, a digest and a peak call produce exactly the input the
+    // tasks below them take — two from the sequence, one from a track. Two sequence
     // sets against each other come last, a dev feature (§28, §29).
     expect(idsIn('1d')).toEqual([
       'motif',
+      // Where an enzyme cuts, beside where a motif lies: the digest Pairs QC
+      // requires, and a lane of its own.
+      'restriction',
       'peaks',
       'composition',
       'oriter',

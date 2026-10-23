@@ -195,11 +195,37 @@ describe('P(s) by pair orientation', () => {
     expect(notes.join(' ')).toMatch(/no longer in hand/)
   })
 
-  it('names a map that has nothing to count them from, and where a .pairs goes', async () => {
+  it('names a map that has nothing to count them from, and where a .pairs goes now', async () => {
     const { mc } = await imported()
     const { job: bare, notes } = job(mc, '', {})
     expect(orientationOf(await runExpected(bare))).toBeUndefined()
-    expect(notes.join(' ')).toMatch(/Drop a \.pairs on the form/)
+    expect(notes.join(' ')).toMatch(/Run Pairs QC and give it the \.pairs/)
+  })
+
+  /**
+   * **Retired from the form, not from the run** (§18.8). The toggle and the
+   * file moved to Pairs QC, and a stored session or a `--stranded` line still
+   * asks for the curve: it comes out as it did, with one sentence saying where
+   * it lives now — and a run that does not ask says nothing about it.
+   */
+  it('still draws them for a run that asks, and says they moved to Pairs QC', async () => {
+    const { mc, inputs } = await imported()
+    const { job: asked, notes } = job(mc, '', inputs)
+    expect(orientationOf(await runExpected(asked))).toBeDefined()
+    expect(notes[0]).toMatch(/^The four orientations have moved to Pairs QC/)
+
+    const { job: quiet, notes: none } = job(mc, '', inputs)
+    const outputs = await runExpected({ ...quiet, params: { ...quiet.params, stranded: false } })
+    expect(orientationOf(outputs)).toBeUndefined()
+    expect(none.join(' ')).not.toMatch(/Pairs QC/)
+  })
+
+  it('keeps both keys as parameters the form does not draw', () => {
+    for (const key of ['stranded', 'pairsUri']) {
+      const spec = EXPECTED_TASK.params.find((param) => param.key === key)
+      expect(spec?.retired, key).toBe(true)
+    }
+    expect(defaultParams(EXPECTED_TASK.params)).toMatchObject({ stranded: false, pairsUri: '' })
   })
 })
 

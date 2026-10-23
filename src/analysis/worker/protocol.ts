@@ -38,6 +38,7 @@ import type {
   SourceSpec,
 } from '../../worker/protocol'
 import type { CorrelationField } from '../compartments'
+import type { PairStats } from '../../pairs/stats'
 import type { Census } from '../../metacooler/resample'
 import type { SmoothedField } from '../../render/derive'
 import type { Smoothing } from '../../render/smooth'
@@ -167,6 +168,23 @@ export interface TaskInputs {
    * the task that draws it runs on this one.
    */
   orientation?: OrientationSummary
+  /**
+   * What `pairtools stats` counted over the same import's records (§3.7), for
+   * the reason {@link orientation} is handed in: the records are gone by the
+   * time anything runs, and every one of these numbers is about records.
+   */
+  pairsStats?: PairStats
+  /**
+   * The `.pairs` the map was binned from, where it was binned from one (§3.7).
+   *
+   * The one place a task is handed the **map's own** source rather than one a
+   * form was given: the worker mounted the pixel table it was binned into, and
+   * Pairs QC's restriction statistics are about where each read ends — below
+   * any bin — so they need the records again. Read for its bytes alone, through
+   * `JobContext.openSource`, and closed by the task. Absent on a map that was
+   * opened rather than binned.
+   */
+  mapSource?: SourceSpec
   /**
    * Files handed to the task's `file` parameters, by parameter key (§18.8).
    *

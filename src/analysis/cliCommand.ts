@@ -69,7 +69,7 @@ import type {
 } from './types'
 import type { AnnotationEntry } from '../annotations/types'
 import type { Extent } from '../types'
-import { paramDerived } from './types'
+import { defaultParams, paramDerived } from './types'
 import { formatLocus } from '../genome/assembly'
 
 /** The command the drawer copies. */
@@ -295,6 +295,7 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
    * second spelling to reconcile.
    */
   const boundByLoad = new Set<string>()
+  const referenceKey = referenceKeyOf(input.task)
   for (const spec of input.task.params) {
     if (!isEntryParam(spec)) continue
     for (const id of idsOf(params[spec.key])) {
@@ -314,7 +315,9 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
             : spec.kind === 'track'
               ? `--${spec.key}`
               : '--features'
-      if (flag === `--${spec.key}`) boundByLoad.add(spec.key)
+      if (flag === `--${spec.key}` || (spec.kind === 'sequence' && spec.key === referenceKey)) {
+        boundByLoad.add(spec.key)
+      }
       const written = `${flag} ${quote(named)}`
       // One load per file, however many parameters chose it: two flags naming
       // one path is two parses of the same file, under one key in the end.
@@ -330,6 +333,11 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
     // which `coerce` splits for a multiple parameter and `readFile` does not —
     // so where the two collide, the load's spelling is the one that works.
     if (boundByLoad.has(spec.key)) continue
+    // A question the task no longer asks (`ParamBase.retired`) is written only
+    // where a stored run answered it otherwise than its default — P(s)'s four
+    // orientations, which a line of every P(s) run would otherwise spell out as
+    // `--stranded=false` about a control nobody can see.
+    if (spec.retired === true && atDefault(spec, params[spec.key])) continue
     const written = flagFor(spec, params[spec.key], entries)
     if (written !== null) args.push(...written)
   }
@@ -342,6 +350,41 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
 // ---------------------------------------------------------------------------
 // Parameters
 // ---------------------------------------------------------------------------
+
+/**
+ * The parameter a `--sequence` load answers by itself, or `null`.
+ *
+ * `motif` and `restriction` call their reference `sequence`, so the load and the
+ * parameter are one token pair (see `boundByLoad`). A composite that hands its
+ * reference on to the step it requires is the other case: Pairs QC's
+ * `reference` *is* the restriction step's `sequence` (`upstreamParams`), so on a
+ * command line it is spelled as that step spells it — `--sequence ref.fa` — and
+ * `cli/main.ts` binds it from the load, as it binds motif's. Only where the task
+ * has exactly one such parameter, which is what makes the binding unambiguous.
+ *
+ * Exported because the shell has to make the same decision from the same
+ * descriptor, and two statements of one rule are how they drift apart.
+ */
+export function referenceKeyOf(task: AnalysisTask): string | null {
+  const references = task.params.filter((spec) => spec.kind === 'sequence' && spec.multiple !== true)
+  if (references.some((spec) => spec.key === 'sequence')) return 'sequence'
+  if (task.upstreamParams === undefined || (task.requires ?? []).length === 0) return null
+  return references.length === 1 ? references[0].key : null
+}
+
+/** Whether a parameter holds what its descriptor starts it on. */
+function atDefault(spec: ParamSpec, value: Params[string]): boolean {
+  const start = defaultParams([spec])[spec.key]
+  if (Array.isArray(start) || Array.isArray(value)) {
+    return (
+      Array.isArray(start) &&
+      Array.isArray(value) &&
+      start.length === value.length &&
+      start.every((item, at) => item === value[at])
+    )
+  }
+  return value === undefined || value === start
+}
 
 function isEntryParam(spec: ParamSpec): boolean {
   return (
