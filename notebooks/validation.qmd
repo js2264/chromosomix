@@ -3499,7 +3499,7 @@ chain is the app's and every reference is held to one step of it.
 2. **CTCF's peaks**: the two labs' tracks as replicates, against yapc 0.1 with IDR 2.0.3 at § 5's
    settings, five seeds.
 3. **APA between consecutive peaks**: each peak of 2 paired with the next along its chromosome — by
-   the app's own *each feature with the next*, and for coolpuppy by a BEDPE of the same pairs written
+   the app's own *consecutive features*, and for coolpuppy by a BEDPE of the same pairs written
    here — piled up raw and over the expected, at coolpuppy's defaults and with every pair, against
    coolpuppy with § 11's script and settings.
 4. **The signal at CTCF's sites**: the metaplot of both CTCF tracks and ATAC-seq about each peak's

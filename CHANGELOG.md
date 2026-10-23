@@ -40,9 +40,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   4DN's 27-GB map by range (`notebooks/scripts/cool_subset.py`), ENCODE's tracks held to their MD5s,
   and its commands are timed with the rest.
 
-- **APA between each feature and the next (§18.8).** A fourth choice of anchors, *each feature with
-  the next*, pairs every feature of a set with its neighbour along the sequence — consecutive CTCF
-  peaks — and piles the pairs up off the diagonal, held to the nearest loop as a loaded loop set is.
+- **APA between consecutive features (§18.8).** A fourth choice of anchors, *consecutive features*
+  (`--anchors consecutive`), pairs every feature of a set with the next one along its sequence —
+  consecutive CTCF peaks — and piles the pairs up off the diagonal, held to the nearest loop as a
+  loaded loop set is.
   Its pileup is coolpuppy's over a BEDPE of the same pairs within 5·10⁻⁶ (validation notebook § 24),
   so Fig. 2's chain — insulation, peaks, the APA between them and the metaplots — runs in the app from
   the map and the tracks alone, with no pair file made outside it.

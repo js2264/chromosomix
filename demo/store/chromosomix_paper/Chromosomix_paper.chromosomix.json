@@ -1763,26 +1763,6 @@
           "heatmap": true
         }
       },
-      "figures": {
-        "apa::apa-0": {
-          "fontSize": 16
-        },
-        "metaplot::metaplot": {
-          "fontSize": 16
-        },
-        "metaplot::metaplot-heatmap": {
-          "fontSize": 22
-        },
-        "metaplot::metaplot-heatmap-2": {
-          "fontSize": 22
-        },
-        "metaplot::metaplot-heatmap-3": {
-          "fontSize": 22
-        },
-        "metaplot::metaplot-heatmap-4": {
-          "fontSize": 22
-        }
-      },
       "circular": [],
       "mapNames": {
         "human/4DNFIXP4QG5B.mcool": "Hi-C · GM12878 (Rao et al. 2014, 4DN)"

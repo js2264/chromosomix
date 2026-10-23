@@ -1219,24 +1219,13 @@ FIG2_RECIPES = {
 }
 
 
-#: How each of those figures is styled when it is drawn (`figures`, by task and output, §18.13): its type
-#: at 16 px, and a heatmap's at 22, so that a figure exported from the drawer — at the size it is drawn —
-#: reads at 4–6 pt set beside the reference tools' own, a heatmap a third of half a page wide
-#: (manuscript/figure2/).
-FIG2_FIGURES = {
-    "apa::apa-0": {"fontSize": 16},
-    "metaplot::metaplot": {"fontSize": 16},
-    **{f"metaplot::{output}": {"fontSize": 22}
-       for output in ("metaplot-heatmap", "metaplot-heatmap-2", "metaplot-heatmap-3", "metaplot-heatmap-4")},
-}
-
-
 def paper_fig2() -> dict:
     """GM12878 on chr19 at 10 kb with Fig. 2's inputs and nothing computed: two labs' CTCF and ATAC-seq
     beside the map. The chain is the reader's to run, in the app, from the Analysis column — insulation
     at four scales, the peaks on the two CTCF tracks, the APA between consecutive peaks, the metaplots —
     each task opening on the recipe the figure was made with (`FIG2_RECIPES`); what it makes is drawn
-    here and is what `manuscript/figure2/` sets beside the reference tools' own figures. The same
+    here, each figure saved by its own button, and `manuscript/figure2/reference.qmd` makes the same
+    panels with the reference tools. The same
     results over the whole genome, computed by the command line, are in the store's human folder."""
     tracks = [
         track("b-ctcf-broad", "track", "CTCF · Broad", gm("ENCFF734CUT.bigWig"), GM_COLOURS["ctcf"], 44),
@@ -1245,8 +1234,7 @@ def paper_fig2() -> dict:
     ]
     state = {"uri": f"{GM_MAP}::resolutions/10000", "view": "region", "region": machine(FIG2_REGION), **MAP_LOOK}
     return tab("Fig. 2 · CTCF sites in GM12878, chr19: the map, two labs’ CTCF and ATAC — insulation, peaks, APA "
-               "and metaplots run here", state, tracks, analysis=FIG2_RECIPES, figures=FIG2_FIGURES, circular=[],
-               mapNames=GM_NAMES)
+               "and metaplots run here", state, tracks, analysis=FIG2_RECIPES, circular=[], mapNames=GM_NAMES)
 
 
 def chromosomix_paper() -> dict:

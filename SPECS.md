@@ -9100,9 +9100,9 @@ the run's own seed rather than truncated**, for §18.8's reason about the anchor
 here: taking the first two hundred thousand is taking whichever sequences sort first, and a pileup of
 chromosome I captioned *200,000 pairs* is a change of subject.
 
-**The fourth pairs each feature with the next one along its sequence** — consecutive CTCF peaks, the
-pairs of neighbouring sites a loop-extrusion figure asks about, which no range over *every* pair can
-give, since between two neighbours lies no third site. It is made from one feature set and read as a
+**The fourth, *consecutive features*, pairs each feature with the next one along its sequence** —
+consecutive CTCF peaks, the pairs of neighbouring sites a loop-extrusion figure asks about, which no
+range over *every* pair can give, since between two neighbours lies no third site. It is made from one feature set and read as a
 loaded loop set of the same pairs is: n − 1 pairs on a sequence of n features, no separation range
 and no sampling, and the nearest loop (`minDist`, coolpuppy's `mindist`) as the one floor, measured
 between the two features' own centres as coolpuppy measures a BEDPE's. So its pileup is the pileup of

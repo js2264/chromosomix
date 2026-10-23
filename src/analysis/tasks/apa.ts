@@ -269,7 +269,7 @@ const PARAMS: readonly ParamSpec[] = [
       },
       {
         value: 'consecutive',
-        label: 'each feature with the next',
+        label: 'consecutive features',
         needsKinds: INTERVAL_KINDS,
         hint:
           'Off the diagonal, between each feature and the next one along its sequence — the pairs ' +
