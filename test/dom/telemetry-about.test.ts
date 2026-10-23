@@ -46,7 +46,9 @@ describe('About, on the subject of telemetry', () => {
     const text = section()?.textContent ?? ''
     expect(text).toContain('Telemetry')
     expect(text).toContain('cloud.umami.is')
-    expect(text).toContain('never a file name, an address, a place on the genome')
+    expect(text).toContain('Never a file name, an address or a place on the genome')
+    // Short, and in sentences rather than asides: no dash anywhere in it.
+    expect(text).not.toMatch(/[—–]/)
     expect(toggle()?.textContent).toBe('telemetry')
     expect(toggle()?.getAttribute('aria-pressed')).toBe('true')
   })
