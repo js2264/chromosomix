@@ -17,6 +17,7 @@
 import { MAX_CATEGORICAL_TICKS } from '../constants'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import { applyColormap, colormapIndex } from './colormaps'
+import { diagonalSplit, foldSplit } from './compare'
 import {
   anchorRays,
   cellAt as squareOf,
@@ -243,11 +244,29 @@ export function pooledOf(matrix: DenseMatrix, scale: ColorScale, isotropic: bool
 export function poolDisplay(
   matrix: DenseMatrix,
   scale: ColorScale,
-  options: { maxDim?: number; isotropic?: boolean } = {},
+  options: {
+    maxDim?: number
+    isotropic?: boolean
+    /**
+     * Pool only one side of the diagonal, for a picture whose two triangles are
+     * two readings on two scales (§5.10): `split` is `render/compare.ts`'s
+     * `diagonalSplit`, and the cells of the other side are left out of every
+     * pixel — so a pixel astride the diagonal is the brightest cell *of this
+     * reading*, and never a count reduced against an O/E.
+     */
+    keep?: { split: Int32Array; lower: boolean }
+  } = {},
 ): PooledDisplay {
   const { nrows, ncols, values } = matrix
   const balanced = scale.balanced === true
   const transform = scale.transform
+  // The columns of row `y` this pooling reads, inside `[x0, x1)`: all of them
+  // with nothing kept apart, else the prefix below the diagonal or the rest.
+  const keep = options.keep
+  const fromCol = (y: number, x0: number): number =>
+    keep === undefined || keep.lower ? x0 : Math.max(x0, keep.split[y] ?? 0)
+  const toCol = (y: number, x1: number): number =>
+    keep === undefined || !keep.lower ? x1 : Math.min(x1, keep.split[y] ?? 0)
 
   const maxDim = options.maxDim ?? RASTER_MAX_DIM
   const perAxis = { x: rasterStride(ncols, maxDim), y: rasterStride(nrows, maxDim) }
@@ -283,6 +302,16 @@ export function poolDisplay(
   if (strideX === 1 && strideY === 1) {
     const n = nrows * ncols
     for (let i = 0; i < n; i++) pooled[i] = displayValue(values[i], transform, balanced)
+    // The other side's cells are not this reading's, and a range measured over
+    // them would be measured over another quantity.
+    if (keep !== undefined) {
+      for (let y = 0; y < nrows; y++) {
+        const row = y * ncols
+        const cut = Math.max(0, Math.min(ncols, keep.split[y] ?? 0))
+        if (keep.lower) pooled.fill(Number.NaN, row + cut, row + ncols)
+        else pooled.fill(Number.NaN, row, row + cut)
+      }
+    }
     return pool
   }
 
@@ -318,7 +347,9 @@ export function poolDisplay(
         let fallback = Number.NaN
         for (let y = y0; y < y1; y++) {
           const row = y * ncols
-          for (let x = x0; x < x1; x++) {
+          const xs = fromCol(y, x0)
+          const xe = toCol(y, x1)
+          for (let x = xs; x < xe; x++) {
             const raw = values[row + x]
             if (Number.isNaN(raw)) continue
             const t = displayValue(raw, transform, balanced)
@@ -358,7 +389,8 @@ export function poolDisplay(
       if (rawMax) {
         for (let y = y0; y < y1; y++) {
           const row = y * ncols
-          for (let x = x0; x < x1; x++) {
+          const xe = toCol(y, x1)
+          for (let x = fromCol(y, x0); x < xe; x++) {
             const raw = values[row + x]
             if (Number.isNaN(raw)) continue
             if (Number.isNaN(best) || raw > best) best = raw
@@ -368,7 +400,8 @@ export function poolDisplay(
       } else {
         for (let y = y0; y < y1; y++) {
           const row = y * ncols
-          for (let x = x0; x < x1; x++) {
+          const xe = toCol(y, x1)
+          for (let x = fromCol(y, x0); x < xe; x++) {
             const raw = values[row + x]
             if (Number.isNaN(raw)) continue
             const t = displayValue(raw, transform, balanced)
@@ -479,6 +512,30 @@ export function colorize(
     scale: { ...scale, vmin, vmax },
     strideX: pooled.strideX,
     strideY: pooled.strideY,
+  }
+}
+
+/**
+ * Lay a second reading's pixels over the first's, below the diagonal (§5.10).
+ *
+ * `into` and `lower` are the same block coloured on two scales, each pooled
+ * from its own side alone (`poolDisplay`'s `keep`), and `split` is that block's
+ * diagonal (`render/compare.ts`). A raster pixel is the lower side's where its
+ * **centre** is: one cell's own side at a stride of one, and a pixel astride the
+ * diagonal — whose centre is on it — stays with the first reading, as the
+ * diagonal itself does.
+ */
+export function joinAcrossDiagonal(into: Raster, lower: Raster, split: Int32Array, nrows: number): void {
+  const { width, height, strideX, strideY } = into
+  if (lower.width !== width || lower.height !== height || nrows <= 0) return
+  const top = new Uint32Array(into.data.buffer, into.data.byteOffset, width * height)
+  const bottom = new Uint32Array(lower.data.buffer, lower.data.byteOffset, width * height)
+  for (let ry = 0; ry < height; ry++) {
+    const y = Math.min(nrows - 1, Math.floor((ry + 0.5) * strideY))
+    // The pixels whose centre column, `(rx + ½) × stride`, is left of the cut.
+    const n = Math.max(0, Math.min(width, Math.ceil((split[y] ?? 0) / strideX - 0.5)))
+    const row = ry * width
+    for (let rx = 0; rx < n; rx++) top[row + rx] = bottom[row + rx]
   }
 }
 
@@ -1748,6 +1805,28 @@ export class HeatmapView {
   private gaugeRange:
     | { transform: Transform; balanced: boolean; centre: number | null; range: ValueRange }
     | null = null
+  /**
+   * A second reading of the block, drawn below the diagonal on a scale of its
+   * own (§5.10), and the square its automatic range is measured from — or
+   * `null` for one scale over the whole picture, which is every map but that one.
+   *
+   * The drawn matrix holds both readings already, merged across the diagonal by
+   * the panel; what is the renderer's is that the two halves are **pooled apart
+   * and coloured apart**, which no merge done before it can arrange.
+   */
+  private lower: { scale: ColorScale; gauge: DenseMatrix } | null = null
+  /** The lower side's pooled values, {@link pooled}'s twin; invalidated with it. */
+  private lowerPooled: PooledDisplay | null = null
+  /** The lower side's colouring, kept for its resolved bounds and its buffer. */
+  private lowerRaster: Raster | null = null
+  /** {@link gaugeRange}'s twin, for the lower reading's own square. */
+  private lowerRange:
+    | { transform: Transform; balanced: boolean; centre: number | null; range: ValueRange }
+    | null = null
+  /** Whether {@link pooled} was pooled from the upper side alone. */
+  private pooledSided = false
+  /** The diagonal the two sides are cut along, for the matrix and fold it was cut for. */
+  private splitHeld: { matrix: DenseMatrix; fold: number | undefined; split: Int32Array } | null = null
   private offscreen: RasterCanvas | null = null
   /**
    * Halved copies of {@link offscreen}, coarsest last, built on demand.
@@ -2171,6 +2250,7 @@ export class HeatmapView {
     this.axisSpans = { rows: [], cols: [] }
     this.dirtyRaster = true
     this.pooled = null
+    this.lowerPooled = null
     this.gauge = gauge ?? null
     this.gaugeRange = null
     this.hoverCell = null
@@ -2217,6 +2297,7 @@ export class HeatmapView {
     this.blockCache = { rows: null, cols: null }
     this.dirtyRaster = true
     this.pooled = null
+    this.lowerPooled = null
     this.hoverCell = null
     // The gauge's measurement survives a reshape it was not part of, and that is
     // the difference between a band re-cut in a frame and one re-cut in a
@@ -2290,6 +2371,7 @@ export class HeatmapView {
     this.blockCache = { rows: null, cols: null }
     this.dirtyRaster = true
     this.pooled = null
+    this.lowerPooled = null
     this.hoverCell = null
     if (options.gauge !== undefined) {
       this.gauge = options.gauge
@@ -2339,6 +2421,7 @@ export class HeatmapView {
     // auto range hangs off it and goes with it, which is what re-measures a
     // ratio's scale instead of keeping the counts'.
     this.pooled = null
+    this.lowerPooled = null
     // And so does the gauge's, which is the same arithmetic over the block the
     // crop came out of: a derivation recomputed on one and not the other would
     // scale a ratio by the range of the counts it was made from.
@@ -2413,6 +2496,72 @@ export class HeatmapView {
   /** The scale actually in force, with `vmax` resolved. Drives the colourbar. */
   get effectiveScale(): ColorScale {
     return this.raster?.scale ?? this.colorScale
+  }
+
+  /**
+   * Colour the cells below the diagonal on a scale of their own, or `null` to
+   * draw the whole block on {@link setScale}'s (§5.10).
+   *
+   * The block itself is the caller's, already merged — the second reading's
+   * values below the diagonal and the first's on and above it, as
+   * `render/compare.ts` merges two files. `gauge` is the second reading's whole
+   * square, which its automatic range is measured from, as the first's is from
+   * {@link setMatrix}'s: a triangle of a symmetric matrix is a sample of the
+   * square that is not quite the square's, and the first reading's colours must
+   * not move because a second was put beside them.
+   *
+   * On a turned block it is drawn only where the block is a **mirrored pair**,
+   * the rows from the fold down being the second band; one band has no lower
+   * side to give it.
+   */
+  setLower(layer: { scale: ColorScale; gauge: DenseMatrix } | null): void {
+    const held = this.lower
+    if (layer === null && held === null) return
+    if (layer === null || held === null || layer.gauge.values !== held.gauge.values) this.lowerRange = null
+    this.lower = layer === null ? null : { scale: { ...layer.scale }, gauge: layer.gauge }
+    this.dirtyRaster = true
+    this.changed()
+  }
+
+  /**
+   * Measure the automatic range from another block, or from the one on screen
+   * again (`null`), keeping the view — for a square map whose lower triangle
+   * has just become, or stopped being, a reading of its own (§5.10): the
+   * upper's range is then measured on its own square rather than on the merged
+   * one, and {@link setValues} only ever updates a gauge already held.
+   */
+  setGauge(gauge: DenseMatrix | null): void {
+    if (gauge === this.gauge) return
+    this.gauge = gauge
+    this.gaugeRange = null
+    this.dirtyRaster = true
+    this.changed()
+  }
+
+  /**
+   * The lower reading's scale as drawn, with its bounds resolved — the second
+   * key's numbers — or `null` where nothing is drawn on one.
+   */
+  get effectiveLowerScale(): ColorScale | null {
+    if (this.lower === null) return null
+    return this.lowerRaster?.scale ?? this.lower.scale
+  }
+
+  /**
+   * The diagonal the two readings are cut along, or `null` where there is no
+   * second reading to draw: none set, or a turned block of one band.
+   */
+  private sideSplit(): Int32Array | null {
+    const matrix = this.matrix
+    if (this.lower === null || matrix === null) return null
+    const fold = this.turn === null ? undefined : this.turn.fold
+    if (this.turn !== null && fold === undefined) return null
+    const held = this.splitHeld
+    if (held !== null && held.matrix === matrix && held.fold === fold) return held.split
+    const split =
+      fold === undefined ? diagonalSplit(matrix) : foldSplit(matrix.nrows, matrix.ncols, fold)
+    this.splitHeld = { matrix, fold, split }
+    return split
   }
 
   /** The block currently displayed. */
@@ -4308,6 +4457,39 @@ export class HeatmapView {
     return (this.gaugeRange as { range: ValueRange }).range
   }
 
+  /**
+   * {@link resolvedScale} for the reading below the diagonal: its own bounds
+   * where it has them, and its own square's automatic range where it does not.
+   */
+  private resolvedLowerScale(scale: ColorScale, centre: number | null): ColorScale {
+    if (Number.isFinite(scale.vmin) && Number.isFinite(scale.vmax)) return scale
+    const gauge = this.lower?.gauge ?? null
+    let range: ValueRange = { vmin: 0, vmax: 1 }
+    if (gauge !== null) {
+      const held = this.lowerRange
+      const balanced = scale.balanced === true
+      if (
+        held === null ||
+        held.transform !== scale.transform ||
+        held.balanced !== balanced ||
+        held.centre !== centre
+      ) {
+        this.lowerRange = {
+          transform: scale.transform,
+          balanced,
+          centre,
+          range: autoRangeOfPooled(pooledOf(gauge, scale, false)),
+        }
+      }
+      range = (this.lowerRange as { range: ValueRange }).range
+    }
+    return {
+      ...scale,
+      vmin: Number.isFinite(scale.vmin) ? scale.vmin : range.vmin,
+      vmax: Number.isFinite(scale.vmax) ? scale.vmax : range.vmax,
+    }
+  }
+
   private rasterizeNow(): void {
     if (this.matrix === null) return
     this.rasterCount += 1
@@ -4327,14 +4509,24 @@ export class HeatmapView {
     // for the square is the wrong array for the band — and pressing the turn
     // toggle changes nothing else about the numbers.
     const isotropic = this.turn !== null
+    // Where a second reading is drawn below the diagonal, each side is pooled
+    // from its own cells alone (§5.10) — so this pooling is not the block's, and
+    // is not the one the cache shares between views of it.
+    const split = this.sideSplit()
+    const sided = split !== null
     if (
       this.pooled === null ||
       this.pooled.transform !== this.colorScale.transform ||
       this.pooled.balanced !== balanced ||
       this.pooled.centre !== centre ||
-      this.pooled.isotropic !== isotropic
+      this.pooled.isotropic !== isotropic ||
+      this.pooledSided !== sided
     ) {
-      this.pooled = pooledOf(this.matrix, this.colorScale, isotropic)
+      this.pooled =
+        split === null
+          ? pooledOf(this.matrix, this.colorScale, isotropic)
+          : poolDisplay(this.matrix, this.colorScale, { isotropic, keep: { split, lower: false } })
+      this.pooledSided = sided
     }
     // Both buffers are handed back to the next colouring. A colormap change or
     // a clip drag never resizes the raster, so the common case reuses a 4 B/px
@@ -4342,6 +4534,32 @@ export class HeatmapView {
     // and orphaning both — ~131 MB of churn per click on a full-size raster,
     // against a budget that is already the tightest thing in the app.
     const raster = colorize(this.pooled, this.resolvedScale(centre), this.raster?.data)
+    const lower = this.lower
+    if (split !== null && lower !== null) {
+      const scale = lower.scale
+      const lowerBalanced = scale.balanced === true
+      const lowerCentre =
+        scale.neutral === undefined ? null : transformValue(scale.neutral, scale.transform)
+      const held = this.lowerPooled
+      if (
+        held === null ||
+        held.transform !== scale.transform ||
+        held.balanced !== lowerBalanced ||
+        held.centre !== lowerCentre ||
+        held.isotropic !== isotropic
+      ) {
+        this.lowerPooled = poolDisplay(this.matrix, scale, { isotropic, keep: { split, lower: true } })
+      }
+      const below = colorize(
+        this.lowerPooled as PooledDisplay,
+        this.resolvedLowerScale(scale, lowerCentre),
+        this.lowerRaster?.data,
+      )
+      joinAcrossDiagonal(raster, below, split, this.matrix.nrows)
+      this.lowerRaster = below
+    } else {
+      this.lowerRaster = null
+    }
     const reusable =
       this.offscreen !== null &&
       this.offscreen.width === raster.width &&
@@ -4687,6 +4905,13 @@ export class HeatmapView {
     // well keeps the frame that follows this call from drawing the previous
     // shape's pixels while it works that out.
     if ((turn === null) !== (held === null)) this.dirtyRaster = true
+    // The fold is where a second reading's band starts, so moving it moves which
+    // pixels are pooled on which scale.
+    if (this.lower !== null && turn?.fold !== held?.fold) {
+      this.pooled = null
+      this.lowerPooled = null
+      this.dirtyRaster = true
+    }
     this.turn = turn
     this.changed()
   }

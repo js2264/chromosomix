@@ -78,7 +78,10 @@ import {
 import type { MetaBlock } from '../annotations/metadata'
 import {
   COMPARE_OPS,
+  alignable,
+  blendAcrossDiagonal,
   combine,
+  diagonalSplit,
   isCompareOp,
   type CompareOp,
 } from '../render/compare'
@@ -95,6 +98,7 @@ import type { Cancellable } from '../worker/client'
 import {
   BIN_FRACTION,
   anchorColumns,
+  bandAt,
   binsForColumns,
   cellAt,
   cellLoci,
@@ -188,6 +192,13 @@ import { el, field, fmt, trimNumber } from './dom'
 import { resolutionLabel } from '../units'
 import { depthPhrase, type DrawnDepth } from '../contacts'
 import { MapKey } from './MapKey'
+import {
+  LowerReading,
+  lastMapTab,
+  rememberMapTab,
+  type LowerPresentation,
+  type LowerSeed,
+} from './LowerReading'
 import {
   type ExportFormat,
   captionStamp,
@@ -463,6 +474,20 @@ export interface MatrixPanelOptions {
    * comparison has of its own.
    */
   compare?: ComparePresentation
+  /**
+   * The lower triangle in a reading of its own (§5.10, `ui/LowerReading.ts`):
+   * the same file, with its own score, smoothing, O/E and colour scale below
+   * the diagonal, set on the Map card's second tab.
+   *
+   * Offered on a single map and nowhere else — beside a second file the lower
+   * triangle is that file's (§5.7), and in a deck the card sets whichever map
+   * is starred (§16.5) — and swapped in and out with every render
+   * ({@link MatrixPanel.rederive}), since a deck forming or closing does not
+   * rebuild the map it forms round. The block a score of its own needs arrives
+   * through {@link MatrixPanel.setData}'s `second`, where there is no
+   * comparison to claim it.
+   */
+  lower?: LowerPresentation
   /**
    * Values computed here rather than read (`render/derive.ts`).
    *
@@ -980,6 +1005,11 @@ export class MatrixPanel {
   /** The key in the map's top-right corner; two of them under a comparison. */
   private readonly key: MapKey
   private readonly key2: MapKey
+  /**
+   * The lower reading's key (§5.10), under the first. Editable, as the first is:
+   * its bounds are this reading's own, set nowhere else but its tab.
+   */
+  private readonly keyLower: MapKey
   private readonly keySlot: HTMLElement
   /** The two keys in {@link keySlot}, hidden together where the legend is off or the screen is a phone's. */
   private readonly keys: HTMLElement
@@ -1151,6 +1181,43 @@ export class MatrixPanel {
    * and their lines on the veil (`ui/MapDerivation.ts`).
    */
   private readonly derivation: MapDerivation
+  /**
+   * The lower triangle's own reading (§5.10): its derivation and jobs, its
+   * colour scale, and the Map card's second tab (`ui/LowerReading.ts`).
+   */
+  private readonly lowerReading: LowerReading
+  /**
+   * The block the lower reading was read as, where its score needed a read of
+   * its own; `null` where it is derived from {@link data}, as it usually is.
+   */
+  private lowerBlock: MatrixResult | null = null
+  /**
+   * The lower reading's whole square of values while it is drawn, and `null`
+   * while it is not — which is what every other part of the panel asks.
+   */
+  private lowerSquare: DenseMatrix | null = null
+  /** The lower scale its key was last drawn for; `null` until it has been. */
+  private lowerPainted: ColorScale | null = null
+  /**
+   * Whether the renderer's gauge is the upper reading's own square because a
+   * lower reading is drawn — so a square map that gains or loses one in place
+   * ({@link redraw}) knows to hand the renderer a gauge or take it back.
+   */
+  private lowerGauged = false
+  /** Where the block on screen crosses its diagonal, for the readout's side of it. */
+  private lowerSplit: { data: MatrixResult; split: Int32Array } | null = null
+  /**
+   * The Map card's two tabs and the two panes they show — the map's own
+   * settings, and the lower triangle's. The row is hidden wherever the lower
+   * reading is not offered, and the map's pane is then the whole card.
+   */
+  private mapTabs: {
+    row: HTMLElement
+    map: HTMLButtonElement
+    lower: HTMLButtonElement
+    mapPane: HTMLElement
+    open: 'map' | 'lower'
+  } | null = null
   /** The last title {@link setData} was given, so a turn can re-run it. */
   private lastTitle = ''
   /**
@@ -1359,6 +1426,18 @@ export class MatrixPanel {
       setBusy: (busy, message) => this.setBusy(busy, message),
       redraw: () => this.redraw(),
     })
+    this.lowerReading = new LowerReading({
+      options,
+      setBusy: (busy, message) => this.setBusy(busy, message),
+      redraw: () => this.redraw(),
+      rescaled: () => {
+        this.installLower()
+        this.lowerPainted = null
+        this.schedule()
+      },
+      seed: () => this.lowerSeed(),
+      defaults: () => this.options.initial?.defaults,
+    })
 
     this.canvas = el('canvas', { class: 'heatmap-canvas' })
     // The readout and the card beside the pointer, which say what is under it
@@ -1371,6 +1450,16 @@ export class MatrixPanel {
       squareCell: (cell) => this.squareCell(cell),
       scoreWord: () => this.scoreWord(),
       derivedReading: (row, col) => this.derivedReading(row, col),
+      lower: (cell, square) =>
+        this.lowerAt(cell, square)
+          ? {
+              word: this.lowerReading.scoreWord(),
+              reading: this.lowerReading.reading(square.row * (this.data?.ncols ?? 0) + square.col),
+              value:
+                (this.lowerBlock ?? this.data)?.values[square.row * (this.data?.ncols ?? 0) + square.col] ??
+                Number.NaN,
+            }
+          : null,
     })
     this.titleNode = el('h2', { class: 'panel-title', text: '' })
     this.overlay = el('div', { class: 'panel-overlay hidden' })
@@ -1458,6 +1547,7 @@ export class MatrixPanel {
       },
     })
     this.key2 = new MapKey()
+    this.keyLower = new MapKey({ onChange: (bound, value) => this.lowerReading.setBound(bound, value) })
 
     const transformSelect = el('select', { class: 'select' })
     this.transformSelect = transformSelect
@@ -2063,6 +2153,7 @@ export class MatrixPanel {
       ),
     )
 
+    const mapPane = el('div', { class: 'panel-controls' }, ...controls)
     this.controlsEl = el(
       'div',
       { class: 'controls-card' },
@@ -2071,8 +2162,12 @@ export class MatrixPanel {
       cardTitle('Map', 'sliders-horizontal', 'controls-title'),
       // Which map of a deck this card sets, under the title; see {@link setCardFor}.
       this.cardFor,
-      el('div', { class: 'panel-controls' }, ...controls),
+      // The map's own settings and the lower triangle's (§5.10), as two tabs
+      // where the second is offered; see {@link buildMapTabs}.
+      this.buildMapTabs(mapPane),
+      mapPane,
     )
+    this.paintMapTabs()
     // After *both* rows exist, not after the first. The Map card is built well
     // below the Tracks card, so painting where the Tracks card ends left every
     // toggle in this one unlit until the next time somebody changed one — which
@@ -2094,7 +2189,8 @@ export class MatrixPanel {
     // The keys, and under them how to zoom into a region: one column in the
     // corner, so the hint moves up into the corner when the legend is off and
     // stands under the keys when it is on.
-    this.keys = el('div', { class: 'map-keys' }, this.key.el, this.key2.el)
+    this.keys = el('div', { class: 'map-keys' }, this.key.el, this.key2.el, this.keyLower.el)
+    this.keyLower.el.classList.add('hidden')
     this.reframeHint = el('div', { class: 'map-hint', attrs: { 'aria-hidden': 'true' } })
     this.keySlot = el('div', { class: 'map-key-slot' }, this.keys, this.reframeHint)
     this.paintReframeHint(false)
@@ -2768,6 +2864,7 @@ export class MatrixPanel {
     // left to resolve into a dead panel, and the client itself is the session's
     // to close.
     this.derivation.destroy()
+    this.lowerReading.destroy()
     setReadout('')
     // A picking mode outlives nothing: the plot it was placing marks on is going
     // away. Ended here rather than left to be garbage-collected, because the
@@ -2995,8 +3092,18 @@ export class MatrixPanel {
     // to guess what the darkest cell was worth.
     const painted = this.painted
     if (painted !== null) {
-      const key = this.keyFor(painted)
+      const key = this.keyFor(painted, '')
       parts.push(`colour ${key.loLabel} to ${key.hiLabel}`)
+    }
+    // The lower triangle's own reading, after the upper's and in the same order
+    // of arithmetic (§5.10): a figure with two scales on it says both.
+    const lowerPainted = this.lowerPainted
+    if (this.lowerSquare !== null) {
+      parts.push(...this.lowerReading.captionParts())
+      if (lowerPainted !== null) {
+        const key = this.lowerReading.keyFor(lowerPainted, '', {})
+        parts.push(`colour ${key.loLabel} to ${key.hiLabel}`)
+      }
     }
     parts.push(captionStamp(now))
     return { title, detail: parts.join(' · ') }
@@ -3675,13 +3782,14 @@ export class MatrixPanel {
     // so every other part of the key matches and the previous quantity's
     // correlation would be drawn under the new one's caption.
     this.derivation.newBlock()
+    this.lowerReading.derivation.newBlock()
     this.lastTitle = title
     // Blanked rather than left to the next frame: the outgoing block's window
     // under the incoming block's bin count is a line describing two pictures.
     this.viewNote.textContent = ''
     this.exportName = title === '' ? this.exportName : title
     this.titleNode.textContent = title
-    const { dense, gauge, presentationMoved, turned } = this.derive(data, second)
+    const { dense, gauge, presentationMoved, lowerMoved, turned } = this.derive(data, second)
     this.turned = turned
     // Two legends for two files' counts — and under a ratio or a difference
     // there are no longer two sets of counts in the square but one derived
@@ -3742,6 +3850,8 @@ export class MatrixPanel {
       turned === null ? separatorsFor(data) : { rows: [], cols: [] },
       gauge,
     )
+    this.lowerGauged = this.lowerSquare !== null
+    this.installLower()
     this.gaugeBlock = {
       spanBp: Math.max(data.nrows, data.ncols) * Math.max(1, this.options.binsize),
       dense: this.square ?? dense,
@@ -3784,6 +3894,7 @@ export class MatrixPanel {
         vmax: this.manualVmax,
       })
     }
+    if (lowerMoved) this.lowerReading.announce()
     this.lanes.setAxes(this.locusAxes)
     this.lanes.setMetaAxes(this.metaAxesOf(data, turned))
     // The caret was measured into a lane of the outgoing block, and the number
@@ -3834,7 +3945,7 @@ export class MatrixPanel {
     const outgoingBinsize = this.options.binsize
     this.data = data
     this.setResolution(binsize)
-    const { dense, gauge, presentationMoved, turned } = this.derive(data, second)
+    const { dense, gauge, presentationMoved, lowerMoved, turned } = this.derive(data, second)
 
     const axes = this.locusAxesOf(data, turned)
     const cols = spanOnAxis(axes.drawn.cols, want.cols, dense.ncols)
@@ -3867,6 +3978,8 @@ export class MatrixPanel {
         gauge: this.gaugeFor(data, gauge),
       },
     )
+    this.lowerGauged = this.lowerSquare !== null
+    this.installLower()
     this.heatmap.setLabelMinSpan(
       data.level === 'bin' ? LABEL_MIN_SPAN_BP / Math.max(1, this.options.binsize) : 0,
     )
@@ -3893,6 +4006,7 @@ export class MatrixPanel {
         vmax: this.manualVmax,
       })
     }
+    if (lowerMoved) this.lowerReading.announce()
     this.lanes.setAxes(this.locusAxes)
     this.lanes.setMetaAxes(this.metaAxesOf(data, turned))
     this.laneEditor?.close()
@@ -4280,15 +4394,37 @@ export class MatrixPanel {
      */
     gauge?: DenseMatrix
     presentationMoved: boolean
+    /** Whether the lower reading's scale was handed over or back, which the caller announces. */
+    lowerMoved: boolean
     turned: RotatedBlock | null
   } {
+    // `second` is the second *file* while there is a comparison to claim it, and
+    // the lower reading's own read of this one where there is not (§5.10).
+    const compared = this.options.compare !== undefined
     // Each file's values first, with any job they wait on started on the way
     // (`ui/MapDerivation.ts`). What follows puts them together and turns them.
-    const { mine, theirs, aligned } = this.derivation.derive(data, second)
+    const { mine, theirs, aligned } = this.derivation.derive(data, compared ? second : undefined)
     this.derived = mine
 
     const op = this.options.compare?.op ?? 'split'
     this.second = aligned === undefined ? null : { data: aligned }
+
+    // The lower triangle in a reading of its own: the same block, or the read
+    // its score asked for, derived by its own recipe — and on a scale of its own,
+    // which is the renderer's to apply ({@link installLower}).
+    const lowerSource = compared ? undefined : second
+    let lowerValues: Float32Array | null = null
+    let lowerMoved = false
+    if (!compared && this.lowerReading.inForce(lowerSource)) {
+      const block = this.lowerReading.operand(data, lowerSource)
+      if (block === data || alignable(data, block)) {
+        lowerMoved = this.lowerReading.derive(block)
+        lowerValues = this.lowerReading.derived?.values ?? null
+      }
+    }
+    if (lowerValues === null) this.lowerReading.clear()
+    this.lowerBlock =
+      lowerValues !== null && lowerSource !== undefined && this.options.lower?.read != null ? lowerSource : null
 
     // Two aligned blocks with two axes each — under the split the merged values
     // are the first file's above the diagonal and the second's below, and
@@ -4308,10 +4444,19 @@ export class MatrixPanel {
     this.neutral = merged === undefined || op === 'split' ? mine.neutral : merged.neutral
     this.ratioOfTwo = merged !== undefined && op === 'ratio'
     const presentationMoved = this.syncDivergingScale()
+    // Under a lower reading, the upper's values on and above the diagonal and
+    // the lower's below it — the split's merge (`render/compare.ts`), of two
+    // readings rather than two files.
+    const lowerMerged =
+      lowerValues === null
+        ? null
+        : blendAcrossDiagonal({ ...data, values: mine.values }, { ...data, values: lowerValues }).values
     const dense: DenseMatrix =
-      merged === undefined
-        ? { ...toDense(data), values: mine.values }
-        : { ...toDense(data), values: merged.values }
+      lowerMerged !== null
+        ? { ...toDense(data), values: lowerMerged }
+        : merged === undefined
+          ? { ...toDense(data), values: mine.values }
+          : { ...toDense(data), values: merged.values }
     // Turned last, over whatever the arithmetic produced: the rotation is a
     // change of *geometry* and everything above it is a change of value, so a
     // turned O/E map and a turned ratio cost this one extra pass and no special
@@ -4335,17 +4480,22 @@ export class MatrixPanel {
     // one derived field over the whole square, so its two triangles are the
     // same numbers twice and the mirror would draw the picture under its own
     // reflection.
-    const mirror = merged !== undefined && op === 'split'
+    //
+    // Two readings are two bands as well, and each band is read from its own
+    // square: the second band's diagonal row is the lower reading's, which a
+    // merge of the two would have given to the upper.
+    const mirror = (merged !== undefined && op === 'split') || lowerValues !== null
     const turned =
       canTurn && this.options.turn?.on === true
         ? rotateBlock(
-            { ...data, values: dense.values },
+            { ...data, values: lowerValues === null ? dense.values : mine.values },
             {
               maxSeparation: depth ?? this.turnDepth(data, mirror),
               ...(this.options.turn.direction === undefined
                 ? {}
                 : { direction: this.options.turn.direction }),
               ...(mirror ? { mirror: true } : {}),
+              ...(lowerValues === null ? {} : { below: lowerValues }),
             },
           )
         : null
@@ -4367,8 +4517,12 @@ export class MatrixPanel {
     // from a real cell, and not the cell under the pointer.
     this.drawn = dense.values
     // …and kept, so a re-cut of the band costs one rotation rather than the
-    // whole derivation again. See {@link syncTurnDepth}.
-    this.square = dense
+    // whole derivation again. See {@link syncTurnDepth}. Under a lower reading
+    // it is the **upper's own** square, whole: the band above the fold is cut
+    // from it, and the upper's colour range is measured on it, so a second
+    // reading put beside the first does not move the first's colours.
+    this.square = lowerValues === null ? dense : { ...toDense(data), values: mine.values }
+    this.lowerSquare = lowerValues === null ? null : { ...toDense(data), values: lowerValues }
     // The strip is the only place the numbers beside it are named, and a ratio
     // drawn under a caption reading `count` is worse than one with no caption.
     // `count` where nothing was derived, rather than `deriveBlock`'s own word
@@ -4387,7 +4541,8 @@ export class MatrixPanel {
       (entry) => entry.id === this.options.scores?.current,
     )?.label
     this.units = barLabel === 'counts' || barLabel === picked ? '' : barLabel
-    return { dense: out, ...(turned === null ? {} : { gauge: dense }), presentationMoved, turned }
+    const gauge = lowerValues !== null ? this.square : turned === null ? undefined : dense
+    return { dense: out, ...(gauge === undefined ? {} : { gauge }), presentationMoved, lowerMoved, turned }
   }
 
   /**
@@ -4399,6 +4554,11 @@ export class MatrixPanel {
    */
   private bandLabels(turned: RotatedBlock | null): [string, string] | null {
     if (turned === null || turned.fold === undefined) return null
+    // Two readings of one file are named by what each is (§5.10).
+    if (this.lowerSquare !== null) {
+      const upper = [this.scoreWord(), this.units].filter((word) => word !== '').join(' ')
+      return [upper, this.lowerReading.captionParts()[0].replace(/^below the diagonal: /, '')]
+    }
     const labels = this.options.compare?.labels
     return labels === undefined ? null : [labels[0], labels[1]]
   }
@@ -4618,6 +4778,7 @@ export class MatrixPanel {
         // stays a mirrored pair: dropping the second band here would put the
         // second file away on the first zoom after it was drawn.
         ...(turned.fold === undefined ? {} : { mirror: true }),
+        ...(this.lowerSquare === null ? {} : { below: this.lowerSquare.values }),
       },
     )
     // Nothing to gain from a band the block could not fill: `rotateBlock` clamps
@@ -4626,6 +4787,7 @@ export class MatrixPanel {
     if (next.maxSeparation === turned.maxSeparation) return
     this.turned = next
     this.heatmap.reshape(turnedDense(next))
+    this.installLower()
     // The depth is half of where the guides go, so it moves with the band.
     this.heatmap.setTurn({
       maxSeparation: next.maxSeparation,
@@ -4682,6 +4844,7 @@ export class MatrixPanel {
    */
   private syncLegendSlots(): void {
     this.key2.el.classList.toggle('hidden', this.second === null || this.neutral !== null)
+    this.keyLower.el.classList.toggle('hidden', this.lowerSquare === null)
   }
 
   /**
@@ -4726,7 +4889,7 @@ export class MatrixPanel {
     return this.options.balance === true ? 'balanced' : 'count'
   }
 
-  private keyFor(scale: ColorScale, prefix = ''): KeyContent {
+  private keyFor(scale: ColorScale, prefix = this.lowerSquare === null ? '' : this.upperMark()): KeyContent {
     // The picker's word where there is a picker; otherwise the one fact about
     // the read that is always known. A derived field that has taken over the
     // square — a ratio, a difference — names itself and nothing else, because
@@ -4795,6 +4958,16 @@ export class MatrixPanel {
         right,
         box.y + box.height + 4,
         this.keyFor(painted, this.secondMark()),
+        style,
+      )
+    }
+    const lowerPainted = this.lowerPainted
+    if (this.lowerSquare !== null && lowerPainted !== null) {
+      drawKey(
+        ctx,
+        right,
+        box.y + box.height + 4,
+        this.lowerReading.keyFor(lowerPainted, this.secondMark(), {}),
         style,
       )
     }
@@ -4925,11 +5098,18 @@ export class MatrixPanel {
     derive: DerivePresentation | undefined,
     compare?: ComparePresentation,
     turn?: TurnPresentation,
+    /**
+     * The lower reading (§5.10): `null` where it is not offered — a deck has
+     * formed round this map, say — and `undefined` for nothing said, which is
+     * what a companion of a deck is told.
+     */
+    lower?: LowerPresentation | null,
   ): void {
     // The comparison first: the O/E and `arms` are painted from it.
     if (compare !== undefined) this.options.compare = compare
     const turnMoved = !this.setTurn(turn)
-    const unchanged = this.setDerive(derive) && !turnMoved
+    const lowerSame = lower === undefined || this.setLower(lower ?? undefined)
+    const unchanged = this.setDerive(derive) && !turnMoved && lowerSame
     const data = this.data
     // Nothing to recompute, but the setting is recorded either way: the session
     // builds a fresh presentation object on every render and hands it over
@@ -4942,20 +5122,26 @@ export class MatrixPanel {
     // for. Asked of the block on screen against what the settings now want,
     // rather than of the setting alone, because the same op means one band on a
     // map with a single file behind it.
-    const bandsMoved =
-      this.turned !== null &&
-      (this.turned.fold !== undefined) !==
-        (this.second !== null && (this.options.compare?.op ?? 'split') === 'split')
+    const bandsMoved = this.turned !== null && (this.turned.fold !== undefined) !== this.wantsBands()
     if (turnMoved || bandsMoved) {
       // A turn is a different *grid*, not different numbers in the same one, so
       // the cheap in-place swap cannot serve it: the block changes shape, its
       // axes change meaning, and the view has to be refitted around them.
       // Re-run from the top, which is one pass over a block already in memory
       // and still costs no read.
-      this.setData(data, this.lastTitle, this.second?.data)
+      this.setData(data, this.lastTitle, this.heldSecond())
       return
     }
     this.redraw()
+  }
+
+  /**
+   * {@link rederive} for the lower reading alone (§5.10), every other setting
+   * kept as the panel holds it — for a map shown again under a state it was not
+   * built for.
+   */
+  relower(lower: LowerPresentation | null): void {
+    this.rederive(this.options.derive, undefined, undefined, lower)
   }
 
   /**
@@ -4973,13 +5159,25 @@ export class MatrixPanel {
     // At the depth the band already has, not the one the box would cut now: this
     // is the in-place swap, and an array of another length read with the grid's
     // stride is rows of the wrong separation with unwritten memory under them.
-    const { dense, gauge, presentationMoved } = this.derive(
+    const { dense, gauge, presentationMoved, lowerMoved } = this.derive(
       data,
-      this.second?.data,
+      this.heldSecond(),
       this.turned?.maxSeparation,
     )
     this.syncLegendSlots()
     this.heatmap.setValues(dense.values, gauge?.values)
+    // A square map whose lower triangle became, or stopped being, a reading of
+    // its own: the upper's range is measured on the upper's own square while it
+    // is, and `setValues` updates a gauge but never installs or removes one.
+    const gauged = this.lowerSquare !== null
+    if (this.turned === null && gauged !== this.lowerGauged) {
+      this.gaugeShown = gauged ? (gauge ?? null) : null
+      this.heatmap.setGauge(this.gaugeShown)
+    }
+    this.lowerGauged = gauged
+    this.installLower()
+    this.lowerPainted = null
+    if (lowerMoved) this.lowerReading.announce()
     // The colourbar is a function of the scale *and* of what the numbers are, and
     // neither the transform nor the clip need have moved for a ratio to want a
     // different bar from a count.
@@ -4995,11 +5193,180 @@ export class MatrixPanel {
     this.schedule()
   }
 
+  /**
+   * Record the lower reading this map is drawn with, without recomputing —
+   * {@link setDerive}'s counterpart for the second tab (§5.10).
+   *
+   * A change of its colours alone is applied here and now, as a repaint: the
+   * numbers below the diagonal have not moved, only how they are coloured.
+   *
+   * @returns `true` when what is derived below the diagonal is unchanged.
+   */
+  setLower(next: LowerPresentation | undefined): boolean {
+    const held = this.options.lower
+    this.options.lower = next
+    const same = this.lowerReading.sync(next, held)
+    this.paintMapTabs()
+    if (this.lowerSquare !== null) {
+      this.installLower()
+      this.lowerPainted = null
+      this.schedule()
+    }
+    return same
+  }
+
+  /**
+   * Hand the renderer the lower reading's scale and square, or take them away.
+   *
+   * After every install of a block — a read, a regrid, a derivation swapped in,
+   * a band re-cut — since the renderer cuts the two sides along the block it is
+   * holding, and after a change of the lower scale alone.
+   */
+  private installLower(): void {
+    const square = this.lowerSquare
+    this.heatmap.setLower(square === null ? null : { scale: this.lowerReading.scale(), gauge: square })
+  }
+
+  /** The second block held for a re-derivation: the second file's, else the lower reading's own read. */
+  private heldSecond(): MatrixResult | undefined {
+    return this.second?.data ?? this.lowerBlock ?? undefined
+  }
+
+  /**
+   * Whether a turn of this map is two bands: a split of two files, or two
+   * readings of one (§5.10) — asked of the settings now, against the band on
+   * screen, by {@link rederive}.
+   */
+  private wantsBands(): boolean {
+    if (this.second !== null) return (this.options.compare?.op ?? 'split') === 'split'
+    return this.options.compare === undefined && this.lowerReading.inForce(this.lowerBlock ?? undefined)
+  }
+
+  /**
+   * The upper reading as it is now, for a lower reading switched on for the
+   * first time to start from: its score, its O/E, its despeckle, and the scale
+   * it would be drawn on with nothing derived ({@link baseScale}).
+   */
+  private lowerSeed(): LowerSeed {
+    const derive = this.options.derive
+    const scores = this.options.scores
+    return {
+      score: scores?.current ?? (this.options.balance === true ? 'balanced' : 'count'),
+      oe: derive?.expected === true,
+      smooth: derive?.smooth ?? '0',
+      ...this.baseScale(),
+    }
+  }
+
+  /**
+   * The mark the first key wears while the lower triangle is another reading:
+   * which half of the picture its numbers are — the upper triangle, or the band
+   * above the axis of a turned pair.
+   */
+  private upperMark(): string {
+    return this.turned?.fold === undefined ? '◥' : '▲'
+  }
+
+  /**
+   * Whether a pointer is over the lower reading: below the diagonal of the
+   * square, or in the second band of a turned pair. `false` wherever there is
+   * no lower reading drawn.
+   */
+  private lowerAt(cell: Cell, square: Cell): boolean {
+    const data = this.data
+    if (this.lowerSquare === null || data === null) return false
+    if (this.turned !== null) return this.turned.fold !== undefined && bandAt(this.turned, cell.row) === 1
+    let held = this.lowerSplit
+    if (held === null || held.data !== data) {
+      held = { data, split: diagonalSplit(data) }
+      this.lowerSplit = held
+    }
+    return square.col < (held.split[square.row] ?? 0)
+  }
+
+  /**
+   * The Map card's tab row (§5.10): the map's own settings, and the lower
+   * triangle's. Built on every panel and shown wherever the lower reading is
+   * offered, since a deck forming round a map takes it away without
+   * rebuilding the map, and closing gives it back.
+   *
+   * The WAI-ARIA tabs pattern, as About's are: one stop in the caret's walk —
+   * the chosen tab — with ← and → moving along the row.
+   */
+  private buildMapTabs(mapPane: HTMLElement): HTMLElement {
+    const tab = (which: 'map' | 'lower', text: string, hint: string): HTMLButtonElement => {
+      const node = el('button', {
+        class: 'map-tab',
+        type: 'button',
+        text,
+        title: hint,
+        attrs: { role: 'tab' },
+      })
+      node.addEventListener('click', () => this.openMapTab(which, false))
+      node.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') {
+          return
+        }
+        event.preventDefault()
+        const to =
+          event.key === 'Home' ? 'map' : event.key === 'End' ? 'lower' : which === 'map' ? 'lower' : 'map'
+        this.openMapTab(to, true)
+      })
+      return node
+    }
+    const map = tab('map', '◥ map', 'The map: what it shows, how it is drawn, and what is drawn over it.')
+    const lower = tab(
+      'lower',
+      '◣ lower',
+      'The triangle below the diagonal, in a reading of its own: its own score, smoothing, O/E and colours.',
+    )
+    const row = el('div', { class: 'map-tabs', attrs: { role: 'tablist', 'aria-label': 'Map settings' } }, map, lower)
+    mapPane.setAttribute('role', 'tabpanel')
+    this.lowerReading.pane.setAttribute('role', 'tabpanel')
+    this.mapTabs = { row, map, lower, mapPane, open: lastMapTab() }
+    return row
+  }
+
+  /** Show one of the Map card's two tabs, and remember it for the next map. */
+  private openMapTab(which: 'map' | 'lower', focus: boolean): void {
+    const tabs = this.mapTabs
+    if (tabs === null) return
+    tabs.open = which
+    rememberMapTab(which)
+    this.paintMapTabs()
+    if (focus) (which === 'map' ? tabs.map : tabs.lower).focus()
+  }
+
+  /** The tab row where the lower reading is offered, and the pane that is open. */
+  private paintMapTabs(): void {
+    const tabs = this.mapTabs
+    if (tabs === null) return
+    const offered = this.options.lower !== undefined
+    const open = offered ? tabs.open : 'map'
+    tabs.row.classList.toggle('hidden', !offered)
+    for (const [which, node] of [['map', tabs.map], ['lower', tabs.lower]] as const) {
+      const on = which === open
+      node.setAttribute('aria-selected', String(on))
+      node.classList.toggle('is-on', on)
+      node.tabIndex = on ? 0 : -1
+    }
+    // Lit while the lower triangle is drawn in its own reading, so the tab says
+    // from the other one that something lives behind it.
+    tabs.lower.classList.toggle('is-set', this.options.lower?.on === true)
+    tabs.mapPane.classList.toggle('hidden', open !== 'map')
+    // In the card only while it is offered: a card that does not offer it is the
+    // card it always was, with one score, one O/E and one of every field.
+    const pane = this.lowerReading.pane
+    if (!offered) pane.remove()
+    else if (pane.parentElement !== this.controlsEl) this.controlsEl.append(pane)
+    pane.classList.toggle('hidden', open !== 'lower')
+  }
+
   setBusy(busy: boolean, message = 'loading…'): void {
     // A correlation outlives the read that started it — see
     // {@link MapDerivation.correlationWait} — so a clear arriving from
     // `setData` puts the longer wait back rather than taking the veil away.
-    const correlationNote = this.derivation.correlationWait
+    const correlationNote = this.derivation.correlationWait ?? this.lowerReading.derivation.correlationWait
     if (!busy && correlationNote !== null) {
       this.overlay.textContent = correlationNote
       this.overlay.classList.remove('hidden')
@@ -5334,6 +5701,17 @@ export class MatrixPanel {
           this.key2.set(this.keyFor(effective, this.secondMark()))
         }
         this.placeKey()
+      }
+      // The lower reading's own key and clip, from the bounds its raster
+      // resolved — its own scale, measured on its own square (§5.10).
+      const lowerEffective = this.lowerSquare === null ? null : this.heatmap.effectiveLowerScale
+      if (lowerEffective !== null) {
+        if (!sameColorScale(lowerEffective, this.lowerPainted)) {
+          this.lowerPainted = { ...lowerEffective }
+          this.keyLower.set(this.lowerReading.keyFor(lowerEffective, this.secondMark(), {}))
+          this.placeKey()
+        }
+        this.lowerReading.showBounds(lowerEffective)
       }
       if (Number.isFinite(effective.vmin) && Number.isFinite(effective.vmax)) {
         this.clip.setValues(
@@ -6073,7 +6451,9 @@ export class MatrixPanel {
     to: ReadonlyArray<{ contig: string; bp: number }>,
   ): Float32Array | null {
     const data = this.data
-    const values = this.drawn
+    // The upper reading's own square where the lower triangle is another
+    // reading (§5.10): a row through the bead is a row of one quantity.
+    const values = this.lowerSquare === null ? this.drawn : (this.square?.values ?? this.drawn)
     const rows = this.squareAxes.rows
     const cols = this.squareAxes.cols
     if (data === null || values === null || rows === null || cols === null) return null

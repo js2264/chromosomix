@@ -4539,6 +4539,81 @@ canvas.is-frozen {
   color: var(--warn);
 }
 
+/* The Map card's two tabs (§5.10): the map's own settings, and the triangle
+   below the diagonal read its own way. Words on a rule, the open one in the
+   accent and underlined into it — About's tabs, at the card's size, so which is
+   open is read off the row's shape and weight and not off a colour alone. */
+.map-tabs {
+  display: flex;
+  gap: 0.15rem;
+  margin: -0.1rem 0 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.map-tab {
+  margin-bottom: -1px;
+  padding: 0.25rem 0.5rem 0.3rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--step--1);
+  cursor: pointer;
+}
+
+.map-tab:hover {
+  color: var(--text);
+}
+
+.map-tab.is-on {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+/* The second tab while its reading is on, seen from the first: a dot after the
+   word, so a reader on the map's own tab can tell the lower triangle is not the
+   mirror it would otherwise be. */
+.map-tab.is-set::after {
+  content: '';
+  display: inline-block;
+  width: 0.4em;
+  height: 0.4em;
+  margin-left: 0.35em;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: 0.15em;
+}
+
+.map-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: var(--radius);
+}
+
+/* The lower tab's fields, under its switch: the same column as the map's own. */
+.map-lower-fields {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
+}
+
+.map-lower-fields > * {
+  min-width: 0;
+}
+
+.map-lower-note {
+  margin: 0;
+  font-size: var(--step--1);
+}
+
+.map-lower .field > .btn-toggle,
+.map-lower .field > .btn-word {
+  justify-self: start;
+}
+
 /* Stacked one per row when the card lives in a sidebar; the panel header keeps
    the inline layout, which is what `.panel-head > .controls-card` restores. */
 .controls-card .panel-controls {
