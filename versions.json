@@ -214,13 +214,6 @@
   ],
   "pulls": [
     {
-      "number": 135,
-      "commit": "ea05054",
-      "title": "Add anonymous telemetry and allow-access button for remembered files",
-      "branch": "ccr-7d5d65bd-wkyknd",
-      "date": "2026-10-23T09:57:21Z"
-    },
-    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
