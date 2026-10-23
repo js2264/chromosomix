@@ -14,6 +14,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The lower triangle in a reading of its own (§5.10).** On a map of one file, the Map card has a
+  second tab, `◣ lower`: switched on, the triangle below the diagonal is drawn with its own score,
+  smoothing, O/E, transform, colours and clip — balanced counts above the diagonal and their O/E
+  below it, on two ramps and two keys. Everything else — the window, the resolution, the turn, the
+  overlays, the tracks — stays the map's. Switching it on starts it from the map's own reading, so
+  the press changes nothing until a field does; each triangle is pooled and coloured apart, and each
+  scale measured on its own reading's whole square, so the upper's colours do not move. The second
+  key is editable, the readout names the reading under the pointer, an exported figure's caption
+  says both, and a turned map is two bands, each cut from its own reading. A lower score that is
+  another column or the balancing the other way reads the block a second time from the same file.
+  In the link as `lower`, `score2`, `oe2`, `smooth2`, `transform2`, `colormap2`, `vmin2` and
+  `vmax2`, carried across a navigation but for the clip, and dropped when a second file or a deck
+  is opened.
+
 - **The paper's GM12878 panels in the lab store (§24.2, §24.3).** *The Chromosomix paper* opens on
   two new tabs over 4DN's in situ Hi-C of GM12878 (Rao et al. 2014, 4DNFIXP4QG5B: 4,010,478,943
   contacts, 27 GB, read in place). **Fig. 1a**: chr14:88.55–90.10 Mb at 2 kb, three cells across —
@@ -84,8 +98,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   Umami (`https://cloud.umami.is/api/send`, free up to its Hobby plan's limit, or a self-hosted
   Umami), named by the repository's `TELEMETRY_ENDPOINT` and `TELEMETRY_WEBSITE` variables
   (docs/deploy.md), when the page is idle, at most two hundred a page. On by default with no banner;
-  **About → telemetry** turns it off at once, *forget everything* keeps it off, and Global Privacy
-  Control or Do Not Track sends nothing. Only the site's own build at the site's own address sends any:
+  **About → telemetry** turns it off at once, *forget everything* keeps it off, and a browser
+  sending Global Privacy Control sends nothing; Do Not Track, which Safari and Firefox have
+  retired, is not read. Only the site's own build at the site's own address sends any:
   the archived pins, the previews, the package, the desktop app, the single file, embeds and
   automated browsers never do.
 

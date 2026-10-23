@@ -48,7 +48,7 @@ chromosomix launches in about a second and reads your data where it lives, on yo
 
 2. **Nothing is uploaded.** A local file is handed to an air-gapped worker by reference and read in place through the Emscripten filesystem. Nothing of it crosses the network, which is why there is no account system, no storage and no hosting cost. You can open unpublished patient-derived genomic data on a laptop with the network cable out.
 
-   The website does send anonymous telemetry about how it is used — which kinds of file are opened, which analyses run, which errors are met — as words from fixed lists, with no cookie and nothing that identifies you: never a file name, an address or a place on the genome. **About → telemetry** turns it off, and a browser sending Global Privacy Control or Do Not Track sends nothing. The desktop app, the static HTML file, the npm package and embeds never send any ([SPECS §31](SPECS.md#31-telemetry)).
+   The website does send anonymous telemetry about how it is used — which kinds of file are opened, which analyses run, which errors are met — as words from fixed lists, with no cookie and nothing that identifies you: never a file name, an address or a place on the genome. **About → telemetry** turns it off, and a browser sending Global Privacy Control sends nothing. The desktop app, the static HTML file, the npm package and embeds never send any ([SPECS §31](SPECS.md#31-telemetry)).
 
 3. **No pre-parsing of genomic files is required.** Contact maps and 1D genomic files are read in bounded reads, and the rest is pure canvas transforms with **zero** further I/O. That is the central difference from HiGlass, which needs a tile server, a tile cache and a tile compositor to stream contact maps. 
 

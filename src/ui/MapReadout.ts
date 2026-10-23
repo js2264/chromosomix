@@ -54,6 +54,11 @@ export interface ReadoutHost {
   scoreWord(): string
   /** The derived value at a cell of the square block, or `null` where nothing is derived. */
   derivedReading(row: number, col: number): string | null
+  /**
+   * The lower reading under a pointer (§5.10) — what its cells hold and its
+   * derived value there — or `null` where the pointer is not over one.
+   */
+  lower?(cell: Cell, square: Cell): { word: string; reading: string | null; value: number } | null
 }
 
 /** The readout line and the card beside the pointer, for one map and its lanes. */
@@ -206,11 +211,15 @@ export class MapReadout {
     // this cell.
     const compare = this.options.compare
     const slot = square.row * data.ncols + square.col
-    const mine = this.second === null ? cell.value : data.values[slot]
+    // Below the diagonal of a map read two ways (§5.10), the cell is the lower
+    // reading's, named as its own key names it, with the number it was read as
+    // beside its derived value.
+    const below = this.host.lower?.(cell, square) ?? null
+    const mine = below !== null ? below.value : this.second === null ? cell.value : data.values[slot]
     const count = Number.isNaN(mine) ? 'NaN (unbalanced)' : fmt.num(mine)
     const counts =
       this.second === null || compare === undefined
-        ? `${this.host.scoreWord()} ${count}`
+        ? `${below?.word ?? this.host.scoreWord()} ${count}`
         : `${compare.labels[0]} ${count} · ${compare.labels[1]} ${
             Number.isNaN(this.second.data.values[slot])
               ? 'NaN (unbalanced)'
@@ -229,9 +238,12 @@ export class MapReadout {
     // told the upper one's O/E, which is a real number from a real cell and not
     // the cell they are pointing at.
     const lower = this.turned !== null && bandAt(this.turned, cell.row) === 1
-    const reading = lower
-      ? this.host.derivedReading(square.col, square.row)
-      : this.host.derivedReading(square.row, square.col)
+    const reading =
+      below !== null
+        ? below.reading
+        : lower
+          ? this.host.derivedReading(square.col, square.row)
+          : this.host.derivedReading(square.row, square.col)
     // The genome each end belongs to, read before the distance because the
     // distance needs them: two MAGs may each have a `contig_1`, and on a
     // coarsened axis the name is most of what is left to tell them apart.

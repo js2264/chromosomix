@@ -73,13 +73,16 @@ export class MapKey {
   /**
    * Where a Tab goes from one end (§26.8): low to high, then on to the next
    * map's low in a deck — the keys in the order the deck's cells are on the
-   * page — and Shift+Tab the other way. Past the last, nowhere: the caret is
+   * page — or to the lower reading's key under this one (§5.10) — and
+   * Shift+Tab the other way. Past the last, nowhere: the caret is
    * let go, as Enter lets it go.
    */
   private tab(which: 'lo' | 'hi', step: 1 | -1): void {
     if (which === 'lo' && step === 1) return this.edit('hi')
     if (which === 'hi' && step === -1) return this.edit('lo')
-    const deck = this.el.closest('.deck-grid')
+    // A deck's keys, or this map's own two where its lower triangle is a reading
+    // with a key of its own (§5.10).
+    const deck = this.el.closest('.deck-grid') ?? this.el.closest('.map-keys')
     if (deck === null) return
     const keys = [...deck.querySelectorAll('.map-key')]
       .filter((node) => node.closest('.hidden, [hidden]') === null)

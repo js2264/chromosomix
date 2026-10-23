@@ -603,4 +603,29 @@ export interface ViewState {
    */
   vmin?: number
   vmax?: number
+  /**
+   * The lower triangle drawn in a reading of its own (§5.10): the same file,
+   * with its own score, smoothing, O/E and colour scale, below the diagonal.
+   *
+   * Only an explicit `true` is the split; the eight keys below it say nothing
+   * without it, so a reader can switch it off and on again and find the reading
+   * as they left it. Ignored — and dropped by the session — wherever there is a
+   * second file in the lower triangle (`uri2`) or a deck (`maps`), each of which
+   * has its own claim on what the lower triangle or the card is.
+   */
+  lower?: boolean
+  /** The lower reading's score, as {@link score} is the upper's — every id, `count` and `balanced` included. */
+  score2?: string
+  /** The lower reading's O/E, as {@link oe} is the upper's. */
+  oe2?: boolean
+  /** The lower reading's despeckle, as {@link smooth} is the upper's. */
+  smooth2?: string
+  /**
+   * The lower reading's colour scale, as {@link transform}, {@link colormap},
+   * {@link vmin} and {@link vmax} are the upper's.
+   */
+  transform2?: Transform
+  colormap2?: string
+  vmin2?: number
+  vmax2?: number
 }

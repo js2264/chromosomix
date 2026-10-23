@@ -628,24 +628,23 @@ function renderTime(seconds: number): string {
  * it for this browser.
  *
  * The sentence names the endpoint's host rather than a product, so it stays
- * true of whatever the site is built to send to. A browser that already asks
- * not to be tracked is told it is being taken at its word, and offered no
- * switch, since there is nothing left for one to turn off.
+ * true of whatever the site is built to send to. A browser that sends Global
+ * Privacy Control is told it is being taken at its word, and offered no switch,
+ * since there is nothing left for one to turn off.
  */
 function telemetrySection(): HTMLElement {
   const host = telemetryHost()
   const what = el('p', {
     text:
-      'This site sends anonymous telemetry about how it is used — which kinds of file are opened, ' +
-      `which analyses run and how long they take, which errors are met — to ${host}. Every value ` +
-      'is a word from a fixed list: never a file name, an address, a place on the genome or ' +
-      'anything you typed, with no cookie and nothing that tells one visitor from another.',
+      `This site sends anonymous telemetry to ${host}: the file formats opened, the analyses ` +
+      'run and the errors met. Never a file name, an address or a place on the genome, and no ' +
+      'cookie.',
   })
   let control: HTMLElement
   if (browserDeclines()) {
     control = el('p', {
       class: 'hint',
-      text: 'Your browser asks sites not to track it, so this one sends nothing.',
+      text: 'Your browser sends Global Privacy Control, so this site sends nothing from it.',
     })
   } else {
     const toggle = el('button', {

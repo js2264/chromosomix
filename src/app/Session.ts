@@ -64,6 +64,8 @@ import { openResolutionDialog } from '../ui/ResolutionDialog'
 import { ViewerError } from '../errors'
 import {
   COMPANION_KEYS,
+  LOWER_KEYS,
+  LOWER_READING_KEYS,
   READING_KEYS,
   SUBJECT_KEYS,
   ViewStore,
@@ -108,6 +110,8 @@ import type {
   DerivePresentation,
   TurnPresentation,
 } from '../ui/MatrixPanel'
+import type { LowerPresentation } from '../ui/LowerReading'
+import { rereading, type LowerRead } from '../ui/compare'
 import { binsForLength } from '../analysis/context'
 import { isCancellation, ReaderClient, type Cancellable } from '../worker/client'
 import type {
@@ -6342,7 +6346,12 @@ export class Session {
     // offers the baseline along its arms or takes it away (§8.15), and the
     // derivation below is of whichever score the state resolves to *now*.
     this.current?.panel?.offerScores(scoreChoices(this.scoreProps(state)), this.scoreOf(state).id)
-    this.current?.panel?.rederive(this.derivePresentation(state), undefined, this.turnPresentation(state))
+    this.current?.panel?.rederive(
+      this.derivePresentation(state),
+      undefined,
+      this.turnPresentation(state),
+      this.lowerPresentation(state) ?? null,
+    )
   }
 
   /**
@@ -6747,6 +6756,159 @@ export class Session {
         })
         this.rederive()
       },
+    }
+  }
+
+  /**
+   * The lower triangle's own reading (§5.10), as the map is handed it — or
+   * `undefined` where it is not offered.
+   *
+   * Offered on a map of one file read as a square or a band: a region, the
+   * whole file, a selection. Not beside a second file, whose triangle the lower
+   * one is (§5.7), and not in a deck, where the Map card sets whichever map is
+   * starred (§16.5); both drop it from the state (`SessionRouter`).
+   *
+   * Its score is resolved through the upper's own list, so a link naming a
+   * column this file lacks lands on the first entry, and absent it is the
+   * file's own default — balanced where the file is balanced by default, as
+   * the upper's is.
+   *
+   * @internal SessionRouter tells a repaint from a new read by {@link lowerReadKey}.
+   */
+  lowerPresentation(state: ViewState): LowerPresentation | undefined {
+    if (state.view !== 'region' && state.view !== 'whole' && state.view !== 'selection') return undefined
+    if (state.uri2 !== undefined || state.maps !== undefined || this.compare.second !== null) return undefined
+    if (this.file === null) return undefined
+    const choices = scoreChoices(this.scoreProps(state))
+    const choice = this.lowerScoreOf(state)
+    const upper = this.scoreOf(state)
+    const needsRead = choice.balance !== upper.balance || choice.value !== upper.value
+    const set = LOWER_KEYS.some((key) => key !== 'lower' && state[key] !== undefined)
+    const fallback = this.scaleOf({ uri: state.uri, view: state.view })
+    const arms = this.armsOf(state).arms
+    return {
+      on: state.lower === true,
+      set,
+      onToggle: (on, seed) => {
+        // Off keeps the reading in the link, so switching it back on finds it
+        // as it was left. A first switch-on starts it from the upper's, so the
+        // press itself changes nothing on screen.
+        this.store.patch(
+          on && !set
+            ? {
+                lower: true,
+                score2: seed.score,
+                oe2: seed.oe ? true : undefined,
+                smooth2: seed.smooth === '0' ? undefined : seed.smooth,
+                transform2: seed.transform,
+                colormap2: seed.colormap,
+                vmin2: seed.vmin,
+                vmax2: seed.vmax,
+              }
+            : { lower: on ? true : undefined },
+        )
+        this.rederive()
+      },
+      scores: {
+        choices,
+        current: choice.id,
+        onChange: (picked) => {
+          this.store.patch({ score2: picked.id })
+          this.rederive()
+        },
+      },
+      derive: {
+        ...(choice.normalise === undefined ? {} : { normalise: choice.normalise }),
+        expected: state.oe2 === true,
+        onExpectedChange: (on) => {
+          this.store.patch({ oe2: on ? true : undefined })
+          this.rederive()
+        },
+        // The map's arms, applied to this reading's O/E as to the upper's and
+        // offered once, in the map's own row: they describe the sequence.
+        ...(arms === undefined ? {} : { arms: { window: arms.window, frame: arms.frame, refusal: arms.refusal } }),
+        correlate: choice.correlate === true,
+        baseline: choice.baseline === true,
+        alongArms: choice.alongArms === true,
+        onCorrelateChange: (on) => {
+          if (!on) this.store.patch({ score2: BALANCED_SCORE })
+          this.rederive()
+        },
+        correlateBlock: (values, n, onProgress) => this.correlate(values, n, onProgress),
+        smoothBlock: (request) => this.smooth(request),
+        onCorrelateFailure: (message) => this.say(`Correlation below the diagonal failed: ${message}`),
+        smooth: state.smooth2 ?? '0',
+        onSmoothChange: (token) => {
+          // The adaptive window turns this triangle's O/E on, as the upper's does.
+          const wantsExpected = parseSmooth(token)?.kind === 'adaptive'
+          this.store.patch({
+            smooth2: token === '0' ? undefined : token,
+            ...(wantsExpected ? { oe2: true } : {}),
+          })
+          this.rederive()
+        },
+      },
+      scale: {
+        transform: state.transform2 ?? fallback.transform ?? 'log1p',
+        colormap: state.colormap2 ?? DEFAULT_UI_COLORMAP,
+        ...(state.vmin2 === undefined ? {} : { vmin: state.vmin2 }),
+        ...(state.vmax2 === undefined ? {} : { vmax: state.vmax2 }),
+      },
+      onScaleChange: (scale) =>
+        this.store.patch(
+          { transform2: scale.transform, colormap2: scale.colormap, vmin2: scale.vmin, vmax2: scale.vmax },
+          { replace: true },
+        ),
+      balance: choice.balance,
+      read: needsRead
+        ? { balance: choice.balance, ...(choice.value === undefined ? {} : { value: choice.value }) }
+        : null,
+    }
+  }
+
+  /** The lower reading's score: its own key, else the file's default — the upper's with nothing said. */
+  private lowerScoreOf(state: ViewState): ScoreChoice {
+    const props = this.scoreProps(state)
+    return scoreFor(scoreChoices(props), {
+      ...(state.score2 === undefined ? {} : { score: state.score2 }),
+      balance: this.balancedByDefault(),
+    })
+  }
+
+  /**
+   * The read the lower reading needs of its own, as a string — empty where it
+   * needs none: off, not offered, or derived from the block the upper reads.
+   *
+   * @internal SessionRouter rebuilds the view only where this moves to a read
+   * the mounted map does not hold.
+   */
+  lowerReadKey(state: ViewState): string {
+    const read = this.lowerPresentation(state)
+    if (read === undefined || !read.on || read.read === null) return ''
+    return `${read.read.balance ? 'balanced' : 'raw'}|${read.read.value ?? ''}`
+  }
+
+  /** The lower reading and its second read, for a view that offers it. */
+  private lowerProps(state: ViewState): { lower?: LowerPresentation; lowerRead?: LowerRead } {
+    const lower = this.lowerPresentation(state)
+    const lowerRead = this.lowerReadOf(state)
+    return {
+      ...(lower === undefined ? {} : { lower }),
+      ...(lowerRead === undefined ? {} : { lowerRead }),
+    }
+  }
+
+  /**
+   * The second read of the open file a view makes for the lower reading, or
+   * `undefined` where it needs none: the file's own worker, asked the same
+   * questions with the lower reading's balancing and column.
+   */
+  private lowerReadOf(state: ViewState): LowerRead | undefined {
+    const read = this.lowerPresentation(state)
+    if (read === undefined || !read.on || read.read === null) return undefined
+    return {
+      client: rereading(this.clientOf(), read.read),
+      onFailure: (message) => this.say(message),
     }
   }
 
@@ -7597,7 +7759,7 @@ export class Session {
       // block a whole-file view holds *is* the picture, and a reader stepping
       // from 1 kb to a derived 3 kb would otherwise be handed the cached 1 kb
       // one under a bar that says 3 kb (§3.4).
-      `whole|${state.uri}|${this.compare.key()}|${level}|${String(balance)}|${state.coarsen ?? 0}|${state.contacts ?? 0}`,
+      `whole|${state.uri}|${this.compare.key()}|${level}|${String(balance)}|${state.coarsen ?? 0}|${state.contacts ?? 0}|${this.lowerReadKey(state)}`,
       () => {
         return new WholeView({
           client: this.clientOf(),
@@ -7646,6 +7808,7 @@ export class Session {
             ? {}
             : { annotations: this.annotationContext() }),
           ...(this.compare.context() === undefined ? {} : { compare: this.compare.context() }),
+          ...this.lowerProps(state),
           // The two are mutually exclusive in practice and both are passed
           // anyway: a file either has a genome layer to name in the tooltip
           // (§7.4) or is a cooler that can carry annotations (§8.5), never both.
@@ -7724,6 +7887,7 @@ export class Session {
         ? {}
         : { annotations: this.annotationContext() }),
       ...(this.compare.context() === undefined ? {} : { compare: this.compare.context() }),
+      ...this.lowerProps(state),
       namesGenomes: file.info.hasGenomes,
       selection: { ...selection, bins, contigs },
       onScoreChange: (choice) => this.setScore(choice),
@@ -7913,6 +8077,7 @@ export class Session {
       noun: this.file?.info.hasGenomes === false ? 'chromosome' : 'contig',
       ...(this.annotationContext() === undefined ? {} : { annotations: this.annotationContext() }),
       ...(this.compare.context() === undefined ? {} : { compare: this.compare.context() }),
+      ...this.lowerProps(state),
       balance: this.balanceOf(state),
       value: this.valueOf(state),
       ...this.scoreProps(state),
@@ -8073,9 +8238,13 @@ export class Session {
       this.wholeFile.view.destroy()
       this.wholeFile = null
     }
+    const reused = this.wholeFile !== null
     this.wholeFile ??= { key, view: build() }
     const { view } = this.wholeFile
     view.applyScale(this.scaleOf(state))
+    // A map kept across a navigation was built with the lower reading of the
+    // state it was built for (§5.10); this is the one it is shown under.
+    if (reused) view.panel.relower(this.lowerPresentation(state) ?? null)
     this.showContent(view.el, {
       sideEl: view.sideEl,
       panel: view.panel,
@@ -8149,7 +8318,8 @@ export class Session {
       K extends
         | (typeof COMPANION_KEYS)[number]
         | (typeof READING_KEYS)[number]
-        | (typeof SUBJECT_KEYS)[number],
+        | (typeof SUBJECT_KEYS)[number]
+        | (typeof LOWER_READING_KEYS)[number],
     >(
       key: K,
     ): void => {
@@ -8160,6 +8330,12 @@ export class Session {
     for (const key of COMPANION_KEYS) carry(key)
     for (const key of READING_KEYS) carry(key)
     for (const key of SUBJECT_KEYS) carry(key)
+    // The lower triangle's own reading (§5.10) is how the reader is reading maps,
+    // as the turn and the O/E are; the clip under it is not carried, as the
+    // upper's is not. Never into a comparison or a deck, which drop it.
+    if (out.uri2 === undefined && out.maps === undefined) {
+      for (const key of LOWER_READING_KEYS) carry(key)
+    }
     return out
   }
 

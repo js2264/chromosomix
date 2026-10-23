@@ -13,6 +13,8 @@ import { describe, expect, it } from 'vitest'
 
 import { alignable, blendAcrossDiagonal } from '../../src/render/compare'
 import { compareRefusal } from '../../src/ui/CompareCard'
+import { rereading } from '../../src/ui/compare'
+import type { ReaderClient } from '../../src/worker/client'
 import type { OpenResult } from '../../src/worker/protocol'
 
 function block(
@@ -260,5 +262,24 @@ describe('compareRefusal', () => {
       second: [['I', 1000]],
     })
     expect(refusal).toContain('counts differ')
+  })
+})
+
+describe('rereading (§5.10)', () => {
+  it('asks the same question with the lower reading’s balancing and column', async () => {
+    const asked: unknown[] = []
+    const client = { request: async (payload: unknown) => (asked.push(payload), payload) } as unknown as ReaderClient
+    const again = rereading(client, { balance: false, value: 'expected_dense' })
+    await again.request({ kind: 'matrix', rows: [0, 4], balance: true } as never)
+    await rereading(client, { balance: true }).request({
+      kind: 'matrix',
+      rows: [0, 4],
+      balance: false,
+      value: 'x',
+    } as never)
+    expect(asked).toEqual([
+      { kind: 'matrix', rows: [0, 4], balance: false, value: 'expected_dense' },
+      { kind: 'matrix', rows: [0, 4], balance: true },
+    ])
   })
 })

@@ -1349,7 +1349,9 @@ pointer, and every task run on either file, were still each file's own depth.
 
 This is the design for **two** files and it stays exactly as it is. §16 is the design for N, which is
 a weaker claim on the files and therefore a different picture; the two compose, and a session may
-hold both at once.
+hold both at once. §5.10 gives the same triangle to a second *reading* of one file, on a scale of its
+own — the one claim this section refuses two files, because there the two readings are of one
+library and are not compared by their colours.
 
 ### 5.8 The 1D genome browser
 
@@ -1734,6 +1736,80 @@ disagree is carried into the report and named there. Without that, the one case 
 word would be the one case that reported a clean bill. `compareRefusal` (§5.7) no longer refuses two files for spelling
 one assembly differently — but still requires the same list in the same order, and still refuses two
 sequences of one name at different lengths, which is the check that catches hg19 against hg38.
+
+### 5.10 Two readings in one square
+
+§5.7 gives the mirror half of a square to a second file. The same half can be given to **a second
+reading of the one file**: the lower-left triangle drawn with its own score, its own smoothing, its
+own O/E and its own colour scale — balanced counts above the diagonal and their O/E below it, raw
+counts against the despeckled map, a correlation against the counts it was computed from. The two
+are then one picture read against itself at every position, which is what two pictures side by side
+cannot do.
+
+**Only the reading is the triangle's own.** Where the picture is — the window, the resolution, the
+turn, the overlays, the tracks, the diagonal lock — is the map's, and so is `arms`, which says how a
+circle's baseline is taken and is a fact about the sequence: it applies to whichever triangle has an
+O/E on, and is offered once, in the map's own row. The split is the matrix diagonal, as §5.7's is,
+cut by the one function the merge and the renderer share (`render/compare.ts`'s `diagonalSplit`), so
+the cells merged from one side are exactly the cells coloured on that side's scale. The diagonal
+stays with the upper reading.
+
+**On the Map card it is a second tab.** Under the card's title, `◥ map` is the card as it always
+was, and `◣ lower` holds a switch — *own reading* — and, while it is on, the five fields of the
+lower triangle: score, smooth, an O/E toggle, transform and colours, and a clip range. Off, the tab
+says in one line what switching it on does, and the triangle is the mirror it has always been. The
+tab is lit with a dot while the reading is on, so a reader on the map's own tab can tell the lower
+triangle is not a mirror. The tab a reader chose is the one the next map opens on. The row is shown
+only where the reading is offered: **on a map of one file** — a region, the whole file, a selection
+— and not beside a second file, whose triangle the lower one is (§5.7), nor in a deck, where the card
+sets whichever map is starred (§16.5).
+
+**Switching it on changes nothing on screen.** A reading nobody has set starts from the upper one as
+it is — its score, its O/E, its despeckle, and the scale it would be drawn on with nothing derived —
+and the reader moves it from there. Switched off, it keeps its settings in the link, so switching it
+on again finds it as it was left.
+
+**Each reading is coloured on its own scale, and measured on its own square.** The renderer pools
+the two triangles apart, so a raster pixel astride the diagonal is the brightest cell *of its own
+reading* rather than a count reduced against an O/E, and colours each on its own ramp; a pixel is
+the lower reading's where its centre is (`render/heatmap.ts`'s `joinAcrossDiagonal`). The automatic
+range of each is measured on that reading's **whole square**, not on its triangle and not on the
+merged block: a triangle of a symmetric matrix holds the diagonal twice as often as the square does,
+and the upper reading's colours must not move because a second reading was put beside them. The
+lower reading takes the scale over for a diverging field and gives it back exactly as the upper does
+(§7.5) — `log2`, a symmetric range, `RdBu_r` — and a link that lands on that scale already keeps its
+clip, which is in the derived units and is the reader's. The upper does not keep it: its clip on a
+link that lands on its O/E's scale is handed back to auto, as it always has been.
+
+**Two keys, both editable.** The first key is marked `◥` while there is a second reading, and the
+lower reading's key under it is marked `◣` — `▲` and `▼` on a turned pair — and names its own score,
+derivation and transform. Its two numbers are buttons, as the first key's are (§7.1), and set the
+lower reading's clip. The readout under the pointer names the reading it is over, with the derived
+value and the number it was read as; an exported figure carries both keys, and its caption a second
+line: *below the diagonal: counts · O/E · log2 · colour −1.08 to 1.08*.
+
+**A score of its own may be a second read.** Where the lower score reads the cells the upper reads —
+`VC`, `ICE`, the baseline, the correlation, an O/E of either — both triangles are derived from the
+one block and nothing is read. Where it names another `/pixels` column, or the balancing the other
+way, the view reads the block a second time from the same file's worker with those two answered
+differently (`ui/compare.ts`'s `rereading`), exactly where §5.7 reads its second file, and the router
+rebuilds the view only for a read the mounted map does not already hold. A map handed no such block
+draws one reading over the whole square rather than the upper's numbers under the lower's name.
+
+**Turned, the pair is two bands**, as §5.7's is (§17.2) — and each band is cut from its own square,
+so the second band's diagonal row is the lower reading's: a merge would have given it to the upper,
+and a diagonal of balanced counts drawn on an O/E's ramp is a stripe of saturated colour along the
+axis, in the one row the two bands are compared by. The bands are named by what each reading is.
+
+**In the link**, eight keys: `lower=true` is the switch, and `score2`, `oe2`, `smooth2`,
+`transform2`, `colormap2`, `vmin2` and `vmax2` are the lower reading's twins of the upper's, parsed
+by the same rules — the score as any id `scoreFor` can repair, the despeckle and the transform only
+as values this build offers, a bound only as a number. Every one but the clip is carried across a
+navigation of the same file, since the split is how the reader is reading maps, as the turn and the
+O/E are; the clip is two numbers about one block, as `vmin` and `vmax` are. **A second file or a
+deck drops all eight** from the state: the first has its own claim on the triangle and the second
+on the card, and a reading kept in the link behind either would come back on a map nobody set it
+for.
 
 ---
 
@@ -15023,5 +15099,11 @@ owed instead is to say it and to make it easy to stop:
   It is kept in `localStorage` (`chromosomix:telemetry`), and *forget everything* keeps it: every other
   key is something kept on the reader's behalf, and this one is a refusal, whose loss would be the
   one way that button could make the page send more than it did before it was pressed.
-- **A browser that already asks not to be tracked is taken at its word**, unasked: Global Privacy
-  Control or Do Not Track, and the site sends nothing. About then says so in place of the switch.
+- **A browser that sends Global Privacy Control is taken at its word**, unasked, and the site sends
+  nothing: Brave and DuckDuckGo by default, Firefox in its private windows, and any browser where
+  the reader turned it on. About then says so in place of the switch. **Do Not Track is not read.**
+  The browsers that offered it have retired it — Safari in 2019, Firefox in 2025, which points its
+  users to GPC instead — so what still sends it is mostly an old setting nobody remembers choosing,
+  and the European Data Protection Board has said GDPR's objection by automated means (Art. 21(5))
+  does not make a site bound to honour it. GPC is the signal a reader can still set, and the one
+  the law names: a binding opt-out in California and a dozen other states.
