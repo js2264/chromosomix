@@ -92,40 +92,73 @@ export function alignable(a: CompareBlock, b: CompareBlock): boolean {
 export function blendAcrossDiagonal(primary: CompareBlock, second: CompareBlock): Blend {
   const { nrows, ncols } = primary
   const values = new Float32Array(primary.values.subarray(0, nrows * ncols))
+  const split = diagonalSplit(primary)
   let lower = 0
-
-  // The two axes may cover different bin ranges — a `contig_A × contig_B` block
-  // does — so "below the diagonal" is a comparison of *absolute bins*, not of
-  // row and column indices. Where the extents coincide the two are the same
-  // question, and the cheap form below is taken.
-  const square =
-    primary.rowExtent[0] === primary.colExtent[0] &&
-    primary.rowExtent[1] === primary.colExtent[1] &&
-    nrows === ncols
-
-  if (square) {
-    for (let r = 0; r < nrows; r++) {
-      const row = r * ncols
-      for (let c = 0; c < r; c++) {
-        values[row + c] = second.values[row + c]
-        lower++
-      }
-    }
-    return { values, lower, upper: nrows * ncols - lower }
-  }
-
-  const rowStep = (primary.rowExtent[1] - primary.rowExtent[0]) / Math.max(1, nrows)
-  const colStep = (primary.colExtent[1] - primary.colExtent[0]) / Math.max(1, ncols)
   for (let r = 0; r < nrows; r++) {
-    const rowBin = primary.rowExtent[0] + r * rowStep
     const row = r * ncols
-    for (let c = 0; c < ncols; c++) {
-      if (primary.colExtent[0] + c * colStep >= rowBin) continue
-      values[row + c] = second.values[row + c]
-      lower++
-    }
+    const end = split[r]
+    for (let c = 0; c < end; c++) values[row + c] = second.values[row + c]
+    lower += end
   }
   return { values, lower, upper: nrows * ncols - lower }
+}
+
+/**
+ * Where each row of a block crosses the matrix diagonal: the cells
+ * `[0, split[r])` of row `r` are **below** it, and the rest of the row is on it
+ * or above it.
+ *
+ * One answer for every picture that puts something else in the lower triangle —
+ * a second file merged by {@link blendAcrossDiagonal}, and the second reading of
+ * one file, whose two triangles are coloured on two scales (`render/heatmap.ts`,
+ * §5.10). Written once so the cells the merge took from one side are exactly the
+ * cells the renderer colours on that side's scale.
+ *
+ * The two axes may cover different bin ranges — a `contig_A × contig_B` block
+ * does — so "below the diagonal" is a comparison of *absolute bins*, not of row
+ * and column indices. Where the extents coincide the two are the same question,
+ * and the cheap form is taken. A row's lower cells are always a prefix of it,
+ * because the column's bin only grows along the row.
+ */
+export function diagonalSplit(
+  block: Pick<CompareBlock, 'nrows' | 'ncols' | 'rowExtent' | 'colExtent'>,
+): Int32Array {
+  const { nrows, ncols } = block
+  const split = new Int32Array(nrows)
+  const square =
+    block.rowExtent[0] === block.colExtent[0] &&
+    block.rowExtent[1] === block.colExtent[1] &&
+    nrows === ncols
+  if (square) {
+    for (let r = 0; r < nrows; r++) split[r] = r
+    return split
+  }
+  const rowStep = (block.rowExtent[1] - block.rowExtent[0]) / Math.max(1, nrows)
+  const colStep = (block.colExtent[1] - block.colExtent[0]) / Math.max(1, ncols)
+  const below = (c: number, rowBin: number): boolean => block.colExtent[0] + c * colStep < rowBin
+  for (let r = 0; r < nrows; r++) {
+    const rowBin = block.rowExtent[0] + r * rowStep
+    // A first guess from the arithmetic, then walked onto the same comparison
+    // the cells are tested by, so a rounding in the division cannot move a
+    // cell across the line.
+    let k = colStep > 0 ? Math.ceil((rowBin - block.colExtent[0]) / colStep) : below(0, rowBin) ? ncols : 0
+    k = Math.max(0, Math.min(ncols, k))
+    while (k > 0 && !below(k - 1, rowBin)) k--
+    while (k < ncols && below(k, rowBin)) k++
+    split[r] = k
+  }
+  return split
+}
+
+/**
+ * {@link diagonalSplit} for a **mirrored** turned pair (`render/rotate.ts`):
+ * the rows from the fold down are the band read from the lower triangle, and
+ * every cell of them is the second side's.
+ */
+export function foldSplit(nrows: number, ncols: number, fold: number): Int32Array {
+  const split = new Int32Array(nrows)
+  for (let r = Math.max(0, fold); r < nrows; r++) split[r] = ncols
+  return split
 }
 
 /**
