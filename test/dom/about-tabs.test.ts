@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 /**
- * *About*'s three tabs (§18.10, §22.4): what the viewer is, the notebooks GitHub
- * Actions publishes, and the licences — with the build stamp under all three.
+ * *About*'s three tabs (§18.10, §22.4): what the viewer is, with the build stamp
+ * and the version picker under it, the notebooks GitHub Actions publishes, and
+ * the licences — each of the last two about that alone.
  *
  * A tab is built when it is first chosen, so the Notebooks tab reads the
  * network when the reader asks for it and not when *About* opens; the row of
@@ -70,12 +71,24 @@ describe('the tabs', () => {
     expect(tabs().map((button) => button.tabIndex)).toEqual([0, -1, -1])
   })
 
-  it('keeps the build stamp under every tab', () => {
+  it('shows the build stamp under the overview, and under no other tab', () => {
     openAbout('https://example.org/repo', null, undefined, null, site())
-    for (const id of ['overview', 'notebooks', 'licences']) {
+    /** The footers on screen: built, and not hidden with their tab. */
+    const feet = (): HTMLElement[] =>
+      [...document.querySelectorAll<HTMLElement>('.about-foot')].filter((foot) => !foot.hidden)
+    expect(feet()).toHaveLength(1)
+    expect(feet()[0]?.querySelector('.about-build')?.textContent).toMatch(/^version /)
+    // Outside the part that scrolls, so it stays on screen however far the
+    // overview is scrolled.
+    expect(feet()[0]?.closest('.about-panels')).toBeNull()
+    for (const id of ['notebooks', 'licences']) {
       tab(id).click()
-      expect(document.querySelector('.about-foot .about-build')?.textContent).toMatch(/^version /)
+      expect(feet(), id).toEqual([])
     }
+    // And back, the one footer it built shown again rather than a second one.
+    tab('overview').click()
+    expect(feet()).toHaveLength(1)
+    expect(document.querySelectorAll('.about-foot')).toHaveLength(1)
   })
 
   it('moves the licences to a tab of their own, built when it is chosen', () => {

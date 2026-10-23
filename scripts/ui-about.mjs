@@ -121,9 +121,9 @@ async function scene(name, fn, { width = 1440, height = 900, dark = false, delay
     const found = await page.evaluate(() => ({
       tabs: [...document.querySelectorAll('.about-tab')].map((b) => `${b.textContent}${b.getAttribute('aria-selected') === 'true' ? '*' : ''}`),
       focused: document.activeElement?.closest('.about-tab')?.textContent ?? document.activeElement?.tagName ?? null,
-      stamp: document.querySelector('.about-foot .about-build')?.textContent ?? null,
+      stamp: document.querySelector('.about-foot:not([hidden]) .about-build')?.textContent ?? null,
       stampOnScreen: (() => {
-        const node = document.querySelector('.about-foot .about-build')
+        const node = document.querySelector('.about-foot:not([hidden]) .about-build')
         if (node === null) return false
         const box = node.getBoundingClientRect()
         return box.bottom <= window.innerHeight && box.top >= 0

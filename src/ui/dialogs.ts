@@ -27,6 +27,14 @@ import {
 import { devFeature } from '../state/devFeatures'
 import type { TourProgress } from '../state/tour'
 import { tutorialButtons } from './tutorialOffer'
+import {
+  browserDeclines,
+  setTelemetry,
+  startTelemetry,
+  telemetryHost,
+  telemetryOffered,
+  telemetryWanted,
+} from '../telemetry'
 
 /**
  * The modifier a gesture actually wants, on the machine reading the dialog.
@@ -276,7 +284,15 @@ export function openAbout(
         'div',
         { class: 'about-body' },
         tabbed([
-          { id: 'overview', label: 'Overview', panel: () => overview(repoUrl, tutorial, close) },
+          {
+            id: 'overview',
+            label: 'Overview',
+            panel: () => overview(repoUrl, tutorial, close),
+            // The build, on the tab about the viewer and nowhere else: the other
+            // two are each about one thing — the notebooks, the licences — and
+            // a stamp and a picker under them were a third thing on each.
+            foot: () => buildFoot(platform),
+          },
           // Absent where no site can be named — a test, or a copy with no
           // homepage — rather than a tab of links leading nowhere (§8.5).
           ...(published === null
@@ -284,52 +300,56 @@ export function openAbout(
             : [{ id: 'notebooks' as const, label: 'Notebooks', panel: () => notebooksPanel(published) }]),
           { id: 'licences', label: 'Licences', panel: () => licences(repoUrl) },
         ]),
-        // Under every tab, and outside the part that scrolls: it is the first
-        // thing to ask for in a bug report about a page that has no server to
-        // interrogate, so it is on screen whichever tab the reader is on —
-        // the Notebooks tab's own stamps, each naming the build a page was
-        // rendered from, read against it.
-        el(
-          'footer',
-          { class: 'about-foot' },
-          // Small, and selectable: copied, and not read for pleasure.
-          el('p', { class: 'about-build', text: `version ${buildLine()}` }),
-          // Directly under the stamp, because it is the same question continued:
-          // the line above says which build this is, and this says which other
-          // ones are still published and lets the reader go and run one. `null`
-          // on the desktop target, where an installer is versioned by being an
-          // installer and there is no site to hold the other builds.
-          versionPicker(),
-          // The runtime, read from `process.versions` at preload time rather than
-          // written down anywhere: Electron's Chromium and Node move within a
-          // major, and a number pinned in the repository would be wrong within a
-          // week and believed anyway, because it is under the word "version".
-          ...(platform === undefined || platform === null
-            ? []
-            : [
-                el('p', {
-                  class: 'about-build',
-                  text:
-                    `Electron ${platform.electron} · Chromium ${platform.chrome} · ` +
-                    `Node ${platform.node} · ${platform.platform} ${platform.arch}`,
-                }),
-              ]),
-          // The answer to the warning the user clicked through to get here. They
-          // were told the developer could not be verified; this is where they
-          // find out that this was expected and what it does and does not mean.
-          ...(platform !== undefined && platform !== null && !platform.signed
-            ? [
-                el('p', {
-                  class: 'about-build',
-                  text:
-                    'This build is not code-signed. A signature says who published a build, ' +
-                    'not whether it works — which is why macOS and Windows each warned you once.',
-                }),
-              ]
-            : []),
-        ),
       ),
   })
+}
+
+/**
+ * Which build this is, and the others still published: the Overview tab's
+ * footer, outside the part that scrolls, so it stays on screen however far the
+ * overview is scrolled — it is the first thing to ask for in a bug report about
+ * a page that has no server to interrogate.
+ */
+function buildFoot(platform: AboutPlatform | null | undefined): HTMLElement {
+  return el(
+    'footer',
+    { class: 'about-foot' },
+    // Small, and selectable: copied, and not read for pleasure.
+    el('p', { class: 'about-build', text: `version ${buildLine()}` }),
+    // Directly under the stamp, because it is the same question continued:
+    // the line above says which build this is, and this says which other
+    // ones are still published and lets the reader go and run one. `null`
+    // on the desktop target, where an installer is versioned by being an
+    // installer and there is no site to hold the other builds.
+    versionPicker(),
+    // The runtime, read from `process.versions` at preload time rather than
+    // written down anywhere: Electron's Chromium and Node move within a
+    // major, and a number pinned in the repository would be wrong within a
+    // week and believed anyway, because it is under the word "version".
+    ...(platform === undefined || platform === null
+      ? []
+      : [
+          el('p', {
+            class: 'about-build',
+            text:
+              `Electron ${platform.electron} · Chromium ${platform.chrome} · ` +
+              `Node ${platform.node} · ${platform.platform} ${platform.arch}`,
+          }),
+        ]),
+    // The answer to the warning the user clicked through to get here. They
+    // were told the developer could not be verified; this is where they
+    // find out that this was expected and what it does and does not mean.
+    ...(platform !== undefined && platform !== null && !platform.signed
+      ? [
+          el('p', {
+            class: 'about-build',
+            text:
+              'This build is not code-signed. A signature says who published a build, ' +
+              'not whether it works — which is why macOS and Windows each warned you once.',
+          }),
+        ]
+      : []),
+  )
 }
 
 /** This build's notebooks: the site's, read with `fetch` except in the single file. */
@@ -348,11 +368,17 @@ function defaultNotebooks(): AboutNotebooks | null {
  * first time it is chosen, so a tab that reads the network does so when the
  * reader asks for it and not when *About* opens.
  */
-function tabbed(tabs: Array<{ id: AboutTab; label: string; panel: () => HTMLElement }>): HTMLElement {
+function tabbed(
+  tabs: Array<{ id: AboutTab; label: string; panel: () => HTMLElement; foot?: () => HTMLElement }>,
+): HTMLElement {
   const row = el('div', { class: 'about-tabs', attrs: { role: 'tablist', 'aria-label': 'About this viewer' } })
   const scroller = el('div', { class: 'about-panels' })
   const buttons: HTMLButtonElement[] = []
   const panels: Array<HTMLElement | null> = tabs.map(() => null)
+  // A tab's own footer, under the part that scrolls and shown with its tab
+  // alone. Built with the tab's panel, and kept, like it.
+  const feet: Array<HTMLElement | null> = tabs.map(() => null)
+  const footing = el('div', { class: 'about-feet' })
   const choose = (index: number, focus: boolean): void => {
     tabs.forEach((tab, at) => {
       const on = at === index
@@ -373,8 +399,14 @@ function tabbed(tabs: Array<{ id: AboutTab; label: string; panel: () => HTMLElem
         )
         panels[at] = panel
         scroller.appendChild(panel)
+        const foot = tab.foot?.() ?? null
+        if (foot !== null) {
+          feet[at] = foot
+          footing.appendChild(foot)
+        }
       }
       panel?.toggleAttribute('hidden', !on)
+      feet[at]?.toggleAttribute('hidden', !on)
     })
     // Each tab opens at its top, not at wherever the last one was scrolled to.
     scroller.scrollTop = 0
@@ -409,7 +441,7 @@ function tabbed(tabs: Array<{ id: AboutTab; label: string; panel: () => HTMLElem
     row.appendChild(button)
   })
   choose(0, false)
-  return el('div', { class: 'about-tabbed' }, row, scroller)
+  return el('div', { class: 'about-tabbed' }, row, scroller, footing)
 }
 
 /** What the viewer is, how it reads, the tutorial and the source. */
@@ -457,6 +489,10 @@ function overview(repoUrl: string, tutorial: AboutTutorial | null | undefined, c
       'Source, issues and the format specification: ',
       el('a', { href: repoUrl, text: repoUrl, class: 'link' }),
     ),
+    // What the site's telemetry holds and where it goes, with the switch (§31):
+    // on the tab About opens on, as the other thing a reader asks of a page
+    // before trusting it with their data. Absent where nothing is sent.
+    ...(telemetryOffered() ? [telemetrySection()] : []),
   )
 }
 
@@ -585,6 +621,61 @@ function renderTime(seconds: number): string {
   const minutes = Math.round(seconds / 60)
   if (minutes < 60) return `${minutes} min`
   return `${Math.floor(minutes / 60)} h ${minutes % 60} min`
+}
+
+/**
+ * The telemetry (§31): what is sent, where it goes, and the switch that stops
+ * it for this browser.
+ *
+ * The sentence names the endpoint's host rather than a product, so it stays
+ * true of whatever the site is built to send to. A browser that already asks
+ * not to be tracked is told it is being taken at its word, and offered no
+ * switch, since there is nothing left for one to turn off.
+ */
+function telemetrySection(): HTMLElement {
+  const host = telemetryHost()
+  const what = el('p', {
+    text:
+      'This site sends anonymous telemetry about how it is used — which kinds of file are opened, ' +
+      `which analyses run and how long they take, which errors are met — to ${host}. Every value ` +
+      'is a word from a fixed list: never a file name, an address, a place on the genome or ' +
+      'anything you typed, with no cookie and nothing that tells one visitor from another.',
+  })
+  let control: HTMLElement
+  if (browserDeclines()) {
+    control = el('p', {
+      class: 'hint',
+      text: 'Your browser asks sites not to track it, so this one sends nothing.',
+    })
+  } else {
+    const toggle = el('button', {
+      class: 'btn btn-toggle',
+      type: 'button',
+      text: 'telemetry',
+      title: 'Send anonymous telemetry about how this site is used. Off sends nothing from this browser.',
+      attrs: { 'aria-pressed': String(telemetryWanted()) },
+    })
+    toggle.addEventListener('click', () => {
+      const on = toggle.getAttribute('aria-pressed') !== 'true'
+      setTelemetry(on)
+      toggle.setAttribute('aria-pressed', String(on))
+      // Turned on from off: this visit is sent from here on.
+      if (on) startTelemetry()
+    })
+    control = el(
+      'div',
+      { class: 'about-telemetry-switch' },
+      toggle,
+      el('span', { class: 'hint', text: 'Off sends nothing from this browser.' }),
+    )
+  }
+  return el(
+    'section',
+    { class: 'about-telemetry', attrs: { 'aria-labelledby': 'about-telemetry-title' } },
+    el('h3', { class: 'about-heading', text: 'Telemetry', attrs: { id: 'about-telemetry-title' } }),
+    what,
+    control,
+  )
 }
 
 /**

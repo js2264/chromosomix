@@ -5659,9 +5659,11 @@ canvas.is-frozen {
   font-size: var(--step--1);
 }
 
-/* About is three tabs over one footer: the row of tabs and the build stamp stay
-   put, and only the chosen tab's panel scrolls, so a tab as long as the
-   licences never takes the stamp off screen with it. */
+/* About is three tabs: the row of tabs stays put and only the chosen tab's
+   panel scrolls. The Overview tab carries the build stamp and the version
+   picker in a footer of its own, under the part that scrolls, so the stamp is
+   never scrolled off screen; the Notebooks and Licences tabs have none, being
+   about one thing each. */
 .about-body {
   display: flex;
   flex-direction: column;
@@ -5725,6 +5727,10 @@ canvas.is-frozen {
   padding: 0.3rem 0.9rem 0.6rem;
 }
 
+.about-feet {
+  flex: 0 0 auto;
+}
+
 .about-foot {
   flex: 0 0 auto;
   padding: 0 0.9rem 0.85rem;
@@ -5732,6 +5738,26 @@ canvas.is-frozen {
 
 .about-foot > .about-build:first-child {
   margin-top: 0;
+}
+
+/* What the site sends, and the switch (§31), closing the Overview tab: set off
+   by a rule, since it is a different kind of answer — what this page does
+   besides what it shows. */
+.about-telemetry {
+  border-top: 1px solid var(--border);
+  margin-top: 0.9rem;
+}
+
+.about-telemetry-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin: 0.4rem 0 0.2rem;
+}
+
+.about-telemetry-switch .hint {
+  margin: 0;
 }
 
 /* A link in a sentence or a list of names: the prose's own type in the accent,
@@ -14685,6 +14711,33 @@ span.deck-name {
 .folders-asked .hint {
   flex: 1 1 20rem;
   margin: 0;
+}
+
+/* The grant this browser still holds for the file a tab is waiting on (§5.6),
+   in place of the red note: the same box, in the accent's wash rather than the
+   danger's, since what it asks for is one click and not a correction — and the
+   button is the page's one primary action until the file is back. A grant
+   that turns out to be spent goes back to the red. */
+.allow-asked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.9rem;
+  max-width: 90ch;
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  font-size: var(--step--1);
+}
+
+.allow-asked-text {
+  flex: 1 1 24rem;
+  margin: 0;
+}
+
+.allow-asked.is-refused {
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 
 /* --- the guided tutorial (§30) ------------------------------------------- */

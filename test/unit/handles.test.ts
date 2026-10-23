@@ -21,6 +21,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  allowHandles,
   forgetAllHandles,
   handleKey,
   handleRows,
@@ -31,6 +32,7 @@ import {
   rememberHandle,
   resetHandlesForTests,
   resolveHandle,
+  subscribeGrants,
 } from '@/state/handles'
 import { useMemoryStores } from '@/state/idb'
 
@@ -223,5 +225,133 @@ describe('forgetAllHandles', () => {
     resetHandlesForTests()
     await hydrateHandles()
     expect(handleRows()).toEqual([])
+  })
+})
+
+describe('allowHandles — the allow access button', () => {
+  it('asks for every remembered file in one press, the one pressed for first', async () => {
+    const order: string[] = []
+    const lapsed = (name: string): FileSystemFileHandle => {
+      let state: PermissionState = 'prompt'
+      return {
+        kind: 'file',
+        name,
+        queryPermission: vi.fn(async () => state),
+        requestPermission: vi.fn(async () => {
+          order.push(name)
+          state = 'granted'
+          return state
+        }),
+        getFile: async () => new File(['bytes'], name),
+      } as unknown as FileSystemFileHandle
+    }
+    await rememberHandle('ATAC.bw', lapsed('ATAC.bw'), fileNamed('ATAC.bw'))
+    await rememberHandle('rep1.cool', lapsed('rep1.cool'), fileNamed('rep1.cool'))
+    await rememberHandle('genes.gtf.gz.tbi', lapsed('genes.gtf.gz.tbi'), fileNamed('genes.gtf.gz.tbi'))
+    const heard = vi.fn()
+    subscribeGrants(heard)
+
+    expect((await allowHandles('rep1.cool'))?.name).toBe('rep1.cool')
+    expect(order[0]).toBe('rep1.cool')
+    expect([...order].sort()).toEqual(['ATAC.bw', 'genes.gtf.gz.tbi', 'rep1.cool'])
+    // All of them readable now without a gesture, which is what each tab's
+    // retry finds — and it is told once, after the last.
+    expect(await resolveHandle('ATAC.bw')).not.toBeNull()
+    expect(await resolveHandle('genes.gtf.gz.tbi')).not.toBeNull()
+    expect(heard).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks about nothing else when the file pressed for is refused', async () => {
+    const other = stubHandle('ATAC.bw', { permission: 'prompt', onRequest: 'granted' })
+    await rememberHandle('ATAC.bw', other, fileNamed('ATAC.bw'))
+    await rememberHandle(
+      'rep1.cool',
+      stubHandle('rep1.cool', { permission: 'prompt', onRequest: 'denied' }),
+      fileNamed('rep1.cool'),
+    )
+    expect(await allowHandles('rep1.cool')).toBeNull()
+    expect(other.requestPermission).not.toHaveBeenCalled()
+  })
+
+  it('goes on to the rest past a file that cannot be read any more, and forgets it', async () => {
+    await rememberHandle('rep1.cool', stubHandle('rep1.cool', { permission: 'prompt' }), fileNamed('rep1.cool'))
+    await rememberHandle(
+      'gone.bw',
+      stubHandle('gone.bw', {
+        permission: 'prompt',
+        getFile: async () => {
+          throw new DOMException('gone', 'NotFoundError')
+        },
+      }),
+      fileNamed('gone.bw'),
+    )
+    const later = stubHandle('later.bw', { permission: 'prompt' })
+    await rememberHandle('later.bw', later, fileNamed('later.bw'))
+    expect(await allowHandles('rep1.cool')).not.toBeNull()
+    expect(hasHandle('gone.bw')).toBe(false)
+    expect(later.requestPermission).toHaveBeenCalled()
+  })
+
+  it('asks for a grant that lapsed to "ask first", and tells every tab when it is given', async () => {
+    // A restart: the row is still stored, the browser wants a click.
+    const handle = stubHandle('rep1.cool', { permission: 'prompt', onRequest: 'granted' })
+    await rememberHandle('rep1.cool', handle, fileNamed('rep1.cool'))
+    const heard = vi.fn()
+    subscribeGrants(heard)
+
+    // The silent road, which every restore takes, asks nothing and keeps the row,
+    // so the button has something to offer.
+    expect(await resolveHandle('rep1.cool')).toBeNull()
+    expect(handle.requestPermission).not.toHaveBeenCalled()
+    expect(hasHandle('rep1.cool')).toBe(true)
+    expect(heard).not.toHaveBeenCalled()
+
+    const file = await allowHandles('rep1.cool')
+    expect(file?.name).toBe('rep1.cool')
+    expect(handle.requestPermission).toHaveBeenCalledWith({ mode: 'read' })
+    // Once, so each tab retries its tracks and its waiting map once.
+    expect(heard).toHaveBeenCalledTimes(1)
+  })
+
+  it('announces nothing when the reader dismisses the prompt, and keeps the row to ask again', async () => {
+    await rememberHandle(
+      'rep1.cool',
+      stubHandle('rep1.cool', { permission: 'prompt', onRequest: 'prompt' }),
+      fileNamed('rep1.cool'),
+    )
+    const heard = vi.fn()
+    subscribeGrants(heard)
+    expect(await allowHandles('rep1.cool')).toBeNull()
+    expect(heard).not.toHaveBeenCalled()
+    expect(hasHandle('rep1.cool')).toBe(true)
+  })
+
+  it('forgets a grant whose file has gone, so the button is not offered again', async () => {
+    await rememberHandle(
+      'gone.cool',
+      stubHandle('gone.cool', {
+        permission: 'prompt',
+        onRequest: 'granted',
+        getFile: async () => {
+          throw new DOMException('gone', 'NotFoundError')
+        },
+      }),
+      fileNamed('gone.cool'),
+    )
+    expect(await allowHandles('gone.cool')).toBeNull()
+    expect(hasHandle('gone.cool')).toBe(false)
+  })
+
+  it('stops telling a listener that has let go', async () => {
+    await rememberHandle(
+      'rep1.cool',
+      stubHandle('rep1.cool', { permission: 'prompt', onRequest: 'granted' }),
+      fileNamed('rep1.cool'),
+    )
+    const heard = vi.fn()
+    const stop = subscribeGrants(heard)
+    stop()
+    expect(await allowHandles('rep1.cool')).not.toBeNull()
+    expect(heard).not.toHaveBeenCalled()
   })
 })

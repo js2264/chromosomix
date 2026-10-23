@@ -264,6 +264,22 @@ describe('forgetEverything', () => {
     expect(await store(STORES.handles).get('a.cool')).toBeNull()
     expect(window.localStorage.getItem('some-other-app')).toBe('keep me')
   })
+
+  it('keeps telemetry off, the one answer whose loss would send more', async () => {
+    // A refusal, not something kept on the reader's behalf: forgetting it would
+    // turn the counts back on behind the button that promised less (§31).
+    window.localStorage.setItem(`${PREFIX}telemetry`, 'off')
+    window.localStorage.setItem(`${PREFIX}theme`, 'dark')
+    await forgetEverything()
+    expect(window.localStorage.getItem(`${PREFIX}telemetry`)).toBe('off')
+    expect(window.localStorage.getItem(`${PREFIX}theme`)).toBeNull()
+  })
+
+  it('leaves telemetry on where it was on, writing nothing', async () => {
+    window.localStorage.setItem(`${PREFIX}theme`, 'dark')
+    await forgetEverything()
+    expect(window.localStorage.getItem(`${PREFIX}telemetry`)).toBeNull()
+  })
 })
 
 // ---------------------------------------------------------------------------

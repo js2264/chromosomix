@@ -30,6 +30,31 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   one that cannot be read leaves the link alone. The desktop app, the single file, the package's copy
   and a dev server link the deployed site's pages; the single file reads no stamp.
 
+- **A remembered local file is one click away after a restart (§5.6, §8.6).** Chromium keeps a
+  dropped or chosen file's grant across a restart but asks again before handing the file over, and
+  asking needs a click the restore path does not have — so a restored tab landed on *drop the same
+  file below* for a file the browser still knew, under a red note saying no page could re-open it.
+  In that note's place the picker now says *This browser remembers rep1.cool and 4 other files, and
+  only needs your permission to read them again* beside **allow access to all 5 files**, and a
+  detached track reads *remembered file — allow access to draw it again* with **allow access** before
+  *or re-open this file*. One press asks for every file the browser remembers, the one the tab is
+  waiting on first, and Chromium's prompt offers *allow on every visit*: the tab's map, its tracks
+  and their indexes reopen, and so does every other tab on screen waiting on a file — a tab restored
+  and never looked at stays unopened until clicked. Firefox and Safari keep no grants, and show no
+  button.
+
+- **Anonymous telemetry on the website, with a switch in About (§31).** The site sends a visit, a
+  format opened, a task run and how long it took, an error code met, an install and an *allow access*
+  answered — each a word from a fixed list, checked against it before it is sent, and never a file
+  name, a URL, a locus, a message or the page's own address. Posted with no cookie and no referrer to
+  Umami (`https://cloud.umami.is/api/send`, free up to its Hobby plan's limit, or a self-hosted
+  Umami), named by the repository's `TELEMETRY_ENDPOINT` and `TELEMETRY_WEBSITE` variables
+  (docs/deploy.md), when the page is idle, at most two hundred a page. On by default with no banner;
+  **About → telemetry** turns it off at once, *forget everything* keeps it off, and Global Privacy
+  Control or Do Not Track sends nothing. Only the site's own build at the site's own address sends any:
+  the archived pins, the previews, the package, the desktop app, the single file, embeds and
+  automated browsers never do.
+
 - **The app held to its own command line, in a notebook (§18.10).** `notebooks/parity.qmd` runs ten
   tasks in the app, in headless Chromium — insulation, compartments, P(s), coverage, virtual 4C, loop
   calling, a motif search and APA on GEO's yeast Micro-C at 1.6 kb, framed on chrIV, and peak calling
@@ -77,9 +102,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 ### Changed
 
 - **About is three tabs, and the licences are one of them (§22.4).** *Overview* — what the viewer is,
-  the tutorial and the source — then *Notebooks* and *Licences*, with the build stamp and the version
-  picker under every tab rather than under the licences, which had pushed them out of sight on a
-  laptop. The row of tabs is walked with ← and →, Home and End.
+  the tutorial and the source, with the build stamp and the version picker in a footer under it that
+  never scrolls away — then *Notebooks* and *Licences*, each about that alone. The stamp used to sit
+  under the licences, which had pushed it out of sight on a laptop. The row of tabs is walked with
+  ← and →, Home and End.
+
+- **C1 is "no server-side component of our own" (§1).** It was "of any kind"; the site's telemetry
+  (§31) goes to a third-party endpoint the app never reads from or waits on. The landing page's
+  privacy note says no server ever sees a file, and adds a clause on the telemetry where the site
+  sends it; the README says the same.
 
 - **pastis-NB's fit runs on every core, and gives the same model on any number of them (§25.6,
   §23.1).** Each evaluation of the likelihood, and of pastis' MDS start before it, is now summed in
