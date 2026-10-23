@@ -143,10 +143,13 @@ def main(argv):
                     b = max(a + 1, int(np.searchsorted(rows, rows[a] + step, side='right')) - 1)
                     b = min(b, hi - lo)
                     p0, p1 = int(rows[a]), int(rows[b])
-                    a = b
+                    a_row, a = a, b
                     if p1 == p0:
                         continue
-                    bin1, bin2 = pixels['bin1_id'][p0:p1], pixels['bin2_id'][p0:p1]
+                    # A pixel's row is the index's to say — rows[a_row:a + 1] delimits rows lo + a_row … lo + a − 1
+                    # — so the bin1_id column, a third of what a rung's pixels weigh, is never read.
+                    bin1 = np.repeat(np.arange(lo + a_row, lo + a, dtype=np.int64), np.diff(rows[a_row:a + 1]))
+                    bin2 = pixels['bin2_id'][p0:p1]
                     count = pixels['count'][p0:p1]
                     keep = bin2 < hi
                     if band is not None:

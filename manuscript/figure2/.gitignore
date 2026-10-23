@@ -1,2 +1,2 @@
-# The paper store's inputs (about 370 MB) and the commands' outputs: fetched or rerun, never committed.
+# The inputs and the commands' outputs: fetched or rerun, never committed.
 build/
