@@ -149,6 +149,11 @@ export default defineConfig({
     __GOOGLE_CLIENT_ID__: JSON.stringify(process.env.GOOGLE_CLIENT_ID ?? ''),
     __GOOGLE_API_KEY__: JSON.stringify(process.env.GOOGLE_API_KEY ?? ''),
     __DROPBOX_APP_KEY__: JSON.stringify(process.env.DROPBOX_APP_KEY ?? ''),
+    // Where the site sends its usage counts (`src/telemetry.ts`, §31), from the
+    // repository's `USAGE_ENDPOINT` variable. Empty is a build that counts
+    // nothing — every build but the site's, which overrides it to empty below
+    // or in its own config, so a copy can never count on the site's behalf.
+    __USAGE_ENDPOINT__: JSON.stringify(process.env.USAGE_ENDPOINT ?? ''),
   },
   // The policy is the site's and every copy's: the pinned and package configs
   // replace this list and name `cspMeta()` again, where the desktop's — whose

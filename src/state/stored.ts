@@ -38,6 +38,7 @@ import { readStoreRows } from './stores'
 import { storedLines as driveStoredLines } from './drives'
 import { actions, dayOf, forgetActions } from './actions'
 import { isSigned, readScopes } from '../s3/credentials'
+import { setUsageCounts, usageCountsWanted } from '../telemetry'
 
 /** The one prefix every key this app writes begins with. */
 export const PREFIX = 'chromosomix:'
@@ -296,6 +297,11 @@ export async function storedItems(): Promise<StoredItem[]> {
  * honest for about half a second and the reader was told it was permanent.
  */
 export async function forgetEverything(): Promise<void> {
+  // **One answer survives the sweep: usage counts turned off** (§31). Every
+  // other key is something kept on the reader's behalf; this one is a refusal,
+  // and forgetting it would be the one way this button could make the page
+  // send more than it did before it was pressed.
+  const refused = !usageCountsWanted()
   for (const key of localKeys()) {
     try {
       window.localStorage.removeItem(key)
@@ -303,6 +309,7 @@ export async function forgetEverything(): Promise<void> {
       /* nothing was stored, so nothing has to be removed */
     }
   }
+  if (refused) setUsageCounts(false)
   for (const key of sessionKeys()) {
     try {
       window.sessionStorage.removeItem(key)

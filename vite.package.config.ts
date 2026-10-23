@@ -76,6 +76,11 @@ export default defineConfig({
   // The site's policy too. A copy on somebody else's server is the copy whose
   // headers we cannot know, which is the case a meta is for (`scripts/csp.mjs`).
   plugins: [stripPwaTags(), shellIcon('chromosomix-package-shell-icon'), cspMeta(), thirdPartyNotices()],
+  // A copy on somebody else's server counts nothing on the site's behalf (§31).
+  define: {
+    ...base.define,
+    __USAGE_ENDPOINT__: JSON.stringify(''),
+  },
   build: {
     ...base.build,
     emptyOutDir: true,

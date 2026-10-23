@@ -90,6 +90,10 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
           GOOGLE_API_KEY: ${{ vars.GOOGLE_API_KEY }}
           DROPBOX_APP_KEY: ${{ vars.DROPBOX_APP_KEY }}
+          # Where the site sends its usage counts (SPECS §31, docs/deploy.md).
+          # This build only: the archived copy below, the previews, the
+          # installers and the package count nothing.
+          USAGE_ENDPOINT: ${{ vars.USAGE_ENDPOINT }}
 
       # The same source again, for the copy that stays reachable after the next
       # push. No typecheck: the build above already ran one over this tree, and

@@ -250,6 +250,36 @@ export async function resolveHandle(
   return file
 }
 
+/** Every tab, waiting to hear that a grant was renewed (§5.6). */
+const listeners = new Set<() => void>()
+
+/** Hear about a grant the reader renewed. Returns the unsubscribe. */
+export function subscribeGrants(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+/**
+ * Ask the reader to allow a remembered file again — the *allow access* button,
+ * and nothing else.
+ *
+ * After a restart a stored grant comes back as `'prompt'`: the browser still
+ * knows the file and will not hand it over until the reader says so, and saying
+ * so needs the live gesture {@link resolveHandle} documents. So this is called
+ * from inside a click, and is the one caller that passes `prompt`.
+ *
+ * Chromium's restore prompt answers for **every** file the site held a grant
+ * for, not only the one asked about, so a success is announced: each tab tries
+ * its waiting map and its detached tracks again without a gesture, and finds
+ * them readable. Where a browser grants only the one, the others keep their own
+ * buttons.
+ */
+export async function allowHandle(uri: string): Promise<File | null> {
+  const file = await resolveHandle(uri, { prompt: true })
+  if (file !== null) for (const listener of listeners) listener()
+  return file
+}
+
 /** Drop one grant. */
 export async function forgetHandle(uri: string): Promise<void> {
   const key = handleKey(uri)
@@ -271,5 +301,6 @@ export async function forgetAllHandles(): Promise<void> {
 /** Drop the memory copy so a test can hydrate a fresh one. **Tests only.** */
 export function resetHandlesForTests(): void {
   rows.clear()
+  listeners.clear()
   hydration = null
 }

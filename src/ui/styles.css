@@ -5734,6 +5734,26 @@ canvas.is-frozen {
   margin-top: 0;
 }
 
+/* What the site counts, and the switch (§31): set off by the same rule as the
+   licences under it, since it is the same kind of answer — what this page does
+   besides what it shows. */
+.about-usage {
+  border-top: 1px solid var(--border);
+  margin-top: 0.9rem;
+}
+
+.about-usage-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin: 0.4rem 0 0.2rem;
+}
+
+.about-usage-switch .hint {
+  margin: 0;
+}
+
 /* A link in a sentence or a list of names: the prose's own type in the accent,
    where `.link` is monospace for an address. */
 .about-link {
@@ -14685,6 +14705,33 @@ span.deck-name {
 .folders-asked .hint {
   flex: 1 1 20rem;
   margin: 0;
+}
+
+/* The grant this browser still holds for the file a tab is waiting on (§5.6),
+   in place of the red note: the same box, in the accent's wash rather than the
+   danger's, since what it asks for is one click and not a correction — and the
+   button is the page's one primary action until the file is back. A grant
+   that turns out to be spent goes back to the red. */
+.allow-asked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.9rem;
+  max-width: 90ch;
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  font-size: var(--step--1);
+}
+
+.allow-asked-text {
+  flex: 1 1 24rem;
+  margin: 0;
+}
+
+.allow-asked.is-refused {
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 
 /* --- the guided tutorial (§30) ------------------------------------------- */

@@ -39,6 +39,7 @@
  */
 
 import { IS_STANDALONE } from '../version'
+import { usageCountsSending } from '../telemetry'
 import { icon, iconButton, markButton } from './icons'
 import type { IconName } from './icons'
 import { button, el } from './dom'
@@ -371,10 +372,22 @@ export class FilePicker {
         el('strong', { text: 'Nothing you open here leaves this machine.' }),
         el('span', {
           text:
-            ' There is no upload, no account and no server: the file is read in place, ' +
-            'a few kilobytes at a time, by code running on your own computer. Quit and ' +
-            'nothing remains.',
+            ' There is no upload and no account, and no server ever sees a file: it is read ' +
+            'in place, a few kilobytes at a time, by code running on your own computer. Quit ' +
+            'and nothing remains.',
         }),
+        // Said where the site does count (§31), and nowhere else: a promise
+        // about files that left out a count going out would be the one thing on
+        // this line a reader could later call misleading.
+        ...(usageCountsSending()
+          ? [
+              el('span', {
+                text:
+                  ' The site does count which kinds of file are opened and which analyses run — ' +
+                  'never a name or an address — and About turns that off.',
+              }),
+            ]
+          : []),
       ),
       iconButton(
         'x',

@@ -90,10 +90,11 @@ export default defineConfig({
     __APP_COMMIT_DATE__: JSON.stringify(''),
     __APP_TARGET__: JSON.stringify('cli'),
     __DEMO_BASE__: JSON.stringify(''),
-    // A command-line program signs in to nothing.
+    // A command-line program signs in to nothing, and counts nothing.
     __GOOGLE_CLIENT_ID__: JSON.stringify(''),
     __GOOGLE_API_KEY__: JSON.stringify(''),
     __DROPBOX_APP_KEY__: JSON.stringify(''),
+    __USAGE_ENDPOINT__: JSON.stringify(''),
   },
   // Nothing in `public/` belongs beside a command-line program; without this
   // the icons and the web manifest are copied into `dist-cli/`.
