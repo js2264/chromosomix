@@ -214,6 +214,13 @@
   ],
   "pulls": [
     {
+      "number": 133,
+      "commit": "90890cd",
+      "title": "Jupyter and R widgets: the viewer in a notebook cell, R Markdown, Quarto and Shiny (§21.5)",
+      "branch": "ccr-9c4f62d7-v0j7gc-widgets",
+      "date": "2026-10-24T12:35:28Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
