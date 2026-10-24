@@ -215,10 +215,10 @@
   "pulls": [
     {
       "number": 134,
-      "commit": "a33c8cc",
+      "commit": "9c4fe14",
       "title": "Pairs stats: pairtools stats on import, the Pairs statistics card, and Pairs QC with restriction fragments (§3.7, §18.8)",
       "branch": "ccr-9c4f62d7-v0j7gc-pairs",
-      "date": "2026-10-24T08:55:48Z"
+      "date": "2026-10-24T09:49:20Z"
     },
     {
       "number": 122,
