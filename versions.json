@@ -214,13 +214,6 @@
   ],
   "pulls": [
     {
-      "number": 139,
-      "commit": "3060e15",
-      "title": "Paper store: GM12878's second CTCF track is UW's (ENCFF644EEX)",
-      "branch": "claude/chromosomix-fig1a-fig2-store-2js2cz",
-      "date": "2026-10-24T18:46:09Z"
-    },
-    {
       "number": 133,
       "commit": "90890cd",
       "title": "Jupyter and R widgets: the viewer in a notebook cell, R Markdown, Quarto and Shiny (§21.5)",
