@@ -57,7 +57,7 @@ meneu2025/genome_references/W303_Mmmyco.gff3	s3://rsglab-data/public-data/2025_M
 meneu2025/genome_references/S288c_Mpneumo.gtf	s3://rsglab-data/public-data/2025_Meneu_et_al/genome_references/S288c_Mpneumo.gtf	Genes, S288C with the M. pneumoniae chromosome
 chromosomix_paper/human/4DNFIXP4QG5B.mcool	s3://4dn-open-data-public/fourfront-webprod/wfoutput/d6abea45-b0bb-4154-9854-1d3075b98097/4DNFIXP4QG5B.mcool	In situ Hi-C, GM12878, 4,010,478,943 contacts (Rao et al. 2014; 4DN 4DNES3JX38V5)
 chromosomix_paper/human/ENCFF734CUT.bigWig	s3://encode-public/2020/10/01/a42c46dc-c33f-4906-8469-ba93e2cf30d3/ENCFF734CUT.bigWig	CTCF ChIP-seq, fold change over control, Bernstein lab, Broad (ENCODE ENCSR000AKB)
-chromosomix_paper/human/ENCFF485CGE.bigWig	s3://encode-public/2020/09/25/ee64f56a-89ba-4f40-84f8-733a1994ea35/ENCFF485CGE.bigWig	CTCF ChIP-seq, fold change over control, Snyder lab, Stanford (ENCODE ENCSR000DZN)
+chromosomix_paper/human/ENCFF644EEX.bigWig	s3://encode-public/2020/09/26/03eeca15-17a9-47ac-aa63-08d471c2e25d/ENCFF644EEX.bigWig	CTCF ChIP-seq, fold change over control, Stamatoyannopoulos lab, UW (ENCODE ENCSR000DRZ)
 chromosomix_paper/human/ENCFF156URE.bigBed	s3://encode-public/2020/10/01/bc71c9d1-2a24-421e-9a32-f78eaf297764/ENCFF156URE.bigBed	CTCF peaks, conservative IDR thresholded (ENCODE ENCSR000AKB)
 chromosomix_paper/human/ENCFF487LOB.bigWig	s3://encode-public/2021/02/24/4c49a77a-edb2-4766-8328-d44ebe7446eb/ENCFF487LOB.bigWig	ATAC-seq, fold change over control (ENCODE ENCSR095QNB)
 chromosomix_paper/human/ENCFF928SQL.bigBed	s3://encode-public/2021/02/24/534b1381-d8a8-4ce3-b6c2-5745076db38b/ENCFF928SQL.bigBed	ATAC-seq peaks, replicated (ENCODE ENCSR095QNB)
@@ -71,7 +71,7 @@ chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w10.bw	repo:demo/store/chr
 chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w20.bw	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w20.bw	Diamond insulation at 10 kb, 200-kb window, genome-wide, computed by the app
 chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w40.bw	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w40.bw	Diamond insulation at 10 kb, 400-kb window, genome-wide, computed by the app
 chromosomix_paper/human/4DNFIXP4QG5B_10000.borders.bed	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_10000.borders.bed	Borders called on the 50-kb insulation, genome-wide
-chromosomix_paper/human/GM12878_CTCF.peaks.bed	repo:demo/store/chromosomix_paper/human/GM12878_CTCF.peaks.bed	CTCF peaks called by the app's yapc on ENCFF734CUT and ENCFF485CGE, IDR ≤ 0.05, genome-wide
+chromosomix_paper/human/GM12878_CTCF.peaks.bed	repo:demo/store/chromosomix_paper/human/GM12878_CTCF.peaks.bed	CTCF peaks called by the app's yapc on ENCFF734CUT and ENCFF644EEX, IDR ≤ 0.05, genome-wide
 chromosomix_paper/human/GM12878_CTCF.consecutive.bedpe	repo:demo/store/chromosomix_paper/human/GM12878_CTCF.consecutive.bedpe	Each CTCF peak with the next one along its sequence, genome-wide
 chromosomix_paper/human/4DNFIXP4QG5B_2000.chr14.insulation-w50.bw	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_2000.chr14.insulation-w50.bw	Diamond insulation of chr14 at 2 kb, 100-kb window (Fig. 1a)
 chromosomix_paper/human/4DNFIXP4QG5B_2000.chr14.borders.bed	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_2000.chr14.borders.bed	Borders called on chr14's insulation at 2 kb (Fig. 1a)

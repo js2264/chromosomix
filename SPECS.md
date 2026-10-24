@@ -9090,7 +9090,7 @@ place. And each track is read **at its own resolution**, never a zoom level: a c
 the bases it covers and a zoom record is a mean over its own span, which straddles the column's edges —
 asked for at the column's width, a 10-kb column took records up to 20 kb wide (bbi's rule), and the
 insulation's profile about CTCF peaks was 0.7 % off. The windows of a sequence are read in order, a
-megabase or 4,096 windows to a request, so what is held is one batch's records. Over GM12878's 2,101
+megabase or 4,096 windows to a request, so what is held is one batch's records. Over GM12878's 2,106
 CTCF peaks (§18.10, § 24 of the notebook) the profiles of CTCF, ATAC-seq and the insulation are
 deepTools' within 5·10⁻⁶ and no cell of half a million differs past both tools' rounding; the
 insulation's run went from 1.1 s to 1.7 s, its peak memory from 300 MB to 210 MB; about mouse RefSeq's

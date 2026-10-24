@@ -6,7 +6,7 @@ file a panel (PDF, and a PNG to look at).
 
 The data are the paper store's GM12878 files on chr19: 4DN's in situ Hi-C of Rao et al. 2014
 (4DNFIXP4QG5B, 4.0 billion contacts, 27 GB, read in place), ENCODE's CTCF ChIP-seq of two labs
-(Bernstein, Broad, ENCSR000AKB; Snyder, Stanford, ENCSR000DZN) and ATAC-seq (ENCSR095QNB), each the
+(Bernstein, Broad, ENCSR000AKB; Stamatoyannopoulos, UW, ENCSR000DRZ) and ATAC-seq (ENCSR095QNB), each the
 fold change over control. The bacterial figure that was Fig. 2 is now Fig. S3 (`manuscript/figureS3/`).
 
 ## chromosomix, in the browser
@@ -16,7 +16,7 @@ two CTCF tracks and ATAC-seq, nothing computed. Show the Analysis column; each t
 figure's settings.
 
 1. **Diamond insulation** → Run: insulation at 50, 100, 200 and 400 kb, their boundaries and domains.
-2. **Peak calling** → Run: *Peaks · CTCF · Broad + CTCF · Stanford · IDR ≤ 0.05*, 2,101 peaks.
+2. **Peak calling** → Run: *Peaks · CTCF · Broad + CTCF · UW · IDR ≤ 0.05*, 2,106 peaks.
 3. Switch the map to **2 kb**. **Aggregate peak analysis**, anchors **consecutive features**, features
    the peaks → Run: each peak with the next, ten bins either side, over the expected, from 22 bins
    apart (panel **a**).
@@ -53,7 +53,7 @@ ranges by the app's rules, and the curves' colours, the app's palette in the ord
   deepTools' the standard error of the mean. The means are the same numbers (§ 24).
 - **deepTools' labels are one word each** (`CTCF-Broad`, `400kb`): it breaks a label at its spaces and
   reads its matrix's header as ASCII.
-- **The pile-up is at 2 kb, ±10 bins**: on chr19 it piles 327 of the 2,100 consecutive pairs, those at
+- **The pile-up is at 2 kb, ±10 bins**: on chr19 it piles 327 of the 2,105 consecutive pairs, those at
   least 44 kb apart. Say if it should be at 5 or 10 kb, where more pairs clear the floor.
 
 ## Rebuild

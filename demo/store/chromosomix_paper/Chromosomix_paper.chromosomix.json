@@ -1635,14 +1635,14 @@
           }
         },
         {
-          "id": "b-ctcf-stanford",
+          "id": "b-ctcf-uw",
           "card": "linear",
           "kind": "track",
-          "label": "CTCF · Stanford",
+          "label": "CTCF · UW",
           "source": {
             "kind": "remote",
-            "name": "ENCFF485CGE.bigWig",
-            "url": "human/ENCFF485CGE.bigWig"
+            "name": "ENCFF644EEX.bigWig",
+            "url": "human/ENCFF644EEX.bigWig"
           },
           "visible": true,
           "placement": {
@@ -1729,7 +1729,7 @@
         },
         "peaks": {
           "signal": "b-ctcf-broad",
-          "replicate": "b-ctcf-stanford",
+          "replicate": "b-ctcf-uw",
           "idr": 0.05,
           "perPeak": true,
           "width": 150,
@@ -1753,7 +1753,7 @@
         "metaplot": {
           "tracks": [
             "b-ctcf-broad",
-            "b-ctcf-stanford",
+            "b-ctcf-uw",
             "b-atac"
           ],
           "mode": "reference",
