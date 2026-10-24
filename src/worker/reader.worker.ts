@@ -425,6 +425,7 @@ function summarise(pairs: PairsImport, download: boolean, binning: PairsBinning)
       orientation === null
         ? null
         : { edges: orientation.edges, counts: orientation.counts, total: orientation.total },
+    stats: base.stats ?? null,
     base: pairs.rungs[0],
     rungs: pairs.rungs,
     records: base.sum,

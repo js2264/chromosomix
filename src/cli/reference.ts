@@ -19,6 +19,11 @@
  *   `genome.fa.fai` — by range through the index;
  * - anything else whole, gzipped or not, as before.
  *
+ * And by range whether it is on this disk or at an address: a ranged reference
+ * reads through a descriptor for a path and through the app's range source for
+ * an address (`cli/remote.ts`), whose `.fai` is looked for beside it, so a
+ * remote genome is read a window at a time without being fetched at all.
+ *
  * Either way it answers {@link Reference}: `bases` for a task that wants a
  * whole sequence, and for a reference read by range also `read`, which is the
  * door the motif search walks a genome through without holding it. `bases`
@@ -29,8 +34,8 @@
  */
 
 import { closeSync, existsSync, fstatSync, openSync, readSync } from 'node:fs'
-import { readFile, stat } from 'node:fs/promises'
-import { basename } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { basename, dirname, join } from 'node:path'
 
 import { looksLikeFasta, parseFasta, type SequenceStore } from '../annotations/fasta'
 import { byteRange, contigsOf, parseFai, residuesIn, type FaiRecord } from '../annotations/fai'
@@ -47,6 +52,7 @@ import {
 import type { Contig } from '../genome/assembly'
 import { contigIndexOf } from '../genome/naming'
 import { inflationCap } from '../sources/untrusted'
+import { fileNameOf, wholeBytes, type Where } from './remote'
 
 /** A loaded reference, however it was opened. */
 export interface Reference {
@@ -69,28 +75,64 @@ const WHOLE_READ_MAX = 2 ** 31 - 1
 /** One `readSync` is limited to this; a longer read is several. */
 const SYNC_READ_MAX = 1 << 30
 
-/** Open one `--sequence`. */
-export async function openReference(path: string): Promise<Reference> {
-  const fd = openSync(path, 'r')
-  const head = new Uint8Array(4)
-  readSync(fd, head, 0, 4, 0)
-  if (looksLikeTwoBit(head)) return openTwoBitReference(fd)
-  if (FASTA_NAME.test(path) && existsSync(`${path}.fai`)) {
-    const records = parseFai(await readFile(`${path}.fai`, 'utf8'))
+/** A file read by range: a descriptor's `pread`s, or a range source's. */
+interface Ranged {
+  readonly size: number
+  read(length: number, position: number): Uint8Array
+  close(): void
+}
+
+/** The ranged reader for wherever a reference's bytes are. */
+function rangedOf(where: Where): Ranged {
+  if (where.kind === 'range') {
+    const { source } = where
+    return {
+      size: source.size,
+      read: (length, position) => source.readBytes(position, length),
+      close: () => source.close(),
+    }
+  }
+  const fd = openSync(where.path, 'r')
+  return {
+    size: fstatSync(fd).size,
+    read: (length, position) => readAt(fd, length, position),
+    close: () => closeSync(fd),
+  }
+}
+
+/**
+ * Open one `--sequence`, from a path or wherever `cli/remote.ts` says its bytes
+ * are. `faiText` answers the text of a sidecar beside it, or `null` where there
+ * is none — a path's by its directory, an address's by the address beside it.
+ */
+export async function openReference(
+  at: string | Where,
+  faiText: (name: string) => Promise<string | null> = async (name) => {
+    if (typeof at !== 'string') return null
+    const path = join(dirname(at), name)
+    return existsSync(path) ? readFile(path, 'utf8') : null
+  },
+): Promise<Reference> {
+  const where: Where = typeof at === 'string' ? { kind: 'disk', path: at } : at
+  const name = where.kind === 'disk' ? basename(where.path) : fileNameOf(where.source.url)
+  const file = rangedOf(where)
+  const head = file.read(4, 0)
+  if (looksLikeTwoBit(head)) return openTwoBitReference(file)
+  if (FASTA_NAME.test(name)) {
+    const text = await faiText(`${name}.fai`)
     // An index that does not parse is no index, and the answer to that is the
     // read that always worked — the worker's terms for the same failure.
-    if (records.length > 0) return indexedReference(fd, records)
+    const records = text === null ? [] : parseFai(text)
+    if (records.length > 0) return indexedReference(file, records)
   }
   // Read whole, so the handle opened to sniff it is not kept: a ranged
   // reference holds its own for the run, and a held one needs none.
-  closeSync(fd)
-  return wholeReference(path)
+  file.close()
+  return wholeReference(where, name, file.size)
 }
 
 /** A FASTA read whole, as every reference used to be. */
-async function wholeReference(path: string): Promise<Reference> {
-  const name = basename(path)
-  const size = (await stat(path)).size
+async function wholeReference(where: Where, name: string, size: number): Promise<Reference> {
   if (size > WHOLE_READ_MAX) {
     throw new Error(
       `${name} is ${(size / 1e9).toFixed(1)} GB and has no index, and a file past 2 GiB cannot be ` +
@@ -104,7 +146,7 @@ async function wholeReference(path: string): Promise<Reference> {
   // big enough that somebody kept it compressed — and capped in proportion to
   // the file rather than at the text ceiling, since residues are kept as bytes
   // and a gzipped hg38 is 3.1 GB of them.
-  const compressed = new Uint8Array(await readFile(path))
+  const compressed = await wholeBytes(where)
   const bytes = await decodeAnnotationBytes(compressed, inflationCap(compressed.length, WHOLE_FILE_INFLATION))
   if (!looksLikeFasta(bytes)) {
     throw new Error(
@@ -130,22 +172,22 @@ export function heldReference(store: SequenceStore): Reference {
 }
 
 /** A FASTA read through the `.fai` beside it. */
-function indexedReference(fd: number, records: FaiRecord[]): Reference {
+function indexedReference(file: Ranged, records: FaiRecord[]): Reference {
   const contigs = contigsOf(records)
   const window = (record: FaiRecord, from: number, to: number): Uint8Array => {
     const range = byteRange(record, from, to)
-    return residuesIn(readAt(fd, range.to - range.from, range.from))
+    return residuesIn(file.read(range.to - range.from, range.from))
   }
   return rangedReference(contigs, records, window)
 }
 
 /** A `.2bit`, read through its own index. */
-async function openTwoBitReference(fd: number): Promise<Reference> {
+async function openTwoBitReference(ranged: Ranged): Promise<Reference> {
   // The size, so a count in the file is checked against the bytes it really has.
-  const file = await openTwoBit(async (length, position) => readAt(fd, length, position), fstatSync(fd).size)
+  const file = await openTwoBit(async (length, position) => ranged.read(length, position), ranged.size)
   const window = (record: TwoBitRecord, from: number, to: number): Uint8Array => {
     const range = dnaByteRange(record, from, to)
-    return unpackDna(readAt(fd, range.to - range.from, range.from), range.firstBase, record, from, to)
+    return unpackDna(ranged.read(range.to - range.from, range.from), range.firstBase, record, from, to)
   }
   return rangedReference(contigsOfRecords(file.ordered), file.ordered, window)
 }

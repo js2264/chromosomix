@@ -522,8 +522,8 @@ makes the same file cheaper. It is **not** §8.13's case: a pairs file has a who
 respects §12, so its absence is never a refusal.
 
 **What is deliberately not read**: ~~the strand, pair-type and mapping-quality columns, and any
-filtering on them.~~ **Narrowed**: the pair-type and mapping-quality columns, and **any filtering
-at all**. A pairs file is the output of a pipeline that has already made those decisions, and
+filtering on them.~~ ~~**Narrowed**: the pair-type and mapping-quality columns, and **any filtering
+at all**.~~ **Narrowed again**: the mapping-quality columns, and **any filtering at all**. A pairs file is the output of a pipeline that has already made those decisions, and
 re-making them here would be the second application §13 refuses — the importer counts the records
 the file contains, and if a reader wants different records they filter with `pairtools select` and
 import the result. Nothing is inferred about restriction fragments, and no matrix is
@@ -552,6 +552,60 @@ never acted on — nothing trims a file, sets a minimum separation, or warns tha
 below the convergence point, because a threshold is a method with choices in it and §18.9's
 argument about a half-good caller applies to one exactly as it applies to a loop. Where the figure
 lives is §18.8, under P(s).
+
+**The pair type is read too, for `pairtools stats`' counts, and on the strands' terms.** The first
+thing anybody asks of a contact list is the table `pairtools stats` writes — records mapped on both
+sides, on one, on neither; duplicates; of the unique, cis and trans, and cis past 1, 2, 4, 10, 20 and
+40 kb; every pair type; the four orientations by separation and where they converge; and the library's
+size by the Lander–Waterman estimate — and every number in it is about *records*, so none of it can be
+had from the map afterwards. The import counts it in the same pass (`pairs/stats.ts`): one more field
+off a record the loop is already walking, and every record counted before the binner can turn one
+away, since pairtools counts the unmapped `!` and the sequences the header does not declare as well as
+what is binned. Nothing is decided from the pair type. No record is kept or dropped for it, a `DD` is
+counted as a duplicate and still binned, and the pixel table is the same table with the column there
+or taken out — asserted rather than claimed (`test/unit/pairs-stats.test.ts`). A reader who wants the
+duplicates gone runs `pairtools dedup`, as before.
+
+It is a **port**, held to its reference on §18.9's terms: `PairCounter.add_pairs_from_dataframe` and
+`calculate_summaries` of pairtools 1.1.2, which is what `pairtools stats` runs — the same
+classification of a record (unmapped where both chromosomes are `!`, mapped where neither is, a
+duplicate only where mapped and typed `DD`), the same separation bins
+(`round(10 ** arange(0, 9.001, 1/8))` with `0` before them, found by `searchsorted(…, 'right') - 1`),
+the same five per cent the convergence is judged at, the same edge after the furthest stray, and the
+same library estimate through the principal branch of Lambert's W — `nan` for a library with no
+duplicates, as scipy's W is at `-exp(-1)` and as pairtools writes it. Its golden is pairtools' own
+`.stats` for a committed fixture drawn from the yeast Micro-C cooler with every pair type pairtools
+writes in it (`test/golden/pairs_stats/`, `npm run fixtures:pairstats`): every key the same, every
+count and fraction the same to the last digit, the library to 1e-12. Two departures, each on a file
+pairtools would not have written: a strand that is neither `+` nor `-` or a position that is not a
+number ends pairtools' run with an error, and here leaves that record out of the separation table
+alone; and the `duplicate` column `add_pairs_from_dataframe` prefers to `DD` where a file has one is
+not read, since `pairtools dedup` marks a duplicate by its type. A file with no `pair_type` column has
+no duplicates to count, and says so. An import scoped through a `.px2` counts the records it read and
+says that too.
+
+It lands as the **Pairs statistics** card in the General column, under the File card's own facts and
+over the stored metadata: the rows a library is judged by — records, mapped, one side, unmapped,
+duplicates, cis, trans, the library's size and where the orientations meet — each a count and the
+share pairtools and MultiQC give it, over pairtools' own denominator (said on the key's tooltip, so the
+value stays short enough for a narrow column); and **three small charts**, drawn from the same counts
+with no run, each under the rows it pictures:
+- the pair types, as one bar of every record by its type, with the chips under it as its key — the
+  three commonest types of at least 2 % in colour, the rest folded into one grey;
+- cis, and cis at least 1, 2, 4, 10, 20 and 40 kb apart, as columns of their shares of the unique
+  mapped pairs, each labelled with its share;
+- P(s) by orientation, the four `dist_freq` curves pairtools counts, each bin's count over its width,
+  log against log, a dash as well as a colour for each, with a rule where the four meet.
+
+They are drawn by hand in SVG at the column's own width, in the theme's colours (the analysis figures'
+palette is pinned light, which a side column must not be), and each is an image with a label saying
+what it shows; a chart with nothing to draw — no `pair_type` column, no strands, no cis pair — is left
+out rather than drawn empty. **save .stats** which writes everything pairtools counts in pairtools'
+own format, key and value a line in its order and its spelling of a number (`0.05`, `1e-05`, `inf`), so
+MultiQC and `pairtools stats --merge` read it as theirs. The shell's answer is `chromosomix stats
+<file.pairs.gz>`, through the same pass at one bin a sequence, which writes `<name>.stats` into `--out`
+(or to stdout): the one file the command writes with no `#` lines over it, because pairtools' reader
+refuses any line that is not a key and a value.
 
 **Equivalence with a cooler is asserted, not assumed.** An imported map and the `.mcool` written
 from it must answer *every* `PixelStore` method identically — `forEachWindow` on and off the
@@ -8224,7 +8278,7 @@ exact stamp is that line's tooltip, so it is one hover from the words and identi
 
 ### 18.8 The catalogue
 
-Thirty-two tasks, in **four cards — 2D, 3D, 1D and Metagenome**, headed *2D tasks*, *3D tasks*,
+Thirty-four tasks, in **four cards — 2D, 3D, 1D and Metagenome**, headed *2D tasks*, *3D tasks*,
 *1D tasks* and *Metagenome*. The build order is in `docs/TASKS_PLAN.md`; what follows is what each
 one must be.
 
@@ -8247,15 +8301,15 @@ because a reader with no structure loaded has exactly one thing to do in it; *fi
 the other from a track. Five tasks are **dev features** (§29.3), absent rather than greyed while the
 switch is off and in every embed: the four metagenome tasks (`metacool`), and their card with them,
 and the 1D card's last, *Two sequences against each other* (`dotplot`); `chromosomix` lists and
-runs all thirty-two (§29.5). The 3D card's three — *Model from the map*, *Model versus map* and
+runs all thirty-four (§29.5). The 3D card's three — *Model from the map*, *Model versus map* and
 *Spatial tracks* — are specified beside the structures they make and read (§25.6), and the dot plot
 beside the view it draws (§28); every other task is below.
 
 **Which card each sits on**, in the registry's order: *2D tasks* — coverage and marginals, cis and
-trans per sequence, per-cell contact QC, P(s), the scalogram, the 4C profile, diamond insulation, the
+trans per sequence, per-cell contact QC, P(s), Pairs QC, the scalogram, the 4C profile, diamond insulation, the
 directionality index, the HiC score, compartments, inter-arm alignment, loop calling, pattern
 detection, reproducibility and aggregate peak analysis; *3D tasks* — model from the map, model versus map and
-spatial tracks; *1D tasks* — find a motif, peak calling, base composition, origin and terminus, the
+spatial tracks; *1D tasks* — find a motif, restriction sites, peak calling, base composition, origin and terminus, the
 metaplot, track correlation, FRiP, signal by group, interval set overlap and the dot plot;
 *Metagenome* — MAG contact QC, the inter-MAG network, MAG purity and split-MAG detection. The entries
 below are not in that order, and *aggregate peak analysis*, a 2D task, is described among the tracks
@@ -8286,7 +8340,56 @@ floor of the total every point is a share of, so 0 puts the diagonal back in the
 a 1 kb map, two thirds of every cis contact — and every other point was a share of a total they
 dominated.
 
-**And the four orientations beside it, wherever there are records to count them from.** Not a
+**The four orientations are Pairs QC's now** (below), beside the rest of what the records say about
+the library. They were a toggle here, and a reader looking for a library's quality had to know to look
+under a decay curve for it. The toggle and its `.pairs` box have left the form, but not the task: a
+stored run, a link and a `chromosomix expected --stranded --pairsUri …` line that ask for them still
+get the same curves, drawn by the same code, with a note saying where they live now. A **retired**
+parameter is the mechanism (`ParamBase.retired`): read from stored params and from the shell as
+before, never drawn, never asked, and left off a written command line while it is at its default.
+
+*Pairs QC* — the library behind a map, as pairtools and HiCUP read it — is listed for every map and
+asks for the `.pairs` a map was binned from when it was not binned from one: on a map **binned from a
+`.pairs`** everything but the restriction statistics is the import's own counts (§3.7) and costs
+nothing, and on any other map the form's `.pairs` box — the one P(s) had — is read once, and the run is
+refused until it is named. Its figures:
+- **The four orientations' P(s)**, as P(s) drew them (the paragraphs below), with the separation
+  where they meet stated as **pairtools' convergence** — `convergenceOf` over the counts'
+  `dist_freq`, the number the card's *strands meet* and the statistics table give — so one task gives
+  one answer to that question;
+- **the pair types, and cis and trans** with cis at least 1, 2, 4, 10, 20 and 40 kb apart, as bars;
+- **the statistics table**, every entry `pairtools stats` writes but its three long lists, in its
+  keys and its spelling of a number.
+
+**And with a reference and an enzyme, the restriction fragments.** The form's *Restriction enzyme*
+section names a FASTA or `.2bit` loaded on the Annotations panel and an enzyme, a kit or typed sites
+(the choices *Restriction sites* offers, below). The reference is held by the annotations worker and
+the records by the analysis one, so Pairs QC is a **composite**: it requires *Restriction sites*, which
+digests the reference first, and its cuts come down in `inputs.upstream`; with no reference or no
+enzyme that step is dropped and the run is the counts alone. Then one more pass over the `.pairs`
+places every end of every mapped, non-duplicate pair in a fragment, and four figures follow:
+- **Each end is placed by the cut on its own strand.** A cut has two positions, the top strand's
+  `s + k` and the bottom strand's `s + L − k` for a site of length `L` cut `k` bases in, and fragment
+  `i` lies between the same two cuts on both strands. A `+` end is placed by the top strand's cuts
+  and a `−` end by the bottom's, because a `−` read's 5′ end is the bottom strand's, which after a 5′
+  overhang is filled in sits `L − 2k` bases past the top-strand cut — 3 bp for DpnII. Placed by the
+  top strand alone, every DpnII dangling end fell in two neighbouring fragments and was counted as a
+  re-ligation; on the validation's library (§18.10) 1.6 M `−` ends start exactly on the site's C.
+- **Pair classes**, by the two ends' orientation, ordered by position: on two sequences *trans*; in
+  one fragment `+−` a **dangling end**, `−+` a **self-circle**, `++`/`−−` **same strand**; in two
+  neighbouring fragments `+−` a **re-ligation** (or a site left uncut); everything else **valid**.
+  Stacked by orientation, with the counts as a table.
+- **Distance to the next cut, in the read's direction** — `B[i+1] − x` for a `+` end, `x − B′[i] + 1`
+  for a `−` end — as two histograms on pairtools' separation bins, so a dangling end's two reads both
+  give the fragment's length and the two strands lie together.
+- **Fragments seen**: how many of the reference's fragments hold at least one end, and how many ends
+  each holds, in powers of two.
+- **Coverage against sites**: each bin of the map on screen, its raw contacts with its own diagonal
+  pixel counted once (the coverage task's count) against the cuts in it; Spearman ρ over every bin
+  that holds either, and the mean coverage for each number of sites drawn only where at least five
+  bins share it, so a repeat's one bright bin does not draw the line.
+
+**The four orientations, wherever there are records to count them from.** Not a
 property of the matrix at all: it is counted from the records, in log-spaced base-pair bins, because
 binning sums the four together and destroys exactly the thing they are read for. The separation at
 which `++`, `+−`, `−+` and `−−` converge is the shortest one the library can be believed at, it is
@@ -8309,14 +8412,13 @@ it. The line runs from the first record to the last, whatever the minimum separa
 the matrix's near-diagonal, a fact about its grid, and the separation the four converge at is usually
 shorter than one bin of it.
 **Where the records are.** A map **binned from a `.pairs`** had them counted in the import's own pass
-(§3.7), and the form asks for no file: *four orientations* is the only question, and the price beside
-**Run** says where the curves come from. On a map opened as a matrix, or binned from a file with no
+(§3.7), and the form asks for no file: the price beside **Run** says where the curves come from. On a map opened as a matrix, or binned from a file with no
 strand columns, the form asks for a `.pairs` — dropped on it, chosen through it, or named by its address
 (§18.2) — which is read for its records alone: no map changes and nothing is binned. A `.pairs`
 dropped on the app rather than on the form is *opened*, as a map. Absent, with a sentence, where there
 is nothing to count them from.
 
-*Scalogram*, which is P(s) with one summation left undone, and sits directly after it for that reason.
+*Scalogram*, which is P(s) with one summation left undone, and sits beside it in the card for that reason.
 The decay curve averages every bin of a sequence into one line and answers *how does this genome fold*;
 the scalogram keeps the bins apart and answers *where does this genome fold differently from itself*.
 At each bin it accumulates the cumulative distribution of its contacts over separation — the two cells
@@ -8848,6 +8950,18 @@ finds. Its estimate is a **scan** rather than *free*: every base of the ticked s
 the file spends on one (61/60 of a byte in a FASTA wrapped at 60, a quarter in a `.2bit`), and over a
 network a request per piece — a whole mouse genome is 2.8 GB, chr1 a fourteenth of it. The site
 ceiling stays at 500,000, and a run that reaches it over several sequences says to tick fewer.
+*Restriction sites* digests the reference: one enzyme of DpnII (MboI, Sau3AI) `^GATC`, HindIII
+`A^AGCTT`, NcoI `C^CATGG`, EcoRI `G^AATTC`, BglII `A^GATCT`, HinfI `G^ANTC`, DdeI `C^TNAG`, MseI
+`T^TAA`, NlaIII `CATG^`, CviQI (Csp6I) `G^TAC` and AluI `AG^CT`; the Arima kit, which is DpnII and
+HinfI; or **typed** — names and sites in IUPAC letters with the cut marked, `G^ANTC, HindIII`, a site
+with no `^` refused with a sentence saying where the cut is needed, and none looser than a four-base
+cutter. It is *find a motif* with a cut in it, through the same matcher and the same pieces read by
+range, and leaves a **lane of the cuts** — a point at the first base after the top strand's cut, named
+by the enzyme that made it — and the **cuts per bin** on the map's grid. Micro-C and Omni-C have no
+enzyme and no use for it. **Its cuts are `bioframe.digest`'s, and `cooler digest`'s, less two**:
+Biopython's `search` already gives the 1-based first base after the cut, and both add one more, so
+every fragment boundary they write is 2 bp late — and a fragment BED from either, given to `pairtools
+restrict`, places ends 2 bp off.
 *Base composition* — GC content, GC skew
 `(G − C)/(G + C)`, AT skew and the cumulative GC skew, per bin and under the map's names, each a lane
 like any other and each written as a bigWig. The **bin size** is the open map's resolution unless the
@@ -9241,7 +9355,7 @@ dropped from every metagenome accumulation rather than counted as inter-MAG, bec
 would make every real MAG look leakier in proportion to how badly the *rest* of the file was binned,
 which is the opposite of a per-MAG diagnostic.
 
-**Three things about this catalogue are settled differently from how they are described above**, and
+**Four things about this catalogue are settled differently from how they are described above**, and
 the reasons are worth recording where the descriptions are:
 
 - **Aggregate peak analysis is not a composite**, despite needing an expected curve for one of its
@@ -9251,6 +9365,12 @@ the reasons are worth recording where the descriptions are:
   windows reach, on the sequences its anchors sit on, read as one band per sequence and never
   deeper than the farthest window. **The inter-MAG network is** a
   genuine composite, for the mirror-image reason: its upstream is the whole input, unconditionally.
+- **Pairs QC is a composite whose upstream takes this form's answers.** A required task runs at its own
+  defaults, because inventing answers to a form the reader never opened puts numbers in their mouth.
+  Pairs QC asks the digest's questions — the reference, the enzyme — on its own form, so its
+  descriptor's `upstreamParams` lays those answers over *Restriction sites*' defaults, and `null`
+  drops the step when the reader gave none; the cache sees the answers as that step's parameters,
+  so changing the enzyme digests again and changing nothing does not. The shell's chain does the same.
 - **Multi-scale insulation is a doubling ladder from a settable base**, not a list of widths. A list
   needs a free-text control the parameter model does not have, and a parser with failure modes of its
   own, to express what a base and a count express exactly. A genuinely irregular set of widths is two
@@ -9613,9 +9733,10 @@ edge, whose region at its first base yapc drops. The generated module carries th
 was built from, and a test fails until `npm run wasm:yapc` is run after `yapc.c` changes.
 
 **And beside the goldens, two notebooks at full size.** `notebooks/validation.qmd`, rendered with
-Quarto, runs twenty-four analyses twice over public data, each file named by its accession and fetched
-from where it was published (4DN's; GEO's yeast Micro-C; ENCODE's GM12878 ChIP-seq and ATAC-seq; and
-UCSC's mm10 sequence and RefSeq genes as Illumina iGenomes distributes them) — once through `chromosomix`, once through the package each
+Quarto, runs twenty-seven analyses twice over public data, each file named by its accession and fetched
+from where it was published (4DN's; GEO's yeast Micro-C; ENCODE's GM12878 ChIP-seq and ATAC-seq;
+UCSC's mm10 sequence and RefSeq genes as Illumina iGenomes distributes them; and Ensembl's R64-1-1
+yeast reference) — once through `chromosomix`, once through the package each
 reproduces, called as it is meant to be called and never re-implemented — and lines the two up bin
 by bin or call by call: insulation, compartments, P(s), coverage and virtual 4C against cooltools;
 the directionality index against `domaincaller`; peak calling with IDR on two replicates against
@@ -9633,13 +9754,19 @@ ratio to indifference against NumPy over them; the compartment call's saddle aga
 `cooltools.saddle` over chromosomix's own E1, cut into its groups by cooltools' `digitize`; the
 fraction of signal in features against pyBigWig's exact sums and NumPy, the whole track's own read
 from a zoom level and measured apart; and signal by group against pyBigWig's exact stretch means,
-rank for rank in each group, and its summaries and tests against NumPy's and SciPy's; and the chain the
+rank for rank in each group, and its summaries and tests against NumPy's and SciPy's; the chain the
 paper's Fig. 2 runs on GM12878 (§ 24), each link fed what the one before it wrote in chromosomix —
 insulation at four scales against `cooltools.insulation`, CTCF's peaks on two labs' ChIP-seq as
 replicates against yapc, APA between consecutive peaks against coolpuppy, and the metaplot of CTCF,
 ATAC-seq and the insulation about the peaks against deepTools — over 4DN's 27-GB map of 4.0 billion
 contacts, of which what the section reads, chr19 at 10 kb, is fetched by range
-(`notebooks/scripts/cool_subset.py`). Where a
+(`notebooks/scripts/cool_subset.py`); the pairs statistics of a yeast library's `.pairs` (CH128)
+against `pairtools stats`, key for key; and, on the
+same library and the reference it was mapped to, the restriction sites against `bioframe.digest` (its
+boundaries two late, as above) and Pairs QC's fragment statistics against `pairtools restrict` —
+run once per strand, on the top strand's cuts for `+` ends and the bottom strand's for `−` ends — and
+a short pandas reading of its fragments, with the coverage beside the cuts against
+`cooltools.coverage`, every count identical. Where a
 reference draws at random — a pileup's controls, an overlap's shuffles, IDR's ties — two
 distributions are compared, the reference's own spread from seed to seed the yardstick. A reference
 that takes a number of processes is given one a core of the machine, at most four (`THREADS`). **Every
@@ -11183,23 +11310,41 @@ file named twice, or two names a Mac's disk holds as one, is numbered (`sample_2
 has written is written over by the same command. `coverage HCT116.rep1.cool HCT116.rep2.cool` wrote
 `HCT116.coverage.*` twice, the second run's files over the first's, with exit 0.
 
-**An address is fetched first, whole.** The app reads a remote file by range, through a reader that
-is synchronous (§11), which a worker has and Node does not, so a shell cannot read one that way. An
-http or https address — the map, an `--against`, a `--sequence`, `--tracks`, `--features` or
-`--pairs`, a `.pairs` named for P(s)'s orientations, the workspace `replay` reads — is downloaded
-instead, streamed to disk with its progress on stderr unless `--quiet`, into one directory per
-command under `$TMPDIR` that is removed when the command ends, Ctrl-C included; and with the sidecar
-its format reads beside itself, where the server has one: a FASTA's `.fai`, a HiC-Pro matrix's bin
-file. A batch lets each map go once its run is done, so it holds one at a time. What every run reads
-— a `--sequence`, `--tracks`, `--features`, `--pairs`, `--against` or the workspace — is fetched
+**An address is read by range, as the app reads it.** The app reads a remote file through
+`RemoteRangeSource`, whose reads are synchronous because HDF5's are (§11), and a browser worker
+answers them with a synchronous `XMLHttpRequest` that Node does not have. The command has one of its
+own instead (`cli/syncFetch.ts`): a helper thread makes each request with `fetch` while the thread
+running the task waits on a shared word with `Atomics.wait` and takes the answer off the port it was
+posted to — so the same source, with the same chunk cache, coalescing and read-ahead, reads an
+address here as it does in a tab. Under the command's NODERAWFS, where h5wasm's filesystem *is* the
+disk, the source is mounted as a path no file lies behind (`h5/lazyFile.ts`): NODERAWFS hands any
+stream that carries stream ops of its own back to the in-memory layer, so every read HDF5 makes of
+that path is the source's. A map — a cooler, an `.mcool` rung, a `.hic`, an `.scool`, a `.pairs`
+and the `.px2` beside it — an `--against`, a bigWig or `.2bit` in `--tracks`, a `.2bit` or a FASTA
+with its `.fai` beside it in `--sequence`, and a `.pairs` named for P(s)'s orientations are read so,
+and nothing of them is written to disk: one rung of the demo's 46 MB *E. coli* `.mcool` costs 2.6 MB
+in three requests, and a metaplot of one chromosome's peaks over a 15 MB bigWig 5.2 MB. A text
+track in `--tracks` is read in one request, being parsed whole. Every request asks for `identity`,
+which Node, unlike a page, may.
+What is read whole from a copy — a `--features` or `--pairs` set, a HiC-Pro matrix and its bin file
+(§3.9), the workspace `replay` reads — and **any address
+whose host will not serve a range**, answering a range with the whole object or compressing it in
+transit, is fetched to disk instead, said so on stderr for the latter, streamed with its progress
+unless `--quiet`, into one directory per command under `$TMPDIR` that is removed when the command
+ends, Ctrl-C included; with the sidecar its format reads beside itself, where the server has one. So
+the command works on every host it worked on, and reads by range on every host the app can. A batch
+lets each copied map go once its run is done, so it holds one at a time. What every run reads — a
+`--sequence`, `--tracks`, `--features`, `--pairs`, `--against` or the workspace — is opened or fetched
 before the first, so an address there that cannot be had is exit 2; a map that cannot be is that
-file's failure, named, and the batch goes on; and a `.pairs` a parameter names is fetched when the
-task asks for it, and noted by the task where it cannot be, as a file on disk is. The map is opened *as* its address, so the
-framing, the provenance and every sentence about it name the URL that was typed, and its outputs are
-named after its file, the query left off. Any other scheme is refused by name: an `s3://` address
-needs credentials the command has not got. An address went to `stat` as a path until now — *cannot
-stat /cwd/https:/example.org/x.cool* — under a README that said it was fetched, and the console said a
-shell reads local files only; its note now says what the line costs instead (§23.3).
+file's failure, named with the status the host answered or the cause of a request that got no
+answer, and the batch goes on; and a `.pairs` a parameter names is opened when the task asks for it,
+and noted by the task where it cannot be, as a file on disk is. The map is opened *as* its address,
+so the framing, the provenance and every sentence about it name the URL that was typed, and its
+outputs are named after its file, the query left off — as is every sentence about it, so a signed
+link's signature stays out of the log. Any other scheme is refused by name: an `s3://` address needs
+credentials the command has not got. An address went to `stat` as a path once — *cannot stat
+/cwd/https:/example.org/x.cool* — and was then downloaded whole, seven gigabytes for one rung; the
+console's note about that cost is gone with it (§23.3).
 
 ### 23.2 What else is on it, and what is not
 
@@ -11251,10 +11396,10 @@ shell cannot be told — a window across several sequences or off the diagonal, 
 set with no file behind it, an `.scool`'s cells or the maps `hicrep` compared against where the
 record does not name them, a map drawn balanced and read raw or the reverse, which the one
 `--no-balance` cannot say, a map drawn through an edit of its reference (§27.7) — and a command that
-runs and answers a slightly different question is worse than one that says what it left out. And
-about the one thing a shell is told at a price: a remote file, which the line names and the shell
-downloads whole before reading it (§23.1), where the app reads only what it draws — so the note says
-so, and that a reader running several lines over one file should fetch it once and name the copy.
+runs and answers a slightly different question is worse than one that says what it left out. A
+remote file is no longer one of them: the shell reads it by range, as the app read it (§23.1), so the
+line names the URL and runs as it stands. Its note said for a while that the command downloaded the
+whole file, and that a reader running several lines over one should fetch it once.
 
 They sit **above a command and below anything else**, which is one rule read twice: a caveat
 qualifies a line the reader is about to run, so it comes first; a refusal explains a line that is

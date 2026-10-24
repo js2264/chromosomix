@@ -1,18 +1,21 @@
 /**
- * Drive P(s)'s four orientations end to end in headless Chromium (§18.8).
+ * Drive the four orientations end to end in headless Chromium (§18.8) — on
+ * Pairs QC, which took them over from P(s)'s form.
  *
- * On the lab's toy *Lachancea kluyveri* library, which sits at the root of the
- * bucket as both a contact list and the map binned from it. Two roads, which
- * are the two a reader takes:
+ * On a library that exists both as a contact list and as the map binned from
+ * it — the lab's toy *Lachancea kluyveri* at the root of the bucket by default.
+ * Two roads, which are the two a reader takes:
  *
- * - **binned** — the `.pairs` opened and binned on the fly (§3.7). The form asks
- *   for no file at all once *four orientations* is on, the price line says the
- *   four were counted as the file was binned, and the run draws them — through
- *   a plain Run, which used to be refused with *choose a bin size*.
- * - **matrix** — the `.mcool` of the same library. The form asks for the
- *   `.pairs` with a drop area that is also a button: shot empty, lit under a
- *   drag, holding the dropped file, and then the run's figure; and last, the
- *   address box with the bucket's URL typed into it, priced as its pass.
+ * - **binned** — the `.pairs` opened and binned on the fly (§3.7). P(s)'s form
+ *   asks nothing about orientations any more; Pairs QC's asks for no file at
+ *   all, the price line says the counts were made as the file was binned, and a
+ *   plain Run draws the four — which used to be refused with *choose a bin
+ *   size*.
+ * - **matrix** — the `.mcool` of the same library. Pairs QC's form asks for the
+ *   `.pairs` with a drop area that is also a button, and refuses to run until it
+ *   has one: shot empty, lit under a drag, holding the dropped file, and then
+ *   the run's figure; and last, the address box with the file's URL typed into
+ *   it, priced as its pass.
  *
  * Every step prints what the form and the price line said, and each run's
  * notes, so a field that should not be there — or a figure that did not come —
@@ -23,11 +26,11 @@
  *   node scripts/ui-stranded.mjs [out-dir]
  *
  * The files are read from `GALLERY_DATA` — the bucket's root by default; where
- * the browser cannot reach it, serve a folder holding the two files under their
- * bucket names and name its address there. `GALLERY_ONLY=binned` or `matrix`
- * runs one part. The contact list is 330 MB and is read twice on the binned
- * road — once to draw the map and once by the analysis worker's own mount — so
- * the whole gallery takes a few minutes.
+ * the browser cannot reach it, serve a folder holding the two files and name
+ * its address there, and their names in `GALLERY_PAIRS` and `GALLERY_MCOOL`
+ * (the Lachancea library's by default; `ui-pairsqc.mjs` documents a yeast pair
+ * under `/out/pairsqc/`). `GALLERY_SEQUENCE` is the sequence the map stands on.
+ * `GALLERY_ONLY=binned` or `matrix` runs one part.
  */
 
 import { createRequire } from 'node:module'
@@ -51,8 +54,8 @@ const BASE = process.env.GALLERY_BASE ?? 'http://127.0.0.1:5173'
 const ONLY = process.env.GALLERY_ONLY ?? ''
 const DATA = (process.env.GALLERY_DATA ?? 'https://rsglab-data.s3.eu-west-3.amazonaws.com/').replace(/\/?$/, '/')
 const STEM = process.env.GALLERY_STEM ?? 'CG002^mapped_Lachancea_kluyveri^DIHE85'
-const PAIRS = `${STEM}.valid_idx_pcrfree.pairs.gz`
-const MCOOL = `${STEM}.mcool`
+const PAIRS = process.env.GALLERY_PAIRS ?? `${STEM}.valid_idx_pcrfree.pairs.gz`
+const MCOOL = process.env.GALLERY_MCOOL ?? `${STEM}.mcool`
 /** The longest chromosome of the library, where P(s) reaches furthest. */
 const SEQUENCE = process.env.GALLERY_SEQUENCE ?? 'CM000694.1'
 const address = (name) => `${DATA}${encodeURIComponent(name)}`
@@ -103,7 +106,8 @@ const said = async (step) => {
       card: card?.innerText.split('\n').filter((line) => line.trim() !== '') ?? null,
       dropArea: zone === null ? null : { text: zone.textContent, held: zone.classList.contains('is-held'), lit: zone.classList.contains('over') },
       address: document.querySelector('.param-address')?.value ?? null,
-      price: document.querySelector('.analysis-drawer .run-note, .analysis-drawer .analysis-estimate')?.textContent ?? null,
+      price: document.querySelector('.analysis-drawer .analysis-cost')?.textContent ?? null,
+      run: document.querySelector('.analysis-drawer .analysis-run button')?.disabled ?? null,
     }
   })
   console.log(`--- ${step}\n${JSON.stringify(state, null, 1)}`)
@@ -148,18 +152,34 @@ const open = async (url, { pairs }) => {
   await sleep(2500)
 }
 
-/** The P(s) drawer, with *four orientations* on. */
-const stranded = async () => {
+/** A task's drawer, by its row's title, the Analysis column opened first. */
+const openTask = async (title) => {
   await fold('Fold the General panel')
   await fold('Fold the Aesthetics panel')
   await fold('Show the Analysis panel')
   await sleep(800)
-  await page.locator('text=Contact probability P(s)').first().click()
+  const close = page.locator('.analysis-drawer-head button').last()
+  if (await close.isVisible().catch(() => false)) {
+    await close.click()
+    await sleep(600)
+  }
+  await page.locator('.analysis-row-title', { hasText: title }).first().click()
   await sleep(1200)
-  const toggle = page.locator('.param-field', { hasText: 'four orientations' }).locator('button').first()
-  if ((await toggle.getAttribute('aria-pressed')) !== 'true') await toggle.click()
-  await sleep(800)
-  // The card the question lives in, at the top of the drawer.
+}
+
+/** P(s)'s form, which must ask nothing about orientations now. */
+const psForm = async (step) => {
+  await openTask('Contact probability P(s)')
+  const asked = await page.evaluate(() => {
+    const text = document.querySelector('.analysis-drawer .analysis-form')?.textContent ?? ''
+    return { orientations: /four orientations/i.test(text), dropArea: document.querySelector('.param-drop') !== null }
+  })
+  console.log(`--- ${step}: P(s) asks ${JSON.stringify(asked)}`)
+}
+
+/** The Pairs QC drawer, its *From the .pairs file* card — where there is one — in view. */
+const stranded = async () => {
+  await openTask('Pairs QC')
   await page.evaluate(() => {
     const card = [...document.querySelectorAll('.param-group')].find((group) =>
       group.textContent?.includes('From the .pairs file'),
@@ -179,7 +199,7 @@ const run = async (step) => {
         const text = document.querySelector('.analysis-drawer')?.textContent ?? ''
         return (
           text.includes('P(s) by pair orientation') ||
-          /choose a bin size|none to count|no longer in hand|Could not open/i.test(text)
+          /choose a bin size|no strand1\/strand2|no longer in hand|Could not open|keeps no records/i.test(text)
         )
       },
       null,
@@ -225,8 +245,9 @@ try {
     // ---- the .pairs, binned on the fly -----------------------------------
     await open(address(PAIRS), { pairs: true })
     await shot('st01-binned-map')
+    await psForm('binned')
     await stranded()
-    await said('binned: four orientations on')
+    await said('binned: Pairs QC')
     await shot('st02-binned-form')
     await run('binned')
     await shot('st03-binned-ran')
@@ -237,8 +258,9 @@ try {
   if (ONLY === '' || ONLY === 'matrix') {
     // ---- the .mcool, and the .pairs handed to the form -----------------------
     await open(address(MCOOL), { pairs: false })
+    await psForm('matrix')
     await stranded()
-    await said('matrix: four orientations on')
+    await said('matrix: Pairs QC')
     await shot('st05-matrix-form')
     await drag(address(PAIRS), PAIRS, { hold: true })
     await said('matrix: a .pairs over the drop area')

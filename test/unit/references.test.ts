@@ -49,6 +49,11 @@ describe('the references', () => {
     expect(referenceOf('compartments')?.agreement).toBe('equivalent')
     expect(referenceOf('reconstruct3d')?.agreement).toBe('equivalent')
     for (const id of ['scalogram', 'hicscore', 'cellqc']) expect(referenceOf(id)?.agreement, id).toBe('untested')
+    // The digest and what Pairs QC counts from it are two sections, one a task.
+    expect(referenceOf('restriction')).toMatchObject({ agreement: 'identical', section: 26 })
+    expect(SECTIONS.get(26)).toBe('Restriction sites')
+    expect(referenceOf('pairsqc')).toMatchObject({ agreement: 'identical', section: 27 })
+    expect(SECTIONS.get(27)).toBe('Pairs QC')
   })
 
   it('leave out the tasks that re-implement nothing', () => {

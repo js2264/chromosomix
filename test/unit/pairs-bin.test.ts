@@ -216,8 +216,9 @@ describe('binPairs', () => {
     }
     const source = new BytesSource(bgzipped(`${lines.join('\n')}\n`))
     const header = await readPairsHeader(source)
-    // `-1` for the strands: this header declares five columns and none of them
-    // is one, which is a fact about the file rather than a fault (§3.7).
+    // `-1` for the strands and the pair type: this header declares five columns
+    // and none of them is one, which is a fact about the file rather than a
+    // fault (§3.7).
     expect(header.columns).toEqual({
       chrom1: 0,
       chrom2: 1,
@@ -225,6 +226,7 @@ describe('binPairs', () => {
       pos2: 3,
       strand1: -1,
       strand2: -1,
+      pairType: -1,
     })
     const pixels = await binPairs(source, {
       binSize: BIN,
@@ -517,6 +519,7 @@ describe('readPairsHeader', () => {
       pos2: 4,
       strand1: 5,
       strand2: 6,
+      pairType: -1,
     })
   })
 

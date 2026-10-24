@@ -14,6 +14,43 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Pairs QC: a library's quality from its `.pairs`, and its restriction fragments (§18.8).** A new
+  task in the 2D card for a map binned from a `.pairs` — or any map, given the `.pairs` it came from.
+  It draws the four orientations' P(s) (moved here from P(s)), the pair types, cis and trans past
+  1–40 kb and the `pairtools stats` table, from the import's own counts at no cost. With a FASTA or
+  `.2bit` and an enzyme it adds the restriction-fragment statistics HiCUP readers look for: pair
+  classes by orientation (dangling end, self-circle, same strand, re-ligation, valid, trans), the
+  distance from each read to the next cut, the fragments seen, and coverage against sites per bin
+  with Spearman ρ. Each read end is placed by the cut on its **own strand** — a `−` read's 5′ end
+  sits `L − 2k` past the top-strand cut once an overhang is filled in, 3 bp for DpnII — so a dangling
+  end is counted as one. `chromosomix pairsqc sample.pairs.gz --bin-size 10000 --sequence ref.fa
+  --enzyme DpnII --out qc/`. Held to `pairtools stats`, `pairtools restrict` (once per strand) and
+  `cooltools.coverage` on a yeast library and its R64 reference in `notebooks/validation.qmd` §27:
+  every count identical. Its row's `?` (§18.1) names pairtools' paper.
+
+- **Restriction sites: a reference digested by an enzyme, a kit or typed sites (§18.8).** DpnII
+  (MboI, Sau3AI), HindIII, NcoI, EcoRI, BglII, HinfI, DdeI, MseI, NlaIII, CviQI and AluI, the Arima
+  kit, or names and IUPAC sites with the cut marked (`G^ANTC`). A lane of the cuts and the cuts per
+  bin, read by range from a large reference as *find a motif* is. Its cuts are `bioframe.digest`'s
+  and `cooler digest`'s **less two**: both add 1 to Biopython's already 1-based position, so every
+  fragment boundary they write is 2 bp late. Held to `bioframe.digest` in `notebooks/validation.qmd`
+  §26, every cut and every bin's count the same, and its row's `?` (§18.1) names bioframe's paper.
+
+- **`pairtools stats` for every `.pairs` the app imports, and a command that writes it (§3.7).** The
+  import counts, in the pass that bins the map, everything `pairtools stats` counts — records mapped
+  on both sides, on one and on neither, duplicates, cis and trans and cis past 1 to 40 kb, every pair
+  type, the four orientations by separation and where they converge, and the library's size — and
+  the General column shows it as a **Pairs statistics** card, each row a count and the share pairtools
+  and MultiQC give it, with **save .stats** writing the whole table in pairtools' own format.
+  `chromosomix stats sample.pairs.gz --out qc/` writes the same file from a shell. A port of pairtools
+  1.1.2's `PairCounter`, held to pairtools' own output on a committed fixture with every pair type in
+  it (`test/unit/pairs-stats.test.ts`, `npm run fixtures:pairstats`): every key and every count and
+  fraction the same, the library estimate to 1e-12. The pair type is counted and nothing is decided
+  from it — the map is the same with the column or without it.
+  The card draws three small charts from the same counts, with no run: the pair types as one bar,
+  cis and cis past 1–40 kb as columns, and P(s) by orientation with where the four meet — in the
+  theme's colours, dark included.
+
 - **The lower triangle in a reading of its own (§5.10).** On a map of one file, the Map card has a
   second tab, `◣ lower`: switched on, the triangle below the diagonal is drawn with its own score,
   smoothing, O/E, transform, colours and clip — balanced counts above the diagonal and their O/E
@@ -67,7 +104,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 - **What a task re-implements, on its row (§18.1).** A `?` in a circle at the right of a task's title
   in the Analysis column names the published method it follows, how it came out against it in the
   validation notebook, and the paper's DOI as a link, in a small tip shown on hover. Green where the
-  validation found it identical or equivalent — 20 tasks, from coverage and insulation to pastis-NB
+  validation found it identical or equivalent — 22 tasks, from coverage and insulation to pastis-NB
   and the metaplot — and in the text's colour where it is untested: the scalogram, the HiC score and
   per-cell contact QC. A mark, not a button: a press on it opens no task. Tasks that follow no
   published method have none.
@@ -151,6 +188,28 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   The map is committed, so this runs on every push with nothing to build.
 
 ### Changed
+
+- **P(s)'s four orientations moved to Pairs QC (§18.8).** The toggle and its `.pairs` box left the
+  P(s) form; a stored run, a link or a `chromosomix expected --stranded` line still draws the same
+  curves, with a note saying where they live now. A composite's required task can now take the
+  answers its own form asked (`upstreamParams`), which is how Pairs QC hands the reference and the
+  enzyme to the digest.
+
+- **The command line reads an address by range, as the app does, rather than downloading it whole
+  (§23.1).** A map — a cooler, an `.mcool` rung, a `.hic`, an `.scool`, a `.pairs` and its `.px2` —
+  an `--against`, a bigWig or `.2bit` in `--tracks`, and a `.2bit` or an indexed FASTA in
+  `--sequence` are read through the app's own `RemoteRangeSource`, with its cache, coalescing and
+  read-ahead, and nothing of them is written to disk: one rung of the demo's 46 MB *E. coli*
+  `.mcool` costs 2.6 MB in three requests, and a metaplot of one chromosome's peaks over a 15 MB
+  bigWig 5.2 MB, where the command used to fetch both whole first. Node has no synchronous request,
+  so a helper thread fetches while the task's thread waits on `Atomics.wait` (`cli/syncFetch.ts`),
+  and a range source is mounted under h5wasm's Node filesystem as a path no file lies behind
+  (`h5/lazyFile.ts`). Every file a command writes over an address is the file it writes over the
+  same bytes on disk (`test/unit/cli-range.test.ts`). What is read whole from a copy is unchanged —
+  a feature set, a HiC-Pro matrix, a workspace — and so is any address whose host will not serve a
+  range, now said on stderr. A `404` names its status, a request that got no answer its cause, and
+  neither its query. The console's note that a remote line downloads the whole file is gone with the
+  download.
 
 - **A second file whose chromosomes run on past the first's opens in the lower triangle (§5.7).** A
   Juicer `.hic` keeps the mitochondrion after `Y`, where a 4DN cooler of the same assembly stops at

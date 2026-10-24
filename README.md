@@ -20,7 +20,7 @@ chromosomix launches in about a second and reads your data where it lives, on yo
 
 - Support for all genomic data types: 
   - Supports 1D genomic formats: bigWig, bigBed, BED, bedGraph, wig, GTF/GFF3, FASTA (+`.fai`), `.2bit`, BAM, VCF, barChart/bigBarChart, genePred/refFlat/bigGenePred, bedMethyl/bigMethyl, chrom.sizes, ...
-  - Supports 2D genomic formats: `.*cool`, `.hic`, HiC-Pro, `pairs(.gz)`, ..., at every resolution the file stores. Also supports interaction formats: BEDPE, and UCSC's `interact`/`bigInteract` and `longrange`/longTabix — drawn as arcs over the contact map and as their own lane in the 1D browser.
+  - Supports 2D genomic formats: `.*cool`, `.hic`, HiC-Pro, `pairs(.gz)`, ..., at every resolution the file stores. A `.pairs` is binned on import, and the same pass counts what `pairtools stats` counts — mapped, duplicates, cis and trans, pair types, strand convergence, library size — shown in the General panel and saved as a `.stats` file MultiQC reads. Also supports interaction formats: BEDPE, and UCSC's `interact`/`bigInteract` and `longrange`/longTabix — drawn as arcs over the contact map and as their own lane in the 1D browser.
   - Supports 3D genomic formats: WashU's g3d (text or binary), `.3dg`, and `bed3d`, drawn in 3D and synchronized with the maps and tracks view. Every model also leaves as a PDB for PyMOL, ChimeraX and the other molecular viewers, a chain per chromosome and bonds along the fibre, and reads back here. 
 
 - Perform analyses directly in the browser:
@@ -175,9 +175,14 @@ chromosomix tasks
 ##       --factor (default 1.1)  log bins per step
 ##       --minSeparation (default 2)  minimum separation
 ##       --derivative (default true)  log-log slope
-##       --stranded (default false)  four orientations
-##       --pairsUri  .pairs file
 ##       --no-balance  read the raw counts (balanced by default where the file carries weights)
+## 
+## pairsqc
+##     Pairs QC
+##       --pairs  .pairs file
+##       --reference  reference
+##       --enzyme (default "none")  enzyme
+##       --sites (default "")  sites
 ## 
 ## scalogram
 ##     Scalogram
@@ -326,6 +331,7 @@ chromosomix tasks
 ##       --region  sequences
 ##       --alpha (default 3)  exponent α
 ##       --weights (default "contacts")  weight pairs by
+##       --seed (default 0)  seed
 ##       --iterations (default 150)  refinement steps
 ##       --no-balance  read the raw counts (balanced by default where the file carries weights)
 ## 
@@ -350,6 +356,13 @@ chromosomix tasks
 ##       --bothStrands (default true)  both strands
 ##       --mismatches (default 0)  mismatches
 ##       --limit (default 500000)  most sites
+## 
+## restriction
+##     Restriction sites
+##       --sequence  reference
+##       --sequences  sequences
+##       --enzyme (default "none")  enzyme
+##       --sites (default "")  sites
 ## 
 ## peaks
 ##     Peak calling
@@ -501,11 +514,14 @@ value after it: `--stranded` turns it on, `--stranded=false` or `--no-stranded` 
 is none of its values is refused before any file is opened, with exit 2 and the values there are,
 and so is a number that is not one.
 
-Files are read from disk. A file named by an http or https address — the map, or what `--against`,
-`--sequence`, `--tracks`, `--features` or `--pairs` names — is downloaded first, whole, because the
-reader's range requests are synchronous, which a browser worker has and Node does not: it goes into
-`$TMPDIR`, with its progress on stderr, and is removed when the command ends. For several commands
-over one large remote file, download it once yourself and name the copy.
+Files are read from disk or from where they are published. A map named by an http or https address —
+a cooler, an `.mcool` rung, a `.hic`, an `.scool` or a `.pairs`, as the positional or after
+`--against` — and a bigWig, a `.2bit` or an indexed FASTA after `--tracks` or `--sequence` is read
+**by range**, as the app reads it: one rung of a seven-gigabyte `.mcool` costs that rung, and nothing
+is written to disk; a bedGraph or a wig after `--tracks` is read in one request. What is read whole
+from a copy — a `--features` or `--pairs` set, a HiC-Pro matrix, a workspace — and any file whose host
+will not serve a range is downloaded into `$TMPDIR` instead, with its progress on stderr, and removed
+when the command ends.
 
 ```bash
 chromosomix insulation *.mcool --sequences II --out results/
@@ -529,6 +545,13 @@ chromosomix apa sample.cool --features domains.bed --anchors features \
 # sites as a BED-shaped table, and their density on the open map's bin grid.
 chromosomix motif sample.cool --sequence ref.fa.gz --pattern GGTCANNNTGACC --mismatches 1 --out results/
 chromosomix overlap sample.cool --features peaks.bed --features boundaries.bed --a peaks.bed --b boundaries.bed
+
+# A library's quality from its contact list: the pairtools counts as figures,
+# the four orientations' P(s), and — with a reference and an enzyme — pair
+# classes, distance to the cut, fragments seen and coverage against sites.
+# Restriction sites alone digests the reference into a lane of cuts.
+chromosomix pairsqc sample.pairs.gz --bin-size 10000 --sequence ref.fa.gz --enzyme DpnII --out qc/
+chromosomix restriction sample.cool --sequence ref.fa.gz --enzyme Arima --out results/
 
 # The tasks that read tracks take them as --tracks: a bigWig, a bedGraph, a
 # wig, or a FASTA read as GC content. Repeat the flag or separate with commas.
@@ -579,6 +602,10 @@ chromosomix insulation sample.metacool --value balanced_by_depth --circular pCEN
 chromosomix coverage Hum53.pairs.gz --bin-size 5000 --rungs 4
 
 chromosomix replay workspace.chromosomix.json --over data/*.hic
+
+# What `pairtools stats` writes for a contact list, counted by the pass the
+# app's import makes, in pairtools' own format — for MultiQC.
+chromosomix stats sample.pairs.gz --out qc/
 ```
 
 ### Recovering the commands you ran

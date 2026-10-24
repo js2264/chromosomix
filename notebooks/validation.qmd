@@ -1,6 +1,6 @@
 ---
 title: "chromosomix against reference implementations"
-subtitle: "Twenty-four analyses on public data, each run by chromosomix and by the package it reproduces"
+subtitle: "Twenty-seven analyses on public data, each run by chromosomix and by the package it reproduces"
 format:
   html:
     toc: true
@@ -26,7 +26,7 @@ sys.path.append(str((_here if _here.name == 'notebooks' else _here / 'notebooks'
 from rendered import Render
 
 R = Render('validation')
-print(R.head(also=f"Every command of §§ 1–19 and 24 below, run again and timed: "
+print(R.head(also=f"Every command of §§ 1–19 and 24–27 below, run again and timed: "
                   f"{R.anchor('timing', 'the timings')}. "
                   f"Beside this page: {R.download('commands.json')}, every command as it ran; "
                   f"{R.download('summary.tsv')}, every verdict; and {R.download('validation.txt')}, every "
@@ -76,6 +76,9 @@ the mean of 100, which is what is written.
 | 22 | Fraction of signal in features | mouse ATAC-seq, two replicates, chr19; peaks and promoters | pyBigWig and NumPy |
 | 23 | Signal by group | mouse ATAC-seq, two replicates, chr19; § 3's compartments | pyBigWig, NumPy and SciPy |
 | 24 | CTCF sites in GM12878 (Fig. 2): insulation at four scales, peaks, APA between consecutive peaks, metaplot | GM12878 Hi-C, 10 kb; CTCF ChIP-seq of two labs and ATAC-seq; chr19 | `cooltools.insulation`; yapc 0.1 with IDR 2.0.3; coolpuppy; deepTools `computeMatrix`, `plotProfile`, `plotHeatmap` |
+| 25 | Pairs statistics | yeast Hi-C contact list, 17.6 million pairs | `pairtools stats` 1.1.2 |
+| 26 | Restriction sites | yeast reference (R64-1-1), DpnII, 5 kb bins | `bioframe.digest` |
+| 27 | Pairs QC | § 25's contact list against § 26's sites, 5 kb | `pairtools restrict` and `pairtools stats` 1.1.2, `cooltools.coverage` |
 
 **To render.** `npm run build:cli` at the repository root builds this checkout's `chromosomix`.
 yapc needs an environment of its own (numpy < 1.24; the recipe is in the yapc section of
@@ -91,7 +94,9 @@ pip install jupyter matplotlib cooler cooltools bioframe pyfaidx pyBigWig 'panda
     scikit-learn scikit-image h5py \
     'git+https://github.com/hiclib/pastis@6888ac25ded72ce3e559987b8a31b3f8ed2935ed'
 git clone https://github.com/LeopoldC/Boost-HiC ../Boost-HiC
-QUARTO_PYTHON=refs/bin/python YAPC_PYTHON=yapc-env/bin/python quarto render notebooks/validation.qmd
+uv venv -p 3.12 pairtools-env && uv pip install -p pairtools-env -r notebooks/requirements-pairtools.txt
+QUARTO_PYTHON=refs/bin/python YAPC_PYTHON=yapc-env/bin/python PAIRTOOLS_PYTHON=pairtools-env/bin/python \
+    quarto render notebooks/validation.qmd
 ```
 
 `notebooks/requirements.txt` is that environment at the versions this page was last rendered with,
@@ -100,7 +105,7 @@ both and renders this page and the timings on every release, publishing them at
 <https://chromosomix.app/validation/> and <https://chromosomix.app/timings/>; the block under the
 title says which render this is.
 
-The data (8 GB) are fetched once into `notebooks/work/validation/data/`. Outputs are kept beside them,
+The data (9.5 GB) are fetched once into `notebooks/work/validation/data/`. Outputs are kept beside them,
 so a second render reads rather than recomputes (`REDO`).
 
 ```{python}
@@ -114,6 +119,9 @@ REDO = False
 THREADS = min(4, os.cpu_count() or 1)
 #: yapc 0.1's interpreter, relative to the repository or absolute.
 YAPC_PYTHON = os.environ.get('YAPC_PYTHON', 'yapc-env/bin/python')
+#: pairtools 1.1.2's interpreter: an environment of its own, on Python 3.12 or older, since pairtools
+#: imports the `pipes` module 3.13 removed.
+PAIRTOOLS_PYTHON = os.environ.get('PAIRTOOLS_PYTHON', 'pairtools-env/bin/python')
 #: A checkout of LeopoldC/Boost-HiC, relative to the repository or absolute.
 BOOSTHIC_DIR = os.environ.get('BOOSTHIC_DIR', '../Boost-HiC')
 
@@ -126,6 +134,9 @@ SCRIPTS = REPO / 'notebooks' / 'scripts'
 #: Every command of this notebook, as timing.qmd runs it again.
 MANIFEST = WORK / 'commands.json'
 YAPC_PYTHON = Path(YAPC_PYTHON) if Path(YAPC_PYTHON).is_absolute() else REPO / YAPC_PYTHON
+PAIRTOOLS_PYTHON = Path(PAIRTOOLS_PYTHON) if Path(PAIRTOOLS_PYTHON).is_absolute() else REPO / PAIRTOOLS_PYTHON
+#: The `pairtools` program beside that interpreter.
+PAIRTOOLS = str(PAIRTOOLS_PYTHON.parent / 'pairtools')
 BOOSTHIC_DIR = Path(BOOSTHIC_DIR) if Path(BOOSTHIC_DIR).is_absolute() else (REPO / BOOSTHIC_DIR).resolve()
 ```
 
@@ -218,7 +229,8 @@ def arg(value):
 
 def typed(argv):
     """A command as a reader would type it: each tool by its installed name."""
-    names = {PYTHON: 'python', str(YAPC_PYTHON): 'yapc-env/bin/python', CHROMOSIGHT: 'chromosight',
+    names = {PYTHON: 'python', str(YAPC_PYTHON): 'yapc-env/bin/python', PAIRTOOLS: 'pairtools',
+             CHROMOSIGHT: 'chromosight',
              COMPUTEMATRIX: 'computeMatrix', PLOTPROFILE: 'plotProfile', SEQKIT: 'seqkit',
              MULTIBIGWIGSUMMARY: 'multiBigwigSummary', PLOTCORRELATION: 'plotCorrelation',
              PLOTHEATMAP: 'plotHeatmap'}
@@ -570,10 +582,13 @@ Every file is public, read by its accession and fetched from the URL listed. 4DN
 content and read for composition and motifs, and the RefSeq genes, for the metaplot's TSS and the
 promoters, are UCSC's as distributed by Illumina iGenomes; the yeast Micro-C map is GEO's
 GSE151553, fetched from GEO; § 24's ChIP-seq and ATAC-seq of GM12878 are ENCODE's, from its
-open-data bucket, and its map is 4DN's, of which only what § 24 reads is fetched, by range. Five are
-also held to an MD5, and a file of any of those names that does not match is refused rather than
-compared: the yeast map, 4DN's insulation score for § 18, to the MD5 4DN publishes for it, and
-ENCODE's three tracks, to theirs.
+open-data bucket, and its map is 4DN's, of which only what § 24 reads is fetched, by range; the
+yeast Hi-C contact list of § 25 is the one the chromosomix demo keeps on its bucket, as pairtools
+wrote it; and the yeast reference of §§ 26 and 27 is Ensembl's R64-1-1, whose sequences are the
+contact list's, by name and by length. Seven are also held to an MD5, and a file of any of those
+names that does not match is refused rather than compared: the yeast map, 4DN's insulation score
+for § 18, to the MD5 4DN publishes for it, ENCODE's three tracks, to theirs, the contact list, and
+the yeast reference, which also matches the checksum Ensembl publishes beside it.
 
 ```{python}
 FOURDN = 'https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput'
@@ -610,9 +625,16 @@ DATASETS = [
     dict(data='GM12878 ATAC-seq, fold change over control (GRCh38; ENCSR095QNB)', accession='ENCFF487LOB',
          source='ENCODE', md5='f95a4eeec1156e2e1dc392ab988ae28a',
          url=f'{ENCODE}/2021/02/24/4c49a77a-edb2-4766-8328-d44ebe7446eb/ENCFF487LOB.bigWig'),
+    dict(data='Yeast Hi-C contact list, as pairtools wrote it', accession='CH128', source='chromosomix demo',
+         url='https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/CH128.pairs.gz',
+         md5='e3e37117383283da0c8e57f4e0837699'),
+    dict(data='Yeast genome sequence, S288C (R64-1-1)', accession='R64-1-1', source='Ensembl 112',
+         url='https://ftp.ensembl.org/pub/release-112/fasta/saccharomyces_cerevisiae/dna/'
+             'Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa.gz', md5='5ae49d2d22cd977abdd6b054b94c544d'),
 ]
 PATHS = {d['accession']: fetch(d['url'], d.get('name'), d.get('md5')) for d in DATASETS}
 MOUSE, YEAST, MM10, GENES = PATHS['4DNFIOZ1TRUS'], PATHS['GSE151553'], PATHS['mm10'], PATHS['refGene']
+CH128 = PATHS['CH128']
 CHICKEN = [PATHS[a] for a in ('4DNFIH8L6WON', '4DNFITBCUX56', '4DNFIIML46E5')]
 ATAC = [PATHS[a] for a in ('4DNFIIY4QW2D', '4DNFITBRHVZE')]
 # mm10's index, by which every tool reads the sequence by range: made once, beside it.
@@ -648,6 +670,7 @@ def program_version(argv, pattern=r'v?([\d.]+)'):
 
 APP_VERSION = f"{json.loads((REPO / 'package.json').read_text())['version']} at {commit(REPO)}"
 YAPC, IDR, YAPC_NUMPY = yapc_versions()
+PAIRTOOLS_VERSION = program_version([PAIRTOOLS, '--version'], r'version ([\d.]+)') if Path(PAIRTOOLS).exists() else 'not found'
 VERSIONS = {name: version(name) for name in (
     'cooler', 'cooltools', 'bioframe', 'chromosight', 'hicrep', 'domaincaller', 'pastis', 'coolpuppy',
     'deeptools', 'pyBigWig', 'biopython', 'pyfaidx', 'numpy', 'scipy', 'pandas')}
@@ -660,11 +683,13 @@ TOOL_VERSIONS = {'chromosomix': APP_VERSION, 'yapc 0.1': f'{YAPC}, with idr {IDR
                  'bioframe, Biopython': f"{VERSIONS['bioframe']}, {VERSIONS['biopython']}",
                  'pyBigWig, NumPy': f"{VERSIONS['pyBigWig']}, {VERSIONS['numpy']}",
                  'pyBigWig, SciPy': f"{VERSIONS['pyBigWig']}, {VERSIONS['scipy']}",
+                 'pairtools': PAIRTOOLS_VERSION,
                  **VERSIONS, **PROGRAMS}
 show(pd.DataFrame([{'package': 'chromosomix', 'version': APP_VERSION},
                    *[{'package': k, 'version': v} for k, v in VERSIONS.items()],
                    *[{'package': k, 'version': v} for k, v in PROGRAMS.items()],
-                   {'package': 'yapc (own environment)', 'version': f'{YAPC}, with idr {IDR} and numpy {YAPC_NUMPY}'}]))
+                   {'package': 'yapc (own environment)', 'version': f'{YAPC}, with idr {IDR} and numpy {YAPC_NUMPY}'},
+                   {'package': 'pairtools (own environment)', 'version': PAIRTOOLS_VERSION}]))
 ```
 
 The RefSeq annotation as transcripts: each one's extent over its exons, on its sequence and strand.
@@ -3880,6 +3905,638 @@ record(GM_ANALYSIS, 'GM12878 Hi-C, 10 kb; CTCF ChIP-seq of two labs and ATAC-seq
        else 'Differs',
        apps=[name for name, app in APP.items() if app['analysis'] == GM_ANALYSIS],
        refs=[name for name, ref in REFS.items() if ref['analysis'] == GM_ANALYSIS])
+```
+
+## 25 · Pairs statistics (pairtools)
+
+What `pairtools stats` counts over a contact list — records mapped on both sides, on one and on
+neither, duplicates, cis and trans and cis past 1 to 40 kb, every pair type, the four strand
+orientations by separation and where they converge, and the library's size — counted by the pass the
+app's import makes of a `.pairs` file, through `chromosomix stats`, against `pairtools stats` itself.
+The library is a yeast Hi-C contact list as pairtools wrote it, deduplicated, each pair with its type
+and its two SAM records. pairtools has an environment of its own, on Python 3.12: 1.1.2 imports the
+`pipes` module 3.13 removed.
+
+| | chromosomix | pairtools |
+|---|---|---|
+| command | `stats` | `stats` |
+| compared | every key pairtools writes, and its value as the file spells it | |
+
+```{python}
+PS = WORK / 'pairstats'
+PS.mkdir(parents=True, exist_ok=True)
+mr('stats', CH128, out=PS / 'app', name='pairstats', analysis='Pairs statistics')
+reference('pairtools-stats', 'Pairs statistics', 'pairtools', [PAIRTOOLS, 'stats', CH128, '-o', OUT],
+          out=PS / 'pairtools.stats')
+
+
+def stats_file(path):
+    """A `.stats` file as pairtools reads one back: a key and a value a line."""
+    with open(path) as handle:
+        return dict(line.rstrip('\n').split('\t', 1) for line in handle if line.strip())
+
+
+ours, theirs = stats_file(one(PS / 'app', '*.stats')), stats_file(PS / 'pairtools.stats')
+only = sorted(set(ours) ^ set(theirs))
+differ = {key: (ours.get(key), value) for key, value in theirs.items() if ours.get(key) != value}
+STRANDS = ['++', '--', '-+', '+-']
+#: The separation bins' left edges, as pairtools' keys name them: `dist_freq/<lo>-<hi>/<strands>`, the
+#: last `dist_freq/<lo>+/<strands>`.
+edges = sorted({int(key.split('/')[1].split('-')[0].rstrip('+')) for key in theirs if key.startswith('dist_freq/')})
+ranges = [f'{lo}-{hi}' for lo, hi in zip(edges, edges[1:])] + [f'{edges[-1]}+']
+
+
+def binned(table, strands):
+    """One orientation's cis pairs per separation bin, in the bins' order."""
+    return np.array([int(table[f'dist_freq/{span}/{strands}']) for span in ranges])
+
+
+TEXT['ps_records'] = f"{int(theirs['total']):,}"
+TEXT['ps_keys'] = f'{len(theirs):,}'
+TEXT['ps_same'] = 'every one of them spelled the same' if not differ and not only else \
+    f'{len(differ)} spelled differently and {len(only)} in one file only'
+TEXT['ps_types'] = ', '.join(key.split('/')[1] for key in theirs if key.startswith('pair_types/'))
+TEXT['ps_cis'] = f"{float(theirs['summary/frac_cis']):.1%}"
+TEXT['ps_meet'] = theirs['summary/dist_freq_convergence/convergence_dist']
+display(measures({
+    'records': TEXT['ps_records'],
+    'keys, chromosomix / pairtools': f'{len(ours):,} / {len(theirs):,}',
+    'keys in one file only': ', '.join(only) or 'none',
+    'values spelled differently': ', '.join(f'{k}: {a} / {b}' for k, (a, b) in differ.items()) or 'none',
+    'mapped, duplicates (pairtools)': f"{int(theirs['total_mapped']):,}, {int(theirs['total_dups']):,}",
+    'cis, of the unique (pairtools)': TEXT['ps_cis'],
+    'pair types': TEXT['ps_types'],
+    'strands converge past (pairtools), bp': TEXT['ps_meet'],
+    'library size (pairtools)': theirs['summary/complexity_naive'],
+}))
+```
+
+```{python}
+#| label: fig-pairstats
+#| fig-cap: "Cis pairs by separation in each of the four strand orientations, per base pair of each bin: pairtools' (lines) and chromosomix's (points), and the separation past which pairtools finds every orientation within 5 % of their mean."
+fig, ax = plt.subplots(figsize=(7, 4), layout='constrained')
+# Each bin's width, the last as wide as an eighth of a decade past its edge; drawn from 1 bp, on a log axis.
+widths = np.diff(np.r_[edges, edges[-1] * 10 ** (1 / 8)])
+starts = np.maximum(edges, 1)
+# An orientation a dash, pairtools' in orange and chromosomix's points over it in blue.
+DASHES = {'++': '-', '--': (0, (5, 2)), '-+': (0, (1, 1.5)), '+-': (0, (6, 2, 1, 2))}
+for strands in STRANDS:
+    reference_curve, app_curve = binned(theirs, strands), binned(ours, strands)
+    seen = reference_curve > 0
+    ax.plot(starts[seen], (reference_curve / widths)[seen], color=REF, lw=1.3, ls=DASHES[strands],
+            label=f'pairtools, {strands}')
+    ax.plot(starts[seen], (app_curve / widths)[seen], ls='none', marker='o', ms=2.4, color=APP_COLOUR,
+            label='chromosomix, each orientation' if strands == '++' else None, gid=f'chromosomix {strands}')
+meet = theirs['summary/dist_freq_convergence/convergence_dist']
+if meet != '0':
+    ax.axvline(int(meet), color=INK, lw=1, ls=(0, (4, 3)), gid='convergence')
+    ax.text(int(meet), 0.97, ' converged', transform=ax.get_xaxis_transform(), va='top', ha='right',
+            fontsize=7, color=INK2, rotation=90)
+ax.set(xscale='log', yscale='log', xlabel='separation, bp', ylabel='cis pairs per bp of separation',
+       title='Cis pairs by separation and strand orientation')
+ax.legend(ncol=2, fontsize=7)
+drawn('fig-pairstats')
+PAIRSTATS_SAME = not differ and not only
+```
+
+pairtools wrote `{python} TEXT['ps_keys']` keys for the `{python} TEXT['ps_records']` pairs, and the
+app's import counted `{python} TEXT['ps_same']`: the totals, the pair types (`{python} TEXT['ps_types']`),
+the cis fraction of `{python} TEXT['ps_cis']`, every separation bin of every orientation, and the
+convergence past `{python} TEXT['ps_meet']` bp. A library with no duplicates has no estimate of its
+size, and both write `nan` for it: scipy's Lambert W at `-exp(-1)`, which lies a hair past -1/e, and the
+port's.
+
+```{python}
+record('Pairs statistics', 'yeast Hi-C contact list, deduplicated', f'pairtools {PAIRTOOLS_VERSION}',
+       'every key, and every value as the file spells it',
+       'Identical' if PAIRSTATS_SAME else 'Differs', apps=['pairstats'], refs=['pairtools-stats'])
+```
+
+## 26 · Restriction sites (bioframe)
+
+Where an enzyme cuts a reference. `chromosomix restriction` finds the sites of DpnII (`^GATC`) along
+the yeast reference R64-1-1 and counts them in each bin of a 5 kb map; `bioframe.digest` finds them
+with Biopython's `Bio.Restriction`. § 27 reads § 25's contact list against these sites.
+
+**The enzyme.** The enzyme CH128 was made with is not recorded. DpnII is chosen to check the
+computation, not the biology: § 27's classes say what the library looks like if DpnII cut it, and
+nothing in the file says that it did. The reads themselves point to a GATC cutter (§ 27), but that
+is the reads' evidence, not a record.
+
+**The cut, 2 bp apart.** For a site whose first base is at s (0-based), cut k bases in (0 for
+`^GATC`), chromosomix cuts at c = s + k, the 0-based index of the first base after the cut, and a
+fragment runs from one cut to the next, [B<sub>i</sub>, B<sub>i+1</sub>). bioframe's fragments end
+2 bp later, at c + 2. Biopython's `search` gives the 1-based position of the first base after the cut,
+c + 1, and `bioframe.digest` adds 1 to it (`np.array(cut_finder(seq)) + 1`), where converting it to
+0-based would take 1 away. `cooler digest` is the same code, so a fragment BED from cooler or bioframe
+is 2 bp late, at every site of every enzyme. The check is therefore that bioframe's boundaries are
+chromosomix's cuts plus 2, every one. The fragments `pairtools restrict` is given are bioframe's
+moved back by 2 (`bioframe_digest.py`'s SHIFT), chromosomix's own, so that it puts ends on the
+boundaries the app puts them on — for the top strand; § 27 has the bottom strand's.
+
+| | chromosomix | reference |
+|---|---|---|
+| cuts | `restriction --enzyme DpnII`, its sites | `bioframe.digest(genome, 'DpnII')`, each boundary less 2 |
+| cuts per bin | `restriction`, its density on the 5 kb map's bins | the same cuts, counted per bin |
+
+```{python}
+import gzip
+
+RS = WORK / 'restriction'
+RS.mkdir(parents=True, exist_ok=True)
+RS_ANALYSIS, PQ_ANALYSIS = 'Restriction sites', 'Pairs QC'
+ENZYME, RS_BIN = 'DpnII', 5_000
+#: R64-1-1 as one plain FASTA beside its index, by which bioframe reads it, and its sizes, by which cooler
+#: bins: written once from the gzip Ensembl serves.
+R64 = PATHS['R64-1-1']
+R64_FA, R64_SIZES = DATA / 'R64-1-1.fa', DATA / 'R64-1-1.chrom.sizes'
+if REDO or not R64_FA.exists():
+    with gzip.open(R64, 'rt') as packed, open(R64_FA, 'w') as plain:
+        shutil.copyfileobj(packed, plain)
+    Path(f'{R64_FA}.fai').unlink(missing_ok=True)
+pyfaidx.Faidx(str(R64_FA)).close()
+R64_LENGTHS = pd.read_csv(f'{R64_FA}.fai', sep='\t', header=None, usecols=[0, 1], names=['chrom', 'length'])
+if REDO or not R64_SIZES.exists():
+    R64_LENGTHS.to_csv(R64_SIZES, sep='\t', header=False, index=False)
+
+
+def pairs_sizes(path):
+    """A contact list's `#chromsize:` lines: its sequences and their lengths, in its order."""
+    sizes = {}
+    with gzip.open(path, 'rt') as handle:
+        for line in handle:
+            if not line.startswith('#'):
+                break
+            if line.startswith('#chromsize:'):
+                name, length = line.split()[1:3]
+                sizes[name] = int(length)
+    return sizes
+
+
+CH128_SIZES = pairs_sizes(CH128)
+R64_SAME = list(zip(R64_LENGTHS['chrom'], R64_LENGTHS['length'])) == list(CH128_SIZES.items())
+if not R64_SAME:
+    raise ValueError("R64-1-1's sequences are not the contact list's, by name, length and order.")
+measures({'sequences, R64-1-1 and the contact list': f"{len(R64_LENGTHS)}: {', '.join(R64_LENGTHS['chrom'])}",
+          'names, lengths and order': 'the same',
+          'bases': f"{R64_LENGTHS['length'].sum():,}"})
+```
+
+The reference's commands: the digest, and the 5 kb map `cooler cload pairs` bins from § 25's contact
+list, whose bins the cuts are counted on. The map is also the binning Pairs QC does itself, and its
+coverage is § 27's, so it is listed with § 27's commands and timed against Pairs QC.
+
+```{python}
+reference('bioframe-digest', RS_ANALYSIS, 'bioframe, Biopython',
+          [PYTHON, script('bioframe_digest'), R64_FA, ENZYME, RS_BIN, OUT, -2],
+          out=RS / 'digest', made=RS / 'digest.sites.tsv')
+# cooler's program, beside the interpreter pip put it with. Pairs QC's reference, made here for its bins.
+reference('cooler-cload', PQ_ANALYSIS, 'cooler',
+          ['cooler', 'cload', 'pairs', '-c1', 2, '-p1', 3, '-c2', 4, '-p2', 5, f'{rel(R64_SIZES)}:{RS_BIN}', CH128,
+           OUT], out=RS / f'CH128.{RS_BIN}.cool',
+          env={'PATH': f'{Path(PYTHON).parent}{os.pathsep}{os.environ["PATH"]}'})
+```
+
+chromosomix's: the sites on that map, whose bins the density is counted on.
+
+```{python}
+mr('restriction', RS / f'CH128.{RS_BIN}.cool', '--sequence', R64_FA, '--enzyme', ENZYME, out=RS / 'app-sites',
+   name='restriction', analysis=RS_ANALYSIS)
+```
+
+```{python}
+#: Each output §§ 26 and 27 read, by where chromosomix writes it: `<map>.<task>.<output id>.<ext>`, as
+#: `writeOutputs` (src/cli/main.ts) names its files. The readers below put each into the reference's shape;
+#: this cell and § 27's are the only places an output's name or columns are spelled.
+APP_OUT = {
+    # The cuts, a point [c, c + 1) each, and their density on the map's bins: `restriction-<the enzyme>`.
+    'cuts': (RS / 'app-sites', '*.restriction.restriction-*.bed'),
+    'density': (RS / 'app-sites', '*.restriction.restriction-*-density.bedGraph'),
+}
+
+
+def app_out(key):
+    return one(*APP_OUT[key])
+
+
+def merged(app, path, on, value):
+    """chromosomix's numbers beside the reference's, keyed, every key of either kept: a missing number is 0."""
+    ref = pd.read_csv(path, sep='\t', dtype={'chrom': str})
+    both = app.merge(ref, on=on, how='outer', suffixes=('_app', '_ref'))
+    both[[f'{value}_app', f'{value}_ref']] = both[[f'{value}_app', f'{value}_ref']].fillna(0)
+    return both
+
+
+def app_cuts():
+    """chromosomix's cuts, a row each (chrom, cut): the start of each point in the BED it writes."""
+    return pd.read_csv(app_out('cuts'), sep='\t', comment='#', header=None, usecols=[0, 1], names=['chrom', 'cut'],
+                       dtype={'chrom': str})
+
+
+def app_density():
+    """Its cuts per bin (chrom, start, end, sites), from the density's bedGraph."""
+    return pd.read_csv(app_out('density'), sep='\t', comment='#', header=None, names=['chrom', 'start', 'end', 'sites'],
+                       dtype={'chrom': str})
+```
+
+```{python}
+rs_lengths = dict(zip(R64_LENGTHS['chrom'], R64_LENGTHS['length']))
+# bioframe's boundaries between fragments, as it writes them: every end but each sequence's last.
+rs_bioframe = pd.read_csv(RS / 'digest.bioframe.bed', sep='\t', header=None, names=['chrom', 'start', 'end'],
+                          dtype={'chrom': str})
+rs_bioframe = rs_bioframe[rs_bioframe['end'] != rs_bioframe['chrom'].map(rs_lengths)]
+rs_app_cuts = app_cuts()
+
+
+def offsets(app, bioframe):
+    """bioframe's boundaries less chromosomix's cuts, sequence by sequence, the first less the first, the
+    second less the second and so on — or, where the two find a different number, each cut's nearest."""
+    out = []
+    for chrom, ours in app.groupby('chrom'):
+        theirs = np.sort(bioframe.loc[bioframe['chrom'] == chrom, 'end'].to_numpy())
+        at = np.sort(ours['cut'].to_numpy())
+        if len(theirs) == len(at):
+            out.append(theirs - at)
+            continue
+        k = np.clip(np.searchsorted(theirs, at), 1, len(theirs) - 1)
+        out.append(np.where(np.abs(theirs[k - 1] - at) <= np.abs(theirs[k] - at), theirs[k - 1], theirs[k]) - at)
+    return np.concatenate(out)
+
+
+rs_offsets = pd.Series(offsets(rs_app_cuts, rs_bioframe)).value_counts().sort_index()
+rs_cut_match = rs_app_cuts.assign(end=rs_app_cuts['cut'] + 2).merge(rs_bioframe[['chrom', 'end']], how='outer',
+                                                                    indicator=True)['_merge'].value_counts()
+rs_density = merged(app_density(), RS / 'digest.sites.tsv', ['chrom', 'start', 'end'], 'sites')
+CUTS_SAME = rs_cut_match.get('left_only', 0) == 0 and rs_cut_match.get('right_only', 0) == 0
+DENSITY_SAME = bool((rs_density['sites_app'] == rs_density['sites_ref']).all())
+measures({
+    "cuts, chromosomix / bioframe's boundaries": f"{len(rs_app_cuts):,} / {len(rs_bioframe):,}",
+    "bioframe's boundary less chromosomix's cut, in order": ', '.join(
+        f'{k:+d} bp at {n:,}' for k, n in rs_offsets.items()),
+    'cuts in one only, once 2 is added to chromosomix\'s': f"{rs_cut_match.get('left_only', 0):,} / "
+                                                           f"{rs_cut_match.get('right_only', 0):,}",
+    f'{RS_BIN // 1000} kb bins with the same cuts':
+        f"{int((rs_density['sites_app'] == rs_density['sites_ref']).sum()):,} of {len(rs_density):,}",
+})
+```
+
+```{python}
+#| label: fig-restriction
+#| fig-cap: "DpnII on R64-1-1, chromosomix against bioframe. a, cuts per 5 kb bin, bioframe's boundaries less 2; b, bioframe's boundary less chromosomix's cut, at every cut."
+fig, axes = plt.subplots(1, 2, figsize=(8.4, 3.6), layout='constrained')
+agreement(axes[0], rs_density['sites_ref'].to_numpy(float), rs_density['sites_app'].to_numpy(float),
+          'bioframe, boundaries less 2', 'chromosomix', f'a  cuts per {RS_BIN // 1000} kb bin')
+ax = axes[1]
+ax.bar(rs_offsets.index, rs_offsets.to_numpy(), width=0.6, color=INK2, gid='cuts')
+ax.set_xticks(range(min(-1, rs_offsets.index.min() - 1), max(4, rs_offsets.index.max() + 2)))
+ax.set(xlabel="bioframe's boundary less chromosomix's cut, bp", ylabel='cuts',
+       title=f'b  {len(rs_app_cuts):,} cuts, each against bioframe')
+drawn('fig-restriction')
+```
+
+```{python}
+RS_SAME = CUTS_SAME and set(rs_offsets.index) == {2} and DENSITY_SAME
+TEXT['rs_cuts'] = f'{len(rs_bioframe):,}'
+TEXT['rs_offset'] = ('each 2 bp past the app’s cut' if set(rs_offsets.index) == {2}
+                     else 'at ' + ', '.join(f'{k:+d} bp from the app’s cut at {n:,}' for k, n in rs_offsets.items()))
+TEXT['rs_bins'] = f'{len(rs_density):,}'
+TEXT['rs_density'] = 'the same number of cuts in every one' if DENSITY_SAME else \
+    f"different numbers in {int((rs_density['sites_app'] != rs_density['sites_ref']).sum()):,}"
+```
+
+bioframe finds the `{python} TEXT['rs_cuts']` sites chromosomix finds, `{python} TEXT['rs_offset']`:
+bioframe's `+ 1` on top of Biopython's 1-based position. In the `{python} TEXT['rs_bins']` bins of
+5 kb the two count `{python} TEXT['rs_density']`.
+
+```{python}
+record(RS_ANALYSIS, 'yeast R64-1-1, DpnII, 5 kb bins',
+       f"bioframe {VERSIONS['bioframe']}, Biopython {VERSIONS['biopython']}",
+       f"the same {TEXT['rs_cuts']} cuts, bioframe's 2 bp later; {TEXT['rs_density']} of the {TEXT['rs_bins']} bins",
+       'Identical' if RS_SAME else 'Differs', apps=['restriction'], refs=['bioframe-digest'])
+```
+
+## 27 · Pairs QC (pairtools, cooltools)
+
+What a contact list says about the fragments an enzyme cut. The restriction half of
+`chromosomix pairsqc` reads § 25's contact list against § 26's sites: the fragment each end lies in,
+the class of each pair, each end's distance to the cut it reads towards, how many of the fragments
+the pairs reach, and each 5 kb bin's coverage against its cuts. Its reference is three tools:
+`pairtools restrict`, which puts each end in a fragment; a short pandas script,
+`restriction_reference.py`, which counts from `pairtools restrict`'s columns by the definitions the
+task states (they are in the script's docstring, below); and `cooltools.coverage`, over the same
+pairs binned by `cooler cload pairs` (§ 26). The rest of Pairs QC draws § 25's counts. Its table of
+them is held to `pairtools stats` here too.
+
+**An end's fragment, by its own strand's cut.** A `.pairs` position is the 1-based 5′ end of the
+read, x = pos − 1. Given a BED of fragments, pairtools puts it in fragment
+`searchsorted([0, end + 1, …], pos, 'right') − 1`, which is `searchsorted(B, x, 'right') − 1`: an end
+on a boundary lies in the fragment that starts there. That suits a read on the + strand, whose 5′ end
+is the top strand's. A read on the − strand starts at the bottom strand's 5′ end, and the bottom
+strand is cut elsewhere. DpnII cuts each strand before its own GATC. On the top strand's coordinates
+that is before the G (c = s) and after the C (c′ = s + 4), a four-base overhang that the library's
+fill-in makes double-stranded. So a fragment's bottom strand runs to c′ − 1, where c′ = s + L − k is
+L − 2k bases past c; its last base is the site's C. Placed by the top strand's cuts, the − read of an
+unligated fragment lies 3 bp into the next fragment, and a dangling end counts as a re-ligation.
+
+chromosomix therefore places a + end among the top strand's boundaries, B = [0, …c, N], and a − end
+among the bottom strand's, B′ = [0, …c′, N]. Fragment i is the same fragment in both. Each end's
+distance is measured on its own strand's boundaries: B[i+1] − x on +, x − B′[i] + 1 on −, so a
+dangling end's two reads both give the fragment's length. The reference does the same with pairtools.
+`pairtools restrict` runs twice, on the top strand's fragments and on the bottom strand's (bioframe's
+boundaries moved by −2, and by −2 + L − 2k, which is +2 for DpnII), and the script reads each end's
+fragment from the run on its strand. Everything counted below follows from where each end was put, so
+it checks chromosomix's placement end by end.
+
+| | chromosomix | reference |
+|---|---|---|
+| each end's fragment | `pairsqc --enzyme DpnII` | `pairtools restrict` on each strand's fragments, a + end read from the one and a − end from the other |
+| classes, distances, fragments seen | `pairsqc` | `restriction_reference.py`, from `pairtools restrict`'s columns |
+| coverage against cuts | `pairsqc --bin-size 5000` | § 26's `cooler cload pairs` at 5 kb, `cooltools.coverage(ignore_diags=0)` less each bin's diagonal (§ 9), SciPy's `spearmanr` |
+| the pairs' statistics | `pairsqc`, its table | `pairtools stats` (§ 25's) |
+
+The reference's commands: each end's fragment and what is counted from it, and the coverage of
+§ 26's map. `pairtools stats` is § 25's command and output; it is listed here again so that the
+timing weighs Pairs QC against every reference command it stands for, `cooler cload` among them.
+
+```{python}
+# Once on the top strand's fragments, for the + ends, and once on the bottom strand's, for the − ends.
+for strand, suffix in (('top', ''), ('bottom', '-bottom')):
+    reference(f'pairtools-restrict-{strand}', PQ_ANALYSIS, 'pairtools',
+              [PAIRTOOLS, 'restrict', '-f', RS / f'digest.frags{suffix}.bed', CH128, '-o', OUT],
+              out=RS / f'CH128.restricted{suffix}.pairs.gz')
+reference('restriction-reference', PQ_ANALYSIS, 'pandas',
+          [PYTHON, script('restriction_reference'), R64_FA, ENZYME, RS / 'CH128.restricted.pairs.gz',
+           RS / 'CH128.restricted-bottom.pairs.gz', OUT, -2],
+          out=RS / 'pairtools', made=RS / 'pairtools.summary.tsv')
+reference('cooltools-coverage-sites', PQ_ANALYSIS, 'cooltools',
+          [PYTHON, script('cooltools_coverage_sites'), RS / f'CH128.{RS_BIN}.cool', RS / 'digest.sites.tsv', OUT,
+           THREADS], out=RS / 'coverage', made=RS / 'coverage.summary.tsv', threads=THREADS)
+reference('pairsqc-pairtools-stats', PQ_ANALYSIS, 'pairtools', [PAIRTOOLS, 'stats', CH128, '-o', OUT],
+          out=PS / 'pairtools.stats')
+```
+
+chromosomix's: Pairs QC on the contact list itself, binned at the same 5 kb.
+
+```{python}
+mr('pairsqc', CH128, '--bin-size', RS_BIN, '--sequence', R64_FA, '--enzyme', ENZYME, out=RS / 'app-pairsqc',
+   name='pairsqc', analysis=PQ_ANALYSIS)
+```
+
+```{python}
+#: Pairs QC's outputs, each written as a TSV, read as § 26's cell reads the cuts.
+RS_CLASSES = ['trans', 'dangling', 'self-circle', 'same-strand', 're-ligation', 'valid']
+RS_ORIENTATIONS = ['++', '+-', '-+', '--']
+APP_OUT.update({
+    'classes': (RS / 'app-pairsqc', '*.pairsqc.pairsqc-classes-table.tsv'),
+    'distance': (RS / 'app-pairsqc', '*.pairsqc.pairsqc-distance.tsv'),
+    'fragments': (RS / 'app-pairsqc', '*.pairsqc.pairsqc-fragments.tsv'),
+    'sites': (RS / 'app-pairsqc', '*.pairsqc.pairsqc-sites.tsv'),
+    'stats': (RS / 'app-pairsqc', '*.pairsqc.pairsqc-stats.tsv'),
+})
+
+
+def ascii_minus(names):
+    """Strands as the reference spells them, should a figure's − have reached a column's name."""
+    return [str(n).replace('\u2212', '-') for n in names]
+
+
+def app_classes():
+    """Its pairs per class and orientation (class, orientation, pairs), from its table of the classes: a row a
+    class, its pairs and share, and a column an orientation."""
+    held = table(app_out('classes'))
+    held.columns = ascii_minus(held.columns)
+    return held[['class', *RS_ORIENTATIONS]].melt(id_vars='class', var_name='orientation', value_name='pairs')
+
+
+def app_distance():
+    """Its ends per distance bin and strand (strand, start, ends): a curve, each bin at its left edge, a column
+    a strand."""
+    held = table(app_out('distance'))
+    held.columns = ['start', *ascii_minus(held.columns[1:])]
+    return held.melt(id_vars='start', value_vars=['+', '-'], var_name='strand', value_name='ends')
+
+
+def app_fragments():
+    """Its fragments per number of ends (label, fragments): a bar a range, named as the range."""
+    return table(app_out('fragments')).set_axis(['label', 'fragments'], axis=1)
+
+
+def app_seen():
+    """The fragments seen and of how many, as the fragments' label says: `… · seen / total fragments seen`."""
+    with open(app_out('fragments')) as handle:
+        label = next(line for line in handle if line.startswith('# output:'))
+    return [int(n.replace(',', '')) for n in re.search(r'([\d,]+)\s*/\s*([\d,]+)', label).groups()]
+
+
+def app_sites():
+    """Its points, a bin each (sites, coverage), in its order — by sites, then along the genome — and its mean
+    line (sites, coverage), one row per number of sites: a curve whose two series share the points' x."""
+    held = table(app_out('sites')).set_axis(['sites', 'coverage', 'mean'], axis=1)
+    # A number of cuts too few bins share has its points and no mean: the column is blank there.
+    return (held[['sites', 'coverage']],
+            held[['sites', 'mean']].dropna(subset=['mean']).drop_duplicates('sites')
+            .rename(columns={'mean': 'coverage'}))
+
+
+def app_rho():
+    """Spearman's ρ as Pairs QC writes it in its note, as written."""
+    for line in NOTES['pairsqc']:
+        found = re.search(r'ρ\s*=\s*(-?[\d.]+)', line)
+        if found:
+            return found.group(1)
+    raise ValueError(f'no note of pairsqc gives ρ: {NOTES["pairsqc"]}')
+
+
+def app_stats():
+    """Its table of the pairs' statistics: pairtools' key, and the value as written."""
+    held = pd.read_csv(app_out('stats'), sep='\t', comment='#', dtype=str, keep_default_na=False)
+    return dict(zip(held['statistic'], held['value']))
+```
+
+```{python}
+rs_summary = pd.read_csv(RS / 'pairtools.summary.tsv', sep='\t').set_index('measure')['value']
+rs_orientation = merged(app_classes(), RS / 'pairtools.orientation.tsv', ['class', 'orientation'], 'pairs')
+rs_distance = merged(app_distance(), RS / 'pairtools.distance.tsv', ['strand', 'start'], 'ends')
+rs_fragments = merged(app_fragments(), RS / 'pairtools.fragments.tsv', ['label'], 'fragments')
+# The bins kept, in the order chromosomix writes its points: by their cuts, then along the genome.
+rs_kept = pd.read_csv(RS / 'coverage.coverage.tsv', sep='\t', dtype={'chrom': str})
+rs_kept = rs_kept[(rs_kept['coverage'] > 0) | (rs_kept['sites'] > 0)].sort_values('sites', kind='stable')
+app_bins, app_means = app_sites()
+rs_coverage = pd.concat([rs_kept[['chrom', 'start', 'sites', 'coverage']].reset_index(drop=True).add_suffix('_ref'),
+                         app_bins.reset_index(drop=True).add_suffix('_app')], axis=1)
+# Pairs QC draws the mean only where at least this many bins share a number of cuts, so a repeat's one
+# bright bin does not draw the line; the reference's means are held to the same bins.
+MEAN_MIN_BINS = 5
+rs_means_ref = pd.read_csv(RS / 'coverage.means.tsv', sep='\t')
+rs_means = (app_means.merge(rs_means_ref.loc[rs_means_ref['bins'] >= MEAN_MIN_BINS, ['sites', 'coverage']],
+                            on='sites', how='outer', suffixes=('_app', '_ref')).fillna(0))
+rs_cov_summary = pd.read_csv(RS / 'coverage.summary.tsv', sep='\t').set_index('measure')['value']
+RHO_REF, RHO_APP = float(rs_cov_summary['spearman']), app_rho()
+SEEN_APP, TOTAL_APP = app_seen()
+rs_stats_app, rs_stats_ref = app_stats(), stats_file(PS / 'pairtools.stats')
+rs_stats_differ = {k: (v, rs_stats_ref.get(k)) for k, v in rs_stats_app.items() if rs_stats_ref.get(k) != v}
+
+
+def same(frame, value):
+    return int((frame[f'{value}_app'] != frame[f'{value}_ref']).sum())
+
+
+RS_HELD = {
+    'classes by orientation': same(rs_orientation, 'pairs'),
+    'distance bins, both strands': same(rs_distance, 'ends'),
+    'fragments per number of ends': same(rs_fragments, 'fragments'),
+    f'{RS_BIN // 1000} kb bins kept, in order: coverage': same(rs_coverage, 'coverage'),
+    f'{RS_BIN // 1000} kb bins kept, in order: cuts': same(rs_coverage, 'sites'),
+}
+RS_MEANS_GAP = float(relative_difference(rs_means['coverage_app'].to_numpy(float),
+                                         rs_means['coverage_ref'].to_numpy(float)).max())
+RS_RHO_GAP = abs(float(RHO_APP) - RHO_REF)
+RS_RHO_NEAR = rounded(len(RHO_APP.split('.')[-1]))
+measures({
+    'pairs counted (pairtools restrict, pandas)': f"{int(rs_summary['counted']):,} of {int(rs_summary['records']):,}",
+    "ends pairtools puts on fragments other than the digest's": f"{int(rs_summary['ends off the digest']):,}",
+    **{f'{name}, differing': f'{n:,}' for name, n in RS_HELD.items()},
+    'fragments seen, chromosomix / pandas':
+        f"{SEEN_APP:,} of {TOTAL_APP:,} / {int(rs_summary['fragments seen']):,} of {int(rs_summary['fragments']):,}",
+    'mean coverage per number of cuts, max relative difference': f'{RS_MEANS_GAP:.1e}',
+    "Spearman's ρ, chromosomix (as written) / SciPy": f'{RHO_APP} / {RHO_REF:.6f}',
+    'statistics in its table, written as pairtools writes them':
+        f"{len(rs_stats_app) - len(rs_stats_differ):,} of {len(rs_stats_app):,}",
+})
+```
+
+```{python}
+#| label: fig-pairsqc
+#| fig-cap: "The contact list's pairs against § 26's DpnII sites: pairtools restrict, pandas, pairtools stats and cooltools (orange) and chromosomix (blue). a, the pairs in each class, of those counted; b, each class in each orientation; c, the distance from each end to the cut it reads towards, per bp of each bin, on each strand; d, the fragments with each number of ends; e, each 5 kb bin's coverage against its cuts, and the mean coverage per number of cuts; f, the statistics in Pairs QC's table against pairtools stats', each above 0."
+rs_classes = rs_orientation.groupby('class', sort=False)[['pairs_app', 'pairs_ref']].sum().reindex(RS_CLASSES)
+rs_counted = int(rs_summary['counted'])
+# Every closed bin from 1 bp, no end being 0 from its cut, to the last any end is in on either strand.
+rs_reached = rs_distance.loc[(rs_distance[['ends_app', 'ends_ref']] > 0).any(axis=1), 'start'].max()
+rs_closed = rs_distance[rs_distance['end'].notna() & rs_distance['start'].between(1, rs_reached)].sort_values(
+    ['strand', 'start'])
+rs_frag_order = pd.read_csv(RS / 'pairtools.fragments.tsv', sep='\t')['label']
+rs_frag_bars = rs_fragments.set_index('label').reindex(rs_frag_order).fillna(0)
+RS_DASH = {'+': '-', '-': (0, (4, 2))}
+
+fig, axes = plt.subplots(2, 3, figsize=(12, 7.6), layout='constrained')
+ax = axes[0, 0]
+at = np.arange(len(RS_CLASSES))
+ax.bar(at, rs_classes['pairs_ref'] / rs_counted, width=0.7, color=REF, label='pairtools restrict, pandas')
+ax.bar(at, rs_classes['pairs_app'] / rs_counted, width=0.28, color=APP_COLOUR, label='chromosomix')
+ax.set_xticks(at, RS_CLASSES, rotation=30, ha='right')
+ax.set(yscale='log', ylabel='share of the pairs counted', title='a  classes')
+ax.legend(loc='upper left')
+ax = axes[0, 1]
+shown = rs_orientation[(rs_orientation['pairs_ref'] > 0) | (rs_orientation['pairs_app'] > 0)]
+ax.scatter(shown['pairs_ref'], shown['pairs_app'], s=22, color=APP_COLOUR, zorder=3, gid='class and orientation')
+identity(ax, shown[['pairs_ref', 'pairs_app']].min().min(), shown[['pairs_ref', 'pairs_app']].max().max())
+# A name a point, those of a class within 2 % of one another named once.
+for name, rows in shown.sort_values('pairs_ref').groupby(['class', np.round(np.log10(shown['pairs_ref']) / 0.01)],
+                                                         sort=False):
+    ax.annotate(f"{name[0]} {', '.join(rows['orientation'])}", (rows['pairs_ref'].iloc[0], rows['pairs_app'].iloc[0]),
+                fontsize=6, color=INK2, xytext=(4, -3), textcoords='offset points')
+ax.set(xscale='log', yscale='log', xlabel='pairtools restrict, pandas', ylabel='chromosomix',
+       title='b  classes by orientation')
+ax = axes[0, 2]
+for strand, rows in rs_closed.groupby('strand'):
+    edges_ = np.r_[rows['start'].to_numpy(float), rows['end'].to_numpy(float)[-1]]
+    width = np.diff(edges_)
+    ax.stairs(rows['ends_ref'] / width, edges_, color=REF, lw=3, ls=RS_DASH[strand],
+              label=f'pairtools restrict, pandas, {strand}')
+    ax.stairs(rows['ends_app'] / width, edges_, color=APP_COLOUR, lw=1.1, ls=RS_DASH[strand],
+              label=f'chromosomix, {strand}')
+ax.set(xscale='log', yscale='log', xlabel='distance to the cut, bp', ylabel='ends per bp',
+       title='c  distance to the cut, by strand')
+ax.legend(loc='lower left', fontsize=7)
+ax = axes[1, 0]
+at = np.arange(len(rs_frag_bars))
+ax.bar(at, rs_frag_bars['fragments_ref'], width=0.7, color=REF, label='pairtools restrict, pandas')
+ax.bar(at, rs_frag_bars['fragments_app'], width=0.28, color=APP_COLOUR, label='chromosomix')
+ax.set_xticks(at, rs_frag_bars.index, rotation=60, ha='right', fontsize=7)
+ax.set(yscale='log', xlabel='ends in the fragment', ylabel='fragments',
+       title=f"d  ends per fragment; {int(rs_summary['fragments seen']):,} of {int(rs_summary['fragments']):,} seen")
+ax.legend(loc='upper left')
+ax = axes[1, 1]
+ax.scatter(rs_coverage['sites_ref'], rs_coverage['coverage_ref'], s=9, color=REF, alpha=0.5, lw=0,
+           label='cooltools, bioframe')
+ax.scatter(rs_coverage['sites_app'], rs_coverage['coverage_app'], s=2, color=APP_COLOUR, lw=0, label='chromosomix')
+ax.plot(rs_means['sites'], rs_means['coverage_ref'], color=REF, lw=3, label='mean, pandas')
+ax.plot(rs_means['sites'], rs_means['coverage_app'], color=APP_COLOUR, lw=1.1, label='mean, chromosomix')
+ax.text(0.97, 0.68, f'Spearman ρ\nSciPy {RHO_REF:.4f}\nchromosomix {RHO_APP}', transform=ax.transAxes,
+        ha='right', va='top', fontsize=7, color=INK2)
+ax.set(xlabel=f'cuts in the {RS_BIN // 1000} kb bin', ylabel='contacts, the diagonal once',
+       title='e  coverage against cuts')
+ax.legend(loc='upper right', fontsize=7)
+ax = axes[1, 2]
+# Its statistics written as numbers, each against pairtools stats', those above 0 on the log axes.
+rs_stats_both = pd.DataFrame([(pd.to_numeric(rs_stats_ref[k], errors='coerce'), pd.to_numeric(v, errors='coerce'))
+                              for k, v in rs_stats_app.items() if k in rs_stats_ref], columns=['ref', 'app'])
+rs_stats_both = rs_stats_both[(rs_stats_both['ref'] > 0) & (rs_stats_both['app'] > 0)]
+ax.scatter(rs_stats_both['ref'], rs_stats_both['app'], s=12, color=APP_COLOUR, zorder=3, gid='statistic')
+identity(ax, rs_stats_both.min().min(), rs_stats_both.max().max())
+ax.set(xscale='log', yscale='log', xlabel='pairtools stats', ylabel='chromosomix',
+       title=f'f  {len(rs_stats_both):,} statistics above 0')
+drawn('fig-pairsqc')
+```
+
+```{python}
+PQ_SAME = (not any(RS_HELD.values()) and int(rs_summary['ends off the digest']) == 0
+           and (SEEN_APP, TOTAL_APP) == (int(rs_summary['fragments seen']), int(rs_summary['fragments']))
+           and RS_RHO_GAP <= RS_RHO_NEAR and RS_MEANS_GAP <= significant(6) and not rs_stats_differ)
+rs_fraction = rs_classes['pairs_ref'] / rs_counted
+TEXT['rs_counted'] = f'{rs_counted:,}'
+TEXT['rs_held'] = ('the same, key for key' if not any(RS_HELD.values())
+                   else '; '.join(f'{name}: {n:,} differ' for name, n in RS_HELD.items() if n))
+TEXT['rs_seen'] = f"{int(rs_summary['fragments seen']):,}"
+TEXT['rs_total'] = f"{int(rs_summary['fragments']):,}"
+TEXT['rs_kept'] = f"{int(rs_cov_summary['kept']):,}"
+TEXT['rs_rho'] = f'{RHO_REF:.4f}'
+TEXT['rs_rho_app'] = RHO_APP
+TEXT['rs_means'] = f'{RS_MEANS_GAP:.1e}'
+TEXT['rs_stats'] = ('every one' if not rs_stats_differ
+                   else f'all but {len(rs_stats_differ)} of the {len(rs_stats_app)}')
+for name in RS_CLASSES:
+    TEXT[f'rs_{name}'] = f'{rs_fraction[name]:.1%}'
+# Reads that start where DpnII cut, on each strand, over those a base away.
+TEXT['rs_plus'] = f"{rs_summary['+ ends on a cut'] / rs_summary['+ ends a base past a cut']:.0f}"
+TEXT['rs_minus'] = f"{rs_summary['- ends on a cut'] / rs_summary['- ends a base before a cut']:.0f}"
+# And the classes had every end been placed by the top strand's cuts.
+rs_top_only = pd.read_csv(RS / 'pairtools.classes.tsv', sep='\t').set_index('class')['top_strand_only']
+TEXT['rs_top_dangling'] = f"{rs_top_only['dangling'] / rs_counted:.1%}"
+TEXT['rs_top_relig'] = f"{rs_top_only['re-ligation'] / rs_counted:.1%}"
+```
+
+Of the `{python} TEXT['rs_counted']` pairs counted, the pandas script's counts from
+`pairtools restrict`'s fragments and Pairs QC's are `{python} TEXT['rs_held']`: the six classes in their four orientations, every distance bin on both
+strands, the fragments with each number of ends (`{python} TEXT['rs_seen']` of
+`{python} TEXT['rs_total']` reached), and each bin's coverage and cuts. The mean coverage at each
+number of cuts that at least five bins share — the only ones Pairs QC draws a mean for, so a repeat's
+one bright bin does not draw the line — agrees within `{python} TEXT['rs_means']`, the six digits
+written. Over the
+`{python} TEXT['rs_kept']` bins with coverage or a cut, Spearman's ρ is `{python} TEXT['rs_rho']` by
+SciPy and `{python} TEXT['rs_rho_app']` as chromosomix writes it, to three decimals. Of the statistics in Pairs QC's table,
+`{python} TEXT['rs_stats']` is written as `pairtools stats` writes it.
+
+If DpnII cut it, CH128 has `{python} TEXT['rs_valid']` valid pairs, `{python} TEXT['rs_dangling']`
+dangling ends, `{python} TEXT['rs_re-ligation']` re-ligations, `{python} TEXT['rs_trans']` trans,
+`{python} TEXT['rs_same-strand']` same-strand and `{python} TEXT['rs_self-circle']` self-circles. The
+reads point to a GATC cutter. + ends start on a site's G, the top strand's cut,
+`{python} TEXT['rs_plus']` times as often as a base past it. − ends start on its C, the bottom strand's
+cut, `{python} TEXT['rs_minus']` times as often as a base before it. Those are the two ends of a
+fragment DpnII cut and the library filled in, and they are why each end is placed by its own strand's
+cut. With every end placed by the top strand's cuts, as one run of `pairtools restrict` places them,
+the dangling ends would have been `{python} TEXT['rs_top_dangling']` and the re-ligations
+`{python} TEXT['rs_top_relig']`.
+
+```{python}
+record(PQ_ANALYSIS, "§ 25's contact list against § 26's DpnII sites, 5 kb",
+       f"pairtools {PAIRTOOLS_VERSION}, cooler {VERSIONS['cooler']}, cooltools {VERSIONS['cooltools']}",
+       f"classes, distances, fragments seen and coverage {TEXT['rs_held']}; ρ {TEXT['rs_rho_app']} against "
+       f"{TEXT['rs_rho']}; {TEXT['rs_stats']} of its statistics as pairtools writes it",
+       'Identical' if PQ_SAME else 'Differs',
+       apps=['pairsqc'],
+       refs=['cooler-cload', 'pairtools-restrict-top', 'pairtools-restrict-bottom', 'restriction-reference',
+             'cooltools-coverage-sites', 'pairsqc-pairtools-stats'])
 ```
 
 ## Summary
