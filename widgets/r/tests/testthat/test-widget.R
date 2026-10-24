@@ -39,6 +39,11 @@ test_that("it writes the fragment in the app's key order and spelling", {
     chromosomix:::view_hash(list(uri = "a b.cool", maps = "b.cool|c.cool", locus = "I:1,000-2,000", contacts = 1e7)),
     "uri=a%20b.cool&maps=b.cool|c.cool&contacts=10000000&locus=I:1,000-2,000"
   )
+  # The lower triangle's own reading (§5.10) after the map's, as the app writes it.
+  expect_equal(
+    chromosomix:::view_hash(list(vmax2 = 3, oe2 = TRUE, uri = "a.cool", lower = TRUE, flip = TRUE)),
+    "uri=a.cool&flip=true&lower=true&oe2=true&vmax2=3"
+  )
 })
 
 test_that("a locus is a string, or a sequence, a start and an end written whole", {

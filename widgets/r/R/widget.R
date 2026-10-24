@@ -16,7 +16,8 @@
 KEY_ORDER <- c(
   "uri", "uri2", "maps", "view", "genome", "genome2", "genomes", "region", "region2", "focus",
   "regions", "cells", "contacts", "locus", "level", "coarsen", "transform", "colormap", "vmin",
-  "vmax", "balance", "score", "oe", "arms", "smooth", "op", "flip"
+  "vmax", "balance", "score", "oe", "arms", "smooth", "op", "flip", "lower", "score2", "oe2", "smooth2",
+  "transform2", "colormap2", "vmin2", "vmax2"
 )
 
 # A value as the fragment spells it: a switch as `true` or `false`, a number

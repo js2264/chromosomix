@@ -49,6 +49,10 @@ def test_writes_the_fragment_in_the_app_s_key_order_and_spelling():
     assert view_hash({'uri': 'a.cool', 'maps': 'b.cool|c.cool', 'locus': 'I:1,000-2,000'}) == (
         'uri=a.cool&maps=b.cool|c.cool&locus=I:1,000-2,000'
     )
+    # The lower triangle's own reading (§5.10) after the map's, as the app writes it.
+    assert view_hash({'vmax2': 3, 'oe2': True, 'uri': 'a.cool', 'lower': True, 'flip': True}) == (
+        'uri=a.cool&flip=true&lower=true&oe2=true&vmax2=3'
+    )
 
 
 def test_puts_tracks_in_files_for_the_frame_to_add_once_the_map_is_up():
