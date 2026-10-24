@@ -9733,7 +9733,7 @@ edge, whose region at its first base yapc drops. The generated module carries th
 was built from, and a test fails until `npm run wasm:yapc` is run after `yapc.c` changes.
 
 **And beside the goldens, two notebooks at full size.** `notebooks/validation.qmd`, rendered with
-Quarto, runs twenty-six analyses twice over public data, each file named by its accession and fetched
+Quarto, runs twenty-seven analyses twice over public data, each file named by its accession and fetched
 from where it was published (4DN's; GEO's yeast Micro-C; ENCODE's GM12878 ChIP-seq and ATAC-seq;
 UCSC's mm10 sequence and RefSeq genes as Illumina iGenomes distributes them; and Ensembl's R64-1-1
 yeast reference) — once through `chromosomix`, once through the package each

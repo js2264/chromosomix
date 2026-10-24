@@ -33,6 +33,7 @@ export interface TaskReference {
   section?: number
 }
 
+const BIOFRAME = '10.1093/bioinformatics/btae088'
 const COOLTOOLS = '10.1371/journal.pcbi.1012067'
 const DEEPTOOLS = '10.1093/nar/gkw257'
 
@@ -59,6 +60,12 @@ export const TASK_REFERENCES: Readonly<Record<string, TaskReference>> = {
     doi: COOLTOOLS,
     agreement: 'identical',
     section: 4,
+  },
+  pairsqc: {
+    method: 'The pairs’ statistics and fragments, as pairtools’ stats and restrict count them (Open2C 2024).',
+    doi: '10.1371/journal.pcbi.1012164',
+    agreement: 'identical',
+    section: 27,
   },
   scalogram: {
     method: 'The scalogram of Lioy et al. 2018.',
@@ -130,6 +137,12 @@ export const TASK_REFERENCES: Readonly<Record<string, TaskReference>> = {
     agreement: 'identical',
     section: 17,
   },
+  restriction: {
+    method: 'Restriction sites as bioframe’s digest finds them, each 2 bp earlier (Open2C 2024).',
+    doi: BIOFRAME,
+    agreement: 'identical',
+    section: 26,
+  },
   peaks: {
     method: 'yapc’s concave regions (Jänes et al. 2018), with IDR across replicates.',
     doi: '10.7554/eLife.37344',
@@ -138,7 +151,7 @@ export const TASK_REFERENCES: Readonly<Record<string, TaskReference>> = {
   },
   composition: {
     method: 'GC content and skews, as bioframe and Biopython compute them (Open2C 2024).',
-    doi: '10.1093/bioinformatics/btae088',
+    doi: BIOFRAME,
     agreement: 'identical',
     section: 16,
   },

@@ -3,11 +3,12 @@
  * Chromium on the yeast demo: the column with its marks, green and the text's
  * own colour; a green mark's tip, and an untested one's; the pointer carried
  * from a `?` into its tip, which stays for the DOI; a click on the `?`, which
- * opens no task; the 1D card's rows; and the dark theme. It prints every row's
- * mark and colour, so a task that lost or gained one is a line in the log.
+ * opens no task; the 1D card's rows; the dark theme; and Pairs QC's and
+ * Restriction sites' tips. It prints every row's mark and colour, so a task
+ * that lost or gained one is a line in the log.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-task-refs.mjs [out-dir]     # tr01 … tr07
+ *   node scripts/ui-task-refs.mjs [out-dir]     # tr01 … tr09
  */
 
 import { createRequire } from 'node:module'
@@ -126,6 +127,17 @@ await scene('light', async ({ page, shot, row, tipText }) => {
   await sleep(300)
   console.log('tr06 metaplot tip:', JSON.stringify(await tipText()))
   await shot('tr06-1d-card')
+
+  // The digest and what Pairs QC counts from it: two tasks, two sections of the validation.
+  for (const [id, title] of [['tr08-pairsqc-tip', 'Pairs QC'], ['tr09-restriction-tip', 'Restriction sites']]) {
+    await page.mouse.move(5, 500)
+    await row(title).scrollIntoViewIfNeeded()
+    await sleep(400)
+    await row(title).locator('.task-ref').hover()
+    await sleep(300)
+    console.log(`${id.slice(0, 4)} ${title} tip:`, JSON.stringify(await tipText()))
+    await shot(id)
+  }
 })
 
 await scene('dark', async ({ page, shot, row, tipText }) => {

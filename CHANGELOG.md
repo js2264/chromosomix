@@ -25,15 +25,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   sits `L − 2k` past the top-strand cut once an overhang is filled in, 3 bp for DpnII — so a dangling
   end is counted as one. `chromosomix pairsqc sample.pairs.gz --bin-size 10000 --sequence ref.fa
   --enzyme DpnII --out qc/`. Held to `pairtools stats`, `pairtools restrict` (once per strand) and
-  `cooltools.coverage` on a yeast library and its R64 reference in `notebooks/validation.qmd` §26:
-  every count identical.
+  `cooltools.coverage` on a yeast library and its R64 reference in `notebooks/validation.qmd` §27:
+  every count identical. Its row's `?` (§18.1) names pairtools' paper.
 
 - **Restriction sites: a reference digested by an enzyme, a kit or typed sites (§18.8).** DpnII
   (MboI, Sau3AI), HindIII, NcoI, EcoRI, BglII, HinfI, DdeI, MseI, NlaIII, CviQI and AluI, the Arima
   kit, or names and IUPAC sites with the cut marked (`G^ANTC`). A lane of the cuts and the cuts per
   bin, read by range from a large reference as *find a motif* is. Its cuts are `bioframe.digest`'s
   and `cooler digest`'s **less two**: both add 1 to Biopython's already 1-based position, so every
-  fragment boundary they write is 2 bp late.
+  fragment boundary they write is 2 bp late. Held to `bioframe.digest` in `notebooks/validation.qmd`
+  §26, every cut and every bin's count the same, and its row's `?` (§18.1) names bioframe's paper.
 
 - **`pairtools stats` for every `.pairs` the app imports, and a command that writes it (§3.7).** The
   import counts, in the pass that bins the map, everything `pairtools stats` counts — records mapped
@@ -103,7 +104,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 - **What a task re-implements, on its row (§18.1).** A `?` in a circle at the right of a task's title
   in the Analysis column names the published method it follows, how it came out against it in the
   validation notebook, and the paper's DOI as a link, in a small tip shown on hover. Green where the
-  validation found it identical or equivalent — 20 tasks, from coverage and insulation to pastis-NB
+  validation found it identical or equivalent — 22 tasks, from coverage and insulation to pastis-NB
   and the metaplot — and in the text's colour where it is untested: the scalogram, the HiC score and
   per-cell contact QC. A mark, not a button: a press on it opens no task. Tasks that follow no
   published method have none.

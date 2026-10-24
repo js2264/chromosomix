@@ -1,4 +1,4 @@
-"""Coverage against restriction sites, bin by bin (validation.qmd § 26).
+"""Coverage against restriction sites, bin by bin (validation.qmd § 27).
 
 Each bin's raw total coverage, cis and trans with every diagonal kept, as `cooltools.coverage` gives
 it, beside the cuts in the bin, as bioframe_digest.py counts them (a cut c in the bin

@@ -1,4 +1,4 @@
-"""Restriction-fragment statistics of a contact list, from `pairtools restrict`'s columns (validation.qmd § 26).
+"""Restriction-fragment statistics of a contact list, from `pairtools restrict`'s columns (validation.qmd § 27).
 
 The fragments are `bioframe.digest`'s, as bioframe_digest.py writes them: between the top strand's
 cuts, c, its boundaries moved by SHIFT (-2 by default), and between the bottom strand's, c', L - 2k
