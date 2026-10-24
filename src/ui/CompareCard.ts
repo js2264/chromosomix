@@ -723,21 +723,31 @@ export function compareRefusal(
  * anybody actually has.
  *
  * What is *not* relaxed is anything the spelling cannot explain. The lists must
- * still be the same length and in the same order, because every coordinate in
- * the blended picture is an index into one of them; and two sequences that
- * match by name must still be the same number of bases, because that is the
- * check that catches hg19 against hg38 — where `chr1` is `chr1` in both and is
- * not the same sequence in either.
+ * still be in the same order, because every coordinate in the blended picture
+ * is an index into one of them; and two sequences that match by name must
+ * still be the same number of bases, because that is the check that catches
+ * hg19 against hg38 — where `chr1` is `chr1` in both and is not the same
+ * sequence in either.
+ *
+ * **The second list may run on past the first.** A `.hic` out of Juicer keeps
+ * the mitochondrion, `M`, after `Y`, where a 4DN cooler of the same assembly
+ * stops at `chrY`. Every bin the picture reads is the first file's, and while
+ * the second's list opens with the whole of the first's, each of those bins is
+ * the same locus in both — the global index is the same running sum up to
+ * there. What follows in the second file is never asked for, as a sequence the
+ * first does not have could not be. The other way round is still refused: the
+ * first file's last sequences would have a lower triangle with nothing to read.
  */
 function firstContigMismatch(
   a: Array<[string, number]>,
   b: Array<[string, number]>,
 ): string | null {
-  if (a.length !== b.length) {
+  if (a.length > b.length) {
     return (
       `Chromosome counts differ: ${fmt.int(a.length)} against ${fmt.int(b.length)}. Every ` +
-      'coordinate in the picture is an index into one list of sequences, so the two files have ' +
-      'to carry the same list, in the same order.'
+      'coordinate in the picture is an index into one list of sequences, so the second file has ' +
+      'to carry every sequence of the first, in the same order. It may carry more after them: ' +
+      'opened the other way round, this pair is drawn.'
     )
   }
   const named = ([name, length]: [string, number]): NamedSequence => ({ name, length })

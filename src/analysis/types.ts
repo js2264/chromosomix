@@ -1359,6 +1359,16 @@ export interface ContextGenome {
  */
 export interface AnalysisContext {
   uri: string
+  /**
+   * Where a task's recipe and its figures' styles are remembered for this map:
+   * the session's own key for the file (`Session.memoryKey`, a tab and a file),
+   * which is what a saved workspace's `analysis` and `figures` are written from
+   * and put back under (§18.2). They were kept under {@link uri} instead — the
+   * file with its resolution — so a workspace opened its tasks on their
+   * defaults and saved none of the recipes it was run with. Absent outside a
+   * session (the command line, a test), and the uri is then the key.
+   */
+  memoryKey?: string
   layout: LayoutKind
   hasGenomes: boolean
   hasWeights: boolean

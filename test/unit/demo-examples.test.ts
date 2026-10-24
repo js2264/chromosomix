@@ -72,7 +72,7 @@ import { parseWorkspaceFile, type WorkspaceFile } from '../../src/state/workspac
 import { LocalFileSource } from '../../src/sources/LocalFileSource'
 import { MetaCooler } from '../../src/metacooler/MetaCooler'
 import { firstEntry } from '../../src/ui/FilePicker'
-import { isMapRef, parseMaps } from '../../src/panels/deck'
+import { isMapRef, isTracksCellKey, parseMaps, tracksCellKey } from '../../src/panels/deck'
 import { parseUri } from '../../src/uri'
 import { resetDevFeatures } from '../../src/state/devFeatures'
 
@@ -166,7 +166,8 @@ function namedFiles(config: SessionConfig): string[] {
     // A second name for the same companion, matched against it by string
     // equality when the deck comes back (`annotations/store.ts`), so it has to
     // resolve to the same place rather than merely to *a* place.
-    ...(config.lanes ?? []).map((lane) => lane.uri),
+    // A lane on a tracks cell is keyed by the cell's seat rather than a file (`tracksCellKey`).
+    ...(config.lanes ?? []).flatMap((lane) => (isTracksCellKey(lane.uri) ? [] : [lane.uri])),
     ...config.tracks.flatMap((track) => (track.source.url === undefined ? [] : [track.source.url])),
   ]
 }
@@ -253,9 +254,12 @@ describe('the picker examples', () => {
      */
     it(`places every track ${file} lays out on a map it opens`, () => {
       for (const config of published(file)) {
+        const refs = parseMaps(config.state.maps)
         const maps = new Set([
           config.state.uri,
-          ...parseMaps(config.state.maps).flatMap((ref) => (isMapRef(ref) ? [ref.uri] : [])),
+          ...refs.flatMap((ref) => (isMapRef(ref) ? [ref.uri] : [])),
+          // …and every tracks cell it opens, by its seat (`tracksCellKey`).
+          ...refs.filter((ref) => ref.kind === 'tracks').map((_, seat) => tracksCellKey(seat)),
         ])
         for (const lane of config.lanes ?? []) {
           expect(maps.has(lane.uri), `${file} puts a track on ${lane.uri}, which it never opens`).toBe(

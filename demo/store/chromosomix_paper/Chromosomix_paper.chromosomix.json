@@ -7,6 +7,671 @@
     {
       "version": 1,
       "createdAt": "2026-10-07T00:00:00.000Z",
+      "name": "Fig. 1a · GM12878, chr14:88.55–90.10 Mb at 5 kb: the map, its tracks and its model",
+      "state": {
+        "uri": "human/4DNFIXP4QG5B.mcool::resolutions/5000",
+        "uri2": "human/ENCFF379AWZ.hic::resolutions/5000",
+        "maps": "tracks|3d",
+        "view": "region",
+        "region": "chr14:88550000-90100000",
+        "level": "bin",
+        "balance": true,
+        "transform": "log10",
+        "colormap": "default",
+        "oe": true,
+        "smooth": "a50"
+      },
+      "tracks": [
+        {
+          "id": "a-insulation",
+          "card": "linear",
+          "kind": "track",
+          "label": "diamond insulation · 100 kb",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIXP4QG5B_2000.chr14.insulation-w50.bw",
+            "url": "human/4DNFIXP4QG5B_2000.chr14.insulation-w50.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": true,
+            "right": false,
+            "bottom": false,
+            "left": false
+          },
+          "style": {
+            "colour": "#1aa0b8",
+            "size": 48,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "a-borders",
+          "card": "linear",
+          "kind": "segments",
+          "label": "insulation boundaries",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIXP4QG5B_2000.chr14.borders.bed",
+            "url": "human/4DNFIXP4QG5B_2000.chr14.borders.bed"
+          },
+          "visible": true,
+          "placement": {
+            "top": true,
+            "right": false,
+            "bottom": false,
+            "left": false
+          },
+          "style": {
+            "colour": "#1aa0b8",
+            "size": 18,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "a-e1",
+          "card": "linear",
+          "kind": "track",
+          "label": "E1 · 250 kb",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIXP4QG5B_250000.compartments-e1.bw",
+            "url": "human/4DNFIXP4QG5B_250000.compartments-e1.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": false,
+            "left": true
+          },
+          "style": {
+            "colour": "#8c8c8c",
+            "size": 48,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "a-ab",
+          "card": "linear",
+          "kind": "segments",
+          "label": "compartments",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIXP4QG5B_250000.compartments-ab.bed",
+            "url": "human/4DNFIXP4QG5B_250000.compartments-ab.bed"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": false,
+            "left": true
+          },
+          "style": {
+            "colour": "#d62728",
+            "size": 18,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "a-4c",
+          "card": "linear",
+          "kind": "track",
+          "label": "4C · chr14:89,150,001-89,180,000 · O/E",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIXP4QG5B_5000.4c-chr14-89150001-89180000.bw",
+            "url": "human/4DNFIXP4QG5B_5000.4c-chr14-89150001-89180000.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#c45a9a",
+            "size": 64,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "a-ctcf",
+          "card": "linear",
+          "kind": "track",
+          "label": "CTCF",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF734CUT.bigWig",
+            "url": "human/ENCFF734CUT.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 44,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "a-motifs",
+          "card": "linear",
+          "kind": "segments",
+          "label": "CTCF motifs",
+          "source": {
+            "kind": "remote",
+            "name": "hg38.CTCF-motifs.bed",
+            "url": "human/hg38.CTCF-motifs.bed"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 22,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "a-rna-plus",
+          "card": "linear",
+          "kind": "track",
+          "label": "RNA+",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF990PUN.bigWig",
+            "url": "human/ENCFF990PUN.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#e69f00",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "rna",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "a-rna-minus",
+          "card": "linear",
+          "kind": "track",
+          "label": "RNA−",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF005BFP.bigWig",
+            "url": "human/ENCFF005BFP.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#3a8fd0",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "rna",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": true
+          },
+          "lead": null
+        },
+        {
+          "id": "a-atac",
+          "card": "linear",
+          "kind": "track",
+          "label": "ATAC",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF487LOB.bigWig",
+            "url": "human/ENCFF487LOB.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#9c6b1e",
+            "size": 44,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "a-atac-peaks",
+          "card": "linear",
+          "kind": "segments",
+          "label": "ATAC peaks",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF928SQL.bigBed",
+            "url": "human/ENCFF928SQL.bigBed"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#9c6b1e",
+            "size": 18,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "a-genes",
+          "card": "linear",
+          "kind": "gtf",
+          "label": "hg38.refGene",
+          "source": {
+            "kind": "remote",
+            "name": "hg38.refGene.txt.gz",
+            "url": "human/hg38.refGene.txt.gz"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 56,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "primary": true,
+          "lead": null
+        },
+        {
+          "id": "a-sequence",
+          "card": "linear",
+          "kind": "sequence",
+          "label": "hg38.2bit",
+          "source": {
+            "kind": "remote",
+            "name": "hg38.2bit",
+            "url": "human/hg38.2bit"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 40,
+            "mode": "line",
+            "limits": {
+              "auto": false,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "a-model",
+          "card": "structure",
+          "kind": "structure",
+          "label": "pastis-NB · chr14:88,550,001-90,100,000",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIXP4QG5B_2000.chr14-88.55-90.10Mb.bed3d",
+            "url": "human/4DNFIXP4QG5B_2000.chr14-88.55-90.10Mb.bed3d"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": false,
+            "left": false
+          },
+          "style": {
+            "colour": "#c45a9a",
+            "size": 24,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false,
+            "structure": {
+              "beads": false,
+              "sticks": true,
+              "tube": false,
+              "colourBy": "distance",
+              "pin": "chr14:89601000",
+              "colormap": "default"
+            }
+          }
+        }
+      ],
+      "manual": [
+        {
+          "id": "m-tad",
+          "kind": "rect",
+          "a": {
+            "contig": "chr14",
+            "from": 89021000,
+            "to": 89919000
+          },
+          "b": {
+            "contig": "chr14",
+            "from": 89021000,
+            "to": 89919000
+          },
+          "colour": "#111318"
+        },
+        {
+          "id": "m-border-1",
+          "kind": "line",
+          "axis": "vertical",
+          "at": {
+            "contig": "chr14",
+            "bp": 89021000
+          },
+          "colour": "#0f8a5f"
+        },
+        {
+          "id": "m-border-2",
+          "kind": "line",
+          "axis": "vertical",
+          "at": {
+            "contig": "chr14",
+            "bp": 89919000
+          },
+          "colour": "#0f8a5f"
+        },
+        {
+          "id": "m-subtad",
+          "kind": "line",
+          "axis": "vertical",
+          "at": {
+            "contig": "chr14",
+            "bp": 89165000
+          },
+          "colour": "#111318"
+        }
+      ],
+      "sequences": [],
+      "groups": {
+        "rna": "stacked"
+      },
+      "scaling": {
+        "rna": "shared"
+      },
+      "compareNormalise": false,
+      "tables": {},
+      "plot": {
+        "text": true,
+        "fills": true,
+        "baseline": true,
+        "outline": true,
+        "gutter": false,
+        "crosshair": true,
+        "dividers": true,
+        "breaks": true,
+        "labels": true,
+        "ticks": true
+      },
+      "lanes": [
+        {
+          "track": "a-ctcf",
+          "uri": "tracks:1",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "a-motifs",
+          "uri": "tracks:1",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "a-rna-plus",
+          "uri": "tracks:1",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "a-rna-minus",
+          "uri": "tracks:1",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "a-atac",
+          "uri": "tracks:1",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "a-atac-peaks",
+          "uri": "tracks:1",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "a-genes",
+          "uri": "tracks:1",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "a-sequence",
+          "uri": "tracks:1",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        }
+      ],
+      "deck": {
+        "columns": 3
+      },
+      "circular": [],
+      "mapNames": {
+        "human/4DNFIXP4QG5B.mcool": "Hi-C · GM12878 (Rao et al. 2014, 4DN)",
+        "human/ENCFF379AWZ.hic": "CTCF ChIA-PET · GM12878 (Ruan lab, ENCODE)"
+      }
+    },
+    {
+      "version": 1,
+      "createdAt": "2026-10-07T00:00:00.000Z",
       "name": "Fig. 1c · one session, from the genome to Sox2",
       "state": {
         "uri": "mouse/4DNFI5QJNFAT.mcool::resolutions/2500000",
@@ -925,7 +1590,190 @@
     {
       "version": 1,
       "createdAt": "2026-10-07T00:00:00.000Z",
-      "name": "Fig. 2a · C. necator, obs./exp.: the decay along the diagonal, then along both arms",
+      "name": "Fig. 2 · CTCF sites in GM12878, chr19: the map, two labs’ CTCF and ATAC — insulation, peaks, APA and metaplots run here",
+      "state": {
+        "uri": "human/4DNFIXP4QG5B.mcool::resolutions/10000",
+        "view": "region",
+        "region": "chr19:0-58617616",
+        "level": "bin",
+        "balance": true,
+        "transform": "log10",
+        "colormap": "default"
+      },
+      "tracks": [
+        {
+          "id": "b-ctcf-broad",
+          "card": "linear",
+          "kind": "track",
+          "label": "CTCF · Broad",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF734CUT.bigWig",
+            "url": "human/ENCFF734CUT.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 44,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "b-ctcf-stanford",
+          "card": "linear",
+          "kind": "track",
+          "label": "CTCF · Stanford",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF485CGE.bigWig",
+            "url": "human/ENCFF485CGE.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#b2182b",
+            "size": 44,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "b-atac",
+          "card": "linear",
+          "kind": "track",
+          "label": "ATAC",
+          "source": {
+            "kind": "remote",
+            "name": "ENCFF487LOB.bigWig",
+            "url": "human/ENCFF487LOB.bigWig"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#9c6b1e",
+            "size": 44,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ],
+      "manual": [],
+      "sequences": [],
+      "groups": {},
+      "scaling": {},
+      "compareNormalise": false,
+      "tables": {},
+      "plot": {
+        "text": true,
+        "fills": true,
+        "baseline": true,
+        "outline": true,
+        "gutter": false,
+        "crosshair": true,
+        "dividers": true,
+        "breaks": true,
+        "labels": true,
+        "ticks": true
+      },
+      "analysis": {
+        "insulation": {
+          "window": 5,
+          "scales": 4,
+          "sequences": [
+            "chr19"
+          ]
+        },
+        "peaks": {
+          "signal": "b-ctcf-broad",
+          "replicate": "b-ctcf-stanford",
+          "idr": 0.05,
+          "perPeak": true,
+          "width": 150,
+          "times": 3,
+          "minWidth": 75,
+          "truncate": 100000,
+          "sequences": [
+            "chr19"
+          ]
+        },
+        "apa": {
+          "anchors": "consecutive",
+          "at": "centre",
+          "mode": "fixed",
+          "window": 10,
+          "minDist": 22,
+          "minDiag": 2,
+          "norm": "oe",
+          "tracks": []
+        },
+        "metaplot": {
+          "tracks": [
+            "b-ctcf-broad",
+            "b-ctcf-stanford",
+            "b-atac"
+          ],
+          "mode": "reference",
+          "at": "centre",
+          "stranded": false,
+          "flank": 2000,
+          "step": 50,
+          "band": "bootstrap",
+          "heatmap": true
+        }
+      },
+      "circular": [],
+      "mapNames": {
+        "human/4DNFIXP4QG5B.mcool": "Hi-C · GM12878 (Rao et al. 2014, 4DN)"
+      }
+    },
+    {
+      "version": 1,
+      "createdAt": "2026-10-07T00:00:00.000Z",
+      "name": "Fig. S3a · C. necator, obs./exp.: the decay along the diagonal, then along both arms",
       "state": {
         "uri": "C_necator/C_necator_N1_VJ_MM260.mcool::resolutions/8000",
         "maps": "C_necator/C_necator_N1_VJ_MM260.mcool::resolutions/8000",
@@ -1053,7 +1901,7 @@
     {
       "version": 1,
       "createdAt": "2026-10-07T00:00:00.000Z",
-      "name": "Fig. 2b · B. subtilis: WT, ΔparAB, and after ParB is induced",
+      "name": "Fig. S3b · B. subtilis: WT, ΔparAB, and after ParB is induced",
       "state": {
         "uri": "B_subtilis/Bsubtilis_WT.mcool::resolutions/10000",
         "maps": "B_subtilis/Bsubtilis_dparAB.mcool::resolutions/10000|B_subtilis/Bsubtilis_induction_0min.mcool::resolutions/10000|B_subtilis/Bsubtilis_induction_15min.mcool::resolutions/10000|B_subtilis/Bsubtilis_induction_20min.mcool::resolutions/10000|B_subtilis/Bsubtilis_induction_30min.mcool::resolutions/10000|B_subtilis/Bsubtilis_induction_35min.mcool::resolutions/10000|B_subtilis/Bsubtilis_induction_45min.mcool::resolutions/10000",
@@ -1106,7 +1954,7 @@
     {
       "version": 1,
       "createdAt": "2026-10-07T00:00:00.000Z",
-      "name": "Fig. 2c · P. aeruginosa: WT, SMC-ScpAB– and MksBEF–, the correlation along both arms",
+      "name": "Fig. S3c · P. aeruginosa: WT, SMC-ScpAB– and MksBEF–, the correlation along both arms",
       "state": {
         "uri": "P_aeruginosa/PAO1_v3_MM38.mcool::resolutions/8000",
         "maps": "P_aeruginosa/PAO1_v3_FG0235.mcool::resolutions/8000|P_aeruginosa/PAO1_v3_FG0238.mcool::resolutions/8000",

@@ -41,7 +41,7 @@ name: Notebooks
 # gathers is its own render or nothing.
 # The validation and the timings share a job because the timings run the
 # validation's own commands again, on the inputs the validation fetched and
-# made: about 6 GB that would otherwise go from one job to the next as an
+# made: about 8 GB that would otherwise go from one job to the next as an
 # artifact on every run, which a private repository pays for. Each job
 # installs what it needs through .github/actions/notebooks-setup, gathers its
 # pages with notebooks/scripts/pages.py — the one table of where each page is
@@ -70,8 +70,10 @@ name: Notebooks
 # from a bucket.
 #
 # **What it costs.** Every run fetches its data rather than caching them: about
-# 6 GB for the validation (4DN's, UCSC's mm10 through iGenomes, and GEO's yeast
-# Micro-C, each from where it was published) and 15 GB more for the viewers
+# 8 GB for the validation (4DN's, UCSC's mm10 through iGenomes, GEO's yeast
+# Micro-C and ENCODE's GM12878 ChIP-seq and ATAC-seq, each from where it was
+# published, and the 0.25 GB of 4DN's 27-GB GM12878 map that § 24 reads, by
+# range) and 15 GB more for the viewers
 # (4DN's chicken and mouse maps in both formats, the mouse's 13 GB of it, and
 # the app's yeast demo); 160 MB for the parity (GEO's yeast Micro-C and
 # ATAC-seq, UCSC's sacCer3); 13.7 GB for the laptop (the validation's mouse

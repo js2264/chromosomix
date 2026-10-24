@@ -199,6 +199,7 @@ export class SessionAnalysis {
   /** The callbacks `AnalysisWorkspace` reads the session through. */
   private workspaceHost(): AnalysisWorkspaceHost {
     return {
+      memoryKey: (uri) => this.session.memoryKey(uri),
       source: (task) => {
         const starred = this.starredFacts(task)
         if (starred !== null) {
@@ -541,6 +542,7 @@ export class SessionAnalysis {
       if (assembly === null) return null
       return buildAnalysisContext({
         uri: assembly.uri,
+        memoryKey: this.session.memoryKey(assembly.uri),
         layout: 'cool',
         binsize: browsingBinsize(assembly.total),
         nBins: 0,
@@ -602,6 +604,7 @@ export class SessionAnalysis {
     const block = panel === undefined || panel === null || derived !== null ? null : panel.analysisBlock()
     return buildAnalysisContext({
       uri,
+      memoryKey: this.session.memoryKey(uri),
       layout: info.layout.kind,
       binsize,
       nBins: derived?.grid.nBins ?? info.nBins,

@@ -221,7 +221,7 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
 
       built.push({
         group: index,
-        rows: await rowsFor(job, entry, plan.windows, plan.layout, step),
+        rows: await rowsFor(job, entry, plan.windows, plan.layout),
         count: plan.windows.length,
         layout: plan.layout,
       })
@@ -307,20 +307,36 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
 }
 
 /**
+ * How many bases one `sample` request asks for, at most, and how many windows:
+ * the batches a sequence's windows are read in, as *Signal by group* reads its
+ * stretches (`run/groupsignal.ts`).
+ */
+const CHUNK_BASES = 1 << 20
+const CHUNK_WINDOWS = 4096
+
+/**
  * Every window's row, for one track.
  *
- * Grouped by sequence before sampling, which is the whole performance story:
- * `sample` picks one zoom level per request and coalesces adjacent blocks, so a
- * thousand features on one chromosome cost one call. Regions are matched back to
- * their windows by index, since the worker drops the ones its file cannot
- * answer.
+ * Read **at the track's own resolution** — a bigWig's base-level records, never
+ * a zoom level — because a column is the mean over the bases it covers and a
+ * zoom record is a mean over *its* span, which straddles the column's edges.
+ * It asked `sample` for the column's width, which takes any zoom level up to
+ * twice that wide (bbi's rule): the records themselves at 50 bp on most tracks,
+ * and on a base-level ChIP-seq track read in 10 kb columns, records of up to
+ * 20 kb. deepTools' `computeMatrix` reads every base, as *Signal by group* and
+ * *Track correlation* now do; `windowRow` weighs each record by how much of a
+ * column it covers, so the records make the exact mean.
+ *
+ * By sequence, the windows in order along it, a batch at a time, so what is
+ * held is one batch's records: a megabase, or one window wider than that. Each
+ * stretch is asked for once, and the reply matched back by the coordinates it
+ * echoes, since `sample` drops what its file cannot answer.
  */
 async function rowsFor(
   job: TrackJobContext,
   entry: string,
   windows: Window[],
   layout: Layout,
-  step: number,
 ): Promise<Float64Array> {
   const rows = new Float64Array(windows.length * layout.slots).fill(Number.NaN)
   const byContig = new Map<string, number[]>()
@@ -330,47 +346,57 @@ async function rowsFor(
     else held.push(i)
   }
 
-  for (const [, indices] of byContig) {
-    job.throwIfCancelled()
+  for (const [contig, indices] of byContig) {
     // **Each stretch asked for once.** Features that share an anchor share a
     // window — the transcripts of a gene that start at one TSS, a fifth of the
     // RefSeq set — and a stretch asked for twice is read, parsed and handed back
-    // twice for the same numbers. The reply is matched by coordinates below, so
-    // every feature finds its stretch whichever of them asked.
-    const asked = new Set<string>()
-    const regions: Region[] = []
+    // twice for the same numbers. Every feature finds its stretch by its
+    // coordinates, whichever of them asked.
+    const asking = new Map<string, number[]>()
     for (const i of indices) {
-      const window = windows[i]
-      const key = `${window.start}-${window.end}`
-      if (asked.has(key)) continue
-      asked.add(key)
-      regions.push({ contig: window.contig, start: window.start, end: window.end })
+      const key = `${windows[i].start}-${windows[i].end}`
+      const held = asking.get(key)
+      if (held === undefined) asking.set(key, [i])
+      else held.push(i)
     }
-    const set = await job.sample(entry, regions, step)
-    // `sample` answers in the order it was asked, having dropped what it could
-    // not answer — so the reply is matched by its echoed coordinates rather than
-    // by position, which would silently shift every row after the first drop.
-    const byKey = new Map<string, (typeof set.regions)[number]>()
-    for (const region of set.regions) byKey.set(`${region.contig}:${region.start}-${region.end}`, region)
+    const regions: Region[] = [...asking.keys()]
+      .map((key) => {
+        const [start, end] = key.split('-').map(Number)
+        return { contig, start, end }
+      })
+      .sort((a, b) => a.start - b.start || a.end - b.end)
     // And each row made once: a window the same as one already done — same
     // stretch, strand and columns, and same body where it has one — is that
     // row again, copied.
     const done = new Map<string, number>()
-    for (const i of indices) {
-      const window = windows[i]
-      const samples = byKey.get(`${window.contig}:${window.start}-${window.end}`)
-      if (samples === undefined) continue
-      const { body } = window
-      const key =
-        `${window.start}-${window.end}:${window.strand}:${window.slotFrom}-${window.slotTo}` +
-        (body === undefined ? '' : `:${body.start}-${body.end}:${body.slotFrom}-${body.slotTo}`)
-      const same = done.get(key)
-      if (same !== undefined) {
-        rows.copyWithin(i * layout.slots, same * layout.slots, (same + 1) * layout.slots)
-        continue
+    for (let first = 0; first < regions.length; ) {
+      job.throwIfCancelled()
+      let last = first + 1
+      let bases = regions[first].end - regions[first].start
+      while (last < regions.length && last - first < CHUNK_WINDOWS) {
+        bases += regions[last].end - regions[last].start
+        if (bases > CHUNK_BASES) break
+        last++
       }
-      done.set(key, i)
-      rows.set(windowRow(samples, window, layout.slots), i * layout.slots)
+      const set = await job.sample(entry, regions.slice(first, last), 1)
+      first = last
+      for (const samples of set.regions) {
+        for (const i of asking.get(`${samples.start}-${samples.end}`) ?? []) {
+          const window = windows[i]
+          const { body, span } = window
+          const key =
+            `${window.start}-${window.end}:${window.strand}:${window.slotFrom}-${window.slotTo}` +
+            (span === undefined ? '' : `:${span.start}-${span.end}`) +
+            (body === undefined ? '' : `:${body.start}-${body.end}:${body.slotFrom}-${body.slotTo}`)
+          const same = done.get(key)
+          if (same !== undefined) {
+            rows.copyWithin(i * layout.slots, same * layout.slots, (same + 1) * layout.slots)
+            continue
+          }
+          done.set(key, i)
+          rows.set(windowRow(samples, window, layout.slots), i * layout.slots)
+        }
+      }
     }
   }
   return rows
