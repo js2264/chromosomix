@@ -214,6 +214,13 @@
   ],
   "pulls": [
     {
+      "number": 138,
+      "commit": "d92c6b6",
+      "title": "Add Fig. 1a and Fig. 2 to the paper's store, and § 24 to the validation notebook",
+      "branch": "claude/chromosomix-fig1a-fig2-store-2js2cz",
+      "date": "2026-10-23T20:32:56Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
