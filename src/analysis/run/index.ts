@@ -25,6 +25,7 @@ import { runScalogram } from './scalogram'
 import { runHicrep } from './hicrep'
 import { runCoverage } from './coverage'
 import { runExpected } from './expected'
+import { runPairsQc } from './pairsqc'
 import { runFourC } from './fourc'
 import { runInsulation } from './insulation'
 import { runInterArm } from './interarm'
@@ -42,6 +43,7 @@ import { runMagNetwork, runMagPurity, runMagQc, runMagSplit } from './mags'
  */
 export const RUNNERS: Record<string, TaskRunner> = {
   expected: runExpected,
+  pairsqc: runPairsQc,
   coverage: runCoverage,
   cistrans: runCisTrans,
   cellqc: runCellQc,

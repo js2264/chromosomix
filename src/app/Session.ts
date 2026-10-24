@@ -64,6 +64,8 @@ import { openResolutionDialog } from '../ui/ResolutionDialog'
 import { ViewerError } from '../errors'
 import {
   COMPANION_KEYS,
+  LOWER_KEYS,
+  LOWER_READING_KEYS,
   READING_KEYS,
   SUBJECT_KEYS,
   ViewStore,
@@ -108,6 +110,8 @@ import type {
   DerivePresentation,
   TurnPresentation,
 } from '../ui/MatrixPanel'
+import type { LowerPresentation } from '../ui/LowerReading'
+import { rereading, type LowerRead } from '../ui/compare'
 import { binsForLength } from '../analysis/context'
 import { isCancellation, ReaderClient, type Cancellable } from '../worker/client'
 import type {
@@ -216,7 +220,8 @@ import { SessionCommands } from './SessionCommands'
 import { SessionCompare, withoutSecond } from './SessionCompare'
 import { SessionDeck } from './SessionDeck'
 import { SessionRouter } from './SessionRouter'
-import { rememberHandle } from '../state/handles'
+import { allowHandles, handleKey, hasHandle, knownPaths, rememberHandle, subscribeGrants } from '../state/handles'
+import { recordTelemetry } from '../telemetry'
 import { grantFor } from '../ui/chooseFiles'
 
 /**
@@ -954,6 +959,8 @@ export class Session {
   private pendingConfig: SessionConfig | null = null
   /** Lets go of the connected folders' announcements; see {@link foldersChanged}. */
   private readonly stopFolders: () => void
+  /** Lets go of the renewed grants' announcements; see {@link grantsChanged}. */
+  private readonly stopGrants: () => void
   /**
    * The config being applied, for the length of one open.
    *
@@ -1051,6 +1058,7 @@ export class Session {
       void this.render(state)
     })
     this.stopFolders = subscribeFolders(() => this.foldersChanged())
+    this.stopGrants = subscribeGrants(() => this.grantsChanged())
   }
 
   /**
@@ -1060,12 +1068,35 @@ export class Session {
    * it — without a gesture, since connecting the folder was the gesture.
    */
   private foldersChanged(): void {
+    this.retryLocal(hasLocation)
+  }
+
+  /**
+   * The reader allowed a remembered file again (§5.6), in this tab or another.
+   * The browser's answer covers every file the site held a grant for, so the
+   * same retry as a connected folder's: the tracks, and the file this session
+   * is waiting on.
+   */
+  private grantsChanged(): void {
+    // A tab restored and never looked at stays named rather than opened: its
+    // own click reads the file, and now finds it allowed. Retrying it here
+    // would open every remembered tab at once, a worker and a matrix each.
+    if (this.primed) return
+    this.retryLocal(hasHandle)
+  }
+
+  /**
+   * Try the local files this session is waiting on again, where `known` says
+   * there is now somewhere to find them — without a gesture, since the gesture
+   * that made them reachable has already happened.
+   */
+  private retryLocal(known: (uri: string) => boolean): void {
     if (this.destroyed) return
     this.annotations?.loader.refind()
     if (this.file !== null) return
     const config = this.pendingConfig
     if (config !== null) {
-      if (!hasLocation(config.state.uri)) return
+      if (!known(config.state.uri)) return
       void (async () => {
         const source = await resolveSource(config.state.uri)
         if (source === null || this.destroyed || this.pendingConfig !== config || this.file !== null) return
@@ -1077,7 +1108,7 @@ export class Session {
     // was waiting on its picker: rendered again, it asks for the file again,
     // and finds it in the folder now.
     const state = this.store.state
-    if (state !== null && hasLocation(state.uri)) void this.render(state)
+    if (state !== null && known(state.uri)) void this.render(state)
   }
 
   // -------------------------------------------------------------------------
@@ -1260,7 +1291,8 @@ export class Session {
       // the feature.
       if (inferSource(state.uri) !== null) return `${state.uri} — remembered, not yet read. Click to open it.`
       return mayResolve(state.uri)
-        ? `${state.uri} — a local file, remembered from an earlier visit. Click to open it again.`
+        ? `${state.uri} — a local file, remembered from an earlier visit. Click to open it again; ` +
+            'after a restart the browser asks for your permission first.'
         : `${state.uri} — a local file, remembered from an earlier visit. ` +
             'Click, then drop the same file again to follow it; the view will be restored.'
     }
@@ -1414,6 +1446,7 @@ export class Session {
   destroy(): void {
     this.destroyed = true
     this.stopFolders()
+    this.stopGrants()
     // What it said goes with the tab.
     this.unsay()
     // The stage goes with the tab; the edit it made is kept with the file.
@@ -2191,6 +2224,9 @@ export class Session {
     // An empty tab takes the file's name as its own, as {@link addRemote}'s
     // does. Read before anything below replaces what the tab holds.
     const wasEmpty = this.file === null && this.assembly === null
+    // Which file was open before, so another resolution of the same one is not
+    // counted as a second file opened (§31).
+    const openedBefore = this.file === null ? null : splitUri(this.file.uri).path
     // …and a genome being browsed as tracks, whose declarations a map of it
     // takes once it has opened (§8.15).
     const browsed = this.file === null && this.assembly !== null ? this.sessionKey() : null
@@ -2337,6 +2373,9 @@ export class Session {
       // A different file, so whatever was parked belongs to a map that is being
       // let go of. `hideMap` is about *this* file and nothing else.
       this.parkedMap = null
+      if (openedBefore !== splitUri(uri).path) {
+        recordTelemetry({ name: 'open', what: 'map', format: info.layout.kind, from: source.kind })
+      }
       this.file = {
         uri,
         info,
@@ -6307,7 +6346,12 @@ export class Session {
     // offers the baseline along its arms or takes it away (§8.15), and the
     // derivation below is of whichever score the state resolves to *now*.
     this.current?.panel?.offerScores(scoreChoices(this.scoreProps(state)), this.scoreOf(state).id)
-    this.current?.panel?.rederive(this.derivePresentation(state), undefined, this.turnPresentation(state))
+    this.current?.panel?.rederive(
+      this.derivePresentation(state),
+      undefined,
+      this.turnPresentation(state),
+      this.lowerPresentation(state) ?? null,
+    )
   }
 
   /**
@@ -6712,6 +6756,159 @@ export class Session {
         })
         this.rederive()
       },
+    }
+  }
+
+  /**
+   * The lower triangle's own reading (§5.10), as the map is handed it — or
+   * `undefined` where it is not offered.
+   *
+   * Offered on a map of one file read as a square or a band: a region, the
+   * whole file, a selection. Not beside a second file, whose triangle the lower
+   * one is (§5.7), and not in a deck, where the Map card sets whichever map is
+   * starred (§16.5); both drop it from the state (`SessionRouter`).
+   *
+   * Its score is resolved through the upper's own list, so a link naming a
+   * column this file lacks lands on the first entry, and absent it is the
+   * file's own default — balanced where the file is balanced by default, as
+   * the upper's is.
+   *
+   * @internal SessionRouter tells a repaint from a new read by {@link lowerReadKey}.
+   */
+  lowerPresentation(state: ViewState): LowerPresentation | undefined {
+    if (state.view !== 'region' && state.view !== 'whole' && state.view !== 'selection') return undefined
+    if (state.uri2 !== undefined || state.maps !== undefined || this.compare.second !== null) return undefined
+    if (this.file === null) return undefined
+    const choices = scoreChoices(this.scoreProps(state))
+    const choice = this.lowerScoreOf(state)
+    const upper = this.scoreOf(state)
+    const needsRead = choice.balance !== upper.balance || choice.value !== upper.value
+    const set = LOWER_KEYS.some((key) => key !== 'lower' && state[key] !== undefined)
+    const fallback = this.scaleOf({ uri: state.uri, view: state.view })
+    const arms = this.armsOf(state).arms
+    return {
+      on: state.lower === true,
+      set,
+      onToggle: (on, seed) => {
+        // Off keeps the reading in the link, so switching it back on finds it
+        // as it was left. A first switch-on starts it from the upper's, so the
+        // press itself changes nothing on screen.
+        this.store.patch(
+          on && !set
+            ? {
+                lower: true,
+                score2: seed.score,
+                oe2: seed.oe ? true : undefined,
+                smooth2: seed.smooth === '0' ? undefined : seed.smooth,
+                transform2: seed.transform,
+                colormap2: seed.colormap,
+                vmin2: seed.vmin,
+                vmax2: seed.vmax,
+              }
+            : { lower: on ? true : undefined },
+        )
+        this.rederive()
+      },
+      scores: {
+        choices,
+        current: choice.id,
+        onChange: (picked) => {
+          this.store.patch({ score2: picked.id })
+          this.rederive()
+        },
+      },
+      derive: {
+        ...(choice.normalise === undefined ? {} : { normalise: choice.normalise }),
+        expected: state.oe2 === true,
+        onExpectedChange: (on) => {
+          this.store.patch({ oe2: on ? true : undefined })
+          this.rederive()
+        },
+        // The map's arms, applied to this reading's O/E as to the upper's and
+        // offered once, in the map's own row: they describe the sequence.
+        ...(arms === undefined ? {} : { arms: { window: arms.window, frame: arms.frame, refusal: arms.refusal } }),
+        correlate: choice.correlate === true,
+        baseline: choice.baseline === true,
+        alongArms: choice.alongArms === true,
+        onCorrelateChange: (on) => {
+          if (!on) this.store.patch({ score2: BALANCED_SCORE })
+          this.rederive()
+        },
+        correlateBlock: (values, n, onProgress) => this.correlate(values, n, onProgress),
+        smoothBlock: (request) => this.smooth(request),
+        onCorrelateFailure: (message) => this.say(`Correlation below the diagonal failed: ${message}`),
+        smooth: state.smooth2 ?? '0',
+        onSmoothChange: (token) => {
+          // The adaptive window turns this triangle's O/E on, as the upper's does.
+          const wantsExpected = parseSmooth(token)?.kind === 'adaptive'
+          this.store.patch({
+            smooth2: token === '0' ? undefined : token,
+            ...(wantsExpected ? { oe2: true } : {}),
+          })
+          this.rederive()
+        },
+      },
+      scale: {
+        transform: state.transform2 ?? fallback.transform ?? 'log1p',
+        colormap: state.colormap2 ?? DEFAULT_UI_COLORMAP,
+        ...(state.vmin2 === undefined ? {} : { vmin: state.vmin2 }),
+        ...(state.vmax2 === undefined ? {} : { vmax: state.vmax2 }),
+      },
+      onScaleChange: (scale) =>
+        this.store.patch(
+          { transform2: scale.transform, colormap2: scale.colormap, vmin2: scale.vmin, vmax2: scale.vmax },
+          { replace: true },
+        ),
+      balance: choice.balance,
+      read: needsRead
+        ? { balance: choice.balance, ...(choice.value === undefined ? {} : { value: choice.value }) }
+        : null,
+    }
+  }
+
+  /** The lower reading's score: its own key, else the file's default — the upper's with nothing said. */
+  private lowerScoreOf(state: ViewState): ScoreChoice {
+    const props = this.scoreProps(state)
+    return scoreFor(scoreChoices(props), {
+      ...(state.score2 === undefined ? {} : { score: state.score2 }),
+      balance: this.balancedByDefault(),
+    })
+  }
+
+  /**
+   * The read the lower reading needs of its own, as a string — empty where it
+   * needs none: off, not offered, or derived from the block the upper reads.
+   *
+   * @internal SessionRouter rebuilds the view only where this moves to a read
+   * the mounted map does not hold.
+   */
+  lowerReadKey(state: ViewState): string {
+    const read = this.lowerPresentation(state)
+    if (read === undefined || !read.on || read.read === null) return ''
+    return `${read.read.balance ? 'balanced' : 'raw'}|${read.read.value ?? ''}`
+  }
+
+  /** The lower reading and its second read, for a view that offers it. */
+  private lowerProps(state: ViewState): { lower?: LowerPresentation; lowerRead?: LowerRead } {
+    const lower = this.lowerPresentation(state)
+    const lowerRead = this.lowerReadOf(state)
+    return {
+      ...(lower === undefined ? {} : { lower }),
+      ...(lowerRead === undefined ? {} : { lowerRead }),
+    }
+  }
+
+  /**
+   * The second read of the open file a view makes for the lower reading, or
+   * `undefined` where it needs none: the file's own worker, asked the same
+   * questions with the lower reading's balancing and column.
+   */
+  private lowerReadOf(state: ViewState): LowerRead | undefined {
+    const read = this.lowerPresentation(state)
+    if (read === undefined || !read.on || read.read === null) return undefined
+    return {
+      client: rereading(this.clientOf(), read.read),
+      onFailure: (message) => this.say(message),
     }
   }
 
@@ -7562,7 +7759,7 @@ export class Session {
       // block a whole-file view holds *is* the picture, and a reader stepping
       // from 1 kb to a derived 3 kb would otherwise be handed the cached 1 kb
       // one under a bar that says 3 kb (§3.4).
-      `whole|${state.uri}|${this.compare.key()}|${level}|${String(balance)}|${state.coarsen ?? 0}|${state.contacts ?? 0}`,
+      `whole|${state.uri}|${this.compare.key()}|${level}|${String(balance)}|${state.coarsen ?? 0}|${state.contacts ?? 0}|${this.lowerReadKey(state)}`,
       () => {
         return new WholeView({
           client: this.clientOf(),
@@ -7611,6 +7808,7 @@ export class Session {
             ? {}
             : { annotations: this.annotationContext() }),
           ...(this.compare.context() === undefined ? {} : { compare: this.compare.context() }),
+          ...this.lowerProps(state),
           // The two are mutually exclusive in practice and both are passed
           // anyway: a file either has a genome layer to name in the tooltip
           // (§7.4) or is a cooler that can carry annotations (§8.5), never both.
@@ -7689,6 +7887,7 @@ export class Session {
         ? {}
         : { annotations: this.annotationContext() }),
       ...(this.compare.context() === undefined ? {} : { compare: this.compare.context() }),
+      ...this.lowerProps(state),
       namesGenomes: file.info.hasGenomes,
       selection: { ...selection, bins, contigs },
       onScoreChange: (choice) => this.setScore(choice),
@@ -7878,6 +8077,7 @@ export class Session {
       noun: this.file?.info.hasGenomes === false ? 'chromosome' : 'contig',
       ...(this.annotationContext() === undefined ? {} : { annotations: this.annotationContext() }),
       ...(this.compare.context() === undefined ? {} : { compare: this.compare.context() }),
+      ...this.lowerProps(state),
       balance: this.balanceOf(state),
       value: this.valueOf(state),
       ...this.scoreProps(state),
@@ -8038,9 +8238,13 @@ export class Session {
       this.wholeFile.view.destroy()
       this.wholeFile = null
     }
+    const reused = this.wholeFile !== null
     this.wholeFile ??= { key, view: build() }
     const { view } = this.wholeFile
     view.applyScale(this.scaleOf(state))
+    // A map kept across a navigation was built with the lower reading of the
+    // state it was built for (§5.10); this is the one it is shown under.
+    if (reused) view.panel.relower(this.lowerPresentation(state) ?? null)
     this.showContent(view.el, {
       sideEl: view.sideEl,
       panel: view.panel,
@@ -8114,7 +8318,8 @@ export class Session {
       K extends
         | (typeof COMPANION_KEYS)[number]
         | (typeof READING_KEYS)[number]
-        | (typeof SUBJECT_KEYS)[number],
+        | (typeof SUBJECT_KEYS)[number]
+        | (typeof LOWER_READING_KEYS)[number],
     >(
       key: K,
     ): void => {
@@ -8125,6 +8330,12 @@ export class Session {
     for (const key of COMPANION_KEYS) carry(key)
     for (const key of READING_KEYS) carry(key)
     for (const key of SUBJECT_KEYS) carry(key)
+    // The lower triangle's own reading (§5.10) is how the reader is reading maps,
+    // as the turn and the O/E are; the clip under it is not carried, as the
+    // upper's is not. Never into a comparison or a deck, which drop it.
+    if (out.uri2 === undefined && out.maps === undefined) {
+      for (const key of LOWER_READING_KEYS) carry(key)
+    }
     return out
   }
 
@@ -8258,15 +8469,16 @@ export class Session {
     return el(
       'div',
       { class: 'view' },
-      el('p', {
-        class: 'inline-error',
-        text:
-          `This session was saved from ${fileLabel(config.state.uri)}` +
-          (note === null ? '' : ` (${note})`) +
-          ', which is a local file — no ' +
-          'page can re-open one by name. Drop it below and everything else comes back with it' +
-          (tracks === 0 ? '.' : `: the view, and ${fmt.int(tracks)} tracks with their settings.`),
-      }),
+      this.allowAsked(config.state.uri) ??
+        el('p', {
+          class: 'inline-error',
+          text:
+            `This session was saved from ${fileLabel(config.state.uri)}` +
+            (note === null ? '' : ` (${note})`) +
+            ', which is a local file — no ' +
+            'page can re-open one by name. Drop it below and everything else comes back with it' +
+            (tracks === 0 ? '.' : `: the view, and ${fmt.int(tracks)} tracks with their settings.`),
+        }),
       this.folderAsked(config.state.uri),
       this.picker.el,
     )
@@ -8306,26 +8518,99 @@ export class Session {
     )
   }
 
+  /**
+   * The file a waiting tab names, where this browser still holds a grant for it
+   * that has lapsed to *ask first* (§5.6) — after a restart, typically: a
+   * sentence saying so, and the button that asks. `null` where there is no
+   * grant, which is every file in Firefox and Safari and every file the reader
+   * never opened through a drop or the open dialog here; the picker then says
+   * what it has always said.
+   *
+   * It stands *in place of* that red note rather than under it: "no page can
+   * re-open one by name" above "this browser remembers it" was the page
+   * contradicting itself, and the red read as an error for what is one click.
+   *
+   * The button is the gesture `requestPermission` needs, and it spends it on
+   * **every** file this browser remembers, this one first (`allowHandles`): one
+   * press, and the map, its tracks and every other tab's files are readable
+   * again. What it opens arrives through {@link grantsChanged}, in every tab
+   * waiting on a file the answer covers, so the click does not open anything
+   * itself. Its words count the files, so a reader asked about five is told so
+   * before the browser asks.
+   */
+  private allowAsked(uri: string): HTMLElement | null {
+    if (!hasHandle(uri)) return null
+    const label = fileLabel(uri)
+    const own = handleKey(uri)
+    const others = [...knownPaths()].filter((path) => path !== own)
+    const files = others.length + 1
+    const hint = el('p', {
+      class: 'allow-asked-text',
+      text:
+        (others.length === 0
+          ? `This browser remembers ${label} and only needs your permission to read it again`
+          : `This browser remembers ${label} and ${fmt.int(others.length)} other ` +
+            `${others.length === 1 ? 'file' : 'files'}, and only needs your permission to read them again`) +
+        ' — or drop the same file below. The rest of the view comes back with it.',
+    })
+    const box = el('div', { class: 'allow-asked' }, hint)
+    // The names behind the count, a few of them, for a reader who wants to know
+    // what they are agreeing to before the browser asks.
+    const named = [own, ...others]
+    const button = el('button', {
+      class: 'btn btn-primary',
+      type: 'button',
+      text: others.length === 0 ? `allow access to ${label}` : `allow access to all ${fmt.int(files)} files`,
+      title:
+        `The browser asks once for ${named.slice(0, 8).join(', ')}` +
+        (named.length > 8 ? ` and ${fmt.int(named.length - 8)} more.` : '.'),
+    })
+    button.addEventListener('click', () => {
+      button.disabled = true
+      void allowHandles(uri).then((file) => {
+        recordTelemetry({ name: 'allow', outcome: file === null ? 'refused' : 'allowed' })
+        if (file !== null || this.destroyed) return
+        if (hasHandle(uri)) {
+          // Dismissed rather than refused: the grant is still there to ask about.
+          button.disabled = false
+          hint.textContent = 'The browser did not allow it. Ask again, or drop the file below.'
+        } else {
+          // Moved, renamed, or refused for good — the grant has been forgotten,
+          // and what is left is the note the picker would have shown.
+          button.remove()
+          box.classList.add('is-refused')
+          hint.textContent = `${label} could not be reached; it has moved, or reading it was refused. Drop it below.`
+        }
+      })
+    })
+    box.appendChild(button)
+    return box
+  }
+
   /** @internal SessionRouter shows it for a local file a link names. */
   pickerWithNote(uri: string): HTMLElement {
     return el(
       'div',
       { class: 'view' },
-      el('p', {
-        class: 'inline-error',
-        text:
-          `This link points at ${fileLabel(uri)}, which is not a URL this page can fetch — it names ` +
-          'a local file. Drop the same file below to follow the link; the rest of the view ' +
-          // A genome is a place only a multi-genome file has — a dev feature (§29).
-          (devFeature('metacool') ? '(genome, region, colour scale)' : '(region, colour scale)') +
-          ' will be restored.',
-      }),
+      this.allowAsked(uri) ??
+        el('p', {
+          class: 'inline-error',
+          text:
+            `This link points at ${fileLabel(uri)}, which is not a URL this page can fetch — it names ` +
+            'a local file. Drop the same file below to follow the link; the rest of the view ' +
+            // A genome is a place only a multi-genome file has — a dev feature (§29).
+            (devFeature('metacool') ? '(genome, region, colour scale)' : '(region, colour scale)') +
+            ' will be restored.',
+        }),
       this.folderAsked(uri),
       this.picker.el,
     )
   }
 
   private showError(err: unknown, uri?: string, source?: SourceSpec): void {
+    // Telemetry (§31): the refusal's code, never its message, which names the
+    // file. Anything without one is sent as `other`.
+    recordTelemetry({ name: 'error', code: err instanceof ViewerError ? err.code : 'other' })
     const entries =
       err instanceof ViewerError && Array.isArray(err.detail['entries'])
         ? (err.detail['entries'] as string[])

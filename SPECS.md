@@ -21,7 +21,7 @@ These are hard, and everything below follows from them.
 
 | # | Constraint | Consequence |
 |---|---|---|
-| C1 | No server-side component of any kind | No tile server, no metacooler on a host, no accounts, no uploads, no update service |
+| C1 | No server-side component of our own, and nothing that waits on one | No tile server, no metacooler on a host, no accounts, no uploads, no update service. The one request the site makes on its own behalf is anonymous telemetry to a third-party analytics endpoint — words from fixed lists, never a file, a name or an address — and nothing in the app waits on its answer (§31) |
 | C2 | No new metacooler API | The app consumes files exactly as current metacooler writes them |
 | C3 | No required preprocessing | A file straight from `metacooler create` must open and work |
 | C4 | `genome-then-length` ordering only | Every genome is one contiguous bin range; no scattered-run handling exists |
@@ -39,6 +39,12 @@ Every other format keeps the rule unchanged, and the opportunism at §8.11 is un
 
 C4 means a whole class of code — run gathering, fallback query planners, `genome_extent` failure
 paths — is deleted rather than written.
+
+C1 was *no server-side component of any kind* until the site began sending telemetry (§31). What
+it protects is unchanged: no server reads a file, holds a session, answers a request the picture
+needs, or knows who anybody is. The telemetry goes out after the page is idle, to an endpoint the
+app never reads a reply from, and a site whose endpoint vanished tomorrow would draw every
+picture exactly as it does today.
 
 ---
 
@@ -516,8 +522,8 @@ makes the same file cheaper. It is **not** §8.13's case: a pairs file has a who
 respects §12, so its absence is never a refusal.
 
 **What is deliberately not read**: ~~the strand, pair-type and mapping-quality columns, and any
-filtering on them.~~ **Narrowed**: the pair-type and mapping-quality columns, and **any filtering
-at all**. A pairs file is the output of a pipeline that has already made those decisions, and
+filtering on them.~~ ~~**Narrowed**: the pair-type and mapping-quality columns, and **any filtering
+at all**.~~ **Narrowed again**: the mapping-quality columns, and **any filtering at all**. A pairs file is the output of a pipeline that has already made those decisions, and
 re-making them here would be the second application §13 refuses — the importer counts the records
 the file contains, and if a reader wants different records they filter with `pairtools select` and
 import the result. Nothing is inferred about restriction fragments, and no matrix is
@@ -546,6 +552,60 @@ never acted on — nothing trims a file, sets a minimum separation, or warns tha
 below the convergence point, because a threshold is a method with choices in it and §18.9's
 argument about a half-good caller applies to one exactly as it applies to a loop. Where the figure
 lives is §18.8, under P(s).
+
+**The pair type is read too, for `pairtools stats`' counts, and on the strands' terms.** The first
+thing anybody asks of a contact list is the table `pairtools stats` writes — records mapped on both
+sides, on one, on neither; duplicates; of the unique, cis and trans, and cis past 1, 2, 4, 10, 20 and
+40 kb; every pair type; the four orientations by separation and where they converge; and the library's
+size by the Lander–Waterman estimate — and every number in it is about *records*, so none of it can be
+had from the map afterwards. The import counts it in the same pass (`pairs/stats.ts`): one more field
+off a record the loop is already walking, and every record counted before the binner can turn one
+away, since pairtools counts the unmapped `!` and the sequences the header does not declare as well as
+what is binned. Nothing is decided from the pair type. No record is kept or dropped for it, a `DD` is
+counted as a duplicate and still binned, and the pixel table is the same table with the column there
+or taken out — asserted rather than claimed (`test/unit/pairs-stats.test.ts`). A reader who wants the
+duplicates gone runs `pairtools dedup`, as before.
+
+It is a **port**, held to its reference on §18.9's terms: `PairCounter.add_pairs_from_dataframe` and
+`calculate_summaries` of pairtools 1.1.2, which is what `pairtools stats` runs — the same
+classification of a record (unmapped where both chromosomes are `!`, mapped where neither is, a
+duplicate only where mapped and typed `DD`), the same separation bins
+(`round(10 ** arange(0, 9.001, 1/8))` with `0` before them, found by `searchsorted(…, 'right') - 1`),
+the same five per cent the convergence is judged at, the same edge after the furthest stray, and the
+same library estimate through the principal branch of Lambert's W — `nan` for a library with no
+duplicates, as scipy's W is at `-exp(-1)` and as pairtools writes it. Its golden is pairtools' own
+`.stats` for a committed fixture drawn from the yeast Micro-C cooler with every pair type pairtools
+writes in it (`test/golden/pairs_stats/`, `npm run fixtures:pairstats`): every key the same, every
+count and fraction the same to the last digit, the library to 1e-12. Two departures, each on a file
+pairtools would not have written: a strand that is neither `+` nor `-` or a position that is not a
+number ends pairtools' run with an error, and here leaves that record out of the separation table
+alone; and the `duplicate` column `add_pairs_from_dataframe` prefers to `DD` where a file has one is
+not read, since `pairtools dedup` marks a duplicate by its type. A file with no `pair_type` column has
+no duplicates to count, and says so. An import scoped through a `.px2` counts the records it read and
+says that too.
+
+It lands as the **Pairs statistics** card in the General column, under the File card's own facts and
+over the stored metadata: the rows a library is judged by — records, mapped, one side, unmapped,
+duplicates, cis, trans, the library's size and where the orientations meet — each a count and the
+share pairtools and MultiQC give it, over pairtools' own denominator (said on the key's tooltip, so the
+value stays short enough for a narrow column); and **three small charts**, drawn from the same counts
+with no run, each under the rows it pictures:
+- the pair types, as one bar of every record by its type, with the chips under it as its key — the
+  three commonest types of at least 2 % in colour, the rest folded into one grey;
+- cis, and cis at least 1, 2, 4, 10, 20 and 40 kb apart, as columns of their shares of the unique
+  mapped pairs, each labelled with its share;
+- P(s) by orientation, the four `dist_freq` curves pairtools counts, each bin's count over its width,
+  log against log, a dash as well as a colour for each, with a rule where the four meet.
+
+They are drawn by hand in SVG at the column's own width, in the theme's colours (the analysis figures'
+palette is pinned light, which a side column must not be), and each is an image with a label saying
+what it shows; a chart with nothing to draw — no `pair_type` column, no strands, no cis pair — is left
+out rather than drawn empty. **save .stats** which writes everything pairtools counts in pairtools'
+own format, key and value a line in its order and its spelling of a number (`0.05`, `1e-05`, `inf`), so
+MultiQC and `pairtools stats --merge` read it as theirs. The shell's answer is `chromosomix stats
+<file.pairs.gz>`, through the same pass at one bin a sequence, which writes `<name>.stats` into `--out`
+(or to stdout): the one file the command writes with no `#` lines over it, because pairtools' reader
+refuses any line that is not a key and a value.
 
 **Equivalence with a cooler is asserted, not assumed.** An imported map and the `.mcool` written
 from it must answer *every* `PixelStore` method identically — `forEachWindow` on and off the
@@ -1209,7 +1269,37 @@ and make the back button walk a history interleaving three files. The rest of th
 and its view state come back, its worker does not, and clicking it is what reads the file. A tab that
 named a local file comes back to the picker with §11's explanation — unless this browser kept a
 grant for that file (`state/handles.ts`, where the platform hands one over with the file), and then
-a click reopens it as it would a remote one. The file dropped there opens **the map the tab named
+a click reopens it as it would a remote one.
+
+**A grant that asks first is one click away, and the picker offers that click.** Chromium keeps a
+file's grant across a restart but hands the file over again only once the reader says so, and
+saying so needs a gesture — the restore path has none, so it finds the grant at *ask first* and
+the tab lands on the picker. There, in place of the red note — which said no page could re-open
+the file, a sentence the browser had just made untrue — a callout in the accent's wash says *This
+browser remembers rep1.cool and 4 other files, and only needs your permission to read them again —
+or drop the same file below* beside **allow access to all 5 files**, the page's one primary button
+(*allow access to rep1.cool* where it is the only one, and its tooltip naming the files); and a
+detached track (§8.6) carries **allow access**, then *or re-open this file* as one piece, so a narrow
+column wraps it whole.
+
+**One press allows every file this browser remembers** (`allowHandles`). The button is the gesture,
+and it is spent on the file the tab is waiting on first, so the prompt names the file the reader was
+looking at, and then on every other grant this browser holds — the map's tracks, their indexes, every
+other tab's files. Chromium's restore prompt answers for all of them at once and offers to *allow on
+every visit*, after which a restart asks nothing at all; the asks after the first then find the
+grant given and show nothing. A browser that asks file by file is asked for each while the click's
+activation lasts, and a file it does not reach keeps its own button. A refusal of the first stops
+there: the reader said no to the file they pressed for, and has not asked to be asked about the rest.
+A track row's *allow access* does the same, its own file first. On a yes every tab on screen tries
+its waiting map and its detached tracks again, without a gesture, and finds them; a tab restored and
+never looked at stays named, and its own click reads its file, now allowed — retrying it with the
+others would open every remembered tab at once, a worker and a matrix each. A prompt dismissed keeps
+the button, saying the browser did not allow it; a file that has moved, or a grant refused for good,
+forgets the grant, and the picker is then the way back. Where there is no
+grant — every file in Firefox and Safari, and every file that arrived through a plain file input —
+there is no button, and the picker reads as it always did. The installed app is not asked: Chromium
+keeps an installed app's grants without asking again, and the desktop build allows its own page to
+read what the reader chose (§20.6). The file dropped there opens **the map the tab named
 inside it** — the `.mcool`'s rung, the `.hic`'s resolution — on the view the tab was showing, alone
 or with tracks dropped beside it, which join it: a dropped file is named by its path, and opened at
 its root it landed on a rung of its own choosing and on its Chromosomes table instead.
@@ -1271,9 +1361,14 @@ Three refusals, each because the merged picture would otherwise be a lie rather 
 
 - **a genome layer** — §8.5's argument applied to a whole matrix rather than to a track;
 - **a different bin size** — one grid cannot be two resolutions;
-- **a chromosome list differing in count, order, name or length** — every coordinate in the picture
-  is an index into one such list. Two spellings of one name, `chr1` against `1`, are not a
-  difference (§5.9); one name at two lengths is.
+- **a chromosome list differing in order, name or length, or missing any of the first file's** —
+  every coordinate in the picture is an index into one such list. Two spellings of one name, `chr1`
+  against `1`, are not a difference (§5.9); one name at two lengths is. **The second file's list may
+  run on past the first's**: a `.hic` out of Juicer keeps the mitochondrion after `Y`, where a 4DN
+  cooler of the same assembly stops at `chrY`, and while the second list opens with the whole of the
+  first, every bin the picture reads is the same locus in both and the rest is never asked for. The
+  other way round is refused, since the first file's last sequences would have a lower triangle with
+  nothing to read, and the refusal says that the other way round the pair is drawn.
 
 **The card asks for it only once there is a first map.** The zone is labelled *Load a map into the
 lower triangle* — not *a second map*, which is what §16's companion cell is called — and it is
@@ -1311,9 +1406,19 @@ are on one scale. A **match depth** switch used to scale the second file so its 
 the first's; it is gone, because it matched the picture and nothing else — the number under the
 pointer, and every task run on either file, were still each file's own depth.
 
+**Balanced is each file's own balancing, in its own unit**, and two containers do not share one. A
+cooler balanced by `cooler balance` has rows that sum to one; a `.hic` balanced by Juicer's KR or
+SCALE has rows that sum to the library's depth a bin — 295 on chr14 for ENCODE's GM12878 CTCF
+ChIA-PET at 5 kb — and is read exactly as straw reads it (`hic/HicFile.ts`), so that a number under
+the pointer is the one Juicebox prints. Beside a cooler, balanced, such a file is drawn hundreds of
+times over the scale and saturates. Their **O/E**, each over its own expected, is the reading two
+such files share, and the one the paper's Fig. 1a draws them with (§24.2).
+
 This is the design for **two** files and it stays exactly as it is. §16 is the design for N, which is
 a weaker claim on the files and therefore a different picture; the two compose, and a session may
-hold both at once.
+hold both at once. §5.10 gives the same triangle to a second *reading* of one file, on a scale of its
+own — the one claim this section refuses two files, because there the two readings are of one
+library and are not compared by their colours.
 
 ### 5.8 The 1D genome browser
 
@@ -1698,6 +1803,80 @@ disagree is carried into the report and named there. Without that, the one case 
 word would be the one case that reported a clean bill. `compareRefusal` (§5.7) no longer refuses two files for spelling
 one assembly differently — but still requires the same list in the same order, and still refuses two
 sequences of one name at different lengths, which is the check that catches hg19 against hg38.
+
+### 5.10 Two readings in one square
+
+§5.7 gives the mirror half of a square to a second file. The same half can be given to **a second
+reading of the one file**: the lower-left triangle drawn with its own score, its own smoothing, its
+own O/E and its own colour scale — balanced counts above the diagonal and their O/E below it, raw
+counts against the despeckled map, a correlation against the counts it was computed from. The two
+are then one picture read against itself at every position, which is what two pictures side by side
+cannot do.
+
+**Only the reading is the triangle's own.** Where the picture is — the window, the resolution, the
+turn, the overlays, the tracks, the diagonal lock — is the map's, and so is `arms`, which says how a
+circle's baseline is taken and is a fact about the sequence: it applies to whichever triangle has an
+O/E on, and is offered once, in the map's own row. The split is the matrix diagonal, as §5.7's is,
+cut by the one function the merge and the renderer share (`render/compare.ts`'s `diagonalSplit`), so
+the cells merged from one side are exactly the cells coloured on that side's scale. The diagonal
+stays with the upper reading.
+
+**On the Map card it is a second tab.** Under the card's title, `◥ map` is the card as it always
+was, and `◣ lower` holds a switch — *own reading* — and, while it is on, the five fields of the
+lower triangle: score, smooth, an O/E toggle, transform and colours, and a clip range. Off, the tab
+says in one line what switching it on does, and the triangle is the mirror it has always been. The
+tab is lit with a dot while the reading is on, so a reader on the map's own tab can tell the lower
+triangle is not a mirror. The tab a reader chose is the one the next map opens on. The row is shown
+only where the reading is offered: **on a map of one file** — a region, the whole file, a selection
+— and not beside a second file, whose triangle the lower one is (§5.7), nor in a deck, where the card
+sets whichever map is starred (§16.5).
+
+**Switching it on changes nothing on screen.** A reading nobody has set starts from the upper one as
+it is — its score, its O/E, its despeckle, and the scale it would be drawn on with nothing derived —
+and the reader moves it from there. Switched off, it keeps its settings in the link, so switching it
+on again finds it as it was left.
+
+**Each reading is coloured on its own scale, and measured on its own square.** The renderer pools
+the two triangles apart, so a raster pixel astride the diagonal is the brightest cell *of its own
+reading* rather than a count reduced against an O/E, and colours each on its own ramp; a pixel is
+the lower reading's where its centre is (`render/heatmap.ts`'s `joinAcrossDiagonal`). The automatic
+range of each is measured on that reading's **whole square**, not on its triangle and not on the
+merged block: a triangle of a symmetric matrix holds the diagonal twice as often as the square does,
+and the upper reading's colours must not move because a second reading was put beside them. The
+lower reading takes the scale over for a diverging field and gives it back exactly as the upper does
+(§7.5) — `log2`, a symmetric range, `RdBu_r` — and a link that lands on that scale already keeps its
+clip, which is in the derived units and is the reader's. The upper does not keep it: its clip on a
+link that lands on its O/E's scale is handed back to auto, as it always has been.
+
+**Two keys, both editable.** The first key is marked `◥` while there is a second reading, and the
+lower reading's key under it is marked `◣` — `▲` and `▼` on a turned pair — and names its own score,
+derivation and transform. Its two numbers are buttons, as the first key's are (§7.1), and set the
+lower reading's clip. The readout under the pointer names the reading it is over, with the derived
+value and the number it was read as; an exported figure carries both keys, and its caption a second
+line: *below the diagonal: counts · O/E · log2 · colour −1.08 to 1.08*.
+
+**A score of its own may be a second read.** Where the lower score reads the cells the upper reads —
+`VC`, `ICE`, the baseline, the correlation, an O/E of either — both triangles are derived from the
+one block and nothing is read. Where it names another `/pixels` column, or the balancing the other
+way, the view reads the block a second time from the same file's worker with those two answered
+differently (`ui/compare.ts`'s `rereading`), exactly where §5.7 reads its second file, and the router
+rebuilds the view only for a read the mounted map does not already hold. A map handed no such block
+draws one reading over the whole square rather than the upper's numbers under the lower's name.
+
+**Turned, the pair is two bands**, as §5.7's is (§17.2) — and each band is cut from its own square,
+so the second band's diagonal row is the lower reading's: a merge would have given it to the upper,
+and a diagonal of balanced counts drawn on an O/E's ramp is a stripe of saturated colour along the
+axis, in the one row the two bands are compared by. The bands are named by what each reading is.
+
+**In the link**, eight keys: `lower=true` is the switch, and `score2`, `oe2`, `smooth2`,
+`transform2`, `colormap2`, `vmin2` and `vmax2` are the lower reading's twins of the upper's, parsed
+by the same rules — the score as any id `scoreFor` can repair, the despeckle and the transform only
+as values this build offers, a bound only as a number. Every one but the clip is carried across a
+navigation of the same file, since the split is how the reader is reading maps, as the turn and the
+O/E are; the clip is two numbers about one block, as `vmin` and `vmax` are. **A second file or a
+deck drops all eight** from the state: the first has its own claim on the triangle and the second
+on the card, and a reading kept in the link behind either would come back on a map nobody set it
+for.
 
 ---
 
@@ -3178,7 +3357,9 @@ one", by way of a menu about something else entirely.
 with the sidecar it was named with. A local one is re-opened where this browser kept a grant for the
 file and its sidecar (`state/handles.ts`), and otherwise stays *detached* — every setting kept, the
 data gone — beside *re-open this file*; the same file dropped again is taken as that answer rather
-than as a second row. A computed row comes back with its recipe and *recompute* (§18.5), and a
+than as a second row. A grant the browser holds but wants a click for (§5.6) leaves the row saying
+*remembered file — allow access to draw it again*, with **allow access** beside *re-open this
+file*. A computed row comes back with its recipe and *recompute* (§18.5), and a
 metadata row comes back ready (§8.12).
 
 **The map is drawn first, and its tracks are read after it.** A file opened with tracks — a
@@ -5616,8 +5797,13 @@ through it was mounted as a file of no bytes and refused as "not an HDF5 file".
 **Private files:** a local file — dropped, picked, or in a connected folder (§20) — or the reader's
 own private bucket, Drive or Dropbox, read from the browser with their own credentials (§20.3,
 §24.7, §24.9). Identical code path, different byte source. Nothing is uploaded, so there are no
-accounts, no storage, no hosting cost and no GDPR review. Stated prominently in the UI and in the
-paper.
+accounts, no storage and no hosting cost. Stated prominently in the UI and in the paper.
+
+**The site sends telemetry about how it is used, and nothing about whom or on what (§31).** A visit, a format
+opened, a task run, an error met: each a word from a fixed list, posted with no cookie and no
+referrer to the endpoint the deploy names, with a switch in About. The policy below needs nothing
+new for it — `connect-src` already takes any `https:` host — and the builds that are not the site
+carry no endpoint at all.
 
 **Every web build carries a Content-Security-Policy, in its page.** The site, every archived pin and
 the package (§22) write one string (`scripts/csp.mjs`) into `index.html` as a `<meta>` right after
@@ -5773,7 +5959,7 @@ satisfy and is therefore the one that is tested first:
 | APA, k windows, local file | 0 network; ≤ k bounded reads after coalescing |
 | APA, k windows, remote | ≤ 2 range requests per *coalesced* window, with the estimate shown before **Run** |
 | APA over the expected | the windows, and one band per sequence the anchors sit on, read in tiles as deep as its farthest window reaches and never held whole; the estimate says so in words, since the depth is the loop set's |
-| Metaplot, k features | 0 matrix reads; ≤ 1 `sample` request per contig touched |
+| Metaplot, k features | 0 matrix reads; ≤ 1 `sample` request per contig touched and per megabase (or 4,096 windows) of its windows, read at the track's own resolution |
 | Correlation / eigenvectors | 0 range requests beyond the block; refused above the bin-count gate (§18.6) |
 | Adaptive smoothing of a block | 0 range requests; the arrays go over and back. Inline below 1 M cells (78 ms at 353²); on the analysis thread above it — 1.5 s at 4 M, 7.4 s at the 16 M cap. The map draws **unsmoothed** meanwhile, never blank and never captioned as smoothed |
 | Analysis worker mount | opened on first use, never at session open |
@@ -5881,7 +6067,8 @@ down without saying so — which is looked for four times a second while somethi
 ## 13. Explicit non-features
 
 Stated so they are decisions rather than omissions: tile server; user accounts; file upload; server-side
-computation of any kind; required companion files **for a contact map** (§1 states the scope, and
+computation of any kind; tracking of any kind — a cookie, an identifier, a value drawn from a file or
+from anything the reader typed, which §31's telemetry is built to be unable to carry; required companion files **for a contact map** (§1 states the scope, and
 §8.13 the one format that falls outside it: where an index is a format's only bounded read, its
 absence is refused by name); required preprocessing; support for orderings other
 than `genome-then-length`; whole-genome views that do not fit in memory (§9 — the limit is measured,
@@ -6859,7 +7046,15 @@ of a row opened by a button saying *add* read as kinds of thing the URL box take
 more cells to open.
 
 In the link a structure cell is `3d` and a tracks cell `tracks`, in the `maps=` list where the
-maps and the `~` of a vacancy are. A deck holds **as many structure cells as the reader asks for** —
+maps and the `~` of a vacancy are. **A track placed on a tracks cell is kept by the cell's seat**:
+a lane is remembered against the file of the map it is drawn on (§16.9), because a cell's id is
+minted per deck and names nothing after a reload, and a tracks cell has no file — so a track put on
+one was kept against nothing, and a reload, a saved workspace opened again or a link brought the cell
+back empty with the track drawn nowhere. The cell's seat, which tracks cell it is counting from the
+left, is the one thing about it that survives, and its name and its height were already kept by it;
+its lanes are kept under `tracks:1`, `tracks:2` and so on (`tracksCellKey`), a word with a colon so
+that a workspace resolving its relative names against its own address leaves it alone, and a link
+carries them, since they name no file of anybody's. A deck holds **as many structure cells as the reader asks for** —
 a second `3d` opens a second cell, and two cells of one model are two views of it (§25.3) — and as
 many tracks cells as the reader opens, named apart in the location control: by the name the reader
 gave the cell (§25.3), or numbered where they gave none.
@@ -7274,6 +7469,21 @@ run, queued, running, done, failed, cancelled. It carries no controls — bar a 
 is queued or running — because a panel that both lists twenty tasks and configures them is a panel
 that does neither.
 
+**A task that re-implements a published method says which**, with a `?` in a circle at the right of
+its title's line, after the state: a mark and not a control — not in the caret's walk, and a press on
+it opens no task. Hovering it shows a small tip: the method and whose it is, how the task came out
+against it, and the paper's DOI as a link — *Diamond insulation (Crane et al. 2015), as cooltools
+computes it. Identical in the validation · doi:10.1038/nature14450*. The `?` is **green** where
+`notebooks/validation.qmd` found the task identical or equivalent to its reference (§18.10), and in
+the text's colour where it is **untested**: the scalogram, the HiC score and per-cell contact QC. A task
+whose code follows no published method — the arms' alignment, the origin and terminus, the
+metagenome's tables, the model against the map, the dot plot — has none, since a citation there would
+claim what the code does not. The tip hangs from the page rather than from the row, which is a button a
+link cannot sit in, and stays while the pointer is on the `?` or on the tip, so it can be followed to
+the DOI; on a touch screen a tap shows it and a tap elsewhere puts it away. The table is
+`src/analysis/references.ts`, and `test/unit/references.test.ts` holds each line to a task, each green
+one to a section of the validation's own table, and the tasks without one to having none.
+
 **Over the cards, a box narrows the list** — `filter 25 tasks…` — because thirty tasks in four cards
 is a list read top to bottom by somebody who already knows the one they want. It is a filter over the
 list rather than a control over any task: every word typed must be found in a task's title, its
@@ -7454,7 +7664,11 @@ list is ticked back to the star, because nothing ticked there is a Run that cann
 used to be one rule, so the drawer's round trip around a run ticked the reader's unticked track back on.
 
 Parameters are remembered per file and per task, and travel in an exported session, so that reproducing
-a figure is opening the session and pressing Run.
+a figure is opening the session and pressing Run. **Per file means the session's key for it** — the tab
+and the file, whatever resolution is drawn — which is the key a workspace's `analysis` is put back
+under and saved from, and a figure's style with it (`AnalysisContext.memoryKey`). The drawer kept them
+under the file's address with its resolution, which nothing else read: a workspace opened its tasks on
+their defaults, saved none of what they were run with, and a change of resolution forgot them.
 
 **A number can take its default from the file.** Base composition's bin size, and *Signal by group*'s,
 is the open map's resolution until the reader types another, and 10 kb where no map is open; *Loop
@@ -8074,7 +8288,7 @@ exact stamp is that line's tooltip, so it is one hover from the words and identi
 
 ### 18.8 The catalogue
 
-Thirty-two tasks, in **four cards — 2D, 3D, 1D and Metagenome**, headed *2D tasks*, *3D tasks*,
+Thirty-four tasks, in **four cards — 2D, 3D, 1D and Metagenome**, headed *2D tasks*, *3D tasks*,
 *1D tasks* and *Metagenome*. The build order is in `docs/TASKS_PLAN.md`; what follows is what each
 one must be.
 
@@ -8097,15 +8311,15 @@ because a reader with no structure loaded has exactly one thing to do in it; *fi
 the other from a track. Five tasks are **dev features** (§29.3), absent rather than greyed while the
 switch is off and in every embed: the four metagenome tasks (`metacool`), and their card with them,
 and the 1D card's last, *Two sequences against each other* (`dotplot`); `chromosomix` lists and
-runs all thirty-two (§29.5). The 3D card's three — *Model from the map*, *Model versus map* and
+runs all thirty-four (§29.5). The 3D card's three — *Model from the map*, *Model versus map* and
 *Spatial tracks* — are specified beside the structures they make and read (§25.6), and the dot plot
 beside the view it draws (§28); every other task is below.
 
 **Which card each sits on**, in the registry's order: *2D tasks* — coverage and marginals, cis and
-trans per sequence, per-cell contact QC, P(s), the scalogram, the 4C profile, diamond insulation, the
+trans per sequence, per-cell contact QC, P(s), Pairs QC, the scalogram, the 4C profile, diamond insulation, the
 directionality index, the HiC score, compartments, inter-arm alignment, loop calling, pattern
 detection, reproducibility and aggregate peak analysis; *3D tasks* — model from the map, model versus map and
-spatial tracks; *1D tasks* — find a motif, peak calling, base composition, origin and terminus, the
+spatial tracks; *1D tasks* — find a motif, restriction sites, peak calling, base composition, origin and terminus, the
 metaplot, track correlation, FRiP, signal by group, interval set overlap and the dot plot;
 *Metagenome* — MAG contact QC, the inter-MAG network, MAG purity and split-MAG detection. The entries
 below are not in that order, and *aggregate peak analysis*, a 2D task, is described among the tracks
@@ -8136,7 +8350,56 @@ floor of the total every point is a share of, so 0 puts the diagonal back in the
 a 1 kb map, two thirds of every cis contact — and every other point was a share of a total they
 dominated.
 
-**And the four orientations beside it, wherever there are records to count them from.** Not a
+**The four orientations are Pairs QC's now** (below), beside the rest of what the records say about
+the library. They were a toggle here, and a reader looking for a library's quality had to know to look
+under a decay curve for it. The toggle and its `.pairs` box have left the form, but not the task: a
+stored run, a link and a `chromosomix expected --stranded --pairsUri …` line that ask for them still
+get the same curves, drawn by the same code, with a note saying where they live now. A **retired**
+parameter is the mechanism (`ParamBase.retired`): read from stored params and from the shell as
+before, never drawn, never asked, and left off a written command line while it is at its default.
+
+*Pairs QC* — the library behind a map, as pairtools and HiCUP read it — is listed for every map and
+asks for the `.pairs` a map was binned from when it was not binned from one: on a map **binned from a
+`.pairs`** everything but the restriction statistics is the import's own counts (§3.7) and costs
+nothing, and on any other map the form's `.pairs` box — the one P(s) had — is read once, and the run is
+refused until it is named. Its figures:
+- **The four orientations' P(s)**, as P(s) drew them (the paragraphs below), with the separation
+  where they meet stated as **pairtools' convergence** — `convergenceOf` over the counts'
+  `dist_freq`, the number the card's *strands meet* and the statistics table give — so one task gives
+  one answer to that question;
+- **the pair types, and cis and trans** with cis at least 1, 2, 4, 10, 20 and 40 kb apart, as bars;
+- **the statistics table**, every entry `pairtools stats` writes but its three long lists, in its
+  keys and its spelling of a number.
+
+**And with a reference and an enzyme, the restriction fragments.** The form's *Restriction enzyme*
+section names a FASTA or `.2bit` loaded on the Annotations panel and an enzyme, a kit or typed sites
+(the choices *Restriction sites* offers, below). The reference is held by the annotations worker and
+the records by the analysis one, so Pairs QC is a **composite**: it requires *Restriction sites*, which
+digests the reference first, and its cuts come down in `inputs.upstream`; with no reference or no
+enzyme that step is dropped and the run is the counts alone. Then one more pass over the `.pairs`
+places every end of every mapped, non-duplicate pair in a fragment, and four figures follow:
+- **Each end is placed by the cut on its own strand.** A cut has two positions, the top strand's
+  `s + k` and the bottom strand's `s + L − k` for a site of length `L` cut `k` bases in, and fragment
+  `i` lies between the same two cuts on both strands. A `+` end is placed by the top strand's cuts
+  and a `−` end by the bottom's, because a `−` read's 5′ end is the bottom strand's, which after a 5′
+  overhang is filled in sits `L − 2k` bases past the top-strand cut — 3 bp for DpnII. Placed by the
+  top strand alone, every DpnII dangling end fell in two neighbouring fragments and was counted as a
+  re-ligation; on the validation's library (§18.10) 1.6 M `−` ends start exactly on the site's C.
+- **Pair classes**, by the two ends' orientation, ordered by position: on two sequences *trans*; in
+  one fragment `+−` a **dangling end**, `−+` a **self-circle**, `++`/`−−` **same strand**; in two
+  neighbouring fragments `+−` a **re-ligation** (or a site left uncut); everything else **valid**.
+  Stacked by orientation, with the counts as a table.
+- **Distance to the next cut, in the read's direction** — `B[i+1] − x` for a `+` end, `x − B′[i] + 1`
+  for a `−` end — as two histograms on pairtools' separation bins, so a dangling end's two reads both
+  give the fragment's length and the two strands lie together.
+- **Fragments seen**: how many of the reference's fragments hold at least one end, and how many ends
+  each holds, in powers of two.
+- **Coverage against sites**: each bin of the map on screen, its raw contacts with its own diagonal
+  pixel counted once (the coverage task's count) against the cuts in it; Spearman ρ over every bin
+  that holds either, and the mean coverage for each number of sites drawn only where at least five
+  bins share it, so a repeat's one bright bin does not draw the line.
+
+**The four orientations, wherever there are records to count them from.** Not a
 property of the matrix at all: it is counted from the records, in log-spaced base-pair bins, because
 binning sums the four together and destroys exactly the thing they are read for. The separation at
 which `++`, `+−`, `−+` and `−−` converge is the shortest one the library can be believed at, it is
@@ -8159,19 +8422,18 @@ it. The line runs from the first record to the last, whatever the minimum separa
 the matrix's near-diagonal, a fact about its grid, and the separation the four converge at is usually
 shorter than one bin of it.
 **Where the records are.** A map **binned from a `.pairs`** had them counted in the import's own pass
-(§3.7), and the form asks for no file: *four orientations* is the only question, and the price beside
-**Run** says where the curves come from. On a map opened as a matrix, or binned from a file with no
+(§3.7), and the form asks for no file: the price beside **Run** says where the curves come from. On a map opened as a matrix, or binned from a file with no
 strand columns, the form asks for a `.pairs` — dropped on it, chosen through it, or named by its address
 (§18.2) — which is read for its records alone: no map changes and nothing is binned. A `.pairs`
 dropped on the app rather than on the form is *opened*, as a map. Absent, with a sentence, where there
 is nothing to count them from.
 
-*Scalogram*, which is P(s) with one summation left undone, and sits directly after it for that reason.
+*Scalogram*, which is P(s) with one summation left undone, and sits beside it in the card for that reason.
 The decay curve averages every bin of a sequence into one line and answers *how does this genome fold*;
 the scalogram keeps the bins apart and answers *where does this genome fold differently from itself*.
 At each bin it accumulates the cumulative distribution of its contacts over separation — the two cells
 either side of it at each distance, which on a circular sequence are the two ways round — and reports
-the separation at which that cumulative reaches each of a set of quantiles. Cournac et al. (2012)'s
+the separation at which that cumulative reaches each of a set of quantiles. Lioy et al. (2018)'s
 reading, and `HiContacts::scalogram()`'s quantity. It is a **distribution** and not a mean, because
 contact probability has a heavy tail by construction: the mean separation of a bin's contacts moves by
 a factor of two when the balancer drops a single distant cell, and its median does not. The quantile is
@@ -8698,6 +8960,18 @@ finds. Its estimate is a **scan** rather than *free*: every base of the ticked s
 the file spends on one (61/60 of a byte in a FASTA wrapped at 60, a quarter in a `.2bit`), and over a
 network a request per piece — a whole mouse genome is 2.8 GB, chr1 a fourteenth of it. The site
 ceiling stays at 500,000, and a run that reaches it over several sequences says to tick fewer.
+*Restriction sites* digests the reference: one enzyme of DpnII (MboI, Sau3AI) `^GATC`, HindIII
+`A^AGCTT`, NcoI `C^CATGG`, EcoRI `G^AATTC`, BglII `A^GATCT`, HinfI `G^ANTC`, DdeI `C^TNAG`, MseI
+`T^TAA`, NlaIII `CATG^`, CviQI (Csp6I) `G^TAC` and AluI `AG^CT`; the Arima kit, which is DpnII and
+HinfI; or **typed** — names and sites in IUPAC letters with the cut marked, `G^ANTC, HindIII`, a site
+with no `^` refused with a sentence saying where the cut is needed, and none looser than a four-base
+cutter. It is *find a motif* with a cut in it, through the same matcher and the same pieces read by
+range, and leaves a **lane of the cuts** — a point at the first base after the top strand's cut, named
+by the enzyme that made it — and the **cuts per bin** on the map's grid. Micro-C and Omni-C have no
+enzyme and no use for it. **Its cuts are `bioframe.digest`'s, and `cooler digest`'s, less two**:
+Biopython's `search` already gives the 1-based first base after the cut, and both add one more, so
+every fragment boundary they write is 2 bp late — and a fragment BED from either, given to `pairtools
+restrict`, places ends 2 bp off.
 *Base composition* — GC content, GC skew
 `(G − C)/(G + C)`, AT skew and the cumulative GC skew, per bin and under the map's names, each a lane
 like any other and each written as a bigWig. The **bin size** is the open map's resolution unless the
@@ -8799,7 +9073,8 @@ takes 3 minutes and 290 MB.
 **Over tracks and feature sets.** *Metaplot over a feature set*, in both **reference-point** (a
 point ± a flank) and
 **scaled-region** (flank, body resampled to a fixed width, flank) modes, strand-aware, over any number
-of bigWig or synthetic tracks, with a bootstrap band and a per-feature heatmap for every curve — because
+of bigWig or synthetic tracks, with a bootstrap band — drawn about its line whatever its sign, which a
+band below zero once was not — and a per-feature heatmap for every curve — because
 the mean of a bimodal set is a line that describes nothing. The heatmaps of one run list the features in
 one order, by each one's mean over every bin of every track and strongest first, which is how deepTools'
 `plotHeatmap` orders several samples: a row is the same feature in each of them, and each has colours of
@@ -8809,10 +9084,27 @@ transcripts of a gene that start at one TSS, a fifth of the RefSeq set — is as
 and its row made once, then given to each of them. *Aggregate peak analysis*, likewise in both
 **fixed** (centre ± W bins) and **scaled-region** (the domain, or the rectangle between two anchors,
 resampled to a fixed grid) modes; on-diagonal from a feature set, off-diagonal from a pair set, and
-off-diagonal from **every pair of one feature set** inside a separation range;
+off-diagonal from **every pair of one feature set** inside a separation range, and off-diagonal from
+**each feature of one set with the next** along its sequence;
 normalised by **observed/expected by default**, by distance-matched controls, by **chromosight**, or
 not at all; with the P2LL enrichment reported under it and a per-feature score table that can leave
 the app.
+
+**A metaplot's columns are deepTools'.** A reference point's *centre* is `computeMatrix`'s: half the
+feature's length, rounded down, from its start — rounding the midpoint put an odd-length feature one
+base to the right, which on a CTCF peak in 50-bp columns moved the profile by up to a percent. A window
+a sequence end clips keeps columns `step` base pairs wide, counted from the anchor, and the column the
+sequence ends in is the mean over the bases it has, as deepTools pads the rest with gaps; spreading what
+was left over a whole number of columns drew every column of a telomeric row a few percent off its
+place. And each track is read **at its own resolution**, never a zoom level: a column is the mean over
+the bases it covers and a zoom record is a mean over its own span, which straddles the column's edges —
+asked for at the column's width, a 10-kb column took records up to 20 kb wide (bbi's rule), and the
+insulation's profile about CTCF peaks was 0.7 % off. The windows of a sequence are read in order, a
+megabase or 4,096 windows to a request, so what is held is one batch's records. Over GM12878's 2,101
+CTCF peaks (§18.10, § 24 of the notebook) the profiles of CTCF, ATAC-seq and the insulation are
+deepTools' within 5·10⁻⁶ and no cell of half a million differs past both tools' rounding; the
+insulation's run went from 1.1 s to 1.7 s, its peak memory from 300 MB to 210 MB; about mouse RefSeq's
+35,034 TSSs (§ 14) the time is what it was, 5.5 s, in 350 MB rather than 410.
 
 **A pileup's axes are distances, in base pairs.** `-21 kb`, `0`, `+21 kb` — five labels along each
 axis, the ends at the ends, the sign written out on both sides because what a label says is *which
@@ -9021,7 +9313,17 @@ the run's own seed rather than truncated**, for §18.8's reason about the anchor
 here: taking the first two hundred thousand is taking whichever sequences sort first, and a pileup of
 chromosome I captioned *200,000 pairs* is a change of subject.
 
-**And either off-diagonal mode may be split by separation**, into log-spaced bands with a pileup and
+**The fourth, *consecutive features*, pairs each feature with the next one along its sequence** —
+consecutive CTCF peaks, the pairs of neighbouring sites a loop-extrusion figure asks about, which no
+range over *every* pair can give, since between two neighbours lies no third site. It is made from one feature set and read as a
+loaded loop set of the same pairs is: n − 1 pairs on a sequence of n features, no separation range
+and no sampling, and the nearest loop (`minDist`, coolpuppy's `mindist`) as the one floor, measured
+between the two features' own centres as coolpuppy measures a BEDPE's. So its pileup is the pileup of
+a BEDPE listing those pairs, here and in coolpuppy, to the last bit: § 24 of the validation notebook
+pairs GM12878's CTCF peaks this way and holds them to coolpuppy over a BEDPE written in Python, within
+5·10⁻⁶ in every cell, at the cost of a loaded pair set.
+
+**And any off-diagonal mode may be split by separation**, into log-spaced bands with a pileup and
 a control apiece. One pileup over pairs spanning 30 kb to 2 Mb is an average of a strong short-range
 contact and a weak long-range one, which is a picture of neither — and the bands are log-spaced on
 the observed range rather than by equal counts, because contact falls off with separation as a power
@@ -9063,7 +9365,7 @@ dropped from every metagenome accumulation rather than counted as inter-MAG, bec
 would make every real MAG look leakier in proportion to how badly the *rest* of the file was binned,
 which is the opposite of a per-MAG diagnostic.
 
-**Three things about this catalogue are settled differently from how they are described above**, and
+**Four things about this catalogue are settled differently from how they are described above**, and
 the reasons are worth recording where the descriptions are:
 
 - **Aggregate peak analysis is not a composite**, despite needing an expected curve for one of its
@@ -9073,6 +9375,12 @@ the reasons are worth recording where the descriptions are:
   windows reach, on the sequences its anchors sit on, read as one band per sequence and never
   deeper than the farthest window. **The inter-MAG network is** a
   genuine composite, for the mirror-image reason: its upstream is the whole input, unconditionally.
+- **Pairs QC is a composite whose upstream takes this form's answers.** A required task runs at its own
+  defaults, because inventing answers to a form the reader never opened puts numbers in their mouth.
+  Pairs QC asks the digest's questions — the reference, the enzyme — on its own form, so its
+  descriptor's `upstreamParams` lays those answers over *Restriction sites*' defaults, and `null`
+  drops the step when the reader gave none; the cache sees the answers as that step's parameters,
+  so changing the enzyme digests again and changing nothing does not. The shell's chain does the same.
 - **Multi-scale insulation is a doubling ladder from a settable base**, not a list of widths. A list
   needs a free-text control the parameter model does not have, and a parser with failure modes of its
   own, to express what a base and a count express exactly. A genuinely irregular set of widths is two
@@ -9435,9 +9743,10 @@ edge, whose region at its first base yapc drops. The generated module carries th
 was built from, and a test fails until `npm run wasm:yapc` is run after `yapc.c` changes.
 
 **And beside the goldens, two notebooks at full size.** `notebooks/validation.qmd`, rendered with
-Quarto, runs twenty-three analyses twice over public data, each file named by its accession and fetched
-from where it was published (4DN's; GEO's yeast Micro-C; and UCSC's mm10 sequence and RefSeq genes
-as Illumina iGenomes distributes them) — once through `chromosomix`, once through the package each
+Quarto, runs twenty-seven analyses twice over public data, each file named by its accession and fetched
+from where it was published (4DN's; GEO's yeast Micro-C; ENCODE's GM12878 ChIP-seq and ATAC-seq;
+UCSC's mm10 sequence and RefSeq genes as Illumina iGenomes distributes them; and Ensembl's R64-1-1
+yeast reference) — once through `chromosomix`, once through the package each
 reproduces, called as it is meant to be called and never re-implemented — and lines the two up bin
 by bin or call by call: insulation, compartments, P(s), coverage and virtual 4C against cooltools;
 the directionality index against `domaincaller`; peak calling with IDR on two replicates against
@@ -9455,7 +9764,19 @@ ratio to indifference against NumPy over them; the compartment call's saddle aga
 `cooltools.saddle` over chromosomix's own E1, cut into its groups by cooltools' `digitize`; the
 fraction of signal in features against pyBigWig's exact sums and NumPy, the whole track's own read
 from a zoom level and measured apart; and signal by group against pyBigWig's exact stretch means,
-rank for rank in each group, and its summaries and tests against NumPy's and SciPy's. Where a
+rank for rank in each group, and its summaries and tests against NumPy's and SciPy's; the chain the
+paper's Fig. 2 runs on GM12878 (§ 24), each link fed what the one before it wrote in chromosomix —
+insulation at four scales against `cooltools.insulation`, CTCF's peaks on two labs' ChIP-seq as
+replicates against yapc, APA between consecutive peaks against coolpuppy, and the metaplot of CTCF,
+ATAC-seq and the insulation about the peaks against deepTools — over 4DN's 27-GB map of 4.0 billion
+contacts, of which what the section reads, chr19 at 10 kb, is fetched by range
+(`notebooks/scripts/cool_subset.py`); the pairs statistics of a yeast library's `.pairs` (CH128)
+against `pairtools stats`, key for key; and, on the
+same library and the reference it was mapped to, the restriction sites against `bioframe.digest` (its
+boundaries two late, as above) and Pairs QC's fragment statistics against `pairtools restrict` —
+run once per strand, on the top strand's cuts for `+` ends and the bottom strand's for `−` ends — and
+a short pandas reading of its fragments, with the coverage beside the cuts against
+`cooltools.coverage`, every count identical. Where a
 reference draws at random — a pileup's controls, an overlap's shuffles, IDR's ties — two
 distributions are compared, the reference's own spread from seed to seed the yardstick. A reference
 that takes a number of processes is given one a core of the machine, at most four (`THREADS`). **Every
@@ -9547,6 +9868,21 @@ measured, with the machine and the build, and a second render of the same build 
 of running again. The page is a table of all 23, the five analyses side by side at the two depths, a
 figure, and every command in one block at the end.
 
+**The laptop's published page is rendered on a laptop.** What it measures is a reader's machine, so
+the page at `<site>/laptop/` is rendered by hand, on one, and committed as `notebooks/laptop.html` —
+the one rendered page `.gitignore` lets through; its data and the measurements a second render reads
+back stay in `notebooks/work/`, uncommitted, since a runner of the same build would read those back
+instead of measuring itself. The page is one file that is the whole of it: it links the other pages
+on the site (NOTEBOOKS_SITE, or `package.json`'s `homepage`) rather than as files beside it, which a
+laptop does not have, and it **carries** what is published beside it rather than linking it — its
+table under the results and its `rendered.json` in its closing line, each a link that downloads the
+file from the page itself (`Render.attach()`) — so the page reads the same from the disk it was
+rendered on and from the site, and its table cannot disagree with its picture. Its block says it was
+rendered by hand, on the machine named under it, as the page is published. Publishing a render is
+committing that file: every deploy writes it as `laptop/index.html` and unpacks the table and the
+stamp beside it (`pages.py committed`), the names its entry lists and nothing else, and makes no
+`laptop/` until one is committed.
+
 They are documents, not tests: they need the data (about 6 GB for the analyses, 15 GB for the
 viewers, 160 MB for the parity and 13.7 GB for the laptop), the reference packages, yapc's own
 environment and higlass-python's, the two viewers and Playwright's Chromium, and nothing in the suite
@@ -9561,7 +9897,8 @@ and Ubuntu's bedtools and seqkit; for the parity and the timings, the two viewer
 Chromium; for the timings, higlass-python's environment with libfuse. The parity renders first, alone,
 so that a page that cannot render stops the run before the hours of the others; then the validation
 and the timings in one job — the timings run the validation's commands on the inputs it fetched and
-made, which no other runner holds — beside the laptop in another. Each render runs through
+made, which no other runner holds — beside the laptop in another, which sets the committed page aside
+first so that what it gathers is its own render or nothing. Each render runs through
 `notebooks/scripts/memory.sh`, which writes into the job's log, every ten seconds, the memory in use
 and available and the three programs holding the most: a runner whose memory runs out is shut down
 in the middle of a step, with no error from the command and no step after it, and the log streamed
@@ -9570,23 +9907,52 @@ Each job gathers its pages with
 `notebooks/scripts/pages.py`, the one table of where each page is published and which files go beside
 it, which `rendered.py` reads too, and every job keeps what it rendered as an artifact for 90 days,
 even when it fails: the validation alone, with the timing rounds it finished, when the timings fail.
-A last job publishes them only if all four rendered, at `<site>/validation/`, `<site>/timings/`,
-`<site>/parity/` and `<site>/laptop/`, each a self-contained page with its tables beside it
-(`commands.json`, `summary.tsv` and `validation.txt`, every command, every verdict and every number its
-figures draw; `timings.tsv` and `viewers.tsv`; the parity's `summary.tsv`, every file compared; the
-laptop's `timings.tsv`, every analysis measured); a release keeps its own copies of the four pages and
-of the six tables as assets. It runs when a release is published and on demand. Each page opens on a
+A last job publishes the validation, the timings and the parity only if the three rendered —
+`pages.py published` names them — at `<site>/validation/`, `<site>/timings/` and `<site>/parity/`,
+each a self-contained page with its tables beside it (`commands.json`, `summary.tsv` and
+`validation.txt`, every command, every verdict and every number its figures draw; `timings.tsv` and
+`viewers.tsv`; the parity's `summary.tsv`, every file compared); a release keeps its own copies of the
+three pages and of the five tables as assets. **The runner's laptop is published nowhere**: not to the
+site, whose `laptop/` is the committed page, nor to a release, whose laptop is the one committed in its
+source; it is the run's artifact, and its section of the run's summary, and whether it rendered decides
+nothing about publishing the others. It runs when a release is published and on demand. Each page opens on a
 block saying when it was rendered, from which version, commit and release, by which run or by hand,
 and on what machine, and closes on how long it took, writing the same to `rendered.json` beside it with
 **one line of what it found** — how many analyses reproduce their reference, how much less time
 chromosomix takes than the references and the other viewers, how many files the app and the command
 line write alike, how many analyses finish within a minute and the most memory any takes. The run's
 summary is a section a notebook: where it is, from what and in how long, that line, and its table,
-folded. The pages link to each other there and on a reader's disk alike. They are no build of the app,
+folded. The pages link to each other there and on a reader's disk alike, but for the laptop, which
+links the site's from either. They are no build of the app,
 so the service worker leaves those four addresses to the network, as it does `v/` and `pr/`, and the
 app, from this version on, finding itself at any of them unregisters its worker and reloads once
 (`recoverPinnedNavigation`), as at `v/`; a worker from before answers there with its own app until its
 reader takes the update it offers.
+
+**And the app names them, in *About*.** The dialog is three tabs — *Overview*, what the viewer is, the
+tutorial (§30.1), the source and, on the site, its telemetry and the switch (§31.4); *Notebooks*; and
+*Licences* (§22.4). **The build stamp and the version picker are the Overview's alone**, in a footer
+under the part that scrolls, so however far the overview is scrolled the stamp stays on screen; the
+other two tabs are about one thing each, the notebooks and the licences, and carry nothing else — a
+stamp and a picker under them were a third subject on each. It opens on *Overview*, with the caret on the row of tabs,
+one stop walked with ← and →, Home and End. **The Notebooks tab** says in a sentence what the
+notebooks are, then gives each a block: its title, linking to its page in a new tab, and its address;
+what it holds chromosomix to; and, read from the `rendered.json` beside the page, the one line of what
+it found, set off by a rule, and a quiet line saying when it was rendered, from which version and
+commit, in how long, on how many cores and how much memory, and by which run of the workflow, linked —
+or *by hand*, which is how the laptop's is rendered, and the tab's sentence says which pages GitHub
+Actions renders and which one is rendered by hand, on a laptop. The list is `src/notebooks.ts`, held
+by `test/unit/notebooks.test.ts` to `pages.py`'s table — its pages, their titles, and which is rendered
+by hand — and to the segments the service worker leaves alone, so a fifth notebook cannot be published
+without the tab naming it. The pages are this site's, when the app is served from one — an archived pin and a preview
+reach up to its root — and the deployed site's, by `package.json`'s `homepage`, from the desktop, the
+single file, the package's copy and a dev server; a build that can name neither has no Notebooks tab.
+**The stamps are read when the tab is first chosen, never when *About* opens**, all four at once; until
+one answers its block says it is being read, and one that cannot be read — offline, a page not
+published yet, a file that does not parse — takes its two lines away and leaves the link. A stamp is
+untrusted input that ends up on screen: a field that fails its check is dropped rather than repaired, a
+run is linked only on GitHub, and a stamp with no finishing time or no version is none. The single
+file, whose policy allows no request (§19), links the pages and reads nothing.
 
 ### 18.11 A set of scales is one picture
 
@@ -10911,15 +11277,17 @@ carry no `LICENSE` beside them. **A package that ships no licence text** — `ge
 which declares MIT and has no text of it in its tarball or its repository — has the licence it
 declares, naming the author it names, committed under `licenses/` and reproduced in its place.
 
-**About names them too**, under *Licences*: chromosomix's own licence, the GPL, then one line per project —
-its name linking to its home, what it does in this viewer, and its licence — with a dependency folded
-in beside what pulls it in, and a link to the build's own `THIRD-PARTY-NOTICES.txt` (the site's, from
-the desktop and the standalone page, which have none a link can open). The list is
+**About names them too**, under *Licences*, the last of its three tabs (§18.10): chromosomix's own
+licence, the GPL, then one line per project — its name linking to its home, what it does in this
+viewer, and its licence — with a dependency folded in beside what pulls it in, and a link to the
+build's own `THIRD-PARTY-NOTICES.txt` (the site's, from the desktop and the standalone page, which
+have none a link can open). The list is
 `src/licences.ts`, and `test/unit/licences.test.ts` holds it to every package the source imports and
 everything those pull in, to every entry the notices name as copied or ported, and to the README's
 *Licence* section. Then one line on the marks of the stores and services the interface shows. The
-dialog is wider than a plain one for its three columns, and taller, so the build stamp under them is
-on screen on a laptop.
+dialog is wider than a plain one for its three columns. The licences are a tab of their own because
+on the one page they shared with what the viewer is they pushed the build stamp out of sight on a
+laptop; the stamp is now the Overview tab's footer, and the Licences tab holds the licences alone.
 
 Each check asserts the notices are there — the package's (§22.3), the archived pin's (§21), the
 desktop renderer's (§15) and the standalone page's (§19) — because a notice that stopped being
@@ -11116,23 +11484,41 @@ file named twice, or two names a Mac's disk holds as one, is numbered (`sample_2
 has written is written over by the same command. `coverage HCT116.rep1.cool HCT116.rep2.cool` wrote
 `HCT116.coverage.*` twice, the second run's files over the first's, with exit 0.
 
-**An address is fetched first, whole.** The app reads a remote file by range, through a reader that
-is synchronous (§11), which a worker has and Node does not, so a shell cannot read one that way. An
-http or https address — the map, an `--against`, a `--sequence`, `--tracks`, `--features` or
-`--pairs`, a `.pairs` named for P(s)'s orientations, the workspace `replay` reads — is downloaded
-instead, streamed to disk with its progress on stderr unless `--quiet`, into one directory per
-command under `$TMPDIR` that is removed when the command ends, Ctrl-C included; and with the sidecar
-its format reads beside itself, where the server has one: a FASTA's `.fai`, a HiC-Pro matrix's bin
-file. A batch lets each map go once its run is done, so it holds one at a time. What every run reads
-— a `--sequence`, `--tracks`, `--features`, `--pairs`, `--against` or the workspace — is fetched
+**An address is read by range, as the app reads it.** The app reads a remote file through
+`RemoteRangeSource`, whose reads are synchronous because HDF5's are (§11), and a browser worker
+answers them with a synchronous `XMLHttpRequest` that Node does not have. The command has one of its
+own instead (`cli/syncFetch.ts`): a helper thread makes each request with `fetch` while the thread
+running the task waits on a shared word with `Atomics.wait` and takes the answer off the port it was
+posted to — so the same source, with the same chunk cache, coalescing and read-ahead, reads an
+address here as it does in a tab. Under the command's NODERAWFS, where h5wasm's filesystem *is* the
+disk, the source is mounted as a path no file lies behind (`h5/lazyFile.ts`): NODERAWFS hands any
+stream that carries stream ops of its own back to the in-memory layer, so every read HDF5 makes of
+that path is the source's. A map — a cooler, an `.mcool` rung, a `.hic`, an `.scool`, a `.pairs`
+and the `.px2` beside it — an `--against`, a bigWig or `.2bit` in `--tracks`, a `.2bit` or a FASTA
+with its `.fai` beside it in `--sequence`, and a `.pairs` named for P(s)'s orientations are read so,
+and nothing of them is written to disk: one rung of the demo's 46 MB *E. coli* `.mcool` costs 2.6 MB
+in three requests, and a metaplot of one chromosome's peaks over a 15 MB bigWig 5.2 MB. A text
+track in `--tracks` is read in one request, being parsed whole. Every request asks for `identity`,
+which Node, unlike a page, may.
+What is read whole from a copy — a `--features` or `--pairs` set, a HiC-Pro matrix and its bin file
+(§3.9), the workspace `replay` reads — and **any address
+whose host will not serve a range**, answering a range with the whole object or compressing it in
+transit, is fetched to disk instead, said so on stderr for the latter, streamed with its progress
+unless `--quiet`, into one directory per command under `$TMPDIR` that is removed when the command
+ends, Ctrl-C included; with the sidecar its format reads beside itself, where the server has one. So
+the command works on every host it worked on, and reads by range on every host the app can. A batch
+lets each copied map go once its run is done, so it holds one at a time. What every run reads — a
+`--sequence`, `--tracks`, `--features`, `--pairs`, `--against` or the workspace — is opened or fetched
 before the first, so an address there that cannot be had is exit 2; a map that cannot be is that
-file's failure, named, and the batch goes on; and a `.pairs` a parameter names is fetched when the
-task asks for it, and noted by the task where it cannot be, as a file on disk is. The map is opened *as* its address, so the
-framing, the provenance and every sentence about it name the URL that was typed, and its outputs are
-named after its file, the query left off. Any other scheme is refused by name: an `s3://` address
-needs credentials the command has not got. An address went to `stat` as a path until now — *cannot
-stat /cwd/https:/example.org/x.cool* — under a README that said it was fetched, and the console said a
-shell reads local files only; its note now says what the line costs instead (§23.3).
+file's failure, named with the status the host answered or the cause of a request that got no
+answer, and the batch goes on; and a `.pairs` a parameter names is opened when the task asks for it,
+and noted by the task where it cannot be, as a file on disk is. The map is opened *as* its address,
+so the framing, the provenance and every sentence about it name the URL that was typed, and its
+outputs are named after its file, the query left off — as is every sentence about it, so a signed
+link's signature stays out of the log. Any other scheme is refused by name: an `s3://` address needs
+credentials the command has not got. An address went to `stat` as a path once — *cannot stat
+/cwd/https:/example.org/x.cool* — and was then downloaded whole, seven gigabytes for one rung; the
+console's note about that cost is gone with it (§23.3).
 
 ### 23.2 What else is on it, and what is not
 
@@ -11184,10 +11570,10 @@ shell cannot be told — a window across several sequences or off the diagonal, 
 set with no file behind it, an `.scool`'s cells or the maps `hicrep` compared against where the
 record does not name them, a map drawn balanced and read raw or the reverse, which the one
 `--no-balance` cannot say, a map drawn through an edit of its reference (§27.7) — and a command that
-runs and answers a slightly different question is worse than one that says what it left out. And
-about the one thing a shell is told at a price: a remote file, which the line names and the shell
-downloads whole before reading it (§23.1), where the app reads only what it draws — so the note says
-so, and that a reader running several lines over one file should fetch it once and name the copy.
+runs and answers a slightly different question is worse than one that says what it left out. A
+remote file is no longer one of them: the shell reads it by range, as the app read it (§23.1), so the
+line names the URL and runs as it stands. Its note said for a while that the command downloaded the
+whole file, and that a reader running several lines over one should fetch it once.
 
 They sit **above a command and below anything else**, which is one rule read twice: a caveat
 qualifies a line the reader is about to run, so it comes first; a refusal explains a line that is
@@ -11542,10 +11928,16 @@ why one table for all of them was the wrong shape and is gone:
   micro-C map with its tracks; the same tracks with no map, close enough for the reading frames;
   Hi-C, micro-C and PCP of one locus in a deck of three; splicing on human chrX in the 1D browser;
   a mitotic Hi-C time course in three tabs of decks; and the metagenome, a dev feature (§29).
-  **Papers**: this viewer's own paper, one workspace of five tabs, a panel each — Fig. 1c's mouse map
-  at five scales with a model under each, Fig. 1d's insulation chain beside chromosome 3's model, and
-  Fig. 2a–c's bacteria read along their arms — and Meneu et al. 2025's bacterial chromosomes in
-  yeast. Inline, so it costs no request; where its files live is §24.3.
+  **Papers**: this viewer's own paper, one workspace of seven tabs, a panel each — Fig. 1a's GM12878
+  window at 5 kb as three cells (the map — 4DN's Hi-C `.mcool` above the diagonal and ENCODE's CTCF
+  ChIA-PET `.hic` below it, both as O/E smoothed adaptively (§5.7) — with its insulation,
+  compartments, 4C and marks, a tracks cell of ENCODE's and UCSC's tracks, and the model coloured by
+  distance to a pinned bead), Fig. 1c's mouse
+  map at five scales with a model under each, Fig. 1d's insulation chain beside chromosome 3's model,
+  Fig. 2's GM12878 map on chr19 with two labs' CTCF and ATAC-seq and nothing computed, each task of its
+  chain — insulation at four scales, peaks on both CTCF tracks, the APA between consecutive peaks, the
+  metaplots — opening on the figure's recipe (`analysis`, §18.2), and Fig. S3a–c's bacteria read along their arms — and Meneu et al. 2025's bacterial
+  chromosomes in yeast. Inline, so it costs no request; where its files live is §24.3.
 - **DNA Bacterial Zoo** — a dev feature (§29), published with the multi-genome format: switched
   off, it has no tile. The genome gallery's cards over **one** file: a card a species, whose
   button is the species' session, with its sample and its replicon count as chips and its map, its
@@ -11869,13 +12261,21 @@ the files its cards open are one folder on the lab's bucket, `demo/store/`, a di
 dataset — `yeast/`, `human/`, `gibcus2018/`, `meneu2025/`, `chromosomix_paper/` — with every name inside
 a workspace relative, so the folder opens wherever it is copied. Unlike the rest of `demo/`, it is
 not a copy of a directory of this repository: its maps run to seven gigabytes, and they are copied
-into it **on the bucket** — from the lab's own published data and from 4DN's open-data bucket — and
-never pass through git. What the repository keeps is the folder's workspaces and
+into it **on the bucket** — from the lab's own published data and from 4DN's and ENCODE's open-data
+buckets — and never pass through git. What the repository keeps is the folder's workspaces and
 `demo/store/MANIFEST.tsv`, one line a file naming where it comes from: a key on a bucket, a file of
 this repository, or a file `scripts/make_rsg_store.py derive` computes (the RNA-seq counts as a
 barChart, the SNPs bgzipped and indexed, the loops called on the micro-C map by this viewer's own
-Chromosight, the sequence as a `.2bit` and the map as a `.hic` for the hub example, and E1 along both
-arms of the paper's three *P. aeruginosa* maps). The paper's folder holds a subfolder an organism, its
+Chromosight, the sequence as a `.2bit` and the map as a `.hic` for the hub example, E1 along both
+arms of the paper's three *P. aeruginosa* maps, UCSC's hg38 sequence and refGene as UCSC publishes
+them, and what the paper's GM12878 panels draw: insulation, compartments, the 4C profile and the model
+at Fig. 1a's window, CTCF's motif, and insulation at four scales and CTCF peaks over the whole genome,
+which Fig. 2's tab computes in the app on chr19). The GM12878 map is 27 GB, and none of that reads it whole: `notebooks/scripts/cool_subset.py`
+reads the one rung a task needs — of one sequence, or of every sequence near the diagonal — by range
+from 4DN's bucket into a `.cool` with the file's own weights, every contact within a sequence written
+as the file holds it, so a task that reads contacts within a sequence, as each of these does, reads the
+same numbers there as in the whole file. Those outputs are files of this repository, under
+`demo/store/chromosomix_paper/human/`. The paper's folder holds a subfolder an organism, its
 bacterial maps and the *P. aeruginosa* RNA-seq copied there from where the lab keeps them — the zoo's
 among them — so that it names
 none of those places and opens with the zoo switched off. The same script
@@ -12823,6 +13223,15 @@ picture beside it cell for cell. **A pair the map never counted is the bottom of
 scale here is the map's *transformed* range and a balanced map's runs from about −3.6 to about 0 —
 so the clamp drew every uncounted pair at the dark end, and a 4C in space came out with its darkest
 beads exactly where there was no contact at all.
+
+**The pin is kept with the model.** It is the one place two colourings read from, and it was the
+cell's alone: a model saved coloured by distance came back from a reload, a workspace or a link
+coloured from nothing, every bead the colour of no value. It is kept on the model's row
+(`StructureStyle.pin`), with its colouring and its camera axes, as the sequence and base pair at the
+pinned bead's middle — `chr14:89601000` — rather than as the bead's index, so it still names the same
+place on a model of the same window at another resolution, and a pin naming no bead of the model is
+no pin. Pinning and unpinning write it; a loop or a measurement, which light their first bead the
+way a pin does, give the pinned bead back when they end.
 
 The same row was also drawn as **chords** from the pinned bead, under a *pin contacts* toggle and a
 threshold. That is gone: the colouring says the same thing in the representation the model is
@@ -14731,11 +15140,11 @@ itself**: a reader who came to open a file is not asked first whether they would
 says what *About* says (below), and steps out of sight while a tour is on screen, since under the grey
 an offer to play the tutorial is one more thing to read.
 
-**In *About*, straight after what the viewer is** — the answer to the question a reader who has just
-read that asks next, and the one way in a newcomer finds without being told where to look. One
-sentence, and one filled button that says what it will do: *play the tutorial* for a reader who has
-not begun it, *resume at step 32 of 50* for one who left it, with a quiet *start over* beside it, and
-*play the tutorial again* for one who finished it. The palette has it too, as *Guided tutorial* under
+**In *About*, straight after what the viewer is**, on its first tab — the answer to the question a
+reader who has just read that asks next, and the one way in a newcomer finds without being told where
+to look. One sentence, and one filled button that says what it will do: *play the tutorial* for a
+reader who has not begun it, *resume at step 32 of 50* for one who left it, with a quiet *start over*
+beside it, and *play the tutorial again* for one who finished it. The palette has it too, as *Guided tutorial* under
 Help, its hint saying which of the three a press will do.
 
 **Only where its first step is.** It opens on a store, so it is offered wherever the store drawer is:
@@ -14942,3 +15351,93 @@ starts the tutorial from the beginning.
 
 **It is in a chunk of its own**, fetched by the press that plays it: a reader who never asks for it
 pays for one `localStorage` read when the landing page or *About* is drawn.
+
+## 31. Telemetry
+
+The site sends anonymous telemetry — a handful of counts of how it is used — so that the work spent
+on it goes where its readers are: which formats are opened, which tasks run and how long they take,
+which refusals people meet, how many install it. `src/telemetry.ts` is the whole of it. **The word
+on screen is *telemetry***, the one a reader looking for this switch in any app's settings looks for;
+the sentences beside it say what it holds, so the word is never the only explanation.
+
+### 31.1 What is counted, and what a count can carry
+
+Every count is a **name from a fixed list with values from fixed lists**, and nothing else:
+
+| Count | When | Its values |
+|---|---|---|
+| `pageview` | the page has loaded and is idle | `version` (the build's own), `installed` (`yes`, `no`) |
+| `open` | a map's file opens — not another resolution of the same one — or a track is added | `what` (`map`, `track`), `format` (§3's layouts, §8's detected formats), `from` (`local`, `remote`) |
+| `task` | a run ends (§18) | `task` (its registry id), `outcome` (`done`, `failed`, `cancelled`), `took` (`under-1s`, `1-10s`, `10-60s`, `1-10min`, `over-10min`) |
+| `error` | the error view is shown | `code` (§10's codes, or `other`) |
+| `allow` | *allow access* is answered (§5.6) | `outcome` (`allowed`, `refused`) |
+| `install` | the browser reports the site installed | none |
+
+**Nothing a reader typed, dropped, named or pointed at can reach one.** No function takes a string
+that did not come from one of those lists, and each list is checked against its type in both
+directions, so a format or an error code added later is a decision about whether to count it, made
+where the type grows. `wire` checks every value against its list again before anything is queued
+and drops the whole count where one is off it — a count with a hole in it would be a count of
+something else. So never: a file's name or contents; a URL — a bucket's, a store's, a signed link's;
+a locus, a hash, a workspace, a search or a setting; the time a task took, other than its bucket;
+an error's message, which names the file. Every count names the site's root as its page, never
+`location`, whose hash names the file open and whose query can name a private workspace.
+
+### 31.2 How it is sent
+
+One `POST` a count, to the endpoint the build names, in the shape Umami's `/api/send` takes —
+`{type: 'event', payload: {website, hostname, url: '/', name, data}}` as JSON in a plain-text body,
+which Umami reads as JSON whatever its type. The visit is sent with no `name`, which Umami files as
+a pageview; every other count goes under its name with its values as `data`, and since Umami counts
+each value against its plan as an event of its own, a count carries no value it does not need. The
+`website` is the site's id at Umami, a UUID it prints in its own snippet: it names where counts are
+filed and authorises nothing. The request goes with `credentials: 'omit'`, so no cookie
+goes either way; `referrerPolicy: 'no-referrer'`; `no-cors`, so nothing is preflighted and nothing
+is read back; and `keepalive`, so a count queued as the page closes still leaves. Not `sendBeacon`,
+which always carries the endpoint's cookies. Counts are queued and sent when the page is idle,
+behind whatever the reader is waiting on, so none shares a connection with a map's first read; at
+most two hundred go from one page, since a loop of errors is not a usage pattern. Nothing is
+written to tell this browser from another: what tells visitors apart is the service's own — Umami
+hashes the request's address and browser with a salt it rotates every month, places the visit in a
+country, region and city from the address, and stores the address nowhere. The
+app never waits on a count and never reads one back, which is what keeps C1 true (§1).
+
+### 31.3 Where it runs
+
+**The site, as deployed, and nothing else.** The deploy passes the repository's `TELEMETRY_ENDPOINT`
+and `TELEMETRY_WEBSITE` variables to the site's build alone (docs/deploy.md); every other config
+writes both empty — the archived pins and the pull-request previews, the package, the desktop app,
+the single file and the command line — and a build without an endpoint and a website id shaped as
+a UUID counts nothing. At run time it also takes the
+web target, a page that is not a pin or a package copy, not inside somebody else's page (§21), at
+the site's own address — a fork, a lab's mirror or `vite preview` serves the same build from
+another — and not under automation, which keeps tests, the gallery and the notebooks' runs out. The
+single file could not count if it tried: its policy reaches no host (§19).
+
+### 31.4 The switch, and the browser's
+
+**On by default, with no question asked first.** There is nothing personal in a count — no
+identifier, no cookie, nothing drawn from a file — so there is nothing to consent to, and a banner
+asking would be a question with no stake in it, put to every reader before their first map. What is
+owed instead is to say it and to make it easy to stop:
+
+- **About says what is sent, where it goes and what never is, under *Telemetry*, with the switch**,
+  last on the *Overview* tab it opens on: *telemetry*, a toggle (§26.3), lit while on, and *Off sends
+  nothing from this browser.* Absent from every build that sends nothing, which has nothing to turn
+  off (§8.5).
+- **The landing page's privacy note says so in a clause** while the site is sending — *The site does
+  send anonymous telemetry … never a name or an address — and About turns it off* — since a promise
+  about files that left the telemetry out would be the one thing on that line a reader could later
+  call misleading.
+- **Off is immediate**: what was queued is dropped, and nothing more is sent from this browser.
+  It is kept in `localStorage` (`chromosomix:telemetry`), and *forget everything* keeps it: every other
+  key is something kept on the reader's behalf, and this one is a refusal, whose loss would be the
+  one way that button could make the page send more than it did before it was pressed.
+- **A browser that sends Global Privacy Control is taken at its word**, unasked, and the site sends
+  nothing: Brave and DuckDuckGo by default, Firefox in its private windows, and any browser where
+  the reader turned it on. About then says so in place of the switch. **Do Not Track is not read.**
+  The browsers that offered it have retired it — Safari in 2019, Firefox in 2025, which points its
+  users to GPC instead — so what still sends it is mostly an old setting nobody remembers choosing,
+  and the European Data Protection Board has said GDPR's objection by automated means (Art. 21(5))
+  does not make a site bound to honour it. GPC is the signal a reader can still set, and the one
+  the law names: a binding opt-out in California and a dozen other states.

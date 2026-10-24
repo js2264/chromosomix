@@ -18,7 +18,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { AnnotationLoader } from '@/annotations/loader'
 import { AnnotationStore } from '@/annotations/store'
-import { forgetAllHandles, rememberHandle, resetHandlesForTests } from '@/state/handles'
+import { allowHandles, forgetAllHandles, rememberHandle, resetHandlesForTests } from '@/state/handles'
 import { useMemoryStores } from '@/state/idb'
 import type { StoredEntry } from '@/annotations/types'
 
@@ -158,5 +158,53 @@ describe('rows that are not a dropped file', () => {
     new AnnotationLoader(store, null as never, []).restore([row])
     await settle()
     expect(store.byId('a1')?.source.kind).toBe('remote')
+  })
+})
+
+describe('a restored local track whose grant asks first', () => {
+  /** A handle as Chromium hands one back after a restart: known, and waiting for a click. */
+  function lapsedHandle(name: string): FileSystemFileHandle {
+    let state: PermissionState = 'prompt'
+    return {
+      kind: 'file',
+      name,
+      queryPermission: async () => state,
+      requestPermission: async () => {
+        state = 'granted'
+        return state
+      },
+      getFile: async () => new File(['bytes'], name),
+    } as unknown as FileSystemFileHandle
+  }
+
+  it('says allow access rather than re-open, since the file is one click away', async () => {
+    await rememberHandle('ATAC.bw', lapsedHandle('ATAC.bw'), new File(['b'], 'ATAC.bw'))
+    const store = freshStore()
+    new AnnotationLoader(store, null as never, []).restore([localRow('ATAC.bw')])
+    await settle()
+
+    const entry = store.byId('a1')
+    expect(entry?.status).toBe('detached')
+    expect(entry?.summary).toBe('remembered file — allow access to draw it again')
+  })
+
+  it('comes back once the reader allows it, with its id and settings', async () => {
+    await rememberHandle('ATAC.bw', lapsedHandle('ATAC.bw'), new File(['b'], 'ATAC.bw'))
+    const store = freshStore()
+    const loader = new AnnotationLoader(store, null as never, [])
+    loader.restore([localRow('ATAC.bw')])
+    await settle()
+    expect(store.byId('a1')?.status).toBe('detached')
+
+    // The button's click, then the retry every tab makes on hearing of it.
+    expect(await allowHandles('ATAC.bw')).not.toBeNull()
+    loader.refind()
+    await settle()
+
+    const entry = store.byId('a1')
+    expect(entry?.id).toBe('a1')
+    expect(entry?.style.colour).toBe('#1f5fa9')
+    expect(entry?.source.kind).toBe('local')
+    expect(entry?.status).not.toBe('detached')
   })
 })

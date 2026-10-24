@@ -23,6 +23,7 @@ import { initTheme } from './ui/ThemeToggle'
 import { installColourPicker } from './ui/colourPicker'
 import { mountPinnedNotice } from './ui/VersionPicker'
 import { recoverPinnedNavigation, registerServiceWorker } from './pwa'
+import { startTelemetry } from './telemetry'
 
 // Before the app mounts, so a user who chose dark gets no flash of light.
 initTheme()
@@ -56,6 +57,11 @@ if (!recoverPinnedNavigation()) {
     // Only ever visible in an archived build, and the one thing standing between
     // a stale link and an afternoon's work in a build from July.
     mountPinnedNotice()
+
+    // The site's telemetry (§31): a visit, queued for when the page is idle.
+    // Nothing in any other build, and nothing in an embed, whose visits are
+    // somebody else's page's.
+    startTelemetry()
   }
 
   const root = document.getElementById('app')

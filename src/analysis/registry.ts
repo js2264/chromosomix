@@ -44,6 +44,8 @@ import { OVERLAP_TASK } from "./tasks/overlap";
 import { TRACK_CORRELATION_TASK } from "./tasks/trackcorr";
 import { METAPLOT_TASK } from "./tasks/metaplot";
 import { MOTIF_TASK } from "./tasks/motif";
+import { RESTRICTION_TASK } from "./tasks/restriction";
+import { PAIRS_QC_TASK } from "./tasks/pairsqc";
 import { PEAKS_TASK } from "./tasks/peaks";
 import { COMPOSITION_TASK } from "./tasks/composition";
 import { DOTPLOT_TASK } from "./tasks/dotplot";
@@ -86,6 +88,13 @@ export const TASKS: readonly AnalysisTask[] = [
   CIS_TRANS_TASK,
   CELL_QC_TASK,
   EXPECTED_TASK,
+  // The library under the map, beside the decay it takes its first figure
+  // from: P(s) by orientation is the four curves the matrix sums together, and
+  // it moved here from P(s)'s own form along with the rest of what a `.pairs`
+  // says about itself — pairtools' counts and, with an enzyme, its fragments.
+  // Read after P(s) because it answers the question P(s) raises first: how
+  // short a separation the curve above can be believed at.
+  PAIRS_QC_TASK,
   SCALOGRAM_TASK,
   FOURC_TASK,
   INSULATION_TASK,
@@ -112,6 +121,10 @@ export const TASKS: readonly AnalysisTask[] = [
   // take. Same reading order as the 2D card's — the thing that comes first is
   // the thing the next one is built on.
   MOTIF_TASK,
+  // Beside it, the search for one particular kind of site: where an enzyme
+  // cuts, to the base, rather than where its recognition sequence lies — the
+  // digest a Hi-C library is read against, which Pairs QC requires.
+  RESTRICTION_TASK,
   // And the other that makes one: peaks called from a track, which is the input
   // FRiP, the metaplot and the overlap below were always handed from elsewhere.
   // A motif search reads the sequence and this reads a track, so the two open

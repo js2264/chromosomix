@@ -26,7 +26,7 @@ from rendered import Render
 
 R = Render('laptop')
 print(R.head(also=f"The same analyses against the packages they reproduce: {R.anchor('timing', 'the timings')}. "
-                  f"Beside this page: {R.download('timings.tsv')}, every analysis measured, with the machine."))
+                  "Every analysis measured, with the machine, is a table to download under the results."))
 ```
 
 How long does an analysis take in chromosomix, and how much memory does it need, when it is run over a
@@ -39,15 +39,20 @@ runs the same code the browser runs, and as a separate process its time and memo
 the operating system: the wall-clock time from start to finish, the CPU time, and the peak memory (the
 largest resident set the process reached).
 
-The block above says which machine this page was rendered on. With every release it is a GitHub runner
-(`.github/workflows/notebooks.yml`); to measure your own, render it from the root of a clone, on a laptop
-that is plugged in and otherwise idle:
+The block above says which machine this page was rendered on. The page published at
+<https://chromosomix.app/laptop/> is rendered by hand, on a laptop, and committed as
+`notebooks/laptop.html`; `.github/workflows/notebooks.yml` renders it on a GitHub runner with every
+release too, but keeps that render as the run's artifact and never publishes it. To measure your own,
+render it from the root of a clone, on a laptop that is plugged in and otherwise idle:
 
 ```bash
 npm ci && npm run build:cli
 pip install jupyter pandas matplotlib pyfaidx
 quarto render notebooks/laptop.qmd
 ```
+
+The page is one file and carries its table and its stamp inside it, so committing
+`notebooks/laptop.html` is all it takes to publish a render: the site's build unpacks the two beside it.
 
 The data (about 13.7 GB) are downloaded once into `notebooks/work/laptop/data/`; files that
 `validation.qmd` has already downloaded are linked rather than downloaded again. The analyses take about
@@ -282,6 +287,14 @@ times = pd.DataFrame(rows).set_index('name').loc[[task[0] for task in TASKS]].re
 ```
 
 ## Results
+
+```{python}
+#| echo: false
+#| output: asis
+# Carried inside the page rather than linked beside it: notebooks/scripts/rendered.py says why.
+print(f"Every analysis measured, with its command and the machine: "
+      f"{R.attach('timings.tsv', times.to_csv(sep=chr(9), index=False))}.")
+```
 
 ```{python}
 def duration(seconds):

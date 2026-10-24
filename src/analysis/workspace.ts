@@ -91,6 +91,11 @@ export interface AnalysisWorkspaceHost {
    */
   source(task?: AnalysisTask): { uri: string; source: SourceSpec; cells?: readonly string[]; label?: string } | null
   context(task?: AnalysisTask): AnalysisContext | null
+  /**
+   * Where a map's task recipes are remembered (`AnalysisContext.memoryKey`): the
+   * session's key for the file. Absent, the file's own URI.
+   */
+  memoryKey?(uri: string): string
   framing(): AnalysisFraming | null
   block(): BlockInput | null
   /**
@@ -472,10 +477,11 @@ export class AnalysisWorkspace {
     const map = on.map
     const uri = result.provenance.framing.uri
     const context = this.host.context(task)
+    const key = this.host.memoryKey?.(uri) ?? uri
     rememberParams(
-      uri,
+      key,
       task.id,
-      asAsked(task, result.provenance.params, recallParams(uri, task.id), context?.uri === uri ? context : null),
+      asAsked(task, result.provenance.params, recallParams(key, task.id), context?.uri === uri ? context : null),
     )
 
     // **Before the early return below**, because this task produces neither a

@@ -67,6 +67,14 @@ const KEY_ORDER = [
   'smooth',
   'op',
   'flip',
+  'lower',
+  'score2',
+  'oe2',
+  'smooth2',
+  'transform2',
+  'colormap2',
+  'vmin2',
+  'vmax2',
 ] as const
 
 /** The keys a patch may remove; `uri` and `view` always exist. */
@@ -96,6 +104,14 @@ const OPTIONAL_KEYS = [
   'smooth',
   'op',
   'flip',
+  'lower',
+  'score2',
+  'oe2',
+  'smooth2',
+  'transform2',
+  'colormap2',
+  'vmin2',
+  'vmax2',
 ] as const
 
 /**
@@ -306,6 +322,29 @@ export function parseViewState(hash: string): ViewState | null {
     if (!Number.isNaN(parsed) || vmax === 'NaN') state.vmax = parsed
   }
 
+  // The lower triangle's own reading (§5.10), on the rules each of its keys'
+  // upper twins is read by: the switch and the O/E as booleans, the score as any
+  // string `scoreFor` can repair, the despeckle only as a token this build
+  // offers, the transform only from the list, and a clip bound only as a number.
+  const lower = raw.get('lower')
+  if (lower !== undefined) state.lower = lower === '1' || lower === 'true'
+  const score2 = raw.get('score2')
+  if (score2 !== undefined && score2 !== '') state.score2 = score2
+  const oe2 = raw.get('oe2')
+  if (oe2 !== undefined) state.oe2 = oe2 === '1' || oe2 === 'true'
+  const smooth2 = raw.get('smooth2')
+  if (smooth2 !== undefined && smooth2 !== '' && parseSmooth(smooth2) !== null) state.smooth2 = smooth2
+  const transform2 = raw.get('transform2')
+  if (transform2 !== undefined && isTransform(transform2)) state.transform2 = transform2
+  const colormap2 = raw.get('colormap2')
+  if (colormap2 !== undefined && colormap2 !== '') state.colormap2 = colormap2
+  for (const key of ['vmin2', 'vmax2'] as const) {
+    const bound = raw.get(key)
+    if (bound === undefined || bound === '') continue
+    const parsed = Number(bound)
+    if (!Number.isNaN(parsed) || bound === 'NaN') state[key] = parsed
+  }
+
   return state
 }
 
@@ -494,6 +533,54 @@ export const READING_KEYS = ['flip', 'oe', 'arms', 'smooth'] as const
 export const SUBJECT_KEYS = ['cells', 'contacts'] as const
 
 /**
+ * The keys of the lower triangle's own reading (§5.10): the switch, and the
+ * score, smoothing, O/E and colour scale drawn below the diagonal.
+ *
+ * One group because they are one thing on screen — the second tab of the Map
+ * card — and because every rule about them is a rule about all of them: a second
+ * file or a deck drops the lot ({@link withoutLower}), and a change to any of
+ * them is told to the mounted map unless its score needs a read the map does
+ * not hold, which is the router's to decide (`app/SessionRouter.ts`).
+ */
+export const LOWER_KEYS = [
+  'lower',
+  'score2',
+  'oe2',
+  'smooth2',
+  'transform2',
+  'colormap2',
+  'vmin2',
+  'vmax2',
+] as const
+
+/**
+ * The ones a navigation carries, beside {@link READING_KEYS}: every one but the
+ * clip, which is two numbers about one block, as `vmin` and `vmax` are. The
+ * split is how the reader is reading maps, and opening the next chromosome is
+ * looking at another one the same way.
+ */
+export const LOWER_READING_KEYS = [
+  'lower',
+  'score2',
+  'oe2',
+  'smooth2',
+  'transform2',
+  'colormap2',
+] as const
+
+/** Whether a state says anything about the lower reading. */
+export function hasLower(state: ViewState): boolean {
+  return LOWER_KEYS.some((key) => state[key] !== undefined)
+}
+
+/** The state with the lower reading taken out, every key of it. */
+export function withoutLower(state: ViewState): ViewState {
+  const out = { ...state }
+  for (const key of LOWER_KEYS) delete out[key]
+  return out
+}
+
+/**
  * `true` when two states select the same block and differ only in how it is
  * painted, what arithmetic is done to it, or what is drawn beside it — the
  * things a mounted view can be *told*, rather than rebuilt for.
@@ -514,10 +601,12 @@ export function differsOnlyInPresentation(a: ViewState, b: ViewState): boolean {
  * is depends on the file — its columns, and whether it is balanced by default,
  * which is what makes `balance=1` and no `balance` the same read on one file and
  * different reads on another — so the caller, which knows the file, asks
- * whether the column and the balancing in force are the same.
+ * whether the column and the balancing in force are the same. The lower
+ * reading (§5.10) is here for the same reason: its score may be the block the
+ * map holds or a second read of it, and the caller asks which.
  */
 export function differsOnlyInPresentationOrScore(a: ViewState, b: ViewState): boolean {
-  return differsOnly(a, b, [...SCALE_KEYS, ...DERIVED_KEYS, ...DECK_KEYS, 'score', 'balance'])
+  return differsOnly(a, b, [...SCALE_KEYS, ...DERIVED_KEYS, ...DECK_KEYS, ...LOWER_KEYS, 'score', 'balance'])
 }
 
 /**

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Fig. 2 of the Chromosomix paper: bacterial chromosomes read along their two arms.
+"""Fig. S3 of the Chromosomix paper: bacterial chromosomes read along their two arms.
 
     npm run build:cli                                  # the chromosomix command every analysis runs on
     python -m pip install numpy scipy matplotlib h5py
-    python manuscript/figure2/make_figure.py           # figure2.pdf, figure2.png and numbers.tsv
+    python manuscript/figureS3/make_figure.py          # figureS3.pdf, figureS3.png and numbers.tsv
 
 The data are the paper store's (`demo/store/chromosomix_paper/`, listed in `demo/store/MANIFEST.tsv`):
 *C. necator* N-1 (a), the *B. subtilis* PY79 ParB time course (b), and *P. aeruginosa* wild type and
@@ -821,13 +821,13 @@ def main() -> int:
     draw_c(page, cd, y_cd)
     p = draw_d(page, cd, y_cd, 13.0 + 3 * 33.5 + 6)
     for suffix in ("pdf", "svg"):
-        page.fig.savefig(HERE / f"figure2.{suffix}")
-    page.fig.savefig(HERE / "figure2.png", dpi=300)
+        page.fig.savefig(HERE / f"figureS3.{suffix}")
+    page.fig.savefig(HERE / "figureS3.png", dpi=300)
     rows = numbers(a, b, cd, p)
     (HERE / "numbers.tsv").write_text("".join(f"{k}\t{v}\n" for k, v in rows))
     for k, v in rows:
         print(f"{k:<48} {v}")
-    print("wrote", ", ".join(str((HERE / f"figure2.{s}").relative_to(ROOT)) for s in ("pdf", "svg", "png")))
+    print("wrote", ", ".join(str((HERE / f"figureS3.{s}").relative_to(ROOT)) for s in ("pdf", "svg", "png")))
     return 0
 
 

@@ -42,12 +42,16 @@
  * - **No map at all.** A task of the annotations venue runs with no file
  *   positional, over the assembly the tracks declare — the 1D browser's own
  *   framing (§5.8), so a run made there is a run this can repeat.
- * - **A named `.pairs`.** `expected --stranded --pairsUri` reads a local path
- *   through `openFile`, and a `.pairs` given as the map carries its own four
- *   orientation curves into the run, as an import in the app does.
+ * - **A named `.pairs`.** `pairsqc --pairs` (and the retired `expected
+ *   --stranded --pairsUri`) reads a local path through `openFile`, and a
+ *   `.pairs` given as the map carries what its import counted into the run —
+ *   the four orientation curves and `pairtools stats` — as an import in the
+ *   app does, and its own file for a task that reads the records again.
  *
  * A composite (`magnetwork` requires `magqc`) runs its requirements first, at
- * their defaults, exactly as `AnalysisRunner.plan` does.
+ * their defaults — or as the task's own flags answered them for it, Pairs QC's
+ * reference and enzyme being the restriction step's — exactly as
+ * `AnalysisRunner.plan` does.
  *
  * ## And why `replay` is the half that matters
  *
@@ -138,9 +142,9 @@ import { parsePdb, pdbRefusal, sniffPdb, writePdb } from '../annotations/pdb'
 import type { FeatureSet, PairSet, StoredEntry } from '../annotations/types'
 import { hicProBinsNames, isHicProMatrix } from '../annotations/sidecar'
 import { openReference, type Reference } from './reference'
-import { Downloads, addressDirectories, displayOf, fileNameOf, isAddress } from './remote'
+import { Downloads, SIDE_CACHE_BYTES, addressDirectories, displayOf, fileNameOf, isAddress } from './remote'
 import { DEFAULT_THREADS, serveIfHelper, useThreads } from './threads'
-import { quote } from '../analysis/cliCommand'
+import { quote, referenceKeyOf } from '../analysis/cliCommand'
 import { regionLabel, typedLocusToRegion } from '../genome/assembly'
 import { parseBins } from '../hicpro/parse'
 import { DEFAULT_COUNT_COLUMN } from '../metacooler/matrix'
@@ -160,10 +164,14 @@ import {
   type Params,
   type TaskOutput,
   type TaskResult,
+  upstreamParamsOf,
 } from '../analysis/types'
 import type { PeerMap, TaskInputs } from '../analysis/worker/protocol'
-import type { OrientationSummary } from '../worker/protocol'
+import type { OrientationSummary, SourceSpec } from '../worker/protocol'
 import { importPairs, probePairs } from '../pairs/import'
+import { binPairs } from '../pairs/bin'
+import { isPairsFile, readPairsHeader } from '../pairs/format'
+import { writePairtoolsStats, type PairStats } from '../pairs/stats'
 import { ViewerError } from '../errors'
 import { parseUri } from '../uri'
 import type { ByteSource } from '../types'
@@ -878,13 +886,12 @@ interface RunOptions {
   params: Params
   path: string
   /**
-   * Where `path`'s bytes are when they are not where it says: the copy of an
-   * address (`cli/remote.ts`). The map is still opened *as* `path`, so its
-   * framing, its provenance and every sentence about it name the address the
-   * reader typed rather than a temporary file.
+   * The command's addresses: how a map named by one is read — by range, or
+   * from a copy fetched whole — and what a run names as it goes, an
+   * `--against` or a `.pairs`. A map is opened *as* the address the reader
+   * typed, so its framing, its provenance and every sentence about it name
+   * that rather than a temporary file.
    */
-  local?: string | undefined
-  /** The command's fetched addresses, for what a run names as it goes: an `--against`, a `.pairs`. */
   downloads: Downloads
   window?: string | undefined
   balance?: boolean | undefined
@@ -948,12 +955,16 @@ async function drawnTo(
   return depth
 }
 
-/** A map opened for a run, with the one fact an import carries that a mount does not. */
+/** A map opened for a run, with the facts an import carries that a mount does not. */
 interface Opened {
   mc: MetaCooler
   source: ByteSource
   /** The four orientation curves counted while binning a `.pairs`, or `null`. */
   orientation: OrientationSummary | null
+  /** What `pairtools stats` counted in the same pass, or `null`. */
+  stats?: PairStats | null
+  /** Whether the map was binned from a `.pairs` here, rather than opened. */
+  binned?: boolean
 }
 
 /** `--bin-size` and `--rungs`, the CLI's answer to the browser's dialog. */
@@ -977,12 +988,13 @@ interface PairsBinning {
  * resolutions a session would have had.
  *
  * `uri` is what the map is called and `path` where its bytes are — one file
- * for a path, and an address and its downloaded copy for an address.
+ * for a path, the address itself for one read by range, and its downloaded
+ * copy for one fetched whole. A `.pairs` file's `.px2` is looked for beside it.
  */
 async function openForTask(
   uri: string,
   source: ByteSource,
-  options: Pick<RunOptions, 'binning' | 'quiet'>,
+  options: Pick<RunOptions, 'binning' | 'quiet' | 'downloads'>,
   path: string,
 ): Promise<Opened> {
   const named = parseUri(uri).path
@@ -999,7 +1011,7 @@ async function openForTask(
         error.detail,
       )
     }
-    const probe = await probePairs(source, () => openPairsIndex(path))
+    const probe = await probePairs(source, () => openPairsIndex(path, options.downloads))
     if (!options.quiet) {
       const known = probe.records === null ? 'an unindexed file' : `${probe.records.toLocaleString()} records`
       process.stderr.write(`  binning ${known} at ${binning.base} bp\n`)
@@ -1024,6 +1036,10 @@ async function openForTask(
     // that draws them (`expected --stranded`) runs on the table.
     const counted = pixels.orientation ?? null
     return {
+      // …and its `pairtools stats`, for Pairs QC, which the session hands it the
+      // same way (`TaskInputs.pairsStats`).
+      stats: pixels.stats ?? null,
+      binned: true,
       mc: MetaCooler.fromPairs({
         uri: named,
         header: imported.header,
@@ -1042,13 +1058,21 @@ async function openForTask(
 }
 
 /**
- * The `.px2` beside a pairs file on disk, or `null`.
+ * The `.px2` beside a pairs file, on disk or at the address beside it, or `null`.
  *
  * Both spellings `pairix` writes, most specific first — the same rule
  * `annotations/sidecar.ts` states for a `.bai`, and for the same reason: a
  * reader must not have to know which convention produced the pair they have.
  */
-async function openPairsIndex(path: string): Promise<ByteSource | null> {
+async function openPairsIndex(path: string, downloads: Downloads): Promise<ByteSource | null> {
+  if (isAddress(path)) {
+    const name = fileNameOf(path)
+    for (const candidate of [`${name}.px2`, `${name.replace(/\.b?gz$/i, '')}.px2`]) {
+      const source = await downloads.sidecarRanged(path, candidate)
+      if (source !== null) return source
+    }
+    return null
+  }
   for (const candidate of [`${path}.px2`, `${path.replace(/\.b?gz$/i, '')}.px2`]) {
     if (!existsSync(candidate)) continue
     try {
@@ -1070,15 +1094,18 @@ async function openPairsIndex(path: string): Promise<ByteSource | null> {
  * — but the parse below is the shared one, so a number computed in a shell and
  * a number computed by clicking come out of the same implementation.
  *
- * `local` is where the bytes are when an address named the file: the copy
- * `cli/remote.ts` fetched, under the address's own file name, so every road
- * below that reads a name — a HiC-Pro matrix's, the bin file beside it — reads
- * the one the reader typed.
+ * An address is read **by range**, as the app reads it (§23.1): every road
+ * below but HiC-Pro's opens a byte source, and a range source is one. Where its
+ * host serves no range, and for a HiC-Pro matrix, which is read whole beside
+ * its bin file, it is fetched to disk by `cli/remote.ts` under the address's own
+ * file name, so every road that reads a name reads the one the reader typed.
+ * `keep` holds that copy to the end of the command — an `--against` every run
+ * reads — rather than letting it go once this run is done.
  */
 async function openLocal(
   uri: string,
-  options: Pick<RunOptions, 'binning' | 'quiet'>,
-  local?: string,
+  options: Pick<RunOptions, 'binning' | 'quiet' | 'downloads'>,
+  keep = false,
 ): Promise<Opened> {
   // **The `::` is addressed to the container, not to the filesystem.** An
   // `.mcool` is a collection of coolers and `detect.ts` refuses one at its root
@@ -1088,7 +1115,18 @@ async function openLocal(
   // path is split off for the filesystem and the *uri* is what the container is
   // opened with, which is where `parseUri` reads the group from.
   const named = parseUri(uri).path
-  const path = local ?? named
+  if (isAddress(named) && !isHicProMatrix(fileNameOf(named))) {
+    const ranged = await options.downloads.ranged(named)
+    if (ranged !== null) {
+      try {
+        return await openForTask(uri, ranged, options, named)
+      } catch (error) {
+        ranged.close()
+        throw error
+      }
+    }
+  }
+  const path = (await options.downloads.local(named, keep)) ?? named
   const name = basename(path)
   if (!isHicProMatrix(name)) {
     // The HDF5 road, and the `.pairs` import that hangs off its one refusal.
@@ -1141,7 +1179,8 @@ function decodeWhole(read: Buffer): Promise<Uint8Array> {
  */
 async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedGraphContig[] }> {
   const { task, path } = options
-  const opened = await openLocal(uriOf(path), options, options.local)
+  options.downloads.refuseScheme(path)
+  const opened = await openLocal(uriOf(path), options)
   let mc = opened.mc
   try {
     // The ticked cells, as the analysis worker selects them before any task
@@ -1257,6 +1296,12 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
       ...options.inputs,
       contigLengths: Object.fromEntries(mc.chromsizes),
       ...(opened.orientation === null ? {} : { orientation: opened.orientation }),
+      // The records themselves, where the map was binned from them here: what
+      // their import counted, and the file again for a task that reads them
+      // (Pairs QC's fragments) — named as `peersOf` names a map, a path as a
+      // `file:` URL, and opened by `openSource` below.
+      ...(opened.stats === undefined || opened.stats === null ? {} : { pairsStats: opened.stats }),
+      ...(opened.binned === true ? { mapSource: specOf(path) } : {}),
       ...(options.peers.length === 0 ? {} : { peers: peersOf(options.peers) }),
       // This map by its base name too, as `peersOf` names the others, so the
       // matrix's axes and the tables name every file the same way.
@@ -1292,9 +1337,9 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
       // analysis worker's own `peer`, against a filesystem instead of a
       // `SourceSpec`. Mounted through `openLocal`, so a `.pairs` or a HiC-Pro
       // pair beside the map opens by the same road the map did — and an address
-      // from the copy fetched before the first run, under its own name.
+      // by range, or from the copy of one whose host serves none.
       peer: async (map) => {
-        const other = await openLocal(uriOf(map.uri), options, await options.downloads.local(map.uri, true))
+        const other = await openLocal(uriOf(map.uri), options, true)
         // Every map of a comparison at the one depth (§6.5).
         try {
           await drawnTo(other.mc, options.contacts, options.quiet)
@@ -1332,14 +1377,22 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
         await source.mount()
         return source
       },
-      // The same, named by an address — which the worker reads by range and a
-      // shell fetches whole first (`cli/remote.ts`), as it fetches a map.
-      openBytes: async (url) => {
-        const at = await options.downloads.local(url, true)
-        if (at === undefined) throw new Error(`${url} is not an address.`)
-        const source = await LocalFileSource.fromPath(at)
-        await source.mount()
-        return source
+      // The same, named by an address — read by range, as the worker reads
+      // it and as a map is read here, or from a copy where its host serves none.
+      openBytes: async (url) => openAddress(url, options.downloads),
+      // A file handed over as a `SourceSpec` — here only ever the map's own
+      // `.pairs`, as `specOf` spelled it: a path as a `file:` URL, read where it
+      // lies, or an address, read as `openBytes` reads one.
+      openSource: async (spec) => {
+        if (spec.kind !== 'remote') {
+          throw new Error('a file handed over in a browser cannot be read from a shell')
+        }
+        if (spec.url.startsWith('file:')) {
+          const source = await LocalFileSource.fromPath(fileURLToPath(spec.url))
+          await source.mount()
+          return source
+        }
+        return openAddress(spec.url, options.downloads)
       },
     })
 
@@ -1391,6 +1444,24 @@ function peersOf(paths: readonly string[]): PeerMap[] {
  */
 function uriOf(path: string): string {
   return isAddress(path) ? path.trim() : resolve(path)
+}
+
+/**
+ * A file named on the line as the `SourceSpec` a task is handed: an address as
+ * it is, and a path as the `file:` URL `peersOf` writes for one — which the job's
+ * own `openSource` reads back where it lies.
+ */
+function specOf(path: string): SourceSpec {
+  const file = parseUri(path).path
+  return { kind: 'remote', url: isAddress(file) ? file.trim() : pathToFileURL(resolve(file)).href }
+}
+
+/** An address opened for its bytes: by range, or from a copy where its host serves none. */
+async function openAddress(url: string, downloads: Downloads): Promise<ByteSource> {
+  const where = await downloads.where(url, true)
+  const source = where.kind === 'range' ? where.source : await LocalFileSource.fromPath(where.path)
+  await source.mount()
+  return source
 }
 
 /**
@@ -1457,9 +1528,12 @@ function gcTrackFor(
  * `AnalysisRunner.plan`, without the cache: depth first, each requirement at
  * its own defaults — the reader configured the network and not the QC under
  * it, and inventing parameters for a form they never opened would be putting
- * numbers in their mouth — and de-duplicated, so two steps wanting one
- * upstream result compute it once. A cycle is a catalogue mistake and is named
- * rather than run into.
+ * numbers in their mouth — except what the task's own flags answered for the
+ * step (`upstreamParams`: Pairs QC's `--sequence` and `--enzyme` are the
+ * restriction step's), laid over them, and a step the task says to leave out,
+ * which is not run at all. De-duplicated, so two steps wanting one upstream
+ * result compute it once. A cycle is a catalogue mistake and is named rather
+ * than run into.
  */
 async function runChain(
   task: AnalysisTask,
@@ -1483,12 +1557,16 @@ async function runChain(
       if (required === undefined) {
         throw new Error(`${node.id} requires the task ${id}, which this build does not have`)
       }
-      // Its own defaults, and balancing as the framing reads the file — which a
-      // required step's form would have set from the file too.
+      // What the task answered for the step, or that it is to be left out —
+      // `upstreamParamsOf`, the function `AnalysisRunner.plan` asks too.
+      const answered = upstreamParamsOf(node, id, nodeParams)
+      if (answered === null) continue
+      // Its own defaults under those answers, and balancing as the framing reads
+      // the file — which a required step's form would have set from the file too.
       const requiredParams = withDerived(
         required,
         Object.fromEntries(
-          Object.entries(defaultParams(required.params)).filter(
+          Object.entries({ ...defaultParams(required.params), ...answered }).filter(
             ([key]) => !required.params.some((spec) => spec.key === key && paramDerived(spec)),
           ),
         ),
@@ -1924,7 +2002,11 @@ export function readPairText(text: string, path: string): PairSet {
  * heatmap's axes read as filenames rather than as `a1`. An address is fetched
  * first and named by its file, query and all left off.
  */
-async function loadInputs(args: Args, downloads: Downloads): Promise<TaskInputs> {
+async function loadInputs(
+  args: Args,
+  downloads: Downloads,
+  task?: AnalysisTask,
+): Promise<TaskInputs> {
   const inputs: TaskInputs = {}
   const labels: Record<string, string> = {}
   for (const path of all(args, 'features')) {
@@ -1936,7 +2018,12 @@ async function loadInputs(args: Args, downloads: Downloads): Promise<TaskInputs>
     else inputs.features = { ...inputs.features, [id]: read.features }
     labels[id] = id
   }
-  for (const path of all(args, 'pairs')) {
+  // **Not where the task claims the name for a contact list** — Pairs QC's
+  // `--pairs` is the `.pairs` its records are read from, one name and one
+  // meaning as `--window` is apa's. Read here as a loop table, a contact list
+  // of gigabytes was fetched whole and parsed as a BEDPE before anything ran.
+  const claimed = task?.params.some((spec) => spec.key === 'pairs' && spec.kind === 'file') === true
+  for (const path of claimed ? [] : all(args, 'pairs')) {
     const at = (await downloads.local(path, true)) ?? path
     const text = await decodeAnnotationText(new Uint8Array(await readFile(at)))
     const id = fileNameOf(path)
@@ -1962,15 +2049,63 @@ async function loadInputs(args: Args, downloads: Downloads): Promise<TaskInputs>
  * Keyed by the string the reader typed, because that string is what comes back
  * out of `params.sequence` — there is no entry store here to allocate an id
  * from, which is the same absence `bindInputs` argues about at length. An
- * address is read from its copy, fetched with the `.fai` beside it where the
- * server has one, so a remote genome is read by range once it is on disk.
+ * address is read by range where it is, with the `.fai` beside it where the
+ * server has one, so a remote genome is never fetched whole for a window.
  */
-async function loadSequences(args: Args, downloads: Downloads): Promise<Map<string, Reference>> {
+async function loadSequences(
+  args: Args,
+  downloads: Downloads,
+  also: readonly string[] = [],
+): Promise<Map<string, Reference>> {
   const held = new Map<string, Reference>()
-  for (const path of all(args, 'sequence')) {
-    held.set(path, await openReference((await downloads.local(path, true)) ?? path))
+  for (const path of [...all(args, 'sequence'), ...also]) {
+    if (held.has(path)) continue
+    const where = await downloads.where(path, true, SIDE_CACHE_BYTES)
+    held.set(path, await openReference(where, (name) => downloads.sidecarText(path, name)))
   }
   return held
+}
+
+/**
+ * The reference a task's own flag names that `--sequence` did not load, as a
+ * list of none or one.
+ *
+ * What a parameter names is what is loaded, which is `--tracks`' arrangement:
+ * `pairsqc --reference ref.fa` reads the file it names rather than running with
+ * no digest and a note saying the reference was never opened. Only for the
+ * parameter `--sequence` answers by itself ({@link referenceKeyOf}), the one a
+ * task hands on to the step it requires.
+ */
+function referenceNamed(task: AnalysisTask, params: Params): string[] {
+  const key = referenceKeyOf(task)
+  if (key === null || key === 'sequence') return []
+  const value = params[key]
+  // A path that is there, or an address: a workspace's entry id (`a3`) names no
+  // file, and is resolved against what `--sequence` loaded instead (`storeFor`).
+  return typeof value === 'string' && value !== '' && (isAddress(value) || existsSync(value)) ? [value] : []
+}
+
+/**
+ * A task's reference answered by the one `--sequence` the line loaded, where
+ * its own flag left it open.
+ *
+ * Pairs QC's `reference` is the restriction step's `sequence`, handed on
+ * (`upstreamParams`), so a line spells it as that step does: `pairsqc
+ * sample.pairs.gz --sequence ref.fa --enzyme DpnII`, which is the line the
+ * console writes (`analysis/cliCommand.ts`'s `referenceKeyOf`, the rule both
+ * sides read). Motif's is called `sequence` and is answered by the flag's own
+ * name already; two references loaded is two answers, and neither is guessed.
+ */
+function withReference(
+  task: AnalysisTask,
+  params: Params,
+  sequences: ReadonlyMap<string, Reference>,
+): Params {
+  const key = referenceKeyOf(task)
+  if (key === null || key === 'sequence' || sequences.size !== 1) return params
+  const held = params[key]
+  if (typeof held === 'string' && held !== '') return params
+  return { ...params, [key]: [...sequences.keys()][0] }
 }
 
 /**
@@ -1987,8 +2122,9 @@ async function loadSequences(args: Args, downloads: Downloads): Promise<Map<stri
  *
  * Opened before any map, so an unreadable track is exit 2 with a sentence
  * rather than the same failure once per file — and so is a name that looks like
- * a path and is not one. An address is fetched then too, and read from its copy
- * under the address it was named by.
+ * a path and is not one. An address is opened then too — a bigWig or a `.2bit`
+ * by range, a text track in one request — and filed under the address it was
+ * named by.
  */
 async function loadTrackFiles(
   tasks: readonly { task: AnalysisTask; params: Params }[],
@@ -2013,7 +2149,7 @@ async function loadTrackFiles(
       }
     }
   }
-  const held = await loadTracks(paths, (path) => downloads.local(path, true))
+  const held = await loadTracks(paths, (path) => downloads.where(path, true, SIDE_CACHE_BYTES))
   // The app's ids, filed against the files they named: `a1` was `signal.bw`
   // when the workspace was saved, and `--track signal.bw` is on the line.
   for (const entry of stored) {
@@ -2131,13 +2267,16 @@ const USAGE = `chromosomix — the Analysis panel, from a shell
                            reads it: BED, narrowPeak, GTF, genePred, VCF,
                            cytoBand, barChart, junctions, bedpe, interact,
                            longrange
-      --sequence <ref.fa>  a reference, for a task that reads residues (motif)
-                           or phases by GC content (compartments). Gzipped or not;
-                           read by range where its .fai is beside it, or a .2bit
+      --sequence <ref.fa>  a reference, for a task that reads residues (motif,
+                           restriction, and pairsqc's digest) or phases by GC
+                           content (compartments). Gzipped or not; read by
+                           range where its .fai is beside it, or a .2bit
       --pairs <file>       a BEDPE, interact or longrange, for an off-diagonal
                            pileup. Note this is a *feature* table and not a
                            contact list — a .pairs file to bin is a positional
-                           argument, and takes --bin-size below
+                           argument, and takes --bin-size below. pairsqc's own
+                           --pairs is the exception: the contact list a matrix
+                           was made from, read for its records
       --against <file>     another contact map, for a task that compares two
                            (hicrep). Repeat it for a third
       --value <column>     the score column to read, for a file that carries
@@ -2180,8 +2319,8 @@ const USAGE = `chromosomix — the Analysis panel, from a shell
                            repeated or comma-separated: a bigWig, a bedGraph, a
                            wig, or a FASTA read as GC content
       --<switch>           a parameter that is on or off, which takes no value
-                           after it: --stranded turns one on, and
-                           --stranded=false or --no-stranded turns it off
+                           after it: --derivative turns one on, and
+                           --derivative=false or --no-derivative turns it off
 
   chromosomix <task> --tracks <file.bw> --features <file.bed> [...]
       A task that reads tracks and no matrix (metaplot, trackcorr, frip,
@@ -2206,6 +2345,15 @@ const USAGE = `chromosomix — the Analysis panel, from a shell
       --alpha <a>          the exponent of the distances, 1/SCN^a.
                            Default: 0.2
 
+  chromosomix stats <file.pairs.gz> [...]
+      What \`pairtools stats\` writes for a .pairs file, counted by the pass the
+      app's import makes: records mapped on both sides, on one and on neither,
+      duplicates, cis and trans and cis past 1 to 40 kb, every pair type, the
+      four orientations by separation and where they converge, and the
+      library's size. One <name>.stats per file into --out, in pairtools' own
+      format, which MultiQC and \`pairtools stats --merge\` read; to stdout
+      without --out.
+
   chromosomix replay <workspace.chromosomix.json> --over <file> [...]
       Re-run every analysis recorded in a saved workspace, with the parameters
       it recorded, over the files named by --over and after the workspace —
@@ -2226,10 +2374,11 @@ const USAGE = `chromosomix — the Analysis panel, from a shell
       h5wasm and @gmod/bbi installed beside it, which read every map and track.
 
 A file may be an http or https address — a map, or what --against,
---sequence, --tracks, --features or --pairs names. The app reads one by
-range, and its range requests are synchronous, which a browser worker has and
-Node does not; so the command downloads the whole of it first, into $TMPDIR,
-with its progress on stderr, and removes it when it ends.
+--sequence, --tracks, --features or --pairs names. A map, a bigWig, a .2bit
+and an indexed FASTA are read by range, as the app reads them, and nothing of
+them is written to disk. What is read whole — a feature file, a HiC-Pro
+matrix, a workspace, or any file whose host serves no range — is fetched into
+$TMPDIR, with its progress on stderr, and removed when the command ends.
 `
 
 /**
@@ -2296,6 +2445,9 @@ function listTasks(): void {
       process.stdout.write('      --against <file>  The other maps to compare with; repeat per map\n')
     }
     for (const param of task.params) {
+      // A retired question is still taken, as a stored line carries it, and not
+      // offered: the task it moved to lists it under its own name.
+      if (param.retired === true) continue
       if (paramDerived(param) && param.key === 'balance') {
         process.stdout.write(
           '      --no-balance  read the raw counts (balanced by default where the file carries weights)\n',
@@ -2333,14 +2485,15 @@ async function runCommand(args: Args, downloads: Downloads): Promise<number> {
     params = paramsFor(task, args)
     binning = pairsBinningOf(args, task)
     framing = framingFlags(args, task)
-    inputs = bindInputs(task, params, await loadInputs(args, downloads))
-    sequences = await loadSequences(args, downloads)
+    inputs = bindInputs(task, params, await loadInputs(args, downloads, task))
+    sequences = await loadSequences(args, downloads, referenceNamed(task, params))
+    params = withReference(task, params, sequences)
     tracks = await loadTrackFiles([{ task, params }], args, downloads)
     inputs = withSequenceLabels(withTrackLabels(inputs, tracks), sequences)
-    // The other maps, fetched now where they are addresses: every run mounts
+    // The other maps, reached now where they are addresses: every run mounts
     // them, and one that cannot be had is a fault in the command rather than in
     // the two hundredth file.
-    for (const peer of all(args, 'against')) await downloads.local(peer, true)
+    for (const peer of all(args, 'against')) await downloads.reach(peer, true)
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
     return 2
@@ -2404,7 +2557,6 @@ async function runCommand(args: Args, downloads: Downloads): Promise<number> {
         task,
         params,
         path,
-        local: await downloads.local(path, false),
         downloads,
         binning,
         // Not `one(args, 'window')`. `apa` declares a parameter of that name —
@@ -2550,7 +2702,7 @@ async function replayCommand(args: Args, downloads: Downloads): Promise<number> 
       config.tracks,
     )
     loaded = withSequenceLabels(withTrackLabels(await loadInputs(args, downloads), tracks), sequences)
-    for (const peer of all(args, 'against')) await downloads.local(peer, true)
+    for (const peer of all(args, 'against')) await downloads.reach(peer, true)
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
     return 2
@@ -2565,15 +2717,9 @@ async function replayCommand(args: Args, downloads: Downloads): Promise<number> 
   const written = new Set<string>()
   let failures = 0
   for (const [at, file] of files.entries()) {
-    // Fetched once for every task it is replayed under, and let go after the
-    // last of them; a fetch that fails fails each of them by name.
-    let local: string | undefined
-    let fetched: unknown = null
-    try {
-      local = await downloads.local(file, false)
-    } catch (error) {
-      fetched = error
-    }
+    // Opened by each task it is replayed under — by range, or from one copy
+    // fetched whole and let go after the last of them; an address that cannot
+    // be had fails each of them by name.
     for (const entry of recorded) {
       const task = taskById(entry.task)
       if (task === undefined) {
@@ -2597,12 +2743,10 @@ async function replayCommand(args: Args, downloads: Downloads): Promise<number> 
       }
       try {
         if (!quiet) process.stderr.write(`${displayOf(file)} · ${task.title}\n`)
-        if (fetched !== null) throw fetched
         const result = await runOne({
           task,
           params: entry.params,
           path: file,
-          local,
           downloads,
           balance: undefined,
           binning,
@@ -2662,7 +2806,8 @@ async function circularCommand(args: Args, downloads: Downloads): Promise<number
   let failures = 0
   for (const [index, path] of args.positional.entries()) {
     try {
-      const { mc } = await openLocal(uriOf(path), { binning, quiet }, await downloads.local(path, false))
+      downloads.refuseScheme(path)
+      const { mc } = await openLocal(uriOf(path), { binning, quiet, downloads })
       try {
         const balance = flag(args, 'no-balance') ? false : mc.hasWeights
         const pairs = mc.chromnames.map((name, id) => [name, mc.coords.contigLengths[id]] as const)
@@ -2710,6 +2855,90 @@ async function circularCommand(args: Args, downloads: Downloads): Promise<number
 }
 
 /**
+ * `pairtools stats` for each `.pairs` named, as the app's import counts it (§3.7).
+ *
+ * The counts are the import's own (`pairs/stats.ts`), made by the import's own
+ * pass — binned at one bin a sequence, which costs nothing, so that what this
+ * writes and what the General column shows of the same file are one count. A
+ * file with no `#chromsize:` is refused as the import refuses it: the sizes are
+ * the last section of the file, and the bin table the pass is built on.
+ *
+ * The one file this command writes with no `#` lines over it. pairtools reads a
+ * `.stats` back a `key<TAB>value` a line and refuses any other, and the point
+ * of writing its format is that it is read by what reads pairtools' — MultiQC,
+ * `pairtools stats --merge`. Where it came from is said on stderr instead.
+ */
+async function statsCommand(args: Args, downloads: Downloads): Promise<number> {
+  if (args.positional.length === 0) {
+    process.stderr.write('stats needs at least one .pairs file.\n')
+    return 2
+  }
+  const directory = one(args, 'out') ?? one(args, 'o')
+  const quiet = flag(args, 'quiet')
+  const stems = stemsOf(args.positional)
+  let failures = 0
+  for (const [index, path] of args.positional.entries()) {
+    let source: ByteSource | null = null
+    try {
+      if (!quiet) process.stderr.write(`${displayOf(path)}\n`)
+      downloads.refuseScheme(path)
+      const where = await downloads.where(uriOf(path), false)
+      source = where.kind === 'range' ? where.source : await LocalFileSource.fromPath(where.path)
+      await source.mount()
+      if (!(await isPairsFile(source))) {
+        throw new Error(`${fileNameOf(path)} is not a .pairs file: it does not begin with a \`## pairs format\` line.`)
+      }
+      const header = await readPairsHeader(source)
+      const widest = header.contigs.reduce((most, contig) => Math.max(most, contig.length), 1)
+      let shown = -1
+      const binned = await binPairs(source, {
+        binSize: widest,
+        contigs: header.contigs,
+        columns: header.columns,
+        ...(quiet
+          ? {}
+          : {
+              onProgress: (done: number, total: number) => {
+                const percent = total > 0 ? Math.floor((done / total) * 100) : 0
+                if (percent === shown) return
+                shown = percent
+                process.stderr.write(`\r  counting records: ${percent}%   `)
+              },
+            }),
+      })
+      if (!quiet) process.stderr.write('\r')
+      if (binned?.stats == null) throw new Error('the count was interrupted')
+      const text = writePairtoolsStats(binned.stats)
+      if (directory === undefined) {
+        process.stdout.write(text)
+      } else {
+        await mkdir(directory, { recursive: true })
+        const at = join(directory, `${stems[index]}.stats`)
+        await writeFile(at, text)
+        if (!quiet) process.stderr.write(`  wrote ${at}\n`)
+      }
+      if (!quiet) process.stderr.write(`  ${statsLine(binned.stats)}\n`)
+    } catch (error) {
+      failures += 1
+      process.stderr.write(`  failed: ${error instanceof Error ? error.message : String(error)}\n`)
+    } finally {
+      source?.close()
+      if (!namedAgain(args.positional, index)) await downloads.release(path)
+    }
+  }
+  return failures === 0 ? 0 : 1
+}
+
+/** The few numbers a reader looks at first, on one line of stderr. */
+function statsLine(stats: PairStats): string {
+  const pct = (part: number, whole: number): string => (whole > 0 ? `${((100 * part) / whole).toFixed(1)}%` : '—')
+  return (
+    `${stats.total.toLocaleString('en-US')} records · ${pct(stats.totalMapped, stats.total)} mapped · ` +
+    `${pct(stats.totalDups, stats.totalMapped)} duplicates · ${pct(stats.cis, stats.totalNodups)} cis`
+  )
+}
+
+/**
  * Boost-HiC's map of each sequence, as an oversample makes it (§6.5) and as
  * Boost-HiC's own `main.py` writes it.
  *
@@ -2745,11 +2974,8 @@ async function boostCommand(args: Args, downloads: Downloads): Promise<number> {
   for (const [index, path] of args.positional.entries()) {
     try {
       if (!quiet) process.stderr.write(`${path}\n`)
-      const { mc } = await openLocal(
-        uriOf(path),
-        { binning: pairsBinningOf(args), quiet },
-        await downloads.local(path, false),
-      )
+      downloads.refuseScheme(path)
+      const { mc } = await openLocal(uriOf(path), { binning: pairsBinningOf(args), quiet, downloads })
       try {
         // The two maps an oversample refuses, for the reasons it gives (§6.5):
         // a sum of cells is not one library, and a square store holds every
@@ -3019,7 +3245,7 @@ export async function main(argv: readonly string[]): Promise<number> {
       listTasks()
       return 0
     }
-    if (!['replay', 'circular', 'boost'].includes(command) && taskById(command) === undefined) {
+    if (!['replay', 'circular', 'boost', 'stats'].includes(command) && taskById(command) === undefined) {
       process.stderr.write(`Unknown task ${JSON.stringify(command)}. Try \`tasks\`.\n`)
       return 2
     }
@@ -3054,6 +3280,7 @@ export async function main(argv: readonly string[]): Promise<number> {
     if (args.command === 'replay') return await replayCommand(args, downloads)
     if (args.command === 'circular') return await circularCommand(args, downloads)
     if (args.command === 'boost') return await boostCommand(args, downloads)
+    if (args.command === 'stats') return await statsCommand(args, downloads)
     return await runCommand(args, downloads)
   } finally {
     await downloads.close()

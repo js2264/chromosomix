@@ -10,7 +10,7 @@ inputs:
     description: juicebox.js, HiGlass and Playwright's Chromium, as notebooks/viewers pins them
     default: 'false'
   references:
-    description: bedtools, seqkit, yapc and IDR, and Boost-HiC
+    description: bedtools, seqkit, yapc and IDR, pairtools, and Boost-HiC
     default: 'false'
   higlass:
     description: higlass-python's tile server, with libfuse 2 for the files it reads from a bucket
@@ -63,12 +63,18 @@ runs:
         npm ci --prefix notebooks/viewers
         npx --prefix notebooks/viewers playwright install --with-deps chromium
 
-    # yapc's first, so that the reference environment's 3.13 is the one left on the PATH.
+    # yapc's and pairtools' first, so that the reference environment's 3.13 is the one left on the PATH.
     - uses: actions/setup-python@v5
       if: inputs.references == 'true'
       id: python311
       with:
         python-version: '3.11'
+
+    - uses: actions/setup-python@v5
+      if: inputs.references == 'true'
+      id: python312
+      with:
+        python-version: '3.12'
 
     - uses: actions/setup-python@v5
       id: python313
@@ -84,6 +90,7 @@ runs:
           echo "REFS=$RUNNER_TEMP/refs"
           echo "QUARTO_PYTHON=$RUNNER_TEMP/refs/bin/python"
           echo "YAPC_PYTHON=$RUNNER_TEMP/yapc-env/bin/python"
+          echo "PAIRTOOLS_PYTHON=$RUNNER_TEMP/pairtools-env/bin/python"
           echo "BOOSTHIC_DIR=$RUNNER_TEMP/Boost-HiC"
           echo "HIGLASS_PYTHON=$RUNNER_TEMP/higlass-env/bin/python"
         } >> "$GITHUB_ENV"
@@ -116,6 +123,17 @@ runs:
         "$pip" install --quiet --no-build-isolation "$RUNNER_TEMP/idr"
         "$pip" install --quiet --no-deps 'git+https://github.com/jurgjn/yapc@cf2ea62694f082fc282a979057d44b5e5b0fb41a'
         "$RUNNER_TEMP/yapc-env/bin/yapc" --help > /dev/null
+
+    # pairtools 1.1.2 imports the `pipes` module Python 3.13 removed, so validation.qmd §§ 25 and 27's
+    # reference has an environment of its own, on 3.12.
+    - name: pairtools, in an environment of its own
+      if: inputs.references == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        '${{ steps.python312.outputs.python-path }}' -m venv "$RUNNER_TEMP/pairtools-env"
+        "$RUNNER_TEMP/pairtools-env/bin/pip" install --quiet -r notebooks/requirements-pairtools.txt
+        "$RUNNER_TEMP/pairtools-env/bin/pairtools" --version
 
     # HiGlass's tile server, as higlass-python starts one, in an environment of its own: its pins
     # (numpy 2, a newer h5py) are not the references'.

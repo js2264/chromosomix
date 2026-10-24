@@ -26,6 +26,9 @@ const LUCIDE = [
   'x',
   'check',
   'info',
+  // What a task re-implements, on its row in the Analysis column (`ui/taskReference.ts`):
+  // drawn rather than a `?` typed in a ring, which a font's metrics set off-centre.
+  'circle-question-mark',
   'keyboard',
   'sun',
   'moon',

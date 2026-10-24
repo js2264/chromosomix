@@ -38,6 +38,8 @@ import {
   STRUCTURE_COLOUR_POSITION,
   STRUCTURE_COLOUR_SEQUENCE,
   STRUCTURE_OTHERS,
+  pinAt,
+  pinOf,
   structureOf,
 } from '../annotations/types'
 import type { AnnotationStore } from '../annotations/store'
@@ -1078,7 +1080,7 @@ export class StructurePanel implements DeckCell {
         this.builtRow = entry.id
         this.colours = null
         this.colouredBy = null
-        this.pinned = -1
+        this.pinned = this.storedPin()
         this.hovered = []
         this.chord = null
         this.relight()
@@ -1209,7 +1211,7 @@ export class StructurePanel implements DeckCell {
     } else if (event.key === 'Escape' && (this.selectFirst >= 0 || this.measureFirst >= 0)) {
       this.selectFirst = -1
       this.measureFirst = -1
-      this.pinned = -1
+      this.pinned = this.storedPin()
       setReadout('')
       this.schedule()
     } else if (this.keys.centre) {
@@ -1351,7 +1353,7 @@ export class StructurePanel implements DeckCell {
     if (first < 0 || first === bead) return
     const pair: readonly [number, number] = [first, bead]
     this.measureFirst = -1
-    this.pinned = -1
+    this.pinned = this.storedPin()
     this.measures = [...this.measures, pair]
     setReadout(this.measureLine(pair))
     this.paintSettings()
@@ -1424,7 +1426,7 @@ export class StructurePanel implements DeckCell {
     if (structure === null || manual === undefined) return
     if (bead < 0) {
       this.selectFirst = -1
-      this.pinned = -1
+      this.pinned = this.storedPin()
       setReadout('')
       this.schedule()
       return
@@ -1439,7 +1441,7 @@ export class StructurePanel implements DeckCell {
     }
     const first = this.selectFirst
     this.selectFirst = -1
-    this.pinned = -1
+    this.pinned = this.storedPin()
     setReadout('')
     const a = lociOf(structure, first)
     const b = lociOf(structure, bead)
@@ -1651,6 +1653,28 @@ export class StructurePanel implements DeckCell {
 
   private style(): StructureStyle {
     return structureOf(this.entry?.style ?? { colour: '', size: 0, mode: 'line', limits: { auto: true, min: 0, max: 1 }, group: '', shape: 'corner', radius: 0, opacity: 1, flip: false })
+  }
+
+  /**
+   * The bead the row's pin names on this model, or `-1` (§25.5): kept on the
+   * row, so a model saved coloured by distance comes back coloured from the
+   * same place.
+   */
+  private storedPin(structure: Structure | null = this.structure): number {
+    const at = pinOf(this.style().pin)
+    if (structure === null || at === null) return -1
+    return beadsIn(structure, at.contig, at.bp, at.bp + 1)[0] ?? -1
+  }
+
+  /** Pin a bead, or `-1` for none, on the picture and on the row. */
+  private pin(bead: number): void {
+    this.pinned = bead
+    // A colouring from the pinned bead follows the pin.
+    const by = this.style().colourBy
+    if (by === STRUCTURE_COLOUR_DISTANCE || by === STRUCTURE_COLOUR_CONTACTS) this.colours = null
+    const structure = this.structure
+    const at = structure === null || bead < 0 ? null : lociOf(structure, bead)
+    this.restyle({ pin: at === null ? '' : pinAt(at.contig, at.start, at.end) })
   }
 
   /** Write one control's value onto the row, which is what everything reads. */
@@ -1979,7 +2003,7 @@ export class StructurePanel implements DeckCell {
         if (this.mode === 'loop') this.loopClick(-1)
         else if (this.mode === 'measure') this.cancelMeasure()
         else if (this.pinned >= 0) {
-          this.pinned = -1
+          this.pin(-1)
           this.schedule()
         }
         return
@@ -2031,12 +2055,7 @@ export class StructurePanel implements DeckCell {
         return
       }
       if (drag.shift) this.markAt(bead)
-      else {
-        this.pinned = this.pinned === bead ? -1 : bead
-        // A colouring from the pinned bead follows the pin.
-        const by = this.style().colourBy
-        if (by === STRUCTURE_COLOUR_DISTANCE || by === STRUCTURE_COLOUR_CONTACTS) this.colours = null
-      }
+      else this.pin(this.pinned === bead ? -1 : bead)
       this.schedule()
     }
     canvas.addEventListener('pointerup', release)

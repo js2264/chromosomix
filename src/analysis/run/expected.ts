@@ -66,7 +66,8 @@ import {
 import type { CurveSeries, TaskOutput } from '../types'
 import { binPairs } from '../../pairs/bin'
 import { readPairsHeader } from '../../pairs/format'
-import { orientationFigure, type OrientationCounts } from '../orientation'
+import type { OrientationCounts } from '../orientation'
+import { openRecords, orientationOutput } from './pairsqc'
 import type { ByteSource } from '../../types'
 import type { SourceSpec } from '../../worker/protocol'
 
@@ -577,6 +578,17 @@ export const runExpected: TaskRunner = async (job) => {
 async function strandedCurves(job: JobContext): Promise<TaskOutput | null> {
   if (!boolParam(job.params, 'stranded', false)) return null
 
+  // **Drawn, and said to have moved.** The form no longer asks for these
+  // (`tasks/ps.ts`, `retired`): a run reaching here is a stored session, a link
+  // or a `--stranded` line, and it comes out as it always did — the same curve
+  // from the same records — with the one sentence that says where the reader
+  // will find it next time.
+  job.note(
+    'The four orientations have moved to Pairs QC, which draws them beside the rest of the ' +
+      "library's statistics from the same records; this run drew them here because its " +
+      'parameters asked for them.',
+  )
+
   const named = strParam(job.params, 'pairsUri', '').trim()
   let counts: OrientationCounts | null = null
 
@@ -586,7 +598,7 @@ async function strandedCurves(job: JobContext): Promise<TaskOutput | null> {
       job.note(
         'The four orientations are counted from the records, and this map has none to count: it ' +
           'was opened as a matrix rather than binned from a .pairs, or the file it was binned ' +
-          'from carried no strand1/strand2 columns. Drop a .pairs on the form, or give its address.',
+          'from carried no strand1/strand2 columns. Run Pairs QC and give it the .pairs.',
       )
       return null
     }
@@ -601,40 +613,9 @@ async function strandedCurves(job: JobContext): Promise<TaskOutput | null> {
   // below any grid, and the separation the four converge at — usually shorter
   // than one bin of the map — is the one thing this figure is drawn for. Floored
   // at the curve's two bins it would be cut off, and the run would report that
-  // the four never settle.
-  const figure = orientationFigure(counts, {
-    factor: Math.max(1.01, numParam(job.params, 'factor', 1.1)),
-  })
-  if (figure === null) {
-    job.note(
-      'Fewer than two orientations have any cis record in them, so there is nothing to compare. ' +
-        'A file whose strand columns are all `.` reads this way.',
-    )
-    return null
-  }
-
-  job.note(
-    figure.convergence === null
-      ? 'The four orientations never settle to within a tenth of each other, so no convergence ' +
-        'point is reported. On a library that is otherwise fine this usually means the axis does ' +
-        'not reach far enough — the sequences are short — rather than that the records are bad.'
-      : `The four orientations converge at about ${Math.round(figure.convergence).toLocaleString()} bp, ` +
-        'which is the shortest separation this library can be read at. Below it the counts are ' +
-        'self-circles, dangling ends and undigested fragments rather than contacts.',
-  )
-
-  return {
-    kind: 'curve',
-    id: 'ps-orientation',
-    label: 'P(s) by pair orientation',
-    series: figure.curves.map(
-      (curve): CurveSeries => ({ name: curve.name, x: curve.x, y: curve.y, n: curve.n }),
-    ),
-    xLabel: 'Genomic separation (bp)',
-    yLabel: 'Density, over the records in all four',
-    xScale: 'log',
-    yScale: 'log',
-  }
+  // the four never settle. The figure and its sentence are Pairs QC's own
+  // (`run/pairsqc.ts`), so the two tasks draw one curve from one set of counts.
+  return orientationOutput(job, counts, 'ps-orientation')
 }
 
 /**
@@ -653,7 +634,7 @@ async function countNamed(
   uri: string,
   handed?: SourceSpec,
 ): Promise<OrientationCounts | null> {
-  const source = await openNamed(job, uri, handed)
+  const source = await openRecords(job, uri, handed)
   if (source === null) return null
   // Closed whatever happens: a detached source is the caller's (`JobContext`),
   // and a gigabyte contact list left mounted after its one pass is memory the
@@ -662,49 +643,6 @@ async function countNamed(
     return await countOrientations(job, uri, source)
   } finally {
     source.close()
-  }
-}
-
-/**
- * The bytes of the `.pairs` a run was given, by whichever road reaches them.
- *
- * A file **handed** to the form comes first — dropped, chosen, or picked out of a
- * connected place — because its source is exactly what the reader gave and the
- * name beside it is only the record of it. An address is fetched as it stands,
- * and a path is read where the venue has a filesystem, which is a shell's whole
- * case and a worker's impossible one: each venue says which it is by the
- * capability it answers (`JobContext.openFile`).
- */
-async function openNamed(
-  job: JobContext,
-  uri: string,
-  handed: SourceSpec | undefined,
-): Promise<ByteSource | null> {
-  const remote = /^(https?|s3):\/\//i.test(uri)
-  const open =
-    handed !== undefined && job.openSource !== undefined
-      ? () => job.openSource!(handed)
-      : remote && job.openBytes !== undefined
-        ? () => job.openBytes!(uri)
-        : !remote && job.openFile !== undefined
-          ? () => job.openFile!(uri)
-          : null
-  if (open === null) {
-    job.note(
-      remote
-        ? `Reading ${uri} needs a venue that can fetch an address, and this one reads local ` +
-            'files only. Fetch it first and name the file, or run it in the app.'
-        : `“${uri}” is not an address this can fetch, and the file is no longer in hand — a ` +
-            'dropped file is kept for the session it was dropped in. Drop it on the form again, ' +
-            'or name it on a `chromosomix` command line, which reads it from disk.',
-    )
-    return null
-  }
-  try {
-    return await open()
-  } catch (error) {
-    job.note(`Could not open ${uri}: ${error instanceof Error ? error.message : String(error)}`)
-    return null
   }
 }
 

@@ -21,7 +21,9 @@
  *
  * **A composite is a chain, and the chain is visible.** A task that declares
  * `requires` gets each required result computed first, at that task's own
- * defaults, and handed down in `inputs.upstream` (§18.2). A required result
+ * defaults — except for what the leaf's own form asked on the step's behalf
+ * (`upstreamParams`), which is laid over them, or a step the leaf says to leave
+ * out — and handed down in `inputs.upstream` (§18.2). A required result
  * already in the cache is reused when its parameters *and* its framing match —
  * {@link sameRecipe} is that comparison, and it is exported so a test can hold
  * it to the claim. While the chain runs the progress note names the step, which
@@ -37,8 +39,10 @@ import type { AnnotationPayload, FeatureSet, PairSet } from '../annotations/type
 import { editFingerprint, type ReferenceEdit } from '../genome/edit'
 import { isCancellation, type Cancellable } from '../worker/client'
 import type { OrientationSummary, PairsBinning, SourceSpec } from '../worker/protocol'
+import type { PairStats } from '../pairs/stats'
 import { abortError, idParam, listParam, runnerParams } from './job'
 import { taskById } from './registry'
+import { recordTelemetry } from '../telemetry'
 import {
   defaultParams,
   readsMap,
@@ -50,6 +54,7 @@ import {
   type ParamValue,
   type Provenance,
   type TaskResult,
+  upstreamParamsOf,
 } from './types'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
 import type { AnnotationClient } from '../annotations/worker/client'
@@ -115,6 +120,8 @@ export interface RunnerHost {
     cells?: readonly string[]
     binning?: PairsBinning
     orientation?: OrientationSummary
+    /** What `pairtools stats` counts, where the map's import counted it (§3.7). */
+    pairsStats?: PairStats
     /** The total the map is drawn to, where it is drawn to one (§6.5). */
     resample?: ResampleTarget
     /** The edit of the reference the map is drawn through, where it is drawn through one (§27.7). */
@@ -422,6 +429,12 @@ export interface RunTarget {
    * files, and a curve measured on one is not a fact about the other.
    */
   orientation?: OrientationSummary
+  /**
+   * What `pairtools stats` counts over the records that map's import read
+   * (`pairs/stats.ts`), where it was binned from a `.pairs` — per target for
+   * {@link orientation}'s reason, and handed to Pairs QC as the curves are.
+   */
+  pairsStats?: PairStats
   /**
    * The total this map is drawn to (§6.5), where the reader has asked for one.
    *
@@ -873,6 +886,8 @@ export class AnalysisRunner {
       // elsewhere and carried both, which is why *run on all maps* worked.
       ...(source?.binning === undefined ? {} : { binning: source.binning }),
       ...(source?.orientation === undefined ? {} : { orientation: source.orientation }),
+      // …and its `pairtools stats`, counted in the same pass, for Pairs QC.
+      ...(source?.pairsStats === undefined ? {} : { pairsStats: source.pairsStats }),
       // Drawn as the view draws it (§6.5): a plain Run is the commonest way a
       // task reaches a resampled map, and dropping the total here would measure
       // the file as stored under a header that says otherwise.
@@ -1110,6 +1125,17 @@ export class AnalysisRunner {
       // back `interrupted` after a reload, which would be this bookkeeping
       // blaming the browser.
       endAction(recorded, outcome ?? { status: 'cancelled' })
+      // Telemetry (§31): the task's registry id, how it ended and how long it
+      // took, bucketed. Only a registered id is ever sent.
+      if (taskById(job.task.id) !== undefined) {
+        const status = outcome?.status ?? 'cancelled'
+        recordTelemetry({
+          name: 'task',
+          task: job.task.id,
+          outcome: status === 'ok' ? 'done' : status === 'failed' ? 'failed' : 'cancelled',
+          ms: performance.now() - startedAt,
+        })
+      }
     }
   }
 
@@ -1390,6 +1416,13 @@ export class AnalysisRunner {
    * configured the saddle and not the eigenvectors underneath it, and inventing
    * parameters for a form they never opened would be putting numbers in their
    * mouth.
+   *
+   * **Except what the leaf's own form asked for it** (`upstreamParams`): Pairs
+   * QC asks for a reference and an enzyme, which are the restriction step's
+   * questions answered on the leaf's form, so they are laid over that step's
+   * defaults — and the cache's `sameRecipe` sees the step's parameters as they
+   * will run, so a digest made with DpnII is never reused for HindIII. `null`
+   * leaves the step out of the chain altogether, and the leaf runs without it.
    */
   private plan(task: AnalysisTask, params: Params): PlanStep[] {
     const steps: PlanStep[] = []
@@ -1407,7 +1440,9 @@ export class AnalysisRunner {
         if (required === undefined) {
           throw new Error(`${node.id} requires the task ${id}, which this session does not offer`)
         }
-        walk(required, defaultParams(required.params))
+        const answered = upstreamParamsOf(node, id, nodeParams)
+        if (answered === null) continue
+        walk(required, { ...defaultParams(required.params), ...answered })
       }
       active.delete(node.id)
       planned.add(node.id)
@@ -1513,6 +1548,17 @@ export class AnalysisRunner {
     // jobs against five files, and a curve counted on one import is not a fact
     // about any of the others (`mount` makes the same argument about the source).
     if (job.target.orientation !== undefined) inputs.orientation = job.target.orientation
+    // **The records themselves, where the map was binned from them** (§3.7):
+    // the `.pairs` the target was imported from, and what its import counted.
+    // A task never read the map's own source before — it reads the mounted
+    // pixels — and Pairs QC is the one that has to, because a restriction
+    // fragment is a fact about where a read ends and no bin remembers that.
+    // The target's own source, for the reason the curves above are the
+    // target's: in a batch it is the file this job is about.
+    if (job.target.binning !== undefined && job.target.source !== undefined) {
+      inputs.mapSource = job.target.source
+    }
+    if (job.target.pairsStats !== undefined) inputs.pairsStats = job.target.pairsStats
     // **Every other target, for the one task whose unit is a pair of files.**
     // Taken from the host's list rather than from the job, because the job knows
     // the map it is *about* and this is a question about the ones beside it —

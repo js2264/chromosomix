@@ -77,6 +77,10 @@ gallery-csp/
 notebooks/work/
 notebooks/figures/
 notebooks/*.html
+# …but the laptop's. It is rendered by hand, on a laptop, and committed: the site publishes this file at
+# laptop/, not the workflow's render (notebooks/scripts/pages.py). Its data and the measurements it
+# reads back stay in notebooks/work/, which a runner must not find committed.
+!notebooks/laptop.html
 notebooks/*_files/
 notebooks/.quarto/
 # The notebook Quarto executes, written beside the .qmd for as long as a render runs.

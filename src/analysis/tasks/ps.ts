@@ -208,41 +208,34 @@ const PARAMS: readonly ParamSpec[] = [
     hint: 'The shoulder and the plateau are visible there and not on the curve.',
     default: true,
   },
+  // **The four orientations, retired from this form** (§18.8). They are about
+  // records rather than about the matrix, and they moved to Pairs QC, which
+  // reads the `.pairs` and draws them beside the rest of the library's
+  // statistics — so neither control is drawn here any more. Both stay
+  // parameters, because stored sessions, shared links and `chromosomix expected
+  // --stranded --pairsUri` lines carry them, and each of those must run as it
+  // did: the curve is still drawn when they ask for it, with a note saying
+  // where it lives now (`run/expected.ts`).
   {
     kind: 'toggle',
     key: 'stranded',
     label: 'four orientations',
-    hint: 'Where ++, +−, −+ and −− converge is the shortest separation this library can be believed at.',
     default: false,
-    // **The .pairs file, not "the records".** *Records* is the parser's word for
-    // the rows of a pairs file, and a heading reading FROM THE RECORDS named
-    // nothing the reader had seen on screen — the second control, which is the
-    // one that says `.pairs` out loud, only appears once the toggle is on. The
-    // heading now names the file, and the box under it names an address.
-    section: 'From the .pairs file',
+    retired: true,
   },
   {
-    // **A drop area that is also a button, and an address under it.** It was an
-    // address box alone, which asked a reader holding the file on their disk to
-    // go and find somewhere to host it — and on a map binned from a `.pairs` it
-    // asked for the file the map was binned from, whose four curves the import
-    // had already counted. The key keeps its old name, because stored sessions
-    // and `chromosomix --pairsUri` lines carry it, and a local file's name is
-    // what this app calls its address everywhere else.
+    // The key keeps its old name, because stored sessions and `chromosomix
+    // --pairsUri` lines carry it. Still settled where the map's own import
+    // counted the four (§3.7), so a stored run on such a map is recorded as
+    // what it reads: the import's curves, and no file.
     kind: 'file',
     key: 'pairsUri',
     label: '.pairs file',
     accept: ['.pairs', '.pairs.gz'],
     prompt: 'Drop a .pairs here, or click to choose one',
-    placeholder: 'or its address: https://… or s3://…',
-    hint: 'Read for its records alone: nothing is binned and no map changes.',
-    when: (params) => params.stranded === true,
-    // Not asked of a map whose own import counted the four curves (§3.7): the
-    // run takes them from there, and a box asking for a file here read as if
-    // they could not be had without one.
     askedOf: (context) => context.binnedFrom?.orientation !== true,
     settled: '',
-    section: 'From the .pairs file',
+    retired: true,
   },
   BALANCE_PARAM,
 ]
@@ -324,13 +317,16 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       note: `${matrix.note} The four orientations were counted as ${binned.name} was binned.`,
     }
   }
+  // Reached only from a stored run or a command line now, since the form no
+  // longer asks (`retired`): so the sentence names where the question went
+  // rather than a control that is not there.
   return {
     ...matrix,
     note:
       binned === undefined
-        ? `${matrix.note} The four orientations need a .pairs: choose one above.`
+        ? `${matrix.note} The four orientations need a .pairs, which Pairs QC asks for.`
         : `${matrix.note} ${binned.name} has no strand columns, so the four orientations need ` +
-          'another .pairs: choose one above.',
+          'another .pairs, which Pairs QC asks for.',
   }
 }
 

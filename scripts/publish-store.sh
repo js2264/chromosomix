@@ -4,7 +4,7 @@
 #
 # The store (`demosStore()` in `src/ui/examples.ts`, SPECS §24.3) is one folder,
 # `s3://rsglab-data/demo/store/`, a directory a card or a dataset. Most of what
-# is in it is too large for git — 4DN's mouse map is 7 GB — so the repository
+# is in it is too large for git — 4DN's GM12878 map is 27 GB — so the repository
 # holds its workspaces and the manifest, one line a file:
 #
 #   <path under demo/store/> <TAB> <source> <TAB> <what it is>
@@ -12,7 +12,7 @@
 # and a source is one of three things:
 #
 #   s3://bucket/key   copied on the bucket's side, from the lab's own bucket or
-#                     from 4DN's open-data one: nothing passes through here
+#                     from 4DN's or ENCODE's open-data one: nothing passes through here
 #   repo:<path>       a file of this repository, uploaded
 #   work:<name>       a file `scripts/make_rsg_store.py derive` wrote, uploaded
 #                     from the directory given as --work
@@ -72,6 +72,7 @@ fi
 region_of() {
   case "$1" in
     4dn-open-data-public) echo us-east-1 ;;
+    encode-public) echo us-west-2 ;;
     *) echo "$REGION" ;;
   esac
 }
