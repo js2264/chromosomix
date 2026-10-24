@@ -1,0 +1,91 @@
+---
+title: "chromosomix in R Markdown"
+output: html_document
+params:
+  data: "https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast"
+  viewer: null
+---
+
+```{r setup, include = FALSE}
+library(chromosomix)
+options(chromosomix.viewer = params$viewer)
+# The repository's own yeast demo, from its bucket — or, rendered with
+# `params = list(data = "demo/yeast")`, from this disk.
+data <- function(name) file.path(params$data, name)
+```
+
+The [chromosomix](https://chromosomix.app/) viewer as an htmlwidget: the app itself on the page — the
+map, its tracks, its side panels and its gestures. This page opens the repository's yeast demo: a
+Micro-C map of *S. cerevisiae* with ATAC-seq, MNase-seq and the genes beside it, and a 3D model of the
+genome. Each file is read where it is, by byte range, from its bucket: nothing is copied into the page.
+
+## A map and its tracks
+
+`region` frames the map, `tracks` are put beside it once it is drawn, and every other argument is a key
+of the view the app's address bar carries — here, counts on a log~10~ scale.
+
+```{r map}
+chromosomix(
+  data("Yeast_microC_G2M_1kb.cool"),
+  region = "IV:1000000-1400000",
+  tracks = data(c("Yeast_ATAC.bw", "Yeast_MNase.bw", "Yeast_annotations.gtf")),
+  transform = "log10",
+  height = 860
+)
+```
+
+## Moved before it is drawn
+
+`chromosomix_goto()`, `chromosomix_navigate()` and `chromosomix_add()` lay requests on a widget, which
+its frame makes in order once it is up: a closer region, observed over expected on a log~2~ scale, and
+the 3D model of the genome in a cell of its own beside the map, panned and zoomed with it. In Shiny the
+same three move a view already on screen, through `chromosomixProxy()`.
+
+```{r moved}
+chromosomix(
+  data("Yeast_microC_G2M_1kb.cool"),
+  region = "IV:1000000-1400000",
+  tracks = data(c("Yeast_ATAC.bw", "Yeast_MNase.bw", "Yeast_annotations.gtf")),
+  transform = "log10",
+  height = 860
+) |>
+  chromosomix_goto("IV:1150000-1300000") |>
+  chromosomix_navigate(transform = "log2", oe = TRUE) |>
+  chromosomix_add(data("Yeast_structure.g3d.gz"))
+```
+
+## A 1D browser
+
+With no map, the first file becomes the view's: a bigWig opens a genome browser over the assembly it
+declares, and the rest are its tracks. `chromosomix_goto()` then places it.
+
+```{r browser}
+chromosomix(
+  tracks = data(c("Yeast_ATAC.bw", "Yeast_ChIP_Pol2-vs-input.bw", "Yeast_annotations.gtf")),
+  height = 540
+) |>
+  chromosomix_goto("IV:400,001-460,000")
+```
+
+## Files on this machine, and which viewer
+
+A path on this machine is served to the viewer by byte range from this R session, its sidecars beside
+it (`serve()`); a page rendered with local files draws them only while that session runs, so a page
+that will be read elsewhere names its files by address, as this one does.
+
+The frame holds https://chromosomix.app/ unless `viewer` — or the option `chromosomix.viewer` —
+names another build: a release (`viewer = "0.17.0"`, kept for ever, which is what a page that must draw
+the same picture next year names), any address, or a built `dist/` on this disk. `install_viewer()`
+fetches the npm package's build once, and every widget after uses it.
+
+## In Shiny
+
+`app.R`, beside this file, is the same map in a Shiny app, driven from R and reporting back where the
+reader has taken it — `shiny::runApp(system.file("examples", "app.R", package = "chromosomix"))`:
+
+```{r shiny, eval = FALSE}
+output$view <- renderChromosomix(chromosomix(map, region = "IV:1000000-1400000", tracks = tracks))
+view <- chromosomixProxy("view")
+observeEvent(input$go, chromosomix_goto(view, input$where))
+output$where <- renderText(input$view_state$region)
+```

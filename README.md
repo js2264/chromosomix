@@ -98,6 +98,54 @@ A minimal version of the viewer can be added to any HTML page as an `<iframe>`. 
 
 Paste it into a page and it works (not rendered here though because GitHub does not allow `<iframe>`). The `src` URL is the same as the one you would use to open the viewer in a browser, with the addition of `?embed=1` to tell it to hide the header and tab strip. 
 
+The page holding the frame can drive it too: `postMessage` moves the view, adds tracks beside the map, and is told where the reader has taken it (SPECS §21.4).
+
+## In a Jupyter notebook
+
+The same viewer is a Jupyter widget: the app itself in a cell, driven from Python and telling Python where the reader has taken it. It works in JupyterLab, Notebook 7, VS Code, Colab and marimo.
+
+```bash
+pip install chromosomix          # from a clone: pip install -e widgets/python
+```
+
+```python
+from chromosomix import Chromosomix
+
+view = Chromosomix(
+    'sample.mcool::/resolutions/5000',      # a path on the kernel's disk, or any address the app opens
+    region='chr2:10000000-14000000',
+    tracks=['ATAC.bw', 'genes.gtf.gz'],
+    transform='log10',
+)
+view                                        # the map, its tracks, its side panels
+
+view.goto('chr2:11000000-12000000')         # frame a region (or a locus, in the 1D browser)
+view.navigate(transform='log2', oe=True)    # any key the address bar carries
+view.add('model.g3d.gz')                    # the header's +: a track, a map, a 3D model beside the map
+view.observe(lambda change: print(change['new']['region']), names='state')
+```
+
+Files on the kernel's disk are served to the viewer by byte range from a server on `127.0.0.1`, with their sidecars beside them; nothing is uploaded. [`widgets/python/demo.ipynb`](widgets/python/demo.ipynb) walks through it on the yeast demo, and [`widgets/python/README.md`](widgets/python/README.md) says which viewer build the frame holds and how to pin one.
+
+## In R: R Markdown, Quarto, RStudio and Shiny
+
+The same viewer is an htmlwidget, in the R package under [`widgets/r`](widgets/r/README.md):
+
+```r
+install.packages("widgets/r", repos = NULL, type = "source")   # from a clone
+
+library(chromosomix)
+chromosomix("sample.mcool::/resolutions/5000", region = "chr2:10000000-14000000",
+            tracks = c("ATAC.bw", "genes.gtf.gz"), transform = "log10") |>
+  chromosomix_goto("chr2:11000000-12000000") |>
+  chromosomix_navigate(oe = TRUE) |>
+  chromosomix_add("model.g3d.gz")
+```
+
+In Shiny, `chromosomixOutput()`, `renderChromosomix()` and `chromosomixProxy()` drive a view on screen,
+and `input$<id>_state` follows the reader. `system.file("examples", package = "chromosomix")` holds an
+R Markdown page of the yeast demo and a Shiny app driving it.
+
 ## Using the chromosomix analysis CLI
 
 Over thirty analysis tasks can be executed programatically through the CLI, with the same parameters and producing the same results as the Analysis panel interactively. This can be used in a pipeline or a script.

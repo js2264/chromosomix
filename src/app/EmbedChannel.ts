@@ -6,14 +6,17 @@
  * rows move the map, and a caption under it that follows the map when the reader
  * moves it themselves. Both are one `postMessage` channel, and this is it.
  *
- * ## The protocol, in five messages
+ * ## The protocol, in six messages
  *
  * Out, from the frame:
  *
- * - `{ type: 'chromosomix:ready', protocol, version, commit }` — once, when the
- *   window is mounted. It carries **nothing about the reader's session**, which
- *   is what lets it be the one message posted before anybody has identified
- *   themselves.
+ * - `{ type: 'chromosomix:ready', protocol, version, commit, accepts }` — once,
+ *   when the window is mounted. It carries **nothing about the reader's
+ *   session**, which is what lets it be the one message posted before anybody
+ *   has identified themselves. `accepts` lists the messages this window takes,
+ *   because adding one leaves the protocol's number alone: a host that needs
+ *   `add` reads it here, and a frame whose `ready` has no list — every build
+ *   before `add` — takes `where` and `navigate` only.
  * - `{ type: 'chromosomix:state', state }` — the view state (§5.5), as the same
  *   object the URL hash is written from, or `null` for the file picker.
  * - `{ type: 'chromosomix:rendered', report }` — the picture on screen is
@@ -28,6 +31,17 @@
  *   given are laid over the view state that is on screen, so `{ locus: … }` moves
  *   the browser without the host having to know what else is in the state, a key
  *   set to `null` is *removed*, and `state: null` is the picker.
+ * - `{ type: 'chromosomix:add', files }` — one more file in this tab, for each
+ *   address in `files`, in order: what the header's `+` does with an address
+ *   typed into it (§5.5) — a map beside the map, a track among the tracks, a
+ *   workspace's tabs — and on an empty tab the first opens as its file. The
+ *   view state has no word for a track, so this is how a host that frames a map
+ *   puts its tracks beside it. Answered with `state` once every file is in.
+ *
+ * Messages are carried out **in the order they came**. An `add` opens files,
+ * which takes a while, and a `navigate` sent after one waits for it: a host
+ * that adds a 1D browser's tracks and then asks for a locus is asking for the
+ * locus *on those tracks*, not on the picker they are still opening over.
  *
  * ## Who is answered, and when
  *
@@ -74,6 +88,14 @@ export const EMBED_STATE = 'chromosomix:state'
 export const EMBED_WHERE = 'chromosomix:where'
 /** Move the view. */
 export const EMBED_NAVIGATE = 'chromosomix:navigate'
+/** Put files in this tab, by their addresses. */
+export const EMBED_ADD = 'chromosomix:add'
+
+/**
+ * The most addresses one `add` is taken for: a deck of maps and a column of
+ * tracks, and not a host's whole bucket listing in one message.
+ */
+export const EMBED_ADD_MAX = 64
 
 /**
  * The protocol's own version, carried by `ready`.
@@ -91,6 +113,11 @@ export interface EmbedHost {
   state(): ViewState | null
   /** Go here. `null` is the picker. */
   navigate(state: ViewState | null): void
+  /**
+   * Put the files at these addresses in this tab, as the header's `+` does,
+   * once whatever is opening has opened. Absent where a window cannot take one.
+   */
+  add?(files: string[]): Promise<void>
 }
 
 /** The half of `Window` a message is posted to; a test hands over a spy. */
@@ -169,6 +196,10 @@ export class EmbedChannel {
    */
   private sent: string | null = null
   private listening = false
+  /** Messages taken and not yet carried out — the `add`s opening, and what came after them. */
+  private pending = 0
+  /** The last of them to finish; the next waits for it. */
+  private last: Promise<void> = Promise.resolve()
 
   private readonly onMessage = (event: MessageEvent): void => this.receive(event)
 
@@ -193,6 +224,7 @@ export class EmbedChannel {
         protocol: EMBED_PROTOCOL,
         version: VERSION,
         ...(COMMIT === '' ? {} : { commit: COMMIT }),
+        accepts: [EMBED_WHERE, EMBED_NAVIGATE, ...(this.host.add === undefined ? [] : [EMBED_ADD])],
       },
       '*',
     )
@@ -250,7 +282,7 @@ export class EmbedChannel {
     if (this.parent === null || !this.fromParent(event)) return
     const data = event.data
     if (!isEmbedMessage(data)) return
-    if (data.type !== EMBED_WHERE && data.type !== EMBED_NAVIGATE) return
+    if (data.type !== EMBED_WHERE && data.type !== EMBED_NAVIGATE && data.type !== EMBED_ADD) return
 
     // A `navigate` carries a patch or an explicit `null` and nothing else.
     // Anything else is a typo rather than a question — refused **before** the
@@ -265,16 +297,61 @@ export class EmbedChannel {
     const named = event.origin !== 'null' && event.origin !== ''
     this.reply = { target: this.parent, origin: named ? event.origin : '*' }
 
-    if (data.type === EMBED_NAVIGATE) {
-      this.host.navigate(
-        patch === null ? null : mergeState(this.host.state(), patch as Record<string, unknown>),
-      )
+    if (data.type === EMBED_ADD) {
+      // Strings only, and a bounded number of them: the addresses are another
+      // origin's, and what each one is — and whether it is an address this
+      // window will fetch at all — is the host's `add` to decide.
+      const files = (data as { files?: unknown }).files
+      const list = Array.isArray(files) ? files.filter((file): file is string => typeof file === 'string') : []
+      const add = this.host.add
+      if (list.length === 0 || add === undefined) return
+      // Answered whether or not the view moved: a host waits on this to know
+      // the files are in, and a state it has already been told is still the
+      // answer to that.
+      const answer = (): void => {
+        this.sent = null
+        this.send()
+      }
+      this.inTurn(() => add.call(this.host, list.slice(0, EMBED_ADD_MAX)).then(answer, answer))
+      return
     }
-    // Both messages are answered with the state, and `navigate` is answered
-    // *after* it has been applied — so what comes back is where the view
-    // actually went, which for a patch the parser trimmed is not always where
-    // the host asked to go.
-    this.send()
+
+    this.inTurn(() => {
+      if (data.type === EMBED_NAVIGATE) {
+        // Merged with the state on screen when its turn comes, not when it
+        // arrived: after an `add`, that is the tracks the add opened.
+        this.host.navigate(
+          patch === null ? null : mergeState(this.host.state(), patch as Record<string, unknown>),
+        )
+      }
+      // Both messages are answered with the state, and `navigate` is answered
+      // *after* it has been applied — so what comes back is where the view
+      // actually went, which for a patch the parser trimmed is not always where
+      // the host asked to go.
+      this.send()
+    })
+  }
+
+  /**
+   * Carry out a message now if nothing before it is still running, or after
+   * the last thing that is. A `where` or a `navigate` with nothing ahead of it
+   * is answered before `receive` returns, as it always was.
+   */
+  private inTurn(work: () => void | Promise<void>): void {
+    if (this.pending === 0) {
+      const started = work()
+      if (started !== undefined) this.hold(started)
+      return
+    }
+    this.hold(this.last.then(work))
+  }
+
+  private hold(work: Promise<void>): void {
+    this.pending += 1
+    const settled = (): void => {
+      this.pending -= 1
+    }
+    this.last = work.then(settled, settled)
   }
 
   private send(): void {

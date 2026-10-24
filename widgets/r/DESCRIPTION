@@ -1,0 +1,32 @@
+Package: chromosomix
+Type: Package
+Title: The 'chromosomix' Hi-C Viewer as an HTML Widget
+Version: 0.16.0.9000
+Authors@R: person("Jacques", "Serizay", email = "jacquesserizay@gmail.com",
+    role = c("aut", "cre"))
+Description: The 'chromosomix' viewer (<https://chromosomix.app/>) - a contact
+    map with its tracks, a 1D genome browser or a 3D model of a genome - in an
+    R Markdown document, a Quarto page, the RStudio viewer or a Shiny app. It
+    is the viewer's own embed in an <iframe>, driven from R through its
+    message channel; files on this machine are served to it by byte range from
+    a server on the loopback interface, and nothing is uploaded.
+License: GPL (>= 3)
+URL: https://chromosomix.app/, https://github.com/js2264/chromosomix
+BugReports: https://github.com/js2264/chromosomix/issues
+Encoding: UTF-8
+Depends: R (>= 4.1)
+Imports:
+    htmlwidgets (>= 1.5),
+    httpuv (>= 1.6),
+    jsonlite,
+    tools,
+    utils
+Suggests:
+    callr,
+    knitr,
+    openssl,
+    rmarkdown,
+    rstudioapi,
+    shiny (>= 1.6),
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3

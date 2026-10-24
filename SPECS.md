@@ -5789,7 +5789,10 @@ with a `HEAD` before its `GET` to test range support, and that `HEAD` is skipped
 its own signature — `X-Amz-Signature`, `X-Goog-Signature`, or `sig=` beside `sv=` — since such a
 URL is signed for a single method. A presigned link therefore opens and goes on working until it
 expires (§24.6); a public bucket URL is still what a citation should point at, because a signature
-has a date on it.
+has a date on it. A `HEAD` answering `Content-Length: 0` is taken to have stated no length, and the
+one-byte probe follows it as it follows a `HEAD` that says nothing: jupyter-server-proxy, the way
+into a notebook kernel's files behind JupyterHub (§21.5), answers every `HEAD` so, and a map read
+through it was mounted as a file of no bytes and refused as "not an HDF5 file".
 
 **Private files:** a local file — dropped, picked, or in a connected folder (§20) — or the reader's
 own private bucket, Drive or Dropbox, read from the browser with their own credentials (§20.3,
@@ -6519,6 +6522,13 @@ locus box: a picture drawn across another picture. Inside a deck the map's colum
 does not fit **scrolls sideways inside the cell** instead of being painted over its neighbour or cut
 off out of reach, and the scroll starts with the map in the middle of the cell — left at its start,
 a cell with a stack down its left edge showed that stack and no map at all.
+
+**And a short window does not shrink the map away.** A deck map's side is the window's height less
+the stacks over and under it, as the single view's is — and has the single view's 20rem floor, past
+which the page scrolls rather than the map giving way. Without it a deck of two in a 620-pixel-tall
+window — a notebook's frame (§21.5), a laptop with its tools open — drew a map with three tracks
+under it as a 42-pixel thumbnail. The map's measured size is still bounded by its cell, so the floor
+never pushes one out of its column.
 
 **Rearranging is a drag, not a pair of arrows.** Every cell but an empty one has a grip before its
 name, **the first map's included** — an empty cell is where the others are dragged *to*; taking hold
@@ -10886,7 +10896,11 @@ embed — which has no drawer — ignores it.
   step the map instead of leaving the page. Every write replaces. The bar is still written — a
   reload and a copied link both read it — only the stack is left alone.
 - **A memory of itself.** Neither the `sessionStorage` tab strip (§5.6) nor the durable record
-  under it (`state/workspace.ts`) is written. An embed is one view seeded by its URL and must show what the page says on
+  under it (`state/workspace.ts`) is written, and the memory of each file — its tracks, marks and
+  filters (`state/UiMemory.ts`) — is kept in the frame alone, never in `sessionStorage`: every frame
+  a page holds on one origin shares that, and with no tab strip each starts with the same session
+  id, so a second notebook widget on one map recalled the first's tracks, and a frame reloaded in
+  place recalled its own under the ones its host added again. An embed is one view seeded by its URL and must show what the page says on
   every load; and a third-party frame's storage is partitioned per embedding site, so what it wrote
   would be a store the reader has no interface to and no way to clear.
 - **The service worker and the version notice.** An embed is not an app to install, and a bar
@@ -10929,13 +10943,36 @@ those four things would be asking a reader to trust a picture with no provenance
 
 ### 21.4 The channel
 
-An embed that can only be linked to is a picture. `postMessage` is the other half, and it is five
-messages (`app/EmbedChannel.ts`). Out: `chromosomix:ready`, once, carrying the protocol version and
-the build and **nothing about the session**; `chromosomix:state`, the view state as the hash is
+An embed that can only be linked to is a picture. `postMessage` is the other half, and it is six
+messages (`app/EmbedChannel.ts`). Out: `chromosomix:ready`, once, carrying the protocol version,
+the build, the messages the window takes (`accepts`) and **nothing about the session**; `chromosomix:state`, the view state as the hash is
 written from; and `chromosomix:rendered`, the report of a finished picture (§12), which is what a
-host takes a screenshot on. In: `chromosomix:where`, answered with the state; and `chromosomix:navigate`, a **patch**
+host takes a screenshot on. In: `chromosomix:where`, answered with the state; `chromosomix:navigate`, a **patch**
 laid over what is on screen — `{ locus: … }` moves the browser without the host knowing what else is
-in the state, a key sent as `null` is removed, and `state: null` is the picker.
+in the state, a key sent as `null` is removed, and `state: null` is the picker; and
+`chromosomix:add`, a list of addresses put in the tab one by one as the header's `+` puts an address
+typed into it (§5.5) — a track among the tracks, a map or a model beside the map, a workspace's tabs,
+and on an empty tab the first as its file. The view state has no word for a track, so this is how a
+host that frames a map puts its tracks beside it. It waits for the frame's first picture — the map
+the `src=` named, drawn, or in a frame out of sight routed and read with only its paints to come
+(a cross-origin frame nobody can see makes no animation frames, so it never paints, and its files
+are wanted all the same) — takes `http(s)` addresses only and at most 64 of them, and is answered
+with the state once every file is in, so a host knows when they are. A tab whose own file was
+refused keeps its refusal on screen: the first address opens as the tab's file only on an empty
+tab, never over the error of the map the host named, which would put a 1D browser in its place and
+report it drawn.
+
+**What a frame takes is in its `ready`, not in the protocol's number.** Adding a message leaves the
+number alone (a host written against it ignores what it has never heard of), so a host that needs
+`add` reads `accepts`; a `ready` without the list is a build from before `add` — the site and every
+release up to 0.16.0 — which takes `where` and `navigate` only. Sent to one of those, an `add` is
+ignored, and the widgets (§21.5) say so on the page rather than drawing a map without its tracks.
+
+**A host's messages are carried out in the order they came.** An `add` takes as long as its files
+take to open, and a `navigate` sent after one waits for it: a host that adds a 1D browser's tracks
+and then asks for a locus means the locus on those tracks, not on the picker they are opening over,
+and the patch is laid over the state on screen when its turn comes. With nothing in flight a
+`where` or a `navigate` is answered at once, as it always was.
 
 Two rules decide the rest. **Only the window that framed this one is answered**, and only after it
 has spoken — `ready` is the single exception and the reason the handshake terminates. Replies and
@@ -10950,6 +10987,143 @@ one reader that validates every key, clamps what needs clamping and drops what i
 A `view` this build has never heard of falls back; a smoothing radius it does not offer is dropped;
 an array where a genome name should be is not stringified into one. What the host is told afterwards
 is where the view actually **went**, which for a trimmed patch is not always where it asked to go.
+
+### 21.5 In a notebook, and in R
+
+The channel is what a notebook widget is made of, and the repository carries two: one for Python and
+Jupyter, one for R. The Python one first: `widgets/python/`,
+the `chromosomix` package on PyPI, an [anywidget](https://anywidget.dev/) that works wherever
+anywidget does — JupyterLab, Notebook 7, VS Code, Colab, marimo. It is the embed in an `<iframe>` and
+nothing else: no second renderer, no kernel-side reader, no data through the kernel's comm.
+
+- **What to open is the `src=`.** `Chromosomix(map, region=…, tracks=[…], **view)` writes the map and
+  every view keyword into the frame's fragment in the app's own key order and spelling (§5.5), and the
+  tracks — which the fragment has no word for — go to the frame as one `add` once it says it is ready.
+  With no map the frame opens on its picker, the first file becomes the tab's, and `locus` — or
+  `region`, with `view='region'` — and the view keywords are a navigate after the files. A value is
+  one value: a list for a key is refused by name, a NumPy switch is written `true` or `false` as the
+  hash spells one, and `uri`, `uri2` and the files among `maps` (not the deck's own words, `~`, `3d`,
+  `tracks`) are served like the map.
+- **Python to the viewer is state, not messages.** `goto`, `navigate` and `add` append a numbered
+  request to a synced list, and every view of the widget posts the ones past the last it posted —
+  all of them again when the frame reloads, which a notebook detaching and re-attaching an output
+  does. A message would reach only the views that exist when it is sent, and "Run all" sends a later
+  cell's `goto` before the browser has drawn the first cell's frame. `goto` moves the map's `region`
+  — clearing `region2` and `focus`, so an off-diagonal block becomes the square asked for — or the 1D
+  browser's `locus`: by the view the viewer last reported, or, before it has reported one, by how
+  the cell opened it. A navigate after a navigate is merged into it, so a slider's thousand moves
+  replay as one and an `add` is never pushed out; a view that made the earlier one is sent only the
+  keys asked since, so a pan the reader made between two calls stays. **Every `load()` is a new
+  frame** — a counter the front end listens to, and a new `<iframe>` element — because a `src` that
+  differs only after its `#`, or not at all, would be a move within the old document, which says no
+  `ready`; `load()` resolves every file before it resets anything, so one it cannot serve leaves
+  the cell as it was. The postMessage target is the origin the frame's `ready` came from, so a
+  viewer behind a redirect is still spoken to.
+- **The viewer to Python is traitlets.** Every `state` lands in `state`, a traitlet a cell can
+  `observe`; every finished picture's report in `rendered`; the build's version in `version`.
+- **A frame that cannot take files says so.** The tracks and every `add` reach the frame as
+  `chromosomix:add`, which a viewer before 0.17.0 does not know (§21.4): its `ready` lists no
+  `accepts`. The widget then sends it nothing, and says above the frame how many files were not
+  added and which viewer would take them — in `notice` for Python too — rather than drawing a map
+  whose tracks are missing without a word. Naming such a release by its version warns when the
+  widget is made, and `install_viewer()` warns when the build npm hands it is one.
+- **A file on the kernel's disk is served by the kernel**, by byte range, from a server on
+  `127.0.0.1`: a `ThreadingHTTPServer` that answers one `Range`, sends `Access-Control-Allow-Origin: *`
+  and `Access-Control-Allow-Private-Network`, never sends a `.gz` with a `Content-Encoding`, and
+  serves the *directory* a file was named in — so its sidecars are read from beside it — under a
+  random token. No name that starts with a dot is served, so a home directory's `.ssh` is not under
+  a map's token. A link in the directory is served by its own name and followed wherever it points
+  — its owner made it, and a DataLad or git-annex file finds its index beside the link, not beside
+  its object. A `Range` it cannot read — several ranges, a reversed one, another unit — is ignored
+  and the whole file sent, as RFC 9110 says; 416 is for a range past the end. A `HEAD` that names
+  no range says no `Accept-Ranges`, so the viewer asks for one byte and takes the size from its
+  `Content-Range`. A reader that hangs up mid-read is no traceback in whichever cell ran last.
+  Behind JupyterHub it is reached through jupyter-server-proxy at `<prefix>/proxy/<port>/`, which
+  must be installed beside the single-user server, and which answers every `HEAD` with
+  `Content-Length: 0` (§11) and holds each answer whole, refusing one over 100 MB — which touches
+  only a file read whole, an annotation file with no tabix index. **Behind JupyterHub only a viewer
+  the kernel serves reads these files**: the proxy answers only a request carrying the reader's login
+  to the hub, and a page on another origin — the site — sends none, so its every read is answered
+  `302` to the login page, or `403` to a preflight, before the kernel's server is asked; the widget
+  warns when its frame is on another origin there. In Colab it is reached through Colab's port
+  proxy, and `CHROMOSOMIX_PUBLIC_URL` names any other way in; the widget makes a relative address
+  absolute against the notebook's page before the frame sees it. Nothing is uploaded and nothing
+  leaves the machine the kernel runs on (C1).
+- **Which build is in the frame is the reader's to pin.** The site by default; a release by its
+  permanent address (`viewer='0.17.0'` is `…/v/v0.17.0/`, §21; one before it takes no files, above);
+  any address; or a built `dist/` on the kernel's disk (§22), served beside the data.
+  `install_viewer()` fetches the npm package once into `~/.cache/chromosomix/` — unpacked beside the
+  cache, checked against npm's `dist.integrity`, and moved into place whole, so an interrupted
+  install leaves nothing a later widget would frame — and every widget after uses it: the app and
+  the data are then one origin and the notebook works offline, where the site reading
+  `http://127.0.0.1` has Chrome ask the reader once to let the page reach this machine, and behind
+  JupyterHub cannot read it at all. `CHROMOSOMIX_VIEWER` names one for every widget.
+- **In marimo** a cell that names the `mo.ui.anywidget` wrapper is run again every time the frame
+  reports, on every move and every finished picture, so the wrapper is named only where `state` is
+  read and the widget itself is what is driven: `live.goto(…)` would pull the view back each time
+  the reader moved it, and `live.add(…)` would add the file again on every report. `demo_marimo.py`
+  is the demo written that way; Notebook 7 runs `demo.ipynb` as JupyterLab does.
+
+`widgets/python/demo.ipynb` is the yeast demo driven from Python, and `scripts/ui-jupyter-widget.mjs`
+runs it whole in JupyterLab and shoots each frame once it has reported a finished picture of what
+was asked of it.
+
+**R's is an htmlwidget**, `widgets/r/`, the `chromosomix` R package: the same frame and the same
+conversation on an R Markdown or Quarto page, in the RStudio viewer and in Shiny. `chromosomix(map,
+region =, tracks =, ...)` writes the same fragment in the same order; `chromosomix_goto()`,
+`chromosomix_navigate()` and `chromosomix_add()` are the same three requests. What differs is R's:
+
+- **Requests are laid on a widget before it is drawn**, piped onto `chromosomix()` — a static page
+  has no R behind it once rendered, and this is how it moves its views — or made of one on screen
+  in Shiny through `chromosomixProxy()`, as custom messages. The frame makes all of them in order,
+  and all of them again when it reloads. `goto` is made a `region` or a `locus` by the widget's own
+  script as it is appended — from the view the frame last reported or, before it has, from how the
+  widget opened — and on a map it clears `region2` and `focus`, so an off-diagonal block becomes
+  the square asked for. A navigate after a navigate is merged into it rather than kept beside it,
+  so a slider's thousand moves replay as one; an add is never merged or dropped. A proxy's request
+  is sent once the outputs of its flush are, so a widget drawn in that flush is on the page first,
+  and one that still arrives before its widget — an output hidden and not yet drawn — is held and
+  made after the widget's own. **Every render is a new frame**: a `src` that differs only after the
+  `#`, or not at all, would otherwise be a navigation within the old document, which says no
+  `ready` and leaves the widget deaf. With no map, `locus` (or `region`, with `view = "region"`)
+  and the view keywords are a navigate after the files. A value is one value: a vector for a key is
+  refused by name, numbers are written with a `.` whatever `OutDec` says, and `uri`, `uri2` and the
+  files among `maps` are addresses as a map's are.
+- **What the viewer says reaches R only in Shiny**, as inputs named after the output:
+  `input$<id>_state`, `input$<id>_rendered`, `input$<id>_version` — and `input$<id>_notice`, the
+  same notice the widget shows above a frame too old to take files.
+- **The file server is httpuv**, on `127.0.0.1` in the R session: one `Range`, CORS for any origin,
+  the private-network preflight, a `.gz` sent as its bytes, a directory under a 128-bit token
+  (`openssl` where installed, else the system's random source, never R's generator, which a
+  script's `set.seed()` makes predictable). No name that starts with a dot is served, so a home
+  directory's `.ssh` is not under a map's token. A link in the directory is served by its own name
+  and followed wherever it points — its owner made it, and a DataLad or git-annex file finds its
+  index beside the link, not beside its object. A `Range` it cannot read — several ranges, a
+  reversed one, another unit — is ignored and the whole file sent, as RFC 9110 says; 416 is for a
+  range past the end. A file asked for whole is streamed by httpuv, never read into R; a range is
+  read. A `HEAD` that names no range says no `Accept-Ranges`, so the viewer asks for one byte and
+  takes the size from its `Content-Range` — an authenticating proxy answers `HEAD` with
+  `Content-Length: 0` (§11). It answers on R's event loop — while R is idle, at the console, in
+  RStudio and under Shiny — because httpuv's static paths, which answer from a thread of their own,
+  ignore `Range` and send a file whole. **A rendered page that names local files therefore draws
+  them only while the session that rendered it runs**, which for a Knit or a `quarto render` is not
+  at all: serving a file while knitting warns once. Behind RStudio Server the server is reached
+  through `rstudioapi::translateLocalUrl()`, and only a viewer served by the session reads it — the
+  site's requests carry no RStudio login; `CHROMOSOMIX_PUBLIC_URL` names any other way in.
+- **The viewer** resolves as Python's does, with the option `chromosomix.viewer` before
+  `CHROMOSOMIX_VIEWER`, and `install_viewer()` caches the npm package in `tools::R_user_dir()` —
+  unpacked beside the cache, checked against npm's `dist.integrity` where `openssl` can, and moved
+  into place whole, so an interrupted install leaves nothing a later widget would frame. While
+  knitting, with no viewer named, an installed build is framed at its permanent address on the site
+  rather than served by a session that ends with the render.
+
+`widgets/r/inst/examples/` holds the demo: `demo.Rmd`, the yeast demo on an R Markdown page from the
+bucket — a map with its tracks, the same map moved before it is drawn, a 1D browser — and `app.R`, the
+map in Shiny with a region box, the scale, observed / expected and the model driving it, and the state
+the viewer sends back under them, the controls following it. `scripts/ui-r-widget.mjs` renders the
+page with the data and the build from this disk and runs the app, and shoots each widget once its
+frame has reported what was asked of it. Both packages' tests run on every push, in the Tests
+workflow's `widgets` job: pytest for the Python one, `R CMD check` for the R one.
 
 ## 22. The package: the copy that goes to npm
 

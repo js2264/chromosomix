@@ -212,3 +212,34 @@ jobs:
           if [ "$DEMO_GOLDEN" != "success" ] && [ "$DEMO" = "success" ] && [ "$COOLER" = "success" ]; then
             echo "::warning title=Demo oracles drifted::rebuilding test/golden/demo with this cooler did not reproduce the committed files; run npm run fixtures:demo-golden and look at the diff."
           fi
+
+  # The notebook widgets (SPECS §21.5): the Python package under `widgets/python`
+  # and the R package under `widgets/r`. Neither needs the app built — each test
+  # suite holds what its widget hands the frame and what its file server answers
+  # — so they run on their own, beside the app's.
+  widgets:
+    name: the Jupyter and R widgets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: The Jupyter widget's tests
+        run: |
+          python -m pip install -e widgets/python pytest
+          python -m pytest -q widgets/python/tests
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: widgets/r
+          extra-packages: any::rcmdcheck
+          needs: check
+      - name: The R widget's check and tests
+        uses: r-lib/actions/check-r-package@v2
+        with:
+          working-directory: widgets/r
+          args: 'c("--no-manual")'
+          error-on: '"warning"'

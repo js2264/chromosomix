@@ -14,6 +14,49 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The viewer in a Jupyter notebook (§21.5).** `pip install chromosomix` (from a clone,
+  `pip install -e widgets/python`) gives `Chromosomix`, the app itself in a cell — the map, its
+  tracks, its side panels and its gestures — as an anywidget for JupyterLab, Notebook 7, VS Code,
+  Colab and marimo: `Chromosomix('sample.mcool::/resolutions/5000', region='chr2:10-14Mb',
+  tracks=['ATAC.bw'], transform='log10')`. `goto`, `navigate` and `add` drive it from Python, and
+  `state` — a traitlet a cell can `observe` — follows where the reader takes it. A file on the
+  kernel's disk is served to the viewer by byte range from a server on `127.0.0.1`, its sidecars
+  beside it; behind JupyterHub through jupyter-server-proxy, in Colab through Colab's proxy. The
+  frame holds the site, a release by its permanent address (`viewer='0.17.0'`), any build, or the
+  npm package fetched once by `install_viewer()` so the notebook works offline.
+  `widgets/python/demo.ipynb` drives the yeast demo, and `demo_marimo.py` the same in marimo, where
+  the wrapper is read and the widget driven; `scripts/ui-jupyter-widget.mjs` runs it in JupyterLab
+  and shoots every frame. The local file server serves no dot-named file, follows a link by its own
+  name so a DataLad or git-annex file finds its index, ignores a `Range` it cannot read, and prints
+  nothing when a reader hangs up; behind JupyterHub, where only a viewer the kernel serves can read
+  through the hub's login, the widget warns when its frame is the site.
+
+- **The viewer in R: an htmlwidget for R Markdown, Quarto, RStudio and Shiny (§21.5).** The
+  `chromosomix` R package (`widgets/r/`, `install.packages("widgets/r", repos = NULL)` from a clone)
+  draws the app on a page — `chromosomix(map, region = "IV:1000000-1400000", tracks = c("ATAC.bw",
+  "genes.gtf"), transform = "log10")` — and `chromosomix_goto()`, `chromosomix_navigate()` and
+  `chromosomix_add()` move it: piped onto a widget before it is drawn, which is how a static page moves
+  its views, or of one on screen in Shiny through `chromosomixProxy()`, where `input$<id>_state`
+  follows the reader. Files on this machine are served to the viewer by byte range from the R
+  session, their sidecars beside them; behind RStudio Server through RStudio's proxy. The examples are
+  an R Markdown page of the yeast demo and a Shiny app driving it
+  (`system.file("examples", package = "chromosomix")`), whose controls follow the viewer without
+  echoing back into it; `scripts/ui-r-widget.mjs` renders and runs both and shoots every widget.
+  The local file server serves no dot-named file, follows a link by its own name so a DataLad or
+  git-annex file finds its index, streams a whole file rather than read it into R, and ignores a
+  `Range` it cannot read; while knitting, an installed viewer is framed from the site rather than
+  from a session that ends with the render.
+
+- **`chromosomix:add`, a host page putting files in an embed (§21.4).** The sixth message of the
+  embed's channel: a list of addresses, each put in the tab as the header's `+` puts one — a track
+  beside the map, another map or a model beside it, a workspace — once the map the `src=` named is
+  drawn, and answered with the state once they are in. The view state has no word for a track; this
+  is how a page that frames a map puts its tracks beside it. A host's messages are now carried out
+  in the order they came, so a `navigate` sent after an `add` lands on what the add opened, and
+  `chromosomix:ready` lists the messages the frame takes (`accepts`), so a host can tell a frame that
+  takes files from one built before this. The Jupyter and R widgets read it: a viewer before 0.17.0
+  draws the map without the tracks, and the widget says above the frame how many it could not add.
+
 - **Pairs QC: a library's quality from its `.pairs`, and its restriction fragments (§18.8).** A new
   task in the 2D card for a map binned from a `.pairs` — or any map, given the `.pairs` it came from.
   It draws the four orientations' P(s) (moved here from P(s)), the pair types, cis and trans past
@@ -345,6 +388,25 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   validation's comparison with yapc 0.1 on chr19 is unchanged to the last digit.
 
 ### Fixed
+
+- **An embed no longer recalls another frame's tracks (§21.2).** The memory of each file — its
+  tracks, marks and filters — was kept in `sessionStorage`, which every frame a page holds on one
+  origin shares; with no tab strip, every embed started with the same session id. Two embeds of one
+  map on a page, or two notebook widgets, showed the first one's tracks in the second, and a frame
+  reloaded in place showed its own twice. An embed now keeps that memory in the frame alone.
+
+- **A map read through a proxy that empties a `HEAD` opens (§11).** jupyter-server-proxy, the way
+  into a notebook kernel's files behind JupyterHub, answers every `HEAD` with `Content-Length: 0`
+  and passes the server's `Accept-Ranges` through, and the reader took both at their word: a 19 MB
+  `.cool` was mounted as a file of no bytes and refused as "not an HDF5 file", while its bigWigs,
+  read by range, drew. A `HEAD` stating no bytes is now followed by the one-byte probe, whose
+  `Content-Range` gives the size.
+
+- **A map in a deck keeps its size in a short window (§16.5).** Each deck cell's map took its height
+  from the window less the tracks stacked under it, with no floor, so a deck of two in a
+  620-pixel-tall window — a notebook's frame, a laptop with its tools open — drew a map with three
+  tracks under it as a 42-pixel thumbnail. It now has the single view's 20rem floor, and the page
+  scrolls, as the single view's does.
 
 - **A band below zero is drawn about its line (§18.13).** A curve's band is two stacked edges, and
   the chart library stacks only values of one sign unless told otherwise: a band whose lower edge was
