@@ -75,12 +75,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   cell with ENCODE's CTCF, ATAC-seq and its peaks, both strands of total RNA-seq, CTCF's motif, UCSC's
   refGene and hg38 sequence; and the pastis-NB model of the window, drawn as sticks, its TAD borders as
   beads and every bead coloured by its distance to one pinned inside the central sub-TAD. **Fig. 2**:
-  the map on chr19 at 10 kb with two labs' CTCF ChIP-seq (ENCSR000AKB and ENCSR000DZN, fold change
-  over control) and ATAC-seq, and nothing computed: each task of the figure's chain opens on its
+  the map on chr19 at 10 kb with two labs' CTCF ChIP-seq (Broad's ENCSR000AKB and UW's ENCSR000DRZ,
+  fold change over control) and ATAC-seq, and nothing computed: each task of the figure's chain opens on its
   recipe — insulation at four scales, the peaks on the two CTCF tracks as replicates, the APA between
   each peak and the next at 2 kb, the metaplots — so the figure's chromosomix panels are made in the
   browser from the map and the tracks alone. Everything else not a consortium's file is the app's own
-  output — and genome-wide, the peaks (25,432) and the insulation at four scales — made by
+  output — and genome-wide, the peaks (39,075) and the insulation at four scales — made by
   `scripts/make_rsg_store.py derive --steps gm12878` on the map's rungs read by range
   (`notebooks/scripts/cool_subset.py`), never the 27 GB.
 

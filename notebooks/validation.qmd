@@ -619,9 +619,9 @@ DATASETS = [
     dict(data='GM12878 CTCF ChIP-seq, fold change over control (GRCh38; Bernstein lab, ENCSR000AKB)',
          accession='ENCFF734CUT', source='ENCODE', md5='b68aeffbebeae3d03e734b51f43c0cb8',
          url=f'{ENCODE}/2020/10/01/a42c46dc-c33f-4906-8469-ba93e2cf30d3/ENCFF734CUT.bigWig'),
-    dict(data='GM12878 CTCF ChIP-seq, fold change over control (GRCh38; Snyder lab, ENCSR000DZN)',
-         accession='ENCFF485CGE', source='ENCODE', md5='ba43f52311258b2491d795504f6cfacc',
-         url=f'{ENCODE}/2020/09/25/ee64f56a-89ba-4f40-84f8-733a1994ea35/ENCFF485CGE.bigWig'),
+    dict(data='GM12878 CTCF ChIP-seq, fold change over control (GRCh38; Stamatoyannopoulos lab, ENCSR000DRZ)',
+         accession='ENCFF644EEX', source='ENCODE', md5='0404a4c8f2ea76f528bb5306d2431a11',
+         url=f'{ENCODE}/2020/09/26/03eeca15-17a9-47ac-aa63-08d471c2e25d/ENCFF644EEX.bigWig'),
     dict(data='GM12878 ATAC-seq, fold change over control (GRCh38; ENCSR095QNB)', accession='ENCFF487LOB',
          source='ENCODE', md5='f95a4eeec1156e2e1dc392ab988ae28a',
          url=f'{ENCODE}/2021/02/24/4c49a77a-edb2-4766-8328-d44ebe7446eb/ENCFF487LOB.bigWig'),
@@ -3509,8 +3509,8 @@ record('Signal by group', "mouse ATAC-seq, 2 replicates, chr19, by § 3's compar
 Fig. 2 chains four tasks, and this section runs the chain twice, each link by chromosomix and by the
 package it reproduces, on the same inputs: in situ Hi-C of GM12878 (Rao et al. 2014; 4DN's
 4DNFIXP4QG5B, every replicate merged, 4,010,478,943 contacts) at 10 kb; CTCF ChIP-seq of two labs as
-the two replicates — ENCODE's ENCSR000AKB (Bernstein lab, Broad) and ENCSR000DZN (Snyder lab,
-Stanford), each the fold change over control of its pooled replicates; and ATAC-seq (ENCSR095QNB).
+the two replicates — ENCODE's ENCSR000AKB (Bernstein lab, Broad) and ENCSR000DRZ (Stamatoyannopoulos
+lab, UW), each the fold change over control of its pooled replicates; and ATAC-seq (ENCSR095QNB).
 The map is 27 GB, and what both sides read of it is the 10-kb rung of chr19, every contact within it
 with the file's own weights, read by range from 4DN's bucket into a `.cool`
 (`notebooks/scripts/cool_subset.py`, which writes a pixel the file stores twice once, as the sum
@@ -3534,7 +3534,7 @@ chain is the app's and every reference is held to one step of it.
 | | chromosomix | reference |
 |---|---|---|
 | insulation | `insulation --window 5 --scales 4` | `cooltools.insulation(…, [50_000, 100_000, 200_000, 400_000])`, § 1's other settings |
-| peaks | `peaks --signal ENCFF734CUT --replicate ENCFF485CGE`, § 5's settings | `yapc`, § 5's settings, seeds 0–4 |
+| peaks | `peaks --signal ENCFF734CUT --replicate ENCFF644EEX`, § 5's settings | `yapc`, § 5's settings, seeds 0–4 |
 | pairs | `apa --anchors consecutive --features` the peaks: each and the next on its chromosome | a BEDPE of each peak and the next, written here |
 | APA | `apa --anchors consecutive --mode fixed --window 5 --minDiag 2 --minDist 12` (or `0`), `--norm none` or `oe` | `coolpup.pileup(…, flank=50_000)`, `mindist` `'auto'` (or `0`), raw or over § 4's expected for this map |
 | metaplot | `metaplot --at centre --stranded=false --band none`, `--flank 2000 --step 50` or `--flank 500000 --step 10000` | `computeMatrix reference-point --referencePoint center`, `-b/-a 2000 --binSize 50` or `-b/-a 500000 --binSize 10000` |
@@ -3568,7 +3568,7 @@ def cut(source, sequences=GM_SEQUENCES):
     return target
 
 
-CTCF = [cut(PATHS[a]) for a in ('ENCFF734CUT', 'ENCFF485CGE')]
+CTCF = [cut(PATHS[a]) for a in ('ENCFF734CUT', 'ENCFF644EEX')]
 GM_ATAC = cut(PATHS['ENCFF487LOB'])
 clr_gm = cooler.Cooler(str(GM_COOL))
 gm_bins = clr_gm.bins()[:]
@@ -3860,7 +3860,7 @@ ax.set(yscale='log', ylim=(1e-9, 1e-3), ylabel='|chromosomix / coolpuppy − 1|'
 ax.set_xticks(range(len(GM_CUTS)), ['raw', 'O/E', 'raw,\nevery\npair', 'O/E,\nevery\npair'], fontsize=8)
 agreement(axes[0, 2], gm_idr['cond_globalIDR'].to_numpy(float), gm_idr['score'].to_numpy(float), 'yapc 0.1',
           'chromosomix', 'c  −log10 IDR, called peaks')
-names_signal = ['CTCF · Broad', 'CTCF · Stanford', 'ATAC-seq']
+names_signal = ['CTCF · Broad', 'CTCF · UW', 'ATAC-seq']
 for ax, plot_key, names_, unit in ((axes[1, 0], 'signal', names_signal, 'from the peak (bp)'),
                                    (axes[1, 1], 'insulation', [f'{w * 10} kb' for w in GM_WINDOWS], 'from the peak (kb)')):
     v = gm_plot[plot_key]

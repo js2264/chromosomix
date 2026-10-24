@@ -77,9 +77,9 @@ GM_ENCODE = {
     "ENCFF734CUT": ("2020/10/01/a42c46dc-c33f-4906-8469-ba93e2cf30d3/ENCFF734CUT.bigWig",
                     "b68aeffbebeae3d03e734b51f43c0cb8",
                     "CTCF ChIP-seq, fold change over control, Bernstein lab, Broad (ENCODE ENCSR000AKB)"),
-    "ENCFF485CGE": ("2020/09/25/ee64f56a-89ba-4f40-84f8-733a1994ea35/ENCFF485CGE.bigWig",
-                    "ba43f52311258b2491d795504f6cfacc",
-                    "CTCF ChIP-seq, fold change over control, Snyder lab, Stanford (ENCODE ENCSR000DZN)"),
+    "ENCFF644EEX": ("2020/09/26/03eeca15-17a9-47ac-aa63-08d471c2e25d/ENCFF644EEX.bigWig",
+                    "0404a4c8f2ea76f528bb5306d2431a11",
+                    "CTCF ChIP-seq, fold change over control, Stamatoyannopoulos lab, UW (ENCODE ENCSR000DRZ)"),
     "ENCFF156URE": ("2020/10/01/bc71c9d1-2a24-421e-9a32-f78eaf297764/ENCFF156URE.bigBed",
                     "f999218d47dc27475c51d54869f3070f", "CTCF peaks, conservative IDR thresholded (ENCODE ENCSR000AKB)"),
     "ENCFF487LOB": ("2021/02/24/4c49a77a-edb2-4766-8328-d44ebe7446eb/ENCFF487LOB.bigWig",
@@ -95,6 +95,9 @@ GM_ENCODE = {
                     "4d419aafa535258c2abaad02054decf9",
                     "In situ CTCF ChIA-PET, contact matrix, Ruan lab, JAX (ENCODE ENCSR184YZV)"),
 }
+#: The two CTCF experiments the peaks are called on, as replicates: Broad's (Bernstein lab) and UW's
+#: (Stamatoyannopoulos lab), each its replicates pooled.
+GM_CTCF = ("ENCFF734CUT", "ENCFF644EEX")
 #: What the app computes on them (`write_gm12878`), under the store's `chromosomix_paper/human/`.
 GM_PEAKS, GM_PAIRS = "GM12878_CTCF.peaks.bed", "GM12878_CTCF.consecutive.bedpe"
 #: Fig. 1a's window, the 4C anchor in it, and what is computed over them.
@@ -378,7 +381,7 @@ def write_gm12878(work: Path, sequence: Path | None) -> str:
 
     Fig. 2: diamond insulation at four scales (50, 100, 200 and 400 kb windows at 10 kb) over the whole
     genome, and CTCF peaks called by the app's yapc on two labs' CTCF ChIP-seq (fold change over
-    control, ENCSR000AKB and ENCSR000DZN) with IDR between them, and each peak paired with the next one
+    control, ENCSR000AKB and ENCSR000DRZ) with IDR between them, and each peak paired with the next one
     along its sequence. Fig. 1a, chr14:88,550,001-90,100,000: insulation at 2 kb (100-kb window) and its
     borders, compartments at 250 kb phased by GC content, the 4C profile from chr14:89,150,001-89,180,000
     over the decay (5 kb, the finest rung whose chromosome-wide square the app will hold), the
@@ -395,7 +398,7 @@ def write_gm12878(work: Path, sequence: Path | None) -> str:
     gm = work / "gm12878"
     gm.mkdir(parents=True, exist_ok=True)
     files = {acc: fetch_checked(ENCODE + key, work / key.rsplit("/", 1)[-1], md5)
-             for acc, (key, md5, _) in GM_ENCODE.items() if acc in ("ENCFF734CUT", "ENCFF485CGE")}
+             for acc, (key, md5, _) in GM_ENCODE.items() if acc in GM_CTCF}
     if sequence is None:
         sequence = fetch(UCSC_HG38 + "bigZips/hg38.2bit", work / "hg38.2bit")
 
@@ -415,7 +418,7 @@ def write_gm12878(work: Path, sequence: Path | None) -> str:
     for window in (5, 10, 20, 40):
         keep(folder, f"*insulation-w{window}.bw", f"{GM}_10000.insulation-w{window}.bw")
     keep(folder, "*insulation-boundaries.bed", f"{GM}_10000.borders.bed")
-    folder = run("peaks", "--signal", files["ENCFF734CUT"], "--replicate", files["ENCFF485CGE"], dest="peaks")
+    folder = run("peaks", "--signal", files[GM_CTCF[0]], "--replicate", files[GM_CTCF[1]], dest="peaks")
     keep(folder, "*.bed", GM_PEAKS)
     pairs = consecutive_pairs(out / GM_PEAKS, out / GM_PAIRS)
 
@@ -620,7 +623,7 @@ FILES: list[tuple[str, str, str]] = [
         (f"{GM}_10000.insulation-w20.bw", "Diamond insulation at 10 kb, 200-kb window, genome-wide, computed by the app"),
         (f"{GM}_10000.insulation-w40.bw", "Diamond insulation at 10 kb, 400-kb window, genome-wide, computed by the app"),
         (f"{GM}_10000.borders.bed", "Borders called on the 50-kb insulation, genome-wide"),
-        (GM_PEAKS, "CTCF peaks called by the app's yapc on ENCFF734CUT and ENCFF485CGE, IDR ≤ 0.05, genome-wide"),
+        (GM_PEAKS, "CTCF peaks called by the app's yapc on ENCFF734CUT and ENCFF644EEX, IDR ≤ 0.05, genome-wide"),
         (GM_PAIRS, "Each CTCF peak with the next one along its sequence, genome-wide"),
         (f"{GM}_2000.chr14.insulation-w50.bw", "Diamond insulation of chr14 at 2 kb, 100-kb window (Fig. 1a)"),
         (f"{GM}_2000.chr14.borders.bed", "Borders called on chr14's insulation at 2 kb (Fig. 1a)"),
@@ -1226,11 +1229,11 @@ FIG2_REGION = "chr19:1-58,617,616"
 #: tracks at ±500 kb in 10-kb columns.
 FIG2_RECIPES = {
     "insulation": {"window": 5, "scales": 4, "sequences": [FIG2_SEQUENCE]},
-    "peaks": {"signal": "b-ctcf-broad", "replicate": "b-ctcf-stanford", "idr": 0.05, "perPeak": True, "width": 150,
+    "peaks": {"signal": "b-ctcf-broad", "replicate": "b-ctcf-uw", "idr": 0.05, "perPeak": True, "width": 150,
               "times": 3, "minWidth": 75, "truncate": 100_000, "sequences": [FIG2_SEQUENCE]},
     "apa": {"anchors": "consecutive", "at": "centre", "mode": "fixed", "window": 10, "minDist": 22, "minDiag": 2,
             "norm": "oe", "tracks": []},
-    "metaplot": {"tracks": ["b-ctcf-broad", "b-ctcf-stanford", "b-atac"], "mode": "reference", "at": "centre",
+    "metaplot": {"tracks": ["b-ctcf-broad", "b-ctcf-uw", "b-atac"], "mode": "reference", "at": "centre",
                  "stranded": False, "flank": 2000, "step": 50, "band": "bootstrap", "heatmap": True},
 }
 
@@ -1245,7 +1248,7 @@ def paper_fig2() -> dict:
     results over the whole genome, computed by the command line, are in the store's human folder."""
     tracks = [
         track("b-ctcf-broad", "track", "CTCF · Broad", gm("ENCFF734CUT.bigWig"), GM_COLOURS["ctcf"], 44),
-        track("b-ctcf-stanford", "track", "CTCF · Stanford", gm("ENCFF485CGE.bigWig"), GM_COLOURS["ctcf2"], 44),
+        track("b-ctcf-uw", "track", "CTCF · UW", gm("ENCFF644EEX.bigWig"), GM_COLOURS["ctcf2"], 44),
         track("b-atac", "track", "ATAC", gm("ENCFF487LOB.bigWig"), GM_COLOURS["atac"], 44),
     ]
     state = {"uri": f"{GM_MAP}::resolutions/10000", "view": "region", "region": machine(FIG2_REGION), **MAP_LOOK}

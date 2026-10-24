@@ -103,7 +103,7 @@ const PAPER_HUMAN = [
   ['human/hg38.2bit', 'Human sequence, UCSC hg38', 'genome', '2bit', 'hg38'],
   ['human/hg38.refGene.txt.gz', 'RefSeq genes, UCSC hg38', 'genome', 'genepred', 'hg38'],
   ['human/ENCFF734CUT.bigWig', 'CTCF ChIP-seq, Broad (ENCODE ENCSR000AKB)', 'genome', 'bigwig', 'hg38'],
-  ['human/ENCFF485CGE.bigWig', 'CTCF ChIP-seq, Stanford (ENCODE ENCSR000DZN)', 'genome', 'bigwig', 'hg38'],
+  ['human/ENCFF644EEX.bigWig', 'CTCF ChIP-seq, UW (ENCODE ENCSR000DRZ)', 'genome', 'bigwig', 'hg38'],
   ['human/ENCFF156URE.bigBed', 'CTCF peaks, conservative IDR (ENCODE)', 'genome', 'bigbed', 'hg38'],
   ['human/ENCFF487LOB.bigWig', 'ATAC-seq (ENCODE ENCSR095QNB)', 'genome', 'bigwig', 'hg38'],
   ['human/ENCFF928SQL.bigBed', 'ATAC-seq peaks (ENCODE)', 'genome', 'bigbed', 'hg38'],

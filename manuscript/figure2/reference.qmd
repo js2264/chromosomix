@@ -22,7 +22,7 @@ reproduces and every panel drawn by that package's own plotting:
 
 | panel | chromosomix | here |
 |---|---|---|
-| peaks | *Peak calling*, CTCF Broad with CTCF Stanford as replicate, IDR ≤ 0.05 | yapc 0.1 with IDR 2.0.3, the same settings, seed 0 |
+| peaks | *Peak calling*, CTCF Broad with CTCF UW as replicate, IDR ≤ 0.05 | yapc 0.1 with IDR 2.0.3, the same settings, seed 0 |
 | insulation | *Diamond insulation*, 50, 100, 200 and 400 kb, on the 10-kb map | `cooltools.insulation`, the same windows |
 | **a** APA | *Aggregate peak analysis*, consecutive features, 2 kb, ±10 bins, observed / expected, nearest loop 22 bins | coolpuppy: `coolpup.pileup` of each peak with the next, `flank=20000`, `mindist='auto'` (22 bins), over cooltools' `expected_cis`; `plotpup.plot` |
 | **b** CTCF and ATAC | *Metaplot over a feature set*, ±2 kb in 50 bp, its band and a heatmap a track | deepTools: `computeMatrix reference-point --referencePoint center`, `plotProfile --plotType se`, `plotHeatmap` |
@@ -106,7 +106,7 @@ WINDOWS = [50_000, 100_000, 200_000, 400_000]
 PALETTE = ['#0072b2', '#d55e00', '#009e73', '#cc79a7']
 #: The app's names for the tracks in one ASCII word each: deepTools decodes its matrix's header as ASCII
 #: and breaks a label at its spaces.
-SIGNAL = [('ENCFF734CUT', 'CTCF-Broad'), ('ENCFF485CGE', 'CTCF-Stanford'), ('ENCFF487LOB', 'ATAC')]
+SIGNAL = [('ENCFF734CUT', 'CTCF-Broad'), ('ENCFF644EEX', 'CTCF-UW'), ('ENCFF487LOB', 'ATAC')]
 #: The validation notebook's § 5 settings, which the app's recipe takes too.
 YAPC = ['--smoothing-window-width', '150', '--smoothing-times', '3', '--min-concave-region-width', '75',
         '--truncate-idr-input', '100000']
@@ -173,8 +173,8 @@ def show(name):
 
 chr19 of 4DN's in situ Hi-C of GM12878 (Rao et al. 2014, 4DNFIXP4QG5B, 4.0 billion contacts) at
 10 kb and at 2 kb, every contact within chr19 with the file's own weights, read by range into a
-`.cool`; and ENCODE's fold change over control of CTCF (ENCSR000AKB, Bernstein lab, Broad; ENCSR000DZN,
-Snyder lab, Stanford) and of ATAC-seq (ENCSR095QNB), each held to its MD5 and cut to chr19 interval for
+`.cool`; and ENCODE's fold change over control of CTCF (ENCSR000AKB, Bernstein lab, Broad; ENCSR000DRZ,
+Stamatoyannopoulos lab, UW) and of ATAC-seq (ENCSR095QNB), each held to its MD5 and cut to chr19 interval for
 interval. The app reads the same files in place, whole, and the same chr19 of them.
 
 ```{python}
@@ -256,7 +256,7 @@ display(Markdown(f"{NUMBERS['boundaries at 50 kb']:,} boundaries at the 50-kb wi
 
 yapc 0.1 with IDR 2.0.3 on the two labs' tracks as replicates, at the validation notebook's § 5
 settings, seed 0 (`notebooks/scripts/yapc_idr.py`), in yapc's own environment; the peaks at
-IDR ≤ 0.05 — what the app's *Peak calling* adds as *Peaks · CTCF · Broad + CTCF · Stanford ·
+IDR ≤ 0.05 — what the app's *Peak calling* adds as *Peaks · CTCF · Broad + CTCF · UW ·
 IDR ≤ 0.05*.
 
 ```{python}
@@ -265,7 +265,7 @@ called = folder / 'yapc_0.05.bed'
 if not called.exists():
     folder.mkdir(parents=True, exist_ok=True)
     environment = {**os.environ, 'PATH': f"{YAPC_PYTHON.parent}{os.pathsep}{os.environ['PATH']}"}
-    call([YAPC_PYTHON, SCRIPTS / 'yapc_idr.py', 0, folder / 'yapc', 'cond', TRACKS['ENCFF734CUT'], TRACKS['ENCFF485CGE'],
+    call([YAPC_PYTHON, SCRIPTS / 'yapc_idr.py', 0, folder / 'yapc', 'cond', TRACKS['ENCFF734CUT'], TRACKS['ENCFF644EEX'],
           *YAPC], env=environment)
 # Named for what it is: deepTools labels a matrix's regions by its file's name, and sorts by that label.
 PEAKS = folder / 'CTCF-peaks.bed'

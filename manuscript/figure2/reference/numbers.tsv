@@ -1,24 +1,24 @@
 quantity	value
 boundaries at 50 kb	306
-peaks at IDR ≤ 0.05	2101
-consecutive pairs	2100
+peaks at IDR ≤ 0.05	2106
+consecutive pairs	2105
 pairs piled up	327
-APA centre, observed / expected	1.39
-APA P2LL (the app's formula)	1.161
-APA colour scale	0.610 to 1.390
-b: CTCF-Broad, mean at its extreme column	28.035
-b: CTCF-Broad, heatmap colour scale	0 to 47.96
-b: CTCF-Stanford, mean at its extreme column	20.503
-b: CTCF-Stanford, heatmap colour scale	0 to 24.25
-b: ATAC, mean at its extreme column	6.3772
-b: ATAC, heatmap colour scale	0 to 14.11
-b: peaks	2101
-c: 400kb, mean at its extreme column	-0.0766
-c: 400kb, heatmap colour scale	-0.8975 to 0.8975
-c: 200kb, mean at its extreme column	0.0204
-c: 200kb, heatmap colour scale	-0.769 to 0.769
-c: 100kb, mean at its extreme column	0.0457
-c: 100kb, heatmap colour scale	-0.8408 to 0.8408
-c: 50kb, mean at its extreme column	0.0407
-c: 50kb, heatmap colour scale	-0.7712 to 0.7712
-c: peaks	2101
+APA centre, observed / expected	1.42
+APA P2LL (the app's formula)	1.169
+APA colour scale	0.567 to 1.433
+b: CTCF-Broad, mean at its extreme column	27.8866
+b: CTCF-Broad, heatmap colour scale	0 to 48.17
+b: CTCF-UW, mean at its extreme column	47.2531
+b: CTCF-UW, heatmap colour scale	0 to 70.41
+b: ATAC, mean at its extreme column	6.5456
+b: ATAC, heatmap colour scale	0 to 14.55
+b: peaks	2106
+c: 400kb, mean at its extreme column	-0.0812
+c: 400kb, heatmap colour scale	-0.8928 to 0.8928
+c: 200kb, mean at its extreme column	0.0225
+c: 200kb, heatmap colour scale	-0.7609 to 0.7609
+c: 100kb, mean at its extreme column	0.0542
+c: 100kb, heatmap colour scale	-0.8449 to 0.8449
+c: 50kb, mean at its extreme column	0.0525
+c: 50kb, heatmap colour scale	-0.7752 to 0.7752
+c: peaks	2106
