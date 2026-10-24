@@ -1,6 +1,13 @@
 {
-  "latest": "46b0a3e",
+  "latest": "8805ad3",
   "versions": [
+    {
+      "commit": "8805ad3",
+      "version": "0.16.0",
+      "date": "2026-10-24T22:26:40+02:00",
+      "subject": "Jupyter and R widgets: the viewer in a notebook cell, R Markdown, Quarto and Shiny (§21.5) (#133)",
+      "tag": ""
+    },
     {
       "commit": "46b0a3e",
       "version": "0.16.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "28cee95",
-      "version": "0.13.0",
-      "date": "2026-10-17T15:07:22+02:00",
-      "subject": "Put the name column's switch on the map's Tracks card, and keep the names over the tracks until it is pressed (§8.8) (#113)",
-      "tag": ""
-    },
-    {
       "commit": "7a6fea2",
       "version": "0.13.0",
       "date": "2026-09-20T22:39:26+02:00",
@@ -213,13 +213,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 133,
-      "commit": "90890cd",
-      "title": "Jupyter and R widgets: the viewer in a notebook cell, R Markdown, Quarto and Shiny (§21.5)",
-      "branch": "ccr-9c4f62d7-v0j7gc-widgets",
-      "date": "2026-10-24T12:35:28Z"
-    },
     {
       "number": 122,
       "commit": "e818753",
