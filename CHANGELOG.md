@@ -25,7 +25,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   sits `L − 2k` past the top-strand cut once an overhang is filled in, 3 bp for DpnII — so a dangling
   end is counted as one. `chromosomix pairsqc sample.pairs.gz --bin-size 10000 --sequence ref.fa
   --enzyme DpnII --out qc/`. Held to `pairtools stats`, `pairtools restrict` (once per strand) and
-  `cooltools.coverage` on a yeast library and its R64 reference in `notebooks/validation.qmd` §25:
+  `cooltools.coverage` on a yeast library and its R64 reference in `notebooks/validation.qmd` §26:
   every count identical.
 
 - **Restriction sites: a reference digested by an enzyme, a kit or typed sites (§18.8).** DpnII
@@ -49,6 +49,98 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   The card draws three small charts from the same counts, with no run: the pair types as one bar,
   cis and cis past 1–40 kb as columns, and P(s) by orientation with where the four meet — in the
   theme's colours, dark included.
+
+- **The lower triangle in a reading of its own (§5.10).** On a map of one file, the Map card has a
+  second tab, `◣ lower`: switched on, the triangle below the diagonal is drawn with its own score,
+  smoothing, O/E, transform, colours and clip — balanced counts above the diagonal and their O/E
+  below it, on two ramps and two keys. Everything else — the window, the resolution, the turn, the
+  overlays, the tracks — stays the map's. Switching it on starts it from the map's own reading, so
+  the press changes nothing until a field does; each triangle is pooled and coloured apart, and each
+  scale measured on its own reading's whole square, so the upper's colours do not move. The second
+  key is editable, the readout names the reading under the pointer, an exported figure's caption
+  says both, and a turned map is two bands, each cut from its own reading. A lower score that is
+  another column or the balancing the other way reads the block a second time from the same file.
+  In the link as `lower`, `score2`, `oe2`, `smooth2`, `transform2`, `colormap2`, `vmin2` and
+  `vmax2`, carried across a navigation but for the clip, and dropped when a second file or a deck
+  is opened.
+
+- **The paper's GM12878 panels in the lab store (§24.2, §24.3).** *The Chromosomix paper* opens on
+  two new tabs over 4DN's in situ Hi-C of GM12878 (Rao et al. 2014, 4DNFIXP4QG5B: 4,010,478,943
+  contacts, 27 GB, read in place). **Fig. 1a**: chr14:88.55–90.10 Mb at 5 kb, three cells across —
+  the map, with ENCODE's CTCF ChIA-PET of GM12878 in its lower triangle (Ruan lab, ENCSR184YZV, a
+  Juicer `.hic`: two formats out of two consortia in one square, §5.7), both as O/E smoothed
+  adaptively, with its insulation and borders above it, its compartments and E1 at 250 kb at its left, the
+  4C profile from chr14:89,150,001-89,180,000 under it, and the TAD and its borders marked; a tracks
+  cell with ENCODE's CTCF, ATAC-seq and its peaks, both strands of total RNA-seq, CTCF's motif, UCSC's
+  refGene and hg38 sequence; and the pastis-NB model of the window, drawn as sticks, its TAD borders as
+  beads and every bead coloured by its distance to one pinned inside the central sub-TAD. **Fig. 2**:
+  the map on chr19 at 10 kb with two labs' CTCF ChIP-seq (ENCSR000AKB and ENCSR000DZN, fold change
+  over control) and ATAC-seq, and nothing computed: each task of the figure's chain opens on its
+  recipe — insulation at four scales, the peaks on the two CTCF tracks as replicates, the APA between
+  each peak and the next at 2 kb, the metaplots — so the figure's chromosomix panels are made in the
+  browser from the map and the tracks alone. Everything else not a consortium's file is the app's own
+  output — and genome-wide, the peaks (25,432) and the insulation at four scales — made by
+  `scripts/make_rsg_store.py derive --steps gm12878` on the map's rungs read by range
+  (`notebooks/scripts/cool_subset.py`), never the 27 GB.
+
+- **Fig. 2's chain, held to its references (§18.10).** The validation notebook's § 24 runs what the
+  paper's Fig. 2 runs on GM12878, each link by chromosomix and by the package it reproduces, each fed
+  what the one before it wrote in chromosomix: insulation at four scales against `cooltools.insulation`,
+  CTCF's peaks on two labs' ChIP-seq as replicates against yapc 0.1 with IDR 2.0.3, APA between
+  consecutive peaks against coolpuppy, and the metaplot of CTCF, ATAC-seq and the insulation about
+  the peaks against deepTools' `computeMatrix`, `plotProfile` and `plotHeatmap`. It reads chr19 of
+  4DN's 27-GB map by range (`notebooks/scripts/cool_subset.py`), ENCODE's tracks held to their MD5s,
+  and its commands are timed with the rest.
+
+- **APA between consecutive features (§18.8).** A fourth choice of anchors, *consecutive features*
+  (`--anchors consecutive`), pairs every feature of a set with the next one along its sequence —
+  consecutive CTCF peaks — and piles the pairs up off the diagonal, held to the nearest loop as a
+  loaded loop set is.
+  Its pileup is coolpuppy's over a BEDPE of the same pairs within 5·10⁻⁶ (validation notebook § 24),
+  so Fig. 2's chain — insulation, peaks, the APA between them and the metaplots — runs in the app from
+  the map and the tracks alone, with no pair file made outside it.
+
+- **What a task re-implements, on its row (§18.1).** A `?` in a circle at the right of a task's title
+  in the Analysis column names the published method it follows, how it came out against it in the
+  validation notebook, and the paper's DOI as a link, in a small tip shown on hover. Green where the
+  validation found it identical or equivalent — 20 tasks, from coverage and insulation to pastis-NB
+  and the metaplot — and in the text's colour where it is untested: the scalogram, the HiC score and
+  per-cell contact QC. A mark, not a button: a press on it opens no task. Tasks that follow no
+  published method have none.
+
+- **The notebooks, in *About* (§18.10).** A *Notebooks* tab names the four published notebooks — the
+  validation, the timings and the parity, which GitHub Actions renders with every release, and the
+  laptop, rendered by hand — each linking to its page, with a sentence on what it holds chromosomix
+  to and, read from the `rendered.json` published beside it, the one line of what it found and when,
+  from which build, on what machine and by which run, or by hand, it was rendered. The stamps are read when the tab is chosen, never when *About* opens;
+  one that cannot be read leaves the link alone. The desktop app, the single file, the package's copy
+  and a dev server link the deployed site's pages; the single file reads no stamp.
+
+- **A remembered local file is one click away after a restart (§5.6, §8.6).** Chromium keeps a
+  dropped or chosen file's grant across a restart but asks again before handing the file over, and
+  asking needs a click the restore path does not have — so a restored tab landed on *drop the same
+  file below* for a file the browser still knew, under a red note saying no page could re-open it.
+  In that note's place the picker now says *This browser remembers rep1.cool and 4 other files, and
+  only needs your permission to read them again* beside **allow access to all 5 files**, and a
+  detached track reads *remembered file — allow access to draw it again* with **allow access** before
+  *or re-open this file*. One press asks for every file the browser remembers, the one the tab is
+  waiting on first, and Chromium's prompt offers *allow on every visit*: the tab's map, its tracks
+  and their indexes reopen, and so does every other tab on screen waiting on a file — a tab restored
+  and never looked at stays unopened until clicked. Firefox and Safari keep no grants, and show no
+  button.
+
+- **Anonymous telemetry on the website, with a switch in About (§31).** The site sends a visit, a
+  format opened, a task run and how long it took, an error code met, an install and an *allow access*
+  answered — each a word from a fixed list, checked against it before it is sent, and never a file
+  name, a URL, a locus, a message or the page's own address. Posted with no cookie and no referrer to
+  Umami (`https://cloud.umami.is/api/send`, free up to its Hobby plan's limit, or a self-hosted
+  Umami), named by the repository's `TELEMETRY_ENDPOINT` and `TELEMETRY_WEBSITE` variables
+  (docs/deploy.md), when the page is idle, at most two hundred a page. On by default with no banner;
+  **About → telemetry** turns it off at once, *forget everything* keeps it off, and a browser
+  sending Global Privacy Control sends nothing; Do Not Track, which Safari and Firefox have
+  retired, is not read. Only the site's own build at the site's own address sends any:
+  the archived pins, the previews, the package, the desktop app, the single file, embeds and
+  automated browsers never do.
 
 - **The app held to its own command line, in a notebook (§18.10).** `notebooks/parity.qmd` runs ten
   tasks in the app, in headless Chromium — insulation, compartments, P(s), coverage, virtual 4C, loop
@@ -78,7 +170,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   each, with the machine it ran on, a figure, and every command at the end. It needs Quarto with
   pandas, matplotlib and pyfaidx, and a built command line; the data, about 13.7 GB, are downloaded
   once, each held to its MD5. Render it on your own laptop, or read it at
-  <https://chromosomix.app/laptop/>, rendered with every release on a GitHub runner.
+  <https://chromosomix.app/laptop/>: a render made by hand, on a laptop, and committed as
+  `notebooks/laptop.html`, the one rendered page `.gitignore` lets through. The page is one file that
+  carries its table and its `rendered.json`, and the deploy unpacks the two beside it, so publishing
+  a render is committing the file. The Notebooks workflow renders it on a GitHub runner with every
+  release too, and keeps that as the run's artifact and in its summary only: never on the site, nor
+  on a release, and whether it rendered no longer holds back the other pages.
 
 - **The `.hic` reader held to `hic-straw` on a file Juicer Tools wrote (§3.6).**
   `test/unit/hic-straw-oracle.test.ts` read only fixtures this repository's own writer produced, so
@@ -101,16 +198,40 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   (§23.1).** A map — a cooler, an `.mcool` rung, a `.hic`, an `.scool`, a `.pairs` and its `.px2` —
   an `--against`, a bigWig or `.2bit` in `--tracks`, and a `.2bit` or an indexed FASTA in
   `--sequence` are read through the app's own `RemoteRangeSource`, with its cache, coalescing and
-  read-ahead, and nothing of them is written to disk: one rung of the demo's 46 MB *E. coli* `.mcool`
-  costs 2.6 MB in three requests, and a metaplot over a 15 MB bigWig 4.2 MB, where the command used to
-  fetch both whole first. Node has no synchronous request, so a helper thread fetches while the task's
-  thread waits on `Atomics.wait` (`cli/syncFetch.ts`), and a range source is mounted under h5wasm's
-  Node filesystem as a path no file lies behind (`h5/lazyFile.ts`). Every file a command writes over
-  an address is the file it writes over the same bytes on disk (`test/unit/cli-range.test.ts`). What
-  is read whole from a copy is unchanged — a feature set, a HiC-Pro matrix, a workspace — and so is
-  any address whose host will not serve a range, now said on stderr. A `404` names its status, a
-  request that got no answer its cause, and neither its query. The console's note that a remote line
-  downloads the whole file is gone with the download.
+  read-ahead, and nothing of them is written to disk: one rung of the demo's 46 MB *E. coli*
+  `.mcool` costs 2.6 MB in three requests, and a metaplot of one chromosome's peaks over a 15 MB
+  bigWig 5.2 MB, where the command used to fetch both whole first. Node has no synchronous request,
+  so a helper thread fetches while the task's thread waits on `Atomics.wait` (`cli/syncFetch.ts`),
+  and a range source is mounted under h5wasm's Node filesystem as a path no file lies behind
+  (`h5/lazyFile.ts`). Every file a command writes over an address is the file it writes over the
+  same bytes on disk (`test/unit/cli-range.test.ts`). What is read whole from a copy is unchanged —
+  a feature set, a HiC-Pro matrix, a workspace — and so is any address whose host will not serve a
+  range, now said on stderr. A `404` names its status, a request that got no answer its cause, and
+  neither its query. The console's note that a remote line downloads the whole file is gone with the
+  download.
+
+- **A second file whose chromosomes run on past the first's opens in the lower triangle (§5.7).** A
+  Juicer `.hic` keeps the mitochondrion after `Y`, where a 4DN cooler of the same assembly stops at
+  `chrY`, and the two were refused for counting 25 sequences against 24. While the second list opens
+  with the whole of the first, every bin the picture reads is the same locus in both, so the pair is
+  drawn; the other way round is still refused, and the refusal now says which way round to open it.
+  §5.7 also says what balanced means beside a `.hic`: Juicer's KR is in the library's depth where a
+  cooler's balancing sums to one, so the two are compared as O/E.
+
+- **The paper's bacterial panels are Fig. S3a–c (§24.2).** The three tabs that were Fig. 2a–c — *C.
+  necator* along both arms, the *B. subtilis* ParB time course and *P. aeruginosa*'s condensin
+  mutants — are named for the supplementary figure they now make, behind Fig. 2's new tab.
+
+- **About is three tabs, and the licences are one of them (§22.4).** *Overview* — what the viewer is,
+  the tutorial and the source, with the build stamp and the version picker in a footer under it that
+  never scrolls away — then *Notebooks* and *Licences*, each about that alone. The stamp used to sit
+  under the licences, which had pushed it out of sight on a laptop. The row of tabs is walked with
+  ← and →, Home and End.
+
+- **C1 is "no server-side component of our own" (§1).** It was "of any kind"; the site's telemetry
+  (§31) goes to a third-party endpoint the app never reads from or waits on. The landing page's
+  privacy note says no server ever sees a file, and adds a clause on the telemetry where the site
+  sends it; the README says the same.
 
 - **pastis-NB's fit runs on every core, and gives the same model on any number of them (§25.6,
   §23.1).** Each evaluation of the likelihood, and of pastis' MDS start before it, is now summed in
@@ -223,6 +344,42 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   validation's comparison with yapc 0.1 on chr19 is unchanged to the last digit.
 
 ### Fixed
+
+- **A band below zero is drawn about its line (§18.13).** A curve's band is two stacked edges, and
+  the chart library stacks only values of one sign unless told otherwise: a band whose lower edge was
+  negative had its width stacked on zero, a strip from 0 to the band's width far from its line. Every
+  metaplot of an insulation track, a log ratio, drew its bands so; they are stacked whatever the signs.
+
+- **A workspace's analysis recipes come back (§18.2).** What each task was last set to, and how its
+  figures were styled, are saved in a workspace so that reproducing a figure is opening it and pressing
+  Run — and the drawer kept them under the map's address with its resolution, where a workspace
+  neither put them back nor looked for them: every task opened on its defaults, a saved workspace
+  carried none of what was run, and switching resolution forgot the form. They are kept under the
+  tab's key for the file, which is the workspace's own, so the paper's Fig. 2 tab opens each task of
+  its chain on the figure's recipe.
+
+- **A tracks cell keeps its tracks (§16.11).** A track placed on a deck's tracks cell was kept against
+  the file of the map it was on, and a tracks cell has none: a reload, a saved workspace opened again
+  or a link brought the cell back empty and the track drawn nowhere. A tracks cell's tracks are kept by
+  its seat — `tracks:1` for the first from the left, as its name and its height already were — and
+  come back with the cell.
+
+- **A model's pinned bead is kept with it (§25.5).** *Spatial distance to pinned bin* and *contacts
+  with pinned bin* colour a model from the bead the reader pinned, and the pin went with the page: a
+  model saved coloured by distance came back coloured from nothing. The pin is kept on the model's row,
+  by the sequence and base pair at its middle, and comes back with a session, a workspace or a link.
+
+- **A metaplot's columns are deepTools' (§18.8).** Three things put a profile off `computeMatrix`'s by
+  up to a percent. An odd-length feature's centre was its midpoint rounded up, one base right of
+  deepTools'; a window a sequence end clipped spread what was left over whole columns, so every column
+  of that row stood a little off its place; and a track was read at the column's width, which takes a
+  zoom level up to twice as wide, whose records straddle the columns' edges — 0.7 % on the insulation
+  about CTCF peaks in 10-kb columns. The centre is now deepTools', a clipped window keeps step-wide
+  columns, and a track is read at its own resolution a megabase at a time: over GM12878's CTCF peaks
+  the profiles of CTCF, ATAC-seq and the insulation agree with deepTools within 5·10⁻⁶ (§ 24 of the
+  validation notebook), at 1.7 s rather than 1.1 s for the insulation, in 210 MB rather than 300;
+  mouse ATAC-seq about all 35,034 RefSeq TSSs (§ 14) stays identical and takes the 5.5 s it took, in
+  350 MB rather than 410.
 
 - **Signal by group's stretches are their exact means (§18.8).** A stretch was read at a twentieth
   of a typical stretch's width, from a zoom level wherever the file had one that fine, and a zoom

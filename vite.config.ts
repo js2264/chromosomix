@@ -149,6 +149,13 @@ export default defineConfig({
     __GOOGLE_CLIENT_ID__: JSON.stringify(process.env.GOOGLE_CLIENT_ID ?? ''),
     __GOOGLE_API_KEY__: JSON.stringify(process.env.GOOGLE_API_KEY ?? ''),
     __DROPBOX_APP_KEY__: JSON.stringify(process.env.DROPBOX_APP_KEY ?? ''),
+    // Where the site sends its telemetry (`src/telemetry.ts`, §31), and the
+    // site's id there, from the repository's `TELEMETRY_ENDPOINT` and
+    // `TELEMETRY_WEBSITE` variables. Empty is a build that sends nothing — every
+    // build but the site's, which overrides both to empty in its own config, so
+    // a copy can never send on the site's behalf.
+    __TELEMETRY_ENDPOINT__: JSON.stringify(process.env.TELEMETRY_ENDPOINT ?? ''),
+    __TELEMETRY_WEBSITE__: JSON.stringify(process.env.TELEMETRY_WEBSITE ?? ''),
   },
   // The policy is the site's and every copy's: the pinned and package configs
   // replace this list and name `cspMeta()` again, where the desktop's — whose

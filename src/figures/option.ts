@@ -1144,6 +1144,11 @@ function lineSeries(entry: Entry, style: FigureStyle, fillOpacity: number): Char
  * a stacked pair draws a ribbon; both are silent and neither is in the legend,
  * because a band is part of the series it belongs to rather than a series of
  * its own.
+ *
+ * **Stacked whatever the signs** (`stackStrategy: 'all'`). ECharts stacks only
+ * values of one sign by default, so a band whose lower edge is below zero had
+ * its width stacked on zero instead: a strip from 0 to the band's width, nowhere
+ * near its line — every insulation profile, a log ratio, drew its band so.
  */
 function bandSeries(entry: Entry, style: FigureStyle): ChartOption[] {
   const low = entry.series.low as number[]
@@ -1168,6 +1173,7 @@ function bandSeries(entry: Entry, style: FigureStyle): ChartOption[] {
   const quiet = {
     type: 'line',
     stack,
+    stackStrategy: 'all',
     symbol: 'none',
     silent: true,
     legendHoverLink: false,

@@ -36,6 +36,8 @@ import { OVERLAY_DRAG_TYPE, TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt } fro
 import { tabAmong } from './tabWalk'
 import { dragHasFileRow } from './fileDrag'
 import { chooseFiles, filesFrom } from './chooseFiles'
+import { allowHandles, hasHandle } from '../state/handles'
+import { recordTelemetry } from '../telemetry'
 import { pairIndexes } from '../annotations/loader'
 import { cardTitle, icon, iconButton } from './icons'
 import { batchFields } from './batchSettings'
@@ -603,7 +605,54 @@ export class AnnotationCard {
       class: 'btn btn-quiet',
       title: 'The settings below were kept; only the data has to be read again.',
     })
-    return el('p', { class: 'ann-note ann-detached' }, `${entry.source.name} · `, pick, input)
+    // "or re-open this file" travels as one piece, so a narrow column wraps it
+    // whole onto the next line rather than leaving a word hanging off this one.
+    const or = el('span', { text: 'or ' })
+    const allow = this.allowButton(entry.source.name, () => or.remove())
+    return el(
+      'p',
+      { class: 'ann-note ann-detached' },
+      `${entry.source.name} · `,
+      ...(allow === null ? [pick] : [allow, el('span', {}, or, pick)]),
+      input,
+    )
+  }
+
+  /**
+   * *allow access*, where this browser still holds a grant for the file that
+   * has lapsed to ask first (§5.6) — the click the permission prompt needs, spent
+   * on this file and then on every other one the browser remembers, as the
+   * picker's button spends it. The row comes back through the announcement every
+   * tab hears, with every other file the answer covers, so nothing is
+   * reattached here.
+   * A grant forgotten on the way — the file moved, or reading it refused for
+   * good — takes the button away, and `gone` the word that joined it to the next.
+   */
+  private allowButton(name: string, gone: () => void): HTMLButtonElement | null {
+    if (!hasHandle(name)) return null
+    const allow = button(
+      'allow access',
+      () => {
+        allow.disabled = true
+        void allowHandles(name).then((file) => {
+          recordTelemetry({ name: 'allow', outcome: file === null ? 'refused' : 'allowed' })
+          if (file !== null) return
+          if (hasHandle(name)) {
+            allow.disabled = false
+          } else {
+            allow.remove()
+            gone()
+          }
+        })
+      },
+      {
+        class: 'btn btn-quiet',
+        title:
+          'This browser remembers the file and only needs your permission to read it again — and ' +
+          'every other file it remembers, at the same time.',
+      },
+    )
+    return allow
   }
 
   // -------------------------------------------------------------------------

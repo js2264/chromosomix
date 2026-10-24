@@ -32,7 +32,7 @@ import {
   type ConfigRefusal,
   type SessionConfig,
 } from '@/state/SessionConfig'
-import { MAPS_SEPARATOR, VACANT, isMapRef, parseMaps, type PanelRef } from '@/panels/deck'
+import { MAPS_SEPARATOR, VACANT, isMapRef, parseMaps, tracksCellKey, type PanelRef } from '@/panels/deck'
 import { recall, remember } from '@/state/UiMemory'
 import { DEFAULT_UI_PLOT_OPTIONS } from '@/ui/plotOptions'
 import { COMMIT, PRODUCER } from '@/version'
@@ -749,6 +749,17 @@ describe('resolveConfig', () => {
     const out = resolveConfig(withLanes, base)
     expect(out.lanes?.[0].uri).toBe(uriOf(parseMaps(out.state.maps)[0]))
     expect(out.lanes?.[0].uri).toBe('https://example.org/app/demo/rep2.cool')
+  })
+
+  it('leaves a lane on a tracks cell keyed by the cell, not by a file', () => {
+    // A tracks cell has no file, so its lanes are kept under its seat,
+    // `tracks:1` (`tracksCellKey`, §16.11). Resolved as a path it would become
+    // `<site>/demo/tracks:1`, which no cell is keyed by, and the cell would come
+    // back empty with its tracks drawn nowhere.
+    const withCell = deckConfig({
+      lanes: [{ track: 'a1', uri: tracksCellKey(0), placement: { bottom: true }, borrowedLead: true }],
+    })
+    expect(resolveConfig(withCell, base).lanes?.[0].uri).toBe('tracks:1')
   })
 
   it('puts a companion’s scale on the same map the deck resolved', () => {

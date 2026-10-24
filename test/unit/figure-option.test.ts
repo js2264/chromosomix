@@ -253,6 +253,16 @@ describe('optionOf', () => {
     expect(seriesOf(option)[1]['areaStyle']).toBeDefined()
   })
 
+  it('stacks a band below zero on its own lower edge, not on zero', () => {
+    // ECharts stacks only values of one sign unless told otherwise: a negative
+    // lower edge with a positive width put the band between 0 and its width.
+    const banded = curve()
+    banded.series[0].low = new Float64Array([-0.05, -0.06, -0.04])
+    banded.series[0].high = new Float64Array([-0.01, -0.02, 0.01])
+    const { option } = build(banded)
+    for (const edge of seriesOf(option).slice(0, 2)) expect(edge['stackStrategy']).toBe('all')
+  })
+
   it('leaves the band out when the reader turns it off', () => {
     const banded = curve()
     banded.series[0].low = new Float64Array([3, 4, 5])

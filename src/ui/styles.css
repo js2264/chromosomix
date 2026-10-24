@@ -4539,6 +4539,81 @@ canvas.is-frozen {
   color: var(--warn);
 }
 
+/* The Map card's two tabs (§5.10): the map's own settings, and the triangle
+   below the diagonal read its own way. Words on a rule, the open one in the
+   accent and underlined into it — About's tabs, at the card's size, so which is
+   open is read off the row's shape and weight and not off a colour alone. */
+.map-tabs {
+  display: flex;
+  gap: 0.15rem;
+  margin: -0.1rem 0 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.map-tab {
+  margin-bottom: -1px;
+  padding: 0.25rem 0.5rem 0.3rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--step--1);
+  cursor: pointer;
+}
+
+.map-tab:hover {
+  color: var(--text);
+}
+
+.map-tab.is-on {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+/* The second tab while its reading is on, seen from the first: a dot after the
+   word, so a reader on the map's own tab can tell the lower triangle is not the
+   mirror it would otherwise be. */
+.map-tab.is-set::after {
+  content: '';
+  display: inline-block;
+  width: 0.4em;
+  height: 0.4em;
+  margin-left: 0.35em;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: 0.15em;
+}
+
+.map-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: var(--radius);
+}
+
+/* The lower tab's fields, under its switch: the same column as the map's own. */
+.map-lower-fields {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
+}
+
+.map-lower-fields > * {
+  min-width: 0;
+}
+
+.map-lower-note {
+  margin: 0;
+  font-size: var(--step--1);
+}
+
+.map-lower .field > .btn-toggle,
+.map-lower .field > .btn-word {
+  justify-self: start;
+}
+
 /* Stacked one per row when the card lives in a sidebar; the panel header keeps
    the inline layout, which is what `.panel-head > .controls-card` restores. */
 .controls-card .panel-controls {
@@ -5044,8 +5119,8 @@ canvas.is-frozen {
 }
 
 /* About: as wide as the wide dialogs, for the licences' three columns, and
-   taller than any, so the build stamp under them is on screen without a
-   scroll on a laptop. Still inside the backdrop's 8vh top margin. */
+   taller than any, so a tab as long as the licences scrolls as little as it
+   can on a laptop. Still inside the backdrop's 8vh top margin. */
 .modal-about {
   width: min(48rem, 100%);
   max-height: 88vh;
@@ -5080,17 +5155,19 @@ canvas.is-frozen {
   padding: 0.85rem 0.9rem 0.95rem;
 }
 
-/* The three that are flush on purpose. Two have a child carrying a border across
+/* The four that are flush on purpose. Three have a child carrying a border across
    the panel's whole width — the palette's search box, the feature card's footer
-   rule — which an inset body would cut short of both edges; they pad their own
-   rows instead (`.palette-body > .input`, `.feature-rows`, `.feature-foot`). The
-   third is the stage (§18.13, §25): a picture at the size of the window beside a
+   rule, About's row of tabs — which an inset body would cut short of both edges;
+   they pad their own rows instead (`.palette-body > .input`, `.feature-rows`,
+   `.feature-foot`, `.about-tabs`, `.about-panels`, `.about-foot`). The
+   fourth is the stage (§18.13, §25): a picture at the size of the window beside a
    column the reader drags the width of, where the divider has to reach both
    edges — and where an inset would be measured into the drag, since the grip
    sizes the column from the modal's own right edge. `.stage-body` carries its
    own inset round the picture. */
 .modal-panel > .palette-body,
 .modal-panel > .feature-body,
+.modal-panel > .about-body,
 .modal-panel > .stage-modal {
   padding: 0;
 }
@@ -5657,27 +5734,105 @@ canvas.is-frozen {
   font-size: var(--step--1);
 }
 
+/* About is three tabs: the row of tabs stays put and only the chosen tab's
+   panel scrolls. The Overview tab carries the build stamp and the version
+   picker in a footer of its own, under the part that scrolls, so the stamp is
+   never scrolled off screen; the Notebooks and Licences tabs have none, being
+   about one thing each. */
 .about-body {
-  overflow: auto;
-  padding: 0.4rem 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .about-body p {
   margin: 0.6rem 0;
 }
 
-/* Whose work this is (`licences.ts`): set off by a rule like the build stamp
-   under it, and a table in three columns — the project, what it does here and
-   its licence — so the eye runs down the licences as one list. The rows are a
-   subgrid, so every column lines up while each row stays a list item. */
-.about-licences {
+.about-tabbed {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The tabs: words on a rule, the chosen one in the accent and underlined into
+   the rule, like the drawer's map tabs (`.analysis-map.is-on`) — which one is
+   current is read off the row's shape and weight, not off a colour alone. */
+.about-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.2rem;
+  padding: 0.35rem 0.9rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.about-tab {
+  margin-bottom: -1px;
+  padding: 0.4rem 0.65rem 0.45rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--step--1);
+  cursor: pointer;
+}
+
+.about-tab:hover {
+  color: var(--text);
+}
+
+.about-tab.is-on {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.about-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: var(--radius);
+}
+
+.about-panels {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.3rem 0.9rem 0.6rem;
+}
+
+.about-feet {
+  flex: 0 0 auto;
+}
+
+.about-foot {
+  flex: 0 0 auto;
+  padding: 0 0.9rem 0.85rem;
+}
+
+.about-foot > .about-build:first-child {
+  margin-top: 0;
+}
+
+/* What the site sends, and the switch (§31), closing the Overview tab: set off
+   by a rule, since it is a different kind of answer — what this page does
+   besides what it shows. */
+.about-telemetry {
   border-top: 1px solid var(--border);
   margin-top: 0.9rem;
 }
 
-.about-body .about-heading {
-  margin: 0.8rem 0 0.2rem;
-  font-size: var(--step--1);
+.about-telemetry-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin: 0.4rem 0 0.2rem;
+}
+
+.about-telemetry-switch .hint {
+  margin: 0;
 }
 
 /* A link in a sentence or a list of names: the prose's own type in the accent,
@@ -5693,6 +5848,10 @@ canvas.is-frozen {
   color: var(--text);
 }
 
+/* Whose work this is (`licences.ts`): a table in three columns — the project,
+   what it does here and its licence — so the eye runs down the licences as one
+   list. The rows are a subgrid, so every column lines up while each row stays
+   a list item. */
 .about-licence-list {
   display: grid;
   grid-template-columns: max-content 1fr max-content;
@@ -5744,6 +5903,60 @@ canvas.is-frozen {
   .about-licence-id::before {
     content: ' · ';
   }
+}
+
+/* The notebooks (§18.10): one block each, its name and address on a line, what
+   it holds chromosomix to, what it found — the line the page wrote, in the
+   text colour since it is what the tab is for — and when and from what it was
+   rendered, quiet, as the build stamp is. */
+.about-notebook-list {
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.about-notebook {
+  padding: 0.6rem 0 0.65rem;
+  border-top: 1px solid var(--border);
+}
+
+.about-notebook-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.6rem;
+}
+
+.about-notebook-title {
+  font-weight: 600;
+}
+
+.about-notebook-where {
+  font-family: var(--mono);
+  font-size: var(--step--2);
+  color: var(--text-faint);
+}
+
+.about-body .about-notebook-what {
+  margin: 0.2rem 0 0;
+  font-size: var(--step--1);
+  color: var(--text-dim);
+}
+
+/* What it found: set off by a rule in the accent down its left, the one line
+   of the four a reader came to the tab for. */
+.about-body .about-notebook-found {
+  margin: 0.4rem 0 0;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--accent);
+  font-size: var(--step--1);
+  color: var(--text);
+}
+
+.about-body .about-notebook-stamp {
+  margin: 0.3rem 0 0;
+  font-size: var(--step--2);
+  color: var(--text-faint);
 }
 
 /* The two buttons of the §12 listing gate, side by side and equally weighted:
@@ -11913,6 +12126,77 @@ span.deck-name {
   color: var(--ok);
 }
 
+/* What the task re-implements (`ui/taskReference.ts`): a `?` in a circle at the
+   right of the title's line, after the chip. Green where the validation found
+   it identical or equivalent to its reference, the text's own colour where it
+   is untested. A mark and not a control — no fill, no hover state, the help
+   cursor its only invitation — so a column of twenty rows does not read as
+   twenty more buttons. Lucide's drawn mark, at 16 pixels: a typed `?` in a
+   bordered ring sat where the font's metrics put it, off-centre by a pixel on
+   some rows and not on others. */
+.task-ref {
+  display: inline-flex;
+  flex: 0 0 auto;
+  /* On the title's first line, centred on the chip beside it, as the chip
+     itself is held there (`align-self: start`): centred in the cell instead,
+     it sank to the middle of a title that wraps onto two lines. The chip is
+     about 0.27rem taller. */
+  align-self: start;
+  margin-top: 0.135rem;
+  color: var(--text);
+  cursor: help;
+}
+
+.task-ref > .icon {
+  display: block;
+}
+
+.task-ref.is-validated {
+  color: var(--ok);
+}
+
+/* The same width on a row with no `?`, so that every chip stands in one column
+   rather than the rows without a reference pushing theirs to the edge. */
+.task-ref-blank {
+  flex: 0 0 auto;
+  width: 16px;
+}
+
+/* Its tip, hung from the body and placed under the `?` by hand: the column
+   scrolls and clips, and the row is a button a link cannot sit inside. Small
+   and plain — the method, then how it came out and its DOI — since it is a
+   footnote to the row and not a card of its own. */
+.task-ref-tip {
+  position: fixed;
+  z-index: 95;
+  width: max-content;
+  max-width: min(19rem, calc(100vw - 1rem));
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  color: var(--text);
+  box-shadow: var(--shadow-2);
+  font-size: var(--step--2);
+  line-height: 1.4;
+}
+
+.task-ref-tip > p {
+  margin: 0;
+}
+
+.task-ref-tip > .task-ref-status {
+  margin-top: 0.15rem;
+  color: var(--text-dim);
+}
+
+.task-ref-tip a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
 .analysis-chip.is-failed {
   border-color: var(--danger);
   color: var(--danger);
@@ -14723,6 +15007,33 @@ span.deck-name {
 .folders-asked .hint {
   flex: 1 1 20rem;
   margin: 0;
+}
+
+/* The grant this browser still holds for the file a tab is waiting on (§5.6),
+   in place of the red note: the same box, in the accent's wash rather than the
+   danger's, since what it asks for is one click and not a correction — and the
+   button is the page's one primary action until the file is back. A grant
+   that turns out to be spent goes back to the red. */
+.allow-asked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.9rem;
+  max-width: 90ch;
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  font-size: var(--step--1);
+}
+
+.allow-asked-text {
+  flex: 1 1 24rem;
+  margin: 0;
+}
+
+.allow-asked.is-refused {
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 
 /* --- the guided tutorial (§30) ------------------------------------------- */

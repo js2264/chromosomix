@@ -15,3 +15,8 @@ test/golden/*.json -diff=off
 # anyway: the cost of that heuristic being wrong once is a corrupt genome in the
 # repository, found by somebody whose sequence lane is drawing nonsense.
 *.2bit binary
+
+# The laptop notebook as rendered by hand and committed (notebooks/scripts/pages.py): a self-contained
+# page, a megabyte of embedded styles and pictures that nobody reviews line by line. Folded in a pull
+# request's diff, and left out of the repository's language count.
+notebooks/laptop.html linguist-generated=true

@@ -90,6 +90,7 @@ import {
   poolsAnchors,
   usesPairSet,
   allPairs,
+  consecutivePairs,
   distanceBins,
   MAX_GENERATED_PAIRS,
   windowBins,
@@ -181,18 +182,24 @@ export const runApa: TaskRunner = async (job) => {
   const norm = strParam(job.params, 'norm', 'matched')
 
   const madePairs = allPairs(job.params)
+  const neighbours = consecutivePairs(job.params)
   const anchors = usingPairs
     ? pairAnchors(job, pairs as PairSet)
     : madePairs
       ? generatedPairs(job, features as FeatureSet)
-      : featureAnchors(job, features as FeatureSet)
+      : neighbours
+        ? consecutiveAnchors(job, features as FeatureSet)
+        : featureAnchors(job, features as FeatureSet)
   if (anchors.length === 0) {
     job.note(
       madePairs
         ? 'No two features of this set are on one sequence within the separation range, so there ' +
             'is no pair to pile up. Widen the range, or check that the set and the file spell ' +
             'their sequences alike.'
-        : 'No anchor of this set lands inside a sequence this file has, so there is nothing to pile up.',
+        : neighbours
+          ? 'No two features of this set are on one sequence this file has, so no feature has a ' +
+              'next one to pair with. Check that the set and the file spell their sequences alike.'
+          : 'No anchor of this set lands inside a sequence this file has, so there is nothing to pile up.',
     )
     return []
   }
@@ -200,6 +207,12 @@ export const runApa: TaskRunner = async (job) => {
     job.note(
       `${anchors.length.toLocaleString()} pairs made from ` +
         `${(features as FeatureSet).length.toLocaleString()} features.`,
+    )
+  }
+  if (neighbours) {
+    job.note(
+      `${anchors.length.toLocaleString()} pairs, each feature with the next along its sequence, ` +
+        `made from ${(features as FeatureSet).length.toLocaleString()} features.`,
     )
   }
 
@@ -226,7 +239,7 @@ export const runApa: TaskRunner = async (job) => {
   // window stops reaching the diagonals it would have gaps cut in — and is what
   // the validation types. It is a floor on *where* a loop is, not a sample of the
   // set, and it is said: how many, how near, and how to have them all.
-  const piled = usingPairs && !isScaled(job.params) ? nearEnough(job, anchors) : anchors
+  const piled = (usingPairs || neighbours) && !isScaled(job.params) ? nearEnough(job, anchors) : anchors
   if (piled.length === 0) return []
 
   // Every anchor of every group. There used to be a cap here, and it was not a
@@ -1227,6 +1240,93 @@ async function expectedBySequence(
 // Pairs made rather than loaded
 // ---------------------------------------------------------------------------
 
+/** One feature where the file has it: its bin, and the point its pairs are measured between. */
+interface Placed {
+  contig: string
+  centre: number
+  /**
+   * The point unrounded — half way along the feature where the window is cut
+   * about its centre — which is where coolpuppy measures a pair's separation
+   * from, so the nearest loop keeps the same pairs as it does.
+   */
+  exact: number
+  bin: number
+  bounds: Span
+  body: Span
+  label: string
+}
+
+/**
+ * A feature set's features on this file, in order along each sequence.
+ *
+ * Resolved once per feature rather than once per pair: `contigIdFor` walks a
+ * naming context and a set of forty thousand features inside a 2 Mb window
+ * produces millions of pairs, so resolving inside the inner loop is the one
+ * decision that would make a run minutes rather than seconds. Sorted by this
+ * file's own sequence name and then by position, because the set's order is the
+ * *set's* and two of its names may resolve to one sequence here (§5.9): sorting
+ * on what was resolved is what keeps a walk along a sequence correct in exactly
+ * that case.
+ */
+function placedFeatures(job: JobContext, set: FeatureSet): Placed[] {
+  const from = contextOf(set.contigs)
+  const placed: Placed[] = []
+  const reference = anchorAt(job.params)
+  for (let i = 0; i < set.length; i++) {
+    // The **same point** the window is cut about is the point the separation is
+    // measured between, and it has to be: a range of 20 kb to 2 Mb between gene
+    // centres and a pileup at gene starts would be two different sets of pairs
+    // wearing one caption.
+    const point = anchorBase(set, i, reference)
+    const at = binOf(job, set.contigs[set.contig[i]], set.start[i], set.end[i], from, { point })
+    if (at === null) continue
+    placed.push({
+      contig: at.contig,
+      centre: point,
+      exact: reference === 'centre' ? (set.start[i] + set.end[i]) / 2 : point,
+      bin: at.bin,
+      bounds: at.bounds,
+      body: at.body,
+      label: set.name[i] === '' ? formatPosition(set.contigs[set.contig[i]], set.start[i]) : set.name[i],
+    })
+  }
+  placed.sort((a, b) => (a.contig === b.contig ? a.centre - b.centre : a.contig < b.contig ? -1 : 1))
+  return placed
+}
+
+/**
+ * Each feature of a set with the next one along its sequence.
+ *
+ * One pair a neighbour, the two in the set's order along the sequence, and no
+ * sampling: a set of n features on one sequence makes n − 1 pairs. A pair is
+ * kept whatever its separation and held to the nearest loop afterwards, as a
+ * loaded BEDPE of the same pairs is (`nearEnough`), measured between the two
+ * features' own centres as coolpuppy measures it — so a pileup of these pairs
+ * and coolpuppy's of a BEDPE listing them are of the same pairs.
+ */
+function consecutiveAnchors(job: JobContext, set: FeatureSet): Anchor[] {
+  const placed = placedFeatures(job, set)
+  const out: Anchor[] = []
+  for (let i = 0; i + 1 < placed.length; i++) {
+    const a = placed[i]
+    const b = placed[i + 1]
+    if (b.contig !== a.contig) continue
+    const row = Math.min(a.bin, b.bin)
+    const col = Math.max(a.bin, b.bin)
+    out.push({
+      pair: { row, col, separation: col - row },
+      bounds: a.bounds,
+      label: `${a.label} × ${b.label}`,
+      rank: Number.NaN,
+      span: col - row,
+      centreDistance: Math.abs(b.exact - a.exact),
+      rows: { from: row, to: row + 1 },
+      cols: { from: col, to: col + 1 },
+    })
+  }
+  return out
+}
+
 /**
  * Every pair of a feature set on one sequence, inside the separation range.
  *
@@ -1264,45 +1364,8 @@ function generatedPairs(job: JobContext, set: FeatureSet): Anchor[] {
       `${shortBp(minSep * job.mc.binsize)} to ${shortBp(maxSep * job.mc.binsize)} at this ` +
       `file’s ${job.mc.binsize.toLocaleString()} bp resolution.`,
   )
-  const from = contextOf(set.contigs)
   const rng = makeRandom(Math.round(numParam(job.params, 'seed', 1)))
-
-  // Resolved once per feature rather than once per pair: `contigIdFor` walks a
-  // naming context and a set of forty thousand features inside a 2 Mb window
-  // produces millions of pairs, so resolving inside the inner loop is the one
-  // decision here that would make the run minutes rather than seconds.
-  interface Placed {
-    contig: string
-    centre: number
-    bin: number
-    bounds: Span
-    body: Span
-    label: string
-  }
-  const placed: Placed[] = []
-  const reference = anchorAt(job.params)
-  for (let i = 0; i < set.length; i++) {
-    // The **same point** the window is cut about is the point the separation is
-    // measured between, and it has to be: a range of 20 kb to 2 Mb between gene
-    // centres and a pileup at gene starts would be two different sets of pairs
-    // wearing one caption.
-    const point = anchorBase(set, i, reference)
-    const at = binOf(job, set.contigs[set.contig[i]], set.start[i], set.end[i], from, { point })
-    if (at === null) continue
-    placed.push({
-      contig: at.contig,
-      centre: point,
-      bin: at.bin,
-      bounds: at.bounds,
-      body: at.body,
-      label: set.name[i] === '' ? formatPosition(set.contigs[set.contig[i]], set.start[i]) : set.name[i],
-    })
-  }
-  // By this file's own sequence name and then by position, because the set's
-  // order is the *set's* and two of its names may resolve to one sequence here
-  // (§5.9). Sorting on what was resolved is what keeps the sliding window below
-  // correct in exactly that case.
-  placed.sort((a, b) => (a.contig === b.contig ? a.centre - b.centre : a.contig < b.contig ? -1 : 1))
+  const placed = placedFeatures(job, set)
 
   const out: Anchor[] = []
   let seen = 0

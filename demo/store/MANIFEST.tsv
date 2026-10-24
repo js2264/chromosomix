@@ -55,6 +55,31 @@ meneu2025/ChIP/Scc1_Mmyco_rep1.vs-input.bw	s3://rsglab-data/public-data/2025_Men
 meneu2025/ChIP/Scc1_Mpneumo_rep1.vs-input.bw	s3://rsglab-data/public-data/2025_Meneu_et_al/ChIP/Scc1_Mpneumo_rep1.vs-input.bw	Scc1 (cohesin) ChIP-seq over input, M. pneumoniae
 meneu2025/genome_references/W303_Mmmyco.gff3	s3://rsglab-data/public-data/2025_Meneu_et_al/genome_references/W303_Mmmyco.gff3	Genes, W303 with the M. mycoides chromosome
 meneu2025/genome_references/S288c_Mpneumo.gtf	s3://rsglab-data/public-data/2025_Meneu_et_al/genome_references/S288c_Mpneumo.gtf	Genes, S288C with the M. pneumoniae chromosome
+chromosomix_paper/human/4DNFIXP4QG5B.mcool	s3://4dn-open-data-public/fourfront-webprod/wfoutput/d6abea45-b0bb-4154-9854-1d3075b98097/4DNFIXP4QG5B.mcool	In situ Hi-C, GM12878, 4,010,478,943 contacts (Rao et al. 2014; 4DN 4DNES3JX38V5)
+chromosomix_paper/human/ENCFF734CUT.bigWig	s3://encode-public/2020/10/01/a42c46dc-c33f-4906-8469-ba93e2cf30d3/ENCFF734CUT.bigWig	CTCF ChIP-seq, fold change over control, Bernstein lab, Broad (ENCODE ENCSR000AKB)
+chromosomix_paper/human/ENCFF485CGE.bigWig	s3://encode-public/2020/09/25/ee64f56a-89ba-4f40-84f8-733a1994ea35/ENCFF485CGE.bigWig	CTCF ChIP-seq, fold change over control, Snyder lab, Stanford (ENCODE ENCSR000DZN)
+chromosomix_paper/human/ENCFF156URE.bigBed	s3://encode-public/2020/10/01/bc71c9d1-2a24-421e-9a32-f78eaf297764/ENCFF156URE.bigBed	CTCF peaks, conservative IDR thresholded (ENCODE ENCSR000AKB)
+chromosomix_paper/human/ENCFF487LOB.bigWig	s3://encode-public/2021/02/24/4c49a77a-edb2-4766-8328-d44ebe7446eb/ENCFF487LOB.bigWig	ATAC-seq, fold change over control (ENCODE ENCSR095QNB)
+chromosomix_paper/human/ENCFF928SQL.bigBed	s3://encode-public/2021/02/24/534b1381-d8a8-4ce3-b6c2-5745076db38b/ENCFF928SQL.bigBed	ATAC-seq peaks, replicated (ENCODE ENCSR095QNB)
+chromosomix_paper/human/ENCFF990PUN.bigWig	s3://encode-public/2021/04/06/b69b32c0-0298-484c-b218-37f22ebb0309/ENCFF990PUN.bigWig	Total RNA-seq, plus strand, Gingeras lab, CSHL (ENCODE ENCSR000AEC)
+chromosomix_paper/human/ENCFF005BFP.bigWig	s3://encode-public/2021/04/06/7bb368f1-3e6b-4b91-86a5-45ce68da0d94/ENCFF005BFP.bigWig	Total RNA-seq, minus strand (ENCODE ENCSR000AEC)
+chromosomix_paper/human/ENCFF379AWZ.hic	s3://encode-public/2020/12/29/12d36023-4ea1-4b2a-9716-59eb557c799d/ENCFF379AWZ.hic	In situ CTCF ChIA-PET, contact matrix, Ruan lab, JAX (ENCODE ENCSR184YZV)
+chromosomix_paper/human/hg38.2bit	work:hg38.2bit	Human genome hg38, UCSC (bigZips)
+chromosomix_paper/human/hg38.refGene.txt.gz	work:hg38.refGene.txt.gz	RefSeq genes, UCSC hg38 refGene table
+chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w5.bw	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w5.bw	Diamond insulation at 10 kb, 50-kb window, genome-wide, computed by the app
+chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w10.bw	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w10.bw	Diamond insulation at 10 kb, 100-kb window, genome-wide, computed by the app
+chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w20.bw	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w20.bw	Diamond insulation at 10 kb, 200-kb window, genome-wide, computed by the app
+chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w40.bw	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_10000.insulation-w40.bw	Diamond insulation at 10 kb, 400-kb window, genome-wide, computed by the app
+chromosomix_paper/human/4DNFIXP4QG5B_10000.borders.bed	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_10000.borders.bed	Borders called on the 50-kb insulation, genome-wide
+chromosomix_paper/human/GM12878_CTCF.peaks.bed	repo:demo/store/chromosomix_paper/human/GM12878_CTCF.peaks.bed	CTCF peaks called by the app's yapc on ENCFF734CUT and ENCFF485CGE, IDR ≤ 0.05, genome-wide
+chromosomix_paper/human/GM12878_CTCF.consecutive.bedpe	repo:demo/store/chromosomix_paper/human/GM12878_CTCF.consecutive.bedpe	Each CTCF peak with the next one along its sequence, genome-wide
+chromosomix_paper/human/4DNFIXP4QG5B_2000.chr14.insulation-w50.bw	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_2000.chr14.insulation-w50.bw	Diamond insulation of chr14 at 2 kb, 100-kb window (Fig. 1a)
+chromosomix_paper/human/4DNFIXP4QG5B_2000.chr14.borders.bed	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_2000.chr14.borders.bed	Borders called on chr14's insulation at 2 kb (Fig. 1a)
+chromosomix_paper/human/4DNFIXP4QG5B_250000.compartments-e1.bw	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_250000.compartments-e1.bw	Compartments (E1) at 250 kb, phased by GC content (Fig. 1a)
+chromosomix_paper/human/4DNFIXP4QG5B_250000.compartments-ab.bed	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_250000.compartments-ab.bed	A and B compartments at 250 kb (Fig. 1a)
+chromosomix_paper/human/4DNFIXP4QG5B_5000.4c-chr14-89150001-89180000.bw	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_5000.4c-chr14-89150001-89180000.bw	4C from chr14:89,150,001-89,180,000 over the decay, 5 kb (Fig. 1a)
+chromosomix_paper/human/4DNFIXP4QG5B_2000.chr14-88.55-90.10Mb.bed3d	repo:demo/store/chromosomix_paper/human/4DNFIXP4QG5B_2000.chr14-88.55-90.10Mb.bed3d	pastis-NB model of chr14:88,550,001-90,100,000 at 2 kb (Fig. 1a)
+chromosomix_paper/human/hg38.CTCF-motifs.bed	repo:demo/store/chromosomix_paper/human/hg38.CTCF-motifs.bed	CTCF's core motif RCCASYAGRKGGCRS, at most one mismatch, on hg38's chr1–22, X and Y (Fig. 1a)
 chromosomix_paper/mouse/4DNFI5QJNFAT.mcool	s3://4dn-open-data-public/fourfront-webprod/wfoutput/ef0eba47-ada0-42bc-9329-5145b57ff33a/4DNFI5QJNFAT.mcool	In situ Hi-C, F123 mouse ES cells (Kubo et al. 2021)
 chromosomix_paper/mouse/4DNFIFFXFV82.bw	s3://4dn-open-data-public/fourfront-webprod/wfoutput/6dd5c984-eccf-4d2d-8118-38ea2a4d30fb/4DNFIFFXFV82.bw	CTCF ChIP-seq (Huang et al. 2021)
 chromosomix_paper/mouse/4DNFIXE23VC7.bw	s3://4dn-open-data-public/fourfront-webprod/wfoutput/8ee59614-5b5f-4c8b-a29e-86d0c8047c30/4DNFIXE23VC7.bw	H3K27ac ChIP-seq (Huang et al. 2021)

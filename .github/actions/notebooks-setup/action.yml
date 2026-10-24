@@ -124,7 +124,7 @@ runs:
         "$pip" install --quiet --no-deps 'git+https://github.com/jurgjn/yapc@cf2ea62694f082fc282a979057d44b5e5b0fb41a'
         "$RUNNER_TEMP/yapc-env/bin/yapc" --help > /dev/null
 
-    # pairtools 1.1.2 imports the `pipes` module Python 3.13 removed, so validation.qmd § 24's reference
+    # pairtools 1.1.2 imports the `pipes` module Python 3.13 removed, so validation.qmd § 25's reference
     # has an environment of its own, on 3.12.
     - name: pairtools, in an environment of its own
       if: inputs.references == 'true'

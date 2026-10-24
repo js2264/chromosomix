@@ -13,6 +13,8 @@ import { describe, expect, it } from 'vitest'
 
 import { alignable, blendAcrossDiagonal } from '../../src/render/compare'
 import { compareRefusal } from '../../src/ui/CompareCard'
+import { rereading } from '../../src/ui/compare'
+import type { ReaderClient } from '../../src/worker/client'
 import type { OpenResult } from '../../src/worker/protocol'
 
 function block(
@@ -254,11 +256,61 @@ describe('compareRefusal', () => {
     expect(refusal).toContain('2,500')
   })
 
-  it('refuses two different chromosome counts', () => {
+  it('refuses a second file that carries fewer chromosomes than the first', () => {
     const refusal = compareRefusal(opened(), opened(), {
       primary: CONTIGS,
       second: [['I', 1000]],
     })
     expect(refusal).toContain('counts differ')
+    expect(refusal).toContain('opened the other way round, this pair is drawn')
+  })
+
+  it('accepts a second file whose list runs on past the first’s', () => {
+    // A Juicer `.hic` keeps the mitochondrion after the last chromosome, where
+    // a 4DN cooler of the same assembly stops: every bin the picture reads is
+    // the first file's, and indexes the same locus in both.
+    expect(
+      compareRefusal(opened(), opened(), {
+        primary: CONTIGS,
+        second: [
+          ['chrI', 1000],
+          ['chrII', 2000],
+          ['chrM', 86],
+        ],
+      }),
+    ).toBeNull()
+  })
+
+  it('refuses an extra chromosome anywhere but after the first file’s', () => {
+    // In the middle it moves every bin after it, so the second file's
+    // triangle would be drawn shifted under the first one's labels.
+    const refusal = compareRefusal(opened(), opened(), {
+      primary: CONTIGS,
+      second: [
+        ['I', 1000],
+        ['M', 86],
+        ['II', 2000],
+      ],
+    })
+    expect(refusal).toContain('“II” in this file and “M” in the other')
+  })
+})
+
+describe('rereading (§5.10)', () => {
+  it('asks the same question with the lower reading’s balancing and column', async () => {
+    const asked: unknown[] = []
+    const client = { request: async (payload: unknown) => (asked.push(payload), payload) } as unknown as ReaderClient
+    const again = rereading(client, { balance: false, value: 'expected_dense' })
+    await again.request({ kind: 'matrix', rows: [0, 4], balance: true } as never)
+    await rereading(client, { balance: true }).request({
+      kind: 'matrix',
+      rows: [0, 4],
+      balance: false,
+      value: 'x',
+    } as never)
+    expect(asked).toEqual([
+      { kind: 'matrix', rows: [0, 4], balance: false, value: 'expected_dense' },
+      { kind: 'matrix', rows: [0, 4], balance: true },
+    ])
   })
 })

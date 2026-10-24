@@ -1,4 +1,4 @@
-"""A reference's restriction sites with bioframe and Biopython (validation.qmd § 25).
+"""A reference's restriction sites with bioframe and Biopython (validation.qmd § 26).
 
 `bioframe.digest` cuts each sequence of the FASTA where Biopython's `Bio.Restriction` finds the
 enzyme. Its boundaries are 2 bp past the cut: Biopython's `search` gives the 1-based position of the

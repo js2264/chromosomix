@@ -10,8 +10,8 @@
  * - **the same numbers.** Every file a command writes over an address is the
  *   file it writes over the same bytes on disk, byte for byte below its header;
  * - **fewer bytes.** One rung of an `.mcool` costs that rung's pixels and the
- *   metadata to find them, not the other rungs; a bigWig sampled at a few
- *   thousand peaks costs the blocks under them;
+ *   metadata to find them, not the other rungs; a bigWig sampled at one
+ *   chromosome's peaks costs the blocks under them;
  * - **nothing on disk.** No `chromosomix-` directory appears under `$TMPDIR`
  *   for a map, a bigWig, a `.2bit` or an indexed FASTA read by range, while the
  *   command runs or after it.
@@ -135,9 +135,16 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), 'chromosomix-cli-range-'))
   served = join(directory, 'served')
   await mkdir(served)
-  for (const name of ['ecoli/Ecoli.mcool', 'yeast/Yeast_ATAC.bw', 'yeast/Yeast_ATAC.narrowPeak']) {
+  for (const name of ['ecoli/Ecoli.mcool', 'yeast/Yeast_ATAC.bw']) {
     await copyFile(join(DEMO, name), join(served, name.split('/')[1]))
   }
+  // Chromosome IV's peaks alone, an eighth of the genome: the metaplot reads a
+  // bigWig's base-level records under its windows, and the 5,105 peaks of the
+  // whole genome, with their 2 kb flanks, lie over most of it — so most of the
+  // file is what they cost.
+  const peaks = await readFile(join(DEMO, 'yeast/Yeast_ATAC.narrowPeak'), 'utf8')
+  const onIV = peaks.split('\n').filter((line) => line.startsWith('IV\t'))
+  await writeFile(join(served, 'Yeast_ATAC.IV.narrowPeak'), `${onIV.join('\n')}\n`)
   // A two-sequence reference, as a `.2bit` and as a FASTA with its `.fai`.
   const sequences = [
     { name: 'chrI', bases: 'GCGTACGTAT'.repeat(12_000) },
@@ -214,7 +221,7 @@ describe('an address read by range', () => {
       '--tracks',
       at('Yeast_ATAC.bw'),
       '--features',
-      join(served, 'Yeast_ATAC.narrowPeak'),
+      join(served, 'Yeast_ATAC.IV.narrowPeak'),
     ])
     expect([...remote.keys()]).toEqual([...local.keys()])
     for (const [name, bytes] of local) expect(remote.get(name)?.equals(bytes), name).toBe(true)

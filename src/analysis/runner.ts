@@ -42,6 +42,7 @@ import type { OrientationSummary, PairsBinning, SourceSpec } from '../worker/pro
 import type { PairStats } from '../pairs/stats'
 import { abortError, idParam, listParam, runnerParams } from './job'
 import { taskById } from './registry'
+import { recordTelemetry } from '../telemetry'
 import {
   defaultParams,
   readsMap,
@@ -1124,6 +1125,17 @@ export class AnalysisRunner {
       // back `interrupted` after a reload, which would be this bookkeeping
       // blaming the browser.
       endAction(recorded, outcome ?? { status: 'cancelled' })
+      // Telemetry (§31): the task's registry id, how it ended and how long it
+      // took, bucketed. Only a registered id is ever sent.
+      if (taskById(job.task.id) !== undefined) {
+        const status = outcome?.status ?? 'cancelled'
+        recordTelemetry({
+          name: 'task',
+          task: job.task.id,
+          outcome: status === 'ok' ? 'done' : status === 'failed' ? 'failed' : 'cancelled',
+          ms: performance.now() - startedAt,
+        })
+      }
     }
   }
 

@@ -271,6 +271,14 @@ function isParamValue(value: unknown): value is ParamValue {
  * none of them back on import. One scope, one reader, and the fixed list is
  * complete again.
  */
+/**
+ * Where this map's recipes and figure styles are kept: the session's key for it
+ * where there is one, which is what a workspace saves and puts back (§18.2).
+ */
+function memoryOf(context: AnalysisContext | null): string {
+  return context === null ? '' : (context.memoryKey ?? context.uri)
+}
+
 function recallParamsFor(task: AnalysisTask, uri: string): Params {
   const out: Record<string, ParamValue> = { ...defaultParams(task.params) }
   const held = recallParams(uri, task.id)
@@ -946,7 +954,7 @@ export class AnalysisDrawer {
       this.form.setContext(context)
       return
     }
-    this.params = recallParamsFor(task, context.uri)
+    this.params = recallParamsFor(task, memoryOf(context))
     const runner = this.options.runner
     const form = new ParamForm({
       specs: task.params,
@@ -977,7 +985,7 @@ export class AnalysisDrawer {
     // Remembered on every edit rather than on Run, so that reproducing a figure
     // is opening the session and pressing Run (§18.2) — including the run the
     // reader configured, thought better of, and came back to.
-    rememberParams(context.uri, task.id, next)
+    rememberParams(memoryOf(context), task.id, next)
     this.syncRun(task, context)
   }
 
@@ -1020,7 +1028,7 @@ export class AnalysisDrawer {
     // handed them answered: what the run's own record is remembered against
     // when it comes back (`asAsked`), so a reader who pressed Run without
     // typing still has a form that follows the map.
-    rememberParams(context.uri, task.id, this.params)
+    rememberParams(memoryOf(context), task.id, this.params)
     return resolveSeeds(task.params, context, this.params)
   }
 
@@ -1340,7 +1348,7 @@ export class AnalysisDrawer {
     const block = figureBlock({
       output,
       task: `${this.current?.id ?? 'task'}:combined`,
-      uri: this.context()?.uri ?? '',
+      uri: memoryOf(this.context()),
       extras: [
         button('TSV', () => this.saveCombinedTsv(output, maps), {
           class: 'btn',
@@ -1546,7 +1554,7 @@ export class AnalysisDrawer {
     const block = figureBlock({
       output,
       task: this.current?.id ?? 'task',
-      uri: this.context()?.uri ?? '',
+      uri: memoryOf(this.context()),
       extras: [
         // The two formats a genome browser opens, on the one file where this
         // drawer is the only place they are offered from (§18.7).

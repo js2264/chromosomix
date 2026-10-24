@@ -10,13 +10,31 @@
 
 import { Modal } from './Modal'
 import { versionPicker } from './VersionPicker'
-import { el } from './dom'
+import { el, trimNumber } from './dom'
 import { groupRank, isMac, keyCap, optionKey, shiftKey, stateChip, type Command } from './commands'
-import { buildLine } from '../version'
+import { TARGET, buildLine } from '../version'
 import { LICENSED, noticesUrl } from '../licences'
+import {
+  NOTEBOOKS,
+  fetchStamp,
+  notebookUrl,
+  notebooksSite,
+  stampUrl,
+  type Notebook,
+  type NotebookStamp,
+  type StampReader,
+} from '../notebooks'
 import { devFeature } from '../state/devFeatures'
 import type { TourProgress } from '../state/tour'
 import { tutorialButtons } from './tutorialOffer'
+import {
+  browserDeclines,
+  setTelemetry,
+  startTelemetry,
+  telemetryHost,
+  telemetryOffered,
+  telemetryWanted,
+} from '../telemetry'
 
 /**
  * The modifier a gesture actually wants, on the machine reading the dialog.
@@ -230,105 +248,433 @@ export interface AboutTutorial {
   play(from: 'start' | 'resume'): void
 }
 
+/**
+ * Where *About*'s Notebooks tab finds the notebooks, and how it reads their
+ * stamps: `read` is `null` where nothing may be fetched — the single file, whose
+ * policy allows no request (§19) — and the tab then links the pages alone.
+ */
+export interface AboutNotebooks {
+  site: string
+  read: StampReader | null
+}
+
+/** *About*'s tabs, by the names their panels and buttons are found under. */
+type AboutTab = 'overview' | 'notebooks' | 'licences'
+
 export function openAbout(
   repoUrl: string,
   platform?: AboutPlatform | null,
   onClose?: () => void,
   tutorial?: AboutTutorial | null,
+  notebooks?: AboutNotebooks | null,
 ): Modal {
+  // Undefined is this build's own answer; `null` is a caller saying there is
+  // none, which is how a test opens the dialog without one.
+  const published = notebooks === undefined ? defaultNotebooks() : notebooks
   return new Modal({
     // Titled for what it is, like every other dialog, rather than for the
     // brand, which `.modal-title` would shout in capitals.
     title: 'About this viewer',
     // Wider and taller than a plain dialog, for the licences' three columns:
-    // at 34rem each project's line broke in two, and the build stamp under
-    // them was a scroll away.
+    // at 34rem each project's line broke in two.
     variant: 'modal-about',
     ...(onClose === undefined ? {} : { onClose }),
     body: (close) =>
       el(
         'div',
         { class: 'about-body' },
-        // The one place a reader holding a bigWig and no contact map is told
-        // this application is for them too (§24.2). It was inside the landing
-        // page's drop target, where it was a paragraph that cost the page its
-        // fold (`ui/LoadBox.ts`); said here it is a clause in the sentence that
-        // was already naming what opens.
-        // The first thing the dialog says is what the viewer opens, so it is
-        // the first sentence a dev feature (§29) must stay out of: switched
-        // off, `.metacool` is not something this viewer reads, and a sentence
-        // selling it would be the one place the reader was told otherwise.
-        el('p', {
-          text:
-            (devFeature('metacool')
-              ? 'A viewer for .metacool multi-genome Hi-C contact maps, for the cooler files ' +
-                'they extend, and for the tracks, genomes and 3D models beside them — with or ' +
-                'without a map. '
-              : 'A viewer for Hi-C contact maps — cooler, .hic, .pairs and HiC-Pro — and for the ' +
-                'tracks, genomes and 3D models beside them, with or without a map. ') +
-            'It runs entirely in this page: there is no backend, no upload and no ' +
-            'preprocessing step.',
-        }),
-        // Same substitution as `FilePicker.ts`, and for the same reason: the
-        // claim is reworded once to be true of both targets rather than
-        // branched, because "in this tab" is false in a window that is not one.
-        el('p', {
-          text:
-            'Local files are read in place, a few kilobytes at a time, by code running on your ' +
-            'own computer. Remote files are read the same way over HTTP range requests, so ' +
-            'opening a map on a bucket costs a few requests rather than a download.',
-        }),
-        // Straight after what the viewer is, because it is the answer to the
-        // question a reader who has just read that asks next — *so how do I
-        // start* — and it is the one way in to the tutorial a newcomer will
-        // find without being told where to look (§30).
-        ...(tutorial === undefined || tutorial === null ? [] : [tutorialOffer(tutorial, close)]),
-        el(
-          'p',
-          {},
-          'Source, issues and the format specification: ',
-          el('a', { href: repoUrl, text: repoUrl, class: 'link' }),
-        ),
-        licences(repoUrl),
-        // Last, small, and selectable: it is the first thing to ask for in a
-        // bug report about a page that has no server to interrogate, and the
-        // last thing anyone reads for pleasure.
-        el('p', { class: 'about-build', text: `version ${buildLine()}` }),
-        // Directly under the stamp, because it is the same question continued:
-        // the line above says which build this is, and this says which other
-        // ones are still published and lets the reader go and run one. `null`
-        // on the desktop target, where an installer is versioned by being an
-        // installer and there is no site to hold the other builds.
-        versionPicker(),
-        // The runtime, read from `process.versions` at preload time rather than
-        // written down anywhere: Electron's Chromium and Node move within a
-        // major, and a number pinned in the repository would be wrong within a
-        // week and believed anyway, because it is under the word "version".
-        ...(platform === undefined || platform === null
-          ? []
-          : [
-              el('p', {
-                class: 'about-build',
-                text:
-                  `Electron ${platform.electron} · Chromium ${platform.chrome} · ` +
-                  `Node ${platform.node} · ${platform.platform} ${platform.arch}`,
-              }),
-            ]),
-        // The answer to the warning the user clicked through to get here. They
-        // were told the developer could not be verified; this is where they
-        // find out that this was expected and what it does and does not mean.
-        ...(platform !== undefined && platform !== null && !platform.signed
-          ? [
-              el('p', {
-                class: 'about-build',
-                text:
-                  'This build is not code-signed. A signature says who published a build, ' +
-                  'not whether it works — which is why macOS and Windows each warned you once.',
-              }),
-            ]
-          : []),
+        tabbed([
+          {
+            id: 'overview',
+            label: 'Overview',
+            panel: () => overview(repoUrl, tutorial, close),
+            // The build, on the tab about the viewer and nowhere else: the other
+            // two are each about one thing — the notebooks, the licences — and
+            // a stamp and a picker under them were a third thing on each.
+            foot: () => buildFoot(platform),
+          },
+          // Absent where no site can be named — a test, or a copy with no
+          // homepage — rather than a tab of links leading nowhere (§8.5).
+          ...(published === null
+            ? []
+            : [{ id: 'notebooks' as const, label: 'Notebooks', panel: () => notebooksPanel(published) }]),
+          { id: 'licences', label: 'Licences', panel: () => licences(repoUrl) },
+        ]),
       ),
   })
+}
+
+/**
+ * Which build this is, and the others still published: the Overview tab's
+ * footer, outside the part that scrolls, so it stays on screen however far the
+ * overview is scrolled — it is the first thing to ask for in a bug report about
+ * a page that has no server to interrogate.
+ */
+function buildFoot(platform: AboutPlatform | null | undefined): HTMLElement {
+  return el(
+    'footer',
+    { class: 'about-foot' },
+    // Small, and selectable: copied, and not read for pleasure.
+    el('p', { class: 'about-build', text: `version ${buildLine()}` }),
+    // Directly under the stamp, because it is the same question continued:
+    // the line above says which build this is, and this says which other
+    // ones are still published and lets the reader go and run one. `null`
+    // on the desktop target, where an installer is versioned by being an
+    // installer and there is no site to hold the other builds.
+    versionPicker(),
+    // The runtime, read from `process.versions` at preload time rather than
+    // written down anywhere: Electron's Chromium and Node move within a
+    // major, and a number pinned in the repository would be wrong within a
+    // week and believed anyway, because it is under the word "version".
+    ...(platform === undefined || platform === null
+      ? []
+      : [
+          el('p', {
+            class: 'about-build',
+            text:
+              `Electron ${platform.electron} · Chromium ${platform.chrome} · ` +
+              `Node ${platform.node} · ${platform.platform} ${platform.arch}`,
+          }),
+        ]),
+    // The answer to the warning the user clicked through to get here. They
+    // were told the developer could not be verified; this is where they
+    // find out that this was expected and what it does and does not mean.
+    ...(platform !== undefined && platform !== null && !platform.signed
+      ? [
+          el('p', {
+            class: 'about-build',
+            text:
+              'This build is not code-signed. A signature says who published a build, ' +
+              'not whether it works — which is why macOS and Windows each warned you once.',
+          }),
+        ]
+      : []),
+  )
+}
+
+/** This build's notebooks: the site's, read with `fetch` except in the single file. */
+function defaultNotebooks(): AboutNotebooks | null {
+  const site = notebooksSite()
+  return site === null ? null : { site, read: TARGET === 'standalone' ? null : (url) => fetch(url) }
+}
+
+/**
+ * A row of tabs over the panels they choose between, the first one shown.
+ *
+ * The WAI-ARIA tabs pattern, by hand like the rest of the dialogs: one stop in
+ * the caret's walk for the whole row — the chosen tab — with ← and → moving
+ * along it and Home and End to its ends, choosing as they go, since every
+ * panel is already built and showing one costs nothing. A panel is built the
+ * first time it is chosen, so a tab that reads the network does so when the
+ * reader asks for it and not when *About* opens.
+ */
+function tabbed(
+  tabs: Array<{ id: AboutTab; label: string; panel: () => HTMLElement; foot?: () => HTMLElement }>,
+): HTMLElement {
+  const row = el('div', { class: 'about-tabs', attrs: { role: 'tablist', 'aria-label': 'About this viewer' } })
+  const scroller = el('div', { class: 'about-panels' })
+  const buttons: HTMLButtonElement[] = []
+  const panels: Array<HTMLElement | null> = tabs.map(() => null)
+  // A tab's own footer, under the part that scrolls and shown with its tab
+  // alone. Built with the tab's panel, and kept, like it.
+  const feet: Array<HTMLElement | null> = tabs.map(() => null)
+  const footing = el('div', { class: 'about-feet' })
+  const choose = (index: number, focus: boolean): void => {
+    tabs.forEach((tab, at) => {
+      const on = at === index
+      const button = buttons[at] as HTMLButtonElement
+      button.setAttribute('aria-selected', String(on))
+      button.tabIndex = on ? 0 : -1
+      button.classList.toggle('is-on', on)
+      let panel = panels[at] ?? null
+      if (on && panel === null) {
+        panel = el(
+          'div',
+          {
+            class: `about-panel about-panel-${tab.id}`,
+            id: `about-panel-${tab.id}`,
+            attrs: { role: 'tabpanel', 'aria-labelledby': `about-tab-${tab.id}` },
+          },
+          tab.panel(),
+        )
+        panels[at] = panel
+        scroller.appendChild(panel)
+        const foot = tab.foot?.() ?? null
+        if (foot !== null) {
+          feet[at] = foot
+          footing.appendChild(foot)
+        }
+      }
+      panel?.toggleAttribute('hidden', !on)
+      feet[at]?.toggleAttribute('hidden', !on)
+    })
+    // Each tab opens at its top, not at wherever the last one was scrolled to.
+    scroller.scrollTop = 0
+    if (focus) buttons[index]?.focus()
+  }
+  tabs.forEach((tab, at) => {
+    const button = el('button', {
+      class: 'about-tab',
+      text: tab.label,
+      type: 'button',
+      id: `about-tab-${tab.id}`,
+      attrs: { role: 'tab', 'aria-controls': `about-panel-${tab.id}`, 'data-tab': tab.id },
+    })
+    button.addEventListener('click', () => choose(at, false))
+    button.addEventListener('keydown', (event) => {
+      const last = tabs.length - 1
+      const to =
+        event.key === 'ArrowRight'
+          ? (at + 1) % tabs.length
+          : event.key === 'ArrowLeft'
+            ? (at + last) % tabs.length
+            : event.key === 'Home'
+              ? 0
+              : event.key === 'End'
+                ? last
+                : null
+      if (to === null) return
+      event.preventDefault()
+      choose(to, true)
+    })
+    buttons.push(button)
+    row.appendChild(button)
+  })
+  choose(0, false)
+  return el('div', { class: 'about-tabbed' }, row, scroller, footing)
+}
+
+/** What the viewer is, how it reads, the tutorial and the source. */
+function overview(repoUrl: string, tutorial: AboutTutorial | null | undefined, close: () => void): HTMLElement {
+  return el(
+    'div',
+    {},
+    // The one place a reader holding a bigWig and no contact map is told
+    // this application is for them too (§24.2). It was inside the landing
+    // page's drop target, where it was a paragraph that cost the page its
+    // fold (`ui/LoadBox.ts`); said here it is a clause in the sentence that
+    // was already naming what opens.
+    // The first thing the dialog says is what the viewer opens, so it is
+    // the first sentence a dev feature (§29) must stay out of: switched
+    // off, `.metacool` is not something this viewer reads, and a sentence
+    // selling it would be the one place the reader was told otherwise.
+    el('p', {
+      text:
+        (devFeature('metacool')
+          ? 'A viewer for .metacool multi-genome Hi-C contact maps, for the cooler files ' +
+            'they extend, and for the tracks, genomes and 3D models beside them — with or ' +
+            'without a map. '
+          : 'A viewer for Hi-C contact maps — cooler, .hic, .pairs and HiC-Pro — and for the ' +
+            'tracks, genomes and 3D models beside them, with or without a map. ') +
+        'It runs entirely in this page: there is no backend, no upload and no ' +
+        'preprocessing step.',
+    }),
+    // Same substitution as `FilePicker.ts`, and for the same reason: the
+    // claim is reworded once to be true of both targets rather than
+    // branched, because "in this tab" is false in a window that is not one.
+    el('p', {
+      text:
+        'Local files are read in place, a few kilobytes at a time, by code running on your ' +
+        'own computer. Remote files are read the same way over HTTP range requests, so ' +
+        'opening a map on a bucket costs a few requests rather than a download.',
+    }),
+    // Straight after what the viewer is, because it is the answer to the
+    // question a reader who has just read that asks next — *so how do I
+    // start* — and it is the one way in to the tutorial a newcomer will
+    // find without being told where to look (§30).
+    ...(tutorial === undefined || tutorial === null ? [] : [tutorialOffer(tutorial, close)]),
+    el(
+      'p',
+      {},
+      'Source, issues and the format specification: ',
+      el('a', { href: repoUrl, text: repoUrl, class: 'link' }),
+    ),
+    // What the site's telemetry holds and where it goes, with the switch (§31):
+    // on the tab About opens on, as the other thing a reader asks of a page
+    // before trusting it with their data. Absent where nothing is sent.
+    ...(telemetryOffered() ? [telemetrySection()] : []),
+  )
+}
+
+/** *the validation, the timings and the parity*: notebooks named in a sentence. */
+function phrase(notebooks: readonly Notebook[]): string {
+  const names = notebooks.map((notebook) => `the ${notebook.title.toLowerCase()}`)
+  return names.length < 2 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+}
+
+/** "Four", for a sentence that counts the notebooks rather than assuming them. */
+const COUNT_WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine']
+
+/**
+ * The notebooks GitHub Actions renders with every release (§18.10): each one's
+ * page, what it holds chromosomix to, and — read from the `rendered.json`
+ * published beside it — the one line of what it found, and when, from which
+ * build and on what it was rendered.
+ *
+ * The stamps are read when this tab is first chosen, all at once. Until one
+ * answers its row says it is being read; a stamp that cannot be read takes its
+ * line away and leaves the link, since a reader offline learns nothing from
+ * being told so here, and the page itself says why it is not there.
+ */
+export function notebooksPanel(notebooks: AboutNotebooks): HTMLElement {
+  const outside = { target: '_blank', rel: 'noopener noreferrer' }
+  const count = COUNT_WORDS[NOTEBOOKS.length] ?? String(NOTEBOOKS.length)
+  const byHand = NOTEBOOKS.filter((notebook) => notebook.byHand === true)
+  const byWorkflow = NOTEBOOKS.filter((notebook) => notebook.byHand !== true)
+  const laptop =
+    byHand.length === 0 ? '' : `; ${phrase(byHand)} ${byHand.length === 1 ? 'is' : 'are'} rendered by hand, on a laptop`
+  return el(
+    'section',
+    { class: 'about-notebooks', attrs: { 'aria-label': 'Notebooks' } },
+    el('p', {
+      text:
+        `${count} notebooks hold chromosomix to the packages it reproduces, to its own command line ` +
+        `and to a machine like yours. GitHub Actions renders ${phrase(byWorkflow)} on a fresh runner ` +
+        `with every release${laptop}. Each is published beside the app, with its tables.`,
+    }),
+    el(
+      'ul',
+      { class: 'about-notebook-list' },
+      ...NOTEBOOKS.map((notebook) => {
+        const url = notebookUrl(notebooks.site, notebook)
+        const found = el('p', { class: 'about-notebook-found hidden' })
+        // No line at all where nothing may be fetched, rather than one saying
+        // it is reading something it never will.
+        const { read } = notebooks
+        const stamp =
+          read === null ? null : el('p', { class: 'about-notebook-stamp', text: 'Reading when it was rendered…' })
+        if (stamp !== null && read !== null) {
+          void fetchStamp(stampUrl(notebooks.site, notebook), read).then((answer) => {
+            if (answer === null) {
+              stamp.remove()
+              found.remove()
+              return
+            }
+            stamp.replaceChildren(...stampLine(answer))
+            if (answer.summary !== '') {
+              found.textContent = answer.summary
+              found.classList.remove('hidden')
+            }
+          })
+        }
+        return el(
+          'li',
+          { class: 'about-notebook', attrs: { 'data-notebook': notebook.path } },
+          el(
+            'div',
+            { class: 'about-notebook-head' },
+            el('a', {
+              text: notebook.title,
+              class: 'about-link about-notebook-title',
+              attrs: { href: url, ...outside },
+            }),
+            el('span', { class: 'about-notebook-where', text: url.replace(/^https?:\/\//, '') }),
+          ),
+          el('p', { class: 'about-notebook-what', text: notebook.what }),
+          found,
+          stamp,
+        )
+      }),
+    ),
+  )
+}
+
+/**
+ * A stamp as one quiet line: *Rendered 21 October 2026 from chromosomix 0.16.0
+ * at 8621d90, in 45 min on 2 cores and 7.7 GB · run 8* — the date in the
+ * reader's own words and to the day, and the run linked, since it is where the
+ * log of a render that went wrong is; or *· by hand*, where no run rendered it.
+ */
+function stampLine(stamp: NotebookStamp): Array<string | Node> {
+  const when = new Date(stamp.finished).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+  const build = stamp.commit === '' ? stamp.version : `${stamp.version} at ${stamp.commit}`
+  const took = stamp.seconds === null ? '' : ` in ${renderTime(stamp.seconds)}`
+  const machine =
+    stamp.machine === null
+      ? ''
+      : ` on ${stamp.machine.cores} core${stamp.machine.cores === 1 ? '' : 's'}` +
+        (stamp.machine.memoryGb === null ? '' : ` and ${trimNumber(stamp.machine.memoryGb, 1)} GB`)
+  const how = took === '' && machine === '' ? '' : `,${took}${machine}`
+  const line: Array<string | Node> = [`Rendered ${when} from chromosomix ${build}${how}`]
+  // A render with no run is one done by hand, which for the laptop is the point (§18.10).
+  if (stamp.run === null) line.push(' · by hand')
+  if (stamp.run !== null) {
+    line.push(
+      ' · ',
+      el('a', {
+        text: stamp.run.number === '' ? 'its run' : `run ${stamp.run.number}`,
+        class: 'about-link',
+        attrs: { href: stamp.run.url, target: '_blank', rel: 'noopener noreferrer' },
+      }),
+    )
+  }
+  return line
+}
+
+/** How long a render took, to the minute past one: `45 min`, `2 h 19 min`. */
+function renderTime(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)} s`
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes} min`
+  return `${Math.floor(minutes / 60)} h ${minutes % 60} min`
+}
+
+/**
+ * The telemetry (§31): what is sent, where it goes, and the switch that stops
+ * it for this browser.
+ *
+ * The sentence names the endpoint's host rather than a product, so it stays
+ * true of whatever the site is built to send to. A browser that sends Global
+ * Privacy Control is told it is being taken at its word, and offered no switch,
+ * since there is nothing left for one to turn off.
+ */
+function telemetrySection(): HTMLElement {
+  const host = telemetryHost()
+  const what = el('p', {
+    text:
+      `This site sends anonymous telemetry to ${host}: the file formats opened, the analyses ` +
+      'run and the errors met. Never a file name, an address or a place on the genome, and no ' +
+      'cookie.',
+  })
+  let control: HTMLElement
+  if (browserDeclines()) {
+    control = el('p', {
+      class: 'hint',
+      text: 'Your browser sends Global Privacy Control, so this site sends nothing from it.',
+    })
+  } else {
+    const toggle = el('button', {
+      class: 'btn btn-toggle',
+      type: 'button',
+      text: 'telemetry',
+      title: 'Send anonymous telemetry about how this site is used. Off sends nothing from this browser.',
+      attrs: { 'aria-pressed': String(telemetryWanted()) },
+    })
+    toggle.addEventListener('click', () => {
+      const on = toggle.getAttribute('aria-pressed') !== 'true'
+      setTelemetry(on)
+      toggle.setAttribute('aria-pressed', String(on))
+      // Turned on from off: this visit is sent from here on.
+      if (on) startTelemetry()
+    })
+    control = el(
+      'div',
+      { class: 'about-telemetry-switch' },
+      toggle,
+      el('span', { class: 'hint', text: 'Off sends nothing from this browser.' }),
+    )
+  }
+  return el(
+    'section',
+    { class: 'about-telemetry', attrs: { 'aria-labelledby': 'about-telemetry-title' } },
+    el('h3', { class: 'about-heading', text: 'Telemetry', attrs: { id: 'about-telemetry-title' } }),
+    what,
+    control,
+  )
 }
 
 /**
@@ -336,16 +682,18 @@ export function openAbout(
  * projects it is built with (`licences.ts`), and where each licence is
  * reproduced in full.
  *
- * Above the version rather than under it, because it is read and the stamp is
- * copied. Each project is named by what it does here, since "zrender" says
- * nothing to a reader and "draws the analysis charts" does.
+ * A tab of its own, the dialog's last: a list a reader goes looking for, and
+ * one that pushed the build stamp out of sight while it shared a page with
+ * what the viewer is. Each project is named by what it does here, since
+ * "zrender" says nothing to a reader and "draws the analysis charts" does.
  */
 function licences(repoUrl: string): HTMLElement {
   const outside = { target: '_blank', rel: 'noopener noreferrer' }
   return el(
+    // No heading of its own: the tab above it is its name, and the panel is
+    // labelled by it.
     'section',
-    { class: 'about-licences', attrs: { 'aria-labelledby': 'about-licences-title' } },
-    el('h3', { class: 'about-heading', text: 'Licences', attrs: { id: 'about-licences-title' } }),
+    { class: 'about-licences' },
     el(
       'p',
       {},
