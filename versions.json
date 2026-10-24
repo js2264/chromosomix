@@ -1,6 +1,13 @@
 {
-  "latest": "8ba9a22",
+  "latest": "78224e1",
   "versions": [
+    {
+      "commit": "78224e1",
+      "version": "0.16.0",
+      "date": "2026-10-24T08:53:53+02:00",
+      "subject": "Add Fig. 1a and Fig. 2 to the paper's store, and § 24 to the validation notebook (#138)",
+      "tag": ""
+    },
     {
       "commit": "8ba9a22",
       "version": "0.16.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "c9e4449",
-      "version": "0.13.0",
-      "date": "2026-10-16T18:31:08+02:00",
-      "subject": "Tab navigation, derived resolution tasks, and figure rendering (#110)",
-      "tag": ""
-    },
-    {
       "commit": "7a6fea2",
       "version": "0.13.0",
       "date": "2026-09-20T22:39:26+02:00",
@@ -213,13 +213,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 138,
-      "commit": "d92c6b6",
-      "title": "Add Fig. 1a and Fig. 2 to the paper's store, and § 24 to the validation notebook",
-      "branch": "claude/chromosomix-fig1a-fig2-store-2js2cz",
-      "date": "2026-10-23T20:32:56Z"
-    },
     {
       "number": 122,
       "commit": "e818753",
