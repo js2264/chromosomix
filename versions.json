@@ -214,6 +214,13 @@
   ],
   "pulls": [
     {
+      "number": 134,
+      "commit": "a33c8cc",
+      "title": "Pairs stats: pairtools stats on import, the Pairs statistics card, and Pairs QC with restriction fragments (§3.7, §18.8)",
+      "branch": "ccr-9c4f62d7-v0j7gc-pairs",
+      "date": "2026-10-24T08:55:48Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
