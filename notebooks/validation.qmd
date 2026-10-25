@@ -3671,7 +3671,10 @@ gm_listing = table(one(GY / 'app', '*.peaks-list.tsv')).rename(columns={'sequenc
 gm_counts = table(one(GY / 'app', '*.peaks-idr.tsv'))
 gm_called = pd.read_csv(one(GY / 'app', '*.bed'), sep='\t', header=None, comment='#',
                         names=['chrom', 'start', 'end', 'name', 'score', 'strand'])
-gm_m = gm_listing.merge(gm_tested.drop(columns=['start', 'end']), left_on=key, right_on=bounds, how='outer',
+# A peak's bounds as chromosomix lists them and as yapc does: § 5's `key` and `bounds`, named again,
+# since the loops of §§ 11, 20 and 22 take `key` for their own.
+gm_key, gm_bounds = ['chrom', 'start', 'end'], ['chrom', 'concave_start', 'concave_end']
+gm_m = gm_listing.merge(gm_tested.drop(columns=['start', 'end']), left_on=gm_key, right_on=gm_bounds, how='outer',
                         indicator=True)
 gm_shared = gm_m[gm_m['_merge'] == 'both']
 gm_curvature = np.abs(np.r_[gm_shared['curvature0'] - gm_shared['cond_rep1_score'],
@@ -3680,16 +3683,16 @@ gm_curvature = np.abs(np.r_[gm_shared['curvature0'] - gm_shared['cond_rep1_score
 
 def gm_bed(th, seed=0):
     out = pd.read_csv(GM_SEEDS[seed] / f'yapc_{th}.bed', sep='\t', header=None, comment='#').iloc[:, :3]
-    out.columns = key
+    out.columns = gm_key
     return out
 
 
 gm_called_ref = gm_bed(0.05)
-gm_same_called = gm_called[key].merge(gm_called_ref, on=key)
-gm_idr = gm_called.merge(gm_tested, left_on=key, right_on=bounds)
-gm_runs = {seed: pd.read_csv(folder / 'yapc.tsv', sep='\t').set_index(bounds)['cond_globalIDR']
+gm_same_called = gm_called[gm_key].merge(gm_called_ref, on=gm_key)
+gm_idr = gm_called.merge(gm_tested, left_on=gm_key, right_on=gm_bounds)
+gm_runs = {seed: pd.read_csv(folder / 'yapc.tsv', sep='\t').set_index(gm_bounds)['cond_globalIDR']
            for seed, folder in GM_SEEDS.items()}
-gm_app_idr = gm_called.set_index(key)['score'].rename_axis(bounds)
+gm_app_idr = gm_called.set_index(gm_key)['score'].rename_axis(gm_bounds)
 gm_idr_app = [np.abs(gm_runs[seed].reindex(gm_app_idr.index) - gm_app_idr).max() for seed in GM_SEEDS]
 gm_idr_self = [np.abs(gm_runs[a].reindex(gm_app_idr.index) - gm_runs[b].reindex(gm_app_idr.index)).max()
                for a in GM_SEEDS for b in GM_SEEDS if a < b]
