@@ -193,6 +193,9 @@ BEDTOOLS, SEQKIT = tool('bedtools'), tool('seqkit')
 #: What a reference's command runs with besides this process's environment.
 YAPC_ENV = {'PATH': f'{YAPC_PYTHON.parent}{os.pathsep}{os.environ["PATH"]}'}
 BOOSTHIC_ENV = {'BOOSTHIC_DIR': str(BOOSTHIC_DIR)}
+# pairtools imports matplotlib, through bioframe, and its environment has no matplotlib-inline, the backend
+# the kernel names in MPLBACKEND for every process it starts: it is given the one every matplotlib has.
+PAIRTOOLS_ENV = {'MPLBACKEND': 'agg'}
 
 
 def fetch(url, name=None, md5=None):
@@ -661,16 +664,17 @@ def yapc_versions():
         return ['not found'] * 3
 
 
-def program_version(argv, pattern=r'v?([\d.]+)'):
+def program_version(argv, pattern=r'v?([\d.]+)', env=None):
     """A program's version, as it prints it."""
-    run = subprocess.run(argv, capture_output=True, text=True)
+    run = subprocess.run(argv, capture_output=True, text=True, env=environment(env))
     found = re.search(pattern, run.stdout + run.stderr)
     return found.group(1) if found else '?'
 
 
 APP_VERSION = f"{json.loads((REPO / 'package.json').read_text())['version']} at {commit(REPO)}"
 YAPC, IDR, YAPC_NUMPY = yapc_versions()
-PAIRTOOLS_VERSION = program_version([PAIRTOOLS, '--version'], r'version ([\d.]+)') if Path(PAIRTOOLS).exists() else 'not found'
+PAIRTOOLS_VERSION = (program_version([PAIRTOOLS, '--version'], r'version ([\d.]+)', env=PAIRTOOLS_ENV)
+                     if Path(PAIRTOOLS).exists() else 'not found')
 VERSIONS = {name: version(name) for name in (
     'cooler', 'cooltools', 'bioframe', 'chromosight', 'hicrep', 'domaincaller', 'pastis', 'coolpuppy',
     'deeptools', 'pyBigWig', 'biopython', 'pyfaidx', 'numpy', 'scipy', 'pandas')}
@@ -3930,7 +3934,7 @@ PS = WORK / 'pairstats'
 PS.mkdir(parents=True, exist_ok=True)
 mr('stats', CH128, out=PS / 'app', name='pairstats', analysis='Pairs statistics')
 reference('pairtools-stats', 'Pairs statistics', 'pairtools', [PAIRTOOLS, 'stats', CH128, '-o', OUT],
-          out=PS / 'pairtools.stats')
+          out=PS / 'pairtools.stats', env=PAIRTOOLS_ENV)
 
 
 def stats_file(path):
@@ -4266,7 +4270,7 @@ timing weighs Pairs QC against every reference command it stands for, `cooler cl
 for strand, suffix in (('top', ''), ('bottom', '-bottom')):
     reference(f'pairtools-restrict-{strand}', PQ_ANALYSIS, 'pairtools',
               [PAIRTOOLS, 'restrict', '-f', RS / f'digest.frags{suffix}.bed', CH128, '-o', OUT],
-              out=RS / f'CH128.restricted{suffix}.pairs.gz')
+              out=RS / f'CH128.restricted{suffix}.pairs.gz', env=PAIRTOOLS_ENV)
 reference('restriction-reference', PQ_ANALYSIS, 'pandas',
           [PYTHON, script('restriction_reference'), R64_FA, ENZYME, RS / 'CH128.restricted.pairs.gz',
            RS / 'CH128.restricted-bottom.pairs.gz', OUT, -2],
@@ -4275,7 +4279,7 @@ reference('cooltools-coverage-sites', PQ_ANALYSIS, 'cooltools',
           [PYTHON, script('cooltools_coverage_sites'), RS / f'CH128.{RS_BIN}.cool', RS / 'digest.sites.tsv', OUT,
            THREADS], out=RS / 'coverage', made=RS / 'coverage.summary.tsv', threads=THREADS)
 reference('pairsqc-pairtools-stats', PQ_ANALYSIS, 'pairtools', [PAIRTOOLS, 'stats', CH128, '-o', OUT],
-          out=PS / 'pairtools.stats')
+          out=PS / 'pairtools.stats', env=PAIRTOOLS_ENV)
 ```
 
 chromosomix's: Pairs QC on the contact list itself, binned at the same 5 kb.
