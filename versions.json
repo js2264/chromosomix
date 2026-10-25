@@ -214,6 +214,13 @@
   ],
   "pulls": [
     {
+      "number": 140,
+      "commit": "424c964",
+      "title": "Validation § 24: name its peaks' columns itself, not with § 5's `key`",
+      "branch": "ccr-140dc7ae-pdpmy4",
+      "date": "2026-10-25T18:30:48Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
