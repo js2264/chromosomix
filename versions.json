@@ -1,6 +1,13 @@
 {
-  "latest": "8805ad3",
+  "latest": "21a4cf8",
   "versions": [
+    {
+      "commit": "21a4cf8",
+      "version": "0.16.0",
+      "date": "2026-10-25T20:09:41+01:00",
+      "subject": "Validation § 24: name its peaks' columns itself, not with § 5's `key` (#140)",
+      "tag": ""
+    },
     {
       "commit": "8805ad3",
       "version": "0.16.0",
@@ -135,13 +142,6 @@
       "tag": "v0.15.0"
     },
     {
-      "commit": "0e053d6",
-      "version": "0.13.0",
-      "date": "2026-10-17T15:34:07+02:00",
-      "subject": "Add guided tutorial for first-time users (#112)",
-      "tag": ""
-    },
-    {
       "commit": "7a6fea2",
       "version": "0.13.0",
       "date": "2026-09-20T22:39:26+02:00",
@@ -213,13 +213,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 140,
-      "commit": "424c964",
-      "title": "Validation § 24: name its peaks' columns itself, not with § 5's `key`",
-      "branch": "ccr-140dc7ae-pdpmy4",
-      "date": "2026-10-25T18:30:48Z"
-    },
     {
       "number": 122,
       "commit": "e818753",
