@@ -1,6 +1,13 @@
 {
-  "latest": "bf8f7fc",
+  "latest": "faa252c",
   "versions": [
+    {
+      "commit": "faa252c",
+      "version": "0.17.0",
+      "date": "2026-10-26T19:01:33+01:00",
+      "subject": "0.17.0",
+      "tag": "v0.17.0"
+    },
     {
       "commit": "bf8f7fc",
       "version": "0.16.0",
@@ -132,13 +139,6 @@
       "version": "0.15.0",
       "date": "2026-10-20T19:38:35+02:00",
       "subject": "Tutorial on K562 map with sequence copy and manual marks (#123)",
-      "tag": ""
-    },
-    {
-      "commit": "4509797",
-      "version": "0.15.0",
-      "date": "2026-10-18T09:58:30+02:00",
-      "subject": "Publish to npm by trusted publishing, without a token (#116)",
       "tag": ""
     },
     {
