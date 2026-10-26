@@ -1,6 +1,13 @@
 {
-  "latest": "faa252c",
+  "latest": "b5fedcd",
   "versions": [
+    {
+      "commit": "b5fedcd",
+      "version": "0.17.0",
+      "date": "2026-10-26T19:53:46+01:00",
+      "subject": "ci: update laptop notebook",
+      "tag": ""
+    },
     {
       "commit": "faa252c",
       "version": "0.17.0",
@@ -133,13 +140,6 @@
       "date": "2026-10-20T23:57:42+02:00",
       "subject": "0.16.0",
       "tag": "v0.16.0"
-    },
-    {
-      "commit": "a332f8f",
-      "version": "0.15.0",
-      "date": "2026-10-20T19:38:35+02:00",
-      "subject": "Tutorial on K562 map with sequence copy and manual marks (#123)",
-      "tag": ""
     },
     {
       "commit": "f453599",

@@ -1,4 +1,4 @@
-Third-party notices for chromosomix 0.15.0
+Third-party notices for chromosomix 0.17.0
 
 chromosomix itself is released under the GNU General Public License, version 3 or (at your option) any later version, reproduced below and in its repository, https://github.com/js2264/chromosomix.
 The complete source of this build, and of every release, is at https://github.com/js2264/chromosomix.
@@ -32,7 +32,7 @@ Copied or ported into the source:
   yapc 0.1 — GPL-3.0
 
 ========================================================================
-chromosomix 0.15.0 — GPL-3.0-or-later
+chromosomix 0.17.0 — GPL-3.0-or-later
 https://github.com/js2264/chromosomix
 ========================================================================
 
