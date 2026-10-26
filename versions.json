@@ -1,6 +1,13 @@
 {
-  "latest": "ffd2e7f",
+  "latest": "597cd06",
   "versions": [
+    {
+      "commit": "597cd06",
+      "version": "0.16.0",
+      "date": "2026-10-26T13:19:44+01:00",
+      "subject": "ci: update laptop notebook",
+      "tag": ""
+    },
     {
       "commit": "ffd2e7f",
       "version": "0.16.0",
