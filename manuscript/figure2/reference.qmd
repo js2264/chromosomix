@@ -16,9 +16,9 @@ execute:
 Fig. 2 is made twice. In the app, the lab store's card *The Chromosomix paper*, tab **Fig. 2**: the
 GM12878 map on chr19 with two labs' CTCF ChIP-seq and ATAC-seq, every task of the chain opening on the
 figure's settings — *Diamond insulation*, *Peak calling*, then at 2 kb *Aggregate peak analysis* with
-anchors *consecutive features*, and *Metaplot over a feature set* — each figure saved by its own PDF
-button. And here, the same chain on the same data, each link run by the package the app's task
-reproduces and every panel drawn by that package's own plotting:
+anchors *consecutive features*, and again over the insulation's domains, scaled, and *Metaplot over a
+feature set* — each figure saved by its own PDF button. And here, the same chain on the same data, each
+link run by the package the app's task reproduces and every panel drawn by that package's own plotting:
 
 | panel | chromosomix | here |
 |---|---|---|
@@ -27,9 +27,11 @@ reproduces and every panel drawn by that package's own plotting:
 | **a** APA | *Aggregate peak analysis*, consecutive features, 2 kb, ±10 bins, observed / expected, nearest loop 22 bins | coolpuppy: `coolpup.pileup` of each peak with the next, `flank=20000`, `mindist='auto'` (22 bins), over cooltools' `expected_cis`; `plotpup.plot` |
 | **b** CTCF and ATAC | *Metaplot over a feature set*, ±2 kb in 50 bp, its band and a heatmap a track | deepTools: `computeMatrix reference-point --referencePoint center`, `plotProfile --plotType se`, `plotHeatmap` |
 | **c** insulation | the same, ±500 kb in 10 kb, over the four insulation tracks | the same, over cooltools' four |
+| **d** TADs | *Aggregate peak analysis*, the insulation's domains, scaled: 51 cells a side, flank 0.5, over five distance-matched controls a domain | coolpuppy: `coolpup.pileup` of the domains between cooltools' boundaries, `local=True`, `rescale=True`, `rescale_flank=0.5`, `rescale_size=51`, `nshifts=5`; `plotpup.plot` |
 
-Every link is held to its reference number for number in `notebooks/validation.qmd` § 24; this page
-is the pictures. Each panel is written on its own to `manuscript/figure2/reference/`, as a PDF and a
+Every link of a, b and c is held to its reference number for number in `notebooks/validation.qmd` § 24;
+d is not, since the two tools resample a domain and shift its controls differently (its section says
+how). This page is the pictures. Each panel is written on its own to `manuscript/figure2/reference/`, as a PDF and a
 PNG, to be set beside the app's own. What is set alike on the two sides is only what lets them be read
 together: the colour maps and their ranges by the app's rules (RdBu_r symmetric about 1 for a pile-up
 over its expected; viridis from 0 to the 99th percentile for a heatmap, or symmetric about 0 over the
@@ -101,6 +103,9 @@ for folder in (DATA, RUNS, PANELS):
 SEQUENCE = 'chr19'
 #: The pile-up: ten 2-kb bins either side, and coolpuppy's floor for that window, 2 × 10 + 2 bins.
 RES, HALF = 2000, 10
+#: The TAD pile-up: each domain with half its length either side, resampled to 51 cells a side, over five
+#: shifted controls a domain.
+GRID, SCALED_FLANK, CONTROLS = 51, 0.5, 5
 WINDOWS = [50_000, 100_000, 200_000, 400_000]
 #: The app's chart palette (`CATEGORY_PALETTE`, src/render/meta.ts), handed out in the order of the tracks.
 PALETTE = ['#0072b2', '#d55e00', '#009e73', '#cc79a7']
@@ -161,6 +166,21 @@ def p2ll(pileup):
     half, centre = quadrant // 2, pileup.shape[0] // 2
     return float(np.nanmean(pileup[centre - half:centre + half + 1, centre - half:centre + half + 1])
                  / np.nanmean(pileup[-quadrant:, :quadrant]))
+
+
+def in_out(pileup, flank):
+    """The app's in / out (`domainScore`), on the app's layout of the grid (`scaledLayout`, both in
+    src/analysis/apa.ts): the domain's corner, a quarter of its body a side at its widest separation, over
+    the same block across each of its two boundaries."""
+    side = pileup.shape[0]
+    edge = min((side - 1) // 2, math.floor(side * flank / (1 + 2 * flank) + 0.5))
+    body = side - 2 * edge
+    q = max(1, math.floor(body / 4 + 0.5))
+    p = min(edge, q)
+    inside = np.nanmean(pileup[edge:edge + q, edge + body - q:edge + body])
+    above = np.nanmean(pileup[edge - p:edge, edge + body - q:edge + body])
+    beyond = np.nanmean(pileup[edge:edge + q, edge + body:edge + body + p])
+    return float(inside / np.mean([above, beyond]))
 
 
 def show(name):
@@ -387,6 +407,55 @@ lists the four tracks of one run.
 ```{python}
 metaplot('c', 'metaplot-insulation', INSULATION[::-1], [f'{w // 1000}kb' for w in WINDOWS[::-1]], 500_000, 10_000,
          'insulation (log2)')
+```
+
+## d · The TADs, scaled
+
+The domains of the 50-kb window, each from the bin one boundary is called at to the bin of the next — as
+the app's *Diamond insulation* makes its *Insulation domains* — piled up on the 2-kb map by
+`coolpup.pileup` with `local=True` and `rescale=True`: each domain with half its length either side
+(`rescale_flank=0.5`), resampled to 51 cells a side, over five controls a domain shifted along the
+diagonal by coolpuppy's default 100 kb to 1 Mb, the first two diagonals left out; and the picture by
+`plotpup.plot`, RdBu_r symmetric about 1 over the furthest cell. Its number is the app's *in / out*
+computed on coolpuppy's pileup: the domain's corner at its widest separation over the same block across
+each of its two boundaries.
+
+The one panel § 24 does not hold number for number, and it could not be: coolpuppy stretches each window
+evenly onto the grid, where the app pins every domain's two ends to the same two grid lines (13 and 38 of
+51) whatever its length; coolpuppy shifts a control by 100 kb to 1 Mb, the app by one to three times its
+window; and coolpuppy leaves out every cell the first two diagonals reach once resampled, where the app
+averages what is left of it.
+
+```{python}
+tads_folder = RUNS / 'tads'
+tads_folder.mkdir(parents=True, exist_ok=True)
+calls = insulation_table[insulation_table['is_boundary_50000'].astype(bool)].sort_values(['chrom', 'start'])
+following = calls.shift(-1)
+same = calls['chrom'] == following['chrom']
+tads = pd.DataFrame({'chrom': calls['chrom'][same], 'start': calls['start'][same],
+                     'end': following['start'][same].astype(int)}).reset_index(drop=True)
+tads.to_csv(tads_folder / 'tads.bed', sep='\t', header=False, index=False)
+print(f"coolpup.pileup({COOL2.name}, tads.bed, features_format='bed', local=True, rescale=True, "
+      f"rescale_flank={SCALED_FLANK}, rescale_size={GRID}, nshifts={CONTROLS}, min_diag=2, seed=1)")
+tad_pup = coolpup.pileup(cooler.Cooler(str(COOL2)), tads, features_format='bed', local=True, rescale=True,
+                         rescale_flank=SCALED_FLANK, rescale_size=GRID, nshifts=CONTROLS, min_diag=2, seed=1,
+                         nproc=THREADS)
+tad_pileup = np.asarray(tad_pup['data'].iloc[0], dtype=float)
+np.savetxt(PANELS / 'd-tads.tsv', tad_pileup, delimiter='\t', fmt='%.10g')
+finite = tad_pileup[np.isfinite(tad_pileup)]
+half = max(abs(finite.max() - 1), abs(finite.min() - 1))
+grid = plotpup.plot(tad_pup, score=False, cmap='RdBu_r', scale='linear', vmin=1 - half, vmax=1 + half, height=3,
+                    font_scale=0.8)
+for suffix in ('pdf', 'png'):
+    grid.savefig(PANELS / f'd-tads.{suffix}', dpi=200)
+plt.close('all')
+NUMBERS.update({'TADs, between consecutive boundaries at 50 kb': len(tads),
+                'TADs piled up': int(tad_pup['n'].iloc[0]),
+                'TADs, in / out (the app\'s formula)': round(in_out(tad_pileup, SCALED_FLANK), 3),
+                'TADs colour scale': f'{1 - half:.3f} to {1 + half:.3f}'})
+show('d-tads')
+display(Markdown(f"{len(tads):,} TADs, {int(tad_pup['n'].iloc[0]):,} piled up; in / out "
+                 f"{in_out(tad_pileup, SCALED_FLANK):.3f}"))
 ```
 
 ## The numbers

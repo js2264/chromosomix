@@ -18,12 +18,18 @@ figure's settings.
 1. **Diamond insulation** → Run: insulation at 50, 100, 200 and 400 kb, their boundaries and domains.
 2. **Peak calling** → Run: *Peaks · CTCF · Broad + CTCF · UW · IDR ≤ 0.05*, 2,106 peaks.
 3. Switch the map to **2 kb**. **Aggregate peak analysis**, anchors **consecutive features**, features
-   the peaks → Run: each peak with the next, ten bins either side, over the expected, from 22 bins
-   apart (panel **a**).
+   the peaks (*Peaks · CTCF · Broad + CTCF · UW · IDR ≤ 0.05*, not the insulation's boundaries, which
+   the list also holds once step 1 has run), normalisation **observed / expected** → Run: each peak
+   with the next, ten bins either side, from 22 bins apart, 327 pairs, P2LL 1.17 (panel **a**).
 4. **Metaplot over a feature set**, features the peaks, tracks both CTCF and ATAC → Run: the profile
    with its band, and a heatmap a track (panel **b**).
 5. The same with the four insulation tracks instead, flank **500000**, resolution **10000** → Run
    (panel **c**).
+6. Still at 2 kb, **Aggregate peak analysis** again: anchors **feature set**, features **Insulation
+   domains**, mode **scaled**, grid **51**, flank **0.5**, normalisation **distance-matched** (the app
+   refuses observed / expected on a scaled grid), five controls a domain, shifted by **1** to **3** windows, seed
+   **1** → Run: the 305 TADs, in / out 1.23 (panel **d**). Set it back to step 3's settings before
+   running panel a again.
 
 Each figure is saved by its own **PDF** button. About five minutes, most of it the 2-kb map read for
 the expected.
@@ -38,9 +44,10 @@ reproduces, every panel drawn by that package's own plotting:
 | **a** | `a-apa.pdf` | coolpuppy 1.1.0: `coolpup.pileup` of each yapc peak with the next, `flank=20000`, `mindist='auto'` (22 bins), over cooltools' `expected_cis`; `plotpup.plot` |
 | **b** | `b-profile.pdf`, `b-heatmaps.pdf`, `b-heatmap-<track>.pdf` | deepTools 4.0.0: `computeMatrix reference-point --referencePoint center`, ±2 kb in 50 bp; `plotProfile --perGroup --plotType se`; `plotHeatmap`, the three together and each on its own in one order |
 | **c** | `c-profile.pdf`, `c-heatmaps.pdf`, `c-heatmap-<window>.pdf` | the same over cooltools' insulation at the four windows, ±500 kb in 10 kb |
+| **d** | `d-tads.pdf` | coolpuppy 1.1.0: `coolpup.pileup` of the 305 domains between consecutive boundaries of cooltools' 50-kb window, `local=True`, `rescale=True`, `rescale_flank=0.5`, `rescale_size=51`, over `nshifts=5` controls at its default shifts (100 kb to 1 Mb); `plotpup.plot` |
 
 Upstream, the peaks are yapc 0.1's with IDR 2.0.3 (seed 0) and the insulation `cooltools.insulation`'s,
-at the validation notebook's settings, where every link is held to the app number for number
+at the validation notebook's settings, where every link but d is held to the app number for number
 (`notebooks/validation.qmd`, § 24). `reference/numbers.tsv` lists what each panel was made from and
 draws.
 
@@ -55,6 +62,20 @@ ranges by the app's rules, and the curves' colours, the app's palette in the ord
   reads its matrix's header as ASCII.
 - **The pile-up is at 2 kb, ±10 bins**: on chr19 it piles 327 of the 2,105 consecutive pairs, those at
   least 44 kb apart. Say if it should be at 5 or 10 kb, where more pairs clear the floor.
+- **Panel a's cells are coolpuppy's to 1%, not to six digits**: one peak, chr19:29,467,891-29,468,109,
+  has its centre half a base before a 2-kb bin edge, and the app rounds it into the next bin where
+  coolpuppy floors it. Centre (1.420) and P2LL (1.168 against 1.169) are unmoved; § 24, at 10 kb, has
+  no such peak.
+- **The TAD pile-up is alike, not equal**: § 24 does not hold it. coolpuppy stretches each window evenly
+  onto the grid where the app pins every domain's two ends to the same grid lines, shifts its controls
+  by 100 kb to 1 Mb where the app shifts by one to three windows, and blanks the cells the first two
+  diagonals reach once resampled. On the same 305 domains the app's in / out is 1.234 and coolpuppy's,
+  by the app's formula, 1.236; the two pileups correlate at 0.994 off those two diagonals, and no cell
+  differs by more than 0.10. coolpuppy's shifts barely move it: 1.232 to 1.237 from 100 kb–1 Mb to
+  500 kb–1.5 Mb.
+- **The app's ticks on d read −0.01 and 1.01** where the domain starts and ends: it spaces five ticks
+  evenly, and they land on the domain's two ends only on a grid that is a multiple of four, where
+  coolpuppy wants an odd one. 51 is kept on both sides.
 
 ## Rebuild
 

@@ -22,3 +22,7 @@ c: 100kb, heatmap colour scale	-0.8449 to 0.8449
 c: 50kb, mean at its extreme column	0.0525
 c: 50kb, heatmap colour scale	-0.7752 to 0.7752
 c: peaks	2106
+TADs, between consecutive boundaries at 50 kb	305
+TADs piled up	305
+TADs, in / out (the app's formula)	1.236
+TADs colour scale	0.417 to 1.583
