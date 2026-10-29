@@ -228,6 +228,13 @@
   ],
   "pulls": [
     {
+      "number": 142,
+      "commit": "f292454",
+      "title": "Speed up base composition and P(s) calculation by 8× and 2.5×",
+      "branch": "js/brave-davinci-f8c5dx",
+      "date": "2026-10-29T10:36:10Z"
+    },
+    {
       "number": 141,
       "commit": "60855f9",
       "title": "Domain pileup over expected: coolpuppy's rescaled local window",
