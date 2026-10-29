@@ -9127,7 +9127,12 @@ under one caption. The point the window is cut about is also the point a *genera
 is measured between, or the range and the picture would disagree about which pairs they are of. The
 axis label says which point it is; *bins from the centre* over a pileup of four thousand TSSs is a
 caption for a figure nobody drew. Hidden where there is no point to choose: a loaded loop set brings
-its own two anchors, and a domain pileup's window *is* the feature, start to end.
+its own two anchors, and a domain pileup's window *is* the feature, start to end. **The centre is the
+metaplot's, the midpoint rounded down**, and so is a loaded loop's anchor: that is the bin coolpuppy
+puts it in, `floor((start + end) / 2 / binsize)`, at any bin size. Rounded to the nearest base, a
+feature an odd number of bases long whose midpoint sat half a base before a bin edge went into the next
+bin — one of GM12878's 2,106 CTCF peaks on chr19 at 2 kb, which moved Fig. 2's pileup of consecutive
+peaks by up to 1.4 % from coolpuppy's; it is now coolpuppy's within 5·10⁻⁶.
 
 **A pileup's window is cut as coolpuppy cuts one, and its observed/expected is coolpuppy's.**
 Nothing is taken from below the diagonal. The map is read whole, both triangles, and a loop window

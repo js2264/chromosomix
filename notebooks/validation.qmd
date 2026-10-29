@@ -105,7 +105,7 @@ both and renders this page and the timings on every release, publishing them at
 <https://chromosomix.app/validation/> and <https://chromosomix.app/timings/>; the block under the
 title says which render this is.
 
-The data (9.5 GB) are fetched once into `notebooks/work/validation/data/`. Outputs are kept beside them,
+The data (9.8 GB) are fetched once into `notebooks/work/validation/data/`. Outputs are kept beside them,
 so a second render reads rather than recomputes (`REDO`).
 
 ```{python}
@@ -3515,8 +3515,9 @@ package it reproduces, on the same inputs: in situ Hi-C of GM12878 (Rao et al. 2
 4DNFIXP4QG5B, every replicate merged, 4,010,478,943 contacts) at 10 kb; CTCF ChIP-seq of two labs as
 the two replicates — ENCODE's ENCSR000AKB (Bernstein lab, Broad) and ENCSR000DRZ (Stamatoyannopoulos
 lab, UW), each the fold change over control of its pooled replicates; and ATAC-seq (ENCSR095QNB).
-The map is 27 GB, and what both sides read of it is the 10-kb rung of chr19, every contact within it
-with the file's own weights, read by range from 4DN's bucket into a `.cool`
+The map is 27 GB, and what both sides read of it is the 10-kb rung of chr19 — and for Fig. 2's own
+pileup the 2-kb one — every contact within it with the file's own weights, read by range from 4DN's
+bucket into a `.cool`
 (`notebooks/scripts/cool_subset.py`, which writes a pixel the file stores twice once, as the sum
 both tools read it as); the tracks are cut to chr19 interval for interval, as § 5 cuts its
 replicates, and for § 5's reason: yapc holds the second derivative of everything it is given in
@@ -3530,7 +3531,9 @@ chain is the app's and every reference is held to one step of it.
 3. **APA between consecutive peaks**: each peak of 2 paired with the next along its chromosome — by
    the app's own *consecutive features*, and for coolpuppy by a BEDPE of the same pairs written
    here — piled up raw and over the expected, at coolpuppy's defaults and with every pair, against
-   coolpuppy with § 11's script and settings.
+   coolpuppy with § 11's script and settings; and Fig. 2's own panel, on the 2-kb rung, ten bins
+   either side from coolpuppy's floor for that window, over the expected. There one peak's midpoint
+   sits half a base before a bin edge, and the two tools agree only if both round it down.
 4. **The signal at CTCF's sites**: the metaplot of both CTCF tracks and ATAC-seq about each peak's
    centre, ±2 kb in 50-bp bins, and of the insulation at its four scales, ±500 kb in 10-kb bins,
    against deepTools' `computeMatrix reference-point`, `plotProfile` and `plotHeatmap`.
@@ -3541,6 +3544,7 @@ chain is the app's and every reference is held to one step of it.
 | peaks | `peaks --signal ENCFF734CUT --replicate ENCFF644EEX`, § 5's settings | `yapc`, § 5's settings, seeds 0–4 |
 | pairs | `apa --anchors consecutive --features` the peaks: each and the next on its chromosome | a BEDPE of each peak and the next, written here |
 | APA | `apa --anchors consecutive --mode fixed --window 5 --minDiag 2 --minDist 12` (or `0`), `--norm none` or `oe` | `coolpup.pileup(…, flank=50_000)`, `mindist` `'auto'` (or `0`), raw or over § 4's expected for this map |
+| APA, Fig. 2 | the same at 2 kb: `--window 10 --minDiag 2 --minDist 22 --norm oe` | `coolpup.pileup(…, flank=20_000)`, `mindist` `'auto'`, over the 2-kb rung's expected |
 | metaplot | `metaplot --at centre --stranded=false --band none`, `--flank 2000 --step 50` or `--flank 500000 --step 10000` | `computeMatrix reference-point --referencePoint center`, `-b/-a 2000 --binSize 50` or `-b/-a 500000 --binSize 10000` |
 
 ```{python}
@@ -3751,16 +3755,41 @@ for cut_key, (label, app_args, options) in GM_CUTS.items():
               [PYTHON, PILEUP, GM_10K, GM_PAIRS, FLANK * clr_gm.binsize, OUT, THREADS, *options],
               out=GP / f'coolpuppy-{cut_key}.tsv', label=f'APA, {label}', group='APA', threads=THREADS, bench=timed)
 
-gm_cut_app = {k: pileup_of(GP / k) for k in GM_CUTS}
-gm_cut_ref = {k: np.loadtxt(GP / f'coolpuppy-{k}.tsv') for k in GM_CUTS}
-gm_same_gaps = {k: bool((np.isnan(gm_cut_app[k]) == np.isnan(gm_cut_ref[k])).all()) for k in GM_CUTS}
-gm_cut_rel = {k: relative_difference(gm_cut_app[k], gm_cut_ref[k])[np.isfinite(gm_cut_ref[k])] for k in GM_CUTS}
+# Fig. 2's own panel: the same pairs on the 2-kb rung, ten bins either side, from coolpuppy's floor for
+# that window (22 bins), over that rung's expected. Not timed, for the reason above.
+GM_COOL_2K = DATA / '4DNFIXP4QG5B_2000.chr19.cool'
+if not GM_COOL_2K.exists():
+    subprocess.run([PYTHON, str(SCRIPTS / 'cool_subset.py'), GM_MAP, '2000', str(GM_COOL_2K), '--sequences',
+                    ','.join(GM_SEQUENCES)], check=True)
+GM_2K, GM_HALF_2K = rel(GM_COOL_2K), 10
+reference('gm-expected-2kb', GM_ANALYSIS, 'cooltools', [PYTHON, EXPECTED, GM_2K, OUT, THREADS],
+          out=GP / 'expected-2kb.tsv', label='the expected at 2 kb, for coolpuppy', group='APA', threads=THREADS,
+          bench=False)
+mr('apa', GM_2K, '--anchors', 'consecutive', '--features', GM_PEAKS_BED, '--norm', 'oe', '--minDist',
+   2 * GM_HALF_2K + 2, '--mode', 'fixed', '--window', GM_HALF_2K, '--minDiag', MIN_DIAG, out=GP / 'oe-2kb',
+   name='gm-apa-oe-2kb', analysis=GM_ANALYSIS, label='APA at 2 kb, over the expected', group='APA', bench=False)
+reference('gm-coolpuppy-oe-2kb', GM_ANALYSIS, 'coolpuppy',
+          [PYTHON, PILEUP, GM_2K, GM_PAIRS, GM_HALF_2K * 2000, OUT, THREADS, '--expected', GP / 'expected-2kb.tsv'],
+          out=GP / 'coolpuppy-oe-2kb.tsv', label='APA at 2 kb, over the expected', group='APA', threads=THREADS,
+          bench=False)
+#: Every pileup compared, by its label.
+GM_PILEUPS = {**{k: v[0] for k, v in GM_CUTS.items()}, 'oe-2kb': 'at 2 kb, over the expected (Fig. 2)'}
+# A peak whose midpoint sits half a base before a bin edge: rounded to the nearest base it is in the next
+# bin, and coolpuppy floors it.
+gm_mid = gm_called['start'] + gm_called['end']
+gm_edge = {res: int(((gm_mid % 2 == 1) & ((gm_mid // 2 + 1) % res == 0)).sum()) for res in (10_000, 2000)}
+
+gm_cut_app = {k: pileup_of(GP / k) for k in GM_PILEUPS}
+gm_cut_ref = {k: np.loadtxt(GP / f'coolpuppy-{k}.tsv') for k in GM_PILEUPS}
+gm_same_gaps = {k: bool((np.isnan(gm_cut_app[k]) == np.isnan(gm_cut_ref[k])).all()) for k in GM_PILEUPS}
+gm_cut_rel = {k: relative_difference(gm_cut_app[k], gm_cut_ref[k])[np.isfinite(gm_cut_ref[k])] for k in GM_PILEUPS}
 measures({
     'consecutive pairs; nearer than coolpuppy\'s floor; median separation':
         f'{len(gm_pairs):,}; {int((gm_apart < MIN_DIST).sum()):,}; {np.median(gm_apart) * clr_gm.binsize / 1e3:,.0f} kb',
-    **{f'{GM_CUTS[k][0]}: max relative difference; cells left as gaps, chromosomix / coolpuppy':
+    'peaks whose midpoint is half a base before a bin edge, at 10 kb; at 2 kb': f'{gm_edge[10_000]}; {gm_edge[2000]}',
+    **{f'{GM_PILEUPS[k]}: max relative difference; cells left as gaps, chromosomix / coolpuppy':
        f'{gm_cut_rel[k].max():.1e}; {int(np.isnan(gm_cut_app[k]).sum())} / {int(np.isnan(gm_cut_ref[k]).sum())}'
-       for k in GM_CUTS},
+       for k in GM_PILEUPS},
     'over the expected, at coolpuppy\'s floor: centre; P2LL': f"{gm_cut_app['oe'][FLANK, FLANK]:.3f}; {p2ll(gm_cut_app['oe']):.3f}",
 })
 ```
@@ -3835,9 +3864,10 @@ measures({key_: f"{v['rows']:,} sites, rows paired one to one: {'yes' if v['one_
 
 ```{python}
 #| label: fig-gm-fig2
-#| fig-cap: "The rest of Fig. 2's chain on GM12878, chr19. a, the pileup over consecutive CTCF peaks, every pair, over the expected, as chromosomix draws it; b, every cell of the four pileups against coolpuppy's; c, −log10 IDR of every peak both call at IDR ≤ 0.05; d, CTCF's two tracks and ATAC-seq about the peaks; e, the insulation at its four scales about them; f, every cell of both metaplots' heatmaps against computeMatrix's."
+#| fig-cap: "The rest of Fig. 2's chain on GM12878, chr19. a, the pileup over consecutive CTCF peaks, every pair, over the expected, as chromosomix draws it; b, every cell of the five pileups against coolpuppy's, the last Fig. 2's own at 2 kb; c, −log10 IDR of every peak both call at IDR ≤ 0.05; d, CTCF's two tracks and ATAC-seq about the peaks; e, the insulation at its four scales about them; f, every cell of both metaplots' heatmaps against computeMatrix's."
 TEXT['gm_pairs'] = f'{len(gm_pairs):,}'
 TEXT['gm_apa_rel'] = f'{max(v.max() for v in gm_cut_rel.values()):.1e}'
+TEXT['gm_edge'] = f'{gm_edge[2000]:,}'
 GM_APA_GAPS = all(gm_same_gaps.values())
 TEXT['gm_apa_gaps'] = 'the same cells left as gaps' if GM_APA_GAPS else 'different cells left as gaps'
 TEXT['gm_peaks'] = f'{len(gm_called):,}'
@@ -3860,11 +3890,12 @@ bar = square(ax, gm_cut_app['oe-every'], 'a  consecutive peaks, over the expecte
 bar.set_ticks([1 / 2, 1, 2], labels=['½', '1', '2'])
 bar.minorticks_off()
 ax = axes[0, 1]
-for k, cut_key in enumerate(GM_CUTS):
+for k, cut_key in enumerate(GM_PILEUPS):
     values = np.maximum(gm_cut_rel[cut_key], 1e-9)
-    ax.scatter(k + np.linspace(-0.25, 0.25, values.size), values, s=6, color=APP_COLOUR, lw=0, gid=GM_CUTS[cut_key][0])
-ax.set(yscale='log', ylim=(1e-9, 1e-3), ylabel='|chromosomix / coolpuppy − 1|', title='b  every cell, four pileups')
-ax.set_xticks(range(len(GM_CUTS)), ['raw', 'O/E', 'raw,\nevery\npair', 'O/E,\nevery\npair'], fontsize=8)
+    ax.scatter(k + np.linspace(-0.25, 0.25, values.size), values, s=6, color=APP_COLOUR, lw=0, gid=GM_PILEUPS[cut_key])
+ax.set(yscale='log', ylim=(1e-9, 1e-3), ylabel='|chromosomix / coolpuppy − 1|', title='b  every cell, five pileups')
+ax.set_xticks(range(len(GM_PILEUPS)), ['raw', 'O/E', 'raw,\nevery\npair', 'O/E,\nevery\npair', 'O/E,\n2 kb'],
+              fontsize=8)
 agreement(axes[0, 2], gm_idr['cond_globalIDR'].to_numpy(float), gm_idr['score'].to_numpy(float), 'yapc 0.1',
           'chromosomix', 'c  −log10 IDR, called peaks')
 names_signal = ['CTCF · Broad', 'CTCF · UW', 'ATAC-seq']
@@ -3894,15 +3925,16 @@ The chain agrees link by link. The same `{python} TEXT['gm_peaks_same']` of the
 `{python} TEXT['gm_peaks']` CTCF peaks pass IDR ≤ 0.05 in both, their −log10 IDR within
 `{python} TEXT['gm_idr']` of every yapc run, whose seeds differ from one another by up to
 `{python} TEXT['gm_idr_self']`. Over the `{python} TEXT['gm_pairs']` pairs of consecutive peaks the
-four pileups draw `{python} TEXT['gm_apa_gaps']` and every other cell within
-`{python} TEXT['gm_apa_rel']` of coolpuppy's. About the `{python} TEXT['gm_mp_sites']` peaks, every
-profile is within `{python} TEXT['gm_mp_profile']` of `plotProfile`'s, and
+five pileups draw `{python} TEXT['gm_apa_gaps']` and every other cell within
+`{python} TEXT['gm_apa_rel']` of coolpuppy's — Fig. 2's at 2 kb too, where `{python} TEXT['gm_edge']`
+of the peaks has its midpoint half a base before a bin edge and both tools round it down. About the
+`{python} TEXT['gm_mp_sites']` peaks, every profile is within `{python} TEXT['gm_mp_profile']` of `plotProfile`'s, and
 `{python} TEXT['gm_mp_past']` cells of the heatmaps lie past the two tools' rounding.
 
 ```{python}
 GM_OK = (max(d.max() for d in gm_diff.values()) < 1e-5 and int((gm_calls['_merge'] != 'both').sum()) == 0
          and GM_PEAKS_SAME and GM_APA_GAPS and max(v.max() for v in gm_cut_rel.values()) < 1e-5 and GM_METAPLOT_OK)
-record(GM_ANALYSIS, 'GM12878 Hi-C, 10 kb; CTCF ChIP-seq of two labs and ATAC-seq; chr19',
+record(GM_ANALYSIS, 'GM12878 Hi-C, 10 and 2 kb; CTCF ChIP-seq of two labs and ATAC-seq; chr19',
        f"cooltools {VERSIONS['cooltools']}, yapc {YAPC}, coolpuppy {VERSIONS['coolpuppy']}, deepTools {VERSIONS['deeptools']}",
        f"insulation at four scales within {TEXT['gm_ins_max']}, the same {TEXT['gm_calls']} boundaries; "
        f"the same {TEXT['gm_peaks_same']} peaks at IDR ≤ 0.05, −log10 IDR within {TEXT['gm_idr']} "

@@ -559,9 +559,9 @@ for window in WINDOWS:
 for name, folder, theirs in (('APA, consecutive peaks', app_apa, pileup), ('APA, TADs', app_tads, tad_pileup)):
     table_ = written(one(folder, '*.apa-0.tsv'))
     mine = table_.set_index(table_.columns[0]).to_numpy(float)
-    AGREEMENT[f'{name}, max |Δ| (observed / expected)'] = f'{apart(mine, theirs):.3f}'
+    AGREEMENT[f'{name}, max |Δ| (observed / expected)'] = f'{apart(mine, theirs):.1e}'
     with np.errstate(divide='ignore', invalid='ignore'):
-        AGREEMENT[f'{name}, max |Δ| (log2 observed / expected)'] = f'{apart(np.log2(mine), np.log2(theirs)):.3f}'
+        AGREEMENT[f'{name}, max |Δ| (log2 observed / expected)'] = f'{apart(np.log2(mine), np.log2(theirs)):.1e}'
 for letter, run, labels in (('b', 'metaplot-signal', [label for _, label in SIGNAL]),
                             ('c', 'metaplot-insulation', [f'{w // 1000}kb' for w in WINDOWS[::-1]])):
     curves = written(one(app_profiles[letter], '*.metaplot.tsv'))

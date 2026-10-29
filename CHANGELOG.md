@@ -10,6 +10,17 @@ The deployed site at <https://chromosomix.app/> is built from `main` on every pu
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Fixed
+
+- **A pileup's centre is coolpuppy's bin (§18.8).** APA cut its window about a feature's midpoint
+  rounded to the nearest base, which put a feature an odd number of bases long into the next bin
+  wherever its midpoint sat half a base before a bin edge; coolpuppy floors it. The midpoint is now
+  rounded down, as the metaplot's centre already was, for a feature set's anchors and a loaded loop
+  set's alike. On Fig. 2's pileup of consecutive CTCF peaks at 2 kb, one peak of 2,106 moved cells up
+  to 1.4 % from coolpuppy's; every cell is now within 5·10⁻⁶.
+
 ## [0.17.0] - 2026-10-26
 
 ### Added

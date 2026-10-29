@@ -60,10 +60,10 @@ does:
 | peaks at IDR ≤ 0.05, Jaccard (bases in both over bases in either) | 1.0000, the same 2,106 |
 | boundaries at 50 kb, Jaccard | 1.0000, the same 306 |
 | insulation, max \|Δ\| over every bin (log2) | 4.7e-6 at 50 kb; 5.0e-6 at most over the four windows |
-| **a** APA, max \|Δ\| over every cell | 0.014 observed / expected (0.015 in log2): one peak's centre, half a base before a bin edge (below); put in the app's bin, coolpuppy's cells are the app's to 5.0e-6 |
+| **a** APA, max \|Δ\| over every cell | 5.0e-6 observed / expected (6.6e-6 in log2) |
 | **b** mean profiles, max \|Δ\| | 4.5e-5 CTCF · Broad, 2.8e-5 CTCF · UW, 4.8e-6 ATAC (fold change) |
 | **c** mean profiles, max \|Δ\| | 5.6e-8, 6.1e-8, 4.9e-7 and 4.9e-7 at 400, 200, 100 and 50 kb (log2) |
-| **d** TADs, max \|Δ\| over the cells both fill | 0.099 observed / expected (0.132 in log2): *The TAD pile-up is alike, not equal*, below |
+| **d** TADs, max \|Δ\| over the cells both fill | 0.099 observed / expected (0.13 in log2): *The TAD pile-up is alike, not equal*, below |
 
 What is set alike on the two sides is only what lets them be read together: the colour maps and their
 ranges by the app's rules, and the curves' colours, the app's palette in the order of its tracks.
@@ -76,17 +76,23 @@ ranges by the app's rules, and the curves' colours, the app's palette in the ord
   reads its matrix's header as ASCII.
 - **The pile-up is at 2 kb, ±10 bins**: on chr19 it piles 327 of the 2,105 consecutive pairs, those at
   least 44 kb apart. Say if it should be at 5 or 10 kb, where more pairs clear the floor.
-- **Panel a's cells are coolpuppy's to 1%, not to six digits**: one peak, chr19:29,467,891-29,468,109,
-  has its centre half a base before a 2-kb bin edge, and the app rounds it into the next bin where
-  coolpuppy floors it. Centre (1.420) and P2LL (1.168 against 1.169) are unmoved; § 24, at 10 kb, has
-  no such peak.
+- **Panel a's cells are coolpuppy's to six digits** since the app rounds a peak's midpoint down, as
+  coolpuppy does. One peak, chr19:29,467,891-29,468,109, has its centre half a base before a 2-kb bin
+  edge; rounded to the nearest base it went into the next bin, and the cells it fed were up to 1.4 %
+  off coolpuppy's. § 24 holds this panel at 2 kb.
 - **The TAD pile-up is alike, not equal**: § 24 does not hold it. coolpuppy stretches each window evenly
   onto the grid where the app pins every domain's two ends to the same grid lines, shifts its controls
   by 100 kb to 1 Mb where the app shifts by one to three windows, and blanks the cells the first two
   diagonals reach once resampled. On the same 305 domains the app's in / out is 1.234 and coolpuppy's,
   by the app's formula, 1.236; the two pileups correlate at 0.994 off those two diagonals, and no cell
   differs by more than 0.10. coolpuppy's shifts barely move it: 1.232 to 1.237 from 100 kb–1 Mb to
-  500 kb–1.5 Mb.
+  500 kb–1.5 Mb. The near diagonals are not where they part: coolpuppy's blanks — the main diagonal and
+  the one either side of it — are left out of the comparison, and the gap is largest 31 cells out, at
+  the domain's corners. Without controls the two differ by up to 0.11 in log2, from two choices:
+  coolpuppy blanks every grid cell a dropped bin reaches (7 % of chr19's 2-kb bins, in 162 of the 305
+  windows) where the app averages what is left of it, and stretches evenly where the app pins. Both
+  taken coolpuppy's way, area-weighted resampling is within 0.018 of coolpuppy's, which is scipy's
+  zoom; the controls add up to 0.06.
 - **The app's ticks on d read −0.01 and 1.01** where the domain starts and ends: it spaces five ticks
   evenly, and they land on the domain's two ends only on a grid that is a multiple of four, where
   coolpuppy wants an odd one. 51 is kept on both sides.

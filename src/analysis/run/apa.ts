@@ -790,15 +790,31 @@ function nearEnough(job: JobContext, anchors: Anchor[]): Anchor[] {
  * The end takes the feature's **last base** rather than its exclusive end, which
  * is a bin off on any feature whose end lands on a bin boundary — and on a gene
  * set that is most of them, since annotation ends are round numbers.
+ *
+ * The centre is {@link midpointBase}: coolpuppy's bin for it, never the next one.
  */
 function anchorBase(set: FeatureSet, i: number, at: 'start' | 'centre' | 'end'): number {
   const start = set.start[i]
   const end = set.end[i]
-  if (at === 'centre') return Math.round((start + end) / 2)
+  if (at === 'centre') return midpointBase(start, end)
   const last = Math.max(start, end - 1)
   const reversed = set.strand[i] < 0
   if (at === 'start') return reversed ? last : start
   return reversed ? start : last
+}
+
+/**
+ * The base an interval's midpoint is binned by: the midpoint **rounded down**.
+ *
+ * coolpuppy bins a feature by `floor((start + end) / 2 / binsize)`, the exact
+ * midpoint, and rounding it down to a base first lands in the same bin whatever
+ * the bin size. Rounding it to the nearest base did not: a feature an odd
+ * number of bases long whose midpoint sits half a base before a bin edge went
+ * into the next bin — one CTCF peak of 2,106 on GM12878's chr19 at 2 kb, enough
+ * to move a pileup's cells by a per cent from coolpuppy's.
+ */
+function midpointBase(start: number, end: number): number {
+  return Math.floor((start + end) / 2)
 }
 
 function featureAnchors(job: JobContext, set: FeatureSet): Anchor[] {
@@ -854,7 +870,7 @@ function binOf(
   // before the choice existed. The *body* below is the feature either way: the
   // scaled mode resamples the whole interval, and where it is cut about is a
   // question only the fixed mode asks.
-  const bin = job.mc.coords.binIndex(cid, options.point ?? Math.round((start + end) / 2))
+  const bin = job.mc.coords.binIndex(cid, options.point ?? midpointBase(start, end))
   if (bin < from || bin >= to) return null
   // The bins the interval itself covers, clamped to the sequence and never
   // empty: a feature narrower than one bin is one bin, since that is the finest
