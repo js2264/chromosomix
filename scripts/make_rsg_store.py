@@ -1227,7 +1227,7 @@ FIG2_REGION = "chr19:1-58,617,616"
 #: profiled along its edges, as coolpuppy draws none; the metaplot
 #: is of both CTCF tracks and ATAC-seq about the peaks' centres, and run again over the four insulation
 #: tracks at ±500 kb in 10-kb columns. Panel d is the APA again, set by hand to the insulation's domains,
-#: scaled, over distance-matched controls (manuscript/figure2/README.md): a task opens on one recipe.
+#: scaled, over the expected (manuscript/figure2/README.md): a task opens on one recipe.
 FIG2_RECIPES = {
     "insulation": {"window": 5, "scales": 4, "sequences": [FIG2_SEQUENCE]},
     "peaks": {"signal": "b-ctcf-broad", "replicate": "b-ctcf-uw", "idr": 0.05, "perPeak": True, "width": 150,

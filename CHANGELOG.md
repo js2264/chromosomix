@@ -10,6 +10,38 @@ The deployed site at <https://chromosomix.app/> is built from `main` on every pu
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Added
+
+- **A domain pileup over the expected, as coolpuppy draws it (§18.8).** APA scaled on a feature set
+  took every normalisation but observed / expected, refused from when the finished pileup was divided
+  by one expected a grid cell. Each window is divided cell by cell at its own diagonals before it is
+  resampled, so the scaled window has an expected too, and choosing observed / expected now draws
+  coolpuppy's rescaled local pileup (`rescale=True`, `ooe=True`) and nothing else: each domain scaled
+  about its middle by its flank each side, snapped out to whole bins, stretched evenly onto the grid by
+  linear interpolation (cooltools' `zoom_array`) and every grid cell a dropped bin or a near diagonal
+  reaches left blank, the axis one straight line from −f to 1 + f. Over GM12878's 305 TADs on chr19 at
+  2 kb it is coolpuppy's within 5·10⁻⁶ in every cell, the same 151 cells blank, which § 24 of the
+  validation notebook now holds; Fig. 2's TAD panel is drawn this way on both sides. The pinned layout
+  stays with the distance-matched control and the raw pileup. Pairs scaled over the expected are still
+  refused, there being no pileup of coolpuppy's like that window to hold them to.
+
+### Changed
+
+- **APA's *anchor on* is the row below *mode*.** It sat between *features* and *mode*, so choosing the
+  scaled mode closed a row above the control that had just been used, and the fixed mode opened it
+  again.
+
+### Fixed
+
+- **A pileup's centre is coolpuppy's bin (§18.8).** APA cut its window about a feature's midpoint
+  rounded to the nearest base, which put a feature an odd number of bases long into the next bin
+  wherever its midpoint sat half a base before a bin edge; coolpuppy floors it. The midpoint is now
+  rounded down, as the metaplot's centre already was, for a feature set's anchors and a loaded loop
+  set's alike. On Fig. 2's pileup of consecutive CTCF peaks at 2 kb, one peak of 2,106 moved cells up
+  to 1.4 % from coolpuppy's; every cell is now within 5·10⁻⁶.
+
 ## [0.17.0] - 2026-10-26
 
 ### Added

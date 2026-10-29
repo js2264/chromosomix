@@ -175,6 +175,21 @@ describe('the anchor point', () => {
     const cut = await cutAt(fixed('end'), round)
     expect(cut).toEqual([1_099])
   })
+
+  it('bins a midpoint half a base before a bin edge in the bin below, as coolpuppy does', async () => {
+    // 219 bases, 999,890 to 1,000,109: the midpoint is 999,999.5, half a base
+    // short of bin 1,000. coolpuppy floors it into bin 999; rounded to the
+    // nearest base first, it went into bin 1,000 — one CTCF peak on GM12878's
+    // chr19 at 2 kb, and a per cent off coolpuppy in the cells it fed.
+    const reads: Read[] = []
+    const context = job(fixed(), { reads, genes: [{ from: 1_000, to: 1_001, strand: 0 }] })
+    const set = (context.inputs as unknown as { features: { features: { start: Int32Array; end: Int32Array } } })
+      .features.features
+    set.start[0] = 999_890
+    set.end[0] = 1_000_109
+    await runApa(context)
+    expect(reads.map((read) => read.rows[0] + 2)).toEqual([999])
+  })
 })
 
 describe('what the axis says', () => {

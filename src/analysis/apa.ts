@@ -198,6 +198,136 @@ export function resampleWindowTo(
 }
 
 /**
+ * One square window stretched evenly onto a `side`-cell grid by **linear
+ * interpolation**, every grid cell a missing value reaches left a gap.
+ *
+ * The resampling a domain pileup over the expected goes through, because that
+ * is coolpuppy's (`rescale=True`), and with no controls drawn at random it is
+ * the one scaled pileup two tools can agree on cell for cell. It is cooltools'
+ * `zoom_array` over scipy's `ndimage.zoom` at order 1, step for step:
+ *
+ * - the window is blown up to `side · m` cells a side, `m` the smallest whole
+ *   number that is at least `n / side` (1 where the window is smaller than the
+ *   grid), by linear interpolation at `o · (n − 1) / (side · m − 1)` for output
+ *   cell `o` — and a coordinate that rounds past the last cell is scipy's
+ *   constant edge, 0, not the last cell's value;
+ * - then averaged back down in blocks of `m × m`;
+ * - with the gaps set to 0 first and interpolated the same way as a 0/1 mask,
+ *   a grid cell any gap reaches with any weight is a gap.
+ *
+ * Unlike {@link resampleWindowTo} this is not area-weighted and it does not
+ * average round a gap — it is smoothing, and it drops every cell a dropped bin
+ * or a near diagonal touches. Both are coolpuppy's choices, kept because the
+ * point of this path is to be its answer, not a better one.
+ *
+ * Done as `A · X · Aᵀ / m²`, `A` the interpolation weights already summed over
+ * each block, so the blown-up square — `n²` cells and more — is never held.
+ */
+export function zoomWindow(source: ArrayLike<number>, n: number, side: number): Float64Array {
+  const blocks = side < n ? Math.ceil(n / side) : 1
+  const fine = side * blocks
+  // scipy's zoom, `grid_mode=False`: the two end cells of the input land on the
+  // two end cells of the output.
+  const step = fine > 1 ? (n - 1) / (fine - 1) : 1
+  // Each grid cell's weights over the input, summed over its block: at most a
+  // block and one cells wide, kept as a start and a dense run.
+  const firsts = new Int32Array(side)
+  const runs: Float64Array[] = []
+  for (let a = 0; a < side; a++) {
+    let lo = Number.POSITIVE_INFINITY
+    let hi = -1
+    const pairs: Array<[number, number]> = []
+    for (let i = a * blocks; i < (a + 1) * blocks; i++) {
+      const at = i * step
+      if (at > n - 1) continue
+      const from = Math.floor(at)
+      const t = at - from
+      pairs.push([from, 1 - t])
+      if (from + 1 < n) pairs.push([from + 1, t])
+      lo = Math.min(lo, from)
+      hi = Math.max(hi, from + 1 < n ? from + 1 : from)
+    }
+    if (hi < 0) {
+      firsts[a] = 0
+      runs.push(new Float64Array(0))
+      continue
+    }
+    const run = new Float64Array(hi - lo + 1)
+    for (const [index, weight] of pairs) run[index - lo] += weight
+    firsts[a] = lo
+    runs.push(run)
+  }
+  // Rows of the input against the grid's columns, then the grid's rows against
+  // those: the data with its gaps as 0, and the gaps as a 0/1 mask beside it.
+  const half = new Float64Array(n * side)
+  const halfGaps = new Float64Array(n * side)
+  for (let p = 0; p < n; p++) {
+    for (let b = 0; b < side; b++) {
+      const run = runs[b]
+      const from = firsts[b]
+      let total = 0
+      let gaps = 0
+      for (let k = 0; k < run.length; k++) {
+        const value = source[p * n + from + k]
+        if (Number.isFinite(value)) total += run[k] * value
+        else gaps += run[k]
+      }
+      half[p * side + b] = total
+      halfGaps[p * side + b] = gaps
+    }
+  }
+  const out = new Float64Array(side * side)
+  const scale = 1 / (blocks * blocks)
+  for (let a = 0; a < side; a++) {
+    const run = runs[a]
+    const from = firsts[a]
+    for (let b = 0; b < side; b++) {
+      let total = 0
+      let gaps = 0
+      for (let k = 0; k < run.length; k++) {
+        total += run[k] * half[(from + k) * side + b]
+        gaps += run[k] * halfGaps[(from + k) * side + b]
+      }
+      out[a * side + b] = gaps > 0 ? Number.NaN : total * scale
+    }
+  }
+  return out
+}
+
+/**
+ * The bins a domain's window covers when it is stretched evenly: the domain
+ * scaled by `1 + 2f` about its middle, half-open, relative to its sequence's
+ * first bin.
+ *
+ * bioframe's `expand(scale=1 + 2f)`, which is how coolpuppy makes the window:
+ * each end moved by `f` times the length and **rounded half to even** (numpy's
+ * `round`), then snapped outwards to whole bins.
+ */
+export function evenWindow(
+  start: number,
+  end: number,
+  flankFraction: number,
+  binsize: number,
+): { from: number; to: number } {
+  // In bioframe's own order of operations, so a flank like 0.3 rounds as it does.
+  const scale = 2 * flankFraction + 1
+  const pad = 0.5 * (scale - 1) * (end - start)
+  return {
+    from: Math.floor(roundHalfEven(start - pad) / binsize),
+    to: Math.ceil(roundHalfEven(end + pad) / binsize),
+  }
+}
+
+/** numpy's `round`: to the nearest whole number, and a half to the even one. */
+export function roundHalfEven(value: number): number {
+  const floor = Math.floor(value)
+  const diff = value - floor
+  if (diff > 0.5) return floor + 1
+  if (diff < 0.5) return floor
+  return floor % 2 === 0 ? floor : floor + 1
+}
+
+/**
  * How a scaled window's grid divides into **flank, body, flank**.
  *
  * One layout for the whole run, so every window lands its body on the same

@@ -5,13 +5,15 @@ from the upper triangle, the first MIN_DIAG diagonals left out, and every loop n
 diagonal than coolpuppy's `mindist='auto'` — twice the flank and two bins — left out, unless
 --mindist says otherwise (0 keeps every loop). With --expected, every window is divided by
 the expected — cooltools' `expected_cis`, read as `balanced.avg` — before the mean
-(`ooe=True`). With --local, FEATURES is a BED and the windows sit on the diagonal. With
+(`ooe=True`). With --local, FEATURES is a BED and the windows sit on the diagonal; with
+--rescale-size too, each feature is scaled by 1 + 2 × RESCALE_FLANK about its middle and
+resampled to RESCALE_SIZE cells a side (`rescale=True`), and FLANK is not used. With
 --nshifts, the pileup is divided by that of NSHIFTS controls per loop, each moved along the
 diagonal by MINSHIFT to MAXSHIFT bp either way, with coolpuppy's seed. Writes the pileup as a
 TSV, one line per row of the window.
 
 usage: python coolpuppy_pileup.py MAP_URI FEATURES FLANK OUT_TSV NPROC [--min-diag N]
-           [--mindist BP] [--expected TSV] [--local]
+           [--mindist BP] [--expected TSV] [--local [--rescale-flank F --rescale-size N]]
            [--nshifts N --minshift BP --maxshift BP --seed S]
 """
 import argparse
@@ -31,6 +33,8 @@ parser.add_argument('--min-diag', type=int, default=2)
 parser.add_argument('--mindist', type=int)
 parser.add_argument('--expected')
 parser.add_argument('--local', action='store_true')
+parser.add_argument('--rescale-flank', type=float)
+parser.add_argument('--rescale-size', type=int)
 for name in ('nshifts', 'minshift', 'maxshift', 'seed'):
     parser.add_argument(f'--{name}', type=int)
 args = parser.parse_args()
@@ -38,6 +42,8 @@ args = parser.parse_args()
 if args.local:
     features = pd.read_csv(args.features, sep='\t', header=None, usecols=range(3), names=['chrom', 'start', 'end'])
     options = dict(features_format='bed', local=True)
+    if args.rescale_size is not None:
+        options.update(rescale=True, rescale_flank=args.rescale_flank, rescale_size=args.rescale_size)
 else:
     features = pd.read_csv(args.features, sep='\t', header=None, usecols=range(6),
                            names=['chrom1', 'start1', 'end1', 'chrom2', 'start2', 'end2'])
