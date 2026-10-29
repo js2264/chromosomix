@@ -124,6 +124,25 @@ def write_standard(path: Path, *, weights: bool = False) -> None:
         bins,
         {name: _pixels_frame(pixels) for name, pixels in CELLS.items()},
     )
+    if weights:
+        _share_weight(path, bins["weight"].to_numpy(dtype="float64"))
+
+
+def _share_weight(path: Path, weight) -> None:
+    """Put the balancing column in the shared `/bins`, and in each cell's, where cooler did not.
+
+    cooler up to 0.11 carried every column of the bin table into a `.scool`; 0.12 keeps
+    `chrom`, `start` and `end` only. A `.scool` balanced by a shared column is still a file
+    readers meet — every one the 0.11 writer made — so the fixture writes the column itself
+    rather than depending on which cooler built it.
+    """
+    import h5py
+
+    with h5py.File(path, "r+") as handle:
+        groups = [handle["bins"], *(handle["cells"][name]["bins"] for name in handle["cells"])]
+        for group in groups:
+            if "weight" not in group:
+                group.create_dataset("weight", data=weight, compression="gzip", compression_opts=6)
 
 
 def write_flat(path: Path, source: Path) -> None:

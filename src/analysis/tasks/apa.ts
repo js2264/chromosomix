@@ -137,6 +137,25 @@ export function isDomainPileup(params: Params): boolean {
 }
 
 /**
+ * Whether a domain pileup's windows are **stretched evenly** onto the grid by
+ * interpolation, rather than resampled with every domain's two ends pinned to
+ * the same two grid lines: a domain pileup over the expected.
+ *
+ * Over the expected because that normalisation draws nothing at random, so it
+ * is the one scaled pileup that can be held to coolpuppy's (`rescale=True`,
+ * `ooe=True`) cell for cell — and it is, in § 24 of the validation notebook
+ * (§18.10) — and held to it, it has to be cut and resampled as coolpuppy cuts
+ * and resamples it: the domain scaled about its middle, stretched evenly, every
+ * grid cell a dropped bin reaches left a gap (`zoomWindow` in analysis/apa.ts).
+ * The pinned layout is the better picture of a set of boundaries and stays with
+ * the distance-matched control and the raw pileup, which no other tool draws
+ * cell for cell anyway.
+ */
+export function stretchesEvenly(params: Params): boolean {
+  return isDomainPileup(params) && params.norm === 'oe'
+}
+
+/**
  * Whether the windows sit **on** the diagonal.
  *
  * Three anchor modes and only one of them does. A loop set is two anchors and a
@@ -291,6 +310,28 @@ const PARAMS: readonly ParamSpec[] = [
   },
   {
     kind: 'choice',
+    key: 'mode',
+    label: 'mode',
+    default: 'fixed',
+    options: [
+      { value: 'fixed', label: 'fixed window', hint: 'Centre plus or minus a number of bins.' },
+      {
+        value: 'scaled',
+        label: 'scaled',
+        hint:
+          'Flank, the feature, flank — every window on one grid. Over a set of domains this is ' +
+          'the domain pileup: the TAD in the middle and its two boundaries as the cross through it.',
+      },
+    ],
+    // The chromosight pileup's window is its template's size. See {@link isScaled}.
+    when: (params) => params.norm !== 'chromosight',
+  },
+  // **Below the mode, not above it**: whether there is a point to choose is the
+  // mode's to say — a domain pileup's window is the feature, start to end — so
+  // the row follows the question that opens and closes it. Above it, the form
+  // grew a row between *features* and *mode* in one mode and lost it in the other.
+  {
+    kind: 'choice',
     key: 'at',
     label: 'anchor on',
     default: 'centre',
@@ -313,24 +354,6 @@ const PARAMS: readonly ParamSpec[] = [
       { value: 'start', label: 'start', hint: 'Its 5′ end — a TSS, on a gene model.' },
       { value: 'end', label: 'end', hint: 'Its 3′ end.' },
     ],
-  },
-  {
-    kind: 'choice',
-    key: 'mode',
-    label: 'mode',
-    default: 'fixed',
-    options: [
-      { value: 'fixed', label: 'fixed window', hint: 'Centre plus or minus a number of bins.' },
-      {
-        value: 'scaled',
-        label: 'scaled',
-        hint:
-          'Flank, the feature, flank — every window on one grid. Over a set of domains this is ' +
-          'the domain pileup: the TAD in the middle and its two boundaries as the cross through it.',
-      },
-    ],
-    // The chromosight pileup's window is its template's size. See {@link isScaled}.
-    when: (params) => params.norm !== 'chromosight',
   },
   {
     kind: 'number',
@@ -718,22 +741,25 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   // itself reports the number it actually generated.
   const anchors = allPairs(params) ? null : features
 
-  // **Refused in the form rather than at Run.** One cell of a scaled pileup is
-  // fed by windows at a dozen different separations — that is what scaling is —
-  // so it has no one diagonal offset for a P(s) to be looked up at, and
-  // dividing by one anyway is a plausible picture of nothing. The other three
-  // normalisations all apply; the distance-matched one is drawn at the same
-  // separations by construction and is the right answer here.
-  if (isScaled(params) && params.norm === 'oe') {
+  // **Refused in the form rather than at Run, for scaled pairs only.** A window
+  // is divided by the expected cell by cell, at each cell's own diagonal of the
+  // map, *before* it is resampled — so a scaled window has an expected as much
+  // as a fixed one does, and a domain pileup over it is coolpuppy's own and is
+  // held to it ({@link stretchesEvenly}). It used to be refused on the diagonal
+  // too, from when the finished pileup was divided by one expected per grid
+  // cell, which on a scaled grid has no meaning. Off the diagonal the scaled
+  // window is this task's own square about the loop and coolpuppy draws none
+  // like it, so there is nothing to hold it to; the distance-matched control is
+  // drawn at the same separations by construction.
+  if (isScaled(params) && params.norm === 'oe' && !onDiagonal(params)) {
     return {
       class: 'free',
       requests: 0,
       bytes: 0,
       note: 'Nothing to read.',
       refusal:
-        'Observed / expected needs one diagonal offset per cell, and a scaled window has a ' +
-        'different one in every feature. Use the distance-matched control, or turn the scaled ' +
-        'mode off.',
+        'Observed / expected on a scaled grid is for a feature set on the diagonal. For pairs, ' +
+        'use the distance-matched control, or turn the scaled mode off.',
     }
   }
 
