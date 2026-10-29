@@ -8840,6 +8840,15 @@ grid's own cells and upstream divides its own base-pair config by the bin size b
 presets stay in base pairs, because they are generated from the installed package and must not be
 edited, and they are converted in exactly one place. *Refinement passes*, one by default and up to
 five, re-scan with the pileup of what the last pass called as the template.
+**The correlation is the scan's whole cost, and it is computed exactly as upstream's**, window by
+window, each adding the same cells in the same order — which leaves room only to compute fewer
+things around it. A window inside the square is masked by two rules rather than five, which is
+nearly half of a balanced map's windows; the rows a slice reaches are copied row by row, so that a
+row of a window is a run of neighbouring cells; and **four windows side by side are summed at
+once**, twelve sums in flight where three waited on their own additions, a cell outside a window's
+mask multiplied by 0 rather than skipped by a branch — a zero added and a value multiplied by one
+change no bit. On the validation's yeast Micro-C at 800 bp the loop scan took 25 s of CPU and takes
+10, every file it writes the same.
 It emits five things and the split is the point: a **loop set** (a bedpe, or a BED for the patterns
 that live on the diagonal) that lands on the map as an overlay the moment the run finishes; the
 **pileup** of every window it called, drawn on chromosight's own fixed 0–2 seismic scale so it can

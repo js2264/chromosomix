@@ -1256,7 +1256,8 @@ record('Peak calling (yapc, IDR)', 'mouse ATAC-seq, 2 replicates, chr19', f'yapc
 ## 6 · Loops (chromosight)
 
 Chromosight's loop preset (`kernels/loops.json`) in both; calls matched by bin pair, p- and q-values
-read from each call's detail.
+read from each call's detail. The app sums four neighbouring windows of the correlation at once, each
+adding its cells in chromosight's order, so its scores are those of one window at a time.
 
 ```{python}
 LP = WORK / 'loops'

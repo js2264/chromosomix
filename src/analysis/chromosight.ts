@@ -486,20 +486,27 @@ export function correlateAt(
 /**
  * The correlation map over the scan band.
  *
- * The same arithmetic as {@link correlateAt} at every pixel, with the two
+ * The same arithmetic as {@link correlateAt} at every pixel, with the
  * shortcuts that make it affordable on a real chromosome:
  *
  * - **a window with no missing pixel skips the mask entirely.** Whether one has
  *   any is a prefix-sum lookup on the undetectable bins plus a comparison
- *   against the sub-diagonal band, and the great majority of windows in a
- *   balanced map have none.
- * - **a window with no signal is not correlated.** Its variance is zero, so
- *   upstream's denominator guard would answer zero anyway; here it is answered
- *   without the multiply-accumulate.
+ *   against the sub-diagonal band.
+ * - **a window inside the square is masked by two rules, not five**
+ *   ({@link correlateInside}), which is every window but the frame's — and a
+ *   balanced map's undetectable bins put nearly half of them here.
+ * - **four windows side by side are summed together**, from the rows copied
+ *   row by row so that each window row is a run of neighbouring cells: twelve
+ *   sums in flight rather than three, where three were waiting on their own
+ *   additions. A cell is masked by multiplying it by 0 rather than by a branch.
  *
- * Both are exact — they decide *whether* to run the loop, never what it
- * computes — which is what lets the golden compare this to the sparse original
- * cell for cell rather than within a tolerance for having taken a short cut.
+ * All of it is exact. Each window adds the same cells in the same order as
+ * `correlateAt`, and a zero added or a value multiplied by one changes no bit,
+ * so `test/unit/analysis-chromosight-kernels.test.ts` holds every window to
+ * `correlateAt` with `Object.is`, and the golden compares this to the sparse
+ * original cell for cell rather than within a tolerance for a short cut. On
+ * the validation's yeast Micro-C at 800 bp the loop scan took 25 s and takes
+ * 10.
  */
 export function correlate(
   matrix: DiagonalBand,
@@ -558,28 +565,237 @@ export function correlateInto(
   const meanK = kernelSum / cells
   const meanK2 = kernelSum2 / cells
   const kernelVariance = meanK2 - meanK * meanK
+  const minPresent = Math.trunc((1 - settings.missingTol) * cells)
+  const values = matrix.values
+  const weights = kernel.values
+  /** A gapped window's correlation from its sums, as {@link correlateInside} finishes one. */
+  const insideScore = (
+    sum: number,
+    sumSquares: number,
+    cross: number,
+    missing: number,
+    missingKernel: number,
+    missingKernel2: number,
+  ): number => {
+    const present = cells - missing
+    if (present < minPresent || present === 0) return 0
+    const meanX = sum / present
+    const meanX2 = sumSquares / present
+    const meanKp = (kernelSum - missingKernel) / present
+    const meanK2p = (kernelSum2 - missingKernel2) / present
+    const variance = (meanX2 - meanX * meanX) * (meanK2p - meanKp * meanKp)
+    const denominator = variance > 0 ? Math.sqrt(variance) : 0
+    if (!(Math.abs(denominator) >= 1e-10)) return 0
+    return Math.min(1, Math.max(-1, (cross / present - meanX * meanKp) / denominator))
+  }
+  // Which of a quad's `size + 3` columns are undetectable, as 0 and 1.
+  const columnGone = new Float64Array(size + 3)
+  /** A clean window's correlation from its three sums, `0` where upstream's guards answer it. */
+  const cleanScore = (sum: number, sumSquares: number, cross: number): number => {
+    if (sumSquares === 0) return 0
+    const meanX = sum / cells
+    const variance = (sumSquares / cells - meanX * meanX) * kernelVariance
+    const denominator = variance > 0 ? Math.sqrt(variance) : 0
+    if (!(Math.abs(denominator) >= 1e-10)) return 0
+    return Math.min(1, Math.max(-1, (cross / cells - meanX * meanK) / denominator))
+  }
+
+  // The rows this slice's windows reach, copied row by row: a row of a window
+  // is then a run of neighbouring cells rather than one cell from each of
+  // `size` diagonals, and four windows side by side share every one of them,
+  // each a cell further along.
+  const width = matrix.hi - matrix.lo + 1
+  const firstRow = Math.max(0, fromRow - half)
+  const lastRow = Math.min(n, toRow + half)
+  const rows = new Float64Array(Math.max(0, lastRow - firstRow) * width)
+  for (let d = 0; d < width; d++) {
+    for (let r = firstRow; r < lastRow; r++) rows[(r - firstRow) * width + d] = values[d * n + r]
+  }
+  // Four windows at once need every cell of all four stored, and none of the
+  // band below the diagonal in any.
+  const quadFrom = Math.max(size - 1, matrix.lo + size - 1)
+  const quadTo = Math.min(band.hi, matrix.hi - size + 1) - 3
 
   for (let row = Math.max(0, fromRow); row < Math.min(n, toRow); row++) {
     const rowFrom = row - half
     const rowTo = row + half + 1
+    const rowInside = rowFrom >= 0 && rowTo <= n
+    const rowClean = rowInside && !anyGap(rowFrom, rowTo)
     for (let offset = 0; offset <= band.hi; offset++) {
       const col = row + offset
       if (col >= n) break
       const colFrom = col - half
       const colTo = col + half + 1
-      // A window entirely inside the square, clear of the sub-diagonal band and
-      // of every undetectable bin, has nothing to mask.
-      const clean =
-        rowFrom >= 0 &&
-        rowTo <= n &&
-        colFrom >= 0 &&
-        colTo <= n &&
-        colFrom > rowTo - 2 &&
-        !anyGap(rowFrom, rowTo) &&
-        !anyGap(colFrom, colTo)
-      if (!clean) {
+      const quad = rowInside && offset >= quadFrom && offset <= quadTo && colTo + 3 <= n
+      // **Four clean windows side by side**, each summing its own cells in the
+      // order the one-at-a-time loop below does — so each comes out the same to
+      // the last bit — and twelve sums in flight rather than three, which is
+      // what the one-at-a-time loop waited on.
+      if (quad && rowClean && !anyGap(colFrom, colTo + 3)) {
+        let s0 = 0
+        let q0 = 0
+        let x0 = 0
+        let s1 = 0
+        let q1 = 0
+        let x1 = 0
+        let s2 = 0
+        let q2 = 0
+        let x2 = 0
+        let s3 = 0
+        let q3 = 0
+        let x3 = 0
+        for (let a = 0; a < size; a++) {
+          const r = rowFrom + a
+          let at = (r - firstRow) * width + (colFrom - r) - matrix.lo
+          let index = a * size
+          let v1 = rows[at]
+          let v2 = rows[at + 1]
+          let v3 = rows[at + 2]
+          for (let b = 0; b < size; b++) {
+            const weight = weights[index]
+            const v0 = v1
+            v1 = v2
+            v2 = v3
+            v3 = rows[at + 3]
+            s0 += v0
+            q0 += v0 * v0
+            x0 += v0 * weight
+            s1 += v1
+            q1 += v1 * v1
+            x1 += v1 * weight
+            s2 += v2
+            q2 += v2 * v2
+            x2 += v2 * weight
+            s3 += v3
+            q3 += v3 * v3
+            x3 += v3 * weight
+            at++
+            index++
+          }
+        }
+        const at = offset * n + row
+        band.values[at] = cleanScore(s0, q0, x0)
+        band.values[at + n] = cleanScore(s1, q1, x1)
+        band.values[at + 2 * n] = cleanScore(s2, q2, x2)
+        band.values[at + 3 * n] = cleanScore(s3, q3, x3)
+        offset += 3
+        continue
+      }
+      // **Four gapped windows side by side**, each with {@link correlateInside}'s
+      // sums over its own cells in its order, where every cell is within the
+      // scan band and so missing exactly when its row or column is. A cell is
+      // counted in or out by multiplying by 1 or 0 rather than by a branch: a
+      // finite value times 1 is itself, times 0 is a zero that leaves a sum as
+      // it was, so the sums are correlateInside's to the last bit.
+      if (quad && offset + 3 + size - 1 <= settings.maxDist) {
+        for (let j = 0; j < size + 3; j++) columnGone[j] = detectable[colFrom + j] === 0 ? 1 : 0
+        // How many cells of each window are missing, which is a count and needs
+        // no order: whole rows of the undetectable rows, and the undetectable
+        // columns of each of the others.
+        const rowsGone = gaps[rowTo] - gaps[rowFrom]
+        const m0 = rowsGone * size + (size - rowsGone) * (gaps[colTo] - gaps[colFrom])
+        const m1 = rowsGone * size + (size - rowsGone) * (gaps[colTo + 1] - gaps[colFrom + 1])
+        const m2 = rowsGone * size + (size - rowsGone) * (gaps[colTo + 2] - gaps[colFrom + 2])
+        const m3 = rowsGone * size + (size - rowsGone) * (gaps[colTo + 3] - gaps[colFrom + 3])
+        let s0 = 0
+        let q0 = 0
+        let x0 = 0
+        let k0 = 0
+        let w0 = 0
+        let s1 = 0
+        let q1 = 0
+        let x1 = 0
+        let k1 = 0
+        let w1 = 0
+        let s2 = 0
+        let q2 = 0
+        let x2 = 0
+        let k2 = 0
+        let w2 = 0
+        let s3 = 0
+        let q3 = 0
+        let x3 = 0
+        let k3 = 0
+        let w3 = 0
+        for (let a = 0; a < size; a++) {
+          const r = rowFrom + a
+          const rowGone = detectable[r] === 0
+          let at = (r - firstRow) * width + (colFrom - r) - matrix.lo
+          let index = a * size
+          let v1 = rows[at]
+          let v2 = rows[at + 1]
+          let v3 = rows[at + 2]
+          let g1 = rowGone ? 1 : columnGone[0]
+          let g2 = rowGone ? 1 : columnGone[1]
+          let g3 = rowGone ? 1 : columnGone[2]
+          for (let b = 0; b < size; b++) {
+            const weight = weights[index]
+            const square = weight * weight
+            const v0 = v1
+            v1 = v2
+            v2 = v3
+            v3 = rows[at + 3]
+            const g0 = g1
+            g1 = g2
+            g2 = g3
+            g3 = rowGone ? 1 : columnGone[b + 3]
+            const u0 = v0 * (1 - g0)
+            const u1 = v1 * (1 - g1)
+            const u2 = v2 * (1 - g2)
+            const u3 = v3 * (1 - g3)
+            s0 += u0
+            q0 += u0 * u0
+            x0 += u0 * weight
+            k0 += weight * g0
+            w0 += square * g0
+            s1 += u1
+            q1 += u1 * u1
+            x1 += u1 * weight
+            k1 += weight * g1
+            w1 += square * g1
+            s2 += u2
+            q2 += u2 * u2
+            x2 += u2 * weight
+            k2 += weight * g2
+            w2 += square * g2
+            s3 += u3
+            q3 += u3 * u3
+            x3 += u3 * weight
+            k3 += weight * g3
+            w3 += square * g3
+            at++
+            index++
+          }
+        }
+        const at = offset * n + row
+        band.values[at] = insideScore(s0, q0, x0, m0, k0, w0)
+        band.values[at + n] = insideScore(s1, q1, x1, m1, k1, w1)
+        band.values[at + 2 * n] = insideScore(s2, q2, x2, m2, k2, w2)
+        band.values[at + 3 * n] = insideScore(s3, q3, x3, m3, k3, w3)
+        offset += 3
+        continue
+      }
+      // A window inside the square is masked by two rules at most, and one clear
+      // of the band below the diagonal with no undetectable bin in it, by none.
+      const inside = rowFrom >= 0 && rowTo <= n && colFrom >= 0 && colTo <= n
+      if (!inside) {
         const scored = correlateAt(matrix, n, detectable, kernel, row, col, settings)
         band.values[offset * n + row] = scored.corr
+        continue
+      }
+      if (colFrom <= rowTo - 2 || anyGap(rowFrom, rowTo) || anyGap(colFrom, colTo)) {
+        band.values[offset * n + row] = correlateInside(
+          matrix,
+          n,
+          detectable,
+          kernel,
+          rowFrom,
+          colFrom,
+          settings.maxDist,
+          kernelSum,
+          kernelSum2,
+          minPresent,
+        )
         continue
       }
 
@@ -596,25 +812,89 @@ export function correlateInto(
         let at = (colFrom + first - r - matrix.lo) * n + r
         let index = a * size + first
         for (let b = first; b < last; b++) {
-          const value = matrix.values[at]
-          if (value !== 0) {
-            sum += value
-            sumSquares += value * value
-            cross += value * kernel.values[index]
-          }
+          // Zeros added rather than skipped: a sum plus zero is the same sum to
+          // the last bit, and a branch on a sparse map's zeros was one the
+          // processor guessed wrong at every other cell.
+          const value = values[at]
+          sum += value
+          sumSquares += value * value
+          cross += value * weights[index]
           at += n
           index++
         }
       }
-      if (sumSquares === 0) continue
-      const meanX = sum / cells
-      const variance = (sumSquares / cells - meanX * meanX) * kernelVariance
-      const denominator = variance > 0 ? Math.sqrt(variance) : 0
-      if (!(Math.abs(denominator) >= 1e-10)) continue
-      const value = (cross / cells - meanX * meanK) / denominator
-      band.values[offset * n + row] = Math.min(1, Math.max(-1, value))
+      band.values[offset * n + row] = cleanScore(sum, sumSquares, cross)
     }
   }
+}
+
+/**
+ * {@link correlateAt} for a window inside the square — where three of the
+ * mask's rules cannot apply and the two left are that a cell below the
+ * diagonal is missing, and one on or above it is missing when its row or its
+ * column is undetectable and it lies within the scan band. (Below the diagonal
+ * means within `size` of it: no cell of a window lies further.)
+ *
+ * The same sums over the same cells in the same order, so the same correlation
+ * to the last bit, without asking {@link framedMissing} and the band's bounds
+ * about every cell: a balanced map's undetectable bins put most windows here
+ * rather than on {@link correlateInto}'s clean path, and through the general
+ * one they were half of a scan's time. `kernelSum` and `kernelSum2` are the
+ * template's, summed cell by cell in order as `correlateAt` sums them.
+ */
+function correlateInside(
+  matrix: DiagonalBand,
+  n: number,
+  detectable: Uint8Array,
+  kernel: Kernel,
+  rowFrom: number,
+  colFrom: number,
+  maxDist: number,
+  kernelSum: number,
+  kernelSum2: number,
+  minPresent: number,
+): number {
+  const size = kernel.size
+  const weights = kernel.values
+  const values = matrix.values
+  const { lo, hi } = matrix
+  let sum = 0
+  let sumSquares = 0
+  let cross = 0
+  let missing = 0
+  let missingKernel = 0
+  let missingKernel2 = 0
+  for (let a = 0; a < size; a++) {
+    const r = rowFrom + a
+    const rowGone = detectable[r] === 0
+    for (let b = 0; b < size; b++) {
+      const c = colFrom + b
+      const weight = weights[a * size + b]
+      const offset = c - r
+      if (offset < 0 || ((rowGone || detectable[c] === 0) && offset <= maxDist)) {
+        missing++
+        missingKernel += weight
+        missingKernel2 += weight * weight
+        continue
+      }
+      const value = offset >= lo && offset <= hi ? values[(offset - lo) * n + r] : 0
+      sum += value
+      sumSquares += value * value
+      cross += value * weight
+    }
+  }
+  const cells = size * size
+  const present = cells - missing
+  if (present < minPresent || present === 0) return 0
+  const meanX = sum / present
+  const meanX2 = sumSquares / present
+  const meanK = (kernelSum - missingKernel) / present
+  const meanK2 = (kernelSum2 - missingKernel2) / present
+  const variance = (meanX2 - meanX * meanX) * (meanK2 - meanK * meanK)
+  const denominator = variance > 0 ? Math.sqrt(variance) : 0
+  if (!(Math.abs(denominator) >= 1e-10)) return 0
+  const value = (cross / present - meanX * meanK) / denominator
+  return Math.min(1, Math.max(-1, value))
 }
 
 // ---------------------------------------------------------------------------

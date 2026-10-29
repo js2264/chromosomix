@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   DiagonalBand,
+  correlate,
   correlateAt,
   corrToPvalue,
   denseContacts,
@@ -196,6 +197,47 @@ describe('correlateAt', () => {
     const scored = correlateAt(band, n, gapped, kernel, 3, 8, { maxDist: 11, missingTol: 0 })
     expect(scored.corr).toBe(0)
     expect(scored.present).toBeLessThan(size * size)
+  })
+})
+
+describe('correlate', () => {
+  /** A band of contacts, sparse as a far diagonal is, with values in undetectable rows as a raw map has. */
+  function contacts(n: number, hi: number, seed: number): DiagonalBand {
+    let state = seed
+    const next = (): number => {
+      state = (state * 1_103_515_245 + 12_345) % 2 ** 31
+      return state / 2 ** 31
+    }
+    const band = new DiagonalBand(n, 0, hi)
+    for (let r = 0; r < n; r++) {
+      for (let c = r; c <= Math.min(n - 1, r + hi); c++) if (next() < 0.6) band.set(r, c, next() * 3)
+    }
+    return band
+  }
+
+  it('scores every window exactly as correlateAt does, clean, gapped or at an edge', () => {
+    const n = 48
+    const kernel: Kernel = { size: 7, values: Float64Array.from({ length: 49 }, (_, i) => Math.sin(i * 1.7) + 0.2) }
+    const gapped = allDetectable(n)
+    for (const bin of [0, 5, 6, 19, 30, 31, 32, 47]) gapped[bin] = 0
+    for (const detectable of [allDetectable(n), gapped]) {
+      for (const [maxDist, hi, missingTol] of [
+        [40, 47, 0.5],
+        [12, 18, 0.5],
+        [12, 18, 0.05],
+        [3, 9, 0.9],
+      ]) {
+        const matrix = contacts(n, hi, maxDist + hi)
+        const settings = { maxDist, missingTol }
+        const band = correlate(matrix, n, detectable, kernel, settings)
+        for (let row = 0; row < n; row++) {
+          for (let offset = 0; offset <= band.hi && row + offset < n; offset++) {
+            const want = correlateAt(matrix, n, detectable, kernel, row, row + offset, settings).corr
+            expect(Object.is(band.values[offset * n + row], want), `${maxDist}, ${row}+${offset}`).toBe(true)
+          }
+        }
+      }
+    }
   })
 })
 

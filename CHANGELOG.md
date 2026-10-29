@@ -31,6 +31,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   takes four hundredths of a second. `chromosomix expected` over that map took 11.0 s of CPU and takes
   4.1 s, both files it writes the same; the yeast map's, whose sequences are short, is as it was.
 
+- **chromosight's pattern detection is two and a half times faster, every number the same (§18.8).**
+  Over the yeast Micro-C at 800 bp, loops took 25 s of CPU and take 10, against 42 s for chromosight
+  1.6.3 on the same machine, and the six files the run writes are row for row what they were. The
+  correlation, nine-tenths of the time, sums four neighbouring windows at once from the band copied
+  row by row; masks a cell by multiplying by 0 rather than by a branch; and scores every window
+  inside the square — where the undetectable bins put nearly half — by the two mask rules that can
+  apply there rather than the five that can at the frame. Each window adds the same cells in the
+  same order, and a test holds every window to the one-window computation bit for bit.
+
 ## [0.17.0] - 2026-10-26
 
 ### Added
