@@ -8341,6 +8341,13 @@ longer, indistinguishable over everything anybody fits. The second is also what 
 expected, the compartment chain, inter-arm alignment and the pileups **divide by**, and they reach it
 through `expectedAt` rather than through the panel: the plotted curve is a figure and the denominator
 is a denominator, and changing what is on screen must not change what an O/E is taken against.
+**The bin pairs are counted, not walked.** With balancing on, a pair could hold a contact only if both
+its bins kept their weight, and over a whole file that was a walk of every sequence for every
+separation: two billion steps on the validation's mouse map at 10 kb, six of the run's eleven seconds.
+It is the line's `L − k` pairs less those that touch a dropped bin, which two running counts give, plus
+those between two dropped bins, subtracted twice and added back pair by pair — so the cost is the
+square of the bins dropped rather than of the line, and the counts are the same integers (where more
+bins are dropped than kept, the kept ones are paired instead). Round a circle the walk stays.
 **The first two diagonals are left out unless the reader asks for them** — *minimum separation*, in
 bins, is 2 by default. The diagonal and the one beside it hold what ligation could not separate,
 self-ligation and unligated fragments, and say nothing about the polymer, which is why cooltools'

@@ -230,12 +230,12 @@ function planUnits(
  * mirrored dense square, arrived at from the other side.
  *
  * With balancing on, a pair is only countable when **both** its bins survived
- * the balancer, which is no longer a closed form and costs a walk of `L` per
- * separation. That is quadratic in the length of a span and it is paid anyway:
- * dropping the filtered bins from the sum but not from the count would depress
- * P(s) by whatever fraction of the map the balancer threw away, and that
- * fraction is largest at exactly the short separations where the curve matters
- * most.
+ * the balancer, and that has to be paid for: dropping the filtered bins from
+ * the sum but not from the count would depress P(s) by whatever fraction of the
+ * map the balancer threw away, and that fraction is largest at exactly the
+ * short separations where the curve matters most. On a line it is counted by
+ * {@link keptPairs}, without a walk of `L` per separation; round a circle, which
+ * is one bacterial chromosome, it still is.
  */
 function countPairs(units: Unit[], doubled: boolean, weight: Float64Array | null): Float64Array[] {
   return units.map((unit) => {
@@ -243,6 +243,7 @@ function countPairs(units: Unit[], doubled: boolean, weight: Float64Array | null
     for (const span of unit.spans) {
       const length = span.to - span.from
       const lap = unit.lap
+      let kept: Float64Array | undefined
       for (let k = 0; k <= unit.maxOffset && k < length; k++) {
         let pairs: number
         if (lap > 0) {
@@ -267,16 +268,58 @@ function countPairs(units: Unit[], doubled: boolean, weight: Float64Array | null
         } else if (weight === null) {
           pairs = length - k
         } else {
-          pairs = 0
-          for (let i = span.from; i + k < span.to; i++) {
-            if (!Number.isNaN(weight[i]) && !Number.isNaN(weight[i + k])) pairs++
-          }
+          kept ??= keptPairs(weight, span.from, span.to, Math.min(unit.maxOffset, length - 1))
+          pairs = kept[k]
         }
         count[k] += doubled && k > 0 ? pairs * 2 : pairs
       }
     }
     return count
   })
+}
+
+/**
+ * How many pairs of bins `k` apart, for each `k` from `0` to `last`, have both
+ * bins kept by the balancer on the line of bins `[from, to)` — kept meaning a
+ * weight that is not `NaN`.
+ *
+ * Counted the other way round from the walk it replaces, and to the same
+ * integers. Of the `L − k` pairs at separation `k`, those whose first bin was
+ * dropped and those whose second was are two running counts away; the pairs
+ * with both dropped were subtracted twice, and are added back from the dropped
+ * bins taken two at a time. That last is the only part that is not a closed
+ * form, and its cost is the square of the dropped bins rather than the square
+ * of the line: on the validation's mouse map at 10 kb, a tenth of the bins, and
+ * the whole genome's pairs in 0.04 s where the walk took 6. Where more bins are
+ * dropped than kept, the kept ones are taken two at a time instead, and those
+ * pairs are the answer.
+ */
+export function keptPairs(weight: Float64Array, from: number, to: number, last: number): Float64Array {
+  const length = to - from
+  // `dropped[i]`: how many of the line's first `i` bins the balancer dropped.
+  const dropped = new Int32Array(length + 1)
+  for (let i = 0; i < length; i++) dropped[i + 1] = dropped[i] + (Number.isNaN(weight[from + i]) ? 1 : 0)
+  const gone = dropped[length]
+  const keptFewer = length - gone <= gone
+  // The smaller of the two sets, as offsets along the line, in order.
+  const at = new Int32Array(keptFewer ? length - gone : gone)
+  let n = 0
+  for (let i = 0; i < length; i++) if (Number.isNaN(weight[from + i]) !== keptFewer) at[n++] = i
+  const within = new Float64Array(last + 1)
+  for (let a = 0; a < n; a++) {
+    within[0]++
+    for (let b = a + 1; b < n; b++) {
+      const k = at[b] - at[a]
+      if (k > last) break
+      within[k]++
+    }
+  }
+  if (keptFewer) return within
+  const out = new Float64Array(last + 1)
+  for (let k = 0; k <= last; k++) {
+    out[k] = length - k - dropped[length - k] - (gone - dropped[k]) + within[k]
+  }
+  return out
 }
 
 /** A finished curve from totals accumulated outside the accumulator class. */

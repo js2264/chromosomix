@@ -24,6 +24,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   endings gathered out by the index's own arithmetic, a line at a time, rather than looked for byte
   by byte. The counting is the app's too, for a FASTA held whole, and the origin and terminus call's.
 
+- **P(s) over a mammalian map is two and a half times faster, every number the same (§18.8).** With
+  balancing on, how many bin pairs each separation could hold was counted by walking every sequence
+  once per separation, which on a mouse map at 10 kb was six of the run's eleven seconds; it is now the
+  pairs less those touching a dropped bin, from running counts, plus the pairs of dropped bins, and
+  takes four hundredths of a second. `chromosomix expected` over that map took 11.0 s of CPU and takes
+  4.1 s, both files it writes the same; the yeast map's, whose sequences are short, is as it was.
+
 ## [0.17.0] - 2026-10-26
 
 ### Added
