@@ -17,15 +17,22 @@
  * - **P2LL** under the picture, whose lower-left corner in a domain window is
  *   the two neighbours of the domain and reads well above 1 with no domains in
  *   the data at all.
+ *
+ * Over the expected the window *is* stretched evenly, on purpose: that pileup is
+ * coolpuppy's, cut, interpolated and gapped as coolpuppy does it, so the two can
+ * be held to each other cell for cell (§18.10). Its tests are the last block.
  */
 
 import { describe, expect, it } from 'vitest'
 
 import {
   domainScore,
+  evenWindow,
   resampleWindowTo,
+  roundHalfEven,
   scaledEdges,
   scaledLayout,
+  zoomWindow,
 } from '@/analysis/apa'
 import { runApa } from '@/analysis/run/apa'
 import type { JobContext } from '@/analysis/job'
@@ -114,6 +121,62 @@ describe('resampleWindowTo', () => {
   it('answers with a gap where an output cell reached nothing finite', () => {
     const out = resampleWindowTo([Number.NaN, Number.NaN], 1, 2, [0, 1], [0, 2])
     expect(out[0]).toBeNaN()
+  })
+})
+
+describe('zoomWindow', () => {
+  it('is the window itself when it is already the grid’s size', () => {
+    const source = Float64Array.from({ length: 25 }, (_, i) => i * 0.5)
+    expect(Array.from(zoomWindow(source, 5, 5))).toEqual(Array.from(source))
+  })
+
+  it('interpolates linearly between the cells it lands between', () => {
+    // 3 cells onto 5: the new cells fall half way between the old ones.
+    const source = Float64Array.from([0, 1, 2, 3, 4, 5, 6, 7, 8])
+    const out = zoomWindow(source, 3, 5)
+    expect(out[0]).toBe(0)
+    expect(out[1]).toBeCloseTo(0.5, 12)
+    expect(out[5 + 1]).toBeCloseTo(2, 12)
+    expect(out[24]).toBe(8)
+  })
+
+  it('takes scipy’s constant edge where a coordinate rounds past the last cell', () => {
+    // 4 cells onto 306: the last output cell's coordinate, 305 · 3/305, comes out
+    // a hair past 3 in floating point, and scipy's `constant` mode answers 0
+    // there rather than the last cell's value. A pileup held to coolpuppy's has
+    // to have the same zero along its last row and column.
+    const out = zoomWindow(new Float64Array(16).fill(1), 4, 306)
+    expect(out[0]).toBe(1)
+    expect(out[304 * 306 + 304]).toBeCloseTo(1, 12)
+    expect(out[305 * 306]).toBe(0)
+    expect(out[305]).toBe(0)
+  })
+
+  it('leaves a gap in every grid cell a missing value reaches with any weight', () => {
+    // One missing cell in the middle of a 9 × 9 window, onto 3 × 3: the cell it
+    // sits in is a gap, the others average what they hold.
+    const source = new Float64Array(81).fill(2)
+    source[4 * 9 + 4] = Number.NaN
+    const out = zoomWindow(source, 9, 3)
+    expect(out[4]).toBeNaN()
+    expect(out[0]).toBeCloseTo(2, 12)
+    expect(out[8]).toBeCloseTo(2, 12)
+  })
+})
+
+describe('evenWindow', () => {
+  it('scales the feature about its middle and snaps out to whole bins', () => {
+    // 2,000–2,400 kb at half a feature each side is 1,800–2,600 kb.
+    expect(evenWindow(2_000_000, 2_400_000, 0.5, 1000)).toEqual({ from: 1800, to: 2600 })
+    expect(evenWindow(2_000_500, 2_400_000, 0.5, 1000)).toEqual({ from: 1800, to: 2600 })
+  })
+
+  it('rounds a half base to the even one, as numpy and bioframe do', () => {
+    // 999 bases at half a feature each side: the ends move by 499.5 to 500.5 and
+    // 2,498.5, which round half to even to 500 and 2,498 — half up would give
+    // 501 and 2,499.
+    expect(evenWindow(1000, 1999, 0.5, 1)).toEqual({ from: 500, to: 2498 })
+    expect([0.5, 1.5, 2.5, 3.5, -1.5, 2.4, 2.6].map(roundHalfEven)).toEqual([0, 2, 2, 4, -2, 2, 3])
   })
 })
 
@@ -379,9 +442,14 @@ describe('the scaled mode’s estimate', () => {
     framing: null,
   } as unknown as AnalysisContext
 
-  it('refuses observed / expected before Run rather than after it', () => {
+  it('takes observed / expected on the diagonal, where each window has its own expected', () => {
     const estimate = APA_TASK.estimate(context, { ...SCALED, norm: 'oe' })
-    expect(estimate.refusal).toMatch(/scaled window/)
+    expect(estimate.refusal).toBeUndefined()
+  })
+
+  it('refuses observed / expected for scaled pairs before Run rather than after it', () => {
+    const estimate = APA_TASK.estimate(context, { ...SCALED, anchors: 'consecutive', norm: 'oe' })
+    expect(estimate.refusal).toMatch(/feature set on the diagonal/)
     expect(estimate.requests).toBe(0)
   })
 
@@ -395,5 +463,27 @@ describe('the scaled mode’s estimate', () => {
     const estimate = APA_TASK.estimate(context, { ...SCALED, mode: 'fixed', norm: 'oe' })
     expect(estimate.refusal).toBeUndefined()
     expect(estimate.note).not.toMatch(/feature’s own size/)
+  })
+})
+
+describe('the domain pileup over the expected', () => {
+  const OVER_EXPECTED: Params = { ...SCALED, norm: 'oe', grid: 41 }
+
+  it('labels the axis as one straight line, the feature’s ends on the second and fourth tick', async () => {
+    // Pinned on 41 cells the second tick reads 0.01 ({@link scaledTickLabels});
+    // stretched evenly it is a quarter of the window, which at half a feature
+    // each side is where the feature starts, exactly.
+    const matrix = matrixOf(await runApa(job(OVER_EXPECTED)))
+    expect(matrix.xTicks).toEqual(['-0.5', '0', '0.5', '1', '1.5'])
+    expect(matrix.label).toMatch(/observed \/ expected/)
+  })
+
+  it('leaves a gap along the grid’s diagonal, where the diagonals left out reach', async () => {
+    // The two diagonals left out of every window reach every grid cell on the
+    // diagonal once interpolated, and coolpuppy blanks those cells; resampled by
+    // area they would be the mean of what is left beside them.
+    const matrix = matrixOf(await runApa(job(OVER_EXPECTED)))
+    for (let i = 0; i < 41; i++) expect(matrix.values[i * 41 + i]).toBeNaN()
+    expect(Number.isFinite(matrix.values[5 * 41 + 30])).toBe(true)
   })
 })

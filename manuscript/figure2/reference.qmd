@@ -27,11 +27,11 @@ link run by the package the app's task reproduces and every panel drawn by that 
 | **a** APA | *Aggregate peak analysis*, consecutive features, 2 kb, ±10 bins, observed / expected, nearest loop 22 bins | coolpuppy: `coolpup.pileup` of each peak with the next, `flank=20000`, `mindist='auto'` (22 bins), over cooltools' `expected_cis`; `plotpup.plot` |
 | **b** CTCF and ATAC | *Metaplot over a feature set*, ±2 kb in 50 bp, its band and a heatmap a track | deepTools: `computeMatrix reference-point --referencePoint center`, `plotProfile --plotType se`, `plotHeatmap` |
 | **c** insulation | the same, ±500 kb in 10 kb, over the four insulation tracks | the same, over cooltools' four |
-| **d** TADs | *Aggregate peak analysis*, the insulation's domains, scaled: 51 cells a side, flank 0.5, over five distance-matched controls a domain | coolpuppy: `coolpup.pileup` of the domains between cooltools' boundaries, `local=True`, `rescale=True`, `rescale_flank=0.5`, `rescale_size=51`, `nshifts=5`; `plotpup.plot` |
+| **d** TADs | *Aggregate peak analysis*, the insulation's domains, scaled: 51 cells a side, flank 0.5, over the expected | coolpuppy: `coolpup.pileup` of the domains between cooltools' boundaries, `local=True`, `rescale=True`, `rescale_flank=0.5`, `rescale_size=51`, over cooltools' `expected_cis` (`ooe`); `plotpup.plot` |
 
-Every link of a, b and c is held to its reference number for number in `notebooks/validation.qmd` § 24;
-d is not, since the two tools resample a domain and shift its controls differently (its section says
-how). This page is the pictures, and at its end how far apart the two sides' numbers are. Each panel
+Every link is held to its reference number for number in `notebooks/validation.qmd` § 24 — d too,
+since over the expected the app cuts and resamples a domain's window as coolpuppy does. This page is
+the pictures, and at its end how far apart the two sides' numbers are. Each panel
 is written on its own to `manuscript/figure2/reference/`, as a PDF and a PNG, to be set beside the
 app's own. What is set alike on the two sides is only what lets them be read
 together: the colour maps and their ranges by the app's rules (RdBu_r symmetric about 1 for a pile-up
@@ -106,9 +106,9 @@ for folder in (DATA, RUNS, PANELS):
 SEQUENCE = 'chr19'
 #: The pile-up: ten 2-kb bins either side, and coolpuppy's floor for that window, 2 × 10 + 2 bins.
 RES, HALF = 2000, 10
-#: The TAD pile-up: each domain with half its length either side, resampled to 51 cells a side, over five
-#: shifted controls a domain.
-GRID, SCALED_FLANK, CONTROLS = 51, 0.5, 5
+#: The TAD pile-up: each domain with half its length either side, resampled to 51 cells a side, over the
+#: expected.
+GRID, SCALED_FLANK = 51, 0.5
 WINDOWS = [50_000, 100_000, 200_000, 400_000]
 #: The app's chart palette (`CATEGORY_PALETTE`, src/render/meta.ts), handed out in the order of the tracks.
 PALETTE = ['#0072b2', '#d55e00', '#009e73', '#cc79a7']
@@ -417,17 +417,17 @@ metaplot('c', 'metaplot-insulation', INSULATION[::-1], [f'{w // 1000}kb' for w i
 The domains of the 50-kb window, each from the bin one boundary is called at to the bin of the next — as
 the app's *Diamond insulation* makes its *Insulation domains* — piled up on the 2-kb map by
 `coolpup.pileup` with `local=True` and `rescale=True`: each domain with half its length either side
-(`rescale_flank=0.5`), resampled to 51 cells a side, over five controls a domain shifted along the
-diagonal by coolpuppy's default 100 kb to 1 Mb, the first two diagonals left out; and the picture by
-`plotpup.plot`, RdBu_r symmetric about 1 over the furthest cell. Its number is the app's *in / out*
-computed on coolpuppy's pileup: the domain's corner at its widest separation over the same block across
-each of its two boundaries.
+(`rescale_flank=0.5`), stretched evenly onto 51 cells a side, every window over the 2-kb map's expected
+of panel a (`ooe`), the first two diagonals left out; and the picture by `plotpup.plot`, RdBu_r
+symmetric about 1 over the furthest cell. Its number is the app's *in / out* computed on coolpuppy's
+pileup: the domain's corner at its widest separation over the same block across each of its two
+boundaries.
 
-The one panel § 24 does not hold number for number, and it could not be: coolpuppy stretches each window
-evenly onto the grid, where the app pins every domain's two ends to the same two grid lines (13 and 38 of
-51) whatever its length; coolpuppy shifts a control by 100 kb to 1 Mb, the app by one to three times its
-window; and coolpuppy leaves out every cell the first two diagonals reach once resampled, where the app
-averages what is left of it.
+Over the expected nothing is drawn at random, and the app cuts and resamples a domain's window as
+coolpuppy does — scaled about its middle, stretched evenly, every cell a dropped bin or the first two
+diagonals reach left blank — so § 24 holds this panel cell for cell, as it holds the others. Over
+distance-matched controls the app pins every domain's two ends to the same two grid lines instead, and
+its random shifts are not coolpuppy's.
 
 ```{python}
 tads_folder = RUNS / 'tads'
@@ -439,10 +439,10 @@ tads = pd.DataFrame({'chrom': calls['chrom'][same], 'start': calls['start'][same
                      'end': following['start'][same].astype(int)}).reset_index(drop=True)
 tads.to_csv(tads_folder / 'tads.bed', sep='\t', header=False, index=False)
 print(f"coolpup.pileup({COOL2.name}, tads.bed, features_format='bed', local=True, rescale=True, "
-      f"rescale_flank={SCALED_FLANK}, rescale_size={GRID}, nshifts={CONTROLS}, min_diag=2, seed=1)")
+      f"rescale_flank={SCALED_FLANK}, rescale_size={GRID}, min_diag=2, expected_df=expected.tsv, ooe=True)")
 tad_pup = coolpup.pileup(cooler.Cooler(str(COOL2)), tads, features_format='bed', local=True, rescale=True,
-                         rescale_flank=SCALED_FLANK, rescale_size=GRID, nshifts=CONTROLS, min_diag=2, seed=1,
-                         nproc=THREADS)
+                         rescale_flank=SCALED_FLANK, rescale_size=GRID, min_diag=2,
+                         expected_df=pd.read_csv(expected, sep='\t'), ooe=True, nproc=THREADS)
 tad_pileup = np.asarray(tad_pup['data'].iloc[0], dtype=float)
 np.savetxt(PANELS / 'd-tads.tsv', tad_pileup, delimiter='\t', fmt='%.10g')
 finite = tad_pileup[np.isfinite(tad_pileup)]
@@ -480,7 +480,7 @@ against the ones drawn here. Each side's own chain, as the figure sets them side
 § 24's, where every reference is fed the app's input. For the peaks and the boundaries, the Jaccard index:
 bases in both sets over bases in either, as `bedtools jaccard` counts it. For the rest, the largest
 |chromosomix − reference| over what both draw: every bin of the insulation, every cell of a pile-up
-that both fill (coolpuppy blanks the cells the first two diagonals reach on d's resampled grid), and
+that both fill (both blank the cells the first two diagonals reach on d's resampled grid), and
 every column of a mean profile. Written to `reference/agreement.tsv`.
 
 ```{python}
@@ -532,8 +532,7 @@ APP_PEAKS = one(app_called, '*.bed')
 app_apa = app('apa', COOL2, '--anchors', 'consecutive', '--features', APP_PEAKS, '--at', 'centre', '--mode', 'fixed',
               '--window', HALF, '--minDist', 2 * HALF + 2, '--minDiag', 2, '--norm', 'oe', out=APP / 'apa')
 app_tads = app('apa', COOL2, '--anchors', 'features', '--features', one(app_ins, '*.insulation-domains.bed'),
-               '--mode', 'scaled', '--grid', GRID, '--flankFraction', SCALED_FLANK, '--norm', 'matched',
-               '--controls', CONTROLS, '--minShiftScale', 1, '--maxShiftScale', 3, '--seed', 1, '--minDiag', 2,
+               '--mode', 'scaled', '--grid', GRID, '--flankFraction', SCALED_FLANK, '--norm', 'oe', '--minDiag', 2,
                out=APP / 'tads')
 APP_INSULATION = [one(app_ins, f'*.insulation-w{w // 10_000}.bw') for w in WINDOWS]
 app_profiles = {}

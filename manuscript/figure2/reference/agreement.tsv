@@ -9,8 +9,8 @@ insulation at 200 kb, max |Δ| (log2)	5.0e-06
 insulation at 400 kb, max |Δ| (log2)	4.9e-06
 APA, consecutive peaks, max |Δ| (observed / expected)	5.0e-06
 APA, consecutive peaks, max |Δ| (log2 observed / expected)	6.6e-06
-APA, TADs, max |Δ| (observed / expected)	9.9e-02
-APA, TADs, max |Δ| (log2 observed / expected)	1.3e-01
+APA, TADs, max |Δ| (observed / expected)	5.0e-06
+APA, TADs, max |Δ| (log2 observed / expected)	7.1e-06
 b: CTCF-Broad, mean profile, max |Δ|	4.5e-05
 b: CTCF-UW, mean profile, max |Δ|	2.8e-05
 b: ATAC, mean profile, max |Δ|	4.8e-06

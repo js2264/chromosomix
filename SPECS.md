@@ -9218,11 +9218,24 @@ comes out at 1 everywhere. And the statistic under it is the **domain's own corn
 block across its boundary** rather than P2LL, whose lower-left quadrant here is the domain's two
 neighbours and reads well above 1 on a set with no boundaries in it.
 
-**Observed/expected is refused in the scaled mode, in the form rather than at Run.** One cell of a
-scaled pileup is fed by windows at a dozen different separations — that is what scaling *is* — so it
-has no one diagonal offset for a P(s) to be looked up at, and dividing by one anyway was a plausible
-picture of nothing. The distance-matched control is the answer there and is drawn at the same
-separations by construction. **Every anchor is piled up and every window is summed**: there is no cap on the anchors read
+**A domain pileup over the expected is coolpuppy's, cut and resampled as coolpuppy does it.** Every
+window is divided by the expected cell by cell, at each cell's own diagonal of the map, *before* it is
+resampled, so a scaled window has an expected as much as a fixed one; observed/expected used to be
+refused here from when the finished pileup was divided by one expected per grid cell, which on a
+scaled grid has no meaning. With no control drawn at random it is the one scaled pileup two tools can
+agree on cell for cell, so it is drawn as coolpuppy draws it (`rescale=True`, `ooe=True`): the window
+is the domain scaled by `1 + 2f` about its middle (bioframe's `expand`, its ends rounded half to even)
+and snapped out to whole bins, a window running off its sequence dropped; it is **stretched evenly**
+onto the grid by cooltools' `zoom_array` — scipy's linear `zoom` onto a multiple of the grid, then
+block means, a coordinate rounding past the last cell taking scipy's constant edge, 0 — and **every
+grid cell a missing value reaches is a gap**, a dropped bin or one of the diagonals left out, where
+the pinned layout averages what is left. The axis is then one straight line, `−f` to `1 + f`. On
+GM12878's 305 TADs at 2 kb every cell is coolpuppy's within 5·10⁻⁶ and the same 151 cells are gaps
+(§18.10, § 24 of the notebook). The pinned layout stays with the distance-matched control and the raw
+pileup, as the better picture of a set of boundaries. **Off the diagonal it is still refused, in the
+form rather than at Run**: a scaled pair window is this task's own square about the loop, coolpuppy
+draws none like it, and the distance-matched control is drawn at the same separations by
+construction. **Every anchor is piled up and every window is summed**: there is no cap on the anchors read
 and no minimum coverage a window must reach — the one floor being a loop set's nearest loop, which is
 about where a loop is rather than a sample of the set, is coolpuppy's, and is said in the run's notes.
 Both existed and both were quietly a change of subject —
@@ -9772,9 +9785,10 @@ from a zoom level and measured apart; and signal by group against pyBigWig's exa
 rank for rank in each group, and its summaries and tests against NumPy's and SciPy's; the chain the
 paper's Fig. 2 runs on GM12878 (§ 24), each link fed what the one before it wrote in chromosomix —
 insulation at four scales against `cooltools.insulation`, CTCF's peaks on two labs' ChIP-seq as
-replicates against yapc, APA between consecutive peaks against coolpuppy, and the metaplot of CTCF,
-ATAC-seq and the insulation about the peaks against deepTools — over 4DN's 27-GB map of 4.0 billion
-contacts, of which what the section reads, chr19 at 10 kb, is fetched by range
+replicates against yapc, APA between consecutive peaks and the TADs between the boundaries, scaled
+over the expected, against coolpuppy, and the metaplot of CTCF, ATAC-seq and the insulation about the
+peaks against deepTools — over 4DN's 27-GB map of 4.0 billion contacts, of which what the section
+reads, chr19 at 10 kb and at 2 kb, is fetched by range
 (`notebooks/scripts/cool_subset.py`); the pairs statistics of a yeast library's `.pairs` (CH128)
 against `pairtools stats`, key for key; and, on the
 same library and the reference it was mapped to, the restriction sites against `bioframe.digest` (its

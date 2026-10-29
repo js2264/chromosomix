@@ -54,6 +54,7 @@ import { DEFAULT_DIVERGING_COLORMAP } from '../../render/colormaps'
 import {
   PileupAccumulator,
   domainScore,
+  evenWindow,
   p2ll,
   ratioOf,
   resampleWindow,
@@ -61,6 +62,7 @@ import {
   scaledEdges,
   scaledLayout,
   shiftedControls,
+  zoomWindow,
   type AnchorPair,
   type ScaledLayout,
 } from '../apa'
@@ -88,6 +90,7 @@ import {
   minDistOf,
   onDiagonal,
   poolsAnchors,
+  stretchesEvenly,
   usesPairSet,
   allPairs,
   consecutivePairs,
@@ -135,6 +138,11 @@ interface Plan {
   bounds: Span
   /** The scaled on-diagonal layout this window is resampled on; absent otherwise. */
   body?: Body
+  /**
+   * A domain window stretched evenly onto the grid by interpolation, gaps and
+   * all ({@link stretchesEvenly}), rather than pinned or resampled by area.
+   */
+  zoomed?: boolean
 }
 
 /**
@@ -325,20 +333,18 @@ export const runApa: TaskRunner = async (job) => {
     return []
   }
 
-  // **Observed/expected has no meaning on a scaled grid**, and the estimate
-  // refuses the combination before Run rather than here. This is the stored
-  // session that names it anyway: one cell of a scaled pileup is fed by windows
-  // at a dozen different separations — that is what scaling *is* — so there is
-  // no single diagonal offset to divide it by, and dividing it by one anyway
-  // produced a plausible picture of nothing. Said out loud and the raw pileup
-  // shown, which is the honest half of what was asked for.
-  const oeOnAScaledGrid = norm === 'oe' && isScaled(job.params)
+  // **Observed/expected on a scaled grid is for a domain pileup**, which is
+  // coolpuppy's and is held to it ({@link stretchesEvenly}); for scaled pairs
+  // the estimate refuses it before Run rather than here, there being no pileup
+  // of coolpuppy's like that window. This is the stored session that names it
+  // anyway: said out loud and the raw pileup shown, which is the honest half of
+  // what was asked for.
+  const oeOnAScaledGrid = norm === 'oe' && isScaled(job.params) && !onDiagonal(job.params)
   if (oeOnAScaledGrid) {
     job.note(
-      'Observed / expected is not available in the scaled mode: every window contributes cells ' +
-        'at a different separation to the same cell of the picture, so a pileup cell has no one ' +
-        'diagonal offset to divide by. The raw pileup is shown — use the distance-matched ' +
-        'control, which is drawn at the same separations by construction.',
+      'Observed / expected on a scaled grid is for a feature set on the diagonal, and these are ' +
+        'pairs. The raw pileup is shown — use the distance-matched control, which is drawn at ' +
+        'the same separations by construction.',
     )
   }
 
@@ -484,7 +490,9 @@ export const runApa: TaskRunner = async (job) => {
     // feature, 0 to 1 — and keeps its own labels ({@link scaledTickLabels}).
     const ticks = isScaled(job.params)
       ? scaledDomains
-        ? scaledTickLabels(layout, flankFractionOf(job.params))
+        ? stretchesEvenly(job.params)
+          ? evenTickLabels(flankFractionOf(job.params))
+          : scaledTickLabels(layout, flankFractionOf(job.params))
         : []
       : offsetTicks(side, job.mc.binsize)
 
@@ -718,6 +726,12 @@ interface Anchor {
    */
   rows: Span
   cols: Span
+  /**
+   * The feature's own start and end on its sequence, in base pairs, for an
+   * on-diagonal anchor: what a window stretched evenly is scaled about
+   * ({@link evenWindow}), which works in base pairs as bioframe does.
+   */
+  extent?: { start: number; end: number }
 }
 
 function pairAnchors(job: JobContext, set: PairSet): Anchor[] {
@@ -839,6 +853,7 @@ function featureAnchors(job: JobContext, set: FeatureSet): Anchor[] {
       span: at.body.to - at.body.from,
       rows: at.body,
       cols: at.body,
+      extent: { start: set.start[i], end: set.end[i] },
     })
   }
   return out
@@ -962,7 +977,7 @@ function planFor(
   anchor: Anchor,
   side: number,
   layout: ScaledLayout,
-): { rect: Rect; body?: Body } | null {
+): { rect: Rect; body?: Body; zoomed?: boolean } | null {
   const { from, to } = anchor.bounds
   if (isScaled(job.params)) {
     // Nothing to scale *by*: a pair whose two anchors land in the same bin has
@@ -970,6 +985,21 @@ function planFor(
     // stretched over the grid is a flat square averaged in as though it were
     // evidence. Dropped, as it was before there was a body.
     if (anchor.span <= 0) return null
+    // **A domain over the expected is scaled about its middle and stretched
+    // evenly**, as coolpuppy cuts it ({@link stretchesEvenly}): the window is the
+    // feature's base pairs times `1 + 2f`, snapped out to whole bins, and a
+    // window that runs off its sequence is dropped rather than clipped.
+    if (stretchesEvenly(job.params) && anchor.extent !== undefined) {
+      const bins = evenWindow(anchor.extent.start, anchor.extent.end, flankFractionOf(job.params), job.mc.binsize)
+      const rect = {
+        rowFrom: from + bins.from,
+        rowTo: from + bins.to,
+        colFrom: from + bins.from,
+        colTo: from + bins.to,
+      }
+      if (rect.rowFrom < from || rect.rowTo > to || rect.rowTo <= rect.rowFrom) return null
+      return { rect, zoomed: true }
+    }
     // No flank cells on the grid means no flank read: a reader who asked for
     // none gets the body, not a band of bins that is read and then dropped.
     const pad = layout.flank === 0 ? 0 : anchor.span * flankFractionOf(job.params)
@@ -1045,6 +1075,18 @@ function scaledTickLabels(layout: ScaledLayout, flankFraction: number): string[]
   // `Number(...)` rather than the fixed string, so `1.00` reads as `1` and a
   // rounded `-0.00` reads as `0` rather than as a minus sign nobody can explain.
   return [0, 0.25, 0.5, 0.75, 1].map((fraction) => String(Number(at(fraction).toFixed(2))))
+}
+
+/**
+ * The same five labels for a window stretched evenly ({@link stretchesEvenly}),
+ * where the axis is one straight line from `−f` to `1 + f`: at the default half
+ * a feature each side the feature's two ends are the second and fourth labels,
+ * `0` and `1`, whatever the grid.
+ */
+function evenTickLabels(flankFraction: number): string[] {
+  return [0, 0.25, 0.5, 0.75, 1].map((fraction) =>
+    String(Number((fraction * (1 + 2 * flankFraction) - flankFraction).toFixed(2))),
+  )
 }
 
 function spanOf(plan: Plan): Span {
@@ -1187,6 +1229,7 @@ function cut(
       cutOut[r * cols + c] = denominator > 0 ? observed / denominator : Number.NaN
     }
   }
+  if (plan.zoomed === true) return zoomWindow(cutOut, rows, side)
   if (plan.body === undefined) return resampleWindow(cutOut, rows, cols, side, side)
   // In cells of this window rather than absolute bins, which is what the edges
   // are measured in.

@@ -347,8 +347,8 @@ chromosomix tasks
 ##       --anchors (default "pairs")  anchors
 ##       --pairs  pairs
 ##       --features  features
-##       --at (default "centre")  anchor on
 ##       --mode (default "fixed")  mode
+##       --at (default "centre")  anchor on
 ##       --window (default 21)  half-width
 ##       --grid (default 51)  grid
 ##       --flankFraction (default 0.5)  flank
