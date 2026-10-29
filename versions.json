@@ -236,10 +236,10 @@
   "pulls": [
     {
       "number": 142,
-      "commit": "f292454",
+      "commit": "67d07d9",
       "title": "Speed up base composition and P(s) calculation by 8× and 2.5×",
       "branch": "js/brave-davinci-f8c5dx",
-      "date": "2026-10-29T10:36:10Z"
+      "date": "2026-10-29T14:12:09Z"
     },
     {
       "number": 122,
