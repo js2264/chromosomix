@@ -462,10 +462,11 @@ export interface SequenceReader {
    * The residues `[start, end)` of one sequence, read where they lie — present
    * only on a reference that is read by range (§8.8, §8.21).
    *
-   * The second way in, for the one task that can take a genome a piece at a
-   * time: a motif search reads a window, scans it and lets it go, so a
-   * reference too large to hold is still one it can search — at the price of
-   * reading every base it searches, which its estimate states. Nothing read
+   * The second way in, for a task that can take a genome a piece at a time:
+   * a motif search reads a window, scans it and lets it go, so a reference too
+   * large to hold is still one it can search — at the price of reading every
+   * base it searches, which its estimate states — and base composition, where
+   * no refusal stands in its way, counts one the same way. Nothing read
    * here is kept, by the reader or by the lane's slab: a search that left
    * each sequence's last piece behind would be holding a genome a piece per
    * chromosome. `undefined` for a name the reference has not got, exactly as

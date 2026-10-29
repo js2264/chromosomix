@@ -691,8 +691,8 @@ describe('running a task', () => {
  * 2 GiB — so a plain mouse FASTA was refused before a byte of it was parsed.
  * Now a FASTA with its `.fai` beside it, and a `.2bit`, are read by range
  * (`cli/reference.ts`), and what is pinned is that the answer cannot tell:
- * the motif search walks the index a piece at a time and the composition reads
- * each sequence whole off the disk, and both write what the whole read wrote.
+ * the motif search and the composition both walk the index a piece at a time,
+ * and both write what the whole read wrote.
  */
 describe('a --sequence read by range', () => {
   /** A deterministic genome over the sample's two sequences, with sites in it. */
@@ -781,7 +781,7 @@ describe('a --sequence read by range', () => {
     expect(rows.filter((row) => /^chrI\t/.test(row))).toEqual([])
   })
 
-  it('reads each sequence whole off the index for a task that needs it whole', async () => {
+  it('counts base composition through the .fai as it counts the file read whole', async () => {
     const runs: Record<string, string[]> = {}
     for (const [name, reference] of [['whole', whole], ['indexed', indexed]] as const) {
       reset()

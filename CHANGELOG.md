@@ -33,6 +33,32 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   scaled mode closed a row above the control that had just been used, and the fixed mode opened it
   again.
 
+- **Base composition is eight times faster, every number the same (§18.8).** Over mm10 in 10 kb
+  bins, `chromosomix composition` took 53 s of CPU and takes 6.5 s, against 68 s for bioframe and
+  Biopython on the same machine — 1.3 times faster than them before, ten times now — and every file
+  it writes is byte for byte what it wrote. The bases are counted a word at a time, as additions of
+  packed counts, where a branch on each base was one the processor could not predict; a reference
+  read by range in the shell — a FASTA with its `.fai`, or a `.2bit` — is counted a few megabases at
+  a time rather than a chromosome held at a time; and a FASTA read through its `.fai` has its line
+  endings gathered out by the index's own arithmetic, a line at a time, rather than looked for byte
+  by byte. The counting is the app's too, for a FASTA held whole, and the origin and terminus call's.
+
+- **P(s) over a mammalian map is two and a half times faster, every number the same (§18.8).** With
+  balancing on, how many bin pairs each separation could hold was counted by walking every sequence
+  once per separation, which on a mouse map at 10 kb was six of the run's eleven seconds; it is now the
+  pairs less those touching a dropped bin, from running counts, plus the pairs of dropped bins, and
+  takes four hundredths of a second. `chromosomix expected` over that map took 11.0 s of CPU and takes
+  4.1 s, both files it writes the same; the yeast map's, whose sequences are short, is as it was.
+
+- **chromosight's pattern detection is two and a half times faster, every number the same (§18.8).**
+  Over the yeast Micro-C at 800 bp, loops took 25 s of CPU and take 10, against 42 s for chromosight
+  1.6.3 on the same machine, and the six files the run writes are row for row what they were. The
+  correlation, nine-tenths of the time, sums four neighbouring windows at once from the band copied
+  row by row; masks a cell by multiplying by 0 rather than by a branch; and scores every window
+  inside the square — where the undetectable bins put nearly half — by the two mask rules that can
+  apply there rather than the five that can at the frame. Each window adds the same cells in the
+  same order, and a test holds every window to the one-window computation bit for bit.
+
 ### Fixed
 
 - **A pileup's centre is coolpuppy's bin (§18.8).** APA cut its window about a feature's midpoint

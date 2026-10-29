@@ -1009,7 +1009,9 @@ every chromosome over the bin pairs that could hold them, at the band's pair-wei
 from the app's default minimum separation of two bins — the diagonal and the one beside it left out,
 as cooltools' own default leaves them out (`ignore_diags=2`). cooltools' per-diagonal sums
 (`expected_cis`, every diagonal) are pooled over the same bands, each a run of consecutive diagonals
-from the first the app kept, whose weighted mean is the separation the app writes.
+from the first the app kept, whose weighted mean is the separation the app writes. The app counts the
+bin pairs each separation could hold from the bins the balancer dropped, rather than by walking every
+pair: the same integers, in four hundredths of a second over the mouse map.
 
 ```{python}
 PS = WORK / 'ps'
@@ -1254,7 +1256,8 @@ record('Peak calling (yapc, IDR)', 'mouse ATAC-seq, 2 replicates, chr19', f'yapc
 ## 6 · Loops (chromosight)
 
 Chromosight's loop preset (`kernels/loops.json`) in both; calls matched by bin pair, p- and q-values
-read from each call's detail.
+read from each call's detail. The app sums four neighbouring windows of the correlation at once, each
+adding its cells in chromosight's order, so its scores are those of one window at a time.
 
 ```{python}
 LP = WORK / 'loops'
@@ -2497,7 +2500,10 @@ record('Interval overlap', 'ATAC-seq peaks (§ 5) and promoters, chr19', f"bedto
 
 GC content and GC skew in 10 kb bins along mm10: `chromosomix composition` against bioframe's
 `frac_gc`, G and C over the bases that are not N, and Biopython's `GC_skew`, (G − C)/(G + C). Biopython
-writes 0 for a bin with neither G nor C, where the app writes no value.
+writes 0 for a bin with neither G nor C, where the app writes no value. The app reads mm10 through the
+`.fai` beside it, a few megabases at a time and none of them kept, and counts the bases a 32-bit word
+at a time; bioframe and Biopython read it through pyfaidx, bioframe a bin at a time and Biopython a
+chromosome at a time.
 
 ```{python}
 COMP = WORK / 'composition'

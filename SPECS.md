@@ -8341,6 +8341,13 @@ longer, indistinguishable over everything anybody fits. The second is also what 
 expected, the compartment chain, inter-arm alignment and the pileups **divide by**, and they reach it
 through `expectedAt` rather than through the panel: the plotted curve is a figure and the denominator
 is a denominator, and changing what is on screen must not change what an O/E is taken against.
+**The bin pairs are counted, not walked.** With balancing on, a pair could hold a contact only if both
+its bins kept their weight, and over a whole file that was a walk of every sequence for every
+separation: two billion steps on the validation's mouse map at 10 kb, six of the run's eleven seconds.
+It is the line's `L − k` pairs less those that touch a dropped bin, which two running counts give, plus
+those between two dropped bins, subtracted twice and added back pair by pair — so the cost is the
+square of the bins dropped rather than of the line, and the counts are the same integers (where more
+bins are dropped than kept, the kept ones are paired instead). Round a circle the walk stays.
 **The first two diagonals are left out unless the reader asks for them** — *minimum separation*, in
 bins, is 2 by default. The diagonal and the one beside it hold what ligation could not separate,
 self-ligation and unligated fragments, and say nothing about the polymer, which is why cooltools'
@@ -8833,6 +8840,15 @@ grid's own cells and upstream divides its own base-pair config by the bin size b
 presets stay in base pairs, because they are generated from the installed package and must not be
 edited, and they are converted in exactly one place. *Refinement passes*, one by default and up to
 five, re-scan with the pileup of what the last pass called as the template.
+**The correlation is the scan's whole cost, and it is computed exactly as upstream's**, window by
+window, each adding the same cells in the same order — which leaves room only to compute fewer
+things around it. A window inside the square is masked by two rules rather than five, which is
+nearly half of a balanced map's windows; the rows a slice reaches are copied row by row, so that a
+row of a window is a run of neighbouring cells; and **four windows side by side are summed at
+once**, twelve sums in flight where three waited on their own additions, a cell outside a window's
+mask multiplied by 0 rather than skipped by a branch — a zero added and a value multiplied by one
+change no bit. On the validation's yeast Micro-C at 800 bp the loop scan took 25 s of CPU and takes
+10, every file it writes the same.
 It emits five things and the split is the point: a **loop set** (a bedpe, or a BED for the patterns
 that live on the diagonal) that lands on the map as an overlay the moment the run finishes; the
 **pileup** of every window it called, drawn on chromosight's own fixed 0–2 seismic scale so it can
@@ -8978,7 +8994,15 @@ like any other and each written as a bigWig. The **bin size** is the open map's 
 reader asks for another, and 10 kb with no map open: a 1D browser (§5.8) with a FASTA in it is enough
 to run it. The lanes, and the files they leave as, are laid out over the same sequences cut at the bin
 size read, never over the map's grid at another; a window wider than a bin is an odd number of them
-centred on it, named as what was read, and wraps on a circle. *Origin and terminus*, the first step of any analysis of a bacterial
+centred on it, named as what was read, and wraps on a circle. The bases are **counted a word at a
+time**: each byte is a count in one of the four bytes of a 32-bit word — A, C, G, T, nothing for
+anything else — two bytes are looked up at once, and the words are added and split into their four
+counts every 252 bases, where a branch on each base was one the processor could not predict. A
+reference read by range (§8.8, §8.21) — in the shell, a FASTA with its `.fai` or a `.2bit` — is
+counted **a few megabases at a time**, a whole number of bins a read and none of them kept, as the
+motif search reads one, so each bin is counted in one read and the counts are those of the sequence
+held whole. On the validation's mm10 in 10 kb bins (validation.qmd § 16) the shell takes 6.5 s of CPU
+where it took 53, every file it writes byte for byte the same. *Origin and terminus*, the first step of any analysis of a bacterial
 chromosome's folding, since the map is read *from* the origin: the two turning points of the
 cumulative GC skew (5 kb windows, 1 kb steps) are the candidates, and which is the terminus is
 decided as Bacchus decides it (Lamy-Besnier et al. 2023) — the one nearer the matS cluster where ten
@@ -11368,7 +11392,8 @@ synchronously, ahead of a walk forward (`src/cli/heldFile.ts`), where `generic-f
 RefSeq TSS, half of the time it spent sampling, and on a disk that had not cached the file a seek for
 each; a reference under `--sequence` is opened as the browser opens one
 (`src/cli/reference.ts`) — a `.2bit`, or a FASTA with `samtools faidx`'s `.fai` beside it, by range,
-and anything else whole, where `readFile`'s 2 GiB ceiling used to refuse every mammalian FASTA before
+each read's line endings gathered out where the index says they are, a line's move at a time, and
+looked for byte by byte only where one of them is not whitespace — and anything else whole, where `readFile`'s 2 GiB ceiling used to refuse every mammalian FASTA before
 a byte of it was parsed and now refuses only one with no index, naming the command that makes one;
 a file under `--features` or `--pairs` is read by the loader's own
 sniffers and parsers, in its order — a BED or a peak file, a GTF, a genePred, a VCF, a cytoBand, a

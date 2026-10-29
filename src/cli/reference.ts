@@ -26,11 +26,11 @@
  *
  * Either way it answers {@link Reference}: `bases` for a task that wants a
  * whole sequence, and for a reference read by range also `read`, which is the
- * door the motif search walks a genome through without holding it. `bases`
- * over a ranged reference reads the sequence from disk and keeps the last one
- * asked for — composition and the origin call ask for each in turn, and a GC
- * vector asks for one sequence's windows one after another — so a run holds a
- * chromosome at a time and never the genome.
+ * door the motif search and base composition walk a genome through without
+ * holding it. `bases` over a ranged reference reads the sequence from disk and
+ * keeps the last one asked for — the origin call asks for each in turn, and a
+ * GC vector asks for one sequence's windows one after another — so a run holds
+ * a chromosome at a time and never the genome.
  */
 
 import { closeSync, existsSync, fstatSync, openSync, readSync } from 'node:fs'
@@ -38,7 +38,7 @@ import { readFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 
 import { looksLikeFasta, parseFasta, type SequenceStore } from '../annotations/fasta'
-import { byteRange, contigsOf, parseFai, residuesIn, type FaiRecord } from '../annotations/fai'
+import { byteRange, contigsOf, parseFai, residuesIn, residuesInLines, type FaiRecord } from '../annotations/fai'
 import { WHOLE_FILE_INFLATION, decodeAnnotationBytes } from '../annotations/parse'
 import { FASTA_NAME } from '../annotations/sidecar'
 import {
@@ -79,6 +79,12 @@ const SYNC_READ_MAX = 1 << 30
 interface Ranged {
   readonly size: number
   read(length: number, position: number): Uint8Array
+  /**
+   * Whether each read is a fresh array nobody else holds — a descriptor's is,
+   * a range source's may be a slice of its cache — and so one the residues can
+   * be gathered in where they lie.
+   */
+  readonly fresh: boolean
   close(): void
 }
 
@@ -89,6 +95,7 @@ function rangedOf(where: Where): Ranged {
     return {
       size: source.size,
       read: (length, position) => source.readBytes(position, length),
+      fresh: false,
       close: () => source.close(),
     }
   }
@@ -96,6 +103,7 @@ function rangedOf(where: Where): Ranged {
   return {
     size: fstatSync(fd).size,
     read: (length, position) => readAt(fd, length, position),
+    fresh: true,
     close: () => closeSync(fd),
   }
 }
@@ -176,7 +184,8 @@ function indexedReference(file: Ranged, records: FaiRecord[]): Reference {
   const contigs = contigsOf(records)
   const window = (record: FaiRecord, from: number, to: number): Uint8Array => {
     const range = byteRange(record, from, to)
-    return residuesIn(file.read(range.to - range.from, range.from))
+    const bytes = file.read(range.to - range.from, range.from)
+    return file.fresh ? residuesInLines(bytes, record, from) : residuesIn(bytes)
   }
   return rangedReference(contigs, records, window)
 }

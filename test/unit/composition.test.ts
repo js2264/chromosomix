@@ -13,8 +13,11 @@ import {
   cumulativeOf,
   gcContentOf,
   gcSkewOf,
+  readBaseCounts,
   windowCounts,
+  type BaseCounts,
 } from '../../src/annotations/composition'
+import { BASE_CODE } from '../../src/annotations/fasta'
 
 function bases(text: string): Uint8Array {
   const out = new Uint8Array(text.length)
@@ -35,6 +38,117 @@ describe('counting bases per step', () => {
   it('makes the last step partial, as the last bin of a map is', () => {
     expect(baseCounts(bases('ACGTACGTAC'), 4).steps).toBe(3)
     expect(baseCounts(bases(''), 4).steps).toBe(0)
+  })
+})
+
+/**
+ * The counts as they were made before they were made a word at a time: a
+ * byte's code, one at a time, into one of four counters.
+ */
+function countedByteByByte(seq: Uint8Array, width: number): BaseCounts {
+  const steps = seq.length === 0 ? 0 : Math.ceil(seq.length / width)
+  const counts = { step: width, steps, a: new Int32Array(steps), c: new Int32Array(steps), g: new Int32Array(steps), t: new Int32Array(steps) }
+  const into = [counts.a, counts.c, counts.g, counts.t]
+  for (let i = 0; i < seq.length; i++) {
+    const code = BASE_CODE[seq[i]]
+    if (code < 4) into[code][Math.floor(i / width)]++
+  }
+  return counts
+}
+
+/** A sequence of every byte, runs of one base long enough to fill a count, and DNA between. */
+function mixed(length: number, seed: number): Uint8Array {
+  let state = seed
+  const next = (): number => {
+    state = (state * 1_103_515_245 + 12_345) % 2 ** 31
+    return state
+  }
+  const out = new Uint8Array(length)
+  for (let at = 0; at < length; ) {
+    const kind = next() % 4
+    const run = 1 + (next() % (kind === 0 ? 700 : 40))
+    const base = 'ACGTacgtNnUu'.charCodeAt(next() % 12)
+    for (let k = 0; k < run && at < length; k++, at++) {
+      out[at] = kind === 0 ? base : kind === 1 ? next() % 256 : 'ACGT'.charCodeAt(next() % 4)
+    }
+  }
+  return out
+}
+
+describe('counting a word at a time', () => {
+  it('counts what a byte at a time counted, at every alignment and every step', () => {
+    const backing = mixed(20_011, 3)
+    for (let offset = 0; offset < 4; offset++) {
+      for (const length of [0, 1, 3, 4, 5, 255, 1_021, 19_999]) {
+        const seq = backing.subarray(offset, offset + length)
+        for (const step of [1, 2, 3, 4, 5, 7, 63, 64, 252, 253, 1_000, 1_009, 4_096, 50_000]) {
+          const label = `offset ${offset}, length ${length}, step ${step}`
+          const got = baseCounts(seq, step)
+          const want = countedByteByByte(seq, step)
+          expect(got.steps, label).toBe(want.steps)
+          expect([...got.a], label).toEqual([...want.a])
+          expect([...got.c], label).toEqual([...want.c])
+          expect([...got.g], label).toEqual([...want.g])
+          expect([...got.t], label).toEqual([...want.t])
+        }
+      }
+    }
+  })
+
+  it('never lets a count overflow its byte, however long a run of one base is', () => {
+    const seq = new Uint8Array(100_003).fill('G'.charCodeAt(0))
+    seq.fill('t'.charCodeAt(0), 60_000)
+    const counts = baseCounts(seq.subarray(1), 100_000)
+    expect([...counts.g]).toEqual([59_999, 0])
+    expect([...counts.t]).toEqual([40_001, 2])
+    expect([...counts.a, ...counts.c]).toEqual([0, 0, 0, 0])
+  })
+})
+
+describe('counting a window at a time', () => {
+  const seq = mixed(30_001, 11)
+  const reader = async (start: number, end: number): Promise<Uint8Array> =>
+    // A fresh array, as a read by range is, rather than a view of the whole.
+    seq.slice(Math.max(0, start), Math.min(seq.length, end))
+
+  it('counts what the sequence read whole counts, whatever the window', async () => {
+    for (const step of [1, 7, 1_000, 4_096, 40_000]) {
+      const want = baseCounts(seq, step)
+      for (const window of [1, 6, 999, 1_000, 8_191, 30_001, 1 << 22]) {
+        const label = `step ${step}, window ${window}`
+        const got = await readBaseCounts(reader, step, window)
+        expect(got?.length, label).toBe(seq.length)
+        expect(got?.counts.steps, label).toBe(want.steps)
+        expect([...(got?.counts.a ?? [])], label).toEqual([...want.a])
+        expect([...(got?.counts.c ?? [])], label).toEqual([...want.c])
+        expect([...(got?.counts.g ?? [])], label).toEqual([...want.g])
+        expect([...(got?.counts.t ?? [])], label).toEqual([...want.t])
+      }
+    }
+  })
+
+  it('ends on a window that comes back short, even an empty one', async () => {
+    const asked: Array<[number, number]> = []
+    const got = await readBaseCounts(
+      async (start, end) => {
+        asked.push([start, end])
+        return seq.slice(start, Math.min(30_000, end))
+      },
+      1_000,
+      10_000,
+    )
+    expect(got?.length).toBe(30_000)
+    expect(got?.counts.steps).toBe(30)
+    expect(asked).toEqual([
+      [0, 10_000],
+      [10_000, 20_000],
+      [20_000, 30_000],
+      [30_000, 40_000],
+    ])
+  })
+
+  it('answers nothing for a sequence the reference has not got', async () => {
+    expect(await readBaseCounts(async () => undefined, 1_000)).toBeUndefined()
   })
 })
 
