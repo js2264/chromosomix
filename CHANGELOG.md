@@ -10,6 +10,20 @@ The deployed site at <https://chromosomix.app/> is built from `main` on every pu
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Changed
+
+- **Base composition is eight times faster, every number the same (§18.8).** Over mm10 in 10 kb
+  bins, `chromosomix composition` took 53 s of CPU and takes 6.5 s, against 68 s for bioframe and
+  Biopython on the same machine — 1.3 times faster than them before, ten times now — and every file
+  it writes is byte for byte what it wrote. The bases are counted a word at a time, as additions of
+  packed counts, where a branch on each base was one the processor could not predict; a reference
+  read by range in the shell — a FASTA with its `.fai`, or a `.2bit` — is counted a few megabases at
+  a time rather than a chromosome held at a time; and a FASTA read through its `.fai` has its line
+  endings gathered out by the index's own arithmetic, a line at a time, rather than looked for byte
+  by byte. The counting is the app's too, for a FASTA held whole, and the origin and terminus call's.
+
 ## [0.17.0] - 2026-10-26
 
 ### Added

@@ -8978,7 +8978,15 @@ like any other and each written as a bigWig. The **bin size** is the open map's 
 reader asks for another, and 10 kb with no map open: a 1D browser (§5.8) with a FASTA in it is enough
 to run it. The lanes, and the files they leave as, are laid out over the same sequences cut at the bin
 size read, never over the map's grid at another; a window wider than a bin is an odd number of them
-centred on it, named as what was read, and wraps on a circle. *Origin and terminus*, the first step of any analysis of a bacterial
+centred on it, named as what was read, and wraps on a circle. The bases are **counted a word at a
+time**: each byte is a count in one of the four bytes of a 32-bit word — A, C, G, T, nothing for
+anything else — two bytes are looked up at once, and the words are added and split into their four
+counts every 252 bases, where a branch on each base was one the processor could not predict. A
+reference read by range (§8.8, §8.21) — in the shell, a FASTA with its `.fai` or a `.2bit` — is
+counted **a few megabases at a time**, a whole number of bins a read and none of them kept, as the
+motif search reads one, so each bin is counted in one read and the counts are those of the sequence
+held whole. On the validation's mm10 in 10 kb bins (validation.qmd § 16) the shell takes 6.5 s of CPU
+where it took 53, every file it writes byte for byte the same. *Origin and terminus*, the first step of any analysis of a bacterial
 chromosome's folding, since the map is read *from* the origin: the two turning points of the
 cumulative GC skew (5 kb windows, 1 kb steps) are the candidates, and which is the terminus is
 decided as Bacchus decides it (Lamy-Besnier et al. 2023) — the one nearer the matS cluster where ten
@@ -11349,7 +11357,8 @@ synchronously, ahead of a walk forward (`src/cli/heldFile.ts`), where `generic-f
 RefSeq TSS, half of the time it spent sampling, and on a disk that had not cached the file a seek for
 each; a reference under `--sequence` is opened as the browser opens one
 (`src/cli/reference.ts`) — a `.2bit`, or a FASTA with `samtools faidx`'s `.fai` beside it, by range,
-and anything else whole, where `readFile`'s 2 GiB ceiling used to refuse every mammalian FASTA before
+each read's line endings gathered out where the index says they are, a line's move at a time, and
+looked for byte by byte only where one of them is not whitespace — and anything else whole, where `readFile`'s 2 GiB ceiling used to refuse every mammalian FASTA before
 a byte of it was parsed and now refuses only one with no index, naming the command that makes one;
 a file under `--features` or `--pairs` is read by the loader's own
 sniffers and parsers, in its order — a BED or a peak file, a GTF, a genePred, a VCF, a cytoBand, a

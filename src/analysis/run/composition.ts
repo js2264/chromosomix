@@ -19,7 +19,9 @@ import {
   cumulativeOf,
   gcContentOf,
   gcSkewOf,
+  readBaseCounts,
   windowCounts,
+  type BaseCounts,
 } from '../../annotations/composition'
 import { idParam, numParam, type TrackTaskRunner } from '../job'
 import { COMPOSITION_BINSIZE, compositionLanes } from '../tasks/composition'
@@ -96,6 +98,11 @@ export const runComposition: TrackTaskRunner = async (job) => {
     cumulative: new Float32Array(total).fill(Number.NaN),
   }
 
+  // A reference read by range is read a few megabases at a time, none of them
+  // kept, as the motif search reads one: a sequence asked for whole is a
+  // chromosome held for nothing, and the pages under it cost more to find than
+  // its bases cost to count. A reference held is counted where it is held.
+  const { read } = reader
   const unread: string[] = []
   const resized: string[] = []
   let startBin = 0
@@ -103,16 +110,22 @@ export const runComposition: TrackTaskRunner = async (job) => {
     const contig = grid[i]
     const bins = Math.max(1, Math.ceil(contig.length / binsize))
     job.progress(i, grid.length, contig.name)
-    const seq = reader.bases(contig.name)
-    if (seq === undefined) {
+    let counted: { counts: BaseCounts; length: number } | undefined
+    if (read !== undefined) {
+      counted = await readBaseCounts((start, end) => read(contig.name, start, end), binsize)
+    } else {
+      const seq = reader.bases(contig.name)
+      counted = seq === undefined ? undefined : { counts: baseCounts(seq, binsize), length: seq.length }
+    }
+    if (counted === undefined) {
       unread.push(contig.name)
       startBin += bins
       continue
     }
     // A reference of another assembly version is read for what it has: its bins
     // go where the map's are, and a length disagreement is said out loud.
-    if (seq.length !== contig.length) resized.push(contig.name)
-    const counts = baseCounts(seq, binsize)
+    if (counted.length !== contig.length) resized.push(contig.name)
+    const { counts } = counted
     const windowed = span > 1 ? windowCounts(counts, span, circular.has(contig.name)) : counts
     const per = {
       gc: gcContentOf(windowed),
