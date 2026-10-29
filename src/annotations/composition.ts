@@ -140,6 +140,17 @@ export function baseCounts(seq: Uint8Array, step: number): BaseCounts {
 export const COUNT_WINDOW = 1 << 22
 
 /**
+ * Residues one read of {@link readBaseCounts} asks for: a whole number of
+ * steps, as many as fit in `window`, and one where none does. Its own function
+ * so the price beside **Run** (`analysis/tasks/composition.ts`) counts the
+ * reads the run makes.
+ */
+export function countSpan(step: number, window = COUNT_WINDOW): number {
+  const width = Math.max(1, Math.round(step))
+  return width * Math.max(1, Math.floor(window / width))
+}
+
+/**
  * {@link baseCounts} of a sequence read through `read` a window at a time,
  * and how many residues it has.
  *
@@ -156,7 +167,7 @@ export async function readBaseCounts(
   window = COUNT_WINDOW,
 ): Promise<{ counts: BaseCounts; length: number } | undefined> {
   const width = Math.max(1, Math.round(step))
-  const span = width * Math.max(1, Math.floor(window / width))
+  const span = countSpan(width, window)
   const pieces: BaseCounts[] = []
   let length = 0
   for (let start = 0; ; start += span) {

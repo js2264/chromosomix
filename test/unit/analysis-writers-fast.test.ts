@@ -19,7 +19,7 @@ import { CoverageAccumulator, binContigMap } from '@/analysis/coverage'
 import type { ProfileOutput, Provenance } from '@/analysis/types'
 import { profileToBedGraph, type BedGraphContig } from '@/analysis/write/bedgraph'
 import { writeBigWig } from '@/analysis/write/bigwig'
-import { outputToTsv, provenanceLines, tsvNumber } from '@/analysis/write/tsv'
+import { outputToTsv, provenanceLines, textOf, tsvNumber } from '@/analysis/write/tsv'
 
 const PROVENANCE: Provenance = {
   task: 'coverage',
@@ -110,7 +110,7 @@ describe('a profile, a block of rows at a time', () => {
     for (let i = 0; i < output.values.length; i++) {
       lines.push([String(i), String(i * BINSIZE), String((i + 1) * BINSIZE), tsvNumberBefore(output.values[i])].join('\t'))
     }
-    expect(outputToTsv(output, PROVENANCE)).toBe(`${lines.join('\n')}\n`)
+    expect(textOf(outputToTsv(output, PROVENANCE))).toBe(`${lines.join('\n')}\n`)
   })
 
   it('is the bedGraph it was, one row a line', () => {
@@ -127,7 +127,47 @@ describe('a profile, a block of rows at a time', () => {
       }
     }
     rows.push('')
-    expect(profileToBedGraph(output, CONTIGS, PROVENANCE)).toBe(rows.join('\n'))
+    expect(textOf(profileToBedGraph(output, CONTIGS, PROVENANCE))).toBe(rows.join('\n'))
+  })
+})
+
+describe('a profile longer than a string can be', () => {
+  // hg38 at 200 bp, about fifteen million bins of a skew ten characters long.
+  // V8 makes no string past 2²⁹ − 24 characters, and `composition --resolution
+  // 200` stopped there with *Invalid string length* (`write/tsv.ts`'s `pieces`).
+  const STRING_MAX = 2 ** 29 - 24
+  const bins = 15_000_000
+  const output: ProfileOutput = {
+    kind: 'profile',
+    id: 'composition-gcskew',
+    label: 'GC skew',
+    values: new Float32Array(bins).fill(-0.0526316),
+    extent: [0, bins],
+    binsize: 200,
+    unit: '',
+  }
+  const contigs: BedGraphContig[] = [{ name: 'chr1', length: bins * 200, startBin: 0, bins }]
+  // Counted as they come and let go, as the shell writes them.
+  const measure = (parts: Iterable<string>): { length: number; longest: number } => {
+    let length = 0
+    let longest = 0
+    for (const part of parts) {
+      length += part.length
+      longest = Math.max(longest, part.length)
+    }
+    return { length, longest }
+  }
+
+  it('is a TSV in pieces of a block of rows, past the length of any string', () => {
+    const { length, longest } = measure(outputToTsv(output, PROVENANCE))
+    expect(length).toBeGreaterThan(STRING_MAX)
+    expect(longest).toBeLessThan(4096 * 64)
+  })
+
+  it('is a bedGraph in pieces of a block of rows, past the length of any string', () => {
+    const { length, longest } = measure(profileToBedGraph(output, contigs, PROVENANCE))
+    expect(length).toBeGreaterThan(STRING_MAX)
+    expect(longest).toBeLessThan(4096 * 64)
   })
 })
 

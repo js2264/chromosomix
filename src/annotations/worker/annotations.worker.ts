@@ -861,9 +861,10 @@ async function runTask(
       if (isRanged(store)) {
         // Not held, so not here whole — and reading it whole for a task would
         // be the download it was indexed to avoid (§8.8, §8.21). What it can
-        // give is a window at a time, which is all a motif search needs: it
-        // reads a piece, scans it and lets it go, and a Stop is seen between
-        // two pieces, each read handing the thread back.
+        // give is a window at a time, which is all a motif search needs, and
+        // all base composition needs: each reads a piece, scans or counts it
+        // and lets it go, and a Stop is seen between two pieces, each read
+        // handing the thread back.
         return {
           contigs: store.contigs,
           bases: () => undefined,

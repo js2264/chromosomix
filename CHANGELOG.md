@@ -61,7 +61,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
-- **A pileup's centre is coolpuppy's bin (§18.8).** APA cut its window about a feature's midpoint
+- **A TSV or bedGraph longer than a string is written (§18.7).** `chromosomix composition
+  --resolution 200` over hg38 wrote the GC content's files and stopped at the GC skew's TSV with
+  *failed: Invalid string length*: every text writer joined its file into one string before writing it,
+  and V8 makes none past about 512 MB. The writers now hand their rows over a block at a time, which the
+  shell writes as they are formatted and the browser makes a `Blob` of, so a file is as long as the
+  disk allows; every file is byte for byte what it was.
+- **Base composition runs on a FASTA dropped with its `.fai` (§8.8, §18.8).** A genome over 64 MB is
+  read by range from its index, and the browser offered the task, priced it as free over residues the
+  worker did not hold, and ended the run in a note that they were not here whole. It counts by range, as
+  the shell already did, a few megabases a read and the same counts as the sequence held whole, and the
+  line beside **Run** prices the read as the motif search's does: every base, its bytes, and over a
+  network a request a read. A Stop is seen between two reads.
+- **A pileup's centre is coolpuppy's bin (§18.8).**** APA cut its window about a feature's midpoint
   rounded to the nearest base, which put a feature an odd number of bases long into the next bin
   wherever its midpoint sat half a base before a bin edge; coolpuppy floors it. The midpoint is now
   rounded down, as the metaplot's centre already was, for a feature set's anchors and a loaded loop
