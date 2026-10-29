@@ -1,6 +1,13 @@
 {
-  "latest": "b5fedcd",
+  "latest": "c69e53e",
   "versions": [
+    {
+      "commit": "c69e53e",
+      "version": "0.17.0",
+      "date": "2026-10-29T15:06:29+01:00",
+      "subject": "Domain pileup over expected: coolpuppy's rescaled local window (#141)",
+      "tag": ""
+    },
     {
       "commit": "b5fedcd",
       "version": "0.17.0",
@@ -233,13 +240,6 @@
       "title": "Speed up base composition and P(s) calculation by 8× and 2.5×",
       "branch": "js/brave-davinci-f8c5dx",
       "date": "2026-10-29T10:36:10Z"
-    },
-    {
-      "number": 141,
-      "commit": "9227acd",
-      "title": "Domain pileup over expected: coolpuppy's rescaled local window",
-      "branch": "js/vigilant-knuth-u5wy3u",
-      "date": "2026-10-29T13:50:45Z"
     },
     {
       "number": 122,
