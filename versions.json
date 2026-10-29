@@ -228,6 +228,13 @@
   ],
   "pulls": [
     {
+      "number": 141,
+      "commit": "60855f9",
+      "title": "Domain pileup over expected: coolpuppy's rescaled local window",
+      "branch": "js/vigilant-knuth-u5wy3u",
+      "date": "2026-10-29T11:07:14Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
