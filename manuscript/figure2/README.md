@@ -51,6 +51,20 @@ at the validation notebook's settings, where every link but d is held to the app
 (`notebooks/validation.qmd`, § 24). `reference/numbers.tsv` lists what each panel was made from and
 draws.
 
+`reference/agreement.tsv` sets the two sides against each other. chromosomix's side is made again by its
+command line on the same chr19, at the tab's recipes, and each side keeps its own chain, as the figure
+does:
+
+| what | chromosomix against the reference |
+| --- | --- |
+| peaks at IDR ≤ 0.05, Jaccard (bases in both over bases in either) | 1.0000, the same 2,106 |
+| boundaries at 50 kb, Jaccard | 1.0000, the same 306 |
+| insulation, max \|Δ\| over every bin (log2) | 4.7e-6 at 50 kb; 5.0e-6 at most over the four windows |
+| **a** APA, max \|Δ\| over every cell | 0.014 observed / expected (0.015 in log2): one peak's centre, half a base before a bin edge (below); put in the app's bin, coolpuppy's cells are the app's to 5.0e-6 |
+| **b** mean profiles, max \|Δ\| | 4.5e-5 CTCF · Broad, 2.8e-5 CTCF · UW, 4.8e-6 ATAC (fold change) |
+| **c** mean profiles, max \|Δ\| | 5.6e-8, 6.1e-8, 4.9e-7 and 4.9e-7 at 400, 200, 100 and 50 kb (log2) |
+| **d** TADs, max \|Δ\| over the cells both fill | 0.099 observed / expected (0.132 in log2): *The TAD pile-up is alike, not equal*, below |
+
 What is set alike on the two sides is only what lets them be read together: the colour maps and their
 ranges by the app's rules, and the curves' colours, the app's palette in the order of its tracks.
 
@@ -78,6 +92,10 @@ ranges by the app's rules, and the curves' colours, the app's palette in the ord
   coolpuppy wants an odd one. 51 is kept on both sides.
 
 ## Rebuild
+
+```bash
+npm run build:cli
+```
 
 ```bash
 QUARTO_PYTHON=refs/bin/python YAPC_PYTHON=yapc-env/bin/python quarto render manuscript/figure2/reference.qmd
