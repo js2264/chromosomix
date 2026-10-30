@@ -235,6 +235,13 @@
   ],
   "pulls": [
     {
+      "number": 144,
+      "commit": "607fabc",
+      "title": "Add example sessions to landing page",
+      "branch": "js/cool-volta-ff9isw",
+      "date": "2026-10-30T17:32:29Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
