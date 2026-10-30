@@ -235,6 +235,13 @@
   ],
   "pulls": [
     {
+      "number": 143,
+      "commit": "7f37d77",
+      "title": "Base composition on indexed FASTA; TSV/bedGraph in pieces",
+      "branch": "js/exciting-planck-h28okz",
+      "date": "2026-10-29T17:48:49Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
