@@ -22,6 +22,9 @@ name: Tests
 #     private repository, so it is checked out with the METACOOLER_REPO_TOKEN
 #     secret (a fine-grained token with read access to js2264/metacooler's
 #     contents) and skipped, with a warning saying so, where that is not set.
+#   - a third job holds the subsample and the normalisations to cooler and
+#     cooltools, run on the runner over the demo map rather than read from a
+#     golden; it is described where it is defined.
 #
 # Every step that installs, fetches or generates is allowed to fail without
 # failing the build, and the job says plainly in its summary what did not run,
@@ -212,6 +215,45 @@ jobs:
           if [ "$DEMO_GOLDEN" != "success" ] && [ "$DEMO" = "success" ] && [ "$COOLER" = "success" ]; then
             echo "::warning title=Demo oracles drifted::rebuilding test/golden/demo with this cooler did not reproduce the committed files; run npm run fixtures:demo-golden and look at the diff."
           fi
+
+  # The subsample and the normalisations, against cooler and cooltools run on this
+  # runner rather than against anything committed (SPECS §6.4, §6.5, §7.5). The
+  # reference is the demo yeast Micro-C as those packages reprocess it —
+  # `cooltools random-sample --exact`, `cooler balance`, `cooler coarsen` and
+  # cooltools' iterative correction — written by `npm run fixtures:reprocessed`
+  # into test/fixtures/reprocessed/ and compared by the two suites the step after
+  # it runs, so a release of either package that disagrees with the app fails the
+  # run that installed it.
+  #
+  # Unlike the goldens job, nothing here may fail quietly: the packages are on
+  # PyPI and the map is in this checkout, so there is no credential or bucket to
+  # be missing, and a green run that compared nothing is the thing the header of
+  # this file warns about. The guard before the suites is for the same reason —
+  # they skip by name when the references are absent, and here that would be a
+  # pass.
+  reprocessed:
+    name: subsample and normalisations against cooler and cooltools
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: test/reprocessed-requirements.txt
+      - run: npm ci
+      - name: Install the pinned cooler and cooltools
+        run: python -m pip install -r test/reprocessed-requirements.txt
+      - name: Reprocess the demo map with cooler and cooltools
+        run: npm run fixtures:reprocessed
+      - name: The app against what they wrote
+        run: |
+          test -s test/fixtures/reprocessed/manifest.json
+          npx vitest run test/unit/subsample-cooltools.test.ts test/unit/normalise-cooler.test.ts
 
   # The notebook widgets (SPECS §21.5): the Python package under `widgets/python`
   # and the R package under `widgets/r`. Neither needs the app built — each test

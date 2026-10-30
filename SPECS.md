@@ -2029,6 +2029,13 @@ for the bins actually on screen, never the whole column, never `/bins/chrom`, an
 the user asked for balanced counts. §3.3's rule is that *coordinates* never come from `/bins`; they
 still do not, and `test/unit/bins-guard.test.ts` still proves it for every unbalanced path.
 
+**What `balanced` draws is what cooler draws.** CI rebalances a copy of the demo yeast Micro-C with
+`cooler balance` and the parameters its weights record, and `test/unit/normalise-cooler.test.ts`
+reads it back here against cooler's own `matrix(balance=True)` — whole chromosomes, a window across a
+seam, the whole genome and a block between two sequences after `cooler coarsen` — `NaN` where cooler's
+is and a relative 1e-6 elsewhere, the Float32 the block is held in (`reprocessed` in
+`.github/workflows/test.yml`; nothing compared is committed, §7.5 says how it is made).
+
 ### 6.5 Drawn to a total — subsampled or oversampled
 
 **The last box on the breadcrumb is a number of contacts** (§5.5), labelled *contacts*. Empty, it
@@ -2064,6 +2071,18 @@ distribution splits exactly (`metacooler/resample.ts`):
 The seed is fixed, so the same total is the same map in every view, in both workers, after a reload
 and in the shell. The pixels follow cooltools' distribution and not its generator: a numpy stream is
 not reproducible from here, and a subsample is a draw, not a file.
+
+**And CI holds them to it, against cooltools run on the day rather than a golden.** The `reprocessed`
+job has `cooltools random-sample --count 10000000 --exact` draw the demo yeast Micro-C, with numpy
+seeded, and `test/unit/subsample-cooltools.test.ts` draws the same total here and compares the two as
+two draws from one distribution: in any set of pixels each keeps a hypergeometric share, so the two
+differ by a known variance, and the test holds them to it — the total exact in both; every pair of
+sequences and every bin's coverage within a few of their standard deviations; the squared
+differences over every pixel within 1% of what two draws without replacement give, where this app's
+draw made one with replacement came to 4% over; and as many pixels holding each count. The weights
+below are held the same way: the file's times `√(T/N)` against `cooler balance` over cooltools'
+draw, the median ratio within half a percent of 1 and each bin within what the draw adds to its
+balanced marginal.
 
 **An oversample is Boost-HiC** (Carron et al., *Bioinformatics* 2019), ported from its Python
 (`metacooler/boost.ts`) and held to it by a golden file that Python writes
@@ -2618,6 +2637,31 @@ doubly stochastic — and converge to the same weights; KR is a Newton solver th
 passes. At §2's scale the fixed point converges in milliseconds, so the faster solver would buy a
 name in a menu and nothing a reader could see. A file balanced with `KR` elsewhere and read here
 under `ICE` shows the same picture.
+
+**Every normalisation is held to cooler or cooltools, run in CI rather than read from a golden.**
+`scripts/reprocess_with_cooltools.py` (`npm run fixtures:reprocessed`) has the two packages, pinned by
+`test/reprocessed-requirements.txt`, reprocess the demo yeast Micro-C into gitignored fixtures, and
+the `reprocessed` job in `.github/workflows/test.yml` runs it and then
+`test/unit/normalise-cooler.test.ts`, which normalises the same blocks here through `deriveBlock` —
+three whole chromosomes at 1 kb, and at 16 kb after `cooler coarsen` the whole genome and a block
+between two sequences:
+
+- **VC** is one round of `cooler balance` from flat weights with every filter off and the marginals
+  left unscaled — each bin's coverage over the mean coverage — `--cis-only` for a chromosome and
+  genome-wide for the genome, and **VC √** its square root. The same numbers on the same scale: a
+  relative 1e-6, `NaN` on the same bins. cooler 0.11 is the first whose marginals count a pixel on
+  the main diagonal once, as a dense block does; 0.10 counted it twice, which is why the job pins its
+  own and not the notebooks' (§18.10).
+- **ICE** is cooltools' `iterative_correction_symmetric` (`_asymmetric` between two sequences) over
+  cooler's dense block, converged far past this app's tolerance: within a relative 1e-4 in every cell
+  after one fitted factor, since balancing fixes the weights only up to one, and converged here. Not
+  `cooler balance` with its filters off: with the main diagonal kept, its undamped update all but
+  oscillates on a Micro-C map, whose diagonal holds most of each bin's contacts.
+
+ICE is held only on chromosomes that have a balanced form. At 1 kb the demo map's II, X, XII and XVI
+each have a bin whose one contact is with one other bin, and no scaling of such a matrix has equal
+marginals; cooltools stalls on them, and the script refuses a reference that did not converge
+rather than write one.
 
 **The baseline can be looked at as well as divided by**, and it is in the picker rather than beside
 the toggle because it answers "what are these numbers" and not "compared to what". Every cell becomes

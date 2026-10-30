@@ -1,0 +1,51 @@
+# The cooler and cooltools that test/unit/subsample-cooltools.test.ts and
+# test/unit/normalise-cooler.test.ts are held to, and everything they resolved to, pinned as
+# `pip freeze` lists `pip install cooler cooltools` on Python 3.13. The `reprocessed` job in
+# .github/workflows/test.yml installs exactly this and runs `npm run fixtures:reprocessed` with it.
+#
+# Not notebooks/requirements.txt, whose cooler is 0.10.4: from 0.11 cooler counts a pixel on the
+# main diagonal once in the marginals it balances by, as the dense block the app normalises does,
+# and 0.10 counted it twice — one round of 0.10's `cooler balance` is not the app's VC. Bump these
+# deliberately: a release that reprocesses the map differently is a finding, and the job's failure
+# is where it is found.
+asciitree==1.0.0
+bioframe==0.8.0
+certifi==2026.10.23
+charset-normalizer==3.5.2
+click==8.5.0
+cloudpickle==3.1.2
+contourpy==1.4.0
+cooler==0.12.1
+cooltools==0.7.1
+cycler==0.12.1
+Cython==3.3.0
+dill==0.4.1
+fonttools==4.68.0
+h5py==3.16.0
+idna==3.20
+ImageIO==2.38.1
+joblib==1.6.0
+kiwisolver==1.5.1
+lazy-loader==0.6
+llvmlite==0.50.0
+matplotlib==3.11.2
+multiprocess==0.70.19
+narwhals==2.28.0
+networkx==3.7
+numba==0.68.1
+numpy==2.5.4
+packaging==26.3
+pandas==3.1.0
+pillow==13.0.0
+pyparsing==3.3.3
+python-dateutil==3.0.0
+PyYAML==6.0.3
+requests==2.34.2
+scikit-image==0.26.0
+scikit-learn==1.9.1
+scipy==1.18.1
+six==1.17.0
+threadpoolctl==3.7.0
+tifffile==2026.10.15
+tzdata==2026.6
+urllib3==2.8.0
