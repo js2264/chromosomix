@@ -507,7 +507,10 @@ On this machine:
 The command line's CPU time is close to its wall-clock time because it computes on one thread; it can be
 slightly higher, as Node collects garbage and compiles on threads of its own. The app computes in its
 workers, and its page draws and answers the reader while they do, so its CPU time is theirs and the
-page's together.
+page's together. Where a task shares its work — pastis-NB's likelihood, in the two 3D models — the app
+shares it with a helper worker for each core but its own, seven at most, where the command line keeps
+to one thread unless `--threads` asks for more: there the app can take less time than the command line
+and more CPU.
 
 The page's peak memory includes what it held before **run** was pressed, which the table gives beside
 it: the app itself, the files it had opened and the picture of them, `{python} f"{rest:,.0f}"` MB at the
