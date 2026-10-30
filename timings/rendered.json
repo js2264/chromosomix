@@ -1,0 +1,31 @@
+{
+  "page": "timing",
+  "published_at": "https://chromosomix.app/timings/",
+  "started": "2026-10-30T10:10:59+00:00",
+  "finished": "2026-10-30T12:54:11+00:00",
+  "seconds": 9792,
+  "chromosomix": {
+    "version": "0.18.0",
+    "commit": "b1f1a7a32b15903eac99ca53b75d79aae4f3d03f",
+    "tag": "v0.18.0",
+    "source": "https://github.com/js2264/chromosomix"
+  },
+  "run": {
+    "url": "https://github.com/js2264/chromosomix/actions/runs/41030621424",
+    "number": "13",
+    "attempt": "1",
+    "workflow": "Notebooks",
+    "event": "release",
+    "actor": "js2264"
+  },
+  "machine": {
+    "system": "Linux 7.0.0-1017-azure",
+    "architecture": "x86_64",
+    "processor": "AMD EPYC 9V45 96-Core Processor",
+    "cores": 4,
+    "memory_gb": 15.6,
+    "python": "3.13.17",
+    "quarto": "1.10.19"
+  },
+  "summary": "chromosomix takes 4.5\u00d7 less CPU time than the references over 36 pairs (1.1\u00d7 to 83.5\u00d7), and 3.2\u00d7 less wall-clock time. On the same file from disk, juicebox.js's time to a picture over chromosomix's is 0.68\u00d7 over 5 pictures (0.47\u00d7 to 1.14\u00d7), HiGlass's 0.99\u00d7 over 12 pictures (0.82\u00d7 to 2.03\u00d7)."
+}

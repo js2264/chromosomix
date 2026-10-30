@@ -1,0 +1,31 @@
+{
+  "page": "validation",
+  "published_at": "https://chromosomix.app/validation/",
+  "started": "2026-10-30T09:16:48+00:00",
+  "finished": "2026-10-30T10:10:44+00:00",
+  "seconds": 3236,
+  "chromosomix": {
+    "version": "0.18.0",
+    "commit": "b1f1a7a32b15903eac99ca53b75d79aae4f3d03f",
+    "tag": "v0.18.0",
+    "source": "https://github.com/js2264/chromosomix"
+  },
+  "run": {
+    "url": "https://github.com/js2264/chromosomix/actions/runs/41030621424",
+    "number": "13",
+    "attempt": "1",
+    "workflow": "Notebooks",
+    "event": "release",
+    "actor": "js2264"
+  },
+  "machine": {
+    "system": "Linux 7.0.0-1017-azure",
+    "architecture": "x86_64",
+    "processor": "AMD EPYC 9V45 96-Core Processor",
+    "cores": 4,
+    "memory_gb": 15.6,
+    "python": "3.13.17",
+    "quarto": "1.10.19"
+  },
+  "summary": "24 of 27 analyses reproduce their reference to the float32 the app computes in, or to every digit written."
+}
