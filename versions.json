@@ -235,6 +235,13 @@
   ],
   "pulls": [
     {
+      "number": 148,
+      "commit": "23865e5",
+      "title": "Signal by group: one value per entry by default",
+      "branch": "js/focused-pasteur-ppzu7d",
+      "date": "2026-10-30T21:50:46Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
