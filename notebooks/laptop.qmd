@@ -453,6 +453,7 @@ if len(FAILED):
 ```
 
 ```{python}
+#| column: page
 def duration(seconds):
     if math.isnan(seconds):
         return '—'
@@ -466,7 +467,9 @@ def megabytes(mb):
 VENUES = {'command line': '', 'app': 'app_'}
 table = pd.DataFrame({('', 'data'): times['data'], ('', 'analysis'): times['analysis'],
                       ('', 'resolution'): times['resolution']})
-for heading, column, shown in (('wall-clock time', 'wall_s', duration), ('CPU time', 'cpu_s', duration),
+# A time kept on one line in a cell: `3.7 min` broken after its number reads as two figures.
+unbroken = lambda seconds: duration(seconds).replace(' ', '\N{NO-BREAK SPACE}')
+for heading, column, shown in (('wall-clock time', 'wall_s', unbroken), ('CPU time', 'cpu_s', unbroken),
                                ('peak memory (MB)', 'peak_mb', megabytes)):
     for venue, prefix in VENUES.items():
         table[(heading, venue)] = times[prefix + column].map(shown)
@@ -528,8 +531,9 @@ indexed = times.set_index('name')
 for name in ['coverage', 'expected', 'insulation', 'compartments', 'loops']:
     mouse, human = indexed.loc[name], indexed.loc[f'human-{name}']
     for venue, prefix in VENUES.items():
-        pairs.append({'analysis': mouse['analysis'], 'resolution': mouse['resolution'], 'run': venue,
-                      'time, 69 M': duration(mouse[f'{prefix}wall_s']), 'time, 1.08 B': duration(human[f'{prefix}wall_s']),
+        pairs.append({'analysis': mouse['analysis'], 'resolution': mouse['resolution'],
+                      'run': venue.replace(' ', '\N{NO-BREAK SPACE}'),
+                      'time, 69 M': unbroken(mouse[f'{prefix}wall_s']), 'time, 1.08 B': unbroken(human[f'{prefix}wall_s']),
                       'memory, 69 M (MB)': mouse[f'{prefix}peak_mb'], 'memory, 1.08 B (MB)': human[f'{prefix}peak_mb']})
 pd.DataFrame(pairs).style.hide(axis='index').format('{:,.0f}', subset=['memory, 69 M (MB)', 'memory, 1.08 B (MB)'],
                                                      na_rep='—')
