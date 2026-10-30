@@ -69,8 +69,8 @@ export const NOTEBOOKS: readonly Notebook[] = [
     path: 'laptop',
     title: 'Laptop',
     what:
-      'What a genome-wide analysis costs on a laptop: 23 of them run once each, with their time and ' +
-      'peak memory. Render it on your own to measure yours.',
+      'What a genome-wide analysis costs on a laptop: 23 of them run on the command line and in the ' +
+      'app, with their time and peak memory. Render it on your own to measure yours.',
     byHand: true,
   },
 ]

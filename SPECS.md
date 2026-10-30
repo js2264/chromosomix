@@ -9904,21 +9904,36 @@ differs**, or one side alone wrote it. Every file and its verdict is one line of
 `notebooks/work/parity/summary.tsv`.
 
 **And one for the reader's own machine.** `notebooks/laptop.qmd` answers what the other three do not
-— what a genome-wide analysis costs on a machine like the reader's — with Quarto, pandas, matplotlib and
-pyfaidx and the built command line, and no reference package, so that a reader can render it on their
-own laptop. It downloads the validation's mouse map, yeast Micro-C, ATAC-seq replicates, mm10 and its
-RefSeq genes, and 4DN's IMR-90 in situ Hi-C (Rao et al. 2014, 4DNFIJTOIGOI, 1.08 billion contacts):
-about 13.7 GB into `notebooks/work/laptop/data/`, each file held to its MD5, a file `validation.qmd`
-already holds linked instead. Then it runs 23 analyses genome-wide, once each, every one a process of
-its own: on the mouse map, coverage, P(s), insulation, the directionality index, compartments (E1,
-unphased), loop calling, chromosight's loops, a pileup over them and a 3D model; five of these again on
-the human map, sixteen times deeper; P(s) at 50 bp, loops and a model on the yeast; and peak calling
-with IDR, interval overlap, a metaplot, track correlation, base composition and a motif search over the
-mouse genome. `os.wait4` gives each process's CPU time and peak resident set, and the wall clock runs
-from its start to its exit. Each result is written to `notebooks/work/laptop/timings.tsv` as it is
-measured, with the machine and the build, and a second render of the same build reads it back instead
-of running again. The page is a table of all 23, the five analyses side by side at the two depths, a
-figure, and every command in one block at the end.
+— what a genome-wide analysis costs on a machine like the reader's, on the command line and in the app —
+with Quarto, pandas, matplotlib and pyfaidx, the built app and command line and Playwright's Chromium,
+and no reference package, so that a reader can render it on their own laptop. It downloads the
+validation's mouse map, yeast Micro-C, ATAC-seq replicates, mm10 and its RefSeq genes, and 4DN's IMR-90
+in situ Hi-C (Rao et al. 2014, 4DNFIJTOIGOI, 1.08 billion contacts): about 13.7 GB into
+`notebooks/work/laptop/data/`, each file held to its MD5, a file `validation.qmd` already holds linked
+instead. Then it runs 23 analyses genome-wide: on the mouse map, coverage, P(s), insulation, the
+directionality index, compartments (E1, unphased), loop calling, chromosight's loops, a pileup over them
+and a 3D model; five of these again on the human map, sixteen times deeper; P(s) at 50 bp, loops and a
+model on the yeast; and peak calling with IDR, interval overlap, a metaplot, track correlation, base
+composition and a motif search over the mouse genome. **Each runs twice.** On the command line, a
+process of its own: `os.wait4` gives its CPU time and peak resident set, and the wall clock runs from
+its start to its exit. **And in the app**, as a reader runs it, in a headless Chromium of its own
+(`notebooks/scripts/laptop.mjs`, the dist/ and dist-cli/ of one commit, as the parity holds them): the
+files the command names dropped on the landing page — a map as a workspace names it, at the command's
+resolution, balanced, its whole genome on screen, with a set of loops as a track beside it, or tracks
+and a FASTA with its index alone — the task opened from the Analysis panel by its title, every flag of
+the command set in its form, the page left until Chromium is idle, and **run** pressed. The time is
+the app's own, from the job's dispatch to its result, and the opening of the files is timed apart; the
+CPU time and the peak memory are the page's, its renderer's, whose threads its workers are, sampled
+five times a second from the press to the console's record of the end — and all of Chromium's beside
+them, the browser that reads a dropped file for the page and the GPU process among them, where WebGL is
+drawn in SwiftShader and the page composited in software. Each result is written to
+`notebooks/work/laptop/timings.tsv` as soon as both are measured, with the machine, the build, the
+Chromium and the line the app's console wrote for the run, and a second render of the same build in
+the same Chromium reads it back instead of running again, but for a run the app did not finish. The
+page is a table of all 23, both ways, the five analyses side by side at the two depths, a figure, every
+command and every line the app wrote in two blocks at the end, and the line held to the command: every
+flag of the command with its value, and besides them only the task's parameters at their defaults and
+those its form answers from what is open, or the page says what else.
 
 **The laptop's published page is rendered on a laptop.** What it measures is a reader's machine, so
 the page at `<site>/laptop/` is rendered by hand, on one, and committed as `notebooks/laptop.html` —
@@ -9945,12 +9960,12 @@ renders each on a fresh runner, with what `.github/actions/notebooks-setup` inst
 app's build, and the reference environment pinned package by package in `notebooks/requirements.txt`,
 which brings Quarto and every package the notebooks import; for the validation, yapc's environment
 (`requirements-yapc.txt`, IDR and yapc built at the commits the notebook cites), Boost-HiC's checkout,
-and Ubuntu's bedtools and seqkit; for the parity and the timings, the two viewers with Playwright's
-Chromium; for the timings, higlass-python's environment with libfuse. The parity renders first, alone,
-so that a page that cannot render stops the run before the hours of the others; then the validation
-and the timings in one job — the timings run the validation's commands on the inputs it fetched and
-made, which no other runner holds — beside the laptop in another, which sets the committed page aside
-first so that what it gathers is its own render or nothing. Each render runs through
+and Ubuntu's bedtools and seqkit; for the parity, the timings and the laptop, the two viewers with
+Playwright's Chromium; for the timings, higlass-python's environment with libfuse. The parity renders
+first, alone, so that a page that cannot render stops the run before the hours of the others; then
+the validation and the timings in one job — the timings run the validation's commands on the inputs it
+fetched and made, which no other runner holds — beside the laptop in another, which sets the
+committed page aside first so that what it gathers is its own render or nothing. Each render runs through
 `notebooks/scripts/memory.sh`, which writes into the job's log, every ten seconds, the memory in use
 and available and the three programs holding the most: a runner whose memory runs out is shut down
 in the middle of a step, with no error from the command and no step after it, and the log streamed
@@ -9972,7 +9987,8 @@ block saying when it was rendered, from which version, commit and release, by wh
 and on what machine, and closes on how long it took, writing the same to `rendered.json` beside it with
 **one line of what it found** — how many analyses reproduce their reference, how much less time
 chromosomix takes than the references and the other viewers, how many files the app and the command
-line write alike, how many analyses finish within a minute and the most memory any takes. The run's
+line write alike, how many analyses finish within a minute and the most memory any takes, on the
+command line and in the app. The run's
 summary is a section a notebook: where it is, from what and in how long, that line, and its table,
 folded. The pages link to each other there and on a reader's disk alike, but for the laptop, which
 links the site's from either. They are no build of the app,
