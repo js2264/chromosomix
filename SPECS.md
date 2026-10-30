@@ -7725,8 +7725,10 @@ under and saved from, and a figure's style with it (`AnalysisContext.memoryKey`)
 under the file's address with its resolution, which nothing else read: a workspace opened its tasks on
 their defaults, saved none of what they were run with, and a change of resolution forgot them.
 
-**A number can take its default from the file.** Base composition's bin size, and *Signal by group*'s,
-is the open map's resolution until the reader types another, and 10 kb where no map is open; *Loop
+**A number can take its default from the file.** Base composition's bin size is the open map's
+resolution until the reader types another, and 10 kb where no map is open — *Signal by group*'s was too,
+and is 0 now, one value per entry, because its bin size decides how many observations its tests count
+and not only how finely it reads (§18.8); *Loop
 calling*'s kernel is the one for the open map's bins, and its scan's reach and clustering radius are
 10 Mb and 20 kb in them (§18.8). The form shows what that comes to on the file in front of it and
 follows a change of resolution, because the answer is still *the map's*; the run is handed the number
@@ -9371,15 +9373,26 @@ set**, split by what is written on its features — the name (A and B on a compa
 strand, the score in quantiles, or nothing — with what the set does not cover as a group of its own;
 or from **a track**, its bins cut by sign (an eigenvector's two compartments, uncalled) or into
 quantiles, and a grouping made that way is written out as intervals named by group. What is compared
-is **stretches of at most one bin**: a group's merged intervals cut on the bin grid, a piece shorter
-than half a bin joined to its neighbour and a feature shorter than a bin kept whole, so a 30 kb
-compartment is three observations and a 300 bp peak one, each the track's **exact mean over the bases
+is, by default, **one value per entry**: each run of a group's features, merged where they overlap or
+touch, each stretch of the rest between two, and each run of bins in one group of a track — so a 30 kb
+compartment is one observation, as a 300 bp peak is, and a run across the origin of a circular
+sequence (§8.15) is one and not two. **That is the default because the tests count their observations
+as independent, and the bins of one compartment are not**: they share their GC, their expression and
+their place in the nucleus, so cutting a compartment into bins multiplies the observations without
+adding to what is known, and the P follows the bin size rather than the data. *P. aeruginosa*'s
+chromosome in 8 kb bins is 782 bins in 110 compartments, and the difference in GC between A and B, its
+rank-biserial effect 0.42, 0.39 and 0.43 at 8, 32 and 128 kb, had a P of 2·10⁻²⁰, 6·10⁻⁵ and 3·10⁻².
+A **bin size** compares stretches of at most one bin instead — a group's merged intervals cut on the
+bin grid, a piece shorter than half a bin joined to its neighbour and a feature shorter than a bin
+kept whole — which describes the signal over a group's bases, each stretch weighted alike, rather than
+over its entries; a track the groups are cut from is cut on that grid, and with none on the open map's
+resolution, or 10 kb with no map open. Either way a value is the track's **exact mean over the bases
 it has a value for**, read as track correlation reads a window — at the track's own resolution, never
-from a zoom level, a megabase at a time: read at a twentieth of a stretch, a mouse ATAC-seq track's
-896 bp zoom records carried each neighbour's signal into a stretch's ends, and chr19's 10 kb stretches
-came out a median 0.2 % from their own means, one in thirteen more than 1 %. A track the groups are
-cut from, and a row per feature, are read the same way. The bin size is seeded as base composition's
-is (§18.2). Each group is summarised (count,
+from a zoom level, a megabase at a time, an entry longer than that read in pieces and summed: read at
+a twentieth of a stretch, a mouse ATAC-seq track's 896 bp zoom records carried each neighbour's signal
+into a stretch's ends, and chr19's 10 kb stretches came out a median 0.2 % from their own means, one in
+thirteen more than 1 %. A track the groups are cut from, and a row per feature, are read the same way.
+Each group is summarised (count,
 bases, mean, SD, median, quartiles, and its mean less that of every other stretch) and drawn as a
 **violin**, and the groups are tested **by ranks** — Mann–Whitney pairwise, with the rank-biserial
 effect and the median difference, and Kruskal–Wallis over three or more — tie-corrected, in the
