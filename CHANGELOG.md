@@ -10,6 +10,28 @@ The deployed site at <https://chromosomix.app/> is built from `main` on every pu
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Added
+
+- **Example sessions on the landing page (§24.11).** Under *Just looking?* and *Pick an example
+  session*, in the margin beside the store tiles — under them on a narrow page — four buttons, each
+  opening one tab in the tab it was pressed in, and each with the Analysis column's `?`, whose tip
+  says what the tab holds and where it is from:
+  - *Human Hi-C data*: 4DN's in situ Hi-C of K562 (Rao et al. 2014, 907 million contacts) at 10 kb
+    over MYC, PVT1 and the blood enhancer cluster on chr8, with no deck; IGV's hg38 RefSeq genes,
+    sequence and bands above it; 4DN's insulation, boundaries and E1 and ENCODE's subcompartments
+    down its left; ENCODE's CTCF ChIA-PET loops on it; and ENCODE's ChIP-seq, ATAC-seq and DNase-seq
+    of the same cells under it, as five overlaid pairs — CTCF with RAD21, H3K4me3 with H3K27ac,
+    Pol II with H3K36me3, H3K27me3 with H3K9me3, ATAC with DNase — each track on its own axis. The
+    gene model and the bands are read from IGV's bucket, whose copy answers a page where UCSC's does
+    not.
+  - *Yeast micro-C data* and *Linear tracks*: the lab's store's yeast micro-C figure and its yeast
+    landscape in the 1D browser, read from the address the store's cards read them from.
+  - *Comparing data*: chicken DT40 Hi-C from 4DN (Gibcus et al. 2018), G2 above the diagonal and
+    60 min into mitosis below it, over 40 Mb of chromosome 1 at 100 kb, with each map's compartment
+    eigenvector and insulation on the edge beside its own triangle, on one axis per kind.
+
 ## [0.18.0] - 2026-10-30
 
 ### Added

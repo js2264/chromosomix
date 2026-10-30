@@ -88,7 +88,7 @@ function row(root: HTMLElement, title: string): HTMLElement {
   return found
 }
 
-const tip = (): HTMLElement | null => document.querySelector<HTMLElement>('.task-ref-tip:not(.hidden)')
+const tip = (): HTMLElement | null => document.querySelector<HTMLElement>('.question-tip:not(.hidden)')
 
 describe('the ? on a task’s row', () => {
   it('is green where the validation agrees, plain where untested, and absent where nothing is re-implemented', () => {
