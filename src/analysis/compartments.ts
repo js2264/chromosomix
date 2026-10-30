@@ -116,6 +116,13 @@ export interface ExpectedPlan {
    */
   ignoreDiags: number
   /**
+   * What a cell {@link ignoreDiags} leaves out becomes: a gap, `NaN`, unless this
+   * says otherwise. cooltools sets those cells to 1 — *as expected* — before it
+   * divides, so its percentile counts them, and {@link cooltoolsPlan} asks for
+   * the same.
+   */
+  nearDiagonal?: number
+  /**
    * Bins in each sequence that is **circular**, `0` for one that is not; one
    * entry per group, absent for a square with no circular sequence in it.
    *
@@ -162,45 +169,64 @@ export function singleGroupPlan(n: number, curve: ExpectedCurve): ExpectedPlan {
  * in a trans block with nothing in it — is `NaN` rather than the observed value:
  * dividing by an unknown and keeping the numerator would put raw counts and
  * ratios in the same matrix.
+ *
+ * Into `out` where one is given — a square of the same size that nothing reads
+ * any longer — since every cell is written.
  */
 export function observedOverExpected(
   values: Float32Array,
   n: number,
   index: Int32Array,
   plan: ExpectedPlan,
+  out: Float64Array = new Float64Array(index.length * index.length),
 ): Float64Array {
   const m = index.length
   const k = plan.cis.length
-  const out = new Float64Array(m * m)
+  const { group, trans, ignoreDiags } = plan
+  const transOnly = plan.contacts === 'trans'
+  const cisOnly = plan.contacts === 'cis'
+  const nearDiagonal = plan.nearDiagonal ?? Number.NaN
+  // Each sequence's expectation at every separation it has, read once rather
+  // than once a cell: the curve is asked the same few thousand questions
+  // millions of times, and the square is made twice under cooltools' method.
+  const decay = plan.cis.map((curve) =>
+    Float64Array.from({ length: curve.maxOffset + 1 }, (_, offset) => expectedAt(curve, offset)),
+  )
   for (let r = 0; r < m; r++) {
     const row = index[r]
-    const rowGroup = plan.group[row]
+    const rowGroup = group[row]
+    const own = decay[rowGroup]
+    const lap = plan.laps?.[rowGroup] ?? 0
+    const at = r * m
+    const from = row * n
     for (let c = 0; c < m; c++) {
       const col = index[c]
-      const colGroup = plan.group[col]
+      const colGroup = group[col]
       const same = rowGroup === colGroup
       // A cell the mode leaves out is a gap, exactly as a cell with no
       // expectation is: it takes no part in any correlation, rather than
       // entering one as a zero and asserting that these two bins do not touch.
-      if (same ? plan.contacts === 'trans' : plan.contacts === 'cis') {
-        out[r * m + c] = Number.NaN
+      if (same ? transOnly : cisOnly) {
+        out[at + c] = Number.NaN
         continue
       }
-      const offset = same
-        ? cisSeparation(Math.abs(col - row), plan.laps?.[rowGroup] ?? 0)
-        : Math.abs(col - row)
-      // …and the near-diagonal goes the same way, for the same reason and on the
-      // same rule cooltools uses. Only in cis: a trans cell has no separation
-      // for a diagonal to be measured from.
-      if (same && offset < plan.ignoreDiags) {
-        out[r * m + c] = Number.NaN
-        continue
+      let denominator: number
+      if (same) {
+        const offset = cisSeparation(Math.abs(col - row), lap)
+        // …and the near-diagonal goes the same way, for the same reason and on
+        // the same rule cooltools uses. Only in cis: a trans cell has no
+        // separation for a diagonal to be measured from.
+        if (offset < ignoreDiags) {
+          out[at + c] = nearDiagonal
+          continue
+        }
+        // Past the end of the curve is no expectation, as `expectedAt` says.
+        denominator = offset < own.length ? own[offset] : Number.NaN
+      } else {
+        denominator = trans[rowGroup * k + colGroup]
       }
-      const observed = values[row * n + col]
-      const denominator = same
-        ? expectedAt(plan.cis[rowGroup], offset)
-        : plan.trans[rowGroup * k + colGroup]
-      out[r * m + c] =
+      const observed = values[from + col]
+      out[at + c] =
         Number.isFinite(observed) && Number.isFinite(denominator) && denominator !== 0
           ? observed / denominator
           : Number.NaN
@@ -320,20 +346,130 @@ export const COOLTOOLS_CLIP_PERCENTILE = 99.9
  * Over the usable bins alone, like the correlation: a bin the balancer dropped is
  * still left out rather than zeroed — cooltools zeroes it and then keeps the zero
  * row out of its solver, which comes to the same thing. The percentile is of the
- * cells that have a value; cooltools' also counts the dropped rows' zeros and the
- * ignored diagonals' ones, which moves the 99.9th by a hair.
+ * cells that have a value, which over {@link cooltoolsPlan}'s observed/expected
+ * includes the near diagonal's ones, as cooltools' does.
  *
- * `oe` is `m × m` row-major and is left as it was — the saddle reads it later.
+ * `oe` is `m × m` row-major and is left as it was unless `out` is `oe` itself —
+ * which the runner passes for the square nothing reads afterwards, and not for the
+ * one the saddle reads.
  */
 export function cooltoolsMatrix(
   oe: Float64Array,
   m: number,
   percentile = COOLTOOLS_CLIP_PERCENTILE,
+  out: Float64Array = new Float64Array(m * m),
 ): Float64Array {
   const ceiling = upperPercentile(oe, percentile)
-  const out = new Float64Array(m * m)
   for (let i = 0; i < m * m; i++) out[i] = departure(oe[i], ceiling)
   return out
+}
+
+/**
+ * The most the two ends of one of cooltools' groups of separations are apart:
+ * `observed_over_expected`'s `dist_bin_edge_ratio`.
+ */
+export const COOLTOOLS_DIST_BIN_EDGE_RATIO = 1.03
+
+/**
+ * The edges of the groups cooltools pools the separations of an `n`-bin square
+ * into: `0`, then `_logbins_numba(1, n, ratio)` — `n`'s logarithm cut into
+ * `⌊ln n / ln ratio⌋` even steps, each raised back and rounded to the nearest
+ * whole separation, ties to even as NumPy's `rint` breaks them, and the repeats
+ * dropped. Each group runs from one edge up to the next, the last up to `n`.
+ */
+export function cooltoolsSeparationGroups(
+  n: number,
+  ratio = COOLTOOLS_DIST_BIN_EDGE_RATIO,
+): Int32Array {
+  const edges = [0]
+  if (n < 1) return Int32Array.from(edges)
+  const steps = Math.trunc(Math.log(n) / Math.log(ratio))
+  const top = Math.log10(n)
+  // NumPy's `linspace`: each point the step times its rank, the last the end itself.
+  const step = steps > 1 ? top / (steps - 1) : 0
+  for (let i = 0; i < steps; i++) {
+    const edge = halfEven(10 ** (steps > 1 && i === steps - 1 ? top : i * step))
+    if (edge > edges[edges.length - 1]) edges.push(edge)
+  }
+  // Both ends are there by construction past a handful of bins; a square too small
+  // for a step still has its one group of separations from 1.
+  if (edges[1] !== 1) edges.splice(1, 0, 1)
+  if (edges[edges.length - 1] !== n) edges.push(n)
+  return Int32Array.from(edges)
+}
+
+/** NumPy's `rint`: the nearest whole number, a half to the even one. */
+function halfEven(value: number): number {
+  const up = Math.round(value)
+  return up - value === 0.5 && up % 2 !== 0 ? up - 1 : up
+}
+
+/**
+ * The distance decay as cooltools' `eigs_cis` divides by it: each separation's
+ * mean replaced by its group's (§18.8).
+ *
+ * `cis_eig` does not read `expected_cis`. It takes its expectation from the square
+ * in hand (`numutils.observed_over_expected`), and that is not a mean per
+ * diagonal: from about the thirty-fifth, where one separation is less than 3% past
+ * the one before, the diagonals are pooled in groups whose ends are at most 3%
+ * apart ({@link cooltoolsSeparationGroups}) and every cell of a group is divided by
+ * the group's mean. Over the mean of its own diagonal, the far cells of a
+ * chromosome sit on a sawtooth of a percent or two against cooltools' — which on
+ * the mouse map at 100 kb (validation § 3) left E1 at r = 0.9985 to 0.99993 with
+ * cooltools', chromosome by chromosome. Over this one every component is
+ * cooltools' to the six significant digits a track is written in.
+ *
+ * Two more of `observed_over_expected`'s rules come with it, each a cell's worth of
+ * cooltools' arithmetic rather than a choice:
+ *
+ * - the **near diagonal** is pooled as ones, which cooltools sets it to before it
+ *   pools — a difference only where `ignoreDiags` reaches into a group of several;
+ * - a group with **no contacts at all** is left undivided, its cells the zeros they
+ *   were, and so `1` here; `0 / 0` would be a gap, *as expected* once prepared, and
+ *   cooltools reads those cells as nothing where something was expected. It is the
+ *   far corner of a chromosome whose ends the map holds no contacts between.
+ *
+ * The groups are a square's of `maxOffset + 1` bins — the sequence, along a line.
+ * `sum` and `count` are the curve's own, per separation; only `mean` is the group's,
+ * so the curve answers {@link expectedAt} and is not one to merge.
+ */
+export function cooltoolsExpected(
+  curve: ExpectedCurve,
+  ignoreDiags: number,
+  ratio = COOLTOOLS_DIST_BIN_EDGE_RATIO,
+): ExpectedCurve {
+  const n = curve.maxOffset + 1
+  const edges = cooltoolsSeparationGroups(n, ratio)
+  const mean = new Float64Array(n).fill(Number.NaN)
+  for (let g = 0; g + 1 < edges.length; g++) {
+    let sum = 0
+    let count = 0
+    for (let k = edges[g]; k < edges[g + 1]; k++) {
+      sum += k < ignoreDiags ? curve.count[k] : curve.sum[k]
+      count += curve.count[k]
+    }
+    if (count === 0) continue
+    const value = sum === 0 ? 1 : sum / count
+    for (let k = edges[g]; k < edges[g + 1]; k++) mean[k] = value
+  }
+  return { maxOffset: curve.maxOffset, sum: curve.sum, count: curve.count, mean }
+}
+
+/**
+ * The plan cooltools' `cis_eig` divides by: each sequence's decay pooled as
+ * {@link cooltoolsExpected} pools it, and the near diagonal one rather than a gap.
+ *
+ * Only for the matrix {@link cooltoolsMatrix} prepares. The saddle is cooltools'
+ * `saddle`, which divides by `expected_cis` — a mean per diagonal — and the
+ * correlation is Lieberman-Aiden's, so both keep the plan they were given. A trans
+ * block is divided by its pair's mean either way: `eigs_cis` has none.
+ */
+export function cooltoolsPlan(plan: ExpectedPlan): ExpectedPlan {
+  return {
+    ...plan,
+    cis: plan.cis.map((curve) => cooltoolsExpected(curve, plan.ignoreDiags)),
+    nearDiagonal: 1,
+  }
 }
 
 /** One cell of {@link cooltoolsMatrix}: clipped, less one, and a gap as expected. */
@@ -364,7 +500,9 @@ function departure(value: number, ceiling: number): number {
  *
  * Summed a row at a time from `oe` itself rather than from the prepared matrix,
  * which at the task's 8,192 bins would be another half gigabyte for a few
- * numbers.
+ * numbers. The runner hands it {@link cooltoolsPlan}'s observed/expected wherever
+ * the expectation is the distance decay, so that under either method the map
+ * measured is the one cooltools' method decomposes.
  */
 export function contactShares(
   oe: Float64Array,

@@ -51,6 +51,26 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **Compartments by cooltools' method are cooltools', to the digits they are written in (§18.8).**
+  E1 agreed with `cooltools.eigs_cis` at r = 0.9985 to 0.99993 chromosome by chromosome on the mouse
+  map at 100 kb, the A/B call differed in up to 1.1% of a chromosome's bins, and on chr4 and chr15 one
+  tool's third component was the other's fourth. The difference was the expectation: `eigs_cis` does
+  not divide by `expected_cis` but by one it takes from each chromosome's square — each diagonal's
+  mean up to about the thirty-fifth and, beyond it, the mean of a group of diagonals at most 3% wide —
+  where the app divided every cell by its own diagonal's mean, which left the far cells on a sawtooth
+  of a percent or two against cooltools'. It now divides by cooltools', with that expectation's two
+  small rules: the near diagonal pooled as the ones cooltools sets it to, and a group with no
+  contacts left undivided. On the mouse map (§ 3 of the validation notebook) and on the zoo's
+  *P. aeruginosa*, *C. necator* and *E. coli* maps at 8 kb, every component is cooltools' to within
+  3·10⁻¹² in r and 5·10⁻⁶ in any bin — the six significant digits a track is written to — the
+  eigenvalues to the table's three decimals, the A/B call the same in every bin, and E2 and E3 the
+  same components on every chromosome. The saddle and the Lieberman-Aiden method still divide by each
+  diagonal's own mean, as `cooltools.saddle` does by `expected_cis`, and the correlation's
+  eigenvectors, A/B call and saddle are what they were; the *of contacts* share is measured over
+  cooltools' matrix under both methods, which moves the correlation's in the third decimal. Version 4
+  of the task. The second observed/expected it makes of each chromosome costs a twentieth of the run:
+  over the mouse map, 16.7 s of CPU where it was 16.0, against 28.2 s for cooltools.
+
 - **Signal by group compares one value per entry by default (§18.8).** Its bin size is 0 unless one is
   typed, where it was the open map's resolution: each run of a name, merged where its features overlap
   or touch, each stretch of the rest between two, and each run of bins in one group of a track is one
