@@ -235,6 +235,13 @@
   ],
   "pulls": [
     {
+      "number": 146,
+      "commit": "2d4b959",
+      "title": "Compartments: divide by cooltools' own expectation",
+      "branch": "js/optimistic-turing-0cjohk",
+      "date": "2026-10-30T22:25:02Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
