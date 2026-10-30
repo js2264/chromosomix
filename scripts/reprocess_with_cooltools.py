@@ -5,13 +5,13 @@ hold the app's subsample (SPECS §6.5) and its normalisations (§6.4, §7.5) to 
 Not a golden
 ------------
 Nothing this script writes is committed, and nothing in it was computed once and
-kept: it goes to ``test/fixtures/reprocessed/``, which is gitignored, and the CI
-job that compares against it (``reprocessed`` in ``.github/workflows/test.yml``)
-writes it afresh, with the pinned cooler and cooltools of
-``test/reprocessed-requirements.txt``, immediately before the comparison runs. A
-reference that drifts — a cooler release that balances differently, a cooltools
-whose sample is not the one §6.5 describes — is therefore found on the run that
-installs it, not the day somebody remembers to rebuild a JSON file.
+kept: it goes to ``test/fixtures/reprocessed/``, which is gitignored, and CI
+writes it afresh on every run, in the goldens job of ``.github/workflows/test.yml``
+beside the other fixtures cooler can write and with whatever cooler and cooltools
+PyPI serves that day, before the suites read it. A reference that drifts — a
+cooler release that balances differently, a cooltools whose sample is not the one
+§6.5 describes — is therefore found on the run that installs it, not the day
+somebody remembers to rebuild a JSON file.
 
 What it writes
 --------------
@@ -44,7 +44,7 @@ float64 in row order, listed in ``manifest.json``:
   same correction at half strength: the app's *VC √*;
 - ``ice`` — cooltools' ``iterative_correction_symmetric`` over the raw block
   (``iterative_correction_asymmetric`` over a block between two sequences),
-  converged to a variance of 1e-16: the app's *ICE*, which balances the block on
+  converged to a variance of 1e-24: the app's *ICE*, which balances the block on
   screen as cooltools balances a dense matrix — every diagonal kept, the main
   one counted once, no bin filtered. ``cooler balance`` with its filters off is
   not used for this: with the main diagonal kept its undamped update all but
@@ -59,7 +59,7 @@ script refuses one rather than writing it.
 
 Usage::
 
-    pip install -r test/reprocessed-requirements.txt
+    pip install 'cooler>=0.11' cooltools     # 0.11: the main diagonal counted once
     npm run fixtures:reprocessed            # or: python scripts/reprocess_with_cooltools.py
     npx vitest run test/unit/subsample-cooltools.test.ts test/unit/normalise-cooler.test.ts
 """
@@ -101,8 +101,12 @@ TRANS = ("IV", "VII")
 #: A window across the seam between I and II, at 1 kb.
 SEAM = 32
 
-#: How converged a cooltools reference must be: the spread of its row sums.
-SPREAD = 1e-6
+#: cooltools' convergence test, the variance of each round's damped marginals:
+#: far past where the app stops, so what is left between the two is the app's.
+VARIANCE = 1e-24
+#: How converged a cooltools reference must be: the spread of its row sums,
+#: well inside the Float32 the app's block is held in.
+SPREAD = 1e-9
 
 
 def run(*args: str) -> None:
@@ -148,10 +152,10 @@ def spread(sums: np.ndarray) -> float:
 def ice(raw: np.ndarray, symmetric: bool) -> np.ndarray:
     """cooltools' iterative correction, refused where it did not converge."""
     if symmetric:
-        corrected, _, (converged, rounds) = iterative_correction_symmetric(raw, 100_000, 0, 1e-16)
+        corrected, _, (converged, rounds) = iterative_correction_symmetric(raw, 100_000, 0, VARIANCE)
         worst = spread(corrected.sum(axis=1))
     else:
-        corrected, _, _, (converged, rounds) = iterative_correction_asymmetric(raw, 100_000, 1e-16)
+        corrected, _, _, (converged, rounds) = iterative_correction_asymmetric(raw, 100_000, VARIANCE)
         worst = max(spread(corrected.sum(axis=1)), spread(corrected.sum(axis=0)))
     if not converged or worst > SPREAD:
         raise SystemExit(

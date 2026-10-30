@@ -5,31 +5,30 @@
  * `npm run fixtures:reprocessed` (`scripts/reprocess_with_cooltools.py`) has the
  * two packages reprocess the demo yeast Micro-C into `test/fixtures/reprocessed/`
  * — `cooler balance` over a copy of it, the same at 16 kb after `cooler
- * coarsen`, cooltools' iterative correction over its blocks — and the CI job
- * that runs this suite runs that first, with the pinned versions of
- * `test/reprocessed-requirements.txt`, so the reference is whatever those
- * packages make of the map on the day. Without it the suite skips by name.
+ * coarsen`, cooltools' iterative correction over its blocks — and CI's goldens
+ * job runs that before this suite, as it builds the other fixtures cooler can
+ * write, so the reference is whatever those packages make of the map on the
+ * day. Without it the suite skips by name.
  *
  * Each block is read by this app from the coolers cooler wrote, normalised as the
  * score picker normalises it (`deriveBlock`, the one function every map calls),
- * and compared with cooler's own `matrix()` over the same bins:
+ * and compared with cooler's own `matrix()` over the same bins. Every cell must
+ * agree **to Float32's precision**, the type the block is held and drawn in: one
+ * unit in its last place, 2⁻²³ relative, of which the rounding to Float32 alone
+ * spends half.
  *
  * - **balanced** — the file's weights, as `cooler balance` just rewrote them,
- *   against `matrix(balance='weight')`: `NaN` exactly where cooler's is, a
- *   relative 1e-6 elsewhere, since the reader multiplies in Float32 what cooler
- *   multiplies in Float64;
+ *   against `matrix(balance='weight')`, `NaN` exactly where cooler's is;
  * - **VC and VC √** — against one round of `cooler balance` from flat weights,
  *   nothing filtered and nothing rescaled, which is each bin's coverage over the
  *   mean (and its square root): the same numbers on the same scale, so no factor
- *   is fitted, `NaN` on the bins nothing was seen in, and the same relative
- *   1e-6, since only the Float32 the block is held in separates them;
+ *   is fitted, and `NaN` on the bins nothing was seen in;
  * - **ICE** — against cooltools' `iterative_correction_symmetric` (and
- *   `_asymmetric` between two sequences), converged far past the app's own
- *   tolerance. Balancing fixes the weights up to one constant, and the two put
- *   it in different places, so one factor is fitted per block and every cell
- *   must then agree to a relative 1e-4 — a few times the 1e-5 flatness the
- *   app stops at (`BALANCE_TOLERANCE`), which is what it leaves in each weight.
- *   The app's empty bins are `NaN` where cooltools leaves them at 0.
+ *   `_asymmetric` between two sequences), converged far past the app. Balancing
+ *   fixes the weights up to one constant, and the two put it in different
+ *   places, so one factor is fitted per block; the app goes on to
+ *   `BALANCE_PRECISION`, 1e-9, which leaves each cell nothing past its own
+ *   rounding. The app's empty bins are `NaN` where cooltools leaves them at 0.
  */
 
 import { existsSync, readFileSync } from 'node:fs'
@@ -44,6 +43,9 @@ const DIR = new URL('../fixtures/reprocessed/', import.meta.url).pathname
 const MANIFEST = `${DIR}manifest.json`
 
 type Kind = 'balanced' | 'vc' | 'vcsqrt' | 'ice'
+
+/** One unit in the last place of a Float32, relative: the precision a block is held in. */
+const FLOAT32 = 2 ** -23
 
 interface Block {
   cool: string
@@ -165,7 +167,7 @@ describe.skipIf(!present)(
           const { ncols } = raw
 
           if (block.kind !== 'ice') {
-            expectCells(what, values, want, ncols, 1e-6, (i) => Number.isNaN(want[i]))
+            expectCells(what, values, want, ncols, FLOAT32, (i) => Number.isNaN(want[i]))
             return
           }
 
@@ -181,7 +183,7 @@ describe.skipIf(!present)(
             theirs += want[i]
           }
           expect(theirs, `${what}: an empty reference`).toBeGreaterThan(0)
-          expectCells(what, values, want, ncols, 1e-4, missing, ours / theirs)
+          expectCells(what, values, want, ncols, FLOAT32, missing, ours / theirs)
         })
       })
     }

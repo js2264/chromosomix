@@ -2031,10 +2031,11 @@ still do not, and `test/unit/bins-guard.test.ts` still proves it for every unbal
 
 **What `balanced` draws is what cooler draws.** CI rebalances a copy of the demo yeast Micro-C with
 `cooler balance` and the parameters its weights record, and `test/unit/normalise-cooler.test.ts`
-reads it back here against cooler's own `matrix(balance=True)` — whole chromosomes, a window across a
-seam, the whole genome and a block between two sequences after `cooler coarsen` — `NaN` where cooler's
-is and a relative 1e-6 elsewhere, the Float32 the block is held in (`reprocessed` in
-`.github/workflows/test.yml`; nothing compared is committed, §7.5 says how it is made).
+reads it back here against cooler's own `matrix(balance=True)` — whole chromosomes, a window across
+a seam, the whole genome and a block between two sequences after `cooler coarsen` — `NaN` where
+cooler's is and every other cell to Float32's precision, the type the block is held in (in the
+goldens job of `.github/workflows/test.yml`, with the other fixtures cooler builds; nothing compared
+is committed, §7.5 says how it is made).
 
 ### 6.5 Drawn to a total — subsampled or oversampled
 
@@ -2072,17 +2073,17 @@ The seed is fixed, so the same total is the same map in every view, in both work
 and in the shell. The pixels follow cooltools' distribution and not its generator: a numpy stream is
 not reproducible from here, and a subsample is a draw, not a file.
 
-**And CI holds them to it, against cooltools run on the day rather than a golden.** The `reprocessed`
+**And CI holds them to it, against cooltools run on the day rather than a golden.** The goldens
 job has `cooltools random-sample --count 10000000 --exact` draw the demo yeast Micro-C, with numpy
-seeded, and `test/unit/subsample-cooltools.test.ts` draws the same total here and compares the two as
-two draws from one distribution: in any set of pixels each keeps a hypergeometric share, so the two
-differ by a known variance, and the test holds them to it — the total exact in both; every pair of
-sequences and every bin's coverage within a few of their standard deviations; the squared
-differences over every pixel within 1% of what two draws without replacement give, where this app's
-draw made one with replacement came to 4% over; and as many pixels holding each count. The weights
-below are held the same way: the file's times `√(T/N)` against `cooler balance` over cooltools'
-draw, the median ratio within half a percent of 1 and each bin within what the draw adds to its
-balanced marginal.
+seeded, and `test/unit/subsample-cooltools.test.ts` draws the same total here and
+compares the two as two draws from one distribution: in any set of pixels each keeps a
+hypergeometric share, so the two differ by a known variance, and the test holds them to it — the
+total exact in both; every pair of sequences and every bin's coverage within a few of their standard
+deviations; the squared differences over every pixel within 1% of what two draws without replacement
+give, where this app's draw made one with replacement came to 4% over; and as many pixels holding
+each count. The weights below are held the same way: the file's times `√(T/N)` against `cooler
+balance` over cooltools' draw, the median ratio within half a percent of 1 and each bin within what
+the draw adds to its balanced marginal.
 
 **An oversample is Boost-HiC** (Carron et al., *Bioinformatics* 2019), ported from its Python
 (`metacooler/boost.ts`) and held to it by a golden file that Python writes
@@ -2614,7 +2615,7 @@ arithmetic in `analysis/compartments.ts`:
 
 | Family | Offered as | Cost |
 |---|---|---|
-| **Normalisation** — VC, VC √, ICE | entries in the score picker (§7.1's control) | one to a few dozen passes over the block |
+| **Normalisation** — VC, VC √, ICE | entries in the score picker (§7.1's control) | one pass for VC; for ICE, a few dozen to some seventy, as the cell budget allows |
 | **Baseline** — observed / expected | a toggle of its own, and `e` | two passes |
 | **Baseline** — observed / expected along a bacterial chromosome's two arms | `arms`, a toggle beside it (§8.15) | two passes |
 | **Baseline** — the expected itself | an entry in the score picker | two passes |
@@ -2639,24 +2640,34 @@ name in a menu and nothing a reader could see. A file balanced with `KR` elsewhe
 under `ICE` shows the same picture.
 
 **Every normalisation is held to cooler or cooltools, run in CI rather than read from a golden.**
-`scripts/reprocess_with_cooltools.py` (`npm run fixtures:reprocessed`) has the two packages, pinned by
-`test/reprocessed-requirements.txt`, reprocess the demo yeast Micro-C into gitignored fixtures, and
-the `reprocessed` job in `.github/workflows/test.yml` runs it and then
+`scripts/reprocess_with_cooltools.py` (`npm run fixtures:reprocessed`) has the two packages
+reprocess the demo yeast Micro-C into gitignored fixtures, built in the goldens job of
+`.github/workflows/test.yml` with the other fixtures cooler can write, and read by
 `test/unit/normalise-cooler.test.ts`, which normalises the same blocks here through `deriveBlock` —
 three whole chromosomes at 1 kb, and at 16 kb after `cooler coarsen` the whole genome and a block
-between two sequences:
+between two sequences. Every cell must agree to Float32's precision, one unit in its last place, and
+does to the half unit its rounding costs:
 
 - **VC** is one round of `cooler balance` from flat weights with every filter off and the marginals
   left unscaled — each bin's coverage over the mean coverage — `--cis-only` for a chromosome and
-  genome-wide for the genome, and **VC √** its square root. The same numbers on the same scale: a
-  relative 1e-6, `NaN` on the same bins. cooler 0.11 is the first whose marginals count a pixel on
-  the main diagonal once, as a dense block does; 0.10 counted it twice, which is why the job pins its
-  own and not the notebooks' (§18.10).
+  genome-wide for the genome, and **VC √** its square root: the same numbers on the same scale, `NaN`
+  on the same bins. cooler 0.11 is the first whose marginals count a pixel on the main diagonal once,
+  as a dense block does; 0.10 counted it twice, so the job asks for 0.11 or later, where the notebooks
+  pin 0.10 (§18.10).
 - **ICE** is cooltools' `iterative_correction_symmetric` (`_asymmetric` between two sequences) over
-  cooler's dense block, converged far past this app's tolerance: within a relative 1e-4 in every cell
-  after one fitted factor, since balancing fixes the weights only up to one, and converged here. Not
-  `cooler balance` with its filters off: with the main diagonal kept, its undamped update all but
-  oscillates on a Micro-C map, whose diagonal holds most of each bin's contacts.
+  cooler's dense block, converged to a variance of 1e-24, after one fitted factor, since balancing
+  fixes the weights only up to one. Not `cooler balance` with its filters off: with the main diagonal
+  kept, its undamped update all but oscillates on a Micro-C map, whose diagonal holds most of each
+  bin's contacts.
+
+**ICE iterates to 1e-9 and calls a block balanced at 1e-5.** It stops once every bin's marginal is
+within 1e-9 of their mean (`BALANCE_PRECISION`), which is what puts its cells on cooltools' to
+Float32's precision: stopping at 1e-5, as it did, left them up to 3·10⁻⁵ apart. The four decades
+between are some thirty rounds — chromosome IV of the demo map at 1 kb, 1,532 bins a side, takes 65
+rounds and 0.6 s where it took 37 and 0.35 s — and the cell budget still caps them. The caption
+keeps the old threshold: a block flat to 1e-5 (`BALANCE_TOLERANCE`) is drawn as balanced whether or
+not the budget let it go on to 1e-9, since the colormap cannot tell the two apart, and only one the
+rounds ran out on short of 1e-5 says it stopped before convergence.
 
 ICE is held only on chromosomes that have a balanced form. At 1 kb the demo map's II, X, XII and XVI
 each have a bin whose one contact is with one other bin, and no scaling of such a matrix has equal
