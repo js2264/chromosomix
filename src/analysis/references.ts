@@ -67,6 +67,13 @@ export const TASK_REFERENCES: Readonly<Record<string, TaskReference>> = {
     agreement: 'identical',
     section: 27,
   },
+  // The resolution ladder counts what Rao et al.'s map resolution is read off;
+  // its § 29 holds it to cooler's own coarsening, untested until rendered.
+  mapreport: {
+    method: 'The map resolution of Rao et al. 2014, its counts at every bin size.',
+    doi: '10.1016/j.cell.2014.11.021',
+    agreement: 'untested',
+  },
   scalogram: {
     method: 'The scalogram of Lioy et al. 2018.',
     doi: '10.1016/j.cell.2017.12.027',
@@ -93,6 +100,13 @@ export const TASK_REFERENCES: Readonly<Record<string, TaskReference>> = {
   hicscore: {
     method: 'The HiC score of Bignaud et al. 2024, after their R script.',
     doi: '10.1038/s41594-023-01178-2',
+    agreement: 'untested',
+  },
+  // Untested until the validation is rendered with Java and the jar: § 28 is
+  // written and runs `juicer_tools arrowhead` itself.
+  arrowhead: {
+    method: 'Contact domains by Arrowhead (Rao et al. 2014), as juicer_tools arrowhead calls them.',
+    doi: '10.1016/j.cell.2014.11.021',
     agreement: 'untested',
   },
   compartments: {

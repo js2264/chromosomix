@@ -25,7 +25,7 @@ chromosomix launches in about a second and reads your data where it lives, on yo
 
 - Perform analyses directly in the browser:
   - 1D analysis tasks: peak calling from a coverage track (yapc, with IDR between replicates), motif search, base composition and GC skew, the origin and terminus of replication, metaplots, track correlation, FRiP over a feature set, signal by group, interval overlap with a shuffle null, ...
-  - 2D analysis tasks: P(s) (and its four pair orientations), scalogram, diamond insulation, directionality index, HiC score, coverage, cis/trans per chromosome, virtual 4C, compartments annotation and saddle plot, the alignment of a bacterial chromosome's two arms, loops and borders detection, APA, loop ranking, ...
+  - 2D analysis tasks: a QC map report (one HTML page, and MultiQC sections from the CLI), P(s) (and its four pair orientations), scalogram, diamond insulation, directionality index, HiC score, TAD annotation (Juicer's Arrowhead), coverage, cis/trans per chromosome, virtual 4C, compartments annotation and saddle plot, the alignment of a bacterial chromosome's two arms, loops and borders detection, APA, loop ranking, ...
   - 3D analysis tasks: build a 3D model from the contact map (pastis-NB or ShRec3D), compare a 3D model with the contact map, and turn a 3D model into tracks.
 
 - Serverless browser & CLI-based: there is no upload, no required preprocessing step and no backend of any kind — the viewer is static files that read standard genome-wide formats directly. Every analysis can be run **interactively**, in the browser, or **programmatically**, with the `chromosomix` command line in a script or a pipeline: the same tasks, with the same parameters, producing the same results. A bottom Console panel in the browser records every run and reports the `chromosomix` command that repeats it.
@@ -232,6 +232,11 @@ chromosomix tasks
 ##       --enzyme (default "none")  enzyme
 ##       --sites (default "")  sites
 ## 
+## mapreport
+##     Map report
+##       --base (default "finest")  ladder from
+##       --no-balance  read the raw counts (balanced by default where the file carries weights)
+## 
 ## scalogram
 ##     Scalogram
 ##       --quantiles (default "standard")  quantiles
@@ -280,6 +285,18 @@ chromosomix tasks
 ##       --sequences  sequences
 ##       --ignoreDiags (default 0)  diagonals to ignore
 ##       --minValid (default 0.5)  minimum coverage of the line
+##       --no-balance  read the raw counts (balanced by default where the file carries weights)
+## 
+## arrowhead
+##     TAD annotation
+##       --sequences  sequences
+##       --matrixSize (default 2000)  window
+##       --minBlockSize (default 60)  smallest lenient domain
+##       --varThreshold (default 0.2)  variance at most
+##       --highSignThreshold (default 0.5)  sign agreement at least
+##       --maxLowSignThreshold (default 0.4)  sign agreement from
+##       --minLowSignThreshold (default 0)  down to
+##       --decrementLowSignThreshold (default 0.1)  in steps of
 ##       --no-balance  read the raw counts (balanced by default where the file carries weights)
 ## 
 ## compartments

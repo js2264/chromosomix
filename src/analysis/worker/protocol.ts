@@ -207,6 +207,16 @@ export interface TaskInputs {
    */
   peers?: PeerMap[]
   /**
+   * The map this job measures, as a peer is named: its address and the source
+   * it is mounted from — for the one task that reads **another rung of the same
+   * file**. The map report's resolution ladder starts at the file's finest
+   * resolution, and the map on screen is often a coarser one (§18.8); the worker
+   * mounts one file, so the finer rung is opened through `JobContext.peer` under
+   * this address with its group changed, and closed when the pass is done.
+   * Absent on a map binned from a `.pairs`, whose rungs are not a file's.
+   */
+  self?: PeerMap
+  /**
    * What the reader calls the map this job measures (§16.10), for a task that
    * names it beside its peers — the matrix, the tables and the lines of a
    * reproducibility run name every map, this one included.

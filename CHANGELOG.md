@@ -14,6 +14,31 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **TAD annotation: Juicer's Arrowhead, ported (§18.8, §18.9).** A 2D task after the HiC score that
+  calls contact domains from the corners of the squares they make on the map, so they can nest, share
+  an edge, or leave an unstructured stretch uncalled — where insulation's and the directionality
+  index's domains tile the sequence. A port of `juicer_tools arrowhead` (the Juicebox classes behind
+  Juicer Tools 1.22.01 and 2): its window (`-m`, 2,000 bins), its strict pass (variance ≤ 0.2, sign
+  agreement ≥ 0.5), its lenient pass (0.4 down to 0 by 0.1, kept past 60 bins where it crosses no
+  strict edge), the merging of nearby corners and Juicer's order, every sum in the Java's order and the
+  lenient blocks tried in a JDK `HashSet`'s own iteration order. The domains open on the map as corners
+  and leave as a BED, and Juicer's `_blocks.bedpe` columns — corner score, `uVarScore`, `lVarScore`,
+  `upSign`, `loSign` — are a table beside them. `chromosomix arrowhead` runs it from a shell. Its
+  golden is Juicer's own output over the demo `.hic` (`npm run fixtures:arrowhead`, which needs Java and
+  the jar), and `notebooks/validation.qmd` § 28 holds it to Juicer on a mouse chromosome.
+
+- **Map report (§18.8).** A 2D task after Pairs QC that runs P(s), Coverage and Cis and trans per
+  sequence as they run on their own, adds the library's totals — contacts, cis, trans, within a bin, cis
+  by separation, and `pairtools stats`' counts where the map was binned from a `.pairs` — and a
+  **resolution ladder**: at each bin size, coarsest first, from the file's finest resolution (opened
+  beside the map when another is on screen) doubled and the file's own rungs, the mean and median
+  contacts per bin, the count 80 % of bins reach, and the empty and nearly empty shares, a contact
+  counted at both its ends as Juicer's `calculate_map_resolution.sh` counts it. Numbers only, no pass
+  or fail. Every figure and table is in the drawer and exports on its own, and *HTML report* saves the
+  run as one self-contained page — SVG figures, light and dark, printable, no script. `chromosomix
+  mapreport` writes the page too, and four MultiQC custom-content files (`*_mqc.tsv`, `*_mqc.json`) a
+  pipeline's MultiQC collects, one row per library.
+
 - **Example sessions on the landing page (§24.11).** Under *Just looking?* and *Pick an example
   session*, in the margin beside the store tiles — under them on a narrow page — four buttons, each
   opening one tab in the tab it was pressed in, and each with the Analysis column's `?`, whose tip
