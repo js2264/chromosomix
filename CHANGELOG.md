@@ -10,6 +10,16 @@ The deployed site at <https://chromosomix.app/> is built from `main` on every pu
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Fixed
+
+- **A FASTA dropped with its `.fai` and nothing else opens by range (§8.8).** The two were paired, and
+  the index went to the sequence track — but not to the question asked first, which sequences the
+  genome has, so the FASTA was read whole for it, and one past 300 MB, `mm10.fa` beside its
+  `mm10.fa.fai`, was refused for want of an index. Dropped with a track or a feature file it opened,
+  since that file named the genome instead.
+
 ## [0.18.0] - 2026-10-30
 
 ### Added

@@ -2831,6 +2831,14 @@ export class Session {
         uri = uri.replace(/#index=.*$/, '')
       }
     }
+    // …and a dropped file's, which `pairIndexes` paired with it, goes on the
+    // source for the same question. Handed only to the track loaded below, a
+    // FASTA past 300 MB that led its own drop — `mm10.fa` and `mm10.fa.fai`
+    // and nothing else — was asked its assembly without the index lying beside
+    // it, read whole, and refused for want of one.
+    if (source.kind === 'local' && source.index === undefined && index !== undefined) {
+      source = { ...source, index }
+    }
     if (this.opening === uri) return
     // As {@link open} does, for the genome a file is browsed as.
     this.unsay(uri)
