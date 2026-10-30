@@ -3369,21 +3369,24 @@ record('Fraction of signal in features', 'mouse ATAC-seq, 2 replicates, chr19; �
 ## 23 · Signal by group (pyBigWig and SciPy)
 
 A track compared between groups of the genome (§18.8): the groups are a feature set's names and the
-stretch of the genome it does not cover, each cut on the bin grid into stretches of at most a bin; a
-stretch's value is the track's exact mean over the bases it has a value for; and the groups are
-summarised and tested by ranks — Mann–Whitney pair by pair and Kruskal–Wallis over all of them, every P
-adjusted with every other (Benjamini–Hochberg). The groups are § 3's compartment call on chr19, A and B,
-and the rest of chr19, which the call leaves out; the tracks are § 5's two ATAC-seq replicates. The
-reference cuts the stretches by the same rule, reads each one's mean with pyBigWig, and summarises and
-tests them with NumPy and SciPy. chromosomix writes every stretch's mean, a group's ascending, as the
-violin it draws, and those are compared with the reference's rank for rank in each group; its summaries
-and tests are compared with NumPy's and SciPy's, each to the places it is written to.
+stretch of the genome it does not cover; by default each group is **one value per entry** — each run of
+a name, merged where its features overlap or touch, and each stretch of the rest between two — and with
+a bin size each run is cut on the bin grid into stretches of at most a bin; a value is the track's
+exact mean over the bases it has one for; and the groups are summarised and tested by ranks —
+Mann–Whitney pair by pair and Kruskal–Wallis over all of them, every P adjusted with every other
+(Benjamini–Hochberg). The groups are § 3's compartment call on chr19, A and B, and the rest of chr19,
+which the call leaves out; the tracks are § 5's two ATAC-seq replicates; and the run is made both ways,
+by entry and in 10 kb stretches. The reference cuts the groups by the same rule, reads each one's mean
+with pyBigWig, and summarises and tests them with NumPy and SciPy. chromosomix writes every value, a
+group's ascending, as the violin it draws, and those are compared with the reference's rank for rank in
+each group; its summaries and tests are compared with NumPy's and SciPy's, each to the places it is
+written to.
 
 | | chromosomix | pyBigWig, NumPy and SciPy |
 |---|---|---|
 | groups | `--features`, § 3's call, `--split name`; the rest of chr19 (`--outside`, the default) | the BED's names; what it does not cover |
-| stretches | at most a bin, `--resolution 10000` | cut by the same rule |
-| a stretch's value | its mean, at the track's own resolution | `stats(..., type='mean', exact=True)` |
+| what is compared | one value per entry (the default); stretches of at most a bin, `--resolution 10000` | the same, a bin size of 0 cutting nothing |
+| a value | its mean, at the track's own resolution | `stats(..., type='mean', exact=True)` |
 | summaries | n, mean, SD, median, quartiles, the mean less the others' | NumPy: `std(ddof=1)`, `quantile` |
 | tests | Mann–Whitney, Kruskal–Wallis, tie-corrected; Benjamini–Hochberg | `mannwhitneyu` (asymptotic, continuity-corrected), `kruskal`; `false_discovery_control` |
 
@@ -3396,22 +3399,20 @@ ab_call = one(CMP / 'app', '*.compartment-ab.bed').read_text()
 AB_CALL = GS / f"ab-{hashlib.sha256(ab_call.encode()).hexdigest()[:12]}.bed"
 if not AB_CALL.exists():
     AB_CALL.write_text(ab_call)
-mr('groupsignal', '--tracks', ','.join(rel(path) for path in REPS), '--features', AB_CALL, '--split', 'name',
-   '--resolution', GS_BIN, out=GS / 'app', name='groupsignal', analysis='Signal by group', bench=False)
-reference('pybigwig-groupsignal', 'Signal by group', 'pyBigWig, SciPy',
-          [PYTHON, script('pybigwig_groupsignal'), AB_CALL, GS_BIN, OUT, *REPS], out=GS / 'reference',
-          made=GS / 'reference-tests.tsv', bench=False)
-
-groups_app = table(one(GS / 'app', '*.groupsignal-groups.tsv'))
-tests_app = table(one(GS / 'app', '*.groupsignal-tests.tsv')).fillna({'b': ''})
-groups_ref = pd.read_csv(GS / 'reference-groups.tsv', sep='\t').assign(track=lambda f: f['track'].map(track_name))
-tests_ref = (pd.read_csv(GS / 'reference-tests.tsv', sep='\t').fillna({'b': ''})
-             .assign(track=lambda f: f['track'].map(track_name)))
-exact = pd.read_csv(GS / 'reference-stretches.tsv', sep='\t').rename(columns=track_name)
+#: The two ways of making a group's values: the default, one value per entry, timed against its reference;
+#: and stretches of at most 10 kb. Each: its folder's suffix, the flag, the bin size the reference is given.
+GS_CASES = {'one value per entry': ('-entries', [], 0), '10 kb stretches': ('', ['--resolution', GS_BIN], GS_BIN)}
+for label, (suffix, flag, binsize) in GS_CASES.items():
+    mr('groupsignal', '--tracks', ','.join(rel(path) for path in REPS), '--features', AB_CALL, '--split', 'name',
+       *flag, out=GS / f'app{suffix}', name=f'groupsignal{suffix}', analysis='Signal by group', label=label,
+       bench=binsize == 0)
+    reference(f'pybigwig-groupsignal{suffix}', 'Signal by group', 'pyBigWig, SciPy',
+              [PYTHON, script('pybigwig_groupsignal'), AB_CALL, binsize, OUT, *REPS], out=GS / f'reference{suffix}',
+              made=GS / f'reference{suffix}-tests.tsv', label=label, bench=binsize == 0)
 
 
 def violin_values(path):
-    """A violin as chromosomix writes it: its track, and every stretch's mean a group, ascending."""
+    """A violin as chromosomix writes it: its track, and every value a group, ascending."""
     frame = table(path)
     track = re.search(r'^# output: (.+?) by ', path.read_text(), flags=re.M).group(1)
     return track, {name: frame[name].dropna().to_numpy(float) for name in frame.columns[1:]}
@@ -3422,9 +3423,9 @@ def significant(digits):
     return 0.5 * 10.0 ** (1 - digits) * (1 + 1e-6)
 
 
-VALUES = dict(violin_values(path) for path in sorted((GS / 'app').glob('*.groupsignal-[0-9]*.tsv')))
-#: Each column chromosomix writes and how near the reference has to be: the places it is written to, and P
-#: and q, written in scientific notation, to their six significant digits.
+#: Each column chromosomix writes and how near the reference has to be: the places it is written to; P and
+#: q, written in scientific notation below 10⁻⁴, to their six significant digits there and to their four
+#: places above it.
 GROUP_COLUMNS = {'mean': rounded(4), 'sd': rounded(4), 'median': rounded(4), 'q1': rounded(4), 'q3': rounded(4),
                  'vsRest': rounded(4)}
 TEST_COLUMNS = {'difference': rounded(4), 'effect': rounded(3), 'statistic': rounded(2), 'p': significant(6),
@@ -3432,73 +3433,104 @@ TEST_COLUMNS = {'difference': rounded(4), 'effect': rounded(3), 'statistic': rou
 
 
 def against(app, other, key, columns):
-    """Each column's largest difference — P and q relative, the others as written — and whether every one
-    is near enough."""
+    """Each column's largest difference — P and q relative where they are written with an exponent, the
+    others as written — and whether every one, P and q above 10⁻⁴ too, is near enough."""
     paired = app.merge(other, on=key, suffixes=('', '_other'))
     out = {}
     for column, near in columns.items():
         mine, theirs = paired[column].to_numpy(float), paired[f'{column}_other'].to_numpy(float)
-        gap = relative_difference(mine, theirs) if column in ('p', 'q') else np.abs(mine - theirs)
-        gap = np.nan_to_num(gap, nan=0.0)
+        if column in ('p', 'q'):
+            exponent = np.abs(mine) < 1e-4
+            gap = np.nan_to_num(np.where(exponent, relative_difference(mine, theirs), np.abs(mine - theirs)), nan=0.0)
+            ok = np.where(exponent, gap <= near, gap <= rounded(4))
+            out[column] = (np.max(gap[exponent], initial=0.0), bool(ok.all()))
+            continue
+        gap = np.nan_to_num(np.abs(mine - theirs), nan=0.0)
         out[column] = (np.max(gap), bool((gap <= near).all()))
     return out, len(paired)
 
 
-held_groups, n_groups = against(groups_app, groups_ref, ['track', 'group'], GROUP_COLUMNS)
-held_tests, n_tests = against(tests_app, tests_ref, ['track', 'test', 'a', 'b'], TEST_COLUMNS)
-HELD = held_groups | held_tests
+def compared(suffix):
+    """One way of making the groups, chromosomix's against the reference's: its values, rank for rank in
+    each group, and every summary and test."""
+    groups_app = table(one(GS / f'app{suffix}', '*.groupsignal-groups.tsv'))
+    tests_app = table(one(GS / f'app{suffix}', '*.groupsignal-tests.tsv')).fillna({'b': ''})
+    groups_ref = (pd.read_csv(GS / f'reference{suffix}-groups.tsv', sep='\t')
+                  .assign(track=lambda f: f['track'].map(track_name)))
+    tests_ref = (pd.read_csv(GS / f'reference{suffix}-tests.tsv', sep='\t').fillna({'b': ''})
+                 .assign(track=lambda f: f['track'].map(track_name)))
+    exact = pd.read_csv(GS / f'reference{suffix}-stretches.tsv', sep='\t').rename(columns=track_name)
+    values = dict(violin_values(path) for path in sorted((GS / f'app{suffix}').glob('*.groupsignal-[0-9]*.tsv')))
+    held_groups, n_groups = against(groups_app, groups_ref, ['track', 'group'], GROUP_COLUMNS)
+    held_tests, n_tests = against(tests_app, tests_ref, ['track', 'test', 'a', 'b'], TEST_COLUMNS)
+    held = held_groups | held_tests
+
+    def exact_sorted(track, name):
+        """A group's exact means on one track, ascending, as chromosomix's violins write its own."""
+        return np.sort(exact.loc[(exact['group'] == name) & exact[track].notna(), track].to_numpy())
+
+    mine = np.concatenate([v for by_group in values.values() for v in by_group.values()])
+    theirs = np.concatenate([exact_sorted(track, name) for track, by_group in values.items() for name in by_group])
+    same_counts = bool((groups_app.merge(groups_ref, on=['track', 'group'], suffixes=('', '_ref'))
+                        .eval('n == n_ref and bases == bases_ref')).all())
+    every = all(ok for _, ok in held.values()) and n_groups == len(groups_app) and n_tests == len(tests_app)
+    return dict(n=len(exact), values=values, mine=mine, theirs=theirs, rank_gap=relative_difference(mine, theirs),
+                held=held, same_counts=same_counts, every=every, names=list(dict.fromkeys(groups_app['group'])))
 
 
-def exact_sorted(track, name):
-    """A group's exact stretch means on one track, ascending, as chromosomix's violins write its own."""
-    return np.sort(exact.loc[(exact['group'] == name) & exact[track].notna(), track].to_numpy())
-
-
-# The stretches, rank for rank in each group: chromosomix's means, its violins, against the exact ones.
-rank_gap = np.concatenate([relative_difference(values, exact_sorted(track, name))
-                           for track, by_group in VALUES.items() for name, values in by_group.items()])
-same_counts = bool((groups_app.merge(groups_ref, on=['track', 'group'], suffixes=('', '_ref'))
-                    .eval('n == n_ref and bases == bases_ref')).all())
-NAMES = list(dict.fromkeys(groups_app['group']))
+GS_RESULTS = {label: compared(suffix) for label, (suffix, _, _) in GS_CASES.items()}
 display(measures({
-    'stretches; groups': f"{len(exact):,}; {', '.join(NAMES)}",
-    'stretches and bases of each group, the same': 'yes' if same_counts else 'no',
-    'stretch means, rank for rank: median, max relative difference': f'{np.median(rank_gap):.1e}, {rank_gap.max():.1e}',
-}))
-show(pd.DataFrame([{'column': column, 'measured': 'relative' if column in ('p', 'q') else 'as written',
-                    'near enough': (GROUP_COLUMNS | TEST_COLUMNS)[column], 'max difference': HELD[column][0],
-                    'near enough, every one': HELD[column][1]}
+    f'{label}: values; groups': f"{r['n']:,}; {', '.join(r['names'])}" for label, r in GS_RESULTS.items()} | {
+    f'{label}: values and bases of each group, the same': 'yes' if r['same_counts'] else 'no'
+    for label, r in GS_RESULTS.items()} | {
+    f'{label}: means, rank for rank: median, max relative difference':
+        f"{np.median(r['rank_gap']):.1e}, {r['rank_gap'].max():.1e}" for label, r in GS_RESULTS.items()}))
+show(pd.DataFrame([{'column': column,
+                    'measured': 'relative below 10⁻⁴, else as written' if column in ('p', 'q') else 'as written',
+                    'near enough': (GROUP_COLUMNS | TEST_COLUMNS)[column],
+                    **{f'max difference, {label}': r['held'][column][0] for label, r in GS_RESULTS.items()},
+                    'near enough, every one': all(r['held'][column][1] for r in GS_RESULTS.values())}
                    for column in [*GROUP_COLUMNS, *TEST_COLUMNS]]),
-     **{c: '{:.1e}' for c in ('near enough', 'max difference')})
+     **{c: '{:.1e}' for c in ('near enough', *[f'max difference, {label}' for label in GS_RESULTS])})
 ```
 
 ```{python}
 #| label: fig-groupsignal
-#| fig-cap: "ATAC-seq on chr19 by § 3's compartments, in stretches of at most 10 kb. a, each group's stretch means as chromosomix measures them, replicate 1; b, every stretch's mean, rank for rank in its group, both replicates, against pyBigWig's; c, every summary and test against NumPy's and SciPy's — P and q relative, the others as they are written."
-TEXT['gs_n'] = f'{len(exact):,}'
-TEXT['gs_rank'] = f'{rank_gap.max():.1e}'
-GS_HELD = all(ok for _, ok in HELD.values()) and n_groups == len(groups_app) and n_tests == len(tests_app)
+#| fig-cap: "ATAC-seq on chr19 by § 3's compartments. a, each group's means as chromosomix measures them, replicate 1: one value per entry (bars) and in stretches of at most 10 kb (steps); b, every value's mean, rank for rank in its group, both replicates and both ways, against pyBigWig's; c, every summary and test against NumPy's and SciPy's, both ways — P and q relative where written with an exponent, the others as they are written."
+ENTRIES, STRETCHES = GS_RESULTS['one value per entry'], GS_RESULTS['10 kb stretches']
+TEXT['gs_n'] = f"{STRETCHES['n']:,}"
+TEXT['gs_entries'] = f"{ENTRIES['n']:,}"
+TEXT['gs_rank'] = f"{max(r['rank_gap'].max() for r in GS_RESULTS.values()):.1e}"
+GS_HELD = all(r['every'] for r in GS_RESULTS.values())
 TEXT['gs_held'] = 'every one' if GS_HELD else 'not every one'
-GS_EXACT = GS_HELD and same_counts and rank_gap.max() <= significant(6)
+GS_EXACT = GS_HELD and all(r['same_counts'] and r['rank_gap'].max() <= significant(6) for r in GS_RESULTS.values())
 
 fig, axes = plt.subplots(1, 3, figsize=(12, 3.9), layout='constrained', width_ratios=[1.05, 1, 1.25])
 ax = axes[0]
-first_track = next(iter(VALUES))
-edges = np.linspace(0, np.percentile(np.concatenate(list(VALUES[first_track].values())), 99.5), 41)
-for name, colour in zip(NAMES, ('#1baf7a', '#7c56c2', INK2)):
-    counts, _ = np.histogram(np.clip(VALUES[first_track][name], 0, edges[-1]), edges)
-    ax.stairs(counts / counts.sum(), edges, color=colour, lw=1.6, label=name)
-ax.set(xlabel=f'mean ATAC signal in a stretch, {REPLICATE[first_track]}', ylabel='share of the group’s stretches',
-       title='a  each group')
+first_track = next(iter(STRETCHES['values']))
+edges = np.linspace(0, np.percentile(np.concatenate(list(STRETCHES['values'][first_track].values())), 99.5), 41)
+for name, colour in zip(STRETCHES['names'], ('#1baf7a', '#7c56c2', INK2)):
+    counts, _ = np.histogram(np.clip(STRETCHES['values'][first_track][name], 0, edges[-1]), edges)
+    ax.stairs(counts / counts.sum(), edges, color=colour, lw=1.6, label=f'{name}, 10 kb')
+    # Each entry's mean as a tick, a row a group, under the stretches' steps.
+    entries = np.clip(ENTRIES['values'][first_track][name], 0, edges[-1])
+    ax.plot(entries, np.full(len(entries), -0.04 * (1 + STRETCHES['names'].index(name))), '|', color=colour, ms=8,
+            gid=f'{name}, by entry')
+top = ax.get_ylim()[1]
+ax.set_yticks(np.arange(0, top, 0.2))
+ax.set(xlabel=f'mean ATAC signal, {REPLICATE[first_track]}', ylabel='share of the group’s stretches',
+       title='a  each group; ticks, by entry', ylim=(-0.04 * (len(STRETCHES['names']) + 1), top))
 ax.legend(loc='upper right')
-agreement(axes[1], np.concatenate([exact_sorted(track, name) for track, by_group in VALUES.items() for name in by_group]),
-          np.concatenate([values for by_group in VALUES.values() for values in by_group.values()]), 'pyBigWig',
-          'chromosomix', 'b  every stretch, rank for rank')
+agreement(axes[1], np.concatenate([r['theirs'] for r in GS_RESULTS.values()]),
+          np.concatenate([r['mine'] for r in GS_RESULTS.values()]), 'pyBigWig', 'chromosomix',
+          'b  every value, rank for rank')
 ax = axes[2]
 columns = [*GROUP_COLUMNS, *TEST_COLUMNS]
+for (label, r), marker in zip(GS_RESULTS.items(), ('o', 's')):
+    for k, column in enumerate(columns):
+        ax.scatter(k, max(r['held'][column][0], 1e-9), s=26, marker=marker, color=APP_COLOUR, zorder=3,
+                   facecolor=APP_COLOUR if marker == 'o' else 'none', label=label if k == 0 else None, gid=label)
 for k, column in enumerate(columns):
-    ax.scatter(k, max(HELD[column][0], 1e-9), s=26, color=APP_COLOUR, zorder=3,
-               label='max difference' if k == 0 else None, gid='max difference')
     near = (GROUP_COLUMNS | TEST_COLUMNS)[column]
     ax.plot([k - 0.35, k + 0.35], [near, near], color=INK2, lw=1, gid='near enough')
 ax.set_xticks(range(len(columns)), ['mean', 'SD', 'median', 'Q1', 'Q3', 'mean − rest', 'median diff.', 'effect',
@@ -3508,19 +3540,22 @@ ax.legend(loc='upper left')
 drawn('fig-groupsignal')
 ```
 
-The two tools cut chr19 into the same `{python} TEXT['gs_n']` stretches, the same number in each group
-and of the same bases, and read the same means from them: rank for rank in each group, chromosomix's are
+The two tools make the same groups both ways — chr19 as `{python} TEXT['gs_entries']` entries by
+default and as `{python} TEXT['gs_n']` stretches of at most 10 kb — the same number in each group and of
+the same bases, and read the same means from them: rank for rank in each group, chromosomix's are
 pyBigWig's within `{python} TEXT['gs_rank']`, the six digits it writes. NumPy and SciPy give
 `{python} TEXT['gs_held']` of its summaries and tests to the places it writes them — U and H to two
-decimals, P and q, far below anything a reader acts on, to six significant digits.
+decimals, P and q to six significant digits where they are written with an exponent and to four places
+above 10⁻⁴.
 
 ```{python}
-record('Signal by group', "mouse ATAC-seq, 2 replicates, chr19, by § 3's compartments; 10 kb stretches",
+record('Signal by group', "mouse ATAC-seq, 2 replicates, chr19, by § 3's compartments; one value per entry, "
+       "and 10 kb stretches",
        f"pyBigWig {VERSIONS['pyBigWig']}, NumPy {VERSIONS['numpy']}, SciPy {VERSIONS['scipy']}",
-       f"the same stretches, their means within {TEXT['gs_rank']}; {TEXT['gs_held']} of the summaries and tests "
-       "as written",
+       f"the same entries and stretches, their means within {TEXT['gs_rank']}; {TEXT['gs_held']} of the "
+       "summaries and tests as written",
        'Identical (to the digits written)' if GS_EXACT else 'Differs',
-       apps=['groupsignal'], refs=['pybigwig-groupsignal'])
+       apps=['groupsignal-entries', 'groupsignal'], refs=['pybigwig-groupsignal-entries', 'pybigwig-groupsignal'])
 ```
 
 ## 24 · CTCF sites in GM12878 (Fig. 2)

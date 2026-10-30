@@ -4,7 +4,9 @@ The groups are the names a BED writes, in their natural order, and the rest of t
 tracks' headers declare: each name's intervals merged where they overlap or touch, what none of them
 covers a group of its own, and every run cut into stretches on the bin grid as chromosomix cuts them
 (§18.8) — one stretch where it is a bin long or shorter, else at each multiple of the bin, a piece of
-less than half a bin at either end joined to the one beside it. A track's value on a stretch is
+less than half a bin at either end joined to the one beside it. A BINSIZE of 0 cuts nothing, as
+chromosomix's default does not: each merged run of a name, and each stretch of the rest between two,
+is one entry. A track's value on a stretch is
 pyBigWig's exact mean over the bases it has a value for, `stats(..., exact=True)`. Each group is
 summarised by NumPy (the SD over n − 1, the quartiles interpolated), and the groups are compared by
 `scipy.stats.kruskal` over all of them and `scipy.stats.mannwhitneyu` pair by pair — two-sided,
@@ -52,7 +54,7 @@ def merged(intervals):
 def cut(start, end):
     if not end > start:
         return []
-    if end - start <= binsize:
+    if binsize <= 0 or end - start <= binsize:
         return [[start, end]]
     pieces, at = [], start
     while at < end:

@@ -71,6 +71,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   of the task. The second observed/expected it makes of each chromosome costs a twentieth of the run:
   over the mouse map, 16.7 s of CPU where it was 16.0, against 28.2 s for cooltools.
 
+- **Signal by group compares one value per entry by default (§18.8).** Its bin size is 0 unless one is
+  typed, where it was the open map's resolution: each run of a name, merged where its features overlap
+  or touch, each stretch of the rest between two, and each run of bins in one group of a track is one
+  value, and an entry across a circular sequence's origin is one entry. The tests count their values as
+  independent, and the bins of one compartment are not — over *P. aeruginosa*'s 782 8-kb bins in 110
+  compartments, A against B in GC had a P of 2·10⁻²⁰ in 8 kb bins and 3·10⁻² in 128 kb ones, its effect
+  the same at both. A bin size gives the stretches of at most a bin it gave before, number for number,
+  and a `chromosomix groupsignal` line with no `--resolution` is now one value per entry; the task's
+  version is 2. Over § 3's compartments on chr19, § 23 of the validation notebook holds both ways to
+  pyBigWig and SciPy to the digits written, P and q to their four places above 10⁻⁴ where an exponent
+  does not write them, and by entry the run takes 0.64 s against the 10 kb stretches' 1.2 s.
+
 - **The laptop notebook runs each of its 23 analyses in the app as well as on the command line
   (§18.10).** What a genome-wide analysis costs was measured on the command line alone, where a reader
   runs most of them in the browser. Each is now run a second time in headless Chromium, as a reader
