@@ -16,12 +16,14 @@ name: Tests
 #     push, not only when the second job can build fixtures.
 #   - the second job builds every oracle a runner can build. Its public half
 #     needs no credential: the demo maps fetched from the lab's bucket and their
-#     oracles rebuilt with the public `cooler` package, and the fixtures `cooler`
-#     and `g3dtools` alone can write. Its private half is the full suite over
-#     `make_fixtures.py`'s output, which needs metacooler — not on PyPI, and a
-#     private repository, so it is checked out with the METACOOLER_REPO_TOKEN
-#     secret (a fine-grained token with read access to js2264/metacooler's
-#     contents) and skipped, with a warning saying so, where that is not set.
+#     oracles rebuilt with the public `cooler` package, the fixtures `cooler`
+#     and `g3dtools` alone can write, and the demo yeast Micro-C as `cooler` and
+#     `cooltools` reprocess it, which the subsample and the normalisations are
+#     held to. Its private half is the full suite over `make_fixtures.py`'s
+#     output, which needs metacooler — not on PyPI, and a private repository, so
+#     it is checked out with the METACOOLER_REPO_TOKEN secret (a fine-grained
+#     token with read access to js2264/metacooler's contents) and skipped, with
+#     a warning saying so, where that is not set.
 #
 # Every step that installs, fetches or generates is allowed to fail without
 # failing the build, and the job says plainly in its summary what did not run,
@@ -99,10 +101,13 @@ jobs:
       # The public half: no credential, every run.
       # ---------------------------------------------------------------------
 
-      - name: Install cooler and g3dtools
+      # cooler from 0.11, the first whose `balance` counts a pixel on the main
+      # diagonal once in a bin's marginal, as the dense block the app normalises
+      # does: one round of an older one is not the app's VC.
+      - name: Install cooler, cooltools and g3dtools
         id: cooler
         continue-on-error: true
-        run: python -m pip install cooler g3dtools
+        run: python -m pip install 'cooler>=0.11' cooltools g3dtools
 
       # From the bucket and not from `demo/`, so a map that changed or vanished
       # there is found here rather than by a reader of the published store.
@@ -126,7 +131,13 @@ jobs:
         if: steps.demo.outcome == 'success'
         run: npx vitest run test/unit/demo-maps.test.ts
 
-      - name: Build the fixtures cooler and g3dtools can write
+      # `fixtures:reprocessed` is the demo yeast Micro-C as cooler and cooltools
+      # reprocess it — `cooltools random-sample --exact`, `cooler balance`,
+      # `cooler coarsen`, cooltools' iterative correction — for the subsample and
+      # normalisation suites (SPECS §6.4, §6.5, §7.5). Like the rest it is built
+      # here and never committed, so a release of either package that disagrees
+      # with the app is found on the run that installed it.
+      - name: Build the fixtures cooler, cooltools and g3dtools can write
         id: public-fixtures
         if: steps.cooler.outcome == 'success'
         continue-on-error: true
@@ -135,6 +146,7 @@ jobs:
           npm run fixtures:hicpro
           npm run fixtures:pairs
           npm run fixtures:g3d
+          npm run fixtures:reprocessed
 
       # ---------------------------------------------------------------------
       # The private half: metacooler's own repository, with a read token.
@@ -179,6 +191,7 @@ jobs:
           test/unit/pairs-cload-oracle.test.ts test/unit/pairs-mcool-roundtrip.test.ts
           test/unit/g3d-binary-oracle.test.ts test/unit/g3d-binary-worker.test.ts
           test/unit/msgpack.test.ts test/dom/error-view.test.ts
+          test/unit/subsample-cooltools.test.ts test/unit/normalise-cooler.test.ts
 
       - name: Report what ran and what did not
         if: always()
@@ -193,10 +206,10 @@ jobs:
           {
             echo "| oracle | outcome |"
             echo "|---|---|"
-            echo "| cooler + g3dtools installed | ${COOLER} |"
+            echo "| cooler + cooltools + g3dtools installed | ${COOLER} |"
             echo "| demo maps fetched from the bucket | ${DEMO} |"
             echo "| demo oracles rebuilt identically | ${DEMO_GOLDEN} |"
-            echo "| fixtures built by cooler / g3dtools | ${PUBLIC_FIXTURES} |"
+            echo "| fixtures built by cooler / cooltools / g3dtools | ${PUBLIC_FIXTURES} |"
             echo "| metacooler checked out (METACOOLER_REPO_TOKEN) | ${METACOOLER:-skipped} |"
             echo "| metacooler fixtures, full suite | ${FIXTURES:-skipped} |"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -204,7 +217,7 @@ jobs:
             echo "::warning title=Full suite not run::metacooler's fixtures were not built (set the METACOOLER_REPO_TOKEN secret to a token that can read js2264/metacooler), so the twelve reader suites over them and the metacool request budgets did not run. The demo maps and the public fixtures still did, where their own steps say so."
           fi
           if [ "$PUBLIC_FIXTURES" != "success" ]; then
-            echo "::warning title=Public fixtures not built::cooler or g3dtools did not build their fixtures, so the .pairs (cooler cload pairs) and binary g3d oracles did not run in this job, nor the .scool and HiC-Pro ones unless metacooler's fixtures rebuilt them. Run npm run fixtures:scool, fixtures:hicpro, fixtures:pairs and fixtures:g3d and look at the error."
+            echo "::warning title=Public fixtures not built::cooler, cooltools or g3dtools did not build their fixtures, so the .pairs (cooler cload pairs) and binary g3d oracles and the subsample and normalisations against cooler and cooltools did not run in this job, nor the .scool and HiC-Pro ones unless metacooler's fixtures rebuilt them. Run npm run fixtures:scool, fixtures:hicpro, fixtures:pairs, fixtures:g3d and fixtures:reprocessed and look at the error."
           fi
           if [ "$DEMO" != "success" ]; then
             echo "::warning title=Demo maps not fetched::the demo maps could not be fetched from the public bucket, so the reader was not compared with cooler on them in this job."

@@ -32,6 +32,23 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
     60 min into mitosis below it, over 40 Mb of chromosome 1 at 100 kb, with each map's compartment
     eigenvector and insulation on the edge beside its own triangle, on one axis per kind.
 
+- **The subsample and every normalisation held to cooler and cooltools in CI, run on the day and not
+  read from a golden (§6.4, §6.5, §7.5).** The goldens job of `.github/workflows/test.yml` now
+  installs cooltools beside cooler and, with the other fixtures cooler can write, has them reprocess
+  the demo yeast Micro-C (`npm run fixtures:reprocessed`, into gitignored fixtures); two new suites
+  compare this app with what they wrote. `test/unit/subsample-cooltools.test.ts` draws ten million
+  contacts as the contacts box does and holds the draw to `cooltools random-sample --exact`'s as two
+  draws from one distribution: the total exact, every pair of sequences and every bin's coverage
+  within the noise two draws leave, every pixel spread as a draw without replacement spreads it, as
+  many pixels holding each count, and the file's weights times `√(T/N)` to `cooler balance` over
+  cooltools' draw — the median ratio 1.0004. `test/unit/normalise-cooler.test.ts` holds `balanced`
+  to cooler's `matrix(balance=True)` on a copy `cooler balance` rewrote, VC and VC √ to one round of
+  `cooler balance` with every filter off, and ICE to cooltools' iterative correction, over three
+  chromosomes at 1 kb and, after `cooler coarsen`, the whole genome and a block between two
+  chromosomes at 16 kb: every cell to Float32's precision, and in fact within the half unit its own
+  rounding costs. Made to fail on purpose, it does — a draw with replacement, ICE stopped early, VC
+  averaged over empty bins.
+
 ### Changed
 
 - **The laptop notebook runs each of its 23 analyses in the app as well as on the command line
@@ -45,6 +62,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   Chromium's kept beside them. The table, the five analyses at two depths and the figure show both, and
   the line the app's console wrote for each run is held to the command it ran, flag by flag. The
   runner's render installs Playwright's Chromium and may take five hours.
+
+- **ICE balances to Float32's precision (§7.5).** It went on until every bin's marginal was within
+  1e-5 of their mean, which left its cells up to 3·10⁻⁵ from cooltools' iterative correction; it now
+  goes on to 1e-9 while the cell budget allows, and its cells are cooltools' to the half unit in the
+  last place their own rounding costs. That is some thirty rounds more — chromosome IV of the yeast
+  Micro-C at 1 kb takes 0.6 s where it took 0.35 — and nothing a colormap can show, so a block is
+  still called balanced at 1e-5: no caption that said balanced now says it stopped before
+  convergence.
 
 ### Fixed
 
