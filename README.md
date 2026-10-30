@@ -494,7 +494,7 @@ chromosomix tasks
 ##       --groupTrack  grouping track
 ##       --cut (default "sign")  cut it by
 ##       --quantiles (default 4)  quantiles
-##       --resolution (default 10000)  bin size
+##       --resolution (default 0)  bin size
 ##       --perFeature (default false)  score every feature
 ## 
 ## overlap
