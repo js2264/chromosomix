@@ -886,16 +886,17 @@ record('Directionality index', 'mouse Hi-C, 50 kb, window 2 Mb', f"domaincaller 
 
 ## 3 · Compartments
 
-cooltools' preparation in both — observed/expected cis, clipped at its 99.9th percentile, less one —
-and three eigenvectors ranked by eigenvalue and signed by GC content, computed once per 100 kb bin
-(`bioframe.frac_gc`, mm10) and given to both. cooltools signs by Spearman correlation, the app by
-Pearson, and the app leaves the sign unset below |r| = 0.1. chrY, mostly unmappable at 100 kb, is left
-out of the comparison.
+cooltools' preparation in both — observed/expected cis over cooltools' own expectation, clipped at its
+99.9th percentile, less one — and three eigenvectors ranked by eigenvalue and signed by GC content,
+computed once per 100 kb bin (`bioframe.frac_gc`, mm10) and given to both. cooltools signs by
+Spearman correlation, the app by Pearson, and the app leaves the sign unset below |r| = 0.1. chrY,
+mostly unmappable at 100 kb, is left out of the comparison.
 
 | | chromosomix | cooltools |
 |---|---|---|
 | components | `--components 3` | `n_eigs=3` |
 | phasing | `--phaseTrack gc.bedGraph` | `phasing_track=gc` |
+| expectation | each diagonal's mean, pooled from about the 35th in groups at most 3% wide (default) | `observed_over_expected`'s, `dist_bin_edge_ratio=1.03` |
 | diagonals left out; clipping | 2; 99.9th percentile (defaults) | `ignore_diags=2`; `clip_percentile=99.9` |
 | eigensolver | Lanczos, a component at a time with deflation, to a residual within 10⁻¹² of each eigenvalue | ARPACK's restarted Lanczos (`scipy.sparse.linalg.eigsh`), largest in size |
 
@@ -944,6 +945,7 @@ for chrom in COMPARED:
         row[f'eigenvalue E{k}, relative difference'] = abs(eig_app / eig_ref - 1)
     e1a, e1b = app_vec[1][s], ref_vec['E1'].to_numpy(float)[s]
     ok = np.isfinite(e1a) & np.isfinite(e1b)
+    row['E1 largest difference'] = np.abs(e1a[ok] - e1b[ok]).max()
     row['A/B agreement'] = (np.sign(e1a[ok]) == np.sign(e1b[ok])).mean()
     phase = first(app_comp.loc[(app_comp['sequence'] == chrom) & (app_comp['component'] == 'E1'), 'r'])
     row['E1 against GC (app)'] = phase
@@ -958,8 +960,10 @@ show(cmp_table)
 #| fig-cap: "Compartments at 100 kb, both signed by GC content. a, correlation of each component between the two tools, chromosome by chromosome; b, E1 along chr1."
 phased = cmp_table[cmp_table['phasing'] == 'set']
 TEXT['cmp_min_r'] = f"{phased['r E1'].min():.4f}"
+TEXT['cmp_gap'] = f"{max(1 - phased['r E1'].min(), 1e-16):.0e}"
+TEXT['cmp_delta'] = f"{phased['E1 largest difference'].max():.0e}"
 TEXT['cmp_n'] = f'{len(phased)}'
-TEXT['cmp_eig'] = f"{phased['eigenvalue E1, relative difference'].max():.2%}"
+TEXT['cmp_eig'] = f"{phased['eigenvalue E1, relative difference'].max():.0e}"
 TEXT['cmp_ab'] = f"{phased['A/B agreement'].min():.2%}"
 ambiguous = ', '.join(cmp_table.loc[cmp_table['phasing'] == 'ambiguous', 'chromosome'])
 TEXT['cmp_subject'] = (f'the {len(phased)} chromosomes compared, every one phased by GC content' if not ambiguous else
@@ -987,17 +991,22 @@ ax.legend(loc='lower left', ncols=2)
 drawn('fig-compartments')
 ```
 
-On `{python} TEXT['cmp_subject']`, E1 correlates at r ≥ `{python} TEXT['cmp_min_r']`, eigenvalues
-agree within `{python} TEXT['cmp_eig']` and the A/B call on at least `{python} TEXT['cmp_ab']` of bins.
-E2 and E3 agree up to sign on `{python} TEXT['cmp_e23']` chromosome-components (|r| ≥ 0.98); each of
-the others is one of two eigenvalues of opposite sign and all but the same size, which the two tools —
-their matrices a few parts in a thousand apart — rank in opposite orders, so that one's third
-component is the other's fourth.
+On `{python} TEXT['cmp_subject']`, E1 correlates at r ≥ `{python} TEXT['cmp_min_r']` — 1 − r at most
+`{python} TEXT['cmp_gap']` — no bin of it more than `{python} TEXT['cmp_delta']` from cooltools', which
+is the six significant digits the track is written to, eigenvalues agree within
+`{python} TEXT['cmp_eig']`, relative, and the A/B call on at least `{python} TEXT['cmp_ab']` of bins.
+E2 and E3 agree up to sign on `{python} TEXT['cmp_e23']` chromosome-components (|r| ≥ 0.98) — up to
+sign because one that follows GC content at |r| < 0.1 keeps the sign the app's solver gave it, where
+cooltools signs it all the same. The two decompose the same matrix: the app divides by cooltools' own
+expectation, which `eigs_cis` takes from each chromosome's square rather than from `expected_cis` —
+each diagonal's mean to about the thirty-fifth and the mean of a group of them, at most 3% wide,
+beyond. Divided by each diagonal's own mean, as the app did until version 4 of the task, E1 agreed
+at r = 0.9985 to 0.99993, and on chr4 and chr15 one tool's third component was the other's fourth.
 
 ```{python}
 record('Compartments', 'mouse Hi-C, 100 kb, GC-phased', f"cooltools {VERSIONS['cooltools']}",
-       f"E1 r ≥ {TEXT['cmp_min_r']} on {TEXT['cmp_n']} chromosomes; eigenvalues within {TEXT['cmp_eig']}; "
-       f"A/B ≥ {TEXT['cmp_ab']}",
+       f"E1 1 − r ≤ {TEXT['cmp_gap']} on {TEXT['cmp_n']} chromosomes, no bin more than {TEXT['cmp_delta']} "
+       f"apart; eigenvalues within {TEXT['cmp_eig']}; A/B ≥ {TEXT['cmp_ab']}",
        'Same eigenvectors' + (f' (phasing ambiguous on {ambiguous})' if ambiguous else ''),
        apps=['compartments'], refs=['cooltools-eigs'])
 ```

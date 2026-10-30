@@ -8727,28 +8727,40 @@ for** — *of contacts*, below — and its Pearson r with the phasing signal as 
 phasing signal is a gene model, else **a track** — any loaded or computed lane, chosen and never
 assumed (§18.2) — else a FASTA's GC content. Circular sequences are divided by their decay measured
 the short way round, which is version 2 of the task; version 3 is ranked by eigenvalue alone,
-reports r as drawn and decomposes cooltools' matrix by default.
+reports r as drawn and decomposes cooltools' matrix by default; version 4 divides that matrix by
+cooltools' own expectation.
 
 **What the eigenvectors are taken of is a choice** — *method*, **cooltools' by default**
 (`eigs_cis`), which is what the field computes today; the other, *Lieberman-Aiden 2009*
 (`--method correlation` in a shell), is the Pearson correlation of observed/expected's rows, as
 Lieberman-Aiden et al. (2009) did it and as every version of this task before the third did.
-cooltools' matrix is observed/expected itself, clipped at 0 and at its 99.9th percentile (NumPy's, linear
-between ranks, of the cells that have a value), one subtracted so that each cell is its departure
-from expected, and every gap — a cell with no value, and the `ignore_diags` near-diagonal — zero,
-which after the subtraction reads *as expected*; each eigenvector is then scaled by √|λ|, as
-cooltools writes it. Everything before the decomposition is shared — the usable bins, the
-expectation chosen (the distance decay, both arms, the short way round a circle), the contacts mode
-and its gate, the phasing. On the zoo's *P. aeruginosa* PAK, *C. necator* and *E. coli* maps at
-8 kb, each read as a line over its distance decay, all three components agree with
-`cooltools.eigs_cis` on the same balanced matrix to |r| = 1.000, with eigenvalues within 0.03% and no
-bin more than 0.03 apart on a track reaching ±0.74. What remains is cooltools' own expectation, which
-averages the diagonals past about the thirtieth in logarithmic groups, and its percentile, which also
-counts the dropped rows' zeros and the ignored diagonals' ones. The two methods agree where a
-chromosome has compartments to find and part where it has none: E1 against E1, r = 0.94 on PAK and
-0.58 on *E. coli*. **Of contacts** is one measure under both: the share of the map's departure from
-expected — cooltools' prepared matrix, observed/expected clipped and less one, a gap as expected —
-that a component's checkerboard carries, `(vᵀAv)²` over the sum of every cell squared. Under
+cooltools' matrix is observed/expected itself, **over cooltools' own expectation** — not
+`expected_cis` but the one `eigs_cis` takes from the square in hand (`observed_over_expected`): each
+diagonal's mean up to about the thirty-fifth and, past it, where one separation is less than 3% beyond
+the one before, the mean of a group of diagonals whose ends are at most 3% apart, every cell of the
+group divided by it; the near diagonal pooled as the ones cooltools sets it to, and a group with no
+contacts at all left undivided, its cells the zeros they were. Divided instead by each diagonal's own
+mean, as version 3 was, the far cells sat on a sawtooth of a percent or two against cooltools', and
+E1 agreed with cooltools' at r = 0.9985 to 0.99993 chromosome by chromosome on the mouse map at
+100 kb, and two chromosomes' third components were cooltools' fourth. That observed/expected is clipped
+at 0 and at its 99.9th percentile (NumPy's, linear between ranks, of the cells that have a value and
+the near diagonal's ones), one subtracted so that each cell is its departure from expected, and every
+gap — a cell with no value, and the `ignore_diags` near-diagonal — zero, which after the subtraction
+reads *as expected*; each eigenvector is then scaled by √|λ|, as cooltools writes it. Everything else
+before the decomposition is shared — the usable bins, the expectation chosen (the distance decay,
+pooled under this method; both arms, which cooltools has no counterpart of and which is divided as it
+is; the short way round a circle, pooled by separation), the contacts mode and its gate, the
+phasing — and the saddle divides by each diagonal's own mean under either method, as
+`cooltools.saddle` does by `expected_cis`. On the mouse map at 100 kb (the validation notebook's § 3)
+and the zoo's *P. aeruginosa* PAK, *C. necator* and *E. coli* maps at 8 kb, each read as a line, all
+three components are `cooltools.eigs_cis`'s on the same balanced matrix to the digits they are
+written in: |r| within 3·10⁻¹² of 1, no bin more than 5·10⁻⁶ apart on tracks reaching ±2.1, the
+eigenvalues the same to the table's three decimals, and on the mouse map, phased by GC content, the
+A/B call the same in every bin. The two methods agree where a chromosome has compartments to find
+and part where it has none: E1 against E1, r = 0.94 on PAK and 0.58 on *E. coli*. **Of contacts**
+is one measure under both: the share of the map's departure from expected — cooltools' prepared
+matrix, observed/expected over its own expectation clipped and less one, a gap as expected — that a
+component's checkerboard carries, `(vᵀAv)²` over the sum of every cell squared. Under
 cooltools `vᵀAv` is the eigenvalue, so this is the share its table has always reported; under the
 correlation it is the one number about the map the table lacked, since a correlation matrix's
 eigenvalue over its rows — the table's *variance*, kept beside it — is a share of how alike the rows

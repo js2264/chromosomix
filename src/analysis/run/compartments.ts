@@ -39,6 +39,7 @@ import {
   compartmentSegments,
   contactShares,
   cooltoolsMatrix,
+  cooltoolsPlan,
   correlationMatrix,
   observedOverExpected,
   phaseComponent,
@@ -485,14 +486,15 @@ async function runSquare(
     )
   }
 
+  const arms = selection.contigs.length === 1 ? options.arms : undefined
   const oe =
-    options.arms !== undefined && selection.contigs.length === 1
+    arms !== undefined
       ? armsObservedOverExpected(
           square,
           selection.n,
           index,
           armFrameOf(job, selection, laps, label),
-          options.arms.window,
+          arms.window,
           options.ignoreDiags,
         )
       : observedOverExpected(square, selection.n, index, plan)
@@ -532,7 +534,16 @@ async function runSquare(
   let whole = index.length
   if (cooltools) {
     job.progress(options.step.at, options.step.of, `decomposing ${label}`)
-    decomposed = cooltoolsMatrix(oe, index.length)
+    if (arms !== undefined) {
+      decomposed = cooltoolsMatrix(oe, index.length)
+    } else {
+      // Over cooltools' own expectation (`cooltoolsPlan`), which is not the
+      // saddle's: a second square, prepared where it lies since nothing reads it
+      // afterwards, so the run holds two as it always did. The arms' expectation
+      // has no counterpart in cooltools and is prepared as it is.
+      const own = observedOverExpected(square, selection.n, index, cooltoolsPlan(plan))
+      decomposed = cooltoolsMatrix(own, index.length, COOLTOOLS_CLIP_PERCENTILE, own)
+    }
     whole = 0
     for (let i = 0; i < decomposed.length; i++) whole += decomposed[i] * decomposed[i]
   } else {
@@ -564,11 +575,19 @@ async function runSquare(
   // How much of the contacts each accounts for (`contactShares`): under
   // cooltools' method the eigenvalue squared over the sum of squares, as it
   // always was, and under the correlation the same measure of the same map —
-  // which a correlation matrix's own eigenvalues are not. Before the loop below,
-  // which scales cooltools' vectors in place.
+  // which a correlation matrix's own eigenvalues are not. The same map is the one
+  // cooltools' method decomposes, over its expectation, and it is made in the
+  // correlation's square, which the deflation has finished with. Before the loop
+  // below, which scales cooltools' vectors in place.
   const contacts = cooltools
     ? pairs.map(({ value }) => (value * value) / whole)
-    : contactShares(oe, index.length, pairs.map((pair) => pair.vector))
+    : contactShares(
+        arms !== undefined
+          ? oe
+          : observedOverExpected(square, selection.n, index, cooltoolsPlan(plan), decomposed),
+        index.length,
+        pairs.map((pair) => pair.vector),
+      )
 
   const signal = phasingSignal(job, selection, index)
   let phased: Phasing | null = null

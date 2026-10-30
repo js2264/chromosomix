@@ -256,13 +256,13 @@ const PARAMS: readonly ParamSpec[] = [
     label: 'method',
     /**
      * What the eigenvectors are taken of — **cooltools' way by default**
-     * (`eigs_cis`): observed/expected itself, clipped at its 99.9th percentile,
-     * less one so the matrix is each cell's departure from expected, and every
-     * gap read as expected (`cooltoolsMatrix`). What the field computes today,
-     * and a track made this way compares with one cooltools wrote, on its scale,
-     * √|λ| — |r| = 1.000 with `eigs_cis` on the zoo's maps, the rest being
-     * cooltools' expectation (SPECS §18.8). It skips the correlation, the one
-     * cubic step, so a fine map takes seconds.
+     * (`eigs_cis`): observed/expected over cooltools' own expectation
+     * (`cooltoolsPlan`), clipped at its 99.9th percentile, less one so the matrix
+     * is each cell's departure from expected, and every gap read as expected
+     * (`cooltoolsMatrix`). What the field computes today, and a track made this
+     * way is the one cooltools wrote, on its scale, √|λ| — to the digits it is
+     * written in, on the mouse map and the zoo's (SPECS §18.8). It skips the
+     * correlation, the one cubic step, so a fine map takes seconds.
      *
      * The other is the correlation of the rows, as Lieberman-Aiden et al. (2009)
      * did it. The two agree where a chromosome has compartments to find and part
@@ -588,7 +588,11 @@ export const COMPARTMENTS_TASK: AnalysisTask = {
   // each one's eigenvalue, and its r with the signal as it is drawn, and what is
   // decomposed is a choice: observed/expected as cooltools prepares it by
   // default, where every earlier version took the correlation of its rows.
-  version: 3,
+  // 4: cooltools' method divides by cooltools' own expectation — the diagonals
+  // pooled in groups at most 3% wide from about the thirty-fifth, as `eigs_cis`
+  // pools them — where it divided by each diagonal's mean, and the share of the
+  // contacts is measured over that matrix under either method.
+  version: 4,
   // Absent on a metacool, which is a scientific judgement rather than a
   // technical one: a bacterial MAG has domains and no compartments, and a row
   // offering an eigenvector of a thing that has none is an invitation to
