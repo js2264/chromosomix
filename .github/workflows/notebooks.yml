@@ -16,8 +16,9 @@ name: Notebooks
 #                                         from the line its console wrote, and
 #                                         the files the two wrote compared
 #
-# The fourth, notebooks/laptop.qmd — 23 analyses run genome-wide, once each,
-# with their time and peak memory — is meant for a laptop. The page at
+# The fourth, notebooks/laptop.qmd — 23 analyses run genome-wide, each on the
+# command line and in the app in headless Chromium, with their time and peak
+# memory — is meant for a laptop. The page at
 # https://chromosomix.app/laptop/ is rendered by hand on one and committed as
 # notebooks/laptop.html, and deploy.yml publishes that file. This workflow
 # renders it on a runner too, keeps it as the run's artifact and writes it into
@@ -66,8 +67,8 @@ name: Notebooks
 # the versions the notebook was written against. Quarto comes with the reference
 # environment, as the `quarto-cli` package. The viewers the timings open on are
 # pinned in `notebooks/viewers/package.json` (juicebox.js, HiGlass and the
-# Playwright that drives Chromium for all three, and for the parity), and
-# HiGlass's tile server in `notebooks/requirements-higlass.txt`,
+# Playwright that drives Chromium for all three, and for the parity and the
+# laptop), and HiGlass's tile server in `notebooks/requirements-higlass.txt`,
 # higlass-python's environment, with Ubuntu's libfuse 2 for the files it reads
 # from a bucket.
 #
@@ -88,7 +89,8 @@ name: Notebooks
 # job may take — four, an even number, so that each side of a pair goes first
 # in as many rounds as the other (timing.qmd's `round_of`), and as many as
 # there are viewers, so that each goes first once a picture. The laptop takes
-# about an hour, half of it peak calling over the whole mouse genome. Every
+# about two hours: an hour on the command line, half of it peak calling over
+# the whole mouse genome, and as long again in the app. Every
 # runner is a different machine, which is why each page says which one it ran
 # on.
 #
@@ -274,13 +276,14 @@ jobs:
           retention-days: 90
           overwrite: true
 
-  # 23 analyses run genome-wide, once each, on this job's runner: the same
-  # kind of machine as the timings', with no reference package beside them.
+  # 23 analyses run genome-wide, on the command line and in the app, on this
+  # job's runner: the same kind of machine as the timings', with no reference
+  # package beside them, and Playwright's Chromium for the app.
   laptop:
     name: laptop
     needs: [site, parity]
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 300
     permissions:
       contents: read
     env:
@@ -289,6 +292,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: ./.github/actions/notebooks-setup
+        with:
+          viewers: 'true'
 
       # The committed page is a render from a laptop, and the one the site
       # publishes. Out of the way, so that a render that fails before it writes

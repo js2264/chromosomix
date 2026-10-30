@@ -32,6 +32,28 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
     60 min into mitosis below it, over 40 Mb of chromosome 1 at 100 kb, with each map's compartment
     eigenvector and insulation on the edge beside its own triangle, on one axis per kind.
 
+### Changed
+
+- **The laptop notebook runs each of its 23 analyses in the app as well as on the command line
+  (§18.10).** What a genome-wide analysis costs was measured on the command line alone, where a reader
+  runs most of them in the browser. Each is now run a second time in headless Chromium, as a reader
+  runs it (`notebooks/scripts/laptop.mjs`): the files the command names dropped on the landing page, a
+  map framed on its whole genome at the command's resolution, the task opened from the Analysis panel,
+  every flag of the command set in its form, and **run** pressed once Chromium is idle — a Chromium of
+  its own for each, so nothing an earlier run held is counted. Its time is the app's own, dispatch to
+  result; its CPU time and peak memory are the page's, sampled five times a second, with all of
+  Chromium's kept beside them. The table, the five analyses at two depths and the figure show both, and
+  the line the app's console wrote for each run is held to the command it ran, flag by flag. The
+  runner's render installs Playwright's Chromium and may take five hours.
+
+### Fixed
+
+- **A FASTA dropped with its `.fai` and nothing else opens by range (§8.8).** The two were paired, and
+  the index went to the sequence track — but not to the question asked first, which sequences the
+  genome has, so the FASTA was read whole for it, and one past 300 MB, `mm10.fa` beside its
+  `mm10.fa.fai`, was refused for want of an index. Dropped with a track or a feature file it opened,
+  since that file named the genome instead.
+
 ## [0.18.0] - 2026-10-30
 
 ### Added
