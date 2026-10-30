@@ -1,6 +1,13 @@
 {
-  "latest": "b1f1a7a",
+  "latest": "db2dddf",
   "versions": [
+    {
+      "commit": "db2dddf",
+      "version": "0.18.0",
+      "date": "2026-10-30T14:25:40+01:00",
+      "subject": "ci: update laptop notebook",
+      "tag": ""
+    },
     {
       "commit": "b1f1a7a",
       "version": "0.18.0",
@@ -132,13 +139,6 @@
       "version": "0.16.0",
       "date": "2026-10-21T17:50:03+02:00",
       "subject": "Peak calling 9.6× faster genome-wide in under a quarter of the memory, results bit-identical (#128)",
-      "tag": ""
-    },
-    {
-      "commit": "15e6f15",
-      "version": "0.16.0",
-      "date": "2026-10-21T16:39:53+02:00",
-      "subject": "Add laptop.qmd: benchmark 23 analyses on your own machine (#127)",
       "tag": ""
     },
     {
