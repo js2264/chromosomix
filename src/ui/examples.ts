@@ -825,6 +825,25 @@ export function demosStore(): StoreFile {
   }
 }
 
+/**
+ * One of the store's figures, by its file: what the card calls it, its one line
+ * and its provenance, and the address it is read from — for the landing page's
+ * example sessions (§24.11), which open two of these figures by name rather than
+ * through the drawer. Read from the same list the store's cards are, so a
+ * figure renamed, moved to another folder or served from `DEMO_BASE` is renamed,
+ * moved and served for both.
+ */
+export function demoFigure(file: string): { uri: string; title: string; line: string; provenance: string } {
+  const entry = DEMO.find((figure) => figure.file === file)
+  if (entry === undefined) throw new Error(`The lab's store has no figure ${file}.`)
+  return {
+    uri: `${demoBase()}${under(entry.folder, entry.file)}`,
+    title: entry.title,
+    line: entry.line,
+    provenance: entry.provenance,
+  }
+}
+
 /** Whether a figure or a file of the lab's store is listed: always, unless its dev feature is off. */
 function shown(entry: { dev?: DevFeature }): boolean {
   return entry.dev === undefined || devFeature(entry.dev)

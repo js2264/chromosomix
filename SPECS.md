@@ -2029,6 +2029,14 @@ for the bins actually on screen, never the whole column, never `/bins/chrom`, an
 the user asked for balanced counts. §3.3's rule is that *coordinates* never come from `/bins`; they
 still do not, and `test/unit/bins-guard.test.ts` still proves it for every unbalanced path.
 
+**What `balanced` draws is what cooler draws.** CI rebalances a copy of the demo yeast Micro-C with
+`cooler balance` and the parameters its weights record, and `test/unit/normalise-cooler.test.ts`
+reads it back here against cooler's own `matrix(balance=True)` — whole chromosomes, a window across
+a seam, the whole genome and a block between two sequences after `cooler coarsen` — `NaN` where
+cooler's is and every other cell to Float32's precision, the type the block is held in (in the
+goldens job of `.github/workflows/test.yml`, with the other fixtures cooler builds; nothing compared
+is committed, §7.5 says how it is made).
+
 ### 6.5 Drawn to a total — subsampled or oversampled
 
 **The last box on the breadcrumb is a number of contacts** (§5.5), labelled *contacts*. Empty, it
@@ -2064,6 +2072,18 @@ distribution splits exactly (`metacooler/resample.ts`):
 The seed is fixed, so the same total is the same map in every view, in both workers, after a reload
 and in the shell. The pixels follow cooltools' distribution and not its generator: a numpy stream is
 not reproducible from here, and a subsample is a draw, not a file.
+
+**And CI holds them to it, against cooltools run on the day rather than a golden.** The goldens
+job has `cooltools random-sample --count 10000000 --exact` draw the demo yeast Micro-C, with numpy
+seeded, and `test/unit/subsample-cooltools.test.ts` draws the same total here and
+compares the two as two draws from one distribution: in any set of pixels each keeps a
+hypergeometric share, so the two differ by a known variance, and the test holds them to it — the
+total exact in both; every pair of sequences and every bin's coverage within a few of their standard
+deviations; the squared differences over every pixel within 1% of what two draws without replacement
+give, where this app's draw made one with replacement came to 4% over; and as many pixels holding
+each count. The weights below are held the same way: the file's times `√(T/N)` against `cooler
+balance` over cooltools' draw, the median ratio within half a percent of 1 and each bin within what
+the draw adds to its balanced marginal.
 
 **An oversample is Boost-HiC** (Carron et al., *Bioinformatics* 2019), ported from its Python
 (`metacooler/boost.ts`) and held to it by a golden file that Python writes
@@ -2595,7 +2615,7 @@ arithmetic in `analysis/compartments.ts`:
 
 | Family | Offered as | Cost |
 |---|---|---|
-| **Normalisation** — VC, VC √, ICE | entries in the score picker (§7.1's control) | one to a few dozen passes over the block |
+| **Normalisation** — VC, VC √, ICE | entries in the score picker (§7.1's control) | one pass for VC; for ICE, a few dozen to some seventy, as the cell budget allows |
 | **Baseline** — observed / expected | a toggle of its own, and `e` | two passes |
 | **Baseline** — observed / expected along a bacterial chromosome's two arms | `arms`, a toggle beside it (§8.15) | two passes |
 | **Baseline** — the expected itself | an entry in the score picker | two passes |
@@ -2618,6 +2638,41 @@ doubly stochastic — and converge to the same weights; KR is a Newton solver th
 passes. At §2's scale the fixed point converges in milliseconds, so the faster solver would buy a
 name in a menu and nothing a reader could see. A file balanced with `KR` elsewhere and read here
 under `ICE` shows the same picture.
+
+**Every normalisation is held to cooler or cooltools, run in CI rather than read from a golden.**
+`scripts/reprocess_with_cooltools.py` (`npm run fixtures:reprocessed`) has the two packages
+reprocess the demo yeast Micro-C into gitignored fixtures, built in the goldens job of
+`.github/workflows/test.yml` with the other fixtures cooler can write, and read by
+`test/unit/normalise-cooler.test.ts`, which normalises the same blocks here through `deriveBlock` —
+three whole chromosomes at 1 kb, and at 16 kb after `cooler coarsen` the whole genome and a block
+between two sequences. Every cell must agree to Float32's precision, one unit in its last place, and
+does to the half unit its rounding costs:
+
+- **VC** is one round of `cooler balance` from flat weights with every filter off and the marginals
+  left unscaled — each bin's coverage over the mean coverage — `--cis-only` for a chromosome and
+  genome-wide for the genome, and **VC √** its square root: the same numbers on the same scale, `NaN`
+  on the same bins. cooler 0.11 is the first whose marginals count a pixel on the main diagonal once,
+  as a dense block does; 0.10 counted it twice, so the job asks for 0.11 or later, where the notebooks
+  pin 0.10 (§18.10).
+- **ICE** is cooltools' `iterative_correction_symmetric` (`_asymmetric` between two sequences) over
+  cooler's dense block, converged to a variance of 1e-24, after one fitted factor, since balancing
+  fixes the weights only up to one. Not `cooler balance` with its filters off: with the main diagonal
+  kept, its undamped update all but oscillates on a Micro-C map, whose diagonal holds most of each
+  bin's contacts.
+
+**ICE iterates to 1e-9 and calls a block balanced at 1e-5.** It stops once every bin's marginal is
+within 1e-9 of their mean (`BALANCE_PRECISION`), which is what puts its cells on cooltools' to
+Float32's precision: stopping at 1e-5, as it did, left them up to 3·10⁻⁵ apart. The four decades
+between are some thirty rounds — chromosome IV of the demo map at 1 kb, 1,532 bins a side, takes 65
+rounds and 0.6 s where it took 37 and 0.35 s — and the cell budget still caps them. The caption
+keeps the old threshold: a block flat to 1e-5 (`BALANCE_TOLERANCE`) is drawn as balanced whether or
+not the budget let it go on to 1e-9, since the colormap cannot tell the two apart, and only one the
+rounds ran out on short of 1e-5 says it stopped before convergence.
+
+ICE is held only on chromosomes that have a balanced form. At 1 kb the demo map's II, X, XII and XVI
+each have a bin whose one contact is with one other bin, and no scaling of such a matrix has equal
+marginals; cooltools stalls on them, and the script refuses a reference that did not converge
+rather than write one.
 
 **The baseline can be looked at as well as divided by**, and it is in the picker rather than beside
 the toggle because it answers "what are these numbers" and not "compared to what". Every cell becomes
@@ -9916,21 +9971,36 @@ differs**, or one side alone wrote it. Every file and its verdict is one line of
 `notebooks/work/parity/summary.tsv`.
 
 **And one for the reader's own machine.** `notebooks/laptop.qmd` answers what the other three do not
-— what a genome-wide analysis costs on a machine like the reader's — with Quarto, pandas, matplotlib and
-pyfaidx and the built command line, and no reference package, so that a reader can render it on their
-own laptop. It downloads the validation's mouse map, yeast Micro-C, ATAC-seq replicates, mm10 and its
-RefSeq genes, and 4DN's IMR-90 in situ Hi-C (Rao et al. 2014, 4DNFIJTOIGOI, 1.08 billion contacts):
-about 13.7 GB into `notebooks/work/laptop/data/`, each file held to its MD5, a file `validation.qmd`
-already holds linked instead. Then it runs 23 analyses genome-wide, once each, every one a process of
-its own: on the mouse map, coverage, P(s), insulation, the directionality index, compartments (E1,
-unphased), loop calling, chromosight's loops, a pileup over them and a 3D model; five of these again on
-the human map, sixteen times deeper; P(s) at 50 bp, loops and a model on the yeast; and peak calling
-with IDR, interval overlap, a metaplot, track correlation, base composition and a motif search over the
-mouse genome. `os.wait4` gives each process's CPU time and peak resident set, and the wall clock runs
-from its start to its exit. Each result is written to `notebooks/work/laptop/timings.tsv` as it is
-measured, with the machine and the build, and a second render of the same build reads it back instead
-of running again. The page is a table of all 23, the five analyses side by side at the two depths, a
-figure, and every command in one block at the end.
+— what a genome-wide analysis costs on a machine like the reader's, on the command line and in the app —
+with Quarto, pandas, matplotlib and pyfaidx, the built app and command line and Playwright's Chromium,
+and no reference package, so that a reader can render it on their own laptop. It downloads the
+validation's mouse map, yeast Micro-C, ATAC-seq replicates, mm10 and its RefSeq genes, and 4DN's IMR-90
+in situ Hi-C (Rao et al. 2014, 4DNFIJTOIGOI, 1.08 billion contacts): about 13.7 GB into
+`notebooks/work/laptop/data/`, each file held to its MD5, a file `validation.qmd` already holds linked
+instead. Then it runs 23 analyses genome-wide: on the mouse map, coverage, P(s), insulation, the
+directionality index, compartments (E1, unphased), loop calling, chromosight's loops, a pileup over them
+and a 3D model; five of these again on the human map, sixteen times deeper; P(s) at 50 bp, loops and a
+model on the yeast; and peak calling with IDR, interval overlap, a metaplot, track correlation, base
+composition and a motif search over the mouse genome. **Each runs twice.** On the command line, a
+process of its own: `os.wait4` gives its CPU time and peak resident set, and the wall clock runs from
+its start to its exit. **And in the app**, as a reader runs it, in a headless Chromium of its own
+(`notebooks/scripts/laptop.mjs`, the dist/ and dist-cli/ of one commit, as the parity holds them): the
+files the command names dropped on the landing page — a map as a workspace names it, at the command's
+resolution, balanced, its whole genome on screen, with a set of loops as a track beside it, or tracks
+and a FASTA with its index alone — the task opened from the Analysis panel by its title, every flag of
+the command set in its form, the page left until Chromium is idle, and **run** pressed. The time is
+the app's own, from the job's dispatch to its result, and the opening of the files is timed apart; the
+CPU time and the peak memory are the page's, its renderer's, whose threads its workers are, sampled
+five times a second from the press to the console's record of the end — and all of Chromium's beside
+them, the browser that reads a dropped file for the page and the GPU process among them, where WebGL is
+drawn in SwiftShader and the page composited in software. Each result is written to
+`notebooks/work/laptop/timings.tsv` as soon as both are measured, with the machine, the build, the
+Chromium and the line the app's console wrote for the run, and a second render of the same build in
+the same Chromium reads it back instead of running again, but for a run the app did not finish. The
+page is a table of all 23, both ways, the five analyses side by side at the two depths, a figure, every
+command and every line the app wrote in two blocks at the end, and the line held to the command: every
+flag of the command with its value, and besides them only the task's parameters at their defaults and
+those its form answers from what is open, or the page says what else.
 
 **The laptop's published page is rendered on a laptop.** What it measures is a reader's machine, so
 the page at `<site>/laptop/` is rendered by hand, on one, and committed as `notebooks/laptop.html` —
@@ -9957,12 +10027,12 @@ renders each on a fresh runner, with what `.github/actions/notebooks-setup` inst
 app's build, and the reference environment pinned package by package in `notebooks/requirements.txt`,
 which brings Quarto and every package the notebooks import; for the validation, yapc's environment
 (`requirements-yapc.txt`, IDR and yapc built at the commits the notebook cites), Boost-HiC's checkout,
-and Ubuntu's bedtools and seqkit; for the parity and the timings, the two viewers with Playwright's
-Chromium; for the timings, higlass-python's environment with libfuse. The parity renders first, alone,
-so that a page that cannot render stops the run before the hours of the others; then the validation
-and the timings in one job — the timings run the validation's commands on the inputs it fetched and
-made, which no other runner holds — beside the laptop in another, which sets the committed page aside
-first so that what it gathers is its own render or nothing. Each render runs through
+and Ubuntu's bedtools and seqkit; for the parity, the timings and the laptop, the two viewers with
+Playwright's Chromium; for the timings, higlass-python's environment with libfuse. The parity renders
+first, alone, so that a page that cannot render stops the run before the hours of the others; then
+the validation and the timings in one job — the timings run the validation's commands on the inputs it
+fetched and made, which no other runner holds — beside the laptop in another, which sets the
+committed page aside first so that what it gathers is its own render or nothing. Each render runs through
 `notebooks/scripts/memory.sh`, which writes into the job's log, every ten seconds, the memory in use
 and available and the three programs holding the most: a runner whose memory runs out is shut down
 in the middle of a step, with no error from the command and no step after it, and the log streamed
@@ -9984,7 +10054,8 @@ block saying when it was rendered, from which version, commit and release, by wh
 and on what machine, and closes on how long it took, writing the same to `rendered.json` beside it with
 **one line of what it found** — how many analyses reproduce their reference, how much less time
 chromosomix takes than the references and the other viewers, how many files the app and the command
-line write alike, how many analyses finish within a minute and the most memory any takes. The run's
+line write alike, how many analyses finish within a minute and the most memory any takes, on the
+command line and in the app. The run's
 summary is a section a notebook: where it is, from what and in how long, that line, and its table,
 folded. The pages link to each other there and on a reader's disk alike, but for the laptop, which
 links the site's from either. They are no build of the app,
@@ -11839,7 +11910,8 @@ second line would have read as an afterthought. There are more than five now and
 as many again, so it is equal columns that fill the width and spill onto the next line, on
 `auto-fill` rather than `auto-fit` so that the last line's tiles stay the width of the ones above
 them — four over three reading as seven of one thing rather than as three larger ones underneath.
-Nothing else is on the page. The
+Nothing else is on the page but two offers in its margin: the tutorial's beside *Load files* (§30.1)
+and the example sessions beside the tiles (§24.11). The
 picker's *browse…* and its *private buckets…* are gone — they were the folder row said less
 plainly — and the *Hubs* dropdown of eighteen shelves was the tile row under another name.
 
@@ -12705,6 +12777,86 @@ The `.2bit` that script writes is checked with `py2bit`, a wrapper around the C 
 That is the only check worth having: a file this repository wrote and this repository read proves
 that two implementations share a reading of the format, which is exactly what they would do if the
 reading were wrong.
+
+### 24.11 Example sessions on the landing page
+
+Each store opens its own data, and a reader who wants to see what the viewer is *for* would have to
+know which rows of which stores make a picture together. **The example sessions are four such
+pictures, a press each**: under *Just looking?* and *Pick an example session*, a column of four
+buttons, each opening **one tab**. **Built**: `ui/exampleSessions.ts`, the column in
+`ui/FilePicker.ts`, and `scripts/ui-examples.mjs`, which presses every button and shoots each tab.
+
+- **Human Hi-C data** — three stores on one map, built in the bundle (below).
+- **Yeast micro-C data** — the lab's store's *Yeast micro-C* figure: one map at 1.6 kb with the
+  sequence, genes, RNA-seq, ATAC, MNase, shotgun, SNPs and its loops.
+- **Linear tracks** — the lab's store's *Yeast chromatin landscape*: the same tracks with no map, in
+  the 1D browser (§5.8), close enough to read the reading frames.
+- **Comparing data** — G2 against mitosis in one square, built in the bundle (below).
+
+**Each button is a name and a `?`.** The names are the names of what they open, as a store tile's
+are, and are capitalised as one; what the tab holds and where it is from is the `?`'s, the mark the
+Analysis column's rows wear for what a task re-implements (§18.1, `ui/questionMark.ts`) — the same
+mark, the same tip hung from the body, shown on hover and on a tap, so a reader who has learnt it in
+one place knows it in the other. A press on the `?` reads and does not open. The button is named by
+its words and described by its `?`. No sentence under the buttons: four of them would be a paragraph
+in a margin.
+
+**Where it stands.** In the margin left of the store tiles, against the bottom of their section,
+where the column is wide enough to have one — the width the tutorial's offer asks (§30.1) — so the
+margin holds one offer at its top and one at its bottom, the buttons one under the other; under the
+tiles where it is not, the two lines and then the buttons in a row that wraps. **Only where the tiles
+are**: an embed and the single file (§19, §21) have no stores and no examples, since every example is
+somebody's published files read over the network as a store's are.
+
+**It opens in the tab it was pressed in**, which holds nothing — a landing page is the page of an
+empty tab — by `Session.openConfig`, the road a dropped workspace takes, so the tracks arrive with the
+map rather than a gesture later. The two of the lab's figures are fetched from the address the
+store's own cards read them from (`ui/examples.ts`'s `demoFigure`) and, being one tab each, opened
+there too; a workspace of several tabs would still open beside what is open, as it does from the
+store. Pressed from an empty tab beside another, it fills the empty one and opens no third.
+
+**Human Hi-C data: three stores on one map.** K562 on GRCh38, the cell line 4DN and ENCODE share
+most, with **no deck**, since the point is the three edges of one picture. The map is 4DN's in situ
+Hi-C of K562 (Rao et al. 2014, `4DNESI7DEJTM`, `4DNFI18UHVRO.mcool`), 907 million contacts, opened
+balanced at 10 kb on **chr8:126,800,001-130,200,000**: MYC, PVT1 and the blood enhancer cluster
+downstream of them, a sharp compartment edge and domains with loops at their corners. Around it:
+
+- **Above**, IGV's hg38 (`hg38_1kg`, the IGV store's human genome): RefSeq genes against the map,
+  then the sequence, then the bands. The genes and the bands are read from IGV's own bucket and not
+  from the addresses IGV's genome table names, because UCSC's `ncbiRefSeq.txt.gz` carries no CORS
+  header; the sequence is the 1000 Genomes FASTA read by range through its index, because the FASTA of
+  IGV's own `hg38` is on a bucket that refuses an anonymous reader (§24.3).
+- **Down the left**, the structure computed from the same map and the same cells: 4DN's insulation
+  score, the boundaries called on it and the first eigenvector at 250 kb, and ENCODE's
+  subcompartments of K562 (`ENCFF955KEB`), each row coloured by the cluster it names in the file's own
+  itemRgb colours — numbered, not lettered, since the file says which cluster and not which label.
+- **On the map**, ENCODE's CTCF ChIA-PET loops of K562 (`ENCSR597AKG`), one ring a pair. The
+  boundaries stay a lane: a loaded BED is drawn beside the map, never on it (§8.1).
+- **Below**, ENCODE's 1D signal of K562, as **five lanes of two tracks**, each pair overlaid and each
+  track on its own axis: CTCF with RAD21, H3K4me3 with H3K27ac, Pol II with H3K36me3, H3K27me3 with
+  H3K9me3, ATAC with DNase. Ten lanes under a map hold it at its smallest on a laptop, and
+  five leave it a map; and each pair is one that is read *against* itself — cohesin where CTCF is,
+  promoters against enhancers, starts against gene bodies, the two kinds of repression, the two assays
+  of accessibility. There is no MNase-seq: neither ENCODE's GRCh38 catalogue nor 4DN's K562 one holds
+  any, as the two stores read them.
+
+**Comparing data: G2 against mitosis in one square.** Chicken DT40 cells released from a G2 block into
+mitosis (Gibcus et al. 2018), from 4DN's bucket: the G2 map (`4DNES9LEZXN7`) above the diagonal and
+the one 60 min on (`4DNESEQNSXSD`) — the time course's last point, which 4DN calls a prometaphase
+block, there being no sample of it called metaphase — below it, as two files in one square (§5.7): one
+colour scale, the two libraries within a percent of one depth. 40 Mb of chromosome 1 at 100 kb, wide
+enough for G2's checkerboard of compartments and for the mitotic band that replaces it. Each map's
+compartment eigenvector and insulation score — 4DN's own — is on the edge beside its own triangle,
+G2's along the top and the mitotic one's down the left, on **one fixed axis per kind** (E1 from −1.5
+to 1.5, insulation from −1 to 1), so the flattening of both in mitosis is read on the edges as it is
+on the map.
+
+**The two built in the bundle rather than published beside the demos**: every file they name is on
+its own consortium's bucket already, so the session is the only thing to publish, and a few
+kilobytes of code is a session that cannot go missing from a bucket. Each is a `SessionConfig` like
+any a workspace file holds, and its test reads it back through `parseWorkspaceFile`, the validator
+every such file meets. Each carries the reader's own overlay preferences and no column layout, so
+opening it changes neither.
 
 ## 25. A 3D structure beside the map
 

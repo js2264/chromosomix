@@ -6691,6 +6691,89 @@ canvas.is-frozen {
   }
 }
 
+/* The example sessions (§24.11): the tutorial's counterpart at the other end of
+   the page. Under the store tiles where the column is narrow — the two lines,
+   then the buttons in a row that wraps; in the margin left of the tiles where it
+   is wide, as a column of buttons, so that it stands beside the tiles whose
+   kind of data it opens and the margin holds one offer at the top and one at
+   the bottom. Against the section's bottom rather than a row of the grid, which
+   a remembered store moves down. */
+.picker-store-section {
+  position: relative;
+}
+
+.picker-examples {
+  margin: 1rem 0 0;
+}
+
+.picker-examples-kicker {
+  margin: 0;
+  font-size: var(--step--2);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.picker-examples-prompt {
+  margin: 0.15rem 0 0.5rem;
+  font-size: var(--step--1);
+  color: var(--text-dim);
+}
+
+.picker-examples-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+/* A name, and the `?` at its end. The `?` is the Analysis column's mark
+   (`ui/questionMark.ts`), in the button's own colour so a hover on the button
+   takes it too, and the help cursor over it says that pointing there reads
+   rather than opens. */
+.picker-example {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.picker-example-hint {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--text-dim);
+  cursor: help;
+}
+
+.picker-example-hint > .icon {
+  display: block;
+}
+
+.picker-example:hover .picker-example-hint {
+  color: inherit;
+}
+
+@container landing (min-width: 86rem) {
+  .picker-examples {
+    position: absolute;
+    bottom: 0;
+    right: calc(100% + 2.5rem);
+    width: 13.5rem;
+    margin: 0;
+  }
+
+  .picker-examples-list {
+    flex-direction: column;
+    flex-wrap: nowrap;
+  }
+
+  .picker-example {
+    justify-content: space-between;
+    padding: 0.5rem 0.75rem;
+    font-size: var(--step-0);
+    text-align: left;
+  }
+}
+
 /* Opened *over* a view the brand block goes: the page it would introduce is
    already behind it, and the picker is a dialog there rather than a landing. */
 .modal-panel .picker-brand {
@@ -12169,11 +12252,12 @@ span.deck-name {
   width: 16px;
 }
 
-/* Its tip, hung from the body and placed under the `?` by hand: the column
-   scrolls and clips, and the row is a button a link cannot sit inside. Small
-   and plain — the method, then how it came out and its DOI — since it is a
-   footnote to the row and not a card of its own. */
-.task-ref-tip {
+/* The tip behind every `?` (`ui/questionMark.ts`) — a task's reference here,
+   an example session's contents on the landing page — hung from the body and
+   placed under the `?` by hand: a column scrolls and clips, and what the `?`
+   sits in is a button a link cannot sit inside. Small and plain, a text and a
+   quieter note under it, since it is a footnote and not a card of its own. */
+.question-tip {
   position: fixed;
   z-index: 95;
   width: max-content;
@@ -12188,16 +12272,16 @@ span.deck-name {
   line-height: 1.4;
 }
 
-.task-ref-tip > p {
+.question-tip > p {
   margin: 0;
 }
 
-.task-ref-tip > .task-ref-status {
+.question-tip > .question-tip-note {
   margin-top: 0.15rem;
   color: var(--text-dim);
 }
 
-.task-ref-tip a {
+.question-tip a {
   color: var(--accent);
   text-decoration: underline;
   text-decoration-thickness: 1px;

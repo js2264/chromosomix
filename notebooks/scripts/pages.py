@@ -132,10 +132,16 @@ def _tables(name, folder):
                          for (case, task), v in cases.items()])
     if name == 'laptop' and (folder / 'timings.tsv').exists():
         rows = _rows(folder / 'timings.tsv')
-        return _details(f'Every analysis ({len(rows)})', ['Data', 'Analysis', 'Resolution', 'Wall-clock, s',
-                                                           'Peak memory, MB'],
-                        [[r['data'], r['analysis'], r['resolution'], f"{float(r['wall_s']):,.1f}",
-                          f"{float(r['peak_mb']):,.0f}"] for r in rows])
+
+        def shown(row, column, form):
+            # The app's figures are blank for a run it did not finish, as is a table from before it had any.
+            value = row.get(column) or 'nan'
+            return '—' if value == 'nan' else form.format(float(value))
+        return _details(f'Every analysis ({len(rows)})', ['Data', 'Analysis', 'Resolution', 'Command line, s',
+                                                           'App, s', 'Command line, MB', 'App, MB'],
+                        [[r['data'], r['analysis'], r['resolution'], shown(r, 'wall_s', '{:,.1f}'),
+                          shown(r, 'app_wall_s', '{:,.1f}'), shown(r, 'peak_mb', '{:,.0f}'),
+                          shown(r, 'app_peak_mb', '{:,.0f}')] for r in rows])
     return []
 
 
