@@ -1179,7 +1179,7 @@ export class AnalysisWorkspace {
     const intervalHeld = this.intervals.get(entry.id)
     if (intervalHeld !== undefined && format === 'tsv') {
       void downloadBlob(
-        new Blob([outputToTsv(intervalHeld.output, intervalHeld.provenance)], {
+        new Blob([...outputToTsv(intervalHeld.output, intervalHeld.provenance)], {
           type: 'text/tab-separated-values',
         }),
         tsvName(base, intervalHeld.output, stamp),
@@ -1202,7 +1202,7 @@ export class AnalysisWorkspace {
 
     if (format === 'tsv') {
       void downloadBlob(
-        new Blob([outputToTsv(held.output, held.provenance)], { type: 'text/tab-separated-values' }),
+        new Blob([...outputToTsv(held.output, held.provenance)], { type: 'text/tab-separated-values' }),
         tsvName(base, held.output, stamp),
       )
       return
@@ -1310,14 +1310,14 @@ export class AnalysisWorkspace {
 
     if (format === 'tsv') {
       await target.write(
-        new Blob([spansToTsv(entry.label, TRACK_OP_LABELS[recipe.op], spans, grid, provenance)], {
+        new Blob([...spansToTsv(entry.label, TRACK_OP_LABELS[recipe.op], spans, grid, provenance)], {
           type: 'text/tab-separated-values',
         }),
       )
       return
     }
     if (format === 'bedgraph') {
-      await target.write(new Blob([spansToBedGraph(spans, grid, provenance)], { type: 'text/plain' }))
+      await target.write(new Blob([...spansToBedGraph(spans, grid, provenance)], { type: 'text/plain' }))
       return
     }
     const blob = await writeBigWig({
@@ -1377,7 +1377,7 @@ export class AnalysisWorkspace {
     )
     if (target === null) return
     if (format === 'bedgraph') {
-      await target.write(new Blob([profileToBedGraph(output, grid, provenance)], { type: 'text/plain' }))
+      await target.write(new Blob([...profileToBedGraph(output, grid, provenance)], { type: 'text/plain' }))
       return
     }
 

@@ -41,7 +41,7 @@ import type {
   TaskResult,
 } from '@/analysis/types'
 import type { CombinedFigures } from '@/analysis/combine'
-import { combinedToTsv } from '@/analysis/write/tsv'
+import { combinedToTsv, textOf } from '@/analysis/write/tsv'
 
 /** The overlays of a combination, in its order. */
 function curvesOf(combined: CombinedFigures): CurveOutput[] {
@@ -485,10 +485,12 @@ describe('the combined table', () => {
       () => null,
     )
     const [stacked] = tablesOf(combined)
-    const text = combinedToTsv(stacked, [
-      { label: 'WT', provenance: { ...resultOf(TASK_ID, []).provenance, framing: { ...FRAMING, uri: 'wt.mcool' } } },
-      { label: 'dparAB', provenance: { ...resultOf(TASK_ID, []).provenance, framing: { ...FRAMING, uri: 'dparab.mcool' } } },
-    ])
+    const text = textOf(
+      combinedToTsv(stacked, [
+        { label: 'WT', provenance: { ...resultOf(TASK_ID, []).provenance, framing: { ...FRAMING, uri: 'wt.mcool' } } },
+        { label: 'dparAB', provenance: { ...resultOf(TASK_ID, []).provenance, framing: { ...FRAMING, uri: 'dparab.mcool' } } },
+      ]),
+    )
     const lines = text.split('\n')
     expect(lines).toContain('# maps: 2')
     expect(lines).toContain('# map: WT')

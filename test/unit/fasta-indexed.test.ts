@@ -387,10 +387,38 @@ describe('a motif search over a FASTA read by its index', () => {
     expect(starts.every((start) => start < 1 << 18)).toBe(true)
   })
 
+  it('counts base composition by range, every bin as the sequence held whole counts it', async () => {
+    // The browser's reader carries a refusal beside `read`, and the run stopped
+    // at the refusal: a genome dropped with its `.fai` was offered the task and
+    // made no tracks.
+    serve({ size: BYTES.length, index: true })
+    await ask({ kind: 'load', entry: 'e-held', source: source('held.fa'), mapContigs: [] })
+    const held = await runTask('composition', 'e-held', { resolution: 100, window: 300 })
+    serve({ size: LARGE, index: true })
+    await ask({ kind: 'load', entry: 'e-counted', source: source('counted.fa'), mapContigs: [] })
+    const before = log.filter((line) => /counted\.fa bytes=/.test(line)).length
+    const ranged = await runTask('composition', 'e-counted', { resolution: 100, window: 300 })
+    expect(ranged.notes.join(' ')).not.toContain('rather than held')
+    expect(log.filter((line) => /counted\.fa bytes=/.test(line)).length).toBeGreaterThan(before)
+    expect(ranged.outputs.map((output) => output.id)).toEqual([
+      'composition-gc',
+      'composition-gcskew',
+      'composition-atskew',
+      'composition-cumulative',
+    ])
+    expect(ranged.outputs.length).toBe(held.outputs.length)
+    for (let i = 0; i < held.outputs.length; i++) {
+      const [one, two] = [held.outputs[i], ranged.outputs[i]]
+      if (one.kind !== 'profile' || two.kind !== 'profile') throw new Error('not a profile')
+      expect(two.values.some((value) => Number.isFinite(value))).toBe(true)
+      expect(Array.from(two.values)).toEqual(Array.from(one.values))
+    }
+  })
+
   it('still declines the tasks that need a sequence whole, in words', async () => {
     serve({ size: LARGE, index: true })
     await ask({ kind: 'load', entry: 'e-whole', source: source('whole.fa'), mapContigs: [] })
-    const result = await runTask('composition', 'e-whole', {})
+    const result = await runTask('oriter', 'e-whole', {})
     expect(result.outputs).toEqual([])
     expect(result.notes.join(' ')).toContain('not here whole to read')
   })

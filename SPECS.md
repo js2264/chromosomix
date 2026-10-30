@@ -3637,12 +3637,12 @@ is on screen the moment a kilobyte of index has arrived, and nothing of the sequ
 a lane asks for a window. The index is the one named on the URL (`<url>#index=<url>`, §8.13) or
 dropped beside the file, and otherwise `<url>.fai`, guessed and never probed on the terms every other
 sidecar is. What an indexed sequence gives up is everything that needed the whole of it in memory:
-its GC lane draws nothing over a window wider than four megabases and its readout says why, base
-composition and the origin call decline it in a note naming the line, and an alignment lane colours
-its mismatches only from the slab the sequence lane last drew, never fetching for one (§8.13). The
-**motif search** needs it only a piece at a time, so it is not among them: it reads every base it
-searches, by range, sixteen megabases at a time and none of them kept, and says what that costs
-before it runs (§18.8). Over the line with no
+its GC lane draws nothing over a window wider than four megabases and its readout says why, the
+origin call declines it in a note naming the line, and an alignment lane colours its mismatches only
+from the slab the sequence lane last drew, never fetching for one (§8.13). The **motif search** and
+**base composition** need it only a piece at a time, so they are not among them: the search reads
+every base it searches, by range, sixteen megabases at a time, composition every base it counts a few
+megabases at a time, none of them kept, and each says what that costs before it runs (§18.8). Over the line with no
 index that can be found, the file is read whole as it always was, and refused past 300 MB by a
 sentence naming the size, `samtools faidx`, and where to put the result. A bgzipped FASTA is read
 whole whatever its size, and refused past the same 300 MB of sequence, its `.fai` needing a `.gzi`
@@ -8252,6 +8252,13 @@ may be smaller than its places — *Signal by group*'s P and q, a peak call's ID
 exponent where its places would print zero, as the drawer draws it: `6.5319e-22`, never a `0` that a
 script could not tell from a P that was.
 
+**A text file is made in pieces and never held as one string.** The TSV and bedGraph writers hand over
+their rows a block at a time — the browser makes a `Blob` of the pieces, the shell writes each as it is
+formatted — because a file can be longer than a string can be: V8 makes none past 2²⁹ − 24 characters,
+about 512 MB, and hg38 at 200 bp is fifteen million bins a track. Joined first, `composition
+--resolution 200` wrote the GC content's table, whose numbers are short, and stopped at the skew's with
+*Invalid string length*.
+
 **Run on every map of a deck, the outputs come together on one more tab, `all maps`.** Each output id
 is folded once, in the order the task returns them:
 
@@ -8998,10 +9005,12 @@ centred on it, named as what was read, and wraps on a circle. The bases are **co
 time**: each byte is a count in one of the four bytes of a 32-bit word — A, C, G, T, nothing for
 anything else — two bytes are looked up at once, and the words are added and split into their four
 counts every 252 bases, where a branch on each base was one the processor could not predict. A
-reference read by range (§8.8, §8.21) — in the shell, a FASTA with its `.fai` or a `.2bit` — is
-counted **a few megabases at a time**, a whole number of bins a read and none of them kept, as the
-motif search reads one, so each bin is counted in one read and the counts are those of the sequence
-held whole. On the validation's mm10 in 10 kb bins (validation.qmd § 16) the shell takes 6.5 s of CPU
+reference read by range (§8.8, §8.21) — a FASTA with its `.fai` or a `.2bit`, in the shell or dropped
+in the browser — is counted **a few megabases at a time**, a whole number of bins a read and none of
+them kept, as the motif search reads one, so each bin is counted in one read and the counts are those
+of the sequence held whole. It is priced beside **Run** as the search is, a scan of the bytes its
+bases are and, over a network, a request a read; the browser declined such a reference in a note,
+after a form that called the run free over residues it said the worker held. On the validation's mm10 in 10 kb bins (validation.qmd § 16) the shell takes 6.5 s of CPU
 where it took 53, every file it writes byte for byte the same. *Origin and terminus*, the first step of any analysis of a bacterial
 chromosome's folding, since the map is read *from* the origin: the two turning points of the
 cumulative GC skew (5 kb windows, 1 kb steps) are the candidates, and which is the terminus is

@@ -1831,7 +1831,9 @@ async function writeOutputs(
 ): Promise<string[]> {
   await mkdir(directory, { recursive: true })
   const written: string[] = []
-  const put = async (name: string, body: string | Uint8Array): Promise<void> => {
+  // A text file as its pieces, written as they are made: a profile at a fine
+  // bin size is more text than one string can hold (`write/tsv.ts`'s `pieces`).
+  const put = async (name: string, body: string | Iterable<string> | Uint8Array): Promise<void> => {
     const at = join(directory, name)
     // Without case, as a Mac's disk and Windows' compare names.
     const key = resolve(at).toLowerCase()

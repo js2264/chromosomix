@@ -84,6 +84,7 @@ node scripts/ui-fixes.mjs gallery            # the shortcuts' gestures, the circ
 node scripts/ui-structure-names.mjs gallery  # a BED's names on the model (§25.5): the colour-by menu with `· names`, the model A/B with its key, A recoloured from the key and the lane by name taking it, thirty names folding into `other`, the dark theme: sn1 … sn6
 node scripts/ui-orfs.mjs gallery              # a FASTA's six reading frames: the setting off and on, UTP5's start with an amino acid in every codon, the readout over it, bare codons, start/stop ticks at 20 kb, the whole chromosome's "zoom in", one window in table 1 and in table 4 (TGA → W), a reload, dark: o01 … o13
 node scripts/ui-motif-range.mjs gallery       # Find a motif over references read by range (§8.8, §8.21, §18.8): an 80 Mb FASTA with its .fai written under out/motif-range/ and opened alone, its row, the form with every sequence ticked and the scan's price, a run mid-way, the sites, one sequence ticked and its own row, then the yeast demo's .2bit priced and searched, and the FASTA held whole: mr01 … mr10
+node scripts/ui-composition-range.mjs gallery # Base composition over a FASTA dropped with its .fai on a new tab (§8.8, §18.8): an 80 Mb genome of GC waves and a skew changing sign mid-sequence written under out/composition-range/, its row read by range, the form priced as a scan in bytes, the run, the four lanes; the drawer's GC-skew TSV saved, its size and head printed: cr01 … cr04
 node scripts/ui-paper-store.mjs gallery      # the lab store's paper card, staged first (`python3 scripts/make_rsg_store.py stage --out gallery/stage --local http://127.0.0.1:5173`): Fig. 1a's three cells — GM12878 at 5 kb with ENCODE's ChIA-PET .hic in the lower triangle, its lanes and marks, the tracks cell its workspace fills, the model coloured by distance to its pinned bead — the tab strip, the same tab after a reload, Fig. 2 on chr19 with nothing computed, Fig. S3c: ps01 … ps05
 node scripts/ui-edit-dotplot.mjs gallery     # the stage's corner dot plot in the hand (§27.3, dev; the chrXVI–mycoides data and a config under out/reasm/): its own size, zoomed by the wheel, moved by a drag, a contig's name hovered on the bar and its lines lit, a line hovered and its contig lit on the map, sized by its grip, the dark theme with the size kept: o01 … o07
 node scripts/ui-basemods.mjs gallery         # a nanopore BAM's MM/ML calls on yeast IV: colour by base modification in the card, the reads by 5mC across UTP5 and its bare promoter and closer, a hover on a call and its read's card, 5hmC and 6mA picked, the depth row as % modified and its card, a 0.9 threshold, the dark theme: bm01 … bm14
@@ -459,6 +460,16 @@ of a byte a base, its sites at a locus, and the form on the FASTA held whole, st
 each price and each run's notes — the `.2bit`'s and the FASTA's site counts must agree. Run it after
 any change to the motif task's form or estimate, `analysis/run/motif.ts`, or how the worker reads a
 ranged reference.
+`scripts/ui-composition-range.mjs` drives **Base composition over a reference read by range**
+(§8.8, §18.8), by the road a reader takes with hg38: a FASTA past the whole-read line and its `.fai`,
+80 Mb written under `out/composition-range/` (git-ignored, written once), dropped together on a new
+tab's landing page. Its GC content swings in 6 Mb waves and each sequence's G/C skew changes sign at
+its middle, so the lanes have a shape a mistake would break. The row says *read by range from its
+index*; the form, at 100 kb, prices the run as a scan of every base in bytes; the run makes four
+lanes — GC in waves, the skew a step at each middle, the cumulative skew a peak there; and the
+drawer's TSV for the GC skew is saved, its line count, size and head printed. It declined such a
+reference in a note, after a form that called the run free. Run it after any change to the
+composition task's form or estimate, `analysis/run/composition.ts`, or the text writers.
 `scripts/ui-orfs.mjs` drives a **sequence lane's reading frames** (§8.8) on the 1D browser demo,
 with the General and Aesthetics columns folded so the browser is wide enough for each rung to land
 where it would on a laptop: the FASTA row's settings before and after *reading frames* is pressed,

@@ -1370,7 +1370,7 @@ export class AnalysisDrawer {
     maps: ReadonlyArray<{ label: string; provenance: Provenance }>,
   ): void {
     const stamp = fileStamp(new Date())
-    const blob = new Blob([combinedToTsv(output, maps)], { type: 'text/tab-separated-values' })
+    const blob = new Blob([...combinedToTsv(output, maps)], { type: 'text/tab-separated-values' })
     void downloadBlob(blob, tsvName(this.current?.id ?? 'task', output, stamp))
   }
 
@@ -1787,7 +1787,7 @@ export class AnalysisDrawer {
 
   private saveTsv(output: TaskOutput, provenance: Provenance): void {
     const stamp = fileStamp(new Date())
-    const blob = new Blob([outputToTsv(output, provenance)], {
+    const blob = new Blob([...outputToTsv(output, provenance)], {
       type: 'text/tab-separated-values',
     })
     void downloadBlob(blob, tsvName(provenance.task, output, stamp))

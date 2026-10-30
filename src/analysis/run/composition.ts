@@ -61,7 +61,12 @@ export const runComposition: TrackTaskRunner = async (job) => {
     job.note('The reference chosen is no longer loaded. Drop the FASTA again, or pick another.')
     return []
   }
-  if (reader.refusal !== undefined) {
+  // A refusal says the residues are not here *whole*, and counting needs them
+  // a few megabases at a time, so a reader that can read by range reads past
+  // it (`SequenceReader.refusal`). It stopped here in the browser, whose
+  // indexed FASTA carries both: a genome dropped with its `.fai` was offered
+  // the task, and the run ended in the note and no tracks.
+  if (reader.read === undefined && reader.refusal !== undefined) {
     job.note(reader.refusal)
     return []
   }
@@ -112,7 +117,12 @@ export const runComposition: TrackTaskRunner = async (job) => {
     job.progress(i, grid.length, contig.name)
     let counted: { counts: BaseCounts; length: number } | undefined
     if (read !== undefined) {
-      counted = await readBaseCounts((start, end) => read(contig.name, start, end), binsize)
+      counted = await readBaseCounts((start, end) => {
+        // A Stop is seen between two reads, as the motif search sees one: a
+        // mammal read by range in the browser is a minute, not a moment.
+        job.throwIfCancelled()
+        return read(contig.name, start, end)
+      }, binsize)
     } else {
       const seq = reader.bases(contig.name)
       counted = seq === undefined ? undefined : { counts: baseCounts(seq, binsize), length: seq.length }

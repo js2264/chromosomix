@@ -28,7 +28,7 @@
  */
 
 import type { ProfileOutput, Provenance } from '../types'
-import { RowBlocks, provenanceLines } from './tsv'
+import { RowBlocks, pieces, provenanceLines } from './tsv'
 
 /**
  * One sequence's intervals, for a track that is on no grid.
@@ -81,7 +81,8 @@ function present(value: number | undefined): value is number {
 }
 
 /**
- * The profile, as bedGraph text.
+ * The profile, as the pieces of a bedGraph, made as they are asked for — a
+ * file can be longer than one string can be (`tsv.ts`'s `pieces`).
  *
  * Sorted by construction rather than by a sort: a profile is laid out over the
  * assembly in bin order and the contigs are given in the order the file lists
@@ -91,15 +92,15 @@ function present(value: number | undefined): value is number {
  * which is why `contigs` is documented as the file's own order rather than as
  * any order.
  */
-export function profileToBedGraph(
+export function* profileToBedGraph(
   output: ProfileOutput,
   contigs: readonly BedGraphContig[],
   provenance: Provenance,
-): string {
-  const rows: string[] = provenanceLines(provenance)
+): Generator<string> {
+  yield* pieces(provenanceLines(provenance))
   const { values, extent, binsize } = output
-  // A block of rows at a time, joined by the `\n` the whole is (`RowBlocks`).
-  const blocks = new RowBlocks(rows)
+  // A block of rows at a time, each handed over as it fills (`RowBlocks`).
+  const blocks = new RowBlocks()
 
   for (const contig of contigs) {
     for (let local = 0; local < contig.bins; local++) {
@@ -110,13 +111,12 @@ export function profileToBedGraph(
       const start = local * binsize
       const end = Math.min(contig.length, start + binsize)
       if (!(end > start)) continue
-      blocks.push(`${contig.name}\t${start}\t${end}\t${format(value)}`)
+      const block = blocks.push(`${contig.name}\t${start}\t${end}\t${format(value)}`)
+      if (block !== undefined) yield block
     }
   }
-  blocks.flush()
-
-  rows.push('')
-  return rows.join('\n')
+  const rest = blocks.flush()
+  if (rest !== undefined) yield rest
 }
 
 /**
@@ -144,7 +144,7 @@ export function spansToBedGraph(
   spans: readonly BedGraphSpans[],
   contigs: readonly BedGraphContig[],
   provenance: Provenance,
-): string {
+): Iterable<string> {
   const rows: string[] = provenanceLines(provenance)
   const byContig = new Map<string, BedGraphSpans[]>()
   for (const span of spans) {
@@ -174,9 +174,7 @@ export function spansToBedGraph(
       rows.push(`${contig.name}\t${start}\t${end}\t${format(value)}`)
     }
   }
-
-  rows.push('')
-  return rows.join('\n')
+  return pieces(rows)
 }
 
 /**
@@ -193,7 +191,7 @@ export function profileToBedGraphRuns(
   output: ProfileOutput,
   contigs: readonly BedGraphContig[],
   provenance: Provenance,
-): string {
+): Iterable<string> {
   const rows: string[] = provenanceLines(provenance)
   const { values, extent, binsize } = output
 
@@ -225,7 +223,5 @@ export function profileToBedGraphRuns(
     }
     flush(contig.bins)
   }
-
-  rows.push('')
-  return rows.join('\n')
+  return pieces(rows)
 }

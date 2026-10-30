@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest'
 import {
   atSkewOf,
   baseCounts,
+  countSpan,
   cumulativeOf,
   gcContentOf,
   gcSkewOf,
@@ -18,6 +19,9 @@ import {
   type BaseCounts,
 } from '../../src/annotations/composition'
 import { BASE_CODE } from '../../src/annotations/fasta'
+import type { AnnotationEntry } from '../../src/annotations/types'
+import { COMPOSITION_TASK } from '../../src/analysis/tasks/composition'
+import type { AnalysisContext } from '../../src/analysis/types'
 
 function bases(text: string): Uint8Array {
   const out = new Uint8Array(text.length)
@@ -149,6 +153,50 @@ describe('counting a window at a time', () => {
 
   it('answers nothing for a sequence the reference has not got', async () => {
     expect(await readBaseCounts(async () => undefined, 1_000)).toBeUndefined()
+  })
+})
+
+describe('the price beside Run', () => {
+  const LENGTHS = [248_956_422, 133_797_422, 16_569]
+  const context = (byRange?: AnnotationEntry['byRange'], remote = false): AnalysisContext =>
+    ({
+      hasMap: false,
+      binsize: 0,
+      contigs: LENGTHS.map((length, at) => ({ name: `chr${at + 1}`, length, startBin: 0, bins: 0, genome: -1 })),
+      entries: [
+        {
+          id: 'seq1',
+          card: 'linear',
+          kind: 'sequence',
+          label: 'hg38.fa',
+          source: remote
+            ? { kind: 'remote', url: 'https://example.invalid/hg38.fa', name: 'hg38.fa' }
+            : { kind: 'local', name: 'hg38.fa' },
+          ...(byRange === undefined ? {} : { byRange }),
+        },
+      ],
+    }) as unknown as AnalysisContext
+  const bases = LENGTHS.reduce((sum, length) => sum + length, 0)
+  const params = { sequence: 'seq1', resolution: 200 }
+
+  it('is free for a reference held whole, its residues already read', () => {
+    const estimate = COMPOSITION_TASK.estimate(context(), params)
+    expect(estimate).toMatchObject({ class: 'free', requests: 0, bytes: 0 })
+    expect(estimate.refusal).toBeUndefined()
+  })
+
+  it('is a scan of every base for a reference read by range, priced as its file spends them', () => {
+    const byRange = { bases, bytesPerBase: 61 / 60 }
+    const local = COMPOSITION_TASK.estimate(context(byRange), params)
+    expect(local).toMatchObject({ class: 'scan', requests: null, bytes: Math.round(bases * (61 / 60)) })
+    expect(local.refusal).toBeUndefined()
+    expect(local.note).toContain('read by range')
+    expect(local.note).not.toContain('holds them')
+    // Over a network a read is a request, and there are as many as the run makes.
+    const remote = COMPOSITION_TASK.estimate(context(byRange, true), params)
+    const span = countSpan(200)
+    expect(span % 200).toBe(0)
+    expect(remote.requests).toBe(LENGTHS.reduce((sum, length) => sum + Math.ceil(length / span), 0))
   })
 })
 

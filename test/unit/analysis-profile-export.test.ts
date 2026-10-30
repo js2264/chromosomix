@@ -34,6 +34,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { AnalysisContext, AnalysisFraming, ProfileOutput, Provenance } from '@/analysis/types'
 import { profileToBedGraph, type BedGraphContig } from '@/analysis/write/bedgraph'
+import { textOf } from '@/analysis/write/tsv'
 import { writeBigWig } from '@/analysis/write/bigwig'
 import {
   AnalysisWorkspace,
@@ -383,7 +384,7 @@ describe('exporting a profile that was not carried', () => {
     const held = carried.profile!.provenance
 
     const bedGraph = await press(workspace, 'bedGraph')
-    expect(await bedGraph.blob.text()).toBe(profileToBedGraph(output, grid(1000), held))
+    expect(await bedGraph.blob.text()).toBe(textOf(profileToBedGraph(output, grid(1000), held)))
     expect(bedGraph.name).toMatch(/^coverage-\d{8}-\d{6}\.bedGraph$/)
 
     const bigWig = await press(workspace, 'bigWig')

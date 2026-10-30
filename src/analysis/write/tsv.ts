@@ -148,39 +148,55 @@ function row(cells: readonly string[]): string {
 const ROWS_PER_BLOCK = 4096
 
 /**
- * Rows gathered into a list of lines a block at a time.
+ * Rows gathered into pieces of a file a block at a time.
  *
  * A profile is a row per bin of the file — a quarter of a million at 10 kb on a
  * mammal, for each of a task's tracks and in each of two formats — and held as
  * rows to the end, every one of them lived long enough for the collector to
  * move it out of its young space and then mark it again and again, which was a
  * larger share of writing a coverage run than formatting its numbers. Joined a
- * block at a time as they are made, the rows die young and the list holds one
- * string for every four thousand rows. Each block is its rows joined by the `\n`
- * the list is joined by in turn (`document`, or a bedGraph's own join), so the
- * text is the same.
+ * block at a time as they are made, the rows die young, and the block each four
+ * thousandth row completes is handed back to be written, each row ending in its
+ * `\n`, so the blocks end to end are the text.
  */
 export class RowBlocks {
   private readonly block: string[] = []
 
-  constructor(private readonly into: string[]) {}
-
-  push(line: string): void {
+  /** The row; and the block it completes, when it completes one. */
+  push(line: string): string | undefined {
     this.block.push(line)
-    if (this.block.length === ROWS_PER_BLOCK) this.flush()
+    return this.block.length === ROWS_PER_BLOCK ? this.flush() : undefined
   }
 
-  /** What is left, onto the list; call once the last row is pushed. */
-  flush(): void {
-    if (this.block.length === 0) return
-    this.into.push(this.block.join('\n'))
+  /** What is left, as one block, if anything is; call once the last row is pushed. */
+  flush(): string | undefined {
+    if (this.block.length === 0) return undefined
+    const text = `${this.block.join('\n')}\n`
     this.block.length = 0
+    return text
   }
 }
 
-/** Lines to a file: newline endings, exactly one at the end. */
-function document(lines: readonly string[]): string {
-  return `${lines.join('\n')}\n`
+/**
+ * Lines as pieces of a file: each with its newline, exactly one at the end.
+ *
+ * **Every writer here and in `bedgraph.ts` hands its file over in pieces, never
+ * as one string**: the browser makes a `Blob` of them and the shell writes them
+ * one after another. A string cannot be longer than 2²⁹ − 24 characters in V8, about
+ * 512 MB, and a file can: hg38 at 200 bp is fifteen million bins, and
+ * `composition --resolution 200` wrote the GC content's table, whose numbers
+ * are short enough to come in under, and then stopped at the skew's with
+ * *Invalid string length*. Made as they are asked for, the pieces of a profile
+ * are written as they are formatted, so the shell never holds a file's text at
+ * all.
+ */
+export function* pieces(lines: Iterable<string>): Generator<string> {
+  for (const line of lines) yield `${line}\n`
+}
+
+/** A file's pieces, end to end — for a test, or a file known to be small. */
+export function textOf(parts: Iterable<string>): string {
+  return [...parts].join('')
 }
 
 // ---------------------------------------------------------------------------
@@ -236,25 +252,26 @@ export function provenanceLines(provenance: Provenance): string[] {
  * jump from bin 40 to bin 57 with no explanation looks like a truncated file
  * rather than like sixteen filtered bins.
  */
-function profileToTsv(output: ProfileOutput): string[] {
+function* profileToTsv(output: ProfileOutput): Generator<string> {
   const [from] = output.extent
-  const lines = [
+  yield* pieces([
     `# output: ${cell(output.label)}${output.unit === '' ? '' : ` (${cell(output.unit)})`}`,
     `# binsize: ${tsvNumber(output.binsize)}`,
     row(['bin', 'start', 'end', 'value']),
-  ]
+  ])
   // One template a row rather than four cells joined: a profile is a row per
   // bin of the file, a quarter of a million at 10 kb on a mammal, and the cells
   // are the same strings either way.
   const { binsize, values } = output
-  const rows = new RowBlocks(lines)
+  const rows = new RowBlocks()
   for (let i = 0; i < values.length; i++) {
     const bin = from + i
     const start = bin * binsize
-    rows.push(`${bin}\t${start}\t${start + binsize}\t${tsvNumber(values[i])}`)
+    const block = rows.push(`${bin}\t${start}\t${start + binsize}\t${tsvNumber(values[i])}`)
+    if (block !== undefined) yield block
   }
-  rows.flush()
-  return lines
+  const rest = rows.flush()
+  if (rest !== undefined) yield rest
 }
 
 /**
@@ -527,7 +544,7 @@ export function spansToTsv(
   spans: readonly TsvSpans[],
   contigs: ReadonlyArray<{ name: string; length: number }>,
   provenance: Provenance,
-): string {
+): Iterable<string> {
   const lines = [
     ...provenanceLines(provenance),
     `# output: ${cell(label)}${unit === '' ? '' : ` (${cell(unit)})`}`,
@@ -557,12 +574,13 @@ export function spansToTsv(
       lines.push(row([cell(contig.name), String(start), String(end), tsvNumber(value)]))
     }
   }
-  return document(lines)
+  return pieces(lines)
 }
 
-/** One output, with its provenance above it, as the text of a `.tsv`. */
-export function outputToTsv(output: TaskOutput, provenance: Provenance): string {
-  return document([...provenanceLines(provenance), ...outputLines(output)])
+/** One output, with its provenance above it, as the pieces of a `.tsv` (see {@link pieces}). */
+export function* outputToTsv(output: TaskOutput, provenance: Provenance): Generator<string> {
+  yield* pieces(provenanceLines(provenance))
+  yield* outputPieces(output)
 }
 
 /**
@@ -576,11 +594,12 @@ export function outputToTsv(output: TaskOutput, provenance: Provenance): string 
  * other seven that is not true — they are other files, and they may have been
  * run at other times with other settings.
  */
-export function combinedToTsv(
+export function* combinedToTsv(
   output: TaskOutput,
   maps: ReadonlyArray<{ label: string; provenance: Provenance }>,
-): string {
-  return document([...combinedProvenanceLines(maps), ...outputLines(output)])
+): Generator<string> {
+  yield* pieces(combinedProvenanceLines(maps))
+  yield* outputPieces(output)
 }
 
 /**
@@ -603,18 +622,18 @@ export function combinedProvenanceLines(
   return head
 }
 
-function outputLines(output: TaskOutput): string[] {
+function outputPieces(output: TaskOutput): Iterable<string> {
   switch (output.kind) {
     case 'profile':
       return profileToTsv(output)
     case 'curve':
-      return curveToTsv(output)
+      return pieces(curveToTsv(output))
     case 'matrix':
-      return matrixToTsv(output)
+      return pieces(matrixToTsv(output))
     case 'table':
-      return tableToTsv(output)
+      return pieces(tableToTsv(output))
     case 'intervals':
-      return intervalsToTsv(output)
+      return pieces(intervalsToTsv(output))
   }
 }
 
