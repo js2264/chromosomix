@@ -19,16 +19,19 @@
  * its own in the drawer (`ui/StoreDrawer.ts`). For the reader who has no data
  * of their own at all.
  *
- * Nothing else is on the page but one offer beside it. The three are in the
+ * Nothing else is on the page but two offers beside it. The three are in the
  * order a reader is likely to want them — what you brought, where you keep it,
  * what somebody else published — and everything that used to be here beside
  * them was one of the three wearing a different name: a catalogue was a store,
- * and a hub was a store. The offer is the guided tutorial's (§30), for the
+ * and a hub was a store. The first offer is the guided tutorial's (§30), for the
  * reader who has none of the three yet and does not know where to start: a
  * button in the margin left of them, where a wide window has nothing, and over
  * *Load files* where a narrow one has no margin. Never a dialog that opens by
  * itself — a reader who came to open a file is not asked first whether they
- * would like a lesson.
+ * would like a lesson. The second is a column of example sessions (§24.11),
+ * for the reader who wants to see somebody's published data on screen before
+ * choosing any: in the same margin beside the tiles, and under them where
+ * there is none.
  *
  * The privacy claim is on screen, prominently, because it is a headline claim
  * of the paper and because it is *true of the code*: a dropped `File` is handed
@@ -53,6 +56,8 @@ import { storeTiles } from './stores/tiles'
 import { subscribeStores } from '../state/stores'
 import { readTourProgress, subscribeTour, tourRunning } from '../state/tour'
 import { tutorialButtons, type TutorialStart } from './tutorialOffer'
+import { EXAMPLES, exampleSessions, type ExampleSession } from './exampleSessions'
+import { questionMark } from './questionMark'
 import type { SourceSpec } from '../worker/protocol'
 import type { PickedFile } from '../browse/folder'
 import { ViewerError } from '../errors'
@@ -125,6 +130,14 @@ export interface FilePickerProps {
    * offers none whatever is passed, for the same reason it offers no store.
    */
   onTutorial?(from: TutorialStart): void
+  /**
+   * An example session's button was pressed (§24.11). The shell opens it.
+   *
+   * Offered with the store tiles and nowhere they are not — an embed, the
+   * standalone build, a picker in a test — since every example is somebody's
+   * published files, read over the network as a store's are.
+   */
+  onExample?(example: ExampleSession): void
 }
 
 /**
@@ -143,6 +156,41 @@ function pickerHeading(text: string, mark: IconName): HTMLElement {
     icon(mark, { size: 18, class: 'picker-heading-mark' }),
     el('span', { text }),
   )
+}
+
+/** Ids for the `?` each example button is described by, unique however many pickers are built. */
+let nextExample = 0
+
+/**
+ * One example's button: its name, and the `?` the Analysis column's rows wear
+ * (`questionMark.ts`) for what the tab holds and where it is from — a press on
+ * the `?` shows that, and does not open the tab. The button is named by its
+ * words alone and described by the `?`, so a screen reader hears the name
+ * first and the footnote after it.
+ */
+function exampleButton(example: ExampleSession, onClick: () => void): HTMLButtonElement {
+  const hint = questionMark({
+    class: 'picker-example-hint',
+    label: `${example.about} ${example.from}.`,
+    fill: (box) =>
+      box.replaceChildren(
+        el('p', { class: 'question-tip-text', text: example.about }),
+        el('p', { class: 'question-tip-note', text: example.from }),
+      ),
+  })
+  hint.id = `picker-example-${nextExample++}`
+  const node = el(
+    'button',
+    {
+      class: 'btn picker-example',
+      type: 'button',
+      attrs: { 'data-example': example.id, 'aria-label': example.label, 'aria-describedby': hint.id },
+    },
+    el('span', { class: 'picker-example-label', text: example.label }),
+    hint,
+  )
+  node.addEventListener('click', onClick)
+  return node
 }
 
 export class FilePicker {
@@ -170,6 +218,24 @@ export class FilePicker {
       IS_STANDALONE || onTutorial === undefined
         ? null
         : el('aside', { class: 'picker-tutorial', attrs: { 'aria-label': 'Guided tutorial' } })
+    const onExample = props.onExample
+    // Inside the stores' section, after the tiles: a column in the margin
+    // beside them where the page is wide enough to have one, and under them
+    // where it is not (`styles.css`).
+    const examples =
+      this.tilesSlot === null || onExample === undefined
+        ? null
+        : el(
+            'aside',
+            { class: 'picker-examples', attrs: { 'aria-label': 'Example sessions' } },
+            el('p', { class: 'picker-examples-kicker', text: EXAMPLES.kicker }),
+            el('p', { class: 'picker-examples-prompt', text: EXAMPLES.prompt }),
+            el(
+              'div',
+              { class: 'picker-examples-list' },
+              ...exampleSessions().map((example) => exampleButton(example, () => onExample(example))),
+            ),
+          )
     this.el = el(
       'section',
       { class: 'view view-picker' },
@@ -193,9 +259,10 @@ export class FilePicker {
         ? null
         : el(
             'section',
-            { class: 'picker-section' },
+            { class: 'picker-section picker-store-section' },
             pickerHeading('Connect to a data store', 'library'),
             this.tilesSlot,
+            examples,
           ),
       this.entryBox,
       this.privacyNote(),
