@@ -28,9 +28,10 @@
  * button in the margin left of them, where a wide window has nothing, and over
  * *Load files* where a narrow one has no margin. Never a dialog that opens by
  * itself — a reader who came to open a file is not asked first whether they
- * would like a lesson. The second is the K562 showcase (§24.11), for the reader
- * who wants to see the stores' data on one map before choosing any: in the same
- * margin beside the tiles' last row, and under the tiles where there is none.
+ * would like a lesson. The second is a column of example sessions (§24.11),
+ * for the reader who wants to see somebody's published data on screen before
+ * choosing any: in the same margin beside the tiles, and under them where
+ * there is none.
  *
  * The privacy claim is on screen, prominently, because it is a headline claim
  * of the paper and because it is *true of the code*: a dropped `File` is handed
@@ -55,7 +56,8 @@ import { storeTiles } from './stores/tiles'
 import { subscribeStores } from '../state/stores'
 import { readTourProgress, subscribeTour, tourRunning } from '../state/tour'
 import { tutorialButtons, type TutorialStart } from './tutorialOffer'
-import { SHOWCASE } from './showcase'
+import { EXAMPLES, exampleSessions, type ExampleSession } from './exampleSessions'
+import { questionMark } from './questionMark'
 import type { SourceSpec } from '../worker/protocol'
 import type { PickedFile } from '../browse/folder'
 import { ViewerError } from '../errors'
@@ -129,13 +131,13 @@ export interface FilePickerProps {
    */
   onTutorial?(from: TutorialStart): void
   /**
-   * The showcase's button was pressed (§24.11). The shell opens its tab.
+   * An example session's button was pressed (§24.11). The shell opens it.
    *
    * Offered with the store tiles and nowhere they are not — an embed, the
-   * standalone build, a picker in a test — since what it opens is three stores'
-   * files, read over the network as a store's are.
+   * standalone build, a picker in a test — since every example is somebody's
+   * published files, read over the network as a store's are.
    */
-  onShowcase?(): void
+  onExample?(example: ExampleSession): void
 }
 
 /**
@@ -156,18 +158,36 @@ function pickerHeading(text: string, mark: IconName): HTMLElement {
   )
 }
 
+/** Ids for the `?` each example button is described by, unique however many pickers are built. */
+let nextExample = 0
+
 /**
- * The showcase's button, built as the tutorial's is (`tutorialOffer.ts`) — a
- * small mark and the words — so that the margin's two offers are one shape:
- * the tutorial's filled, as the page's one invited press, and this one outlined
- * beside the tiles whose data it opens.
+ * One example's button: its name, and the `?` the Analysis column's rows wear
+ * (`questionMark.ts`) for what the tab holds and where it is from — a press on
+ * the `?` shows that, and does not open the tab. The button is named by its
+ * words alone and described by the `?`, so a screen reader hears the name
+ * first and the footnote after it.
  */
-function showcaseButton(onClick: () => void): HTMLButtonElement {
+function exampleButton(example: ExampleSession, onClick: () => void): HTMLButtonElement {
+  const hint = questionMark({
+    class: 'picker-example-hint',
+    label: `${example.about} ${example.from}.`,
+    fill: (box) =>
+      box.replaceChildren(
+        el('p', { class: 'question-tip-text', text: example.about }),
+        el('p', { class: 'question-tip-note', text: example.from }),
+      ),
+  })
+  hint.id = `picker-example-${nextExample++}`
   const node = el(
     'button',
-    { class: 'btn picker-showcase-open', type: 'button' },
-    icon('layers', { size: 12 }),
-    el('span', { text: SHOWCASE.button }),
+    {
+      class: 'btn picker-example',
+      type: 'button',
+      attrs: { 'data-example': example.id, 'aria-label': example.label, 'aria-describedby': hint.id },
+    },
+    el('span', { class: 'picker-example-label', text: example.label }),
+    hint,
   )
   node.addEventListener('click', onClick)
   return node
@@ -198,19 +218,23 @@ export class FilePicker {
       IS_STANDALONE || onTutorial === undefined
         ? null
         : el('aside', { class: 'picker-tutorial', attrs: { 'aria-label': 'Guided tutorial' } })
-    const onShowcase = props.onShowcase
-    // Inside the stores' section, after the tiles: in the margin beside their
-    // last row where the column is wide enough to have one, and as a row under
-    // them where it is not (`styles.css`).
-    const showcase =
-      this.tilesSlot === null || onShowcase === undefined
+    const onExample = props.onExample
+    // Inside the stores' section, after the tiles: a column in the margin
+    // beside them where the page is wide enough to have one, and under them
+    // where it is not (`styles.css`).
+    const examples =
+      this.tilesSlot === null || onExample === undefined
         ? null
         : el(
             'aside',
-            { class: 'picker-showcase', attrs: { 'aria-label': 'K562 showcase' } },
-            el('p', { class: 'picker-showcase-kicker', text: SHOWCASE.kicker }),
-            showcaseButton(() => onShowcase()),
-            el('p', { class: 'picker-showcase-text', text: SHOWCASE.line }),
+            { class: 'picker-examples', attrs: { 'aria-label': 'Example sessions' } },
+            el('p', { class: 'picker-examples-kicker', text: EXAMPLES.kicker }),
+            el('p', { class: 'picker-examples-prompt', text: EXAMPLES.prompt }),
+            el(
+              'div',
+              { class: 'picker-examples-list' },
+              ...exampleSessions().map((example) => exampleButton(example, () => onExample(example))),
+            ),
           )
     this.el = el(
       'section',
@@ -238,7 +262,7 @@ export class FilePicker {
             { class: 'picker-section picker-store-section' },
             pickerHeading('Connect to a data store', 'library'),
             this.tilesSlot,
-            showcase,
+            examples,
           ),
       this.entryBox,
       this.privacyNote(),

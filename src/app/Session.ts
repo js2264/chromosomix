@@ -94,11 +94,13 @@ import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor, type ScoreChoice }
 import {
   applyConfig,
   buildConfig,
+  isRefusal,
   looksLikeConfig,
   resolveConfig,
   SESSION_NAME_SCOPE,
   type SessionConfig,
 } from '../state/SessionConfig'
+import { parseWorkspaceFile } from '../state/workspace'
 import type { Transform, ViewKind, ViewState } from '../types'
 import type { Normalisation, SmoothedField, SmoothingRequest } from '../render/derive'
 import { parseSmooth } from '../render/smooth'
@@ -171,7 +173,7 @@ import type { AnnotationContext, BorrowedScale, FigureSubject, MatrixPanel } fro
 import { ContigsTable, type CircularColumn, type OriginColumn } from '../ui/ContigsTable'
 import { ErrorView } from '../ui/ErrorView'
 import { FilePicker, firstEntry } from '../ui/FilePicker'
-import { showcaseConfig } from '../ui/showcase'
+import type { ExampleSession } from '../ui/exampleSessions'
 import type { ProviderId } from '../ui/connectFronts'
 import { embedded } from '../embed'
 import { openPairsDialog } from '../ui/PairsDialog'
@@ -1052,10 +1054,10 @@ export class Session {
             ...(this.host.startTutorial === undefined
               ? {}
               : { onTutorial: (from: 'start' | 'resume') => this.host.startTutorial?.(from) }),
-            // The showcase is one tab's config (§24.11), and the tab it opens
-            // in is this one: the landing page it was pressed on is the page
-            // of a tab that holds nothing.
-            onShowcase: () => void this.openConfig(showcaseConfig()),
+            // An example is one tab (§24.11), and the tab it opens in is this
+            // one: the landing page it was pressed on is the page of a tab
+            // that holds nothing.
+            onExample: (example: ExampleSession) => void this.openExample(example),
           }),
     })
     this.store.subscribe((state, change) => {
@@ -1922,19 +1924,37 @@ export class Session {
     rawUrl: string,
     /** What to call it where its address says only an id: a Drive file's name (§24.9). */
     label?: string,
+    options: {
+      /**
+       * Open a workspace of one tab in this one rather than beside it: an
+       * example pressed on this tab's landing page (§24.11), where the window
+       * may hold other tabs and this one holds nothing. A workspace of several
+       * is still the window's, and still opens beside what is open.
+       */
+      here?: boolean
+    } = {},
   ): Promise<void> {
     // A wait for the picture the workspace describes, from the moment it is
     // asked for (`perf/rendered.ts`): the fetch comes before anything opens.
     const end = begin()
     try {
-      await this.openConfigUrlNow(rawUrl, label)
+      await this.openConfigUrlNow(rawUrl, label, options.here === true)
     } finally {
       end()
     }
   }
 
+  /**
+   * One of the landing page's example sessions (§24.11), in this tab: built
+   * in the bundle, or a workspace of the lab's store fetched from its address.
+   */
+  private async openExample(example: ExampleSession): Promise<void> {
+    if ('config' in example.open) await this.openConfig(example.open.config())
+    else await this.openConfigUrl(example.open.workspace, example.label, { here: true })
+  }
+
   /** What {@link openConfigUrl} does. */
-  private async openConfigUrlNow(rawUrl: string, label?: string): Promise<void> {
+  private async openConfigUrlNow(rawUrl: string, label?: string, here = false): Promise<void> {
     // `?config=` is the other road a URL arrives on — a link, not a box — so the
     // rewrite table runs here the way it runs in `inferSource` for `#uri=`
     // (SPECS §24.5). A workspace published on Drive or named `gs://` is fetched
@@ -1969,10 +1989,18 @@ export class Session {
             `${response.statusText}${credential === null ? '' : ' to a signed request'}.`,
         )
       }
+      const text = await response.text()
       if (this.destroyed) return
+      if (here) {
+        const read = parseWorkspaceFile(text)
+        if (!isRefusal(read) && read.tabs.length === 1) {
+          await this.openConfig(resolveConfig(read.tabs[0], url))
+          return
+        }
+      }
       // …and the same hop for a published one, with the URL it was found at, so
       // the relative names inside it resolve against that folder.
-      this.host.openWorkspaceFile(await response.text(), name, url)
+      this.host.openWorkspaceFile(text, name, url)
     } catch (err) {
       if (!this.destroyed) this.showError(err)
     } finally {

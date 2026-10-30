@@ -11828,7 +11828,7 @@ as many again, so it is equal columns that fill the width and spill onto the nex
 `auto-fill` rather than `auto-fit` so that the last line's tiles stay the width of the ones above
 them — four over three reading as seven of one thing rather than as three larger ones underneath.
 Nothing else is on the page but two offers in its margin: the tutorial's beside *Load files* (§30.1)
-and the K562 showcase's beside the tiles' last row (§24.11). The
+and the example sessions beside the tiles (§24.11). The
 picker's *browse…* and its *private buckets…* are gone — they were the folder row said less
 plainly — and the *Hubs* dropdown of eighteen shelves was the tile row under another name.
 
@@ -12695,31 +12695,48 @@ That is the only check worth having: a file this repository wrote and this repos
 that two implementations share a reading of the format, which is exactly what they would do if the
 reading were wrong.
 
-### 24.11 The K562 showcase: three stores on one map
+### 24.11 Example sessions on the landing page
 
 Each store opens its own data, and a reader who wants to see what the viewer is *for* would have to
-know which rows of which stores belong together — a cell line two consortia both profiled, a map on
-the assembly the signal is on, a gene model on the same one. **The showcase is that answer, made
-once**: K562 on GRCh38, the cell line 4DN and ENCODE share most, opened as **one tab** — one map and
-its tracks on three sides, and no deck, since the point is the three edges of one picture and a deck
-would split them across cells. **Built**: `ui/showcase.ts`, the offer in `ui/FilePicker.ts`, and
-`scripts/ui-showcase.mjs`, which presses it and shoots the tab.
+know which rows of which stores make a picture together. **The example sessions are four such
+pictures, a press each**: under *Just looking?* and *Pick an example session*, a column of four
+buttons, each opening **one tab**. **Built**: `ui/exampleSessions.ts`, the column in
+`ui/FilePicker.ts`, and `scripts/ui-examples.mjs`, which presses every button and shoots each tab.
 
-**Offered on the landing page, beside the store tiles' last row**: *Just looking?*, a button that
-says what it does — *open K562 in one tab* — and one line naming the three sources. In the margin left
-of the tiles, against the bottom of their section, where the column is wide enough to have one (the
-same width the tutorial's offer asks, §30.1), so the margin holds one offer at its top and one at its
-bottom; as a row under the tiles where it is not. The tutorial's button is filled and this one is
-outlined in the same shape: one invited press per page. **Only where the tiles are**: an embed and
-the single file (§19, §21) have no stores and no showcase, since every file it names is read over the
-network as a store's are. Pressed, it opens in the tab whose landing page it is on, which holds
-nothing — by `Session.openConfig`, the road a dropped workspace takes, so the tracks arrive with the
-map rather than a gesture later.
+- **Human Hi-C data** — three stores on one map, built in the bundle (below).
+- **Yeast micro-C data** — the lab's store's *Yeast micro-C* figure: one map at 1.6 kb with the
+  sequence, genes, RNA-seq, ATAC, MNase, shotgun, SNPs and its loops.
+- **Linear tracks** — the lab's store's *Yeast chromatin landscape*: the same tracks with no map, in
+  the 1D browser (§5.8), close enough to read the reading frames.
+- **Comparing data** — G2 against mitosis in one square, built in the bundle (below).
 
-**The map** is 4DN's in situ Hi-C of K562 (Rao et al. 2014, `4DNESI7DEJTM`, `4DNFI18UHVRO.mcool`),
-907 million contacts, opened balanced at 10 kb on **chr8:126,800,001-130,200,000**: MYC, PVT1 and the
-blood enhancer cluster downstream of them, a sharp compartment edge and domains with loops at their
-corners, and the locus K562 is known for. What surrounds it:
+**Each button is a name and a `?`.** The names are the names of what they open, as a store tile's
+are, and are capitalised as one; what the tab holds and where it is from is the `?`'s, the mark the
+Analysis column's rows wear for what a task re-implements (§18.1, `ui/questionMark.ts`) — the same
+mark, the same tip hung from the body, shown on hover and on a tap, so a reader who has learnt it in
+one place knows it in the other. A press on the `?` reads and does not open. The button is named by
+its words and described by its `?`. No sentence under the buttons: four of them would be a paragraph
+in a margin.
+
+**Where it stands.** In the margin left of the store tiles, against the bottom of their section,
+where the column is wide enough to have one — the width the tutorial's offer asks (§30.1) — so the
+margin holds one offer at its top and one at its bottom, the buttons one under the other; under the
+tiles where it is not, the two lines and then the buttons in a row that wraps. **Only where the tiles
+are**: an embed and the single file (§19, §21) have no stores and no examples, since every example is
+somebody's published files read over the network as a store's are.
+
+**It opens in the tab it was pressed in**, which holds nothing — a landing page is the page of an
+empty tab — by `Session.openConfig`, the road a dropped workspace takes, so the tracks arrive with the
+map rather than a gesture later. The two of the lab's figures are fetched from the address the
+store's own cards read them from (`ui/examples.ts`'s `demoFigure`) and, being one tab each, opened
+there too; a workspace of several tabs would still open beside what is open, as it does from the
+store. Pressed from an empty tab beside another, it fills the empty one and opens no third.
+
+**Human Hi-C data: three stores on one map.** K562 on GRCh38, the cell line 4DN and ENCODE share
+most, with **no deck**, since the point is the three edges of one picture. The map is 4DN's in situ
+Hi-C of K562 (Rao et al. 2014, `4DNESI7DEJTM`, `4DNFI18UHVRO.mcool`), 907 million contacts, opened
+balanced at 10 kb on **chr8:126,800,001-130,200,000**: MYC, PVT1 and the blood enhancer cluster
+downstream of them, a sharp compartment edge and domains with loops at their corners. Around it:
 
 - **Above**, IGV's hg38 (`hg38_1kg`, the IGV store's human genome): RefSeq genes against the map,
   then the sequence, then the bands. The genes and the bands are read from IGV's own bucket and not
@@ -12740,11 +12757,23 @@ corners, and the locus K562 is known for. What surrounds it:
   of accessibility. There is no MNase-seq: neither ENCODE's GRCh38 catalogue nor 4DN's K562 one holds
   any, as the two stores read them.
 
-**Built into the bundle rather than published beside the demos**: every file is on its own
-consortium's bucket already, so the session is the only thing to publish, and a few kilobytes of code
-is a session that cannot go missing from a bucket. It is a `SessionConfig` like any a workspace file
-holds, and its test reads it back through `parseWorkspaceFile`, the validator every such file meets.
-It carries the reader's own overlay preferences and no column layout, so opening it changes neither.
+**Comparing data: G2 against mitosis in one square.** Chicken DT40 cells released from a G2 block into
+mitosis (Gibcus et al. 2018), from 4DN's bucket: the G2 map (`4DNES9LEZXN7`) above the diagonal and
+the one 60 min on (`4DNESEQNSXSD`) — the time course's last point, which 4DN calls a prometaphase
+block, there being no sample of it called metaphase — below it, as two files in one square (§5.7): one
+colour scale, the two libraries within a percent of one depth. 40 Mb of chromosome 1 at 100 kb, wide
+enough for G2's checkerboard of compartments and for the mitotic band that replaces it. Each map's
+compartment eigenvector and insulation score — 4DN's own — is on the edge beside its own triangle,
+G2's along the top and the mitotic one's down the left, on **one fixed axis per kind** (E1 from −1.5
+to 1.5, insulation from −1 to 1), so the flattening of both in mitosis is read on the edges as it is
+on the map.
+
+**The two built in the bundle rather than published beside the demos**: every file they name is on
+its own consortium's bucket already, so the session is the only thing to publish, and a few
+kilobytes of code is a session that cannot go missing from a bucket. Each is a `SessionConfig` like
+any a workspace file holds, and its test reads it back through `parseWorkspaceFile`, the validator
+every such file meets. Each carries the reader's own overlay preferences and no column layout, so
+opening it changes neither.
 
 ## 25. A 3D structure beside the map
 

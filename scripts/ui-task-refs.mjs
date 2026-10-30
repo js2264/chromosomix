@@ -1,5 +1,5 @@
 /**
- * The `?` on the Analysis column's rows (`ui/taskReference.ts`), in headless
+ * The `?` on the Analysis column's rows (`ui/taskReference.ts`, its tip `ui/questionMark.ts`'s), in headless
  * Chromium on the yeast demo: the column with its marks, green and the text's
  * own colour; a green mark's tip, and an untested one's; the pointer carried
  * from a `?` into its tip, which stays for the DOI; a click on the `?`, which
@@ -57,7 +57,7 @@ async function scene(name, fn, { dark = false } = {}) {
   const row = (title) =>
     page.locator('.analysis-row', { has: page.locator('.analysis-row-title', { hasText: new RegExp(`^${title}$`) }) }).first()
   const tipText = () => page.evaluate(() => {
-    const tip = document.querySelector('.task-ref-tip:not(.hidden)')
+    const tip = document.querySelector('.question-tip:not(.hidden)')
     return tip === null ? null : { text: tip.innerText.replace(/\n/g, ' / '), href: tip.querySelector('a')?.href ?? null }
   })
   try {
@@ -100,7 +100,7 @@ await scene('light', async ({ page, shot, row, tipText }) => {
   const mark = await row('Directionality index').locator('.task-ref').boundingBox()
   await page.mouse.move(mark.x + mark.width / 2, mark.y + mark.height / 2)
   await sleep(250)
-  const tip = await page.locator('.task-ref-tip').boundingBox()
+  const tip = await page.locator('.question-tip').boundingBox()
   await page.mouse.move(tip.x + tip.width - 20, tip.y + tip.height - 6, { steps: 6 })
   await sleep(400)
   console.log('tr04 pointer in the tip:', JSON.stringify(await tipText()))
