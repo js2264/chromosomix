@@ -10,6 +10,20 @@ The deployed site at <https://chromosomix.app/> is built from `main` on every pu
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Added
+
+- **The K562 showcase: three stores on one map, from the landing page (§24.11).** *Just looking?* in
+  the margin beside the store tiles' last row — under them on a narrow page — opens one tab, with no
+  deck: 4DN's in situ Hi-C of K562 (Rao et al. 2014, 907 million contacts) at 10 kb over MYC, PVT1
+  and the blood enhancer cluster on chr8; IGV's hg38 RefSeq genes, sequence and bands above it; 4DN's
+  insulation, boundaries and E1 and ENCODE's subcompartments down its left; ENCODE's CTCF ChIA-PET
+  loops on it; and ENCODE's ChIP-seq, ATAC-seq and DNase-seq of the same cells under it, as five
+  overlaid pairs — CTCF with RAD21, H3K4me3 with H3K27ac, Pol II with H3K36me3, H3K27me3 with H3K9me3,
+  ATAC with DNase — each track on its own axis. Every file is read by range from its consortium's own
+  bucket; the gene model and the bands from IGV's, whose copy answers a page where UCSC's does not.
+
 ## [0.18.0] - 2026-10-30
 
 ### Added

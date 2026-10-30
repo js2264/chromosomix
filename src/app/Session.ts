@@ -171,6 +171,7 @@ import type { AnnotationContext, BorrowedScale, FigureSubject, MatrixPanel } fro
 import { ContigsTable, type CircularColumn, type OriginColumn } from '../ui/ContigsTable'
 import { ErrorView } from '../ui/ErrorView'
 import { FilePicker, firstEntry } from '../ui/FilePicker'
+import { showcaseConfig } from '../ui/showcase'
 import type { ProviderId } from '../ui/connectFronts'
 import { embedded } from '../embed'
 import { openPairsDialog } from '../ui/PairsDialog'
@@ -1051,6 +1052,10 @@ export class Session {
             ...(this.host.startTutorial === undefined
               ? {}
               : { onTutorial: (from: 'start' | 'resume') => this.host.startTutorial?.(from) }),
+            // The showcase is one tab's config (§24.11), and the tab it opens
+            // in is this one: the landing page it was pressed on is the page
+            // of a tab that holds nothing.
+            onShowcase: () => void this.openConfig(showcaseConfig()),
           }),
     })
     this.store.subscribe((state, change) => {

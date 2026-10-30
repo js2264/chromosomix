@@ -11827,7 +11827,8 @@ second line would have read as an afterthought. There are more than five now and
 as many again, so it is equal columns that fill the width and spill onto the next line, on
 `auto-fill` rather than `auto-fit` so that the last line's tiles stay the width of the ones above
 them — four over three reading as seven of one thing rather than as three larger ones underneath.
-Nothing else is on the page. The
+Nothing else is on the page but two offers in its margin: the tutorial's beside *Load files* (§30.1)
+and the K562 showcase's beside the tiles' last row (§24.11). The
 picker's *browse…* and its *private buckets…* are gone — they were the folder row said less
 plainly — and the *Hubs* dropdown of eighteen shelves was the tile row under another name.
 
@@ -12693,6 +12694,57 @@ The `.2bit` that script writes is checked with `py2bit`, a wrapper around the C 
 That is the only check worth having: a file this repository wrote and this repository read proves
 that two implementations share a reading of the format, which is exactly what they would do if the
 reading were wrong.
+
+### 24.11 The K562 showcase: three stores on one map
+
+Each store opens its own data, and a reader who wants to see what the viewer is *for* would have to
+know which rows of which stores belong together — a cell line two consortia both profiled, a map on
+the assembly the signal is on, a gene model on the same one. **The showcase is that answer, made
+once**: K562 on GRCh38, the cell line 4DN and ENCODE share most, opened as **one tab** — one map and
+its tracks on three sides, and no deck, since the point is the three edges of one picture and a deck
+would split them across cells. **Built**: `ui/showcase.ts`, the offer in `ui/FilePicker.ts`, and
+`scripts/ui-showcase.mjs`, which presses it and shoots the tab.
+
+**Offered on the landing page, beside the store tiles' last row**: *Just looking?*, a button that
+says what it does — *open K562 in one tab* — and one line naming the three sources. In the margin left
+of the tiles, against the bottom of their section, where the column is wide enough to have one (the
+same width the tutorial's offer asks, §30.1), so the margin holds one offer at its top and one at its
+bottom; as a row under the tiles where it is not. The tutorial's button is filled and this one is
+outlined in the same shape: one invited press per page. **Only where the tiles are**: an embed and
+the single file (§19, §21) have no stores and no showcase, since every file it names is read over the
+network as a store's are. Pressed, it opens in the tab whose landing page it is on, which holds
+nothing — by `Session.openConfig`, the road a dropped workspace takes, so the tracks arrive with the
+map rather than a gesture later.
+
+**The map** is 4DN's in situ Hi-C of K562 (Rao et al. 2014, `4DNESI7DEJTM`, `4DNFI18UHVRO.mcool`),
+907 million contacts, opened balanced at 10 kb on **chr8:126,800,001-130,200,000**: MYC, PVT1 and the
+blood enhancer cluster downstream of them, a sharp compartment edge and domains with loops at their
+corners, and the locus K562 is known for. What surrounds it:
+
+- **Above**, IGV's hg38 (`hg38_1kg`, the IGV store's human genome): RefSeq genes against the map,
+  then the sequence, then the bands. The genes and the bands are read from IGV's own bucket and not
+  from the addresses IGV's genome table names, because UCSC's `ncbiRefSeq.txt.gz` carries no CORS
+  header; the sequence is the 1000 Genomes FASTA read by range through its index, because the FASTA of
+  IGV's own `hg38` is on a bucket that refuses an anonymous reader (§24.3).
+- **Down the left**, the structure computed from the same map and the same cells: 4DN's insulation
+  score, the boundaries called on it and the first eigenvector at 250 kb, and ENCODE's
+  subcompartments of K562 (`ENCFF955KEB`), each row coloured by the cluster it names in the file's own
+  itemRgb colours — numbered, not lettered, since the file says which cluster and not which label.
+- **On the map**, ENCODE's CTCF ChIA-PET loops of K562 (`ENCSR597AKG`), one ring a pair. The
+  boundaries stay a lane: a loaded BED is drawn beside the map, never on it (§8.1).
+- **Below**, ENCODE's 1D signal of K562, as **five lanes of two tracks**, each pair overlaid and each
+  track on its own axis: CTCF with RAD21, H3K4me3 with H3K27ac, Pol II with H3K36me3, H3K27me3 with
+  H3K9me3, ATAC with DNase. Ten lanes under a map hold it at its smallest on a laptop, and
+  five leave it a map; and each pair is one that is read *against* itself — cohesin where CTCF is,
+  promoters against enhancers, starts against gene bodies, the two kinds of repression, the two assays
+  of accessibility. There is no MNase-seq: neither ENCODE's GRCh38 catalogue nor 4DN's K562 one holds
+  any, as the two stores read them.
+
+**Built into the bundle rather than published beside the demos**: every file is on its own
+consortium's bucket already, so the session is the only thing to publish, and a few kilobytes of code
+is a session that cannot go missing from a bucket. It is a `SessionConfig` like any a workspace file
+holds, and its test reads it back through `parseWorkspaceFile`, the validator every such file meets.
+It carries the reader's own overlay preferences and no column layout, so opening it changes neither.
 
 ## 25. A 3D structure beside the map
 

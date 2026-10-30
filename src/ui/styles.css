@@ -6691,6 +6691,66 @@ canvas.is-frozen {
   }
 }
 
+/* The K562 showcase's offer (§24.11): the tutorial's counterpart at the other
+   end of the page. Under the store tiles, as a row, where the column is narrow;
+   in the margin left of their last row where it is wide, so that it stands
+   beside the tiles whose data it opens and the margin holds one offer at the
+   top and one at the bottom. Against the section's bottom rather than a row of
+   the grid, which a remembered store moves down. */
+.picker-store-section {
+  position: relative;
+}
+
+.picker-showcase {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  margin: 1rem 0 0;
+}
+
+.picker-showcase-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+}
+
+.picker-showcase-kicker {
+  margin: 0;
+  font-size: var(--step--2);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.picker-showcase-text {
+  margin: 0;
+  font-size: var(--step--1);
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+@container landing (min-width: 86rem) {
+  .picker-showcase {
+    position: absolute;
+    bottom: 0;
+    right: calc(100% + 2.5rem);
+    width: 13.5rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+    margin: 0;
+  }
+
+  .picker-showcase-open {
+    padding: 0.55rem 0.9rem;
+    font-size: var(--step-0);
+    box-shadow: var(--shadow-2);
+  }
+}
+
 /* Opened *over* a view the brand block goes: the page it would introduce is
    already behind it, and the picker is a dialog there rather than a landing. */
 .modal-panel .picker-brand {

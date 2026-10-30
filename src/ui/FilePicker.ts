@@ -19,16 +19,18 @@
  * its own in the drawer (`ui/StoreDrawer.ts`). For the reader who has no data
  * of their own at all.
  *
- * Nothing else is on the page but one offer beside it. The three are in the
+ * Nothing else is on the page but two offers beside it. The three are in the
  * order a reader is likely to want them — what you brought, where you keep it,
  * what somebody else published — and everything that used to be here beside
  * them was one of the three wearing a different name: a catalogue was a store,
- * and a hub was a store. The offer is the guided tutorial's (§30), for the
+ * and a hub was a store. The first offer is the guided tutorial's (§30), for the
  * reader who has none of the three yet and does not know where to start: a
  * button in the margin left of them, where a wide window has nothing, and over
  * *Load files* where a narrow one has no margin. Never a dialog that opens by
  * itself — a reader who came to open a file is not asked first whether they
- * would like a lesson.
+ * would like a lesson. The second is the K562 showcase (§24.11), for the reader
+ * who wants to see the stores' data on one map before choosing any: in the same
+ * margin beside the tiles' last row, and under the tiles where there is none.
  *
  * The privacy claim is on screen, prominently, because it is a headline claim
  * of the paper and because it is *true of the code*: a dropped `File` is handed
@@ -53,6 +55,7 @@ import { storeTiles } from './stores/tiles'
 import { subscribeStores } from '../state/stores'
 import { readTourProgress, subscribeTour, tourRunning } from '../state/tour'
 import { tutorialButtons, type TutorialStart } from './tutorialOffer'
+import { SHOWCASE } from './showcase'
 import type { SourceSpec } from '../worker/protocol'
 import type { PickedFile } from '../browse/folder'
 import { ViewerError } from '../errors'
@@ -125,6 +128,14 @@ export interface FilePickerProps {
    * offers none whatever is passed, for the same reason it offers no store.
    */
   onTutorial?(from: TutorialStart): void
+  /**
+   * The showcase's button was pressed (§24.11). The shell opens its tab.
+   *
+   * Offered with the store tiles and nowhere they are not — an embed, the
+   * standalone build, a picker in a test — since what it opens is three stores'
+   * files, read over the network as a store's are.
+   */
+  onShowcase?(): void
 }
 
 /**
@@ -143,6 +154,23 @@ function pickerHeading(text: string, mark: IconName): HTMLElement {
     icon(mark, { size: 18, class: 'picker-heading-mark' }),
     el('span', { text }),
   )
+}
+
+/**
+ * The showcase's button, built as the tutorial's is (`tutorialOffer.ts`) — a
+ * small mark and the words — so that the margin's two offers are one shape:
+ * the tutorial's filled, as the page's one invited press, and this one outlined
+ * beside the tiles whose data it opens.
+ */
+function showcaseButton(onClick: () => void): HTMLButtonElement {
+  const node = el(
+    'button',
+    { class: 'btn picker-showcase-open', type: 'button' },
+    icon('layers', { size: 12 }),
+    el('span', { text: SHOWCASE.button }),
+  )
+  node.addEventListener('click', onClick)
+  return node
 }
 
 export class FilePicker {
@@ -170,6 +198,20 @@ export class FilePicker {
       IS_STANDALONE || onTutorial === undefined
         ? null
         : el('aside', { class: 'picker-tutorial', attrs: { 'aria-label': 'Guided tutorial' } })
+    const onShowcase = props.onShowcase
+    // Inside the stores' section, after the tiles: in the margin beside their
+    // last row where the column is wide enough to have one, and as a row under
+    // them where it is not (`styles.css`).
+    const showcase =
+      this.tilesSlot === null || onShowcase === undefined
+        ? null
+        : el(
+            'aside',
+            { class: 'picker-showcase', attrs: { 'aria-label': 'K562 showcase' } },
+            el('p', { class: 'picker-showcase-kicker', text: SHOWCASE.kicker }),
+            showcaseButton(() => onShowcase()),
+            el('p', { class: 'picker-showcase-text', text: SHOWCASE.line }),
+          )
     this.el = el(
       'section',
       { class: 'view view-picker' },
@@ -193,9 +235,10 @@ export class FilePicker {
         ? null
         : el(
             'section',
-            { class: 'picker-section' },
+            { class: 'picker-section picker-store-section' },
             pickerHeading('Connect to a data store', 'library'),
             this.tilesSlot,
+            showcase,
           ),
       this.entryBox,
       this.privacyNote(),
