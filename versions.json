@@ -235,6 +235,13 @@
   ],
   "pulls": [
     {
+      "number": 145,
+      "commit": "5055b73",
+      "title": "Measure analyses in the app as well as on the command line",
+      "branch": "js/determined-galileo-08c97f",
+      "date": "2026-10-30T18:03:27Z"
+    },
+    {
       "number": 144,
       "commit": "607fabc",
       "title": "Add example sessions to landing page",
