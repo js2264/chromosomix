@@ -235,6 +235,13 @@
   ],
   "pulls": [
     {
+      "number": 147,
+      "commit": "8c5e6b1",
+      "title": "CI: hold the subsample and every normalisation to cooler and cooltools, run on the day",
+      "branch": "ccr-4e4287e1-7ff954",
+      "date": "2026-10-30T21:47:52Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
