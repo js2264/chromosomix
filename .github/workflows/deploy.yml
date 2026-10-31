@@ -97,6 +97,20 @@ jobs:
           TELEMETRY_ENDPOINT: ${{ vars.TELEMETRY_ENDPOINT }}
           TELEMETRY_WEBSITE: ${{ vars.TELEMETRY_WEBSITE }}
 
+      # The files for language models — llms.txt, the pages it links under
+      # llms/ and llms-full.txt — are written by the build above from this
+      # commit's source (scripts/llms.mjs, SPECS §11), so every deploy of main
+      # refreshes them with nothing committed. A build that wrote none, or a
+      # page llms.txt links that is missing, stops the deploy here rather than
+      # publishing a summary whose links 404.
+      - name: Check the files for language models
+        run: |
+          test -s dist/llms.txt && test -s dist/llms-full.txt
+          pages=$(grep -oE '\(https://chromosomix\.app/llms/[a-z0-9-]+\.md\)' dist/llms.txt | sed -E 's#^\(https://chromosomix\.app/##; s#\)$##')
+          test -n "$pages"
+          for page in $pages; do test -s "dist/$page" || { echo "llms.txt links $page, which the build did not write"; exit 1; }; done
+          echo "llms.txt, llms-full.txt and $(echo "$pages" | wc -l) pages written"
+
       # The same source again, for the copy that stays reachable after the next
       # push. No typecheck: the build above already ran one over this tree, and
       # a second would spend a minute answering a question already answered.
@@ -297,3 +311,23 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+      # What an agent fetches, fetched as one would, from the address just
+      # published: llms.txt answers with the summary, and the first page it
+      # links answers too. The CDN may hold the previous copy for a few
+      # minutes, so this asks that the files are there, not that they are new.
+      - name: Check llms.txt is served
+        env:
+          SITE: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if curl -fsS -A 'chromosomix-deploy-check' "${SITE}llms.txt" -o llms.txt && head -1 llms.txt | grep -q '^# chromosomix'; then
+              page=$(grep -oE 'https://chromosomix\.app/llms/[a-z0-9-]+\.md' llms.txt | head -1 | sed 's#https://chromosomix\.app/##')
+              if [ -z "$page" ] || curl -fsS -o /dev/null "${SITE}${page}"; then
+                echo "${SITE}llms.txt is served"; exit 0
+              fi
+            fi
+            sleep 20
+          done
+          echo "::error::${SITE}llms.txt or its first page did not answer after two minutes"
+          exit 1

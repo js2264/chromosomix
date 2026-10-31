@@ -10,8 +10,9 @@
  * which is the one feature a reader of the static text could not then find.
  * The name is chromosomix.
  *
- * `public/llms.txt`, the summary the site serves to language models, is static
- * text in the same sense and under the same rule, as are the description a
+ * `llms.txt`, the summary the site serves to language models, is static text in
+ * the same sense and under the same rule, and so are the pages it links under
+ * `llms/` — written by the site build, rendered here — as are the description a
  * pasted link unfurls with (`og:description`), what the page says to a reader
  * or a crawler that runs no JavaScript (`<noscript>`), and the package's
  * description and keywords on npm.
@@ -23,6 +24,8 @@
 
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+
+import { renderAgentFiles } from '@/llms/render'
 
 const page = readFileSync(new URL('../../index.html', import.meta.url), 'utf8')
 const manifest = JSON.parse(
@@ -36,7 +39,8 @@ const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.ur
 /** The multi-genome format's words: its containers, the name for what they hold, and the field it is for. */
 const DEV = /multi-genome|\bm?metacool\b|metagenom/i
 
-const llms = readFileSync(new URL('../../public/llms.txt', import.meta.url), 'utf8')
+/** `llms.txt` and the pages it links, as the site build writes them (`src/llms/render.ts`). */
+const agentTexts = renderAgentFiles().map((file) => file.text)
 
 const title = /<title>([^<]*)<\/title>/.exec(page)?.[1] ?? ''
 const description = /<meta\s+name="description"\s+content="([^"]*)"/.exec(page)?.[1] ?? ''
@@ -57,7 +61,8 @@ describe('the static text', () => {
 
   it('names nothing that is a dev feature, in the page, the install prompt, the summary for models or on npm', () => {
     const texts = [title, description, unfurled, noscript, manifest.name, manifest.short_name, manifest.description]
-    for (const text of [...texts, llms, pkg.description, ...pkg.keywords]) {
+    expect(agentTexts.length).toBeGreaterThan(1)
+    for (const text of [...texts, ...agentTexts, pkg.description, ...pkg.keywords]) {
       expect(text).not.toMatch(DEV)
     }
   })

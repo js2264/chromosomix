@@ -14,6 +14,39 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The site describes itself to AI agents in full (§11).** `llms.txt` now says the four things an
+  agent can do with chromosomix — write a link, run an analysis, embed and drive the viewer, publish
+  data — names every task, and links five reference pages that the app writes about itself, under
+  `chromosomix.app/llms/`:
+  - `links.md`: every key a link's fragment takes, with its values, the views, the two forms of a
+    coordinate, the query (`embed`, `config`, `store`), pinned builds, and example links, each of
+    which opens what it says;
+  - `cli.md`: installing the command, writing one, what it writes, its exit statuses, examples, and
+    the usage `--help` prints;
+  - `tasks.md`: every task, each with what it reads and writes, the shape of its command, and every
+    parameter's flag, what it takes, its default and what it does — every value a choice takes
+    included, which `chromosomix tasks` never printed;
+  - `embed.md`: the `<iframe>`, the six `postMessage` messages and their rules, a host page's script,
+    and the Jupyter and R widgets;
+  - `data.md`: the formats and their sidecars, what a host must serve, the built-in stores, and a
+    store file and the smallest workspace a lab can write by hand.
+
+  **All of it is written by the site build, from the source it builds**, so every deploy of `main`
+  refreshes it with nothing to remember and nothing generated committed: `llms.txt`'s lists — the
+  tasks, the stores, the colour maps — and each page are read from what they describe (the task
+  registry, the hash reader's own keys, the command's usage, the embed channel, the store shelf), and
+  `npm run dev` serves them live. `llms-full.txt` is now the README followed by the five pages, in the
+  order `llms.txt` links them. The deploy stops before publishing if the build left out `llms.txt` or a
+  page it links, and after publishing fetches `chromosomix.app/llms.txt` and its first page as an
+  agent would, failing if they do not answer. `llms.txt` was a file kept by hand in `public/`.
+
+- **`chromosomix tasks --json` (§23).** The task listing as one JSON document: per task its id,
+  title, what it reads and writes — the files a run leaves as a whole included, such as the map
+  report's page — the tasks it runs first, and every parameter with its flag as the
+  parser takes it, its default, every value a choice takes, its range and unit; with how a parameter
+  naming a file is given one, and what each kind of result is written as. For a script or an agent
+  writing commands for the installed version.
+
 - **TAD annotation: Juicer's Arrowhead, ported (§18.8, §18.9).** A 2D task after the HiC score that
   calls contact domains from the corners of the squares they make on the map, so they can nest, share
   an edge, or leave an unstructured stretch uncalled — where insulation's and the directionality

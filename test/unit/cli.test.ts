@@ -1102,6 +1102,27 @@ describe('the annotations venue', () => {
     expect(complained()).not.toMatch(/failed:/)
   })
 
+  it('lists every task as one JSON document, with every value a choice takes', async () => {
+    reset()
+    expect(await main(['tasks', '--json'])).toBe(0)
+    const listed = JSON.parse(said()) as {
+      producer: string
+      inputs: Record<string, string>
+      outputs: Record<string, string>
+      tasks: Array<{ id: string; params: Array<{ key: string; flag: string; choices?: Array<{ value: string }> }> }>
+    }
+    expect(listed.producer).toMatch(/^chromosomix /)
+    // Every task the plain listing names, dev features' included: the command runs them all.
+    expect(listed.tasks.map((task) => task.id)).toEqual(TASKS.map((task) => task.id))
+    expect(Object.keys(listed.inputs)).toEqual(['featureSet', 'pairSet', 'track', 'sequence'])
+    expect(Object.keys(listed.outputs)).toContain('profile')
+    const apa = listed.tasks.find((task) => task.id === 'apa')
+    expect(apa?.params.find((param) => param.key === 'norm')?.choices?.map((choice) => choice.value)).toContain('matched')
+    expect(apa?.params.find((param) => param.key === 'balance')?.flag).toBe('--no-balance')
+    // The deck a comparison reads, spelled as the files a shell names.
+    expect(listed.tasks.find((task) => task.id === 'hicrep')?.params[0]?.flag).toBe('--against <file>')
+  })
+
   it('lists every task with its flags, the track tasks included', async () => {
     reset()
     expect(await main(['tasks'])).toBe(0)
