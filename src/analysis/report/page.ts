@@ -1259,14 +1259,14 @@ const SCRIPT = `
     if (label) label.textContent = names[value];
   }
   var chosen = 'auto';
-  try { chosen = localStorage.getItem('chromosomix-report-theme') || 'auto'; } catch (e) {}
+  try { chosen = localStorage.getItem('chromosomix:report-theme') || 'auto'; } catch (e) {}
   if (themes.indexOf(chosen) === -1) chosen = 'auto';
   theme(chosen);
   var toggle = doc.querySelector('[data-theme-toggle]');
   if (toggle) toggle.addEventListener('click', function () {
     chosen = themes[(themes.indexOf(chosen) + 1) % themes.length];
     theme(chosen);
-    try { localStorage.setItem('chromosomix-report-theme', chosen); } catch (e) {}
+    try { localStorage.setItem('chromosomix:report-theme', chosen); } catch (e) {}
   });
   var print = doc.querySelector('[data-print]');
   if (print) print.addEventListener('click', function () { window.print(); });
