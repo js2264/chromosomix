@@ -1,6 +1,13 @@
 {
-  "latest": "79cde0a",
+  "latest": "836288f",
   "versions": [
+    {
+      "commit": "836288f",
+      "version": "0.18.0",
+      "date": "2026-10-31T16:09:07+01:00",
+      "subject": "Describe the site to AI agents in full: llms.txt and five reference pages (§11, §23) (#150)",
+      "tag": ""
+    },
     {
       "commit": "79cde0a",
       "version": "0.18.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "78224e1",
-      "version": "0.16.0",
-      "date": "2026-10-24T08:53:53+02:00",
-      "subject": "Add Fig. 1a and Fig. 2 to the paper's store, and § 24 to the validation notebook (#138)",
-      "tag": ""
-    },
-    {
       "commit": "8d8450d",
       "version": "0.16.0",
       "date": "2026-10-20T23:57:42+02:00",
@@ -234,13 +234,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 150,
-      "commit": "613af10",
-      "title": "Describe the site to AI agents in full: llms.txt and five reference pages (§11, §23)",
-      "branch": "ccr-4192119d-y7877t",
-      "date": "2026-10-31T14:42:13Z"
-    },
     {
       "number": 122,
       "commit": "e818753",
