@@ -31,10 +31,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   - `data.md`: the formats and their sidecars, what a host must serve, the built-in stores, and a
     store file and the smallest workspace a lab can write by hand.
 
-  Each page is generated from what it describes — the task registry, the hash reader's own keys, the
-  command's usage, the embed channel, the store shelf — committed under `public/llms/`, and held to
-  the app by a test, which fails while a page is stale; `npm run llms` writes them again.
-  `llms-full.txt` is now the README followed by the five pages, in the order `llms.txt` links them.
+  **All of it is written by the site build, from the source it builds**, so every deploy of `main`
+  refreshes it with nothing to remember and nothing generated committed: `llms.txt`'s lists — the
+  tasks, the stores, the colour maps — and each page are read from what they describe (the task
+  registry, the hash reader's own keys, the command's usage, the embed channel, the store shelf), and
+  `npm run dev` serves them live. `llms-full.txt` is now the README followed by the five pages, in the
+  order `llms.txt` links them. The deploy stops before publishing if the build left out `llms.txt` or a
+  page it links, and after publishing fetches `chromosomix.app/llms.txt` and its first page as an
+  agent would, failing if they do not answer. `llms.txt` was a file kept by hand in `public/`.
 
 - **`chromosomix tasks --json` (§23).** The task listing as one JSON document: per task its id,
   title, what it reads and writes, the tasks it runs first, and every parameter with its flag as the

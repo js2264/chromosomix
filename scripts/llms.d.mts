@@ -23,5 +23,14 @@ export declare function llmsFullText(
   repository: string,
 ): string
 
-/** The plugin: `llms-full.txt` from the README and the pages, for the site build. */
-export declare function llmsFull(): Plugin
+/** Whether a path under the site's root is one of the files for language models. */
+export declare function isAgentPath(path: string): boolean
+
+/** Every file by its path: what the app renders through `load`, then `llms-full.txt`. */
+export declare function agentFiles(load: (id: string) => Promise<Record<string, any>>): Promise<Map<string, string>>
+
+/** The files, rendered through a Vite server made for it and closed after. */
+export declare function buildAgentFiles(): Promise<Map<string, string>>
+
+/** The plugin, for the site build and its dev server. */
+export declare function llms(): Plugin

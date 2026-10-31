@@ -96,8 +96,9 @@ function read(): boolean {
 }
 
 /**
- * Forget the remembered answer, or state one. Tests only: a page reads it once,
- * and a test under `node` has no address to put an answer in.
+ * Forget the remembered answer, or state one. For tests, and for the files the
+ * site build writes for language models (`llms/render.ts`): a page reads it
+ * once, and a test or a build under `node` has no address to put an answer in.
  */
 export function resetDevFeatures(on: boolean | null = null): void {
   cached = on

@@ -6,7 +6,7 @@ import { fileURLToPath, URL } from 'node:url'
 import { cspMeta } from './scripts/csp.mjs'
 import { precacheUrls } from './scripts/sw-manifest.mjs'
 import { thirdPartyCollector, thirdPartyNotices } from './scripts/third-party-notices.mjs'
-import { llmsFull } from './scripts/llms.mjs'
+import { llms } from './scripts/llms.mjs'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
   version?: string
@@ -166,10 +166,11 @@ export default defineConfig({
   // names `thirdPartyNotices()` again, last, where the worker builds report into
   // it from `worker.plugins` below (`scripts/third-party-notices.mjs`).
   //
-  // `llms-full.txt` is the site's alone, beside the `llms.txt`, the pages under
-  // `llms/`, `robots.txt` and `sitemap.xml` its `public/` carries: the README and
-  // those pages in one file (`scripts/llms.mjs`).
-  plugins: [serviceWorker(process.env.BASE_PATH ?? '/'), gzippedAsIs(), cspMeta(), thirdPartyNotices(), llmsFull()],
+  // `llms.txt`, the pages it links under `llms/` and `llms-full.txt` are the
+  // site's alone, written from this source by every build of it and served by
+  // the dev server, beside the `robots.txt` and `sitemap.xml` its `public/`
+  // carries (`scripts/llms.mjs`).
+  plugins: [serviceWorker(process.env.BASE_PATH ?? '/'), gzippedAsIs(), cspMeta(), thirdPartyNotices(), llms()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },

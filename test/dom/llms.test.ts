@@ -1,22 +1,19 @@
 // @vitest-environment jsdom
 /**
- * The site's files for language models and crawlers: `public/llms.txt`,
- * `robots.txt` and `sitemap.xml`, the pages under `public/llms/` that the app
- * writes about itself (`src/llms/pages.ts`), and the `llms-full.txt` the site
- * build puts together from the README and those pages (`scripts/llms.mjs`).
+ * The site's files for language models and crawlers: `llms.txt` and the pages
+ * it links under `llms/`, which the app writes about itself
+ * (`src/llms/render.ts`), the `llms-full.txt` the site build folds them into
+ * with the README (`scripts/llms.mjs`), and `public/robots.txt` and
+ * `sitemap.xml`.
  *
- * `llms.txt` is written by hand and read by models that act on it — they write
- * a link from it, or run a command from it — so everything it says the app takes
- * is held to what the app takes: each example link through the hash's own
- * reader, each value it lists against the list it is drawn from, each task
- * against the registry and each store against the shelf. A summary that has
- * drifted from the app is worse than none, since nothing reading it can tell.
- *
- * The pages are generated, and committed: each is compared with what the app
- * writes now, and `npm run llms` — this file under `--update` — writes them
- * again. What they say is then held as the summary is: every link key against
- * the reader's own list, every flag against the parser the command reads it
- * with, both JSON examples against the parsers that will be handed them.
+ * None of the first three is committed: every build of the site writes them
+ * from its source, so what is deployed is what the app says. What they say is
+ * held here to what the app takes, because a model acts on it — writes a link
+ * from it, runs a command from it — and nothing reading it can tell a summary
+ * that has drifted: each example link through the hash's own reader, each value
+ * listed against the list it is drawn from, every link key against the reader's
+ * own list, every flag against the parser the command reads it with, both JSON
+ * examples against the parsers that will be handed them.
  */
 
 import { readFileSync } from 'node:fs'
@@ -24,7 +21,14 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { absoluteLinks, linkedPages, llmsFullText, repositoryUrl } from '../../scripts/llms.mjs'
+import {
+  absoluteLinks,
+  agentFiles,
+  isAgentPath,
+  linkedPages,
+  llmsFullText,
+  repositoryUrl,
+} from '../../scripts/llms.mjs'
 import { taskCatalogue } from '@/analysis/catalogue'
 import { TASKS, taskById } from '@/analysis/registry'
 import { parseCommandLine, USAGE } from '@/cli/main'
@@ -32,6 +36,7 @@ import { publicUsage } from '@/llms/cli'
 import { json, STORE_EXAMPLE, WORKSPACE_EXAMPLE } from '@/llms/data'
 import { LINK_EXAMPLES, LINK_KEYS, LINK_VIEWS, UNDOCUMENTED_KEYS } from '@/llms/links'
 import { AGENT_PAGES } from '@/llms/pages'
+import { renderAgentFiles } from '@/llms/render'
 import { synopsisOf } from '@/llms/tasks'
 import { COLORMAP_NAMES } from '@/render/colormaps'
 import { COMPARE_OPS } from '@/render/compare'
@@ -40,13 +45,15 @@ import { isRefusal } from '@/state/SessionConfig'
 import { parseStore } from '@/state/store'
 import { KEY_ORDER, parseViewState } from '@/state/ViewState'
 import { parseWorkspaceFile } from '@/state/workspace'
-import { frontById } from '@/ui/stores/registry'
+import { builtinStores, frontById } from '@/ui/stores/registry'
 
 // Paths rather than `new URL(…)`: under jsdom the global `URL` is jsdom's, and
 // `readFileSync` does not take one of those for a file.
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const read = (path: string): string => readFileSync(join(ROOT, path), 'utf8')
-const llms = read('public/llms.txt')
+/** What the site build writes, as it writes it: with the dev features off. */
+const files = renderAgentFiles()
+const llms = files.find((file) => file.path === 'llms.txt')?.text ?? ''
 const lines = llms.split('\n')
 
 /** The backticked words of the first sentence of the bullet that documents `key`. */
@@ -119,6 +126,11 @@ describe('llms.txt', () => {
     expect(linkedPages(llms)).toEqual(AGENT_PAGES.map((agentPage) => agentPage.path))
   })
 
+  it('names every store the shelf offers, and no dev feature’s', () => {
+    expect(listAfter('the store ids are ')).toEqual(builtinStores().map((store) => store.id))
+    expect(listAfter('the store ids are ')).not.toContain('dbz')
+  })
+
   it('names only views, transforms, colour maps and comparisons the app has, and every colour map', () => {
     for (const view of valuesOf('view')) expect(parseViewState(`uri=a.cool&view=${view}`)?.view).toBe(view)
     for (const transform of valuesOf('transform')) {
@@ -172,16 +184,22 @@ describe('the pages the app writes about itself', () => {
   // As the site's own visitor reads them: the static text names no dev feature
   // (§29.5), and under `node` with no address the switch would answer on.
   beforeAll(() => resetDevFeatures(false))
-  const rendered = (): Array<{ path: string; text: string }> =>
-    AGENT_PAGES.map((agentPage) => ({ path: agentPage.path, text: agentPage.render() }))
+  const rendered = (): Array<{ path: string; text: string }> => files
 
-  for (const agentPage of AGENT_PAGES) {
-    it(`commits public/${agentPage.path} as the app writes it (npm run llms writes it again)`, async () => {
-      await expect(agentPage.render(), `public/${agentPage.path} is stale: run npm run llms`).toMatchFileSnapshot(
-        join(ROOT, 'public', agentPage.path),
-      )
+  it('are llms.txt and every page it links, each served at a path the site keeps for them', () => {
+    expect(files.map((file) => file.path)).toEqual(['llms.txt', ...AGENT_PAGES.map((agentPage) => agentPage.path)])
+    for (const file of files) expect(isAgentPath(file.path), file.path).toBe(true)
+    expect(isAgentPath('llms-full.txt')).toBe(true)
+    expect(isAgentPath('index.html')).toBe(false)
+    expect(isAgentPath('llms/../index.html')).toBe(false)
+  })
+
+  it('refuse to fold a page llms.txt links that nothing writes', async () => {
+    const missing = async (): Promise<Record<string, unknown>> => ({
+      renderAgentFiles: () => [{ path: 'llms.txt', text: '- [Gone](https://chromosomix.app/llms/gone.md): a page' }],
     })
-  }
+    await expect(agentFiles(missing)).rejects.toThrow(/llms\/gone\.md/)
+  })
 
   it('each open with a heading and a summary, and link only to absolute https addresses', () => {
     for (const { path, text } of rendered()) {
@@ -291,12 +309,15 @@ describe('the pages the app writes about itself', () => {
 describe('llms-full.txt', () => {
   const repository = 'https://github.com/js2264/chromosomix'
 
-  it('is the README, then every page llms.txt links, in its order', () => {
-    const full = llmsFullText(read('README.md'), llms, (path: string) => read(`public/${path}`), repository)
+  it('is the README, then every page llms.txt links, in its order', async () => {
+    const built = await agentFiles(async () => ({ renderAgentFiles: () => files }))
+    const full = built.get('llms-full.txt') ?? ''
+    const text = (path: string): string => files.find((file) => file.path === path)?.text ?? ''
+    expect(full).toBe(llmsFullText(read('README.md'), llms, text, repository))
     const parts = full.split('\n\n---\n\n')
     expect(parts[0]).toBe(absoluteLinks(read('README.md'), repository).replace(/\s+$/, ''))
     expect(parts.slice(1).map((part) => part.split('\n')[0])).toEqual(
-      AGENT_PAGES.map((agentPage) => read(`public/${agentPage.path}`).split('\n')[0]),
+      AGENT_PAGES.map((agentPage) => text(agentPage.path).split('\n')[0]),
     )
     expect(full.endsWith('\n')).toBe(true)
   })
