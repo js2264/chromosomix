@@ -46,12 +46,14 @@ import { METAPLOT_TASK } from "./tasks/metaplot";
 import { MOTIF_TASK } from "./tasks/motif";
 import { RESTRICTION_TASK } from "./tasks/restriction";
 import { PAIRS_QC_TASK } from "./tasks/pairsqc";
+import { MAP_REPORT_TASK } from "./tasks/mapreport";
 import { PEAKS_TASK } from "./tasks/peaks";
 import { COMPOSITION_TASK } from "./tasks/composition";
 import { DOTPLOT_TASK } from "./tasks/dotplot";
 import { GROUP_SIGNAL_TASK } from "./tasks/groupsignal";
 import { ORITER_TASK } from "./tasks/oriter";
 import { INSULATION_TASK } from "./tasks/insulation";
+import { ARROWHEAD_TASK } from "./tasks/arrowhead";
 import { DI_TASK } from "./tasks/di";
 import { HIC_SCORE_TASK } from "./tasks/hicscore";
 import { SCALOGRAM_TASK } from "./tasks/scalogram";
@@ -95,11 +97,19 @@ export const TASKS: readonly AnalysisTask[] = [
   // Read after P(s) because it answers the question P(s) raises first: how
   // short a separation the curve above can be believed at.
   PAIRS_QC_TASK,
+  // The library on one page: after the four it gathers from — coverage, cis and
+  // trans, P(s) and the records under them — since it is their composite, and
+  // before the tasks that read structure out of a map it has said can bear it.
+  MAP_REPORT_TASK,
   SCALOGRAM_TASK,
   FOURC_TASK,
   INSULATION_TASK,
   DI_TASK,
   HIC_SCORE_TASK,
+  // The domains read off the map's corners rather than off a track of minima:
+  // after the three that score each bin, because what it calls — nested, and
+  // with gaps — is the answer those three cannot give by construction.
+  ARROWHEAD_TASK,
   COMPARTMENTS_TASK,
   // The arms of a bacterial chromosome, after the compartments that are read
   // with their secondary diagonal divided out: how strongly the two arms touch

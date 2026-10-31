@@ -14,6 +14,7 @@
 
 import type { TaskRunner } from '../job'
 import { runApa } from './apa'
+import { runArrowhead } from './arrowhead'
 import { runCellQc } from './cellqc'
 import { runChromosight } from './chromosight'
 import { runCisTrans } from './cistrans'
@@ -29,6 +30,7 @@ import { runPairsQc } from './pairsqc'
 import { runFourC } from './fourc'
 import { runInsulation } from './insulation'
 import { runInterArm } from './interarm'
+import { runMapReport } from './mapreport'
 import { runReconstruct, runSpatialTracks, runStructureMap } from './structure'
 import { runMagNetwork, runMagPurity, runMagQc, runMagSplit } from './mags'
 
@@ -44,12 +46,14 @@ import { runMagNetwork, runMagPurity, runMagQc, runMagSplit } from './mags'
 export const RUNNERS: Record<string, TaskRunner> = {
   expected: runExpected,
   pairsqc: runPairsQc,
+  mapreport: runMapReport,
   coverage: runCoverage,
   cistrans: runCisTrans,
   cellqc: runCellQc,
   insulation: runInsulation,
   di: runDi,
   hicscore: runHicScore,
+  arrowhead: runArrowhead,
   scalogram: runScalogram,
   fourc: runFourC,
   apa: runApa,
