@@ -1565,12 +1565,14 @@ async function runChain(
       const answered = upstreamParamsOf(node, id, nodeParams)
       if (answered === null) continue
       // Its own defaults under those answers, and balancing as the framing reads
-      // the file — which a required step's form would have set from the file too.
+      // the file — which a required step's form would have set from the file too —
+      // unless the task answered it: the map report's library is the raw counts
+      // however the map is read, and `AnalysisRunner.plan` keeps that answer too.
       const requiredParams = withDerived(
         required,
         Object.fromEntries(
           Object.entries({ ...defaultParams(required.params), ...answered }).filter(
-            ([key]) => !required.params.some((spec) => spec.key === key && paramDerived(spec)),
+            ([key]) => key in answered || !required.params.some((spec) => spec.key === key && paramDerived(spec)),
           ),
         ),
         framing.balance,

@@ -43,8 +43,8 @@ const PARAMS: readonly ParamSpec[] = [
     ],
   },
   // P(s) is read balanced where the file is, as the P(s) task reads it; the
-  // coverage is always the raw counts, since a balanced coverage is flat by
-  // construction and says nothing about depth.
+  // coverage and the cis and trans are always the raw counts, since a balanced
+  // coverage is flat by construction and says nothing about depth.
   BALANCE_PARAM,
 ]
 
@@ -77,6 +77,9 @@ export const MAP_REPORT_TASK: AnalysisTask = {
   upstreamParams: (id, params): Params => {
     if (id === 'expected') return { scope: 'file', balance: params.balance === true }
     if (id === 'coverage') return { total: true, fraction: false, cis: false, trans: false, balance: false }
+    // Cis and trans of the counts, as the library's own totals are: a share of
+    // balanced values is a share of something no read measured.
+    if (id === 'cistrans') return { balance: false }
     return {}
   },
   documents: [

@@ -182,12 +182,19 @@ describe('the run', () => {
     const html = mapReportPage(await run(), 'sample')
     expect(html.startsWith('<!doctype html>')).toBe(true)
     expect(html).toContain('<title>Map report · sample</title>')
-    for (const heading of ['The library', 'Resolutions, coarsest to finest', 'Contact probability, P(s)', 'Coverage', 'Cis and trans per sequence', 'Provenance']) {
+    // A tab and a panel for each question, in reading order.
+    const tabs = [...html.matchAll(/role="tab" id="tab-([a-z]+)"/g)].map((m) => m[1])
+    expect(tabs).toEqual(['overview', 'library', 'resolutions', 'decay', 'coverage', 'cistrans', 'about'])
+    for (const heading of ['At a glance', 'The library', 'Resolutions, coarsest to finest', 'Contact probability, P(s)', 'Coverage', 'Cis and trans per sequence', 'How these numbers were made']) {
       expect(html).toContain(`<h2>${heading}</h2>`)
     }
     expect(html).toContain('<code>code</code>')
-    // Self-contained: no script, stylesheet or image fetched from anywhere.
-    expect(html).not.toMatch(/<script|<link|src=|https?:\/\//)
+    // Self-contained: its one script inline, and nothing fetched from anywhere.
+    expect(html).not.toMatch(/<script[^>]*\ssrc=|<link|<img|https?:\/\/(?!www\.w3\.org\/2000\/svg)/)
+    // The numbers the page's buttons save are in it, and parse.
+    const data = JSON.parse(/<script type="application\/json" id="report-data">([\s\S]*?)<\/script>/.exec(html)![1])
+    expect(Object.values(data.downloads).some((file) => (file as { name: string }).name === 'sample.report-resolutions.tsv')).toBe(true)
+    expect(Object.keys(data.charts).length).toBeGreaterThan(0)
   })
 
   it('leaves MultiQC sections MultiQC can read', async () => {

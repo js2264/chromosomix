@@ -8509,8 +8509,9 @@ is nothing to count them from.
 *Map report* — the questions a library is judged by before anything is read off it, answered in one
 run and written as one page. It is a **composite** (§18.2): it requires *P(s)*, *Coverage and
 marginals* and *Cis and trans per sequence*, runs each at its own defaults but for what the report
-answers for it — P(s) over the whole genome, balanced as the file is, and coverage of the **raw**
-counts, since a balanced coverage is flat by construction and says nothing about depth — and carries
+answers for it — P(s) over the whole genome, balanced as the file is, and coverage and cis and trans of
+the **raw** counts, since a balanced coverage is flat by construction and a share of balanced values is a
+share of something no read measured — and carries
 their outputs under ids of its own, so the numbers on the page are the numbers each task gives on its
 own and a run of any of them already in hand is reused. What it adds is two things no task computed:
 - **The library**, from one pass over the pixel table: every contact, cis and trans, those within one
@@ -8548,12 +8549,24 @@ offers *HTML report* beside *copy provenance*, and `chromosomix mapreport` write
 custom-content files a pipeline's MultiQC collects by their `_mqc` suffix — the general statistics
 (contacts, the cis, trans and cis ≥ 10 kb shares, and the finest bin's median and 80 % count), the
 ladder as a table, the 80 % count against the bin size and P(s), each under the file's name, so a
-batch over a hundred libraries is one MultiQC report with a row each. The page is written from the
-`TaskResult` alone, with no DOM and no chart library (`analysis/report/page.ts`): its figures are SVG
-drawn there, each value a `<title>` the browser shows under the pointer, in the first slots of the
-reference categorical palette chosen for a light and a dark surface each; it fetches nothing, holds no
-script, and prints. A table past two hundred rows is printed to that many and says so, the TSV beside
-it holding every one, and a sequence bar chart past sixty sequences is left to its table.
+batch over a hundred libraries is one MultiQC report with a row each.
+
+**The page is a small document application**, written from the `TaskResult` alone with no DOM and no
+chart library (`analysis/report/page.ts`), so the drawer and the shell make the same bytes. It has a
+**tab per question** — *Overview* (the headline numbers as tiles, the ladder and P(s) as thumbnails
+that open their tabs, the run's notes), *Library* (where the contacts are, as one bar of every contact
+by how far apart its ends are, and the tables), *Resolutions*, *P(s)*, *Coverage*, *Cis & trans* and
+*About* (the notes and the provenance, with a copy) — each addressable as `#resolutions` and walked
+with the arrow keys. Its figures are SVG drawn there and **answer the pointer**: a guide and a card with
+every series' value at the nearest point, a legend whose chips hide and show a series, and each figure
+saved as SVG — its colours resolved, so it opens anywhere — or its numbers as TSV. Its tables sort by a
+click on a column, filter past a dozen rows, and save as TSV. Light and dark are each chosen for their
+surface, the system's unless the reader picks one, which is remembered where the browser allows; at a
+phone's width the tabs scroll and a figure keeps a width its words can be read at. It **fetches
+nothing**: one script, inline, whose every step is guarded, and without which every tab is laid out
+one after another with each value still an SVG `<title>`; and a print lays every tab out on a page of
+its own. A table past five hundred rows is printed to that many and says so, the TSV holding every one,
+and a sequence bar chart past eighty sequences is left to its table.
 
 *Scalogram*, which is P(s) with one summation left undone, and sits beside it in the card for that reason.
 The decay curve averages every bin of a sequence into one line and answers *how does this genome fold*;

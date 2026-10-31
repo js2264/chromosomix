@@ -8,8 +8,8 @@
  * domains as corners on the map, whole and close up on chromosome IV. Then the
  * *Map report* row after Pairs QC, its form and price, a run, the drawer's
  * figures and tables page by page, and the *HTML report* button: the file it
- * saves is written under files/ and opened on its own, top and bottom, light
- * and dark. Prints each form's fields, its price, each run's notes and the
+ * saves is written under files/ and opened on its own: every tab in light,
+ * three in dark, a figure under the pointer, and a phone's width. Prints each form's fields, its price, each run's notes and the
  * drawer's headings, so a figure that did not arrive is a line in the log as
  * well as a missing picture.
  *
@@ -181,16 +181,36 @@ try {
   const report = await page.context().newPage()
   for (const scheme of ['light', 'dark']) {
     await report.emulateMedia({ colorScheme: scheme })
-    await report.setViewportSize({ width: 900, height: 1100 })
+    await report.setViewportSize({ width: 1280, height: 900 })
     await report.goto(`file://${resolve(saved)}`)
     await sleep(500)
-    await report.screenshot({ path: `${OUT}/ar11-report-page-${scheme}-top.png` })
-    console.log(`wrote ar11-report-page-${scheme}-top.png`)
-    await report.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
-    await sleep(300)
-    await report.screenshot({ path: `${OUT}/ar12-report-page-${scheme}-end.png` })
-    console.log(`wrote ar12-report-page-${scheme}-end.png`)
+    const tabs = await report.$$eval('[role=tab]', (all) => all.map((a) => a.getAttribute('aria-controls')))
+    console.log(`report tabs (${scheme}):`, JSON.stringify(tabs))
+    for (const [i, id] of tabs.entries()) {
+      if (scheme === 'dark' && !['overview', 'library', 'resolutions'].includes(id)) continue
+      await report.click(`#tab-${id}`)
+      await sleep(400)
+      const name = `ar${11 + i}-page-${id}-${scheme}`
+      await report.screenshot({ path: `${OUT}/${name}.png`, fullPage: true })
+      console.log(`wrote ${name}.png`)
+    }
   }
+  // The pointer on P(s): the guide and the card with its value.
+  await report.emulateMedia({ colorScheme: 'light' })
+  await report.click('#tab-decay')
+  await sleep(400)
+  const figure = report.locator('#decay .chart svg').first()
+  const at = await figure.boundingBox()
+  await report.mouse.move(at.x + at.width * 0.45, at.y + at.height * 0.4)
+  await sleep(300)
+  await report.screenshot({ path: `${OUT}/ar18-page-hover.png`, clip: { x: at.x - 40, y: at.y - 90, width: at.width + 80, height: at.height + 110 } })
+  console.log('wrote ar18-page-hover.png')
+  // A phone.
+  await report.setViewportSize({ width: 390, height: 844 })
+  await report.click('#tab-overview')
+  await sleep(400)
+  await report.screenshot({ path: `${OUT}/ar19-page-phone.png`, fullPage: true })
+  console.log('wrote ar19-page-phone.png', 'scroll width', await report.evaluate(() => document.documentElement.scrollWidth))
   await report.close()
 } finally {
   await close()

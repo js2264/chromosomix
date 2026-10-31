@@ -35,8 +35,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   contacts per bin, the count 80 % of bins reach, and the empty and nearly empty shares, a contact
   counted at both its ends as Juicer's `calculate_map_resolution.sh` counts it. Numbers only, no pass
   or fail. Every figure and table is in the drawer and exports on its own, and *HTML report* saves the
-  run as one self-contained page — SVG figures, light and dark, printable, no script. `chromosomix
-  mapreport` writes the page too, and four MultiQC custom-content files (`*_mqc.tsv`, `*_mqc.json`) a
+  run as one self-contained page: a tab per question (Overview, Library, Resolutions, P(s), Coverage,
+  Cis & trans, About), figures with a hover card and legend chips that hide a series, each saved as SVG
+  or TSV, sortable and filterable tables, light and dark, a phone's width and a print of every tab —
+  nothing fetched. `chromosomix mapreport` writes the page too, and four MultiQC custom-content files (`*_mqc.tsv`, `*_mqc.json`) a
   pipeline's MultiQC collects, one row per library.
 
 - **Example sessions on the landing page (§24.11).** Under *Just looking?* and *Pick an example
@@ -109,6 +111,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   convergence.
 
 ### Fixed
+
+- **A task's required steps keep a balancing the task answered for them, from the shell as in the app
+  (§18.2).** `chromosomix` re-derived every required step's *use balancing weights* from the file even
+  where the task had answered it, which `AnalysisRunner.plan` never did; no task answered one before the
+  map report, whose cis and trans are of the raw counts in both.
 
 - **A FASTA dropped with its `.fai` and nothing else opens by range (§8.8).** The two were paired, and
   the index went to the sequence track — but not to the question asked first, which sequences the
