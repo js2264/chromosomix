@@ -95,7 +95,7 @@ Two things do not move, and both belong to the browser rather than to this repos
 
 - **Storage is per origin.** Workspaces kept in the browser, the restore slot, the recent files and
   the settings stay with the old address. Export what matters before the move.
-- **An installed copy keeps the old build.** The service worker answers every page load at the old
+- **An installed copy keeps the old build.** The service worker answers a load of the app at the old
   address from its cache, so a reader who has used it there is never shown the redirect — and its
   update check, a request for `sw.js` at the old address, is redirected too, which a browser refuses
   for a service worker. That reader keeps the last build from before the move until they go to
@@ -509,7 +509,10 @@ because 20 builds is ~100 MB and the budget is what it is.
 The worker is registered at `/<repo>/`, so `/<repo>/v/<commit>/` is inside its scope, and its
 navigation handler answers **every** navigation in scope from the precached shell. Left alone it
 would serve the newest app at a pinned address: the right URL, the wrong code, and no symptom.
-`src/sw.js` now passes navigations under `<scope>v/` straight through.
+`src/sw.js` now passes navigations under `<scope>v/` straight through. (It has since stopped keeping
+a list at all: it answers only the app's own address — the scope itself and `index.html` — and
+leaves every other navigation to the network, which is what a list of exceptions kept failing to do
+for the next file published beside the app, `llms.txt` last; SPECS §11.)
 
 That fix only reaches a visitor once their worker updates, and a worker updates only when a page it
 controls is loaded — so a reader carrying an older one can still land on this exact bug.
@@ -673,8 +676,8 @@ branch, not to a release. No `/laptop/` until a render is committed.
 
 Each page says, in a block under its title, when it was rendered, from which version, commit and
 release, by which run, and on what machine; `rendered.json` beside it says the same for a script.
-The service worker leaves the four addresses to the network (`src/sw.js`), as it does `v/` and
-`pr/`: they are pages of their own, and the app's shell answered there would be the app wearing
+The service worker leaves the four addresses to the network (`src/sw.js`), as it does `v/`, `pr/`
+and every address but the app's own: they are pages of their own, and the app's shell answered there would be the app wearing
 their address. A reader whose worker predates this sees the app at those addresses until they take
 the update the app offers. Absent until the workflow has published once; the first run is by
 hand, or the next release.

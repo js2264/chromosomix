@@ -37,31 +37,33 @@ const PRECACHE = __PRECACHE__
 const PRECACHED = new Set(PRECACHE)
 
 /**
- * The archived builds this worker must keep its hands off.
+ * The addresses that *are* the app, and the only navigations this worker answers.
  *
- * The site publishes a copy of every push under `<base>v/<commit>/`, and the
- * whole point of that copy is that opening it runs *that* code. But this worker
- * is registered at `<base>`, so those URLs are inside its scope, and the
- * navigation branch below answers every navigation in scope with the cached
- * shell of the build the worker belongs to. Without this prefix, clicking a
- * pinned version would load the newest app at a pinned address: the right URL,
- * the wrong code, and no symptom to notice it by.
+ * The app is one document. Every view lives in the URL's hash, and every option
+ * a link carries — `?config=`, `?store=`, `?embed=1` — in its query, so the
+ * scope directory itself, and `index.html` as its alias, are the whole of the
+ * app's address space. Everything else in scope is somebody else's document and
+ * goes to the network as if this worker were not here: `llms.txt`, the pages
+ * under `llms/` and `llms-full.txt`, `robots.txt`, `sitemap.xml`,
+ * `THIRD-PARTY-NOTICES.txt`, an archived build at `v/<commit>/`, a pull
+ * request's preview at `pr/<n>/`, the rendered notebooks, and an address that
+ * is nothing at all, which the host answers with its 404.
+ *
+ * An allowlist, after a denylist that kept failing open. The worker used to
+ * answer *every* navigation with the cached shell and pass through a list of
+ * known exceptions — `v/`, then `pr/`, then each notebook as it was published —
+ * and every file beside the app that was not on the list was shown as the app:
+ * `llms.txt` typed into a browser that had visited the site came back as the
+ * landing page, and only a hard reload, which skips the worker, showed the
+ * file. Nothing about that is visible to a test that fetches the file, or to an
+ * agent, since neither runs a worker; it is a reader's browser that lies.
  *
  * Read from `self.location` rather than substituted, because the worker is
  * emitted beside the shell it serves and therefore already knows where it is.
  * `new URL('./', …)` is the directory this file sits in, which is the scope.
  */
 const SCOPE_DIR = new URL('./', self.location.href).pathname
-// …and the same for pull-request previews under `pr/<number>/`, which are the
-// same kind of copy at a different address (docs/deploy.md), and for the
-// rendered notebooks under `validation/`, `timings/`, `parity/` and `laptop/` (notebooks.yml), which
-// are pages of their own and no build at all. Each is passed through with and
-// without its trailing slash: Pages answers `…/validation` with a redirect to
-// `…/validation/`, and answering the first with the shell would never let the
-// redirect be seen.
-const PINNED_PREFIXES = ['v/', 'pr/', 'validation/', 'timings/', 'parity/', 'laptop/'].map((dir) => `${SCOPE_DIR}${dir}`)
-const passedThrough = (pathname) =>
-  PINNED_PREFIXES.some((prefix) => pathname.startsWith(prefix) || pathname === prefix.slice(0, -1))
+const isApp = (pathname) => pathname === SCOPE_DIR || pathname === `${SCOPE_DIR}index.html`
 
 /**
  * Fill the cache, then wait.
@@ -115,13 +117,12 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return
 
   // A reload, or a link into the app: answer with the cached shell, and fall
-  // back to the network on a cold cache. Every view lives in the URL *hash*, so
-  // one entry serves every link the app publishes — with two exceptions, a link
-  // to an archived build and a link to a rendered notebook. Each is a different
-  // document under the same scope and has to come from the network, or the
-  // reader gets this build wearing that page's address.
+  // back to the network on a cold cache. Every view lives in the URL's hash and
+  // query, so one entry serves every link the app publishes. A navigation to
+  // any other path is a different document under the same scope and is left to
+  // the network, or the reader gets this build wearing that page's address.
   if (request.mode === 'navigate') {
-    if (passedThrough(new URL(request.url).pathname)) return
+    if (!isApp(new URL(request.url).pathname)) return
     event.respondWith(
       caches.match(PRECACHE[0]).then((cached) => cached ?? fetch(request)),
     )

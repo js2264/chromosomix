@@ -5946,6 +5946,21 @@ from, every flag through the parser the command reads it with, both JSON example
 parsers, and none of it names a dev feature (§29.5) — the render turns the switch off, whatever the
 environment says. None of these files is in the pinned, desktop or package builds.
 
+**A browser that has opened the app shows these files as what they are, too.** The site's service
+worker (`src/sw.js`), which keeps the app working with no network, answers a page load with the app
+**only at the app's own address** — the site root, and `index.html` as its alias, whatever query and
+hash they carry, since every view lives in the hash and every option a link takes in the query. Every
+other address in its scope goes to the network as if no worker were there: `llms.txt`, its pages and
+`llms-full.txt`, `robots.txt`, `sitemap.xml`, `THIRD-PARTY-NOTICES.txt`, the archived pins and
+previews, the notebooks (§18.10), and an address that is nothing, which the host answers with its
+404. The worker used to answer every page load with the app and pass a list of exceptions through,
+so each file beside the app that was not on the list — `llms.txt` typed into the address bar, the
+licences linked from *About* — opened as the landing page in any browser that had visited the site,
+while a hard reload, which skips the worker, a private window and every agent showed the file. Held
+by `test/unit/sw-navigation.test.ts`. A browser holding a worker from before takes the change as it
+takes any new build: when its reader accepts the bar offering the new version, or once every tab of
+the site is closed.
+
 **The page is written for a search engine too, which reads it after the app has run.** Its title,
 *chromosomix – genome browser for Hi-C, tracks and 3D models*, and its description name what the
 app is searched by — Hi-C and Micro-C, a genome browser, `.cool`, `.mcool` and `.hic` — inside the
@@ -10257,7 +10272,8 @@ command line and in the app. The run's
 summary is a section a notebook: where it is, from what and in how long, that line, and its table,
 folded. The pages link to each other there and on a reader's disk alike, but for the laptop, which
 links the site's from either. They are no build of the app,
-so the service worker leaves those four addresses to the network, as it does `v/` and `pr/`, and the
+so the service worker leaves those four addresses to the network, as it does `v/`, `pr/` and every
+address but the app's own (§11), and the
 app, from this version on, finding itself at any of them unregisters its worker and reloads once
 (`recoverPinnedNavigation`), as at `v/`; a worker from before answers there with its own app until its
 reader takes the update it offers.
@@ -10276,7 +10292,7 @@ commit, in how long, on how many cores and how much memory, and by which run of 
 or *by hand*, which is how the laptop's is rendered, and the tab's sentence says which pages GitHub
 Actions renders and which one is rendered by hand, on a laptop. The list is `src/notebooks.ts`, held
 by `test/unit/notebooks.test.ts` to `pages.py`'s table — its pages, their titles, and which is rendered
-by hand — and to the segments the service worker leaves alone, so a fifth notebook cannot be published
+by hand — and to the segments the app recovers from (`recoverPinnedNavigation`), so a fifth notebook cannot be published
 without the tab naming it. The pages are this site's, when the app is served from one — an archived pin and a preview
 reach up to its root — and the deployed site's, by `package.json`'s `homepage`, from the desktop, the
 single file, the package's copy and a dev server; a build that can name neither has no Notebooks tab.

@@ -2,15 +2,14 @@
  * Which navigations the service worker answers with the app, and which it
  * leaves to the network.
  *
- * It answers every navigation in its scope from the cached shell — every view
- * lives in the hash, so one document serves them all — except the addresses
- * that hold a different document under the same scope: an archived build at
- * `v/<commit>/`, a pull request's preview at `pr/<n>/`, and the rendered
- * notebooks at `validation/`, `timings/`, `parity/` and `laptop/` (`.github/workflows/notebooks.yml`).
- * Answered with the shell, those show this build at that address, which is the
- * one failure a reader has no symptom to notice by. The notebooks are passed
- * through without their trailing slash too, because that is how a link to one
- * is typed, and Pages' redirect to the slash is a network answer.
+ * It answers the app's own address and nothing else: the scope directory, and
+ * `index.html` as its alias, whatever query they carry — every view lives in
+ * the hash, and every option a link takes in the query, so one document serves
+ * them all. Every other address in its scope is a different document, and
+ * answered with the shell it shows this build at that address: `llms.txt` and
+ * the files beside it, an archived build at `v/<commit>/`, a pull request's
+ * preview at `pr/<n>/`, the rendered notebooks, and an address that is nothing,
+ * which must be the host's 404 rather than the landing page.
  *
  * The worker is a plain script with two placeholders the build fills in, so it
  * is run here as the build emits it, in a context with only what it touches.
@@ -57,9 +56,22 @@ function worker(scope: string): (path: string) => boolean {
 describe('a navigation', () => {
   const answers = worker('https://chromosomix.app/')
 
-  it('into the app is answered with the cached shell', () => {
-    for (const path of ['/', '/index.html', '/?config=x', '/validations/', '/timingsheet', '/parityx/']) {
+  it('into the app is answered with the cached shell, whatever its query', () => {
+    for (const path of ['/', '/index.html', '/?config=x', '/?embed=1#map', '/index.html?store=y']) {
       expect(answers(path), path).toBe(true)
+    }
+  })
+
+  it('to a file beside the app is left to the network', () => {
+    for (const path of ['/llms.txt', '/llms-full.txt', '/llms/links.md', '/robots.txt', '/sitemap.xml',
+      '/THIRD-PARTY-NOTICES.txt', '/manifest.webmanifest', '/sw.js']) {
+      expect(answers(path), path).toBe(false)
+    }
+  })
+
+  it('to an address that is nothing is left to the network, so the host can say 404', () => {
+    for (const path of ['/asdcasdc', '/asdcasdc/', '/index.htm', '/validations/', '/timingsheet']) {
+      expect(answers(path), path).toBe(false)
     }
   })
 
@@ -79,9 +91,14 @@ describe('a navigation', () => {
   it('is read against the scope the worker is served from', () => {
     const below = worker('https://example.github.io/chromosomix/')
     expect(below('/chromosomix/')).toBe(true)
+    expect(below('/chromosomix/index.html')).toBe(true)
+    expect(below('/chromosomix/?config=x')).toBe(true)
+    expect(below('/chromosomix')).toBe(false)
+    expect(below('/chromosomix/llms.txt')).toBe(false)
     expect(below('/chromosomix/validation/')).toBe(false)
     expect(below('/chromosomix/timings')).toBe(false)
     expect(below('/chromosomix/parity/')).toBe(false)
     expect(below('/chromosomix/laptop')).toBe(false)
+    expect(below('/')).toBe(false)
   })
 })

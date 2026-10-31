@@ -81,7 +81,7 @@ describe('the list', () => {
     expect(NOTEBOOKS.filter((notebook) => notebook.byHand === true).map((notebook) => notebook.path)).toEqual(local)
   })
 
-  it('is the segments the service worker leaves to the network', () => {
+  it('is the segments the app recovers from when a worker answered one', () => {
     expect(NOTEBOOKS.map((notebook) => notebook.path)).toEqual([...NOTEBOOK_SEGMENTS])
   })
 
