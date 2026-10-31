@@ -171,6 +171,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **`llms.txt`, a mistyped address and every other file beside the app open as themselves in a
+  browser that has visited the site (§11).** The service worker answered every page load on
+  chromosomix.app with the app, except a list of known addresses, so `chromosomix.app/llms.txt`
+  typed into the address bar showed the landing page — as did `robots.txt`, `sitemap.xml`, the
+  licences linked from *About*, and an address that does not exist, which should be a 404. A hard
+  reload or a private window showed the file, since neither goes through the worker, and agents, which
+  run no worker, always saw it. The worker now answers only the app's own address — the root and
+  `index.html`, with any query and hash — and leaves everything else to the network. A browser already
+  holding the old worker takes the fix when it accepts the bar offering the new version.
+
 - **A task's required steps keep a balancing the task answered for them, from the shell as in the app
   (§18.2).** `chromosomix` re-derived every required step's *use balancing weights* from the file even
   where the task had answered it, which `AnalysisRunner.plan` never did; no task answered one before the
