@@ -674,30 +674,27 @@ pd.DataFrame(pairs).style.hide(axis='index').format('{:,.0f}', subset=['memory, 
 ```{python}
 #| label: fig-laptop
 #| fig-cap: "Wall-clock time (left, logarithmic) and peak memory (right) of each analysis, grouped by its data: on the command line and in each browser."
-# The first slots of a categorical palette, in their fixed order, one a venue; the data name their groups.
+# The first slots of a categorical palette, in their fixed order, one a venue.
 colours = dict(zip(VENUES, ['#2a78d6', '#eb6834', '#1baf7a', '#eda100']))
-labels = [f'{a} ({r})' for a, r in zip(TASK['analysis'], TASK['resolution'])]
-y = pd.Series(range(len(ORDER))[::-1], dtype=float)
+# A row for each data, naming it, and under it a row for each of its analyses, from the top down.
+layout = []
+for data, names in TASK.reset_index().groupby('data', sort=False)['name']:
+    layout += [(data, None)] + [(f"{TASK.loc[name, 'analysis']} ({TASK.loc[name, 'resolution']})", name) for name in names]
+y = {name: len(layout) - 1 - at for at, (_, name) in enumerate(layout) if name is not None}
 band = 0.8 / len(VENUES)
-firsts = TASK.reset_index().groupby('data', sort=False).head(1).set_index('data')['name']
-fig, (left, right) = plt.subplots(1, 2, figsize=(10, (0.15 * len(VENUES) + 0.2) * len(ORDER) + 1.2), sharey=True,
+fig, (left, right) = plt.subplots(1, 2, figsize=(10, (0.15 * len(VENUES) + 0.2) * len(layout) + 1), sharey=True,
                                   layout='constrained')
 for ax, measured in ((left, WALL), (right, PEAK)):
     for at, venue in enumerate(VENUES):
-        ax.barh(y + 0.4 - band * (at + 0.5), measured[venue].values, height=band * 0.85, color=colours[venue])
+        ax.barh([y[name] + 0.4 - band * (at + 0.5) for name in ORDER], measured.loc[ORDER, venue].values,
+                height=band * 0.85, color=colours[venue])
     ax.spines[['top', 'right']].set_visible(False)
     ax.tick_params(axis='y', labelsize=8, length=0)
-    # A rule above each data's first analysis but the topmost, and the data's name under it, on the left.
-    for data, first in firsts.items():
-        top = y[ORDER.index(first)] + 0.5
-        if ORDER.index(first):
-            ax.axhline(top, color='#c3c2b7', linewidth=0.6)
-        if ax is right:
-            ax.annotate(data, (1, top), xycoords=('axes fraction', 'data'), xytext=(0, -2),
-                        textcoords='offset points', ha='right', va='top', fontsize=8, fontweight='bold',
-                        color='#52514e')
-left.set(xscale='log', xlabel='wall-clock time (s)', yticks=list(y), yticklabels=labels,
-         ylim=(-0.6, len(ORDER) - 0.4))
+left.set(xscale='log', xlabel='wall-clock time (s)', yticks=list(range(len(layout)))[::-1],
+         yticklabels=[label for label, _ in layout], ylim=(-0.6, len(layout) - 0.4))
+for tick, (_, name) in zip(left.get_yticklabels(), layout):
+    if name is None:
+        tick.set_fontweight('bold')
 right.set(xlabel='peak memory (MB)')
 fig.legend(handles=[Patch(color=colour, label=venue) for venue, colour in colours.items()],
            loc='outside lower center', ncols=len(VENUES), frameon=False, fontsize=8)
