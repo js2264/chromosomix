@@ -1,45 +1,49 @@
 /**
- * The app's half of laptop.qmd: one analysis run in the app, in headless Chromium, and what it cost
- * the machine.
+ * The app's half of laptop.qmd: one analysis run in the app, in a headless browser — Chromium,
+ * Firefox or WebKit — and what it cost the machine.
  *
  *   node laptop.mjs PLAN.json RESULT.json
- *   node laptop.mjs --version [CHROMIUM]
+ *   node laptop.mjs --version BROWSER [EXECUTABLE]
  *
- * PLAN.json is written by the notebook for one analysis: where the app's build is, the folder its
- * files are named from, a folder of the run's own, and the session — a workspace and the files it
- * names, or the files alone, dropped on the landing page as a reader drops them, so the line the
- * console writes names each file as the shell finds it — then the task, opened from the Analysis
- * panel by its title, its form set as the plan says, and run. `--version` names the Chromium a run
- * would be, for the page to say before it runs any.
+ * PLAN.json is written by the notebook for one analysis in one browser: which of the three Playwright
+ * drives (`browser`, Chromium unless it says), where the app's build is, the folder its files are
+ * named from, a folder of the run's own, and the session — a workspace and the files it names, or the
+ * files alone, dropped on the landing page as a reader drops them, so the line the console writes
+ * names each file as the shell finds it — then the task, opened from the Analysis panel by its title,
+ * its form set as the plan says, and run. `--version` names the browser a run would be, for the page
+ * to say before it runs any.
  *
- * Each run is a Chromium of its own, launched for it and closed after it, so that nothing an
- * earlier run read, drew or kept is in what this one is measured to hold. The page is loaded, the
- * files are opened, the form is set, and the page is left until Chromium is idle — what the app
- * starts on its own once a map is open is over before the run, and nothing is left focused or under
- * the pointer to be drawn again and again — and then **run** is pressed. From the press to the
- * console's record of the run ending, every process of that Chromium is sampled every
- * {@link EVERY_MS}: their CPU times as Chromium counts them (CDP's `SystemInfo.getProcessInfo`,
- * cumulative per process), their resident sets as `ps` gives them, in kilobytes on macOS and Linux
- * alike. The **page's** are its renderers': the page's own, whose threads its workers are, where the
- * app computes and holds what it reads, and any Chromium keeps spare. Its CPU time is the sum of what
- * each spent across the run, and its peak memory the largest of their summed resident sets — sampled,
- * so a peak that lasts less than a sample can be missed, where the command line's `ru_maxrss` cannot
- * miss one. **All of Chromium's** are counted the same way beside them: the browser process, which
- * reads a dropped file for the page, the GPU process and the network and storage services as well.
- * The time is the app's: what its console records, from the job's dispatch to its result; and the
- * opening of the files, which a command-line run does inside its own time, is timed apart, from the
- * drop to the console's record of the last.
+ * Each run is a browser of its own, launched for it and closed after it, so that nothing an earlier
+ * run read, drew or kept is in what this one is measured to hold. The page is loaded, the files are
+ * opened, the form is set, and the page is left until the browser is idle — what the app starts on
+ * its own once a map is open is over before the run, and nothing is left focused or under the pointer
+ * to be drawn again and again — and then **run** is pressed. From the press to the console's record of
+ * the run ending, every process of that browser is sampled every {@link EVERY_MS}, as the operating
+ * system counts it, the same way for the three: its CPU time and its resident set, from `/proc` on
+ * Linux and from `ps` on macOS. Its processes are the ones this script started, the browser and what
+ * it starts in turn, and any that run from the browser's own folder and were not running before it was
+ * launched — WebKit's, on macOS, which launchd starts for it. The **page's** are those that render
+ * pages: Chromium's renderers, Firefox's web content processes, WebKit's web processes — the page's
+ * own, whose threads its workers are, where the app computes and holds what it reads, and any the
+ * browser keeps spare. Its CPU time is the sum of what each spent across the run, and its peak memory
+ * the largest of their summed resident sets — sampled, so a peak that lasts less than a sample can be
+ * missed, where the command line's `ru_maxrss` cannot miss one. **All of the browser's** are counted
+ * the same way beside them: the browser process, which reads a dropped file for the page, and its GPU,
+ * network and storage processes as well. The time is the app's: what its console records, from the
+ * job's dispatch to its result; and the opening of the files, which a command-line run does inside its
+ * own time, is timed apart, from the drop to the console's record of the last.
  *
  * RESULT.json is written once, at the end, whether the run finished, failed or did not start.
  */
 
-import { execFile } from 'node:child_process'
-import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { execFile, execFileSync } from 'node:child_process'
+import {
+  createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync,
+} from 'node:fs'
 import { createServer } from 'node:http'
 import { createRequire } from 'node:module'
 import { dirname, extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { promisify } from 'node:util'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 // The Playwright the timings pin (notebooks/viewers), or one installed globally.
@@ -50,14 +54,23 @@ function playwright() {
     return createRequire(join(process.execPath, '..', '..', 'lib', 'node_modules', 'x'))('playwright')
   }
 }
-const { chromium } = playwright()
 
-const [planPath, resultPath] = process.argv.slice(2)
-if (planPath === undefined || (resultPath === undefined && planPath !== '--version')) {
-  console.error('usage: node laptop.mjs PLAN.json RESULT.json\n       node laptop.mjs --version [CHROMIUM]')
+/** The browsers a plan can name, as Playwright names them, and as a reader does. */
+const BROWSERS = { chromium: 'Chromium', firefox: 'Firefox', webkit: 'WebKit' }
+
+const [planPath, resultPath, executable] = process.argv.slice(2)
+if (planPath === undefined || (planPath === '--version' ? !(resultPath in BROWSERS) : resultPath === undefined)) {
+  console.error('usage: node laptop.mjs PLAN.json RESULT.json\n       node laptop.mjs --version BROWSER [EXECUTABLE]\n' +
+    `BROWSER is one of ${Object.keys(BROWSERS).join(', ')}`)
   process.exit(2)
 }
-const PLAN = planPath === '--version' ? { executablePath: resultPath } : JSON.parse(readFileSync(planPath, 'utf8'))
+const PLAN = planPath === '--version'
+  ? { browser: resultPath, executablePath: executable }
+  : { browser: 'chromium', ...JSON.parse(readFileSync(planPath, 'utf8')) }
+if (!(PLAN.browser in BROWSERS)) {
+  console.error(`${planPath} names a browser Playwright does not drive: ${PLAN.browser}`)
+  process.exit(2)
+}
 /** How long the page, the opening of its files or the run may take before it is given up. */
 const LIMIT_MS = PLAN.limitMs ?? 3_600_000
 /** How often the processes are sampled while the run runs. */
@@ -102,36 +115,114 @@ function serve() {
 }
 
 // ---------------------------------------------------------------------------
-// What Chromium's processes hold and have spent
+// What the browser's processes hold and have spent, as the operating system counts them
 // ---------------------------------------------------------------------------
 
-const run = promisify(execFile)
+/** Linux counts CPU time in clock ticks and a resident set in pages: how long one is, and how large. */
+const LINUX = process.platform === 'linux'
+  ? Object.fromEntries(['CLK_TCK', 'PAGESIZE'].map((name) => [name, Number(execFileSync('getconf', [name], { encoding: 'utf8' }))]))
+  : null
 
-/** Every process of this Chromium, with its type and its CPU seconds so far. */
-async function processes(cdp) {
-  return (await cdp.send('SystemInfo.getProcessInfo')).processInfo
+/** `ps`'s CPU time, `[[days-]hours:]minutes:seconds`, in seconds. */
+function seconds(time) {
+  const [days, clock] = time.includes('-') ? time.split('-') : ['0', time]
+  return Number(days) * 86_400 + clock.split(':').reduce((sum, part) => sum * 60 + Number(part), 0)
 }
 
-/** The resident set of each process, in MB, from `ps`; a process that has gone is left out. */
-async function resident(ids) {
-  if (ids.length === 0) return new Map()
-  let stdout = ''
-  try {
-    ;({ stdout } = await run('ps', ['-o', 'pid=,rss=', '-p', ids.join(',')]))
-  } catch (error) {
-    // `ps` exits 1 when one of the processes has gone, and still prints the others.
-    stdout = error.stdout ?? ''
+/**
+ * Every process on the machine: its parent, its name and command line, its CPU seconds so far, user
+ * and system, and its resident set in MB. On Linux from `/proc`, where a process that ends between
+ * the listing and the reading is left out; elsewhere from one `ps`, which leaves itself out.
+ */
+async function listing() {
+  if (LINUX) {
+    const out = []
+    for (const entry of readdirSync('/proc')) {
+      if (!/^\d+$/.test(entry)) continue
+      try {
+        // The name is in parentheses and may hold either itself: the fields after the last `)` are the
+        // third onwards — the parent the fourth, user and system time the 14th and 15th, the resident
+        // set the 24th.
+        const stat = readFileSync(`/proc/${entry}/stat`, 'utf8')
+        const close = stat.lastIndexOf(')')
+        const field = stat.slice(close + 2).split(' ')
+        out.push({
+          pid: Number(entry),
+          ppid: Number(field[1]),
+          name: stat.slice(stat.indexOf('(') + 1, close),
+          command: readFileSync(`/proc/${entry}/cmdline`, 'utf8').split('\0').join(' ').trim(),
+          cpu: (Number(field[11]) + Number(field[12])) / LINUX.CLK_TCK,
+          mb: (Number(field[21]) * LINUX.PAGESIZE) / 2 ** 20,
+        })
+      } catch {
+        // Gone between the listing and the reading.
+      }
+    }
+    return out
   }
-  const out = new Map()
-  for (const line of stdout.trim().split('\n')) {
-    const [pid, kb] = line.trim().split(/\s+/).map(Number)
-    if (Number.isFinite(pid) && Number.isFinite(kb)) out.set(pid, kb / 1024)
+  const { stdout, lister } = await new Promise((resolve, reject) => {
+    const child = execFile('ps', ['-A', '-ww', '-o', 'pid=,ppid=,rss=,time=,command='], { maxBuffer: 2 ** 26 },
+      (error, stdout) => (error ? reject(error) : resolve({ stdout, lister: child.pid })))
+  })
+  const out = []
+  for (const line of stdout.split('\n')) {
+    const found = line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/)
+    if (found === null || Number(found[1]) === lister) continue
+    out.push({ pid: Number(found[1]), ppid: Number(found[2]), name: '', command: found[5].trim(),
+      cpu: seconds(found[4]), mb: Number(found[3]) / 1024 })
   }
   return out
 }
 
-/** The page's processes: its renderer, whose threads its workers are, and any renderer kept spare. */
-const isPage = (type) => type === 'renderer'
+/**
+ * The browser's processes in a listing: those below this script — the browser and every process it
+ * starts, and those start — and any run from the browser's own folder that was not running before it
+ * was launched, which is how WebKit's are found on macOS, where launchd starts them for it.
+ */
+function ours(processes, scope) {
+  const below = new Map()
+  for (const one of processes) below.set(one.ppid, [...(below.get(one.ppid) ?? []), one])
+  const found = new Map()
+  const take = (one) => {
+    if (found.has(one.pid)) return
+    found.set(one.pid, one)
+    for (const child of below.get(one.pid) ?? []) take(child)
+  }
+  for (const child of below.get(process.pid) ?? []) take(child)
+  if (scope.folder) {
+    for (const one of processes) if (!scope.before.has(one.pid) && one.command.startsWith(scope.folder)) take(one)
+  }
+  return [...found.values()]
+}
+
+const PAGE_NAMES = /^(Web Content|Isolated Web Co)/
+
+/**
+ * What a process of the browser is, from its command line: `page` for one that renders pages and runs
+ * their workers — Chromium's renderer; Firefox's web content process (Firefox itself on Linux,
+ * `plugin-container` on macOS), whose type, `tab`, is the last word of its line, and which Linux
+ * names; WebKit's web process — and otherwise the type the browser
+ * gives it, or `browser` for the browser itself and what launched it.
+ */
+function kind({ command, name }) {
+  const chromium = command.match(/\s--type=([\w-]+)/)
+  if (chromium) return chromium[1] === 'renderer' ? 'page' : chromium[1]
+  if (/\s-contentproc(\s|$)|\bplugin-container\b|\s-childID\s/.test(command) || PAGE_NAMES.test(name)) {
+    const type = command.split(/\s+/).at(-1)
+    return type === 'tab' || PAGE_NAMES.test(name) ? 'page' : type
+  }
+  const webkit = command.match(/^\S*?(?:WebKit(\w+?)Process|com\.apple\.WebKit\.(\w+))(?:[.\s]|$)/)
+  if (webkit) {
+    const type = webkit[1] ?? webkit[2]
+    return type === 'Web' || type === 'WebContent' ? 'page' : type.toLowerCase()
+  }
+  return 'browser'
+}
+
+/** The browser's processes now, each with what it is. */
+async function snapshot(scope) {
+  return ours(await listing(), scope).map((one) => ({ ...one, kind: kind(one) }))
+}
 
 /**
  * A running account of the processes, the page's and all of them: each one's CPU seconds when it was
@@ -142,76 +233,76 @@ class Account {
   constructor() {
     this.first = new Map()
     this.last = new Map()
-    this.types = new Map()
+    this.kinds = new Map()
     this.peak = { page: 0, all: 0 }
     this.atPeak = {}
     this.samples = 0
   }
 
-  async sample(cdp) {
-    const info = await processes(cdp)
-    for (const one of info) {
-      if (!this.first.has(one.id)) this.first.set(one.id, this.samples === 0 ? one.cpuTime : 0)
-      this.last.set(one.id, one.cpuTime)
-      this.types.set(one.id, one.type)
-    }
-    const sizes = await resident(info.map((one) => one.id))
+  sample(processes) {
     const held = { page: 0, all: 0 }
-    const byType = {}
-    for (const one of info) {
-      const size = sizes.get(one.id) ?? 0
-      held.all += size
-      if (isPage(one.type)) held.page += size
-      byType[one.type] = (byType[one.type] ?? 0) + size
+    const byKind = {}
+    for (const one of processes) {
+      if (!this.first.has(one.pid)) this.first.set(one.pid, this.samples === 0 ? one.cpu : 0)
+      this.last.set(one.pid, one.cpu)
+      this.kinds.set(one.pid, one.kind)
+      held.all += one.mb
+      if (one.kind === 'page') held.page += one.mb
+      byKind[one.kind] = (byKind[one.kind] ?? 0) + one.mb
     }
     this.peak.page = Math.max(this.peak.page, held.page)
     if (held.all > this.peak.all) {
       this.peak.all = held.all
-      this.atPeak = byType
+      this.atPeak = byKind
     }
     this.samples += 1
-    return { ...held, byType, count: info.length }
+    return { ...held, byKind, count: processes.length }
   }
 
-  /** The CPU seconds each type of process took, for a reader asking where they went. */
-  get cpuByType() {
+  /** Whether a process that renders the page was ever seen: one that never was cannot be measured. */
+  get sawPage() {
+    return [...this.kinds.values()].includes('page')
+  }
+
+  /** The CPU seconds each kind of process took, for a reader asking where they went. */
+  get cpuByKind() {
     const out = {}
-    for (const [id, last] of this.last) {
-      const type = this.types.get(id)
-      out[type] = (out[type] ?? 0) + last - this.first.get(id)
+    for (const [pid, last] of this.last) {
+      const kind = this.kinds.get(pid)
+      out[kind] = (out[kind] ?? 0) + last - this.first.get(pid)
     }
     return out
   }
 
   get cpu() {
-    const byType = Object.entries(this.cpuByType)
+    const byKind = Object.entries(this.cpuByKind)
     return {
-      page: byType.filter(([type]) => isPage(type)).reduce((sum, [, cpu]) => sum + cpu, 0),
-      all: byType.reduce((sum, [, cpu]) => sum + cpu, 0),
+      page: byKind.filter(([kind]) => kind === 'page').reduce((sum, [, cpu]) => sum + cpu, 0),
+      all: byKind.reduce((sum, [, cpu]) => sum + cpu, 0),
     }
   }
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
-/** CPU seconds of each type of process, now. */
-async function cpuNow(cdp) {
+/** CPU seconds of each kind of process, now. */
+async function cpuNow(scope) {
   const out = {}
-  for (const one of await processes(cdp)) out[one.type] = (out[one.type] ?? 0) + one.cpuTime
+  for (const one of await snapshot(scope)) out[one.kind] = (out[one.kind] ?? 0) + one.cpu
   return out
 }
 
 /**
- * Wait until Chromium is idle: how long that took, and, where it never was, what each type of
+ * Wait until the browser is idle: how long that took, and, where it never was, what each kind of
  * process was spending in the last stretch waited.
  */
-async function settle(cdp) {
+async function settle(scope) {
   const started = Date.now()
-  let before = await cpuNow(cdp)
+  let before = await cpuNow(scope)
   for (;;) {
     await sleep(QUIET_MS)
-    const now = await cpuNow(cdp)
-    const spent = Object.fromEntries(Object.entries(now).map(([type, cpu]) => [type, cpu - (before[type] ?? 0)]))
+    const now = await cpuNow(scope)
+    const spent = Object.fromEntries(Object.entries(now).map(([kind, cpu]) => [kind, cpu - (before[kind] ?? 0)]))
     const total = Object.values(spent).reduce((sum, cpu) => sum + cpu, 0)
     if (total < (QUIET_SHARE * QUIET_MS) / 1000) return { quiet: true, ms: Date.now() - started }
     if (Date.now() - started > SETTLE_LIMIT_MS) return { quiet: false, ms: Date.now() - started, spent }
@@ -371,30 +462,30 @@ async function prepare(page) {
 }
 
 /** Run pressed, and the processes sampled until the console records the run's end. */
-async function measure(page, cdp, result) {
+async function measure(page, scope, result) {
   const account = new Account()
   const before = (await actions(page)).length
-  const rest = await account.sample(cdp)
-  Object.assign(result, { rest_mb: rest.page, chromium_rest_mb: rest.all, rest_by_type: rest.byType })
+  const rest = account.sample(await snapshot(scope))
+  Object.assign(result, { rest_mb: rest.page, all_rest_mb: rest.all, rest_by_kind: rest.byKind })
   const started = Date.now()
   await page.locator('.analysis-drawer button', { hasText: /^run( on ★)?$/ }).first().click()
   let entry
   for (;;) {
     const tick = Date.now()
-    const { count } = await account.sample(cdp)
+    const { count } = account.sample(await snapshot(scope))
     result.processes = Math.max(result.processes ?? 0, count)
     entry = (await actions(page)).slice(before).find((one) => one.kind === 'run' && one.status !== 'running')
     if (entry !== undefined || Date.now() - started > LIMIT_MS) break
     await sleep(Math.max(0, EVERY_MS - (Date.now() - tick)))
   }
   // One more sample, so a run that ends between two still has one taken after it.
-  await account.sample(cdp)
+  account.sample(await snapshot(scope))
   const cpu = account.cpu
   Object.assign(result, {
     waited_s: (Date.now() - started) / 1000,
     cpu_s: cpu.page, peak_mb: account.peak.page,
-    chromium_cpu_s: cpu.all, chromium_peak_mb: account.peak.all,
-    cpu_by_type: account.cpuByType, peak_by_type: account.atPeak, samples: account.samples,
+    all_cpu_s: cpu.all, all_peak_mb: account.peak.all,
+    cpu_by_kind: account.cpuByKind, peak_by_kind: account.atPeak, samples: account.samples,
   })
   if (entry === undefined) {
     result.error = 'the run did not finish'
@@ -405,6 +496,10 @@ async function measure(page, cdp, result) {
     result.error = entry.error ?? entry.status
     return
   }
+  if (!account.sawPage) {
+    result.error = `no process of ${BROWSERS[PLAN.browser]}'s that renders the page was found to measure`
+    return
+  }
   result.status = 'ok'
 }
 
@@ -413,35 +508,72 @@ async function measure(page, cdp, result) {
 // ---------------------------------------------------------------------------
 
 /**
- * Chromium itself in its headless mode, as the timings and the parity run it, or the one named;
- * WebGL in SwiftShader, as theirs, and the page composited in software, which draws again only what
- * changed. Composited through SwiftShader, every frame of the spinner a running job shows was the
- * whole window drawn again, on the processor: three cores' worth beside a 40-second metaplot, which
- * a reader's browser spends on its GPU.
+ * Each browser headless, as Playwright launches it, but for what makes its drawing comparable.
+ * **Chromium** is Chromium itself in its headless mode, as the timings and the parity run it, or the
+ * one named; WebGL in SwiftShader, as theirs, and the page composited in software, which draws again
+ * only what changed. Composited through SwiftShader, every frame of the spinner a running job shows
+ * was the whole window drawn again, on the processor: three cores' worth beside a 40-second metaplot,
+ * which a reader's browser spends on its GPU. **Firefox** may draw WebGL whatever its blocklist says
+ * of the machine's graphics, as Chromium may with `--ignore-gpu-blocklist`. **WebKit** is as
+ * Playwright launches it.
  */
-function launch() {
-  return chromium.launch({
-    ...(PLAN.executablePath ? { executablePath: PLAN.executablePath } : { channel: 'chromium' }),
+const LAUNCH = {
+  chromium: {
+    channel: 'chromium',
     args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader',
       '--ignore-gpu-blocklist', '--disable-gpu-compositing'],
-  })
+  },
+  firefox: { firefoxUserPrefs: { 'webgl.force-enabled': true } },
+  webkit: {},
 }
 
-// Which Chromium a run would be, for the page to name before it runs any.
+const TYPE = playwright()[PLAN.browser]
+
+function launch() {
+  const { channel, ...options } = LAUNCH[PLAN.browser]
+  const which = PLAN.executablePath ? { executablePath: PLAN.executablePath } : channel ? { channel } : {}
+  return TYPE.launch({ ...which, ...options })
+}
+
+/** The folder the browser runs from: the one named, or Playwright's own; none if it cannot be found. */
+function folder() {
+  try {
+    return dirname(realpathSync(PLAN.executablePath || TYPE.executablePath()))
+  } catch {
+    return undefined
+  }
+}
+
+// Which browser a run would be, for the page to name before it runs any.
 if (planPath === '--version') {
-  const browser = await launch()
-  console.log(browser.version())
-  await browser.close()
-  process.exit(0)
+  try {
+    const browser = await launch()
+    console.log(browser.version())
+    await browser.close()
+    process.exit(0)
+  } catch (error) {
+    // Playwright's first line says what is missing and where; the box under it is for its own tests.
+    console.error(String(error.message ?? error).split('\n')[0])
+    process.exit(1)
+  }
 }
 
 mkdirSync(PLAN.out, { recursive: true })
 const server = await serve()
 PLAN.base = `http://127.0.0.1:${server.address().port}`
-const browser = await launch()
-const result = { name: PLAN.name, chromium: browser.version(), status: 'failed' }
+const scope = { before: new Set((await listing()).map((one) => one.pid)), folder: folder() }
+const result = { name: PLAN.name, browser: PLAN.browser, status: 'failed' }
+// A browser that will not start for this run is this run's failure, said in its result, rather than
+// the end of the render around it.
+const browser = await launch().catch((error) => {
+  result.error = `${BROWSERS[PLAN.browser]} did not start: ${String(error.message ?? error).split('\n')[0]}`
+  writeFileSync(resultPath, JSON.stringify(result, null, 1))
+  server.close()
+  console.log(`${result.name} in ${BROWSERS[PLAN.browser]}: failed — ${result.error}`)
+  process.exit(0)
+})
+result.version = browser.version()
 try {
-  const cdp = await browser.newBrowserCDPSession()
   // No service worker: a reader's is installed once and then idle, where a first visit's would be
   // fetching the whole build for its cache in the middle of the measurement.
   const context = await browser.newContext({ viewport: { width: 1600, height: 1000 }, serviceWorkers: 'block' })
@@ -451,10 +583,10 @@ try {
   try {
     await open(page, result)
     await prepare(page)
-    const settled = await settle(cdp)
+    const settled = await settle(scope)
     result.settle_s = settled.ms / 1000
     if (!settled.quiet) result.busy = settled.spent
-    await measure(page, cdp, result)
+    await measure(page, scope, result)
   } catch (error) {
     result.error = String(error).split('\n')[0]
   }
@@ -465,4 +597,4 @@ try {
   await browser.close()
   server.close()
 }
-console.log(`${result.name}: ${result.status}${result.error ? ` — ${result.error}` : ''}`)
+console.log(`${result.name} in ${BROWSERS[PLAN.browser]}: ${result.status}${result.error ? ` — ${result.error}` : ''}`)

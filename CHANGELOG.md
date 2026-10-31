@@ -149,17 +149,24 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   pyBigWig and SciPy to the digits written, P and q to their four places above 10⁻⁴ where an exponent
   does not write them, and by entry the run takes 0.64 s against the 10 kb stretches' 1.2 s.
 
-- **The laptop notebook runs each of its 23 analyses in the app as well as on the command line
-  (§18.10).** What a genome-wide analysis costs was measured on the command line alone, where a reader
-  runs most of them in the browser. Each is now run a second time in headless Chromium, as a reader
-  runs it (`notebooks/scripts/laptop.mjs`): the files the command names dropped on the landing page, a
-  map framed on its whole genome at the command's resolution, the task opened from the Analysis panel,
-  every flag of the command set in its form, and **run** pressed once Chromium is idle — a Chromium of
-  its own for each, so nothing an earlier run held is counted. Its time is the app's own, dispatch to
-  result; its CPU time and peak memory are the page's, sampled five times a second, with all of
-  Chromium's kept beside them. The table, the five analyses at two depths and the figure show both, and
-  the line the app's console wrote for each run is held to the command it ran, flag by flag. The
-  runner's render installs Playwright's Chromium and may take five hours.
+- **The laptop notebook runs each of its 23 analyses in the app, in Chromium, Firefox and WebKit, as
+  well as on the command line (§18.10).** What a genome-wide analysis costs was measured on the command
+  line alone, where a reader runs most of them in the browser. Each is now run again in each of the
+  three browser engines Playwright drives headless — Chromium, which Chrome and Edge are built on;
+  Firefox; and WebKit, Safari's engine — as a reader runs it (`notebooks/scripts/laptop.mjs`): the
+  files the command names dropped on the landing page, a map framed on its whole genome at the
+  command's resolution, the task opened from the Analysis panel, every flag of the command set in its
+  form, and **run** pressed once the browser is idle — a browser of its own for each, so nothing an
+  earlier run held is counted. Its time is the app's own, dispatch to result; its CPU time and peak
+  memory are the page's, sampled five times a second as the operating system counts them, the same way
+  in the three, with all of the browser's processes kept beside them. `LAPTOP_BROWSERS` names the
+  browsers, all three unless it says. The table under the results is one row a run; the page shows the
+  time, the CPU time and the memory with a column for each venue, each browser against the command line
+  and against Chromium, how many finished in each, the five analyses at two depths and the figure, and
+  the line each browser's console wrote for each run is held to the command it ran, flag by flag, and to
+  the others'. Its findings are written by the page itself, where they were inline expressions that a
+  Quarto before 1.4 printed as code. The runner's render installs Playwright's three browsers and may
+  take close to six hours.
 
 - **ICE balances to Float32's precision (§7.5).** It went on until every bin's marginal was within
   1e-5 of their mean, which left its cells up to 3·10⁻⁵ from cooltools' iterative correction; it now
