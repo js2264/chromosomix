@@ -169,8 +169,19 @@ function section(task: CatalogueTask): string {
     `- **Reads:** ${reads}.`,
     ...(task.requires.length === 0
       ? []
-      : [`- **Runs first:** ${either(task.requires, 'and')}, at its defaults, and reads its result.`]),
+      : [
+          task.requires.length === 1
+            ? `- **Runs first:** ${either(task.requires)}, at its defaults, and reads its result.`
+            : `- **Runs first:** ${either(task.requires, 'and')}, at their defaults, and reads their results.`,
+        ]),
     `- **Writes:** ${task.outputs.map((kind) => OUTPUT_FILES[kind] ?? kind).join('; ')}.`,
+    ...(task.documents.length === 0
+      ? []
+      : [
+          `- **And, for the run as a whole:** ${task.documents
+            .map((document) => `${document.label}, \`<file stem>.${document.file}\`${document.shellOnly === true ? ' (command line only)' : ''}`)
+            .join('; ')}.`,
+        ]),
     ...(task.keywords.length === 0 ? [] : [`- **Also known as:** ${task.keywords.join(', ')}.`]),
   ]
   const params = table(

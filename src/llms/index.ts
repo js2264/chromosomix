@@ -27,6 +27,8 @@ const TASK_GLOSSES: Readonly<Record<string, string>> = {
   expected: 'P(s)',
   fourc: 'virtual 4C',
   di: 'directionality index',
+  arrowhead: 'TADs, as Juicer’s Arrowhead calls them',
+  mapreport: 'a library’s QC on one page, and MultiQC’s files',
   loops: 'HiCCUPS-style loop calling',
   chromosight: 'loops, borders and other patterns',
   hicrep: 'reproducibility between maps',

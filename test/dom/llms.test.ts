@@ -278,6 +278,19 @@ describe('the pages the app writes about itself', () => {
     }
   })
 
+  it('name every file a run leaves as a whole as the command writes it', () => {
+    const report = taskCatalogue().find((task) => task.id === 'mapreport')
+    expect(report?.documents.map((document) => document.file)).toContain('mapreport.report.html')
+    for (const task of taskCatalogue()) {
+      // `<stem>.<task>.<id>.<extension>`, which is `cli/main.ts`'s `writeOutputs`.
+      expect(task.documents.map((document) => document.file), task.id).toEqual(
+        (taskById(task.id)?.documents ?? []).map((document) => `${task.id}.${document.id}.${document.extension}`),
+      )
+    }
+    const page = files.find((file) => file.path === 'llms/tasks.md')?.text ?? ''
+    expect(page).toContain('`<file stem>.mapreport.report.html`')
+  })
+
   it('give the command line every task it runs when asked for the dev features too', () => {
     expect(taskCatalogue({ dev: true }).map((task) => task.id)).toEqual(TASKS.map((task) => task.id))
     expect(taskCatalogue().every((task) => taskById(task.id)?.dev === undefined)).toBe(true)

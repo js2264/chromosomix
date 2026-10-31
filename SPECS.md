@@ -11790,8 +11790,9 @@ range, a file with no word on what kind. With `--json` the same tasks come out a
 (`analysis/catalogue.ts`): the build on top, as `--version`'s first line; what a parameter naming a
 feature set, a set of pairs, a track or a reference takes and how a line names one; what each kind of
 result is written as; and per task its id, title, blurb, keywords, card, whether it reads a map and
-whether it compares others (`--against`), the tasks it runs first, the kinds of result it writes, its
-version, and every parameter it is not retiring — its flag as the parser takes it (`--x <n>`,
+whether it compares others (`--against`), the tasks it runs first, the kinds of result it writes, the
+files a run leaves as a whole (the map report's page and its MultiQC sections, named as `writeOutputs`
+names them, and whether the drawer offers each), its version, and every parameter it is not retiring — its flag as the parser takes it (`--x <n>`,
 `--x / --no-x`, coverage's `--balance / --balance=false`, the derived balance as `--no-balance`), its
 kind, label, hint and card heading, its default or a sentence where the default is not one value
 (worked out from the map's bin size, every sequence, none), every value a choice takes with its label

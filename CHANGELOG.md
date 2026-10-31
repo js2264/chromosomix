@@ -41,7 +41,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   agent would, failing if they do not answer. `llms.txt` was a file kept by hand in `public/`.
 
 - **`chromosomix tasks --json` (§23).** The task listing as one JSON document: per task its id,
-  title, what it reads and writes, the tasks it runs first, and every parameter with its flag as the
+  title, what it reads and writes — the files a run leaves as a whole included, such as the map
+  report's page — the tasks it runs first, and every parameter with its flag as the
   parser takes it, its default, every value a choice takes, its range and unit; with how a parameter
   naming a file is given one, and what each kind of result is written as. For a script or an agent
   writing commands for the installed version.

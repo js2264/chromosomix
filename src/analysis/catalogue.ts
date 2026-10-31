@@ -83,6 +83,15 @@ export interface CatalogueParam {
   answeredBySomeFiles?: boolean
 }
 
+/** One file a run leaves as a whole (`AnalysisTask.documents`). */
+export interface CatalogueDocument {
+  /** Its name after the file stem: `mapreport.report.html`. */
+  file: string
+  label: string
+  /** Written by the command line alone: a pipeline's file rather than a reader's. */
+  shellOnly?: boolean
+}
+
 /** One task. */
 export interface CatalogueTask {
   /** The command: `chromosomix <id> …`. */
@@ -100,6 +109,12 @@ export interface CatalogueTask {
   requires: string[]
   /** The kinds of result it produces. */
   outputs: string[]
+  /**
+   * Files the run leaves as a whole, beside each output's own — the map
+   * report's page and its MultiQC sections — each written by the command as
+   * `<file stem>.<file>`, and offered by the app's drawer unless `shellOnly`.
+   */
+  documents: CatalogueDocument[]
   /** Bumped when the numbers it produces change meaning. */
   version: number
   params: CatalogueParam[]
@@ -153,6 +168,11 @@ function describeTask(task: AnalysisTask, dev: boolean): CatalogueTask {
     needsPeers: task.needsPeers === true,
     requires: [...(task.requires ?? [])],
     outputs: [...new Set(task.outputs)],
+    documents: (task.documents ?? []).map((document) => ({
+      file: `${task.id}.${document.id}.${document.extension}`,
+      label: document.label,
+      ...(document.shellOnly === true ? { shellOnly: true } : {}),
+    })),
     version: task.version,
     params,
   }
