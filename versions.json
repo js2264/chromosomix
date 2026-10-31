@@ -235,6 +235,13 @@
   ],
   "pulls": [
     {
+      "number": 150,
+      "commit": "613af10",
+      "title": "Describe the site to AI agents in full: llms.txt and five reference pages (§11, §23)",
+      "branch": "ccr-4192119d-y7877t",
+      "date": "2026-10-31T14:42:13Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
