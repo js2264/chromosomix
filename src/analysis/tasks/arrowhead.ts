@@ -10,8 +10,8 @@
  * overlap at their edges, and leave a stretch with no structure uncalled.
  *
  * It is a caller, and §18.9 admits it on that section's terms: a port of
- * `juicer_tools arrowhead` — `juicebox.tools.utils.juicer.arrowhead`, the code
- * `juicer_tools_1.22.01.jar` and JuicerTools 2 both run — whose golden is that
+ * `juicer_tools arrowhead` — `juicebox.tools.utils.juicer.arrowhead`, as
+ * `juicer_tools_1.22.01.jar` runs it — whose golden is that
  * program's own output (`test/golden/analysis/arrowhead.json`). Every setting
  * here is one of Juicer's, under the meaning its `-m` and its six `-t`
  * thresholds give it, and every default is Juicer's.

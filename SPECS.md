@@ -8768,8 +8768,8 @@ of every candidate square is scored by the mean and the mean sign of its upper a
 their variance, and the scores past a threshold are joined into connected components and each reported
 at its best. So a domain can sit inside another, two can share an edge, and a stretch with no structure
 has no domain at all. It is a **port** of `juicer_tools arrowhead` (§18.9) — `BlockBuster` and the
-classes beside it in `juicebox.tools.utils.juicer.arrowhead`, which `juicer_tools_1.22.01.jar` and
-JuicerTools 2 both run — and every control on its form is one of Juicer's, under its meaning and at its
+classes beside it in `juicebox.tools.utils.juicer.arrowhead`, as `juicer_tools_1.22.01.jar` runs
+them (§18.9 says where the jar and today's source differ) — and every control on its form is one of Juicer's, under its meaning and at its
 default: the **window**, `-m` 2,000 bins, read as squares along the diagonal each half over the next;
 the **strict pass**, a summed variance at most 0.2 and a sign agreement of at least 0.5 in both
 triangles, whose domains are all kept; the **lenient pass**, from 0.4 down to 0 in steps of 0.1 until
@@ -8779,7 +8779,7 @@ from inside is not added round it. The domains near one another, within five bin
 merged into one at their furthest corner with their scores averaged, and listed as Juicer lists them:
 by the two variances summed, highest first. Read balanced where the file is, as Juicer reads a
 normalised map; a `.hic`'s weights are its own vectors (§3.6), so a run over a `.hic` reads the very
-counts `juicer_tools` reads.
+counts `juicer_tools` reads, weighted as it weights them.
 
 **What comes out** is Juicer's `_blocks.bedpe` twice: as a **set of domains**, opening on the map as the
 corners of their squares (§18.7) — which is where a nested domain is seen to be nested — and as a
@@ -9668,19 +9668,39 @@ clusters are sklearn's BIRCH down to the roundings the BLAS beneath it fuses, wi
 equidistant from two subclusters joins the other one.
 
 **Domain calling is the fourth, and the one insulation could not be.** *TAD annotation* is Arrowhead
-as `juicer_tools arrowhead` computes it, and its golden is that program's own `_blocks.bedpe` over
-`demo/yeast/Yeast_hic.hic` — at 2 and 5 kb, raw and with the normalisation the app reads that file
-with — compared domain for domain and score for score (`test/golden/analysis/arrowhead.json`, built by
-`scripts/make_arrowhead_golden.py`). The port does not improve on it. The last window of a sequence is
-sized from its end and read from where the slide left it, so it holds the sequence's tail and then
-zeros, and its corners are placed from there; a domain is reported at the starts of its two corner bins;
-and the lenient blocks are tried, for the step that adds those not crossing a strict one, in the order a
-`java.util.HashSet` of them iterates — reproduced hash for hash from `Objects.hash` and `HashMap`'s
-buckets, since that order decides which of two lenient domains in conflict is kept. That order depends on
-the JVM: since JDK 19 a `HashSet` copied from a list sizes its table differently, and the port follows a
-current JDK, which is the one its golden is made with and records. Every sum is accumulated in the
-Java's order, in doubles, so on the same counts the scores are Juicer's to the last bit — which matters
-beyond tidiness, because the set's order is decided by the bits of the scores.
+as `juicer_tools arrowhead` 1.22.01 computes it. Its golden is that program's own `_blocks.bedpe` over
+`demo/yeast/Yeast_hic.hic` — at 2 and 4 kb, raw and with the KR vectors the app reads that file
+balanced with, over the chromosomes whose vector holds a value — compared domain for domain and score
+for score, and equal to the last bit: 102 domains in four runs (`test/golden/analysis/arrowhead.json`,
+built by `scripts/make_arrowhead_golden.py`). And it is held to Juicer on a human map in the
+validation (`notebooks/validation.qmd` § 28): 4DN's in situ Hi-C of K562 at 10 kb, chromosomes 21 and
+22, read by range by both, where every one of Juicer's 177 domains raw and 200 with KR is called at
+the same corners with the same five scores — the first test with sequences longer than one window.
+The port does not improve on it, and four things a first reading takes for oversights are kept:
+- the last window of a sequence is sized from its end and read from where the slide left it, so it
+  holds the sequence's tail and then zeros, and its corners are placed from there;
+- a domain is reported at the starts of its two corner bins;
+- **a contact in a bin the balancer dropped is `NaN`** in Juicer's window — 1.22.01 divides by the
+  undefined weight and keeps the record — and its transform is 0, where an empty cell is 0 and its
+  transform beside a contact is −1; so the window is read as counts and weighted here, `NaN` only where
+  there is a contact, rather than read balanced, where a dropped bin's whole row and column are `NaN`;
+- **the lenient blocks are tried in the order a `java.util.HashSet` of them iterates**, for the step
+  that adds those not crossing a strict one — which decides which of two lenient domains in conflict
+  is kept, and which corners are averaged together after. The order is the jar's own: its
+  `HighScore.hashCode` is `7 · (i + j) · ⌊score + uVarScore + lVarScore + upSign + loSign⌋`, read
+  off its bytecode — the source in the Juicebox repository has since become an `Objects.hash`, and a
+  port of that source misplaced domains on every sequence longer than a window — and a hash of so
+  few values crowds buckets past eight entries, which `HashMap` turns into red-black trees ordered by
+  hash and then by `compareTo`, iterated root first. The table's growth and split, the trees, their
+  rotations and the root moved to the front of its bucket are all modelled (`JavaHashMap`), and held
+  to Java's own iteration of collision-heavy sets of up to three hundred. The table is sized as a
+  current JDK sizes a set copied from a list (JDK 19 changed it), which is what the references run on.
+  Two entries of one bucket with one hash and equal `compareTo` are ordered by
+  `System.identityHashCode`, which depends on everything the JVM hashed before, and are not modelled.
+
+Every sum is accumulated in the Java's order, in doubles, so on the same counts the scores are
+Juicer's to the last bit — which matters beyond tidiness, because the set's order is decided by the
+bits of the scores.
 
 **Contact-based reordering and scaffolding: the reference editor (§27).** ~~No contact-based contig
 reordering or scaffolding. It would only be useful if the reordering could be written back into a

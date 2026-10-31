@@ -14,7 +14,7 @@ import { ARROWHEAD_DEFAULTS, arrowheadWindows, callDomains, type ArrowheadSettin
 import { boolParam, numParam, tickedSequences, type TaskRunner } from '../job'
 import { matrixSizeOf } from '../tasks/arrowhead'
 import type { IntervalsOutput, TableOutput } from '../types'
-import { missingSequencesNote, spanOfContig, squareFor, tickedContigIds, usableBlock, type Span } from './blocks'
+import { missingSequencesNote, spanOfContig, squareFor, tickedContigIds, usableBlock, validBins, type Span } from './blocks'
 import { formatBp } from './labels'
 
 interface Unit {
@@ -82,11 +82,16 @@ export const runArrowhead: TaskRunner = async (job) => {
     )
   }
 
+  // The counts, and the weights applied here rather than by the reader, so a
+  // cell is `NaN` only where it holds a contact and a bin of it was dropped —
+  // the window Juicer reads. A balanced read is `NaN` across every dropped
+  // row and column, empty cells included, and there the transform differs.
   const block = usableBlock(
     job,
     units.map((unit) => unit.span),
-    balance,
+    false,
   )
+  const weights = validBins(mc, balance)
   const total = units.reduce((sum, unit) => sum + arrowheadWindows(unit.span.to - unit.span.from, settings.matrixSize).length, 0)
   let done = 0
   const domains: Domain[] = []
@@ -97,14 +102,15 @@ export const runArrowhead: TaskRunner = async (job) => {
     const called = await callDomains(
       bins,
       mc.binsize,
-      async (from, to) =>
-        (
-          await squareFor(
-            job,
-            { from: unit.span.from + from, to: unit.span.from + to },
-            { block, balance, value },
-          )
-        ).values,
+      async (from, to) => {
+        const first = unit.span.from + from
+        const square = await squareFor(
+          job,
+          { from: first, to: unit.span.from + to },
+          { block, balance: false, value },
+        )
+        return weights === null ? square.values : weighted(square.values, to - from, weights, first)
+      },
       settings,
       async (window, windows) => {
         await job.breathe()
@@ -151,6 +157,22 @@ export const runArrowhead: TaskRunner = async (job) => {
       (nested === 0 ? ', none inside another.' : `, ${nested.toLocaleString()} of them inside another.`),
   )
   return [domainSet(domains), domainTable(domains, mc.binsize)]
+}
+
+/**
+ * A square of counts balanced as the reader balances one — `count × w[i] × w[j]`,
+ * rounded to float32 — but `0` where there is no contact, whatever its weights.
+ */
+function weighted(raw: Float32Array, n: number, weights: Float64Array, first: number): Float32Array {
+  const out = new Float32Array(n * n)
+  for (let r = 0; r < n; r++) {
+    const wr = weights[first + r]
+    for (let c = 0; c < n; c++) {
+      const count = raw[r * n + c]
+      out[r * n + c] = count === 0 ? 0 : count * wr * weights[first + c]
+    }
+  }
+  return out
 }
 
 /** In genomic order: the sequence as the file has it, then where a domain starts, then where it ends. */

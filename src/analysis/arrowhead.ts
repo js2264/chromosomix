@@ -6,9 +6,10 @@
  * corner score read off two triangles of it, and the two passes — a strict one
  * whose blocks are kept, and a lenient one whose blocks are added where they do
  * not collide with them. The source is `juicebox.tools.utils.juicer.arrowhead`
- * in the Juicebox repository, which is what `juicer_tools_1.22.01.jar` was
- * built from and what JuicerTools 2 carries unchanged; every function below
- * names the Java it is.
+ * in the Juicebox repository, as `juicer_tools_1.22.01.jar` was built from it —
+ * where today's source differs from the jar, the jar's bytecode is what is
+ * followed ({@link highScoreHash}) — and every function below names the Java
+ * it is.
  *
  * **The port does not get to improve on it** (§18.9), and three places where a
  * first reading takes the Java for an oversight are kept as they are:
@@ -18,8 +19,12 @@
  *   its calls are placed from `limStart` (`BlockBuster.callSubBlockbuster`);
  * - the lenient pass's blocks are taken out of a `HashSet` before the greedy
  *   step that adds those that do not collide, so the order they are tried in is
- *   that set's iteration order — reproduced here, hash for hash, from
- *   `Objects.hash` and `HashMap`'s buckets ({@link javaHashSetOrder});
+ *   that set's iteration order — reproduced here from the jar's own
+ *   `HighScore.hashCode` and `HashMap`'s buckets, the ones crowded enough to
+ *   have become red-black trees included ({@link javaHashSetOrder});
+ * - a contact in a bin the balancer dropped is `NaN` in Juicer's window, where
+ *   an empty cell is 0, and the two give different transforms (see
+ *   {@link callDomains});
  * - a domain is reported from `i · resolution` to `j · resolution`, the starts
  *   of its two corner bins, which is what Juicer's BEDPE holds.
  *
@@ -125,21 +130,20 @@ export function windowCorners(
     }
     out.push(
       components(n, start, kept, labels).map((cells) => {
-        // getHighestScoringPoint: the component's highest score. Juicer walks a
-        // `HashSet<Point>` and keeps the first of equal highs; two cells of one
-        // component with the same score to the bit are not met in practice, and
-        // the first in the order the fill met them is kept here.
-        let bestI = cells[0]
-        let bestJ = cells[1]
-        let bestScore = score[at(bestI, bestJ)]
-        for (let c = 2; c < cells.length; c += 2) {
+        // getHighestScoringPoint: the component's highest score, and of equal
+        // highs the first its `HashSet<Point>` gives — which is no rarity
+        // where a balancer dropped bins, since a run of them makes whole
+        // stretches of exactly equal scores.
+        let bestScore = Number.NEGATIVE_INFINITY
+        for (let c = 0; c < cells.length; c += 2) {
           const value = score[at(cells[c], cells[c + 1])]
-          if (value > bestScore) {
-            bestScore = value
-            bestI = cells[c]
-            bestJ = cells[c + 1]
-          }
+          if (value > bestScore) bestScore = value
         }
+        const tied: Array<[number, number]> = []
+        for (let c = 0; c < cells.length; c += 2) {
+          if (score[at(cells[c], cells[c + 1])] === bestScore) tied.push([cells[c], cells[c + 1]])
+        }
+        const [bestI, bestJ] = tied.length === 1 ? tied[0] : firstInPointSet(tied, cells.length / 2)
         const cell = at(bestI, bestJ)
         return {
           i: bestI,
@@ -422,14 +426,17 @@ export function lowSignThresholds(settings: ArrowheadSettings): number[] {
  * A window's square, as Juicer reads it: `n` rows and columns from `limStart`,
  * the cells past the end of the sequence zero.
  */
-export type WindowReader = (from: number, to: number) => Promise<ArrayLike<number>>
+export type WindowReader = (from: number, to: number) => Promise<Float32Array>
 
 /**
  * One sequence's domains: `BlockBuster.run`.
  *
  * `read(from, to)` returns the dense square over the sequence's bins
- * `[from, to)`, row-major, with a dropped cell as `NaN` or `0`. The result is in
- * base pairs, sorted as Juicer writes it — by summed variance, highest first.
+ * `[from, to)`, row-major, as Juicer reads it: a cell with no contact `0`, and
+ * a contact whose normalisation is undefined `NaN` — which Juicer Tools 1.22.01
+ * keeps rather than drops (`DatasetReaderV2.readNormalizedBlock` divides and
+ * adds the record whatever it came to). The result is in base pairs, sorted as
+ * Juicer writes it — by summed variance, highest first.
  */
 export async function callDomains(
   bins: number,
@@ -452,13 +459,11 @@ export async function callDomains(
     const to = Math.min(limStart + n, bins)
     const held = await read(limStart, to)
     const width = to - limStart
+    // Copied as it came, `NaN` included: a contact in a bin the balancer
+    // dropped is `NaN` in Juicer's window and its transform is 0, where a cell
+    // with no contact is 0 and its transform is −1 beside one that has one.
     const square = new Float32Array(n * n)
-    for (let r = 0; r < width; r++) {
-      for (let c = 0; c < width; c++) {
-        const v = held[r * width + c]
-        square[r * n + c] = Number.isNaN(v) ? 0 : v
-      }
-    }
+    for (let r = 0; r < width; r++) square.set(held.subarray(r * width, (r + 1) * width), r * n)
     const perThreshold = windowCorners(square, n, thresholds)
     for (let t = 0; t < thresholds.length; t++) {
       // offsetResultsIndex(limStart) — limStart, not the adjusted start.
@@ -493,7 +498,7 @@ export async function callDomains(
 /** `BlockBuster.orderedSetDifference`: `listA` less `listB`, in `HashSet` order. */
 function orderedSetDifference(listA: readonly HighScore[], listB: readonly HighScore[]): HighScore[] {
   const inB = new Set(listB.map(scoreKey))
-  return javaHashSetOrder(listA, highScoreHash, scoreKey).filter((score) => !inB.has(scoreKey(score)))
+  return javaHashSetOrder(listA, highScoreHash, scoreKey, compareHighScores).filter((score) => !inB.has(scoreKey(score)))
 }
 
 /** `BlockBuster.appendNonConflictingBlocks`, which appends to `mainList` in place. */
@@ -605,46 +610,451 @@ export function javaDoubleCompare(a: number, b: number): number {
   return x === y ? 0 : x < y ? -1 : 1
 }
 
-/** `Objects.hash(i, j, score, uVarScore, lVarScore, upSign, loSign)`: `HighScore.hashCode`. */
+/**
+ * `HighScore.hashCode` as `juicer_tools_1.22.01.jar` has it — read off its
+ * bytecode, since the source in the Juicebox repository has since become an
+ * `Objects.hash` of the seven fields: `7 · (i + j) · (int) ⌊score + uVarScore +
+ * lVarScore + upSign + loSign⌋`, in int arithmetic. It takes few values, so
+ * a `HashSet` of these collides often and its buckets become trees, which is
+ * why {@link javaHashSetOrder} models those too.
+ */
 export function highScoreHash(score: HighScore): number {
-  let h = 1
-  for (const part of [
-    score.i | 0,
-    score.j | 0,
-    javaDoubleHash(score.score),
-    javaDoubleHash(score.uVarScore),
-    javaDoubleHash(score.lVarScore),
-    javaDoubleHash(score.upSign),
-    javaDoubleHash(score.loSign),
-  ]) {
-    h = (Math.imul(31, h) + part) | 0
-  }
-  return h
+  const sum = score.score + score.uVarScore + score.lVarScore + score.upSign + score.loSign
+  return Math.imul(Math.imul(7, (score.i + score.j) | 0), javaD2I(Math.floor(sum)))
+}
+
+/** Java's `d2i`: truncation, saturating at the int range, and `NaN` as 0. */
+function javaD2I(value: number): number {
+  if (Number.isNaN(value)) return 0
+  if (value >= 2147483647) return 2147483647
+  if (value <= -2147483648) return -2147483648
+  return Math.trunc(value) | 0
+}
+
+/** `HighScore.compareTo`: by the two variances summed, as `Double.compare` orders them. */
+export function compareHighScores(a: HighScore, b: HighScore): number {
+  return javaDoubleCompare(a.uVarScore + a.lVarScore, b.uVarScore + b.lVarScore)
 }
 
 let unequal = 0
 
 /**
- * `HighScore.equals` as a `HashMap` asks it, as a key: the same hash, then every
- * field by `==`. Under the same hash a `0` and a `-0` cannot both occur but by
- * coincidence, so the fields are keyed by their exact value; a `NaN` is equal
- * to nothing, not even another `NaN`.
+ * `HighScore.equals` as a `HashMap` asks it, as a key: every field by `==`. A
+ * `0` and a `-0` are one value; a `NaN` is equal to nothing, not even another.
  */
 function scoreKey(score: HighScore): string {
-  const part = (x: number): string =>
-    Number.isNaN(x) ? `NaN#${++unequal}` : Object.is(x, -0) ? '-0' : String(x)
-  return [
-    highScoreHash(score),
-    score.i,
-    score.j,
-    score.score,
-    score.uVarScore,
-    score.lVarScore,
-    score.upSign,
-    score.loSign,
-  ]
+  const part = (x: number): string => (Number.isNaN(x) ? `NaN#${++unequal}` : String(x === 0 ? 0 : x))
+  return [score.i, score.j, score.score, score.uVarScore, score.lVarScore, score.upSign, score.loSign]
     .map(part)
     .join(',')
+}
+
+// ---------------------------------------------------------------------------
+// java.util.HashMap, as far as its iteration order goes
+// ---------------------------------------------------------------------------
+
+/** A node of a bucket: a link of its list and, once the bucket is a tree, a node of that tree. */
+interface Bin<T> {
+  hash: number
+  key: string
+  item: T
+  next: Bin<T> | null
+  prev: Bin<T> | null
+  parent: Bin<T> | null
+  left: Bin<T> | null
+  right: Bin<T> | null
+  red: boolean
+  tree: boolean
+}
+
+const TREEIFY_THRESHOLD = 8
+const UNTREEIFY_THRESHOLD = 6
+const MIN_TREEIFY_CAPACITY = 64
+
+/**
+ * The parts of `java.util.HashMap` (OpenJDK 21) that decide in which order a
+ * `HashSet` gives its elements back: the spread hash and its buckets, the
+ * table's growth and the split of each bucket when it doubles, and a bucket of
+ * more than eight entries turned into a red-black tree ordered by hash and then
+ * by `compareTo` — whose iteration order is its root first and then each entry
+ * placed after the node it was hung under, not the order they arrived in.
+ *
+ * One thing is not modelled, because it cannot be: two entries of one bucket
+ * with the same hash and comparing equal are ordered by
+ * `System.identityHashCode`, which differs from one run of the JVM to the next.
+ * Here the newcomer goes left of the one it ties with.
+ */
+class JavaHashMap<T> {
+  private table: Array<Bin<T> | null> = []
+  private size = 0
+  private threshold: number
+
+  constructor(
+    initialCapacity: number,
+    private readonly compare: ((a: T, b: T) => number) | null,
+  ) {
+    this.threshold = tableSizeFor(initialCapacity)
+  }
+
+  put(hash: number, key: string, item: T): void {
+    if (this.table.length === 0) this.resize()
+    const tab = this.table
+    const n = tab.length
+    const index = (n - 1) & hash
+    const p = tab[index]
+    if (p === null) {
+      tab[index] = this.node(hash, key, item, null)
+    } else if (p.hash === hash && p.key === key) {
+      return
+    } else if (p.tree) {
+      if (!this.putTreeVal(p, hash, key, item)) return
+    } else {
+      let q = p
+      for (let binCount = 0; ; binCount++) {
+        if (q.next === null) {
+          q.next = this.node(hash, key, item, null)
+          if (binCount >= TREEIFY_THRESHOLD - 1) this.treeifyBin(hash)
+          break
+        }
+        const e = q.next
+        if (e.hash === hash && e.key === key) return
+        q = e
+      }
+    }
+    if (++this.size > this.threshold) this.resize()
+  }
+
+  /** Every item, as an iterator over the table gives them. */
+  items(): T[] {
+    const out: T[] = []
+    for (const head of this.table) for (let e = head; e !== null; e = e.next) out.push(e.item)
+    return out
+  }
+
+  private node(hash: number, key: string, item: T, next: Bin<T> | null): Bin<T> {
+    return { hash, key, item, next, prev: null, parent: null, left: null, right: null, red: false, tree: false }
+  }
+
+  private resize(): void {
+    const old = this.table
+    const oldCap = old.length
+    let newCap: number
+    if (oldCap > 0) {
+      newCap = oldCap * 2
+      this.threshold = oldCap >= 16 ? this.threshold * 2 : Math.trunc(newCap * 0.75)
+    } else if (this.threshold > 0) {
+      newCap = this.threshold
+      this.threshold = Math.trunc(Math.fround(newCap * Math.fround(0.75)))
+    } else {
+      newCap = 16
+      this.threshold = 12
+    }
+    const tab: Array<Bin<T> | null> = new Array(newCap).fill(null)
+    this.table = tab
+    for (let j = 0; j < oldCap; j++) {
+      const e = old[j]
+      if (e === null) continue
+      if (e.next === null) tab[e.hash & (newCap - 1)] = e
+      else if (e.tree) this.split(e, j, oldCap)
+      else {
+        let loHead: Bin<T> | null = null
+        let loTail: Bin<T> | null = null
+        let hiHead: Bin<T> | null = null
+        let hiTail: Bin<T> | null = null
+        for (let x: Bin<T> | null = e; x !== null; ) {
+          const next: Bin<T> | null = x.next
+          if ((x.hash & oldCap) === 0) {
+            if (loTail === null) loHead = x
+            else loTail.next = x
+            loTail = x
+          } else {
+            if (hiTail === null) hiHead = x
+            else hiTail.next = x
+            hiTail = x
+          }
+          x = next
+        }
+        if (loTail !== null) loTail.next = null
+        if (hiTail !== null) hiTail.next = null
+        tab[j] = loHead
+        tab[j + oldCap] = hiHead
+      }
+    }
+  }
+
+  private treeifyBin(hash: number): void {
+    const tab = this.table
+    if (tab.length < MIN_TREEIFY_CAPACITY) {
+      this.resize()
+      return
+    }
+    const index = (tab.length - 1) & hash
+    let prev: Bin<T> | null = null
+    for (let e = tab[index]; e !== null; e = e.next) {
+      e.tree = true
+      e.prev = prev
+      prev = e
+    }
+    const head = tab[index]
+    if (head !== null) this.treeify(head)
+  }
+
+  /** `TreeNode.treeify`: the bucket's list hung into a tree in list order, the root moved to the front. */
+  private treeify(head: Bin<T>): void {
+    let root: Bin<T> | null = null
+    for (let x: Bin<T> | null = head; x !== null; x = x.next) {
+      x.left = null
+      x.right = null
+      if (root === null) {
+        x.parent = null
+        x.red = false
+        root = x
+        continue
+      }
+      for (let p: Bin<T> = root; ; ) {
+        const dir = this.direction(x.hash, x.item, p)
+        const xp: Bin<T> = p
+        const child: Bin<T> | null = dir <= 0 ? p.left : p.right
+        if (child === null) {
+          x.parent = xp
+          if (dir <= 0) xp.left = x
+          else xp.right = x
+          root = balanceInsertion(root, x)
+          break
+        }
+        p = child
+      }
+    }
+    if (root !== null) this.moveRootToFront(root)
+  }
+
+  /** Left (≤ 0) or right of `p`: by hash, then by `compareTo`, then — unknowably — left. */
+  private direction(hash: number, item: T, p: Bin<T>): number {
+    if (p.hash > hash) return -1
+    if (p.hash < hash) return 1
+    const dir = this.compare === null ? 0 : this.compare(item, p.item)
+    return dir === 0 ? -1 : dir
+  }
+
+  /** `TreeNode.putTreeVal`; `false` where an equal key was already there. */
+  private putTreeVal(first: Bin<T>, hash: number, key: string, item: T): boolean {
+    let root = first
+    while (root.parent !== null) root = root.parent
+    let searched = false
+    for (let p: Bin<T> = root; ; ) {
+      let dir: number
+      if (p.hash > hash) dir = -1
+      else if (p.hash < hash) dir = 1
+      else if (p.key === key) return false
+      else {
+        dir = this.compare === null ? 0 : this.compare(item, p.item)
+        if (dir === 0) {
+          if (!searched) {
+            searched = true
+            if ((p.left !== null && this.find(p.left, hash, key, item) !== null) ||
+                (p.right !== null && this.find(p.right, hash, key, item) !== null)) return false
+          }
+          dir = -1
+        }
+      }
+      const xp: Bin<T> = p
+      const child: Bin<T> | null = dir <= 0 ? p.left : p.right
+      if (child === null) {
+        const xpn = xp.next
+        const x = this.node(hash, key, item, xpn)
+        x.tree = true
+        if (dir <= 0) xp.left = x
+        else xp.right = x
+        xp.next = x
+        x.parent = xp
+        x.prev = xp
+        if (xpn !== null) xpn.prev = x
+        this.moveRootToFront(balanceInsertion(root, x))
+        return true
+      }
+      p = child
+    }
+  }
+
+  /** `TreeNode.find`. */
+  private find(start: Bin<T>, hash: number, key: string, item: T): Bin<T> | null {
+    for (let p: Bin<T> | null = start; p !== null; ) {
+      const pl: Bin<T> | null = p.left
+      const pr: Bin<T> | null = p.right
+      if (p.hash > hash) p = pl
+      else if (p.hash < hash) p = pr
+      else if (p.key === key) return p
+      else if (pl === null) p = pr
+      else if (pr === null) p = pl
+      else {
+        const dir: number = this.compare === null ? 0 : this.compare(item, p.item)
+        if (dir !== 0) p = dir < 0 ? pl : pr
+        else {
+          const q = this.find(pr, hash, key, item)
+          if (q !== null) return q
+          p = pl
+        }
+      }
+    }
+    return null
+  }
+
+  /** `TreeNode.moveRootToFront`: the root, out of its place in the list, made the bucket's first. */
+  private moveRootToFront(root: Bin<T>): void {
+    const tab = this.table
+    const index = (tab.length - 1) & root.hash
+    const first = tab[index]
+    if (root === first) return
+    tab[index] = root
+    const rp = root.prev
+    const rn = root.next
+    if (rn !== null) rn.prev = rp
+    if (rp !== null) rp.next = rn
+    if (first !== null) first.prev = root
+    root.next = first
+    root.prev = null
+  }
+
+  /** `TreeNode.split`: a tree bucket's two halves on a doubled table, each a list again if small. */
+  private split(head: Bin<T>, index: number, bit: number): void {
+    const tab = this.table
+    let loHead: Bin<T> | null = null
+    let loTail: Bin<T> | null = null
+    let hiHead: Bin<T> | null = null
+    let hiTail: Bin<T> | null = null
+    let lc = 0
+    let hc = 0
+    for (let e: Bin<T> | null = head; e !== null; ) {
+      const next: Bin<T> | null = e.next
+      e.next = null
+      if ((e.hash & bit) === 0) {
+        e.prev = loTail
+        if (loTail === null) loHead = e
+        else loTail.next = e
+        loTail = e
+        lc++
+      } else {
+        e.prev = hiTail
+        if (hiTail === null) hiHead = e
+        else hiTail.next = e
+        hiTail = e
+        hc++
+      }
+      e = next
+    }
+    const untreeify = (h: Bin<T>): Bin<T> => {
+      for (let e: Bin<T> | null = h; e !== null; e = e.next) {
+        e.tree = false
+        e.parent = e.left = e.right = e.prev = null
+      }
+      return h
+    }
+    if (loHead !== null) {
+      if (lc <= UNTREEIFY_THRESHOLD) tab[index] = untreeify(loHead)
+      else {
+        tab[index] = loHead
+        if (hiHead !== null) this.treeify(loHead)
+      }
+    }
+    if (hiHead !== null) {
+      if (hc <= UNTREEIFY_THRESHOLD) tab[index + bit] = untreeify(hiHead)
+      else {
+        tab[index + bit] = hiHead
+        if (loHead !== null) this.treeify(hiHead)
+      }
+    }
+  }
+}
+
+function rotateLeft<T>(root: Bin<T>, p: Bin<T>): Bin<T> {
+  const r = p.right
+  if (r === null) return root
+  const rl = (p.right = r.left)
+  if (rl !== null) rl.parent = p
+  const pp = (r.parent = p.parent)
+  if (pp === null) {
+    root = r
+    r.red = false
+  } else if (pp.left === p) pp.left = r
+  else pp.right = r
+  r.left = p
+  p.parent = r
+  return root
+}
+
+function rotateRight<T>(root: Bin<T>, p: Bin<T>): Bin<T> {
+  const l = p.left
+  if (l === null) return root
+  const lr = (p.left = l.right)
+  if (lr !== null) lr.parent = p
+  const pp = (l.parent = p.parent)
+  if (pp === null) {
+    root = l
+    l.red = false
+  } else if (pp.right === p) pp.right = l
+  else pp.left = l
+  l.right = p
+  p.parent = l
+  return root
+}
+
+/** `TreeNode.balanceInsertion`: the red-black repair after `x` is hung in. */
+function balanceInsertion<T>(root: Bin<T>, x: Bin<T>): Bin<T> {
+  x.red = true
+  for (;;) {
+    let xp = x.parent
+    if (xp === null) {
+      x.red = false
+      return x
+    }
+    let xpp = xp.parent
+    if (!xp.red || xpp === null) return root
+    const xppl = xpp.left
+    if (xp === xppl) {
+      const xppr = xpp.right
+      if (xppr !== null && xppr.red) {
+        xppr.red = false
+        xp.red = false
+        xpp.red = true
+        x = xpp
+      } else {
+        if (x === xp.right) {
+          x = xp
+          root = rotateLeft(root, x)
+          xp = x.parent
+          xpp = xp === null ? null : xp.parent
+        }
+        if (xp !== null) {
+          xp.red = false
+          if (xpp !== null) {
+            xpp.red = true
+            root = rotateRight(root, xpp)
+          }
+        }
+      }
+    } else {
+      if (xppl !== null && xppl.red) {
+        xppl.red = false
+        xp.red = false
+        xpp.red = true
+        x = xpp
+      } else {
+        if (x === xp.left) {
+          x = xp
+          root = rotateRight(root, x)
+          xp = x.parent
+          xpp = xp === null ? null : xp.parent
+        }
+        if (xp !== null) {
+          xp.red = false
+          if (xpp !== null) {
+            xpp.red = true
+            root = rotateLeft(root, xpp)
+          }
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -652,36 +1062,64 @@ function scoreKey(score: HighScore): string {
  *
  * Since JDK 19 the copy constructor sizes its map with
  * `HashMap.newHashMap(Math.max(size, 12))` — a table of the power of two at or
- * above `⌈max(size, 12) / 0.75⌉`, never resized while the items go in — and a
- * `HashMap` iterates its buckets in index order, each bucket in the order its
- * entries arrived. A bucket's index is the hash spread by `h ^ (h >>> 16)` and
- * masked by the table. Equal items after the first are not added.
- *
- * Earlier JDKs sized the table from `size / .75f + 1` with a floor of 16, which
- * can be a table twice the size and is a different order: the reference this
- * port is held to is run on a current one. A bucket of eight entries or more is
- * turned into a tree, whose order is not the arrival order; at a load of three
- * quarters that is a chance of about one in ten million a bucket, and is not
- * modelled.
+ * above `⌈max(size, 12) / 0.75⌉` — and adds the items in order; the rest is
+ * {@link JavaHashMap}. Earlier JDKs sized the table from `size / .75f + 1` with
+ * a floor of 16, which can be a table twice the size and is a different order:
+ * the reference this port is held to is run on a current one.
  */
 export function javaHashSetOrder<T>(
   items: readonly T[],
   hash: (item: T) => number,
   key: (item: T) => string,
+  compare: ((a: T, b: T) => number) | null = null,
 ): T[] {
-  const capacity = tableSizeFor(Math.ceil(Math.max(items.length, 12) / 0.75))
-  const seen = new Set<string>()
-  const entries: Array<{ item: T; bucket: number; order: number }> = []
+  const map = new JavaHashMap<T>(Math.ceil(Math.max(items.length, 12) / 0.75), compare)
   for (const item of items) {
-    const k = key(item)
-    if (seen.has(k)) continue
-    seen.add(k)
     const h = hash(item)
-    const spread = (h ^ (h >>> 16)) | 0
-    entries.push({ item, bucket: spread & (capacity - 1), order: entries.length })
+    map.put((h ^ (h >>> 16)) | 0, key(item), item)
   }
-  entries.sort((a, b) => a.bucket - b.bucket || a.order - b.order)
-  return entries.map((entry) => entry.item)
+  return map.items()
+}
+
+/**
+ * `java.awt.Point.hashCode`, which is `Point2D`'s: the bits of `x` XOR-ed with
+ * 31 times the bits of `y`, folded to an int.
+ */
+export function javaPointHash(x: number, y: number): number {
+  const bitsOf = (v: number): bigint => {
+    scratch.setFloat64(0, v)
+    return scratch.getBigUint64(0)
+  }
+  const bits = BigInt.asUintN(64, bitsOf(x) ^ BigInt.asUintN(64, bitsOf(y) * 31n))
+  const low = Number(BigInt.asIntN(32, bits))
+  const high = Number(BigInt.asIntN(32, bits >> 32n))
+  return (low ^ high) | 0
+}
+
+/**
+ * Of a component's cells tied for its highest score, the one Juicer keeps: the
+ * first a `HashSet<Point>` of the component's `size` cells iterates.
+ *
+ * The set is a copy of the first label's cells grown by the others', so it ends
+ * at the table a set of `size` sized from a list has — the power of two at or
+ * above `⌈max(size, 12) / 0.75⌉` — and iterates bucket by bucket. Within one
+ * bucket the order is the order the cells were added, which is the order the
+ * labels were met in raster order; two tied cells in one bucket are left in
+ * raster order, which is that order but for labels joined late.
+ */
+function firstInPointSet(tied: ReadonlyArray<[number, number]>, size: number): [number, number] {
+  const capacity = tableSizeFor(Math.ceil(Math.max(size, 12) / 0.75))
+  let best = tied[0]
+  let bestKey = Number.POSITIVE_INFINITY
+  for (const cell of tied) {
+    const h = javaPointHash(cell[0], cell[1])
+    const bucket = (h ^ (h >>> 16)) & (capacity - 1)
+    if (bucket < bestKey || (bucket === bestKey && (cell[0] < best[0] || (cell[0] === best[0] && cell[1] < best[1])))) {
+      best = cell
+      bestKey = bucket
+    }
+  }
+  return best
 }
 
 /** `HashMap.tableSizeFor`: the power of two at or above `c`, at least 1. */

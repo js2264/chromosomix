@@ -79,7 +79,7 @@ the mean of 100, which is what is written.
 | 25 | Pairs statistics | yeast Hi-C contact list, 17.6 million pairs | `pairtools stats` 1.1.2 |
 | 26 | Restriction sites | yeast reference (R64-1-1), DpnII, 5 kb bins | `bioframe.digest` |
 | 27 | Pairs QC | § 25's contact list against § 26's sites, 5 kb | `pairtools restrict` and `pairtools stats` 1.1.2, `cooltools.coverage` |
-| 28 | TAD annotation | HCT-116 Hi-C (.hic), chr21 and chr22, 10 kb, raw and KR | `juicer_tools arrowhead` 1.22.01 |
+| 28 | TAD annotation | K562 Hi-C (.hic), chromosomes 21 and 22, 10 kb, raw and KR | `juicer_tools arrowhead` 1.22.01 |
 | 29 | Map report | yeast Micro-C, every stored resolution | `cooler` and numpy |
 
 **To render.** `npm run build:cli` at the repository root builds this checkout's `chromosomix`.
@@ -636,16 +636,16 @@ DATASETS = [
     dict(data='Yeast genome sequence, S288C (R64-1-1)', accession='R64-1-1', source='Ensembl 112',
          url='https://ftp.ensembl.org/pub/release-112/fasta/saccharomyces_cerevisiae/dna/'
              'Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa.gz', md5='5ae49d2d22cd977abdd6b054b94c544d'),
-    dict(data='HCT-116 RAD21-AID Hi-C, untreated, as Juicer wrote it (hg38; Rao et al. 2017)',
-         accession='4DNFIM7ZVQOQ', source='4DN',
-         url=f'{FOURDN}/000789fe-9a22-4280-a71c-7ad228fd4cac/4DNFIM7ZVQOQ.hic'),
     dict(data='Juicer Tools 1.22.01, the reference of § 28', accession='juicer_tools_1.22.01', source='Aiden lab',
          url='https://s3.amazonaws.com/hicfiles.tc4ga.com/public/juicer/juicer_tools_1.22.01.jar'),
 ]
 PATHS = {d['accession']: fetch(d['url'], d.get('name'), d.get('md5')) for d in DATASETS}
 MOUSE, YEAST, MM10, GENES = PATHS['4DNFIOZ1TRUS'], PATHS['GSE151553'], PATHS['mm10'], PATHS['refGene']
 CH128 = PATHS['CH128']
-HCT116, JUICER = PATHS['4DNFIM7ZVQOQ'], PATHS['juicer_tools_1.22.01']
+JUICER = PATHS['juicer_tools_1.22.01']
+#: § 28's map, 4DN's in situ Hi-C of K562 (Rao et al. 2014) as Juicer wrote it: 6.7 GB, of which both
+#: tools read only chromosomes 21 and 22, by range, so it is named by its address and not fetched.
+K562_HIC = f'{FOURDN}/dcfcb009-f006-4ab8-a4c7-af72be58c12c/4DNFITUOMFUQ.hic'
 CHICKEN = [PATHS[a] for a in ('4DNFIH8L6WON', '4DNFITBCUX56', '4DNFIIML46E5')]
 ATAC = [PATHS[a] for a in ('4DNFIIY4QW2D', '4DNFITBRHVZE')]
 # mm10's index, by which every tool reads the sequence by range: made once, beside it.
@@ -4658,13 +4658,14 @@ record(PQ_ANALYSIS, "§ 25's contact list against § 26's DpnII sites, 5 kb",
 Contact domains as `juicer_tools arrowhead` calls them, by the port of its `BlockBuster` in
 `chromosomix arrowhead`: each window of 2,000 bins along the diagonal turned into the arrowhead
 transform, every corner scored by its two triangles' means, signs and variances, a strict pass and a
-lenient one, and the corners near one another merged. The map is 4DN's in situ Hi-C of HCT-116
-(RAD21-AID, untreated; Rao et al. 2017) as Juicer wrote it, a `.hic`, read whole by both; chromosomes
-21 and 22 at 10 kb, which is the resolution Juicer picks for a map of this depth. Twice: on the raw
-counts, which both read as the same float32 counts, and balanced, where Juicer is given the KR vector
-and chromosomix reads the file's own preferred vector — SCALE, then KR (`src/hic/HicFile.ts`), and 4DN's
-pipeline wrote no SCALE. Juicer Tools 1.22.01 runs on Java 21: one step walks a `HashSet` whose order
-changed in JDK 19, and the port follows a current JDK.
+lenient one, and the corners near one another merged. The map is 4DN's in situ Hi-C of K562 (Rao et al.
+2014, 4DNFITUOMFUQ) as Juicer wrote it, a `.hic` both read by range from 4DN's bucket; chromosomes 21
+and 22 at 10 kb, which is the resolution Juicer picks for a map of this depth, and each longer than one
+of Arrowhead's 2,000-bin windows. Twice: on the raw counts, which both read as the same float32 counts,
+and balanced, where Juicer is given the KR vector and chromosomix reads the file's own preferred vector
+— SCALE, then KR (`src/hic/HicFile.ts`), and 4DN's pipeline wrote no SCALE. Juicer Tools 1.22.01 runs
+on Java 21: one step walks a `HashSet` whose order changed in JDK 19, and the port follows a current
+JDK.
 
 | | chromosomix | Juicer Tools |
 |---|---|---|
@@ -4676,15 +4677,15 @@ changed in JDK 19, and the port follows a current JDK.
 ```{python}
 AH = WORK / 'arrowhead'
 AH_RES = 10_000
-AH_CHROMS = ['chr21', 'chr22']
+AH_CHROMS = ['21', '22']
 #: Each variant: Juicer's normalisation and chromosomix's flags for the same counts.
 AH_VARIANTS = {'raw': ('NONE', ['--no-balance']), 'balanced': ('KR', [])}
 for variant, (norm, flags) in AH_VARIANTS.items():
-    mr('arrowhead', f'{rel(HCT116)}::/resolutions/{AH_RES}', '--sequences', ','.join(AH_CHROMS), *flags,
+    mr('arrowhead', f'{K562_HIC}::/resolutions/{AH_RES}', '--sequences', ','.join(AH_CHROMS), *flags,
        out=AH / f'app-{variant}', name=f'arrowhead-{variant}', analysis='TAD annotation', label=variant)
     reference(f'juicer-arrowhead-{variant}', 'TAD annotation', 'Juicer Tools',
               ['java', '-Xmx8g', '-jar', JUICER, 'arrowhead', '-c', ','.join(AH_CHROMS), '-m', '2000',
-               '-r', str(AH_RES), '-k', norm, '--threads', '1', HCT116, OUT],
+               '-r', str(AH_RES), '-k', norm, '--threads', '1', K562_HIC, OUT],
               out=AH / f'juicer-{variant}', made=AH / f'juicer-{variant}' / f'{AH_RES}_blocks.bedpe', label=variant)
 
 AH_SCORES = ['score', 'uVarScore', 'lVarScore', 'upSign', 'loSign']
@@ -4705,18 +4706,23 @@ def juicer_blocks(path):
 
 AH_RESULTS = {}
 for variant in AH_VARIANTS:
-    mine = table(one(AH / f'app-{variant}', '*.arrowhead-table.tsv'))
+    # A sequence's name is a name, `21` included, on both sides of the merge.
+    mine = table(one(AH / f'app-{variant}', '*.arrowhead-table.tsv')).astype({'sequence': str})
     theirs = juicer_blocks(AH / f'juicer-{variant}' / f'{AH_RES}_blocks.bedpe')
-    # Juicer writes a domain to the start of its last corner bin; chromosomix clamps that to the sequence,
-    # which only a domain ending on a sequence's last bin can tell apart.
-    both = mine.merge(theirs, on=['sequence', 'start'], how='outer', indicator=True, suffixes=('_app', '_juicer'))
-    paired = both[both['_merge'] == 'both']
-    ends = (paired['end'] == paired['end_juicer']) | ((paired['end'] < paired['end_juicer'])
-                                                     & (paired['end_juicer'] - paired['end'] < AH_RES))
+    # Juicer writes a domain to the start of its last corner bin, and chromosomix clamps that to the
+    # sequence: an end is the same, or chromosomix's is short of Juicer's by less than a bin, which only a
+    # domain ending on a sequence's last bin can be. Nested domains share starts, so a pair is matched on
+    # its start and its end both.
+    pairs = mine.merge(theirs, on=['sequence', 'start'], suffixes=('_app', '_juicer'))
+    pairs = pairs[(pairs['end'] == pairs['end_juicer'])
+                  | ((pairs['end'] < pairs['end_juicer']) & (pairs['end_juicer'] - pairs['end'] < AH_RES))]
+    paired = pairs.drop_duplicates(['sequence', 'start', 'end'])
+    ends = pd.Series(True, index=paired.index)
+    only = (len(mine) - len(paired)) + (len(theirs) - paired[['sequence', 'start', 'end_juicer']].drop_duplicates().shape[0])
     worst = {key: float(np.abs(paired[f'{key}_app'] - paired[f'{key}_juicer']).max()) if len(paired) else np.nan
              for key in AH_SCORES}
-    AH_RESULTS[variant] = dict(mine=mine, theirs=theirs, paired=paired, only=int((both['_merge'] != 'both').sum()),
-                               ends=int(ends.sum()), worst=worst)
+    AH_RESULTS[variant] = dict(mine=mine, theirs=theirs, paired=paired, only=int(only), ends=int(ends.sum()),
+                               worst=worst)
 # chromosomix writes a score to six decimals.
 AH_EXACT = all(r['only'] == 0 and r['ends'] == len(r['paired']) and len(r['paired']) > 0
                and max(r['worst'].values()) <= rounded(6) for r in AH_RESULTS.values())
@@ -4732,7 +4738,7 @@ measures({
 
 ```{python}
 #| label: fig-arrowhead
-#| fig-cap: "TAD annotation, HCT-116 Hi-C at 10 kb, balanced. a, the corner score of every domain both call; b, the domains of chromosome 21 as the triangles they span on the map, chromosomix's above the axis and Juicer's below it."
+#| fig-cap: "TAD annotation, K562 Hi-C at 10 kb, balanced. a, the corner score of every domain both call; b, the domains of chromosome 21 as the triangles they span on the map, chromosomix's above the axis and Juicer's below it."
 balanced = AH_RESULTS['balanced']
 TEXT['ah_n'] = f"{len(balanced['paired']):,}"
 TEXT['ah_raw_n'] = f"{len(AH_RESULTS['raw']['paired']):,}"
@@ -4762,7 +4768,7 @@ drawn('fig-arrowhead')
 `{python} TEXT['ah_worst']`, which is the six decimals chromosomix writes.
 
 ```{python}
-record('TAD annotation', 'HCT-116 Hi-C (.hic), chr21 and chr22, 10 kb, raw and KR', 'Juicer Tools 1.22.01',
+record('TAD annotation', 'K562 Hi-C (.hic), chromosomes 21 and 22, 10 kb, raw and KR', 'Juicer Tools 1.22.01',
        f"{TEXT['ah_n']} domains (balanced) and {TEXT['ah_raw_n']} (raw), the same corners; scores within "
        f"{TEXT['ah_worst']}, the digits written",
        'Identical (to the digits written)' if AH_EXACT else 'Differs',

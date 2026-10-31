@@ -31,6 +31,8 @@ interface Golden {
   runs: Array<{
     resolution: number
     norm: string
+    /** The chromosomes a balanced run was over: those whose vector Juicer can use. */
+    chroms: string[] | null
     domains: Array<{
       chrom: string
       x1: number
@@ -47,13 +49,13 @@ interface Golden {
 const golden: Golden | null = existsSync(GOLDEN) ? (JSON.parse(readFileSync(GOLDEN, 'utf8')) as Golden) : null
 
 /**
- * How far a score may be from Juicer's. The raw counts are read bit for bit as
- * Juicer reads them and every sum is taken in its order, so they agree to the
- * last digit Java prints; a balanced cell is the count over two weights here
- * and over their product in Juicer, which can differ in the last bit of a
- * float32 — and the score is a ratio of sums of millions of such cells.
+ * How far a score may be from Juicer's: not at all. The counts are read as
+ * Juicer reads them — a balanced cell `count × w[i] × w[j]` rounded to float32,
+ * which is Juicer's `(float) (count / (nv[i] × nv[j]))` to the bit on this file,
+ * and `NaN` where a contact meets a dropped bin, as Juicer keeps it — and every
+ * sum is taken in its order, so the five scores are its own.
  */
-const TOLERANCE = { NONE: 0, balanced: 1e-9 }
+const TOLERANCE = 0
 
 async function open(binsize: number): Promise<MetaCooler> {
   const source = await LocalFileSource.fromPath(HIC)
@@ -61,10 +63,10 @@ async function open(binsize: number): Promise<MetaCooler> {
   return MetaCooler.fromHic(`${HIC}::/resolutions/${binsize}`, source)
 }
 
-function job(mc: MetaCooler, balance: boolean, matrixSize: number): JobContext {
+function job(mc: MetaCooler, balance: boolean, matrixSize: number, sequences: string[] | null): JobContext {
   return {
     mc,
-    params: { sequences: null, matrixSize, balance },
+    params: { sequences, matrixSize, balance },
     framing: { value: '' } as AnalysisFraming,
     inputs: {} as never,
     cancelled: () => false,
@@ -82,7 +84,7 @@ describe('Arrowhead against juicer_tools arrowhead', () => {
   for (const run of golden?.runs ?? []) {
     it(`calls Juicer's domains at ${run.resolution} bp, ${run.norm}`, async () => {
       const mc = await open(run.resolution)
-      const outputs = await runArrowhead(job(mc, run.norm !== 'NONE', golden!.matrixSize))
+      const outputs = await runArrowhead(job(mc, run.norm !== 'NONE', golden!.matrixSize, run.chroms))
       const table = outputs.find((output): output is TableOutput => output.kind === 'table')
       const key = (chrom: string, x1: number, x2: number): string => `${chrom}:${x1}-${x2}`
       const ours = new Map((table?.rows ?? []).map((row) => [key(String(row.sequence), Number(row.start), Number(row.end)), row]))
@@ -91,7 +93,7 @@ describe('Arrowhead against juicer_tools arrowhead', () => {
       const length = (chrom: string): number => mc.chromsizes.get(chrom) ?? Number.POSITIVE_INFINITY
       const theirs = run.domains.map((domain) => ({ ...domain, x2: Math.min(domain.x2, length(domain.chrom)) }))
       expect([...ours.keys()].sort()).toEqual(theirs.map((domain) => key(domain.chrom, domain.x1, domain.x2)).sort())
-      const tolerance = run.norm === 'NONE' ? TOLERANCE.NONE : TOLERANCE.balanced
+      const tolerance = TOLERANCE
       for (const domain of theirs) {
         const row = ours.get(key(domain.chrom, domain.x1, domain.x2))!
         for (const column of ['score', 'uVarScore', 'lVarScore', 'upSign', 'loSign'] as const) {

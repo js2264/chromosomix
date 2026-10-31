@@ -8,6 +8,7 @@ import {
   javaDoubleCompare,
   javaDoubleHash,
   javaHashSetOrder,
+  javaPointHash,
   lowSignThresholds,
 } from '@/analysis/arrowhead'
 
@@ -86,11 +87,26 @@ describe('Java’s hashing, where the order of a HashSet decides a result', () =
     expect(javaDoubleHash(Number.NaN)).toBe(2146959360)
   })
 
-  it('hashes a HighScore as Objects.hash does', () => {
-    // Objects.hash(1, 2, 0.0, 0.0, 0.0, 0.0, 0.0) = 31⁶·1 + 31⁵·2 + … folded from 1.
-    let expected = 1
-    for (const part of [1, 2, 0, 0, 0, 0, 0]) expected = (Math.imul(31, expected) + part) | 0
-    expect(highScoreHash({ i: 1, j: 2, score: 0, uVarScore: 0, lVarScore: 0, upSign: 0, loSign: 0 })).toBe(expected)
+  it('hashes a HighScore as juicer_tools 1.22.01 does', () => {
+    // 7 · (i + j) · (int) ⌊score + uVarScore + lVarScore + upSign + loSign⌋, read off the jar's
+    // bytecode; Juicer's own HashSet of chromosome 21's lenient blocks gives 14784 for this one.
+    expect(highScoreHash({ i: 521, j: 535, score: 1.2, uVarScore: 0.1, lVarScore: 0.1, upSign: 0.3, loSign: 0.3 })).toBe(14784)
+    expect(highScoreHash({ i: 1, j: 2, score: Number.NaN, uVarScore: 0, lVarScore: 0, upSign: 0, loSign: 0 })).toBe(0)
+  })
+
+  it('iterates a HashSet whose crowded bucket became a tree as Java does', () => {
+    // Nine items in one bucket of a 16-slot table: the ninth makes Java grow the
+    // table (a tree needs 64 slots), and it is still a list, in arrival order.
+    const items = Array.from({ length: 9 }, (_, k) => k)
+    expect(javaHashSetOrder(items, () => 0, String, (a, b) => a - b)).toEqual(items)
+  })
+
+  it('hashes a cell as java.awt.Point does', () => {
+    // Point2D.hashCode: bits(x) ^ bits(y) · 31 in 64 bits, folded. For (1, 2):
+    // 0x4000… · 31 wraps to 0xC000…, and 0x3FF0… ^ 0xC000… = 0xFFF0…, whose
+    // high word is the hash.
+    expect(javaPointHash(0, 0)).toBe(0)
+    expect(javaPointHash(1, 2)).toBe(0xfff00000 | 0)
   })
 
   it('compares doubles as Double.compare does', () => {

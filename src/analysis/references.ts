@@ -67,12 +67,13 @@ export const TASK_REFERENCES: Readonly<Record<string, TaskReference>> = {
     agreement: 'identical',
     section: 27,
   },
-  // The resolution ladder counts what Rao et al.'s map resolution is read off;
-  // its § 29 holds it to cooler's own coarsening, untested until rendered.
+  // The resolution ladder counts what Rao et al.'s map resolution is read off,
+  // held in § 29 to cooler's own coarsening at every stored resolution.
   mapreport: {
     method: 'The map resolution of Rao et al. 2014, its counts at every bin size.',
     doi: '10.1016/j.cell.2014.11.021',
-    agreement: 'untested',
+    agreement: 'identical',
+    section: 29,
   },
   scalogram: {
     method: 'The scalogram of Lioy et al. 2018.',
@@ -102,12 +103,11 @@ export const TASK_REFERENCES: Readonly<Record<string, TaskReference>> = {
     doi: '10.1038/s41594-023-01178-2',
     agreement: 'untested',
   },
-  // Untested until the validation is rendered with Java and the jar: § 28 is
-  // written and runs `juicer_tools arrowhead` itself.
   arrowhead: {
     method: 'Contact domains by Arrowhead (Rao et al. 2014), as juicer_tools arrowhead calls them.',
     doi: '10.1016/j.cell.2014.11.021',
-    agreement: 'untested',
+    agreement: 'identical',
+    section: 28,
   },
   compartments: {
     method: 'The first eigenvector (Lieberman-Aiden et al. 2009), as cooltools’ eigs_cis takes it.',
