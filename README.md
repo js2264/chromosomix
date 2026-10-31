@@ -81,6 +81,14 @@ double-clicking and you end up with a fully functional genome browser.
 It is attached to every [release](https://github.com/js2264/chromosomix/releases)
 as `chromosomix-<tag>.html`, and `npm run build:standalone` builds it from a clone.
 
+### For AI agents
+
+The site describes itself to language models at <https://chromosomix.app/llms.txt>, in the shape
+[llmstxt.org](https://llmstxt.org/) gives one, with reference pages generated from the app itself:
+how to write a link to a view, every analysis task with every parameter, the embed protocol, and the
+file, store and workspace formats. <https://chromosomix.app/llms-full.txt> is all of it, and this
+README, in one file.
+
 ## Embedding chromosomix in a page
 
 A minimal version of the viewer can be added to any HTML page as an `<iframe>`. Nothing needs to be installed. There is no extra package dependency and no modifications to make to the page's header, just drop the `<iframe>` in. The `src` attribute is the URL of the viewer, with a query string that tells it what to show.
@@ -184,7 +192,9 @@ npm run build:cli && npm link
 
 ### Running tasks
 
-Once it is installed, run the following command to see the available tasks and their parameters:
+Once it is installed, run the following command to see the available tasks and their parameters
+(`chromosomix tasks --json` prints the same as one JSON document, with every value a choice takes,
+for a script or an agent):
 
 ```bash
 chromosomix tasks

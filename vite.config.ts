@@ -166,8 +166,9 @@ export default defineConfig({
   // names `thirdPartyNotices()` again, last, where the worker builds report into
   // it from `worker.plugins` below (`scripts/third-party-notices.mjs`).
   //
-  // `llms-full.txt` is the site's alone, beside the `llms.txt`, `robots.txt` and
-  // `sitemap.xml` its `public/` carries (`scripts/llms.mjs`).
+  // `llms-full.txt` is the site's alone, beside the `llms.txt`, the pages under
+  // `llms/`, `robots.txt` and `sitemap.xml` its `public/` carries: the README and
+  // those pages in one file (`scripts/llms.mjs`).
   plugins: [serviceWorker(process.env.BASE_PATH ?? '/'), gzippedAsIs(), cspMeta(), thirdPartyNotices(), llmsFull()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },

@@ -36,10 +36,16 @@ const VIEW_KINDS: ViewKind[] = [
   'browser',
 ]
 const LEVELS = ['bin', 'contig', 'genome'] as const
-const TRANSFORMS: Transform[] = ['log1p', 'log10', 'log2', 'none']
+export const TRANSFORMS: readonly Transform[] = ['log1p', 'log10', 'log2', 'none']
 
-/** Serialisation order — stable so two equal states produce equal strings. */
-const KEY_ORDER = [
+/**
+ * Serialisation order — stable so two equal states produce equal strings.
+ *
+ * Exported as the list of every key a link may carry, which is what the page
+ * the site serves to language models documents key by key (`llms/links.ts`),
+ * and its test holds the two to each other.
+ */
+export const KEY_ORDER = [
   'uri',
   'uri2',
   'maps',
@@ -391,7 +397,7 @@ function isViewKind(value: string | undefined): value is ViewKind {
 }
 
 function isTransform(value: string): value is Transform {
-  return (TRANSFORMS as string[]).includes(value)
+  return (TRANSFORMS as readonly string[]).includes(value)
 }
 
 /** Structural equality, used to suppress redundant re-renders and hash writes. */

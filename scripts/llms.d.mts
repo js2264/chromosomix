@@ -12,5 +12,16 @@ export declare function repositoryUrl(manifest: { repository?: string | { url?: 
 /** `markdown` with every repository-relative link and image made absolute. */
 export declare function absoluteLinks(markdown: string, repository: string, ref?: string): string
 
-/** The plugin: `llms-full.txt` from the README, for the site build. */
+/** The site's pages that `index` (an `llms.txt`) links, as paths under the site's root, in order. */
+export declare function linkedPages(index: string): string[]
+
+/** The whole of `llms-full.txt`: the README, then each page `index` links, read by `read(path)`. */
+export declare function llmsFullText(
+  readme: string,
+  index: string,
+  read: (path: string) => string,
+  repository: string,
+): string
+
+/** The plugin: `llms-full.txt` from the README and the pages, for the site build. */
 export declare function llmsFull(): Plugin

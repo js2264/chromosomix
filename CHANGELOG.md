@@ -14,6 +14,34 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The site describes itself to AI agents in full (§11).** `llms.txt` now says the four things an
+  agent can do with chromosomix — write a link, run an analysis, embed and drive the viewer, publish
+  data — names every task, and links five reference pages that the app writes about itself, under
+  `chromosomix.app/llms/`:
+  - `links.md`: every key a link's fragment takes, with its values, the views, the two forms of a
+    coordinate, the query (`embed`, `config`, `store`), pinned builds, and example links, each of
+    which opens what it says;
+  - `cli.md`: installing the command, writing one, what it writes, its exit statuses, examples, and
+    the usage `--help` prints;
+  - `tasks.md`: all 29 tasks, each with what it reads and writes, the shape of its command, and every
+    parameter's flag, what it takes, its default and what it does — every value a choice takes
+    included, which `chromosomix tasks` never printed;
+  - `embed.md`: the `<iframe>`, the six `postMessage` messages and their rules, a host page's script,
+    and the Jupyter and R widgets;
+  - `data.md`: the formats and their sidecars, what a host must serve, the built-in stores, and a
+    store file and the smallest workspace a lab can write by hand.
+
+  Each page is generated from what it describes — the task registry, the hash reader's own keys, the
+  command's usage, the embed channel, the store shelf — committed under `public/llms/`, and held to
+  the app by a test, which fails while a page is stale; `npm run llms` writes them again.
+  `llms-full.txt` is now the README followed by the five pages, in the order `llms.txt` links them.
+
+- **`chromosomix tasks --json` (§23).** The task listing as one JSON document: per task its id,
+  title, what it reads and writes, the tasks it runs first, and every parameter with its flag as the
+  parser takes it, its default, every value a choice takes, its range and unit; with how a parameter
+  naming a file is given one, and what each kind of result is written as. For a script or an agent
+  writing commands for the installed version.
+
 - **Example sessions on the landing page (§24.11).** Under *Just looking?* and *Pick an example
   session*, in the margin beside the store tiles — under them on a narrow page — four buttons, each
   opening one tab in the tab it was pressed in, and each with the Analysis column's `?`, whose tip

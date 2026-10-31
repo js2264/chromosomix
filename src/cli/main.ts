@@ -95,6 +95,7 @@ import { chosenEntries } from '../analysis/runner'
 import { RUNNERS } from '../analysis/run/index'
 import { TRACK_RUNNERS } from '../analysis/run/tracks'
 import { TASKS, taskById } from '../analysis/registry'
+import { ENTRY_KINDS, OUTPUT_FILES, taskCatalogue } from '../analysis/catalogue'
 import { abortError, runnerParams } from '../analysis/job'
 import type { JobContext, SequenceReader, TrackJobContext } from '../analysis/job'
 import {
@@ -2247,10 +2248,17 @@ function bindInputs(task: AnalysisTask, params: Params, inputs: TaskInputs): Tas
 // Commands
 // ---------------------------------------------------------------------------
 
-const USAGE = `chromosomix — the Analysis panel, from a shell
+/**
+ * What `--help` prints. Exported for the command-line page the site serves to
+ * language models (`llms/cli.ts`), which carries it whole rather than a
+ * paraphrase of it.
+ */
+export const USAGE = `chromosomix — the Analysis panel, from a shell
 
-  chromosomix tasks
-      Every task, its id, and the parameters it takes.
+  chromosomix tasks [--json]
+      Every task, its id, and the parameters it takes. With --json, the same
+      as one JSON document: every value a choice takes, every range and unit,
+      what each input reads and what each task writes.
 
   chromosomix <task> <file.cool|file.mcool|file.metacool|file.hic|file.pairs.gz> [...]
       Run one task over one or more files. Each file's outputs are named after
@@ -2465,6 +2473,27 @@ function listTasks(): void {
     }
     process.stdout.write('\n')
   }
+}
+
+/**
+ * `tasks --json`: the same tasks, as the whole answer rather than a line per flag
+ * (`analysis/catalogue.ts`) — every value a choice takes, every range, what
+ * each input reads and what each task writes — for a script or an agent that
+ * writes commands rather than a person who reads them. Every task the listing
+ * above names, dev features' included, since the command runs them all; and the
+ * build on top, as every file the command writes opens with it.
+ */
+function writeTaskCatalogue(): void {
+  const catalogue = {
+    producer: `chromosomix ${VERSION}${COMMIT === '' ? '' : ` (${COMMIT})`}`,
+    version: VERSION,
+    // What the four kinds of parameter that name a file take, and what each
+    // kind of result is written as: the two rules every task shares, said once.
+    inputs: ENTRY_KINDS,
+    outputs: OUTPUT_FILES,
+    tasks: taskCatalogue({ dev: true }),
+  }
+  process.stdout.write(`${JSON.stringify(catalogue, null, 2)}\n`)
 }
 
 async function runCommand(args: Args, downloads: Downloads): Promise<number> {
@@ -3244,7 +3273,8 @@ export async function main(argv: readonly string[]): Promise<number> {
       return 0
     }
     if (command === 'tasks') {
-      listTasks()
+      if (argv.includes('--json')) writeTaskCatalogue()
+      else listTasks()
       return 0
     }
     if (!['replay', 'circular', 'boost', 'stats'].includes(command) && taskById(command) === undefined) {

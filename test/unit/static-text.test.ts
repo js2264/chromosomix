@@ -11,7 +11,8 @@
  * The name is chromosomix.
  *
  * `public/llms.txt`, the summary the site serves to language models, is static
- * text in the same sense and under the same rule, as are the description a
+ * text in the same sense and under the same rule, and so are the pages it links
+ * under `public/llms/`, as are the description a
  * pasted link unfurls with (`og:description`), what the page says to a reader
  * or a crawler that runs no JavaScript (`<noscript>`), and the package's
  * description and keywords on npm.
@@ -21,7 +22,7 @@
  * the page is found by the words in them: Hi-C, a genome browser, the formats.
  */
 
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const page = readFileSync(new URL('../../index.html', import.meta.url), 'utf8')
@@ -37,6 +38,10 @@ const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.ur
 const DEV = /multi-genome|\bm?metacool\b|metagenom/i
 
 const llms = readFileSync(new URL('../../public/llms.txt', import.meta.url), 'utf8')
+/** The pages `llms.txt` links, which the app writes about itself (`src/llms/pages.ts`). */
+const pages = readdirSync(new URL('../../public/llms/', import.meta.url))
+  .filter((name) => name.endsWith('.md'))
+  .map((name) => readFileSync(new URL(`../../public/llms/${name}`, import.meta.url), 'utf8'))
 
 const title = /<title>([^<]*)<\/title>/.exec(page)?.[1] ?? ''
 const description = /<meta\s+name="description"\s+content="([^"]*)"/.exec(page)?.[1] ?? ''
@@ -57,7 +62,8 @@ describe('the static text', () => {
 
   it('names nothing that is a dev feature, in the page, the install prompt, the summary for models or on npm', () => {
     const texts = [title, description, unfurled, noscript, manifest.name, manifest.short_name, manifest.description]
-    for (const text of [...texts, llms, pkg.description, ...pkg.keywords]) {
+    expect(pages.length).toBeGreaterThan(0)
+    for (const text of [...texts, llms, ...pages, pkg.description, ...pkg.keywords]) {
       expect(text).not.toMatch(DEV)
     }
   })

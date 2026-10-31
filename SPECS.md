@@ -5890,20 +5890,45 @@ did not ask for, and on a map or a lane left without its data.
 
 **The site describes itself to crawlers and to language models, in files beside the app.** Its
 `public/` puts three at the root. `llms.txt` is a summary in the shape llmstxt.org gives one: what
-the app is, the formats it opens, how to write a link that opens a file at a place — the hash of
-§5.5, with a map's `region` in the machine form and the browser's `locus` in the display form
-(§26.1) — how to embed one (§21), how to run the command line (§23), and links to the README, the
-validation, timing, parity and laptop notebooks, the changelog and this specification. `robots.txt` lets every
-crawler in, those of language models included, keeps the archived pins and the pull-request
-previews (`/v/`, `/pr/`) out of search — each is a copy of the app at the root, kept for links that
-must not change — and names `sitemap.xml`, which lists the app and its four notebooks. The site
-build adds a fourth, `llms-full.txt`: the README as one file, its repository-relative links made
-absolute (`scripts/llms.mjs`), for a tool that reads a single document rather than following links.
-**`llms.txt` is written by hand and held to the app by a test**, because a model acts on it — writes
-a link from it, runs a command from it — and nothing reading it can tell a summary that has drifted:
-each example link goes through the hash's own reader, each value it lists through the list it is
-drawn from, each task through the registry and each store through the shelf. None of these four
-files is in the pinned, desktop or package builds.
+the app is, the four things an agent can do with it — write a link, run an analysis, embed and drive
+the viewer, publish data — the formats it opens, how to write a link that opens a file at a place —
+the hash of §5.5, with a map's `region` in the machine form and the browser's `locus` in the display
+form (§26.1) — how to embed one (§21), how to run the command line (§23) and every task it runs, and
+then sections of links: the five reference pages below and `llms-full.txt`, the README, the
+validation, timing, parity and laptop notebooks, where to get each build and widget, and the
+changelog, this specification and the glossary. `robots.txt` lets every crawler in, those of language
+models included, keeps the archived pins and the pull-request previews (`/v/`, `/pr/`) out of search
+— each is a copy of the app at the root, kept for links that must not change — and names
+`sitemap.xml`, which lists the app and its four notebooks.
+
+**The references `llms.txt` links are written by the app about itself**, one Markdown page each under
+`public/llms/` (`src/llms/pages.ts`), each opening with a heading and a one-paragraph summary and
+linking only to absolute addresses, since it is read away from the site: *links* (`links.md`) — every
+key of the hash and the values it takes, documented beside the reader's own list (`KEY_ORDER`) and
+held to it both ways, the multi-genome format's three keys alone left out; the views; the two forms
+of a coordinate; the query (`embed`, `config`, `store`); pinned builds; and example links, each of
+which opens what its caption says on the yeast demo — a whole-genome link waits for its button
+(§7.3), and a link's clip is not applied to a ratio, which opens centred on no change; *command line*
+(`cli.md`) — installing, the shape of a command, what it writes, the exit statuses, examples, and the
+usage exactly as `--help` prints it but for the dev container it names; *analysis tasks*
+(`tasks.md`) — every task that is no dev feature's, from `tasks --json`'s catalogue: what it reads,
+what it runs first and writes, the shape of its command with every input nothing stands in for, and a
+row per parameter with its flag, what it takes, its default and its label, hint and choices; *embedding
+and driving* (`embed.md`) — the `<iframe>`, the six messages of §21.4 with their names, protocol
+number and cap read from the channel, the rules around them, a host page's script, and the Jupyter
+and R widgets; and *files, hosting, stores and workspaces* (`data.md`) — the formats and sidecars,
+where files are read from and what a host must serve, the built-in stores read from the shelf, and a
+store file and the smallest workspace, each read back through its parser. **They are committed, and
+a test fails while one differs from what the app would write** (`test/dom/llms.test.ts`, which
+`npm run llms` runs with `--update`): a task's new parameter, a renamed message or a store added is a
+diff to what agents are told, in the same review as the change. The site build adds
+`llms-full.txt`: the README, its repository-relative links made absolute, then each page `llms.txt`
+links, in its order (`scripts/llms.mjs`), for a tool that reads a single document rather than
+following links. **`llms.txt` is written by hand and held to the app by a test**, because a model
+acts on it — writes a link from it, runs a command from it — and nothing reading it can tell a
+summary that has drifted: each example link goes through the hash's own reader, each value it lists
+through the list it is drawn from, its tasks are the catalogue's, and each store is the shelf's.
+None of these files is in the pinned, desktop or package builds.
 
 **The page is written for a search engine too, which reads it after the app has run.** Its title,
 *chromosomix – genome browser for Hi-C, tracks and 3D models*, and its description name what the
@@ -11598,6 +11623,23 @@ part in a run. Like `--help` it is answered wherever on the line it is written, 
 is checked, with exit 0. `chromosomix --version` printed the usage until now — an answer to a
 question nobody had asked, and none to the one a pipeline's record of its tools asks.
 
+**`tasks --json` is the listing as data.** `chromosomix tasks` prints a line per flag — its name,
+its default and its label — which is enough for a person who knows the task and not enough to write
+a command from: a choice is printed with its default and not the values it takes, a number with no
+range, a file with no word on what kind. With `--json` the same tasks come out as one document
+(`analysis/catalogue.ts`): the build on top, as `--version`'s first line; what a parameter naming a
+feature set, a set of pairs, a track or a reference takes and how a line names one; what each kind of
+result is written as; and per task its id, title, blurb, keywords, card, whether it reads a map and
+whether it compares others (`--against`), the tasks it runs first, the kinds of result it writes, its
+version, and every parameter it is not retiring — its flag as the parser takes it (`--x <n>`,
+`--x / --no-x`, coverage's `--balance / --balance=false`, the derived balance as `--no-balance`), its
+kind, label, hint and card heading, its default or a sentence where the default is not one value
+(worked out from the map's bin size, every sequence, none), every value a choice takes with its label
+and hint, its range, step and unit, whether it takes several, and whether the form hides it at the
+task's defaults. Every task the listing names is in it, dev features' included (§29.5). It is read
+from the descriptors and decides nothing, so it cannot say a thing the command would not take: the
+test reads every flag it writes back through the parser, every choice against the descriptor.
+
 **A reader that stops reading is no failure of the command.** `chromosomix tasks | head -1` closes
 the pipe under the command, and Node reports the next write as an error on the stream — `EPIPE`, or
 `EOF` on Windows — which, unheard, killed the command with a stack trace and exit 1 the moment `head`
@@ -15344,7 +15386,7 @@ never the reason a session is lost.
   one.
 - **Not in the static text** around the app — the page's title and description, the description a
   pasted link unfurls with, what the page says without JavaScript, the install prompt's name and
-  description, the `llms.txt` the site serves to language models (§11), and the package's description
+  description, the `llms.txt` the site serves to language models and the pages it links (§11), and the package's description
   and keywords on npm — which cannot follow a switch, so it names nothing that is dev, metagenomics
   included: *chromosomix – genome browser for Hi-C, tracks and 3D models*, where both titles once said
   *(multi-genome) cool files* and the package's keywords *metagenomics* and *metacool*. The name is
