@@ -1578,12 +1578,38 @@ export interface AnalysisTask {
    */
   upstreamParams?(id: string, params: Params): Params | null
   /**
+   * Files a run leaves **as a whole**, beside each output's own (§18.7).
+   *
+   * Every output already leaves on its own — a TSV, a BED, a PNG of its figure —
+   * and for nearly every task that is the whole of what a result is. The map
+   * report is the exception: what it is *for* is one page holding every figure
+   * and table of the run in reading order, and the files a pipeline's MultiQC
+   * collects. Both are written from the {@link TaskResult} and nothing else, so
+   * the drawer and `chromosomix` make the same bytes.
+   */
+  documents?: readonly TaskDocument[]
+  /**
    * The dev feature this task belongs to (§29), if it is one: absent from the
    * Analysis panel — not greyed, not waiting — while the switch is off. The
    * command line runs it regardless, having no switch.
    */
   dev?: DevFeature
   estimate(context: AnalysisContext, params: Params): CostEstimate
+}
+
+/** One whole-run file, written from a result (see {@link AnalysisTask.documents}). */
+export interface TaskDocument {
+  /** The part of the file name after the task's id: `sample.mapreport.<id>.<extension>`. */
+  id: string
+  extension: 'html' | 'tsv' | 'json'
+  /** The drawer's button for it. */
+  label: string
+  /** The MIME type it is saved as. */
+  type: string
+  /** Written by `chromosomix` and not offered in the drawer: a pipeline's file rather than a reader's. */
+  shellOnly?: boolean
+  /** The file, from the run's result; `sample` is the name the file is reported under. */
+  write(result: TaskResult, sample: string): string
 }
 
 /**

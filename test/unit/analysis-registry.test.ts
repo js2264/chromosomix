@@ -283,6 +283,8 @@ describe('every descriptor', () => {
       'insulation',
       'di',
       'hicscore',
+      // Domains read off the map's corners: nested, and with gaps.
+      'arrowhead',
       'compartments',
       'cistrans',
       'hicrep',
@@ -407,11 +409,15 @@ describe('the cards', () => {
       // The library under the map, beside the decay whose four orientations
       // it took over: how short a separation P(s) can be believed at.
       'pairsqc',
+      // Their composite: the library on one page, after what it gathers.
+      'mapreport',
       'scalogram',
       'fourc',
       'insulation',
       'di',
       'hicscore',
+      // Domains read off the map's corners: nested, and with gaps.
+      'arrowhead',
       'compartments',
       'interarm',
       // Detection, the caller built for loops before the one that matches any

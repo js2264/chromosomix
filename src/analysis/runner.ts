@@ -1594,6 +1594,20 @@ export class AnalysisRunner {
       if (job.target.label !== '') inputs.mapLabel = job.target.label
     }
 
+    // **The map itself, by address, for the report that reads its finest rung**
+    // (§18.8): the worker mounts one file, and a ladder that starts below the
+    // rung on screen has to open the one under it. Not on an import, whose
+    // rungs were binned here rather than stored.
+    if (step.task.id === 'mapreport' && job.target.source !== undefined && job.target.binning === undefined) {
+      inputs.self = {
+        label: job.target.label,
+        uri: job.target.uri,
+        source: job.target.source,
+        ...(job.target.cells === undefined ? {} : { cells: job.target.cells }),
+        ...(job.target.resample === undefined ? {} : { resample: job.target.resample }),
+      }
+    }
+
     // **Only to the job that is about the map the block came from.**
     //
     // The block on screen belongs to one panel — the starred one — and

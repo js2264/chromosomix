@@ -8342,6 +8342,13 @@ opinions about half-open ends waiting to diverge, and what varies between a hand
 boundary is the *row*, not the format. Both round-trip through this app's own parser, which is what the
 tests assert rather than the text.
 
+**A run can also leave as a whole**, where what the task is *for* is one document rather than its
+outputs one at a time: the map report's HTML page and its MultiQC sections (§18.8). A task declares
+these as `documents` — each written from the `TaskResult` and nothing else, so the drawer and
+`chromosomix` make the same bytes — and the drawer offers each that is not a pipeline's file beside
+*copy provenance*, while `chromosomix` writes every one as `<file>.<task>.<document>.<extension>`
+after the outputs' own files.
+
 **Every** output additionally offers TSV, and that is the most important of them: it is what makes a
 number in a figure checkable by the person reading the figure. Where an output has both, the two are not
 alternatives — the BED is the file a tool reads, and the TSV is the same rows with the provenance above
@@ -8393,7 +8400,7 @@ exact stamp is that line's tooltip, so it is one hover from the words and identi
 
 ### 18.8 The catalogue
 
-Thirty-four tasks, in **four cards — 2D, 3D, 1D and Metagenome**, headed *2D tasks*, *3D tasks*,
+Thirty-six tasks, in **four cards — 2D, 3D, 1D and Metagenome**, headed *2D tasks*, *3D tasks*,
 *1D tasks* and *Metagenome*. The build order is in `docs/TASKS_PLAN.md`; what follows is what each
 one must be.
 
@@ -8416,13 +8423,13 @@ because a reader with no structure loaded has exactly one thing to do in it; *fi
 the other from a track. Five tasks are **dev features** (§29.3), absent rather than greyed while the
 switch is off and in every embed: the four metagenome tasks (`metacool`), and their card with them,
 and the 1D card's last, *Two sequences against each other* (`dotplot`); `chromosomix` lists and
-runs all thirty-four (§29.5). The 3D card's three — *Model from the map*, *Model versus map* and
+runs all thirty-six (§29.5). The 3D card's three — *Model from the map*, *Model versus map* and
 *Spatial tracks* — are specified beside the structures they make and read (§25.6), and the dot plot
 beside the view it draws (§28); every other task is below.
 
 **Which card each sits on**, in the registry's order: *2D tasks* — coverage and marginals, cis and
-trans per sequence, per-cell contact QC, P(s), Pairs QC, the scalogram, the 4C profile, diamond insulation, the
-directionality index, the HiC score, compartments, inter-arm alignment, loop calling, pattern
+trans per sequence, per-cell contact QC, P(s), Pairs QC, the map report, the scalogram, the 4C profile, diamond insulation, the
+directionality index, the HiC score, TAD annotation, compartments, inter-arm alignment, loop calling, pattern
 detection, reproducibility and aggregate peak analysis; *3D tasks* — model from the map, model versus map and
 spatial tracks; *1D tasks* — find a motif, restriction sites, peak calling, base composition, origin and terminus, the
 metaplot, track correlation, FRiP, signal by group, interval set overlap and the dot plot;
@@ -8539,6 +8546,68 @@ strand columns, the form asks for a `.pairs` — dropped on it, chosen through i
 (§18.2) — which is read for its records alone: no map changes and nothing is binned. A `.pairs`
 dropped on the app rather than on the form is *opened*, as a map. Absent, with a sentence, where there
 is nothing to count them from.
+
+*Map report* — the questions a library is judged by before anything is read off it, answered in one
+run and written as one page. It is a **composite** (§18.2): it requires *P(s)*, *Coverage and
+marginals* and *Cis and trans per sequence*, runs each at its own defaults but for what the report
+answers for it — P(s) over the whole genome, balanced as the file is, and coverage and cis and trans of
+the **raw** counts, since a balanced coverage is flat by construction and a share of balanced values is a
+share of something no read measured — and carries
+their outputs under ids of its own, so the numbers on the page are the numbers each task gives on its
+own and a run of any of them already in hand is reused. What it adds is two things no task computed:
+- **The library**, from one pass over the pixel table: every contact, cis and trans, those within one
+  bin, cis between bins at least 1, 2, 4, 10, 20 and 40 kb apart — pairtools' separations, measured
+  between bin starts, which the run says is coarse at a bin of more than a kilobase — and the pixels
+  with a count. Where the map was binned here from a `.pairs` (§3.7), `pairtools stats`' own counts over
+  its records stand above them: pairs, mapped, duplicates, unique, cis and trans, and cis by the same
+  separations, each to the record.
+- **The resolutions, coarsest to finest**: at every bin size, how the contacts spread over the bins —
+  how many bins, the mean and the median contacts per bin, the count at least 80 % of bins reach (the
+  order statistic at ⌊0.2 · bins⌋), and the share of bins that are empty and that hold under a tenth of
+  the median. **A contact is counted at both its ends**, as Juicer's `calculate_map_resolution.sh`
+  counts it — a contact within one bin twice for it — which is what makes a coarser bin's count the sum
+  of its finer ones exactly, so one pass at the finest bins answers every coarser one; and why these
+  are not the Coverage task's counts, which take a bin's contact with itself once. The sizes are the
+  file's own resolutions that are whole multiples of the base and the base doubled until it passes a
+  tenth of the longest sequence, so a file with one resolution has a ladder too: yeast at 1 kb climbs
+  to 128 kb, a human map at 1 kb to 16 Mb. **The base is the file's finest resolution** by default,
+  whatever is on screen — a ladder from the 10 kb a reader happened to be looking at says nothing of
+  the 1 kb the file holds — opened beside the map for the pass and closed after it (`JobContext.peer`,
+  with the map's own address handed in as `TaskInputs.self`); *ladder from this map's resolution*
+  reads the map instead. A map binned from a `.pairs` is its own base: its rungs were binned here, not
+  stored.
+
+**Numbers, never a verdict.** Rao et al. (2014) call a map's resolution the finest bin size at which
+80 % of bins hold at least 1,000 contacts, and every QC in the field has a cut of that kind. A cut is a
+threshold somebody chose — §18.9's argument about a half-good caller, applied to a pass or a fail — so
+the report gives what a cut is applied to, at every size, and draws no line: the column Rao's criterion
+reads is there, and a reader makes the cut at a glance down it. Nothing on the page is coloured good or
+bad.
+
+**It leaves as one HTML page** — every table and figure of the run in reading order, the run's notes
+and its provenance — **and as MultiQC's sections** from the shell (§18.7's whole-run files): the drawer
+offers *HTML report* beside *copy provenance*, and `chromosomix mapreport` writes the page and four
+custom-content files a pipeline's MultiQC collects by their `_mqc` suffix — the general statistics
+(contacts, the cis, trans and cis ≥ 10 kb shares, and the finest bin's median and 80 % count), the
+ladder as a table, the 80 % count against the bin size and P(s), each under the file's name, so a
+batch over a hundred libraries is one MultiQC report with a row each.
+
+**The page is a small document application**, written from the `TaskResult` alone with no DOM and no
+chart library (`analysis/report/page.ts`), so the drawer and the shell make the same bytes. It has a
+**tab per question** — *Overview* (the headline numbers as tiles, the ladder and P(s) as thumbnails
+that open their tabs, the run's notes), *Library* (where the contacts are, as one bar of every contact
+by how far apart its ends are, and the tables), *Resolutions*, *P(s)*, *Coverage*, *Cis & trans* and
+*About* (the notes and the provenance, with a copy) — each addressable as `#resolutions` and walked
+with the arrow keys. Its figures are SVG drawn there and **answer the pointer**: a guide and a card with
+every series' value at the nearest point, a legend whose chips hide and show a series, and each figure
+saved as SVG — its colours resolved, so it opens anywhere — or its numbers as TSV. Its tables sort by a
+click on a column, filter past a dozen rows, and save as TSV. Light and dark are each chosen for their
+surface, the system's unless the reader picks one, which is remembered where the browser allows; at a
+phone's width the tabs scroll and a figure keeps a width its words can be read at. It **fetches
+nothing**: one script, inline, whose every step is guarded, and without which every tab is laid out
+one after another with each value still an SVG `<title>`; and a print lays every tab out on a page of
+its own. A table past five hundred rows is printed to that many and says so, the TSV holding every one,
+and a sequence bar chart past eighty sequences is left to its table.
 
 *Scalogram*, which is P(s) with one summation left undone, and sits beside it in the card for that reason.
 The decay curve averages every bin of a sequence into one line and answers *how does this genome fold*;
@@ -8729,6 +8798,46 @@ is the one place the weights were never fitted, since cooler's balancer excludes
 diagonals from its own solve and then scales them anyway. A score carried by that cell is a score
 carried by the protocol — and a peak that is in the weights rather than in the counts looks exactly like
 a peak that is in the biology.
+
+*TAD annotation* — contact domains by Juicer's **Arrowhead** (Rao et al. 2014), and the domain
+caller the three readings above are not. Insulation, the directionality index and the HiC score read one
+number per bin and cut the sequence where it dips or changes sign, so the domains they give **tile** it:
+every stretch between two boundaries is a domain, nothing nests, and nothing is left over. Arrowhead
+reads the **corners** of the squares domains make on the map: each row of a window is turned into the
+arrowhead transform `(O[i, i−d] − O[i, i+d]) / (O[i, i−d] + O[i, i+d])` from seven bins out, the corner
+of every candidate square is scored by the mean and the mean sign of its upper and lower triangles less
+their variance, and the scores past a threshold are joined into connected components and each reported
+at its best. So a domain can sit inside another, two can share an edge, and a stretch with no structure
+has no domain at all. It is a **port** of `juicer_tools arrowhead` (§18.9) — `BlockBuster` and the
+classes beside it in `juicebox.tools.utils.juicer.arrowhead`, as `juicer_tools_1.22.01.jar` runs
+them (§18.9 says where the jar and today's source differ) — and every control on its form is one of Juicer's, under its meaning and at its
+default: the **window**, `-m` 2,000 bins, read as squares along the diagonal each half over the next;
+the **strict pass**, a summed variance at most 0.2 and a sign agreement of at least 0.5 in both
+triangles, whose domains are all kept; the **lenient pass**, from 0.4 down to 0 in steps of 0.1 until
+the sequence has a domain, with no variance asked, whose domains are added where they are **wider than
+60 bins** and **cross no edge of a strict one** — Juicer's rule, and why a domain the strict pass split
+from inside is not added round it. The domains near one another, within five bins and then ten, are
+merged into one at their furthest corner with their scores averaged, and listed as Juicer lists them:
+by the two variances summed, highest first. Read balanced where the file is, as Juicer reads a
+normalised map; a `.hic`'s weights are its own vectors (§3.6), so a run over a `.hic` reads the very
+counts `juicer_tools` reads, weighted as it weights them.
+
+**What comes out** is Juicer's `_blocks.bedpe` twice: as a **set of domains**, opening on the map as the
+corners of their squares (§18.7) — which is where a nested domain is seen to be nested — and as a
+**table** of Juicer's own columns, the corner score, `uVarScore`, `lVarScore`, `upSign` and `loSign`
+beside each domain's start, end and width in bins. A domain runs from `i · resolution` to
+`j · resolution`, the starts of its two corner bins, as Juicer writes it, clamped to the sequence's
+length where its last corner is the last bin. The run notes how many domains sit inside another.
+
+**The resolution is the map's.** Juicer picks 5 or 10 kb for itself from how deep the map is; here the
+map open is the resolution asked, as for every task, and a run outside 5–25 kb says what Arrowhead was
+tuned at and what its window came to in base pairs. On a budding-yeast map at 1 kb it finds the small
+domains a micro-C map shows, a quarter of them nested.
+
+**Its price** is a dense square per window — 2,001 × 2,001 at the default, about 16 MB of counts — and,
+while that window is scored, about a dozen copies of its upper triangle, most of them in doubles: about
+170 MB, let go before the next. The window is capped at 4,000 bins, past which one window's triangles would be most of
+a gigabyte.
 
 *4C profile* from an anchor — a sequence, a stretch of one, or on a metagenome a whole genome — output
 as a bigWig. On a cooler it is **cis by default with trans as a stated-cost toggle**, and optionally
@@ -9610,6 +9719,41 @@ Poisson test and the q-values are taken at, and a pixel a hair past the last rou
 dropped, as `dots` drops it; the tail is SciPy's `pdtrc`, Temme's asymptotic series included; and the
 clusters are sklearn's BIRCH down to the roundings the BLAS beneath it fuses, without which a pixel
 equidistant from two subclusters joins the other one.
+
+**Domain calling is the fourth, and the one insulation could not be.** *TAD annotation* is Arrowhead
+as `juicer_tools arrowhead` 1.22.01 computes it. Its golden is that program's own `_blocks.bedpe` over
+`demo/yeast/Yeast_hic.hic` — at 2 and 4 kb, raw and with the KR vectors the app reads that file
+balanced with, over the chromosomes whose vector holds a value — compared domain for domain and score
+for score, and equal to the last bit: 102 domains in four runs (`test/golden/analysis/arrowhead.json`,
+built by `scripts/make_arrowhead_golden.py`). And it is held to Juicer on a human map in the
+validation (`notebooks/validation.qmd` § 28): 4DN's in situ Hi-C of K562 at 10 kb, chromosomes 21 and
+22, read by range by both, where every one of Juicer's 177 domains raw and 200 with KR is called at
+the same corners with the same five scores — the first test with sequences longer than one window.
+The port does not improve on it, and four things a first reading takes for oversights are kept:
+- the last window of a sequence is sized from its end and read from where the slide left it, so it
+  holds the sequence's tail and then zeros, and its corners are placed from there;
+- a domain is reported at the starts of its two corner bins;
+- **a contact in a bin the balancer dropped is `NaN`** in Juicer's window — 1.22.01 divides by the
+  undefined weight and keeps the record — and its transform is 0, where an empty cell is 0 and its
+  transform beside a contact is −1; so the window is read as counts and weighted here, `NaN` only where
+  there is a contact, rather than read balanced, where a dropped bin's whole row and column are `NaN`;
+- **the lenient blocks are tried in the order a `java.util.HashSet` of them iterates**, for the step
+  that adds those not crossing a strict one — which decides which of two lenient domains in conflict
+  is kept, and which corners are averaged together after. The order is the jar's own: its
+  `HighScore.hashCode` is `7 · (i + j) · ⌊score + uVarScore + lVarScore + upSign + loSign⌋`, read
+  off its bytecode — the source in the Juicebox repository has since become an `Objects.hash`, and a
+  port of that source misplaced domains on every sequence longer than a window — and a hash of so
+  few values crowds buckets past eight entries, which `HashMap` turns into red-black trees ordered by
+  hash and then by `compareTo`, iterated root first. The table's growth and split, the trees, their
+  rotations and the root moved to the front of its bucket are all modelled (`JavaHashMap`), and held
+  to Java's own iteration of collision-heavy sets of up to three hundred. The table is sized as a
+  current JDK sizes a set copied from a list (JDK 19 changed it), which is what the references run on.
+  Two entries of one bucket with one hash and equal `compareTo` are ordered by
+  `System.identityHashCode`, which depends on everything the JVM hashed before, and are not modelled.
+
+Every sum is accumulated in the Java's order, in doubles, so on the same counts the scores are
+Juicer's to the last bit — which matters beyond tidiness, because the set's order is decided by the
+bits of the scores.
 
 **Contact-based reordering and scaffolding: the reference editor (§27).** ~~No contact-based contig
 reordering or scaffolding. It would only be useful if the reordering could be written back into a

@@ -79,6 +79,8 @@ the mean of 100, which is what is written.
 | 25 | Pairs statistics | yeast Hi-C contact list, 17.6 million pairs | `pairtools stats` 1.1.2 |
 | 26 | Restriction sites | yeast reference (R64-1-1), DpnII, 5 kb bins | `bioframe.digest` |
 | 27 | Pairs QC | § 25's contact list against § 26's sites, 5 kb | `pairtools restrict` and `pairtools stats` 1.1.2, `cooltools.coverage` |
+| 28 | TAD annotation | K562 Hi-C (.hic), chromosomes 21 and 22, 10 kb, raw and KR | `juicer_tools arrowhead` 1.22.01 |
+| 29 | Map report | yeast Micro-C, every stored resolution | `cooler` and numpy |
 
 **To render.** `npm run build:cli` at the repository root builds this checkout's `chromosomix`.
 yapc needs an environment of its own (numpy < 1.24; the recipe is in the yapc section of
@@ -634,10 +636,16 @@ DATASETS = [
     dict(data='Yeast genome sequence, S288C (R64-1-1)', accession='R64-1-1', source='Ensembl 112',
          url='https://ftp.ensembl.org/pub/release-112/fasta/saccharomyces_cerevisiae/dna/'
              'Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa.gz', md5='5ae49d2d22cd977abdd6b054b94c544d'),
+    dict(data='Juicer Tools 1.22.01, the reference of § 28', accession='juicer_tools_1.22.01', source='Aiden lab',
+         url='https://s3.amazonaws.com/hicfiles.tc4ga.com/public/juicer/juicer_tools_1.22.01.jar'),
 ]
 PATHS = {d['accession']: fetch(d['url'], d.get('name'), d.get('md5')) for d in DATASETS}
 MOUSE, YEAST, MM10, GENES = PATHS['4DNFIOZ1TRUS'], PATHS['GSE151553'], PATHS['mm10'], PATHS['refGene']
 CH128 = PATHS['CH128']
+JUICER = PATHS['juicer_tools_1.22.01']
+#: § 28's map, 4DN's in situ Hi-C of K562 (Rao et al. 2014) as Juicer wrote it: 6.7 GB, of which both
+#: tools read only chromosomes 21 and 22, by range, so it is named by its address and not fetched.
+K562_HIC = f'{FOURDN}/dcfcb009-f006-4ab8-a4c7-af72be58c12c/4DNFITUOMFUQ.hic'
 CHICKEN = [PATHS[a] for a in ('4DNFIH8L6WON', '4DNFITBCUX56', '4DNFIIML46E5')]
 ATAC = [PATHS[a] for a in ('4DNFIIY4QW2D', '4DNFITBRHVZE')]
 # mm10's index, by which every tool reads the sequence by range: made once, beside it.
@@ -678,6 +686,7 @@ PAIRTOOLS_VERSION = (program_version([PAIRTOOLS, '--version'], r'version ([\d.]+
 VERSIONS = {name: version(name) for name in (
     'cooler', 'cooltools', 'bioframe', 'chromosight', 'hicrep', 'domaincaller', 'pastis', 'coolpuppy',
     'deeptools', 'pyBigWig', 'biopython', 'pyfaidx', 'numpy', 'scipy', 'pandas')}
+JAVA_VERSION = program_version(['java', '-version'], r'version "([^"]+)"')
 PROGRAMS = {'bedtools': program_version([BEDTOOLS, '--version']),
             'seqkit': program_version([SEQKIT, 'version']),
             'Boost-HiC (GitHub)': commit(BOOSTHIC_DIR)}
@@ -688,12 +697,14 @@ TOOL_VERSIONS = {'chromosomix': APP_VERSION, 'yapc 0.1': f'{YAPC}, with idr {IDR
                  'pyBigWig, NumPy': f"{VERSIONS['pyBigWig']}, {VERSIONS['numpy']}",
                  'pyBigWig, SciPy': f"{VERSIONS['pyBigWig']}, {VERSIONS['scipy']}",
                  'pairtools': PAIRTOOLS_VERSION,
+                 'Juicer Tools': f'1.22.01, on Java {JAVA_VERSION}',
                  **VERSIONS, **PROGRAMS}
 show(pd.DataFrame([{'package': 'chromosomix', 'version': APP_VERSION},
                    *[{'package': k, 'version': v} for k, v in VERSIONS.items()],
                    *[{'package': k, 'version': v} for k, v in PROGRAMS.items()],
                    {'package': 'yapc (own environment)', 'version': f'{YAPC}, with idr {IDR} and numpy {YAPC_NUMPY}'},
-                   {'package': 'pairtools (own environment)', 'version': PAIRTOOLS_VERSION}]))
+                   {'package': 'pairtools (own environment)', 'version': PAIRTOOLS_VERSION},
+                   {'package': 'Juicer Tools', 'version': f'1.22.01, on Java {JAVA_VERSION}'}]))
 ```
 
 The RefSeq annotation as transcripts: each one's extent over its exons, on its sequence and strand.
@@ -4649,6 +4660,175 @@ record(PQ_ANALYSIS, "§ 25's contact list against § 26's DpnII sites, 5 kb",
        apps=['pairsqc'],
        refs=['cooler-cload', 'pairtools-restrict-top', 'pairtools-restrict-bottom', 'restriction-reference',
              'cooltools-coverage-sites', 'pairsqc-pairtools-stats'])
+```
+
+## 28 · TAD annotation (Juicer Arrowhead)
+
+Contact domains as `juicer_tools arrowhead` calls them, by the port of its `BlockBuster` in
+`chromosomix arrowhead`: each window of 2,000 bins along the diagonal turned into the arrowhead
+transform, every corner scored by its two triangles' means, signs and variances, a strict pass and a
+lenient one, and the corners near one another merged. The map is 4DN's in situ Hi-C of K562 (Rao et al.
+2014, 4DNFITUOMFUQ) as Juicer wrote it, a `.hic` both read by range from 4DN's bucket; chromosomes 21
+and 22 at 10 kb, which is the resolution Juicer picks for a map of this depth, and each longer than one
+of Arrowhead's 2,000-bin windows. Twice: on the raw counts, which both read as the same float32 counts,
+and balanced, where Juicer is given the KR vector and chromosomix reads the file's own preferred vector
+— SCALE, then KR (`src/hic/HicFile.ts`), and 4DN's pipeline wrote no SCALE. Juicer Tools 1.22.01 runs
+on Java 21: one step walks a `HashSet` whose order changed in JDK 19, and the port follows a current
+JDK.
+
+| | chromosomix | Juicer Tools |
+|---|---|---|
+| window | `--matrixSize 2000` (default) | `-m 2000` |
+| thresholds | variance 0.2, sign 0.5; lenient 0.4 to 0 by 0.1, wider than 60 bins (defaults) | its `BlockBuster` defaults |
+| counts | `--no-balance`; balanced (default) | `-k NONE`; `-k KR` |
+| compared | each domain's corners, and its five scores, to the digits Juicer prints | |
+
+```{python}
+AH = WORK / 'arrowhead'
+AH_RES = 10_000
+AH_CHROMS = ['21', '22']
+#: Each variant: Juicer's normalisation and chromosomix's flags for the same counts.
+AH_VARIANTS = {'raw': ('NONE', ['--no-balance']), 'balanced': ('KR', [])}
+for variant, (norm, flags) in AH_VARIANTS.items():
+    mr('arrowhead', f'{K562_HIC}::/resolutions/{AH_RES}', '--sequences', ','.join(AH_CHROMS), *flags,
+       out=AH / f'app-{variant}', name=f'arrowhead-{variant}', analysis='TAD annotation', label=variant)
+    reference(f'juicer-arrowhead-{variant}', 'TAD annotation', 'Juicer Tools',
+              ['java', '-Xmx8g', '-jar', JUICER, 'arrowhead', '-c', ','.join(AH_CHROMS), '-m', '2000',
+               '-r', str(AH_RES), '-k', norm, '--threads', '1', K562_HIC, OUT],
+              out=AH / f'juicer-{variant}', made=AH / f'juicer-{variant}' / f'{AH_RES}_blocks.bedpe', label=variant)
+
+AH_SCORES = ['score', 'uVarScore', 'lVarScore', 'upSign', 'loSign']
+
+
+def juicer_blocks(path):
+    """Juicer's `_blocks.bedpe`, by position: its header names `score` twice, and the five scores are
+    always a row's last five."""
+    rows = []
+    for line in Path(path).read_text().splitlines():
+        if line.startswith('#') or not line.strip():
+            continue
+        fields = line.split('\t')
+        rows.append({'sequence': fields[0], 'start': int(fields[1]), 'end_juicer': int(fields[2]),
+                     **{key: float(value) for key, value in zip(AH_SCORES, fields[-5:])}})
+    return pd.DataFrame(rows)
+
+
+AH_RESULTS = {}
+for variant in AH_VARIANTS:
+    # A sequence's name is a name, `21` included, on both sides of the merge.
+    mine = table(one(AH / f'app-{variant}', '*.arrowhead-table.tsv')).astype({'sequence': str})
+    theirs = juicer_blocks(AH / f'juicer-{variant}' / f'{AH_RES}_blocks.bedpe')
+    # Juicer writes a domain to the start of its last corner bin, and chromosomix clamps that to the
+    # sequence: an end is the same, or chromosomix's is short of Juicer's by less than a bin, which only a
+    # domain ending on a sequence's last bin can be. Nested domains share starts, so a pair is matched on
+    # its start and its end both.
+    pairs = mine.merge(theirs, on=['sequence', 'start'], suffixes=('_app', '_juicer'))
+    pairs = pairs[(pairs['end'] == pairs['end_juicer'])
+                  | ((pairs['end'] < pairs['end_juicer']) & (pairs['end_juicer'] - pairs['end'] < AH_RES))]
+    paired = pairs.drop_duplicates(['sequence', 'start', 'end'])
+    ends = pd.Series(True, index=paired.index)
+    only = (len(mine) - len(paired)) + (len(theirs) - paired[['sequence', 'start', 'end_juicer']].drop_duplicates().shape[0])
+    worst = {key: float(np.abs(paired[f'{key}_app'] - paired[f'{key}_juicer']).max()) if len(paired) else np.nan
+             for key in AH_SCORES}
+    AH_RESULTS[variant] = dict(mine=mine, theirs=theirs, paired=paired, only=int(only), ends=int(ends.sum()),
+                               worst=worst)
+# chromosomix writes a score to six decimals.
+AH_EXACT = all(r['only'] == 0 and r['ends'] == len(r['paired']) and len(r['paired']) > 0
+               and max(r['worst'].values()) <= rounded(6) for r in AH_RESULTS.values())
+measures({
+    **{f'{v}: domains, chromosomix / Juicer': f"{len(r['mine']):,} / {len(r['theirs']):,}" for v, r in AH_RESULTS.items()},
+    **{f'{v}: same corners; in one only': f"{len(r['paired']):,}; {r['only']}" for v, r in AH_RESULTS.items()},
+    **{f'{v}: max |difference|, five scores': ', '.join(f'{k} {x:.1e}' for k, x in r['worst'].items())
+       for v, r in AH_RESULTS.items()},
+    'chromosomix, as it noted (balanced)': ' '.join(NOTES['arrowhead-balanced']),
+    'Java': JAVA_VERSION,
+})
+```
+
+```{python}
+#| label: fig-arrowhead
+#| fig-cap: "TAD annotation, K562 Hi-C at 10 kb, balanced. a, the corner score of every domain both call; b, the domains of chromosome 21 as the triangles they span on the map, chromosomix's above the axis and Juicer's below it."
+balanced = AH_RESULTS['balanced']
+TEXT['ah_n'] = f"{len(balanced['paired']):,}"
+TEXT['ah_raw_n'] = f"{len(AH_RESULTS['raw']['paired']):,}"
+TEXT['ah_only'] = f"{sum(r['only'] for r in AH_RESULTS.values())}"
+TEXT['ah_worst'] = f"{max(max(r['worst'].values()) for r in AH_RESULTS.values()):.1e}"
+fig = plt.figure(figsize=(11, 6.4), layout='constrained')
+grid = fig.add_gridspec(2, 2, width_ratios=[1, 2.2])
+ax = fig.add_subplot(grid[:, 0])
+ax.scatter(balanced['paired']['score_juicer'], balanced['paired']['score_app'], s=10, color=APP_COLOUR, alpha=0.7, lw=0)
+identity(ax, balanced['paired']['score_juicer'].min(), balanced['paired']['score_juicer'].max())
+ax.set(xlabel='Juicer, corner score', ylabel='chromosomix, corner score', title='a  corner scores')
+for row, (who, frame, colour, sign) in enumerate([('chromosomix', balanced['mine'], APP_COLOUR, 1),
+                                                   ('Juicer', balanced['theirs'], REF, -1)]):
+    ax = fig.add_subplot(grid[row, 1])
+    on = frame[frame['sequence'] == AH_CHROMS[0]]
+    stop = on['end' if who == 'chromosomix' else 'end_juicer']
+    for start, end in zip(on['start'], stop):
+        ax.plot([start / 1e6, (start + end) / 2e6, end / 1e6], [0, sign * (end - start) / 2e6, 0], color=colour, lw=1)
+    ax.axhline(0, color=INK2, lw=0.8)
+    ax.set(xlabel=f'{AH_CHROMS[0]} (Mb)', ylabel='half the span (Mb)',
+           title=f"{'b' if row == 0 else ''}  {who}, {len(on):,} domains")
+drawn('fig-arrowhead')
+```
+
+`{python} TEXT['ah_n']` domains balanced and `{python} TEXT['ah_raw_n']` raw at the same corners
+(`{python} TEXT['ah_only']` in one only), and every one of the five scores within
+`{python} TEXT['ah_worst']`, which is the six decimals chromosomix writes.
+
+```{python}
+record('TAD annotation', 'K562 Hi-C (.hic), chromosomes 21 and 22, 10 kb, raw and KR', 'Juicer Tools 1.22.01',
+       f"{TEXT['ah_n']} domains (balanced) and {TEXT['ah_raw_n']} (raw), the same corners; scores within "
+       f"{TEXT['ah_worst']}, the digits written",
+       'Identical (to the digits written)' if AH_EXACT else 'Differs',
+       apps=['arrowhead-raw', 'arrowhead-balanced'], refs=['juicer-arrowhead-raw', 'juicer-arrowhead-balanced'])
+```
+
+## 29 · Map report: the resolution ladder (cooler)
+
+The map report's own numbers. At each resolution, how a map's contacts spread over its bins — how many
+bins, the mean and the median contacts per bin, the count 80 % of bins reach, and the empty and nearly
+empty shares — with a contact counted at both its ends, as Juicer's `calculate_map_resolution.sh`
+counts it. chromosomix counts the ends once, at the file's finest resolution, and sums them to every
+coarser one. The reference reads each resolution the `.mcool` stores, as `cooler zoomify` coarsened it,
+and counts each one's ends from its own pixel table with numpy (`map_resolution.py`, below). The map is
+the yeast Micro-C of § 4.
+
+| | chromosomix | cooler and numpy |
+|---|---|---|
+| command | `mapreport`, the ladder from the file's finest resolution (default) | every stored resolution's own pixels |
+| compared | at each resolution the file stores: bins, mean, median, the 80 % count and the two shares | |
+
+```{python}
+MR = WORK / 'mapreport'
+mr('mapreport', f'{rel(YEAST)}::/resolutions/800', out=MR / 'app', name='mapreport', analysis='Map report')
+reference('map-resolution', 'Map report', 'cooler', [PYTHON, script('map_resolution'), YEAST, OUT],
+          out=MR / 'cooler.tsv')
+mr_app = table(one(MR / 'app', '*.mapreport.report-resolutions.tsv'))
+mr_ref = pd.read_csv(MR / 'cooler.tsv', sep='\t')
+mr_both = mr_app.merge(mr_ref, on='binsize', suffixes=('_app', '_ref'))
+MR_COLUMNS = ['bins', 'mean', 'median', 'reached80', 'empty', 'belowTenthMedian']
+#: chromosomix writes the mean and the median to one decimal, the shares to four, the counts whole.
+MR_DIGITS = {'bins': 0, 'mean': 1, 'median': 1, 'reached80': 0, 'empty': 4, 'belowTenthMedian': 4}
+mr_worst = {key: float(np.abs(mr_both[f'{key}_app'] - mr_both[f'{key}_ref']).max()) for key in MR_COLUMNS}
+MR_EXACT = len(mr_both) == len(mr_ref) and all(mr_worst[k] <= rounded(MR_DIGITS[k]) for k in MR_COLUMNS)
+TEXT['mr_n'] = f'{len(mr_both)}'
+TEXT['mr_sizes'] = ', '.join(f'{b:,}' for b in sorted(mr_both['binsize']))
+measures({
+    'resolutions the file stores, compared': f"{len(mr_both)} of {len(mr_ref)} ({TEXT['mr_sizes']} bp)",
+    'rows chromosomix reports': f'{len(mr_app)} (the file’s and its finest doubled)',
+    **{f'{k}, max |difference|': f'{x:.1e}' for k, x in mr_worst.items()},
+})
+show(mr_both[['binsize', *[f'{k}_{s}' for k in MR_COLUMNS for s in ('app', 'ref')]]])
+```
+
+At each of the `{python} TEXT['mr_n']` resolutions the file stores, chromosomix's sums of its finest
+bins are the counts cooler's own coarsening gives, to the digits written.
+
+```{python}
+record('Map report', 'yeast Micro-C, every stored resolution', f"cooler {VERSIONS['cooler']}, numpy",
+       f"{TEXT['mr_n']} resolutions, bins, mean, median, 80 % count and shares, the digits written",
+       'Identical (to the digits written)' if MR_EXACT else 'Differs', apps=['mapreport'], refs=['map-resolution'])
 ```
 
 ## Summary

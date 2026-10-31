@@ -1303,6 +1303,9 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
       // `file:` URL, and opened by `openSource` below.
       ...(opened.stats === undefined || opened.stats === null ? {} : { pairsStats: opened.stats }),
       ...(opened.binned === true ? { mapSource: specOf(path) } : {}),
+      // The map itself, by address, for the report that reads its finest rung:
+      // a path, or an address, with the group it was opened at.
+      ...(opened.binned === true ? {} : { self: { label: fileNameOf(path), uri: path, source: specOf(path) } }),
       ...(options.peers.length === 0 ? {} : { peers: peersOf(options.peers) }),
       // This map by its base name too, as `peersOf` names the others, so the
       // matrix's axes and the tables name every file the same way.
@@ -1563,12 +1566,14 @@ async function runChain(
       const answered = upstreamParamsOf(node, id, nodeParams)
       if (answered === null) continue
       // Its own defaults under those answers, and balancing as the framing reads
-      // the file — which a required step's form would have set from the file too.
+      // the file — which a required step's form would have set from the file too —
+      // unless the task answered it: the map report's library is the raw counts
+      // however the map is read, and `AnalysisRunner.plan` keeps that answer too.
       const requiredParams = withDerived(
         required,
         Object.fromEntries(
           Object.entries({ ...defaultParams(required.params), ...answered }).filter(
-            ([key]) => !required.params.some((spec) => spec.key === key && paramDerived(spec)),
+            ([key]) => key in answered || !required.params.some((spec) => spec.key === key && paramDerived(spec)),
           ),
         ),
         framing.balance,
@@ -1912,6 +1917,13 @@ async function writeOutputs(
       )
       await put(`${stem}.bw`, new Uint8Array(await blob.arrayBuffer()))
     }
+  }
+  // **The run as a whole**, where the task leaves it so (§18.7): the map
+  // report's page, and the sections a pipeline's MultiQC collects by their
+  // `_mqc` suffix — each named after the file, which is the sample MultiQC
+  // reports it under.
+  for (const document of taskById(result.provenance.task)?.documents ?? []) {
+    await put(`${base}.${result.provenance.task}.${document.id}.${document.extension}`, document.write(result, base))
   }
   return written
 }
