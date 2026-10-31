@@ -235,6 +235,13 @@
   ],
   "pulls": [
     {
+      "number": 149,
+      "commit": "9668f43",
+      "title": "Add TAD annotation (Juicer's Arrowhead, ported) and the map report",
+      "branch": "ccr-4a3c2bae-zb0av4",
+      "date": "2026-10-31T09:17:41Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
