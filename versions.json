@@ -235,6 +235,13 @@
   ],
   "pulls": [
     {
+      "number": 151,
+      "commit": "3d48cef",
+      "title": "Service worker: answer only the app's own address, so llms.txt and a 404 open as themselves (§11)",
+      "branch": "js/adoring-shannon-pg14tt",
+      "date": "2026-10-31T18:10:43Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
