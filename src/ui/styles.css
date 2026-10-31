@@ -5815,26 +5815,6 @@ canvas.is-frozen {
   margin-top: 0;
 }
 
-/* What the site sends, and the switch (§31), closing the Overview tab: set off
-   by a rule, since it is a different kind of answer — what this page does
-   besides what it shows. */
-.about-telemetry {
-  border-top: 1px solid var(--border);
-  margin-top: 0.9rem;
-}
-
-.about-telemetry-switch {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 0.75rem;
-  margin: 0.4rem 0 0.2rem;
-}
-
-.about-telemetry-switch .hint {
-  margin: 0;
-}
-
 /* A link in a sentence or a list of names: the prose's own type in the accent,
    where `.link` is monospace for an address. */
 .about-link {

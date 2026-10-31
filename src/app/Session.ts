@@ -224,7 +224,6 @@ import { SessionCompare, withoutSecond } from './SessionCompare'
 import { SessionDeck } from './SessionDeck'
 import { SessionRouter } from './SessionRouter'
 import { allowHandles, handleKey, hasHandle, knownPaths, rememberHandle, subscribeGrants } from '../state/handles'
-import { recordTelemetry } from '../telemetry'
 import { grantFor } from '../ui/chooseFiles'
 
 /**
@@ -2257,9 +2256,6 @@ export class Session {
     // An empty tab takes the file's name as its own, as {@link addRemote}'s
     // does. Read before anything below replaces what the tab holds.
     const wasEmpty = this.file === null && this.assembly === null
-    // Which file was open before, so another resolution of the same one is not
-    // counted as a second file opened (§31).
-    const openedBefore = this.file === null ? null : splitUri(this.file.uri).path
     // …and a genome being browsed as tracks, whose declarations a map of it
     // takes once it has opened (§8.15).
     const browsed = this.file === null && this.assembly !== null ? this.sessionKey() : null
@@ -2406,9 +2402,6 @@ export class Session {
       // A different file, so whatever was parked belongs to a map that is being
       // let go of. `hideMap` is about *this* file and nothing else.
       this.parkedMap = null
-      if (openedBefore !== splitUri(uri).path) {
-        recordTelemetry({ name: 'open', what: 'map', format: info.layout.kind, from: source.kind })
-      }
       this.file = {
         uri,
         info,
@@ -8609,7 +8602,6 @@ export class Session {
     button.addEventListener('click', () => {
       button.disabled = true
       void allowHandles(uri).then((file) => {
-        recordTelemetry({ name: 'allow', outcome: file === null ? 'refused' : 'allowed' })
         if (file !== null || this.destroyed) return
         if (hasHandle(uri)) {
           // Dismissed rather than refused: the grant is still there to ask about.
@@ -8649,9 +8641,6 @@ export class Session {
   }
 
   private showError(err: unknown, uri?: string, source?: SourceSpec): void {
-    // Telemetry (§31): the refusal's code, never its message, which names the
-    // file. Anything without one is sent as `other`.
-    recordTelemetry({ name: 'error', code: err instanceof ViewerError ? err.code : 'other' })
     const entries =
       err instanceof ViewerError && Array.isArray(err.detail['entries'])
         ? (err.detail['entries'] as string[])

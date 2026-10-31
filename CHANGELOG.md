@@ -169,6 +169,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   still called balanced at 1e-5: no caption that said balanced now says it stopped before
   convergence.
 
+### Removed
+
+- **Telemetry, all of it (§1, §11, §13, §18.10; §31 is gone).** The site sends nothing on its own
+  behalf any more: no visit, no format opened, no task, error, install or *allow access* counted, and
+  no request to Umami. About's *Telemetry* section and its switch go, and so does the landing page's
+  clause about it, whose privacy note says again that there is no upload, no account and no server;
+  so do `src/telemetry.ts`, the `TELEMETRY_ENDPOINT` and `TELEMETRY_WEBSITE` build variables and the
+  deploy's use of them. C1 is again *no server-side component of any kind*. *forget everything*
+  keeps no key back: a `chromosomix:telemetry` left by an earlier version is swept with the rest, and
+  nothing reads it. The gallery script is now `scripts/ui-allow.mjs`, and drives *allow access*
+  alone.
+
 ### Fixed
 
 - **A task's required steps keep a balancing the task answered for them, from the shell as in the app
