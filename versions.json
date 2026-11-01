@@ -1,6 +1,13 @@
 {
-  "latest": "e428aa3",
+  "latest": "a51d315",
   "versions": [
+    {
+      "commit": "a51d315",
+      "version": "0.18.0",
+      "date": "2026-11-01T16:54:58+01:00",
+      "subject": "Notebooks: R scripts to draw the timing and validation figures",
+      "tag": ""
+    },
     {
       "commit": "e428aa3",
       "version": "0.18.0",
@@ -132,13 +139,6 @@
       "version": "0.16.0",
       "date": "2026-10-25T20:09:41+01:00",
       "subject": "Validation § 24: name its peaks' columns itself, not with § 5's `key` (#140)",
-      "tag": ""
-    },
-    {
-      "commit": "8805ad3",
-      "version": "0.16.0",
-      "date": "2026-10-24T22:26:40+02:00",
-      "subject": "Jupyter and R widgets: the viewer in a notebook cell, R Markdown, Quarto and Shiny (§21.5) (#133)",
       "tag": ""
     },
     {
