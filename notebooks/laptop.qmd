@@ -1,6 +1,6 @@
 ---
 title: "chromosomix on a laptop"
-subtitle: "Time and memory of genome-wide analyses, run on the command line and in the app, on the machine that renders this page"
+subtitle: "Time and memory of genome-wide analyses, run on the command line and in the app in three browsers, on the machine that renders this page"
 format:
   html:
     toc: true
@@ -26,7 +26,8 @@ from rendered import Render
 
 R = Render('laptop')
 print(R.head(also=f"The same analyses against the packages they reproduce: {R.anchor('timing', 'the timings')}. "
-                  "Every analysis measured, with the machine, is a table to download under the results."))
+                  "Every run measured, on the command line and in each browser, with the machine, is a table to "
+                  "download under the results."))
 ```
 
 How long does an analysis take in chromosomix, and how much memory does it need, when it is run over a
@@ -34,27 +35,34 @@ whole genome on an ordinary laptop? This notebook answers that for 23 analyses o
 from 69 million to 1.08 billion contacts, a yeast Micro-C map down to 50 bp, and ATAC-seq tracks and
 sequence over the whole mouse genome.
 
-Each analysis is run twice. **On the command line**, through `chromosomix`, the command-line form of
-the app's Analysis panel: it runs the same code the browser runs, and as a process of its own its time
-and memory are measured by the operating system — the wall-clock time from start to finish, the CPU
-time, and the peak memory (the largest resident set the process reached). **In the app**, in headless
-Chromium, as a reader runs it (`notebooks/scripts/laptop.mjs`): the files the command names dropped on
-the landing page, the task opened from the Analysis panel, every flag of the command set in its form,
-and **run** pressed. There the time is the app's own, from the job's dispatch to its result, as its
-console records it; the CPU time and the memory are the page's, sampled from the press to the end.
+Each analysis is run on the command line and then in the app, in each of three browsers. **On the
+command line**, through `chromosomix`, the command-line form of the app's Analysis panel: it runs the
+same code the browser runs, and as a process of its own its time and memory are measured by the
+operating system — the wall-clock time from start to finish, the CPU time, and the peak memory (the
+largest resident set the process reached). **In the app**, as a reader runs it
+(`notebooks/scripts/laptop.mjs`), in the three browser engines Playwright drives headless: Chromium,
+which Chrome and Edge are built on; Firefox; and WebKit, Safari's engine. In each, the files the command
+names are dropped on the landing page, the task opened from the Analysis panel, every flag of the
+command set in its form, and **run** pressed. There the time is the app's own, from the job's dispatch
+to its result, as its console records it; the CPU time and the memory are the page's, sampled from the
+press to the end. WebKit here is Playwright's build of Safari's engine rather than Safari, which cannot
+be run headless or driven so; on a Mac it is the nearest a script comes to it.
 
 The block above says which machine this page was rendered on. The page published at
 <https://chromosomix.app/laptop/> is rendered by hand, on a laptop, and committed as
 `notebooks/laptop.html`; `.github/workflows/notebooks.yml` renders it on a GitHub runner with every
 release too, but keeps that render as the run's artifact and never publishes it. To measure your own,
 render it from the root of a clone, on a laptop that is plugged in and otherwise idle, with the app and
-the command line built from one commit and a Chromium for Playwright — the one the timings pin
-(`notebooks/viewers`), or one already installed, named in `LAPTOP_CHROMIUM` or found under
-`PLAYWRIGHT_BROWSERS_PATH`:
+the command line built from one commit and the three browsers of the Playwright the timings pin
+(`notebooks/viewers`) — on Linux, `playwright install --with-deps`, for the system libraries Firefox
+and WebKit need. A Chromium already installed can stand in for Playwright's, named in
+`LAPTOP_CHROMIUM` or found under `PLAYWRIGHT_BROWSERS_PATH`; Firefox and WebKit are Playwright's own
+builds. `LAPTOP_BROWSERS` names the browsers the app is run in, of `chromium,firefox,webkit`, all three
+unless it says, and the page is of those it names.
 
 ```bash
 npm ci && npm run build && npm run build:cli
-npm ci --prefix notebooks/viewers && npx --prefix notebooks/viewers playwright install chromium
+npm ci --prefix notebooks/viewers && npx --prefix notebooks/viewers playwright install chromium firefox webkit
 pip install jupyter pandas matplotlib pyfaidx
 quarto render notebooks/laptop.qmd
 ```
@@ -64,10 +72,11 @@ The page is one file and carries its table and its stamp inside it, so committin
 
 The data (about 13.7 GB) are downloaded once into `notebooks/work/laptop/data/`; files that
 `validation.qmd` has already downloaded are linked rather than downloaded again. The analyses take about
-20 minutes on the command line and about as long again in the app, with a Chromium started and the files
-opened for each. Each result is saved to `notebooks/work/laptop/timings.tsv` as soon as it is measured
-on both, so a second render reads the table instead of running everything again; set `REDO` below to
-start over.
+20 minutes on the command line and about as long again in Chromium, with a browser started and the files
+opened for each; Firefox and WebKit each take their own, which the results give. Each result is saved to
+`notebooks/work/laptop/timings.tsv` as soon as it is measured, on the command line or in one browser, so
+a second render reads the table instead of running everything again, and one with a browser added runs
+that browser alone; set `REDO` below to start over.
 
 ```{python}
 import hashlib
@@ -84,6 +93,7 @@ import tempfile
 import time
 import urllib.request
 from pathlib import Path
+from statistics import geometric_mean
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
@@ -101,10 +111,17 @@ WORK = REPO / 'notebooks' / 'work' / 'laptop'
 DATA = WORK / 'data'
 TIMINGS = WORK / 'timings.tsv'
 DATA.mkdir(parents=True, exist_ok=True)
+#: The browsers the app is run in, as Playwright names them and as the page does: LAPTOP_BROWSERS, else all three.
+NAMES = {'chromium': 'Chromium', 'firefox': 'Firefox', 'webkit': 'WebKit'}
+BROWSERS = [one.strip() for one in os.environ.get('LAPTOP_BROWSERS', ','.join(NAMES)).split(',') if one.strip()]
+if not BROWSERS or set(BROWSERS) - set(NAMES) or len(set(BROWSERS)) < len(BROWSERS):
+    raise ValueError(f"LAPTOP_BROWSERS is {os.environ.get('LAPTOP_BROWSERS')!r}: name each browser once, "
+                     f"of {', '.join(NAMES)}.")
 #: A Chromium to drive: LAPTOP_CHROMIUM, else the one under PLAYWRIGHT_BROWSERS_PATH, else Playwright's own.
+#: Firefox and WebKit are always Playwright's own.
 _browsers = os.environ.get('PLAYWRIGHT_BROWSERS_PATH', '')
-CHROMIUM = os.environ.get('LAPTOP_CHROMIUM') or (
-    str(Path(_browsers) / 'chromium') if _browsers and (Path(_browsers) / 'chromium').is_file() else None)
+EXECUTABLES = {'chromium': os.environ.get('LAPTOP_CHROMIUM') or (
+    str(Path(_browsers) / 'chromium') if _browsers and (Path(_browsers) / 'chromium').is_file() else None)}
 
 for built, how in ((CLI, 'npm run build:cli'), (APP / 'index.html', 'npm run build')):
     if not built.exists():
@@ -119,10 +136,15 @@ _app = re.search(r'const CACHE = "([^"]*)"', (APP / 'sw.js').read_text()) if (AP
 if _cli is None or _app is None or _app[1] != '-'.join(filter(None, ('chromosomix', *_cli.groups()))):
     raise RuntimeError(f"dist/ is {_app[1] if _app else 'not the site build'} and dist-cli/ is {VERSION}: "
                        'run `npm run build && npm run build:cli` at the repository root, so both are this checkout.')
-_chromium = subprocess.run(['node', str(DRIVER), '--version', *([CHROMIUM] if CHROMIUM else [])],
-                           capture_output=True, text=True)
-if _chromium.returncode:
-    raise RuntimeError(f'No Chromium to drive:\n{_chromium.stderr[-2000:]}')
+# Each browser launched once before any is timed, for its version and to know it is there.
+VERSIONS = {}
+for _browser in BROWSERS:
+    _launched = subprocess.run(['node', str(DRIVER), '--version', _browser, *filter(None, [EXECUTABLES.get(_browser)])],
+                               capture_output=True, text=True)
+    if _launched.returncode:
+        raise RuntimeError(f'No {NAMES[_browser]} to drive: install it with `npx --prefix notebooks/viewers playwright '
+                           f'install {_browser}`, or leave it out of LAPTOP_BROWSERS.\n{_launched.stderr[-2000:]}')
+    VERSIONS[_browser] = _launched.stdout.strip()
 ```
 
 ## The machine
@@ -134,10 +156,10 @@ MACHINE = {
     'memory': f"{R.machine['memory_gb']:.0f} GB",
     'system': platform.platform(),
     'node': subprocess.run(['node', '--version'], capture_output=True, text=True).stdout.strip(),
-    'chromium': _chromium.stdout.strip(),
     'chromosomix': VERSION.removeprefix('chromosomix '),
 }
-pd.DataFrame(MACHINE.items(), columns=['', 'this machine']).style.hide(axis='index')
+pd.DataFrame([*MACHINE.items(), *((NAMES[one].lower(), VERSIONS[one]) for one in BROWSERS)],
+             columns=['', 'this machine']).style.hide(axis='index')
 ```
 
 ## The data
@@ -355,23 +377,36 @@ def session(name, args):
     return plan
 ```
 
+Each analysis is run on the command line and then in each browser, one after another, and the first of
+them to read a file would find it on disk where the others find it in the system's memory: an 8.3 GB map
+read from disk took the run that read it first more than twice as long. So before each run, on the
+command line or in a browser, every file the command names is read through once, and every run starts
+from files the system holds in memory, as a reader's do once they have opened them.
+
 On the command line, each command runs as a process of its own, and `os.wait4` returns what the system
 counted of it: its CPU time, user and system, and its peak resident memory (`ru_maxrss`, which macOS
 gives in bytes and Linux in kilobytes).
 
-In the app, each command runs in a Chromium of its own, launched for it and closed after it, so that
-nothing an earlier run read or drew is in what this one holds. Once the files are open and the form is
-set, the page is left until Chromium is idle — what the app starts by itself once a map is open is over
-before the run — and then **run** is pressed. Until the console records the run's end, Chromium's
-processes are sampled five times a second: their CPU times as Chromium counts them, their resident sets
-as `ps` does. The page's are its renderer's, whose threads are its workers, where the app computes and
-holds what it reads; its CPU time is what they spent between the press and the end, and its peak memory
-their largest resident set — sampled, so a peak shorter than a fifth of a second can be missed, where
-`ru_maxrss` cannot miss one. Chromium's other processes — the browser itself, which reads the dropped
-files for the page, its GPU process and its network and storage services — are counted apart, as
-`chromium_cpu_s` and `chromium_peak_mb` in the table under the results, the page's included. Headless
-Chromium draws WebGL in software (SwiftShader) and composites the page in software too, where a reader's
-browser has a GPU for both.
+In the app, each command runs in each browser in turn, a browser of its own, launched for it and closed
+after it, so that nothing an earlier run read or drew is in what this one holds. Once the files are open
+and the form is set, the page is left until the map is drawn, the app has measured which of its
+sequences are circles, and the browser is idle — what the app starts by itself once a map is open is
+over before the run — and then **run** is pressed. A page waiting on the disk spends no CPU, and the
+measure of the circles reads at a few percent of a core, so neither is told apart from idle by the CPU:
+the app's own word that it has drawn a map, and that it has measured its circles, is waited for. Until the console records the run's
+end, the browser's processes are sampled five times a second, the same way in the three: their CPU times
+and resident sets as the operating system counts them, from `/proc` on Linux and `ps` on macOS. The
+page's are the processes that render pages — Chromium's renderers, Firefox's web content processes,
+WebKit's web processes — whose threads are its workers, where the app computes and holds what it reads;
+its CPU time is what they spent between the press and the end, and its peak memory their largest
+resident set — sampled, so a peak shorter than a fifth of a second can be missed, where `ru_maxrss`
+cannot miss one. The browser's other processes — the browser itself, which reads the dropped files for
+the page, and its GPU, network and storage processes — are counted apart, as `all_cpu_s` and
+`all_peak_mb` in the table under the results, the page's included. Each draws as it does headless:
+Chromium draws WebGL in software (SwiftShader) and composites the page in software too; Firefox and
+WebKit draw as Playwright launches them, Firefox allowed WebGL whatever its blocklist says of the
+machine's graphics. A reader's browser has a GPU for all of it. Each run leaves what it was handed, what
+it measured and a picture of the page at its end in `notebooks/work/laptop/app/<browser>/<name>/`.
 
 ```{python}
 def on_the_command_line(name, args):
@@ -392,50 +427,94 @@ def on_the_command_line(name, args):
     return {'wall_s': wall, 'cpu_s': usage.ru_utime + usage.ru_stime, 'peak_mb': peak}
 
 
-def in_the_app(name, args):
-    """One command run in the app: its time, the page's CPU seconds and peak memory in MB, all of
-    Chromium's, and the line its console wrote — or, where it did not finish, why."""
-    out = WORK / 'out' / name / 'app'
-    out.mkdir(parents=True, exist_ok=True)
-    plan = {**session(name, args), 'app': str(APP), 'data': str(WORK), 'out': str(out), 'executablePath': CHROMIUM}
-    (out / 'plan.json').write_text(json.dumps(plan, indent=1))
-    (out / 'result.json').unlink(missing_ok=True)
-    driven = subprocess.run(['node', str(DRIVER), str(out / 'plan.json'), str(out / 'result.json')],
+#: What a run in the app measures beside the command line's three: the page before the run, the opening
+#: of its files, and every process of the browser.
+APP_ONLY = ['rest_mb', 'open_s', 'all_cpu_s', 'all_peak_mb']
+
+
+def in_the_app(name, args, browser):
+    """One command run in the app in one browser: its time, the page's CPU seconds and peak memory in MB,
+    all of the browser's, and the line its console wrote — or, where it did not finish, why."""
+    folder = WORK / 'app' / browser / name
+    folder.mkdir(parents=True, exist_ok=True)
+    plan = {**session(name, args), 'browser': browser, 'app': str(APP), 'data': str(WORK), 'out': str(folder),
+            'executablePath': EXECUTABLES.get(browser)}
+    (folder / 'plan.json').write_text(json.dumps(plan, indent=1))
+    (folder / 'result.json').unlink(missing_ok=True)
+    driven = subprocess.run(['node', str(DRIVER), str(folder / 'plan.json'), str(folder / 'result.json')],
                             capture_output=True, text=True)
-    if not (out / 'result.json').exists():
-        raise RuntimeError(f'{DRIVER.name} wrote no result for {name}:\n{driven.stderr[-3000:]}')
-    result = json.loads((out / 'result.json').read_text())
+    if not (folder / 'result.json').exists():
+        raise RuntimeError(f'{DRIVER.name} wrote no result for {name} in {NAMES[browser]}:\n{driven.stderr[-3000:]}')
+    result = json.loads((folder / 'result.json').read_text())
     ran = result['status'] == 'ok'
-    measured = {column: result[key] if ran else math.nan for column, key in (
-        ('app_wall_s', 'wall_s'), ('app_cpu_s', 'cpu_s'), ('app_peak_mb', 'peak_mb'), ('app_rest_mb', 'rest_mb'),
-        ('app_open_s', 'open_s'), ('chromium_cpu_s', 'chromium_cpu_s'), ('chromium_peak_mb', 'chromium_peak_mb'))}
-    return {**measured, 'app_line': result.get('line', ''), 'app_error': '' if ran else result.get('error', 'failed')}
+    measured = {key: result[key] if ran else math.nan for key in ['wall_s', 'cpu_s', 'peak_mb', *APP_ONLY]}
+    return {**measured, 'line': result.get('line', ''), 'error': '' if ran else result.get('error', 'failed')}
+
+
+#: Where each analysis is run, in order — the command line, then each browser — and what each is: Node's
+#: version on the command line, the browser's in the app.
+VENUES = ['command line', *(NAMES[one] for one in BROWSERS)]
+APPS = VENUES[1:]
+PROGRAMS = {'command line': MACHINE['node'], **{NAMES[one]: VERSIONS[one] for one in BROWSERS}}
 
 
 def kept():
-    """What an earlier render of this same build, in this same Chromium, measured on both: a run the app
-    did not finish is run again."""
+    """What an earlier render of this same build measured, run by run: on the command line in this same
+    Node, and in each browser asked for at the version it is now. A run the app did not finish is run
+    again."""
     if REDO or not TIMINGS.exists():
         return []
-    done = pd.read_csv(TIMINGS, sep='\t').fillna({'app_line': '', 'app_error': ''})
-    if not {'chromium', 'app_wall_s'} <= set(done.columns):
+    done = pd.read_csv(TIMINGS, sep='\t', dtype={'version': str})
+    if not {'venue', 'version', 'error'} <= set(done.columns):
         return []
-    same = (done['chromosomix'] == MACHINE['chromosomix']) & (done['chromium'] == MACHINE['chromium'])
-    return done[same & done['app_wall_s'].notna()].to_dict('records')
+    done = done.fillna({'line': '', 'error': '', 'version': ''})
+    same = (done['chromosomix'] == MACHINE['chromosomix']) & (done['version'] == done['venue'].map(PROGRAMS))
+    return done[same & (done['error'] == '') & done['wall_s'].notna()].to_dict('records')
 
 
-# Each command on the command line and then in the app — the pileup's loops and the overlap's peaks are
-# the command line's, so both read the same files — and each saved as soon as both are measured.
+def save(rows):
+    pd.DataFrame(rows).to_csv(TIMINGS, sep='\t', index=False)
+
+
+def warm(name, args):
+    """Read through every file a command names, so that no run pays alone for reading them from disk."""
+    for path in session(name, args)['files']:
+        with open(WORK / path, 'rb') as handle:
+            while handle.read(1 << 24):
+                pass
+
+
+# Each command on the command line and then in each browser — the pileup's loops and the overlap's peaks
+# are the command line's, so every venue reads the same files — and each run saved as soon as it is
+# measured, one row each.
 rows = kept()
 for name, data, analysis, resolution, args in TASKS:
-    if any(row['name'] == name for row in rows):
-        continue
-    rows.append({'name': name, 'data': data, 'analysis': analysis, 'resolution': resolution,
-                 **on_the_command_line(name, args), **in_the_app(name, args),
-                 'command': 'chromosomix ' + ' '.join(args), **MACHINE})
-    pd.DataFrame(rows).to_csv(TIMINGS, sep='\t', index=False)
-times = pd.DataFrame(rows).set_index('name').loc[[task[0] for task in TASKS]].reset_index()
-FAILED = times[times['app_error'] != '']
+    task = {'name': name, 'data': data, 'analysis': analysis, 'resolution': resolution}
+    done = {row['venue'] for row in rows if row['name'] == name}
+    for venue, browser in zip(VENUES, [None, *BROWSERS]):
+        if venue in done:
+            continue
+        warm(name, args)
+        measured = on_the_command_line(name, args) if browser is None else in_the_app(name, args, browser)
+        rows.append({**task, 'venue': venue, 'version': PROGRAMS[venue], **measured,
+                     'command': 'chromosomix ' + ' '.join(args), **MACHINE})
+        save(rows)
+
+#: Every run, one row each, in the order of TASKS and of VENUES; and each analysis once, with its labels.
+ORDER = [task[0] for task in TASKS]
+times = pd.DataFrame(rows).fillna({'line': '', 'error': ''})
+for column in APP_ONLY:
+    times[column] = times[column] if column in times else math.nan
+times = times.sort_values(['name', 'venue'], key=lambda column: column.map(
+    {'name': ORDER, 'venue': VENUES}[column.name].index)).reset_index(drop=True)
+times['added_mb'] = times['peak_mb'] - times['rest_mb']
+TASK = times.drop_duplicates('name').set_index('name').loc[ORDER, ['data', 'analysis', 'resolution', 'command']]
+FAILED = times[times['error'] != '']
+
+
+def wide(column, venues=VENUES):
+    """One measure of every analysis, a column for each venue."""
+    return times.pivot(index='name', columns='venue', values=column).reindex(index=ORDER, columns=venues)
 ```
 
 ## Results
@@ -444,16 +523,17 @@ FAILED = times[times['app_error'] != '']
 #| echo: false
 #| output: asis
 # Carried inside the page rather than linked beside it: notebooks/scripts/rendered.py says why.
-print(f"Every analysis measured, with its command, the app's line for it and the machine: "
+print(f"Every run measured, one row each — on the command line or in a browser — with its command, the "
+      f"app's line for it, the browser's version and the machine: "
       f"{R.attach('timings.tsv', times.to_csv(sep=chr(9), index=False))}.")
 if len(FAILED):
-    print(f"\n**{len(FAILED)} did not finish in the app**, and have no figures for it:\n")
+    print(f"\n**{len(FAILED)} {'run' if len(FAILED) == 1 else 'runs'} in the app did not finish**, or could not "
+          f"be measured, and have no figures:\n")
     for _, row in FAILED.iterrows():
-        print(f"- {row['analysis']} ({row['data']}): {row['app_error']}")
+        print(f"- In {row['venue']}, {row['analysis']} ({row['data']}): {row['error']}")
 ```
 
 ```{python}
-#| column: page
 def duration(seconds):
     if math.isnan(seconds):
         return '—'
@@ -464,98 +544,192 @@ def megabytes(mb):
     return '—' if math.isnan(mb) else f'{mb:,.0f}'
 
 
-VENUES = {'command line': '', 'app': 'app_'}
-table = pd.DataFrame({('', 'data'): times['data'], ('', 'analysis'): times['analysis'],
-                      ('', 'resolution'): times['resolution']})
 # A time kept on one line in a cell: `3.7 min` broken after its number reads as two figures.
 unbroken = lambda seconds: duration(seconds).replace(' ', '\N{NO-BREAK SPACE}')
-for heading, column, shown in (('wall-clock time', 'wall_s', unbroken), ('CPU time', 'cpu_s', unbroken),
-                               ('peak memory (MB)', 'peak_mb', megabytes)):
-    for venue, prefix in VENUES.items():
-        table[(heading, venue)] = times[prefix + column].map(shown)
-table[('peak memory (MB)', 'app, before the run')] = times['app_rest_mb'].map(megabytes)
-table.columns = pd.MultiIndex.from_tuples(table.columns)
-table.style.hide(axis='index')
+
+
+def measure(heading, column, shown, added=False):
+    """A table of one measure: each analysis, and a column for each venue under the measure's heading —
+    but, for the memory, the command line's alone, and what the run added to the page in each browser."""
+    table = pd.DataFrame({('', key): TASK[key].values for key in ['data', 'analysis', 'resolution']})
+    for venue, values in wide(column, VENUES[:1] if added else VENUES).items():
+        table[(heading, venue)] = values.map(shown).values
+    if added:
+        for venue, values in wide('added_mb', APPS).items():
+            table[('added by the run', venue)] = values.map(shown).values
+    table.columns = pd.MultiIndex.from_tuples(table.columns)
+    return table.style.hide(axis='index')
+```
+
+::: {.panel-tabset}
+
+### Wall-clock time
+
+```{python}
+#| column: page
+measure('wall-clock time', 'wall_s', unbroken)
+```
+
+### CPU time
+
+```{python}
+#| column: page
+measure('CPU time', 'cpu_s', unbroken)
+```
+
+### Memory
+
+```{python}
+#| column: page
+measure('peak memory (MB)', 'peak_mb', megabytes, added=True)
+```
+
+:::
+
+```{python}
+def listing(words):
+    """`a`, `a and b`, `a, b and c`."""
+    words = [str(word) for word in words]
+    return ' and '.join(words) if len(words) < 3 else f"{', '.join(words[:-1])} and {words[-1]}"
+
+
+def where(venue):
+    return 'on the command line' if venue == 'command line' else f'in {venue}'
+
+
+def extremes(venue):
+    """Of one venue's runs: how many took under a minute, the slowest, and the one that held the most —
+    none, where none finished."""
+    ran = times[(times['venue'] == venue) & times['wall_s'].notna()]
+    if ran.empty:
+        return 0, None, None
+    return int((ran['wall_s'] < 60).sum()), ran.loc[ran['wall_s'].idxmax()], ran.loc[ran['peak_mb'].idxmax()]
+
+
+def ratios(series, of):
+    """A set of ratios, analysis by analysis, in words."""
+    if series.empty:
+        return 'no analysis finished in both to compare'
+    return f'{series.median():.1f} times {of} at the median, from {series.min():.1f} to {series.max():.1f} times'
+
+
+def on_average(venue):
+    """A browser's CPU time and peak memory over the command line's, as geometric means of its analyses."""
+    cpu, memory = ((measured[venue] / measured['command line']).dropna() for measured in (CPU, PEAK))
+    if cpu.empty:
+        return f'{where(venue)}, no analysis finished in both to compare'
+    return (f"{where(venue)}, {geometric_mean(cpu):.1f} times the command line's CPU time and "
+            f"{geometric_mean(memory):.1f} times its peak memory")
+
+
+EXTREMES = {venue: extremes(venue) for venue in VENUES}
+WALL, CPU, PEAK = wide('wall_s'), wide('cpu_s'), wide('peak_mb')
+#: Each browser's time over the command line's, analysis by analysis; and, for each browser after the
+#: first, its time and its memory over the first's.
+AGAINST_THE_LINE = {venue: (WALL[venue] / WALL['command line']).dropna() for venue in APPS}
+FIRST, OTHERS = APPS[0], APPS[1:]
+AGAINST_THE_FIRST = {venue: ((WALL[venue] / WALL[FIRST]).dropna(), (PEAK[venue] / PEAK[FIRST]).dropna())
+                     for venue in OTHERS}
+UNFINISHED = {venue: int((FAILED['venue'] == venue).sum()) for venue in APPS}
 ```
 
 ```{python}
-def extremes(prefix):
-    """Of one venue's runs: how many took under a minute, the slowest and the one that held the most."""
-    ran = times[times[f'{prefix}wall_s'].notna()]
-    return (int((ran[f'{prefix}wall_s'] < 60).sum()), ran.loc[ran[f'{prefix}wall_s'].idxmax()],
-            ran.loc[ran[f'{prefix}peak_mb'].idxmax()])
+#| echo: false
+#| output: asis
+under = [f'{EXTREMES[venue][0]} {where(venue)}' for venue in VENUES]
+slowest_each = [f"{where(venue)}, {slow['analysis']} ({slow['data']}), in {duration(slow['wall_s'])}"
+                for venue, (_, slow, _) in EXTREMES.items() if slow is not None]
+largest_each = [f"{where(venue)}, {large['peak_mb']:,.0f} MB, for {large['analysis']} ({large['data']})"
+                for venue, (_, _, large) in EXTREMES.items() if large is not None]
+of_line, of_first = "the command line's time", f"{FIRST}'s time"
+against_line = [f"{where(venue)}, {ratios(series, of_line)}"
+                for venue, series in AGAINST_THE_LINE.items()]
+against_first = [f"{venue} took {ratios(wall, of_first)}, and held {ratios(peak, 'its peak memory')}"
+                 for venue, (wall, peak) in AGAINST_THE_FIRST.items()]
+finished = [f'{len(ORDER) - count} of {len(ORDER)} in {venue}' for venue, count in UNFINISHED.items()]
 
-
-under_a_minute, slowest, largest = extremes('')
-app_under_a_minute, app_slowest, app_largest = extremes('app_')
-ratio = (times['app_wall_s'] / times['wall_s']).dropna()
-rest = times['app_rest_mb'].median()
-added = (times['app_peak_mb'] - times['app_rest_mb']).median()
+print('On this machine:\n')
+print(f"- **Under a minute:** of the {len(ORDER)} analyses, {listing(under)}.")
+print(f"- **Slowest:** {'; '.join(slowest_each)}.")
+print(f"- **Most memory:** {'; '.join(largest_each)}.")
+print(f"- **The app against the command line:** {'; '.join(against_line)}.")
+print(f"- **On average:** {'; '.join(on_average(venue) for venue in APPS)}, counting what the page held before "
+      f"the run (geometric means over the analyses each finished).")
+if OTHERS:
+    print(f"- **The browsers against {FIRST}:** {'; '.join(against_first)}.")
+if len(FAILED):
+    print(f"- **Finished:** {listing(finished)}; the others are listed above the tables.")
+else:
+    print(f"- **Finished:** every analysis, in {'every browser' if OTHERS else FIRST}.")
 ```
-
-On this machine:
-
-- **Under a minute:** `{python} under_a_minute` of the `{python} len(times)` analyses on the command
-  line, `{python} app_under_a_minute` in the app.
-- **Slowest:** on the command line, `{python} slowest['analysis']` (`{python} slowest['data']`), in
-  `{python} duration(slowest['wall_s'])`; in the app, `{python} app_slowest['analysis']`
-  (`{python} app_slowest['data']`), in `{python} duration(app_slowest['app_wall_s'])`.
-- **Most memory:** on the command line, `{python} f"{largest['peak_mb']:,.0f}"` MB, for
-  `{python} largest['analysis']` (`{python} largest['data']`); in the app,
-  `{python} f"{app_largest['app_peak_mb']:,.0f}"` MB, for `{python} app_largest['analysis']`
-  (`{python} app_largest['data']`).
-- **The app against the command line:** `{python} f"{ratio.median():.1f}"` times the command line's
-  time at the median, from `{python} f"{ratio.min():.1f}"` to `{python} f"{ratio.max():.1f}"` times.
 
 The command line's CPU time is close to its wall-clock time because it computes on one thread; it can be
 slightly higher, as Node collects garbage and compiles on threads of its own. The app computes in its
 workers, and its page draws and answers the reader while they do, so its CPU time is theirs and the
 page's together. Where a task shares its work — pastis-NB's likelihood, in the two 3D models — the app
-shares it with a helper worker for each core but its own, seven at most, where the command line keeps
-to one thread unless `--threads` asks for more: there the app can take less time than the command line
-and more CPU.
+shares it with a helper worker for each core the browser reports but its own, seven at most, where the
+command line keeps to one thread unless `--threads` asks for more: there the app can take less time
+than the command line and more CPU.
 
-The page's peak memory includes what it held before **run** was pressed, which the table gives beside
-it: the app itself, the files it had opened and the picture of them, `{python} f"{rest:,.0f}"` MB at the
-median. What a run added to that is `{python} f"{added:,.0f}"` MB at the median. Its time leaves out the
-opening of the files, which on the command line is part of the run: reading a GTF of every RefSeq
-transcript, say, is done in the app when the file is dropped (`app_open_s` in the table under the
-results).
+```{python}
+#| echo: false
+#| output: asis
+rest = wide('rest_mb', APPS).median()
+added = wide('added_mb', APPS).median()
+print(f"In a browser, the table gives what a run added to the page's memory — at the median, "
+      f"{listing(f'{added[venue]:,.0f} MB in {venue}' for venue in APPS)}: its peak less what it held when "
+      f"**run** was pressed, the app itself, the files it had opened and the picture of them — at the median, "
+      f"{listing(f'{rest[venue]:,.0f} MB in {venue}' for venue in APPS)}. The average above, the table "
+      f"below and the figure count the whole peak (`peak_mb`, `rest_mb` and `added_mb` in the table under "
+      f"the results). The app's time leaves out the opening of the files, which on the command line is part "
+      f"of the run: reading a GTF of every RefSeq transcript, say, is done in the app when the file is "
+      f"dropped (`open_s` there too).")
+```
 
 The mouse and human Hi-C maps differ 16-fold in depth (69 million and 1.08 billion contacts), on genomes
 of about the same size. The same five analyses on each:
 
 ```{python}
 pairs = []
-indexed = times.set_index('name')
+indexed = times.set_index(['name', 'venue'])
 for name in ['coverage', 'expected', 'insulation', 'compartments', 'loops']:
-    mouse, human = indexed.loc[name], indexed.loc[f'human-{name}']
-    for venue, prefix in VENUES.items():
-        pairs.append({'analysis': mouse['analysis'], 'resolution': mouse['resolution'],
+    for venue in VENUES:
+        mouse, human = indexed.loc[(name, venue)], indexed.loc[(f'human-{name}', venue)]
+        pairs.append({'analysis': TASK.loc[name, 'analysis'], 'resolution': TASK.loc[name, 'resolution'],
                       'run': venue.replace(' ', '\N{NO-BREAK SPACE}'),
-                      'time, 69 M': unbroken(mouse[f'{prefix}wall_s']), 'time, 1.08 B': unbroken(human[f'{prefix}wall_s']),
-                      'memory, 69 M (MB)': mouse[f'{prefix}peak_mb'], 'memory, 1.08 B (MB)': human[f'{prefix}peak_mb']})
+                      'time, 69 M': unbroken(mouse['wall_s']), 'time, 1.08 B': unbroken(human['wall_s']),
+                      'memory, 69 M (MB)': mouse['peak_mb'], 'memory, 1.08 B (MB)': human['peak_mb']})
 pd.DataFrame(pairs).style.hide(axis='index').format('{:,.0f}', subset=['memory, 69 M (MB)', 'memory, 1.08 B (MB)'],
                                                      na_rep='—')
 ```
 
 ```{python}
 #| label: fig-laptop
-#| fig-cap: "Wall-clock time (left, logarithmic) and peak memory (right) of each analysis, coloured by its data: on the command line (solid) and in the app (pale)."
-colours = dict(zip(times['data'].unique(), ['#2a78d6', '#eb6834', '#4f9d69', '#8c6bb1']))
-labels = [f'{a} ({r})' for a, r in zip(times['analysis'], times['resolution'])]
-y = pd.Series(range(len(times))[::-1], dtype=float)
-fig, (left, right) = plt.subplots(1, 2, figsize=(10, 0.45 * len(times) + 1), sharey=True, layout='constrained')
-for ax, column in ((left, 'wall_s'), (right, 'peak_mb')):
-    ax.barh(y + 0.2, times[column], height=0.4, color=times['data'].map(colours))
-    ax.barh(y - 0.2, times[f'app_{column}'], height=0.4, color=times['data'].map(colours), alpha=0.4)
+#| fig-cap: "Wall-clock time (left, logarithmic) and peak memory (right) of each analysis, grouped by its data: on the command line and in each browser."
+# The first slots of a categorical palette, in their fixed order, one a venue.
+colours = dict(zip(VENUES, ['#2a78d6', '#eb6834', '#1baf7a', '#eda100']))
+# A row for each data, naming it, and under it a row for each of its analyses, from the top down.
+layout = []
+for data, names in TASK.reset_index().groupby('data', sort=False)['name']:
+    layout += [(data, None)] + [(f"{TASK.loc[name, 'analysis']} ({TASK.loc[name, 'resolution']})", name) for name in names]
+y = {name: len(layout) - 1 - at for at, (_, name) in enumerate(layout) if name is not None}
+band = 0.8 / len(VENUES)
+fig, (left, right) = plt.subplots(1, 2, figsize=(10, (0.15 * len(VENUES) + 0.2) * len(layout) + 1), sharey=True,
+                                  layout='constrained')
+for ax, measured in ((left, WALL), (right, PEAK)):
+    for at, venue in enumerate(VENUES):
+        ax.barh([y[name] + 0.4 - band * (at + 0.5) for name in ORDER], measured.loc[ORDER, venue].values,
+                height=band * 0.85, color=colours[venue])
     ax.spines[['top', 'right']].set_visible(False)
-    ax.tick_params(axis='y', labelsize=8)
-left.set(xscale='log', xlabel='wall-clock time (s)', yticks=list(y), yticklabels=labels)
+    ax.tick_params(axis='y', labelsize=8, length=0)
+left.set(xscale='log', xlabel='wall-clock time (s)', yticks=list(range(len(layout)))[::-1],
+         yticklabels=[label for label, _ in layout], ylim=(-0.6, len(layout) - 0.4))
+for tick, (_, name) in zip(left.get_yticklabels(), layout):
+    if name is None:
+        tick.set_fontweight('bold')
 right.set(xlabel='peak memory (MB)')
-fig.legend(handles=[Patch(color=colour, label=data) for data, colour in colours.items()]
-           + [Patch(color='#777777', label='command line'), Patch(color='#777777', alpha=0.4, label='app')],
-           loc='outside lower center', ncols=len(colours) + 2, frameon=False, fontsize=8)
+fig.legend(handles=[Patch(color=colour, label=venue) for venue, colour in colours.items()],
+           loc='outside lower center', ncols=len(VENUES), frameon=False, fontsize=8)
 plt.show()
 ```
 
@@ -567,21 +741,30 @@ Run from `notebooks/work/laptop/`, each followed by `--out out/<name> --quiet`:
 #| echo: false
 #| output: asis
 print('```bash')
-for command in times['command']:
+for command in TASK['command']:
     print(command)
 print('```')
 ```
 
-And each as the app's console wrote it, the line it gives a reader to run the same analysis from a
-shell — in the folder that holds the files, which it names by their own names:
-
 ```{python}
 #| echo: false
 #| output: asis
+LINES = times[(times['venue'] != 'command line') & (times['line'] != '')]
+FIRST_LINE = LINES.drop_duplicates('name').set_index('name')['line']
+APART = [row for _, row in LINES.iterrows() if row['line'] != FIRST_LINE[row['name']]]
+said = f'in {FIRST}' if not OTHERS else f'in {FIRST} where it finished there, and otherwise in the first browser it did'
+print(f"And each as the app's console wrote it, {said}: the line it gives a reader to run the same analysis "
+      f"from a shell, in the folder that holds the files, which it names by their own names.\n")
 print('```bash')
-for _, row in times.iterrows():
-    print(row['app_line'] or f"# {row['name']}: no line, the run did not finish in the app")
+for name in ORDER:
+    print(FIRST_LINE.get(name, f'# {name}: no line, the run did not finish in the app'))
 print('```')
+if OTHERS and not APART:
+    print('\nEvery browser wrote the same line, word for word, for every analysis it finished.')
+elif APART:
+    print('\nWhere a browser wrote another line than the one above:\n')
+    for row in APART:
+        print(f"- `{row['name']}`, in {row['venue']}: `{row['line']}`")
 ```
 
 ```{python}
@@ -632,34 +815,43 @@ def differences(task, command, line):
     return out
 
 
-DIFFERENT = {row['name']: differences(row['command'].split()[1], row['command'], row['app_line'])
-             for _, row in times.iterrows() if row['app_line']}
-DIFFERENT = {name: found for name, found in DIFFERENT.items() if found}
+#: Every line a browser wrote, held to the command it ran for: where it asks for anything else, what.
+DIFFERENT = {(row['name'], row['venue']): differences(row['command'].split()[1], row['command'], row['line'])
+             for _, row in LINES.iterrows()}
+DIFFERENT = {run: found for run, found in DIFFERENT.items() if found}
 ```
 
 ```{python}
 #| echo: false
 #| output: asis
-lines = sum(1 for line in times['app_line'] if line)
-same = lines - len(DIFFERENT)
+same = len(LINES) - len(DIFFERENT)
+over = f', over the {len(APPS)} browsers' if OTHERS else ''
 print(f"Held against the command it ran for, the app's line asks for the same thing in **{same} of "
-      f"{lines}**: every flag of the command, with the same value, and besides them only the task's "
-      f"parameters at their defaults and those its form answers from what is open — every sequence "
-      f"ticked, the column a feature set is ranked by.")
+      f"{len(LINES)}**{over}: every flag of the command, with the same value, and besides them only the task's "
+      f"parameters at their defaults and those its form answers from what is open — every sequence ticked, "
+      f"the column a feature set is ranked by.")
 if DIFFERENT:
     print(' Where it asks for anything else:\n')
-    for name, found in DIFFERENT.items():
-        print(f"- `{name}`: {'; '.join(f'`{one}`' for one in found)}")
+    for (name, venue), found in DIFFERENT.items():
+        print(f"- `{name}`, in {venue}: {'; '.join(f'`{one}`' for one in found)}")
 ```
 
 ```{python}
 #| echo: false
 #| output: asis
-print(R.foot(summary=f"{len(times)} analyses run genome-wide on {MACHINE['processor']} with {MACHINE['memory']}: "
-                     f"{under_a_minute} took less than a minute on the command line and {app_under_a_minute} in the "
-                     f"app; the slowest, {slowest['analysis'].split(',')[0]} ({slowest['data']}), "
-                     f"{duration(slowest['wall_s'])} and {duration(slowest['app_wall_s'])}; the most memory, "
-                     f"{largest['peak_mb']:,.0f} MB on the command line ({largest['analysis'].split(',')[0]}, "
-                     f"{largest['data']}) and {app_largest['app_peak_mb']:,.0f} MB in the app "
-                     f"({app_largest['analysis'].split(',')[0]}, {app_largest['data']})."))
+_, slowest, largest = EXTREMES['command line']
+_ran = times[(times['venue'] != 'command line') & times['peak_mb'].notna()]
+app_largest = _ran.loc[_ran['peak_mb'].idxmax()] if len(_ran) else None
+in_them = f'in {FIRST}' if not OTHERS else f'in {listing(APPS)}'
+counted = listing(EXTREMES[venue][0] for venue in APPS)
+slowest_times = listing(duration(WALL.loc[slowest['name'], venue]) for venue in APPS)
+held = '' if app_largest is None else (
+    f" and {app_largest['peak_mb']:,.0f} MB in the app ({app_largest['analysis'].split(',')[0]}, "
+    f"{app_largest['data']}, in {app_largest['venue']})")
+print(R.foot(summary=f"{len(ORDER)} analyses run genome-wide on {MACHINE['processor']} with {MACHINE['memory']}, "
+                     f"on the command line and in the app {in_them}: {EXTREMES['command line'][0]} took less than a "
+                     f"minute on the command line and {counted} {in_them}; the slowest, "
+                     f"{slowest['analysis'].split(',')[0]} ({slowest['data']}), {duration(slowest['wall_s'])} on the "
+                     f"command line and {slowest_times} {in_them}; the most memory, {largest['peak_mb']:,.0f} MB on "
+                     f"the command line ({largest['analysis'].split(',')[0]}, {largest['data']}){held}."))
 ```

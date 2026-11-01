@@ -3,13 +3,16 @@ description: >
   What a job of notebooks.yml renders a notebook with: room on the runner, chromosomix built (the app and
   its command line), and the reference environment, which brings Quarto, Jupyter and every package the
   notebooks import. Each job asks for the rest it needs: the viewers and their Chromium (the parity, the
-  timings and the laptop), the references' own programs (the validation), HiGlass's tile server (the
-  timings).
+  timings and the laptop), Firefox and WebKit beside it (the laptop), the references' own programs (the
+  validation), HiGlass's tile server (the timings).
 
 inputs:
   viewers:
     description: juicebox.js, HiGlass and Playwright's Chromium, as notebooks/viewers pins them
     default: 'false'
+  browsers:
+    description: The browsers of that Playwright to install with the viewers, as `playwright install` names them
+    default: 'chromium'
   references:
     description: bedtools, seqkit, yapc and IDR, pairtools, Boost-HiC, and Java for Juicer Tools
     default: 'false'
@@ -66,12 +69,14 @@ runs:
         distribution: temurin
         java-version: '21'
 
-    - name: The viewers and their browser
+    - name: The viewers and their browsers
       if: inputs.viewers == 'true'
       shell: bash
+      env:
+        BROWSERS: ${{ inputs.browsers }}
       run: |
         npm ci --prefix notebooks/viewers
-        npx --prefix notebooks/viewers playwright install --with-deps chromium
+        npx --prefix notebooks/viewers playwright install --with-deps $BROWSERS
 
     # yapc's and pairtools' first, so that the reference environment's 3.13 is the one left on the PATH.
     - uses: actions/setup-python@v5

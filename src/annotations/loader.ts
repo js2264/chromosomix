@@ -25,7 +25,6 @@ import type {
 import type { AnnotationClient } from './worker/client'
 import type { DetectedFormat, WireSource } from './worker/protocol'
 import { hasHandle, rememberHandle } from '../state/handles'
-import { recordTelemetry } from '../telemetry'
 import { hasLocation, resolveLocal } from '../state/locations'
 import {
   basesForIndex,
@@ -759,9 +758,6 @@ export class AnnotationLoader {
       // row brings its own partner, and a reader who closed the pile and kept
       // the depth would otherwise be handed the pile again on every reload.
       if (guessed && kind === 'alignments') this.pileFor(id)
-      // A track added, counted by its format and where it was read from (§31);
-      // a restored row is the same track again and is not.
-      if (guessed) recordTelemetry({ name: 'open', what: 'track', format: result.format, from: source.kind })
     } catch (err) {
       this.store.update(id, {
         status: 'error',

@@ -21,7 +21,7 @@ These are hard, and everything below follows from them.
 
 | # | Constraint | Consequence |
 |---|---|---|
-| C1 | No server-side component of our own, and nothing that waits on one | No tile server, no metacooler on a host, no accounts, no uploads, no update service. The one request the site makes on its own behalf is anonymous telemetry to a third-party analytics endpoint — words from fixed lists, never a file, a name or an address — and nothing in the app waits on its answer (§31) |
+| C1 | No server-side component of any kind | No tile server, no metacooler on a host, no accounts, no uploads, no update service |
 | C2 | No new metacooler API | The app consumes files exactly as current metacooler writes them |
 | C3 | No required preprocessing | A file straight from `metacooler create` must open and work |
 | C4 | `genome-then-length` ordering only | Every genome is one contiguous bin range; no scattered-run handling exists |
@@ -39,12 +39,6 @@ Every other format keeps the rule unchanged, and the opportunism at §8.11 is un
 
 C4 means a whole class of code — run gathering, fallback query planners, `genome_extent` failure
 paths — is deleted rather than written.
-
-C1 was *no server-side component of any kind* until the site began sending telemetry (§31). What
-it protects is unchanged: no server reads a file, holds a session, answers a request the picture
-needs, or knows who anybody is. The telemetry goes out after the page is idle, to an endpoint the
-app never reads a reply from, and a site whose endpoint vanished tomorrow would draw every
-picture exactly as it does today.
 
 ---
 
@@ -5852,13 +5846,8 @@ through it was mounted as a file of no bytes and refused as "not an HDF5 file".
 **Private files:** a local file — dropped, picked, or in a connected folder (§20) — or the reader's
 own private bucket, Drive or Dropbox, read from the browser with their own credentials (§20.3,
 §24.7, §24.9). Identical code path, different byte source. Nothing is uploaded, so there are no
-accounts, no storage and no hosting cost. Stated prominently in the UI and in the paper.
-
-**The site sends telemetry about how it is used, and nothing about whom or on what (§31).** A visit, a format
-opened, a task run, an error met: each a word from a fixed list, posted with no cookie and no
-referrer to the endpoint the deploy names, with a switch in About. The policy below needs nothing
-new for it — `connect-src` already takes any `https:` host — and the builds that are not the site
-carry no endpoint at all.
+accounts, no storage, no hosting cost and no GDPR review. Stated prominently in the UI and in the
+paper.
 
 **Every web build carries a Content-Security-Policy, in its page.** The site, every archived pin and
 the package (§22) write one string (`scripts/csp.mjs`) into `index.html` as a `<meta>` right after
@@ -6178,8 +6167,7 @@ down without saying so — which is looked for four times a second while somethi
 ## 13. Explicit non-features
 
 Stated so they are decisions rather than omissions: tile server; user accounts; file upload; server-side
-computation of any kind; tracking of any kind — a cookie, an identifier, a value drawn from a file or
-from anything the reader typed, which §31's telemetry is built to be unable to carry; required companion files **for a contact map** (§1 states the scope, and
+computation of any kind; required companion files **for a contact map** (§1 states the scope, and
 §8.13 the one format that falls outside it: where an index is a format's only bounded read, its
 absence is refused by name); required preprocessing; support for orderings other
 than `genome-then-length`; whole-genome views that do not fit in memory (§9 — the limit is measured,
@@ -10184,9 +10172,10 @@ differs**, or one side alone wrote it. Every file and its verdict is one line of
 `notebooks/work/parity/summary.tsv`.
 
 **And one for the reader's own machine.** `notebooks/laptop.qmd` answers what the other three do not
-— what a genome-wide analysis costs on a machine like the reader's, on the command line and in the app —
-with Quarto, pandas, matplotlib and pyfaidx, the built app and command line and Playwright's Chromium,
-and no reference package, so that a reader can render it on their own laptop. It downloads the
+— what a genome-wide analysis costs on a machine like the reader's, on the command line and in the app,
+in each of three browsers — with Quarto, pandas, matplotlib and pyfaidx, the built app and command line
+and Playwright's Chromium, Firefox and WebKit, and no reference package, so that a reader can render it
+on their own laptop. It downloads the
 validation's mouse map, yeast Micro-C, ATAC-seq replicates, mm10 and its RefSeq genes, and 4DN's IMR-90
 in situ Hi-C (Rao et al. 2014, 4DNFIJTOIGOI, 1.08 billion contacts): about 13.7 GB into
 `notebooks/work/laptop/data/`, each file held to its MD5, a file `validation.qmd` already holds linked
@@ -10194,26 +10183,46 @@ instead. Then it runs 23 analyses genome-wide: on the mouse map, coverage, P(s),
 directionality index, compartments (E1, unphased), loop calling, chromosight's loops, a pileup over them
 and a 3D model; five of these again on the human map, sixteen times deeper; P(s) at 50 bp, loops and a
 model on the yeast; and peak calling with IDR, interval overlap, a metaplot, track correlation, base
-composition and a motif search over the mouse genome. **Each runs twice.** On the command line, a
-process of its own: `os.wait4` gives its CPU time and peak resident set, and the wall clock runs from
-its start to its exit. **And in the app**, as a reader runs it, in a headless Chromium of its own
-(`notebooks/scripts/laptop.mjs`, the dist/ and dist-cli/ of one commit, as the parity holds them): the
+composition and a motif search over the mouse genome. Before each run, every file its command names
+is read through once, so that every run starts from files the system holds in memory, as a reader's do
+once opened, and none pays alone for a read from disk that the venue after it is spared — an 8.3 GB map
+read cold took the first venue to read it more than twice as long. **Each runs on the command line**, a
+process of its own: `os.wait4` gives its CPU time and peak resident set, and the wall clock runs from its start to
+its exit. **And in the app**, as a reader runs it (`notebooks/scripts/laptop.mjs`, the dist/ and
+dist-cli/ of one commit, as the parity holds them), **in each of the three browser engines Playwright
+drives headless** — Chromium, which Chrome and Edge are built on; Firefox; and WebKit, Safari's engine,
+in Playwright's build, the nearest a script comes to Safari — a browser of its own for each run: the
 files the command names dropped on the landing page — a map as a workspace names it, at the command's
 resolution, balanced, its whole genome on screen, with a set of loops as a track beside it, or tracks
 and a FASTA with its index alone — the task opened from the Analysis panel by its title, every flag of
-the command set in its form, the page left until Chromium is idle, and **run** pressed. The time is
-the app's own, from the job's dispatch to its result, and the opening of the files is timed apart; the
-CPU time and the peak memory are the page's, its renderer's, whose threads its workers are, sampled
-five times a second from the press to the console's record of the end — and all of Chromium's beside
-them, the browser that reads a dropped file for the page and the GPU process among them, where WebGL is
-drawn in SwiftShader and the page composited in software. Each result is written to
-`notebooks/work/laptop/timings.tsv` as soon as both are measured, with the machine, the build, the
-Chromium and the line the app's console wrote for the run, and a second render of the same build in
-the same Chromium reads it back instead of running again, but for a run the app did not finish. The
-page is a table of all 23, both ways, the five analyses side by side at the two depths, a figure, every
-command and every line the app wrote in two blocks at the end, and the line held to the command: every
-flag of the command with its value, and besides them only the task's parameters at their defaults and
-those its form answers from what is open, or the page says what else.
+the command set in its form, the page left until the map is drawn, the app has measured which of its
+sequences are circles (§8.15) and the browser is idle — a tenth of a core, where an idle page with a
+map open keeps 2% busy in Chromium, 5% in Firefox and 6% in WebKit — and **run** pressed.
+`LAPTOP_BROWSERS` names the browsers, all three unless it says, and the page is of those it names. The
+time is the app's own, from the job's dispatch to its result, and the opening of the files is timed
+apart; the CPU time and the peak memory are the page's, sampled five times a second from the press to
+the console's record of the end, as the operating system counts them, the same way in the three —
+`/proc` on Linux, `ps` on macOS: the processes that render pages, whose threads its workers are
+(Chromium's renderers, Firefox's web content processes, WebKit's web processes), and all of the
+browser's beside them, the browser that reads a dropped file for the page and its GPU, network and
+storage processes among them. Its processes are those below the script and any run from the browser's
+own folder that were not running before it was launched, which is how WebKit's are found on macOS,
+where launchd starts them. Chromium draws WebGL in SwiftShader and composites the page in software;
+Firefox and WebKit draw as Playwright launches them, Firefox allowed WebGL whatever its blocklist says
+of the machine's graphics. Each run is written to `notebooks/work/laptop/timings.tsv` as soon as it is
+measured, one row a run — on the command line or in a browser — with the machine, the build, the
+version of the program it ran in (Node's, or the browser's) and the line the app's console wrote, and a
+second render of the same build reads back every run whose program is the same version, but for a run
+the app did not finish, so a browser added later is the only one run. The page is three tables of all
+23, the wall-clock time, the CPU time and the memory, each with a column for the command line and one
+for each browser — the memory in a browser being what the run added to what the page held when **run**
+was pressed, the peak and that hold kept in the table to download —; what the slowest and the largest
+were in each, each browser against the command line and against the first browser, the geometric means
+of each browser's CPU time and peak memory over the command line's, and how many finished; the five
+analyses side by side at the two depths, a figure, every command and the line the app wrote for each in two blocks at the end, whether
+every browser wrote the same line, and every browser's line held to the command: every flag of the
+command with its value, and besides them only the task's parameters at their defaults and those its
+form answers from what is open, or the page says what else.
 
 **The laptop's published page is rendered on a laptop.** What it measures is a reader's machine, so
 the page at `<site>/laptop/` is rendered by hand, on one, and committed as `notebooks/laptop.html` —
@@ -10232,7 +10241,7 @@ stamp beside it (`pages.py committed`), the names its entry lists and nothing el
 
 They are documents, not tests: they need the data (about 6 GB for the analyses, 15 GB for the
 viewers, 160 MB for the parity and 13.7 GB for the laptop), the reference packages, yapc's own
-environment and higlass-python's, the two viewers and Playwright's Chromium, and nothing in the suite
+environment and higlass-python's, the two viewers and Playwright's browsers, and nothing in the suite
 runs them.
 
 **They are published with every release, a job a notebook.** `.github/workflows/notebooks.yml`
@@ -10241,7 +10250,7 @@ app's build, and the reference environment pinned package by package in `noteboo
 which brings Quarto and every package the notebooks import; for the validation, yapc's environment
 (`requirements-yapc.txt`, IDR and yapc built at the commits the notebook cites), Boost-HiC's checkout,
 and Ubuntu's bedtools and seqkit; for the parity, the timings and the laptop, the two viewers with
-Playwright's Chromium; for the timings, higlass-python's environment with libfuse. The parity renders
+Playwright's Chromium, and for the laptop its Firefox and WebKit too; for the timings, higlass-python's environment with libfuse. The parity renders
 first, alone, so that a page that cannot render stops the run before the hours of the others; then
 the validation and the timings in one job — the timings run the validation's commands on the inputs it
 fetched and made, which no other runner holds — beside the laptop in another, which sets the
@@ -10279,7 +10288,7 @@ app, from this version on, finding itself at any of them unregisters its worker 
 reader takes the update it offers.
 
 **And the app names them, in *About*.** The dialog is three tabs — *Overview*, what the viewer is, the
-tutorial (§30.1), the source and, on the site, its telemetry and the switch (§31.4); *Notebooks*; and
+tutorial (§30.1) and the source; *Notebooks*; and
 *Licences* (§22.4). **The build stamp and the version picker are the Overview's alone**, in a footer
 under the part that scrolls, so however far the overview is scrolled the stamp stays on screen; the
 other two tabs are about one thing each, the notebooks and the licences, and carry nothing else — a
@@ -15800,93 +15809,3 @@ starts the tutorial from the beginning.
 
 **It is in a chunk of its own**, fetched by the press that plays it: a reader who never asks for it
 pays for one `localStorage` read when the landing page or *About* is drawn.
-
-## 31. Telemetry
-
-The site sends anonymous telemetry — a handful of counts of how it is used — so that the work spent
-on it goes where its readers are: which formats are opened, which tasks run and how long they take,
-which refusals people meet, how many install it. `src/telemetry.ts` is the whole of it. **The word
-on screen is *telemetry***, the one a reader looking for this switch in any app's settings looks for;
-the sentences beside it say what it holds, so the word is never the only explanation.
-
-### 31.1 What is counted, and what a count can carry
-
-Every count is a **name from a fixed list with values from fixed lists**, and nothing else:
-
-| Count | When | Its values |
-|---|---|---|
-| `pageview` | the page has loaded and is idle | `version` (the build's own), `installed` (`yes`, `no`) |
-| `open` | a map's file opens — not another resolution of the same one — or a track is added | `what` (`map`, `track`), `format` (§3's layouts, §8's detected formats), `from` (`local`, `remote`) |
-| `task` | a run ends (§18) | `task` (its registry id), `outcome` (`done`, `failed`, `cancelled`), `took` (`under-1s`, `1-10s`, `10-60s`, `1-10min`, `over-10min`) |
-| `error` | the error view is shown | `code` (§10's codes, or `other`) |
-| `allow` | *allow access* is answered (§5.6) | `outcome` (`allowed`, `refused`) |
-| `install` | the browser reports the site installed | none |
-
-**Nothing a reader typed, dropped, named or pointed at can reach one.** No function takes a string
-that did not come from one of those lists, and each list is checked against its type in both
-directions, so a format or an error code added later is a decision about whether to count it, made
-where the type grows. `wire` checks every value against its list again before anything is queued
-and drops the whole count where one is off it — a count with a hole in it would be a count of
-something else. So never: a file's name or contents; a URL — a bucket's, a store's, a signed link's;
-a locus, a hash, a workspace, a search or a setting; the time a task took, other than its bucket;
-an error's message, which names the file. Every count names the site's root as its page, never
-`location`, whose hash names the file open and whose query can name a private workspace.
-
-### 31.2 How it is sent
-
-One `POST` a count, to the endpoint the build names, in the shape Umami's `/api/send` takes —
-`{type: 'event', payload: {website, hostname, url: '/', name, data}}` as JSON in a plain-text body,
-which Umami reads as JSON whatever its type. The visit is sent with no `name`, which Umami files as
-a pageview; every other count goes under its name with its values as `data`, and since Umami counts
-each value against its plan as an event of its own, a count carries no value it does not need. The
-`website` is the site's id at Umami, a UUID it prints in its own snippet: it names where counts are
-filed and authorises nothing. The request goes with `credentials: 'omit'`, so no cookie
-goes either way; `referrerPolicy: 'no-referrer'`; `no-cors`, so nothing is preflighted and nothing
-is read back; and `keepalive`, so a count queued as the page closes still leaves. Not `sendBeacon`,
-which always carries the endpoint's cookies. Counts are queued and sent when the page is idle,
-behind whatever the reader is waiting on, so none shares a connection with a map's first read; at
-most two hundred go from one page, since a loop of errors is not a usage pattern. Nothing is
-written to tell this browser from another: what tells visitors apart is the service's own — Umami
-hashes the request's address and browser with a salt it rotates every month, places the visit in a
-country, region and city from the address, and stores the address nowhere. The
-app never waits on a count and never reads one back, which is what keeps C1 true (§1).
-
-### 31.3 Where it runs
-
-**The site, as deployed, and nothing else.** The deploy passes the repository's `TELEMETRY_ENDPOINT`
-and `TELEMETRY_WEBSITE` variables to the site's build alone (docs/deploy.md); every other config
-writes both empty — the archived pins and the pull-request previews, the package, the desktop app,
-the single file and the command line — and a build without an endpoint and a website id shaped as
-a UUID counts nothing. At run time it also takes the
-web target, a page that is not a pin or a package copy, not inside somebody else's page (§21), at
-the site's own address — a fork, a lab's mirror or `vite preview` serves the same build from
-another — and not under automation, which keeps tests, the gallery and the notebooks' runs out. The
-single file could not count if it tried: its policy reaches no host (§19).
-
-### 31.4 The switch, and the browser's
-
-**On by default, with no question asked first.** There is nothing personal in a count — no
-identifier, no cookie, nothing drawn from a file — so there is nothing to consent to, and a banner
-asking would be a question with no stake in it, put to every reader before their first map. What is
-owed instead is to say it and to make it easy to stop:
-
-- **About says what is sent, where it goes and what never is, under *Telemetry*, with the switch**,
-  last on the *Overview* tab it opens on: *telemetry*, a toggle (§26.3), lit while on, and *Off sends
-  nothing from this browser.* Absent from every build that sends nothing, which has nothing to turn
-  off (§8.5).
-- **The landing page's privacy note says so in a clause** while the site is sending — *The site does
-  send anonymous telemetry … never a name or an address — and About turns it off* — since a promise
-  about files that left the telemetry out would be the one thing on that line a reader could later
-  call misleading.
-- **Off is immediate**: what was queued is dropped, and nothing more is sent from this browser.
-  It is kept in `localStorage` (`chromosomix:telemetry`), and *forget everything* keeps it: every other
-  key is something kept on the reader's behalf, and this one is a refusal, whose loss would be the
-  one way that button could make the page send more than it did before it was pressed.
-- **A browser that sends Global Privacy Control is taken at its word**, unasked, and the site sends
-  nothing: Brave and DuckDuckGo by default, Firefox in its private windows, and any browser where
-  the reader turned it on. About then says so in place of the switch. **Do Not Track is not read.**
-  The browsers that offered it have retired it — Safari in 2019, Firefox in 2025, which points its
-  users to GPC instead — so what still sends it is mostly an old setting nobody remembers choosing,
-  and the European Data Protection Board has said GDPR's objection by automated means (Art. 21(5))
-  does not make a site bound to honour it. GPC is the signal a reader can still set, and the one
-  the law names: a binding opt-out in California and a dozen other states.

@@ -149,17 +149,28 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   pyBigWig and SciPy to the digits written, P and q to their four places above 10⁻⁴ where an exponent
   does not write them, and by entry the run takes 0.64 s against the 10 kb stretches' 1.2 s.
 
-- **The laptop notebook runs each of its 23 analyses in the app as well as on the command line
-  (§18.10).** What a genome-wide analysis costs was measured on the command line alone, where a reader
-  runs most of them in the browser. Each is now run a second time in headless Chromium, as a reader
-  runs it (`notebooks/scripts/laptop.mjs`): the files the command names dropped on the landing page, a
-  map framed on its whole genome at the command's resolution, the task opened from the Analysis panel,
-  every flag of the command set in its form, and **run** pressed once Chromium is idle — a Chromium of
-  its own for each, so nothing an earlier run held is counted. Its time is the app's own, dispatch to
-  result; its CPU time and peak memory are the page's, sampled five times a second, with all of
-  Chromium's kept beside them. The table, the five analyses at two depths and the figure show both, and
-  the line the app's console wrote for each run is held to the command it ran, flag by flag. The
-  runner's render installs Playwright's Chromium and may take five hours.
+- **The laptop notebook runs each of its 23 analyses in the app, in Chromium, Firefox and WebKit, as
+  well as on the command line (§18.10).** What a genome-wide analysis costs was measured on the command
+  line alone, where a reader runs most of them in the browser. Each is now run again in each of the
+  three browser engines Playwright drives headless — Chromium, which Chrome and Edge are built on;
+  Firefox; and WebKit, Safari's engine — as a reader runs it (`notebooks/scripts/laptop.mjs`): the
+  files the command names dropped on the landing page, a map framed on its whole genome at the
+  command's resolution, the task opened from the Analysis panel, every flag of the command set in its
+  form, and **run** pressed once the map is drawn, its circles measured and the browser idle — a
+  browser of its own for each, so nothing an earlier run held is counted. Its time is the app's own, dispatch to result; its CPU time and peak
+  memory are the page's, sampled five times a second as the operating system counts them, the same way
+  in the three, with all of the browser's processes kept beside them. Every file a command names is
+  read through before each run, so the first venue to read an 8.3 GB map does not pay alone for
+  reading it from disk. `LAPTOP_BROWSERS` names the
+  browsers, all three unless it says. The table under the results is one row a run; the page shows the
+  time, the CPU time and the memory with a column for each venue, each browser against the command line
+  and against Chromium, how many finished in each, the five analyses at two depths and the figure, and
+  the line each browser's console wrote for each run is held to the command it ran, flag by flag, and to
+  the others'. The memory table's column for a browser is what the run added to what the page already
+  held, and a sentence gives the geometric means of each browser's CPU time and peak memory over the
+  command line's. Its findings are written by the page itself, where they were inline expressions that a
+  Quarto before 1.4 printed as code. The runner's render installs Playwright's three browsers and may
+  take close to six hours.
 
 - **ICE balances to Float32's precision (§7.5).** It went on until every bin's marginal was within
   1e-5 of their mean, which left its cells up to 3·10⁻⁵ from cooltools' iterative correction; it now
@@ -168,6 +179,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   Micro-C at 1 kb takes 0.6 s where it took 0.35 — and nothing a colormap can show, so a block is
   still called balanced at 1e-5: no caption that said balanced now says it stopped before
   convergence.
+
+### Removed
+
+- **Telemetry, all of it (§1, §11, §13, §18.10; §31 is gone).** The site sends nothing on its own
+  behalf any more: no visit, no format opened, no task, error, install or *allow access* counted, and
+  no request to Umami. About's *Telemetry* section and its switch go, and so does the landing page's
+  clause about it, whose privacy note says again that there is no upload, no account and no server;
+  so do `src/telemetry.ts`, the `TELEMETRY_ENDPOINT` and `TELEMETRY_WEBSITE` build variables and the
+  deploy's use of them. C1 is again *no server-side component of any kind*. *forget everything*
+  keeps no key back: a `chromosomix:telemetry` left by an earlier version is swept with the rest, and
+  nothing reads it. The gallery script is now `scripts/ui-allow.mjs`, and drives *allow access*
+  alone.
 
 ### Fixed
 

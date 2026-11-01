@@ -37,7 +37,6 @@ import { tabAmong } from './tabWalk'
 import { dragHasFileRow } from './fileDrag'
 import { chooseFiles, filesFrom } from './chooseFiles'
 import { allowHandles, hasHandle } from '../state/handles'
-import { recordTelemetry } from '../telemetry'
 import { pairIndexes } from '../annotations/loader'
 import { cardTitle, icon, iconButton } from './icons'
 import { batchFields } from './batchSettings'
@@ -635,7 +634,6 @@ export class AnnotationCard {
       () => {
         allow.disabled = true
         void allowHandles(name).then((file) => {
-          recordTelemetry({ name: 'allow', outcome: file === null ? 'refused' : 'allowed' })
           if (file !== null) return
           if (hasHandle(name)) {
             allow.disabled = false

@@ -27,14 +27,6 @@ import {
 import { devFeature } from '../state/devFeatures'
 import type { TourProgress } from '../state/tour'
 import { tutorialButtons } from './tutorialOffer'
-import {
-  browserDeclines,
-  setTelemetry,
-  startTelemetry,
-  telemetryHost,
-  telemetryOffered,
-  telemetryWanted,
-} from '../telemetry'
 
 /**
  * The modifier a gesture actually wants, on the machine reading the dialog.
@@ -489,10 +481,6 @@ function overview(repoUrl: string, tutorial: AboutTutorial | null | undefined, c
       'Source, issues and the format specification: ',
       el('a', { href: repoUrl, text: repoUrl, class: 'link' }),
     ),
-    // What the site's telemetry holds and where it goes, with the switch (§31):
-    // on the tab About opens on, as the other thing a reader asks of a page
-    // before trusting it with their data. Absent where nothing is sent.
-    ...(telemetryOffered() ? [telemetrySection()] : []),
   )
 }
 
@@ -621,60 +609,6 @@ function renderTime(seconds: number): string {
   const minutes = Math.round(seconds / 60)
   if (minutes < 60) return `${minutes} min`
   return `${Math.floor(minutes / 60)} h ${minutes % 60} min`
-}
-
-/**
- * The telemetry (§31): what is sent, where it goes, and the switch that stops
- * it for this browser.
- *
- * The sentence names the endpoint's host rather than a product, so it stays
- * true of whatever the site is built to send to. A browser that sends Global
- * Privacy Control is told it is being taken at its word, and offered no switch,
- * since there is nothing left for one to turn off.
- */
-function telemetrySection(): HTMLElement {
-  const host = telemetryHost()
-  const what = el('p', {
-    text:
-      `This site sends anonymous telemetry to ${host}: the file formats opened, the analyses ` +
-      'run and the errors met. Never a file name, an address or a place on the genome, and no ' +
-      'cookie.',
-  })
-  let control: HTMLElement
-  if (browserDeclines()) {
-    control = el('p', {
-      class: 'hint',
-      text: 'Your browser sends Global Privacy Control, so this site sends nothing from it.',
-    })
-  } else {
-    const toggle = el('button', {
-      class: 'btn btn-toggle',
-      type: 'button',
-      text: 'telemetry',
-      title: 'Send anonymous telemetry about how this site is used. Off sends nothing from this browser.',
-      attrs: { 'aria-pressed': String(telemetryWanted()) },
-    })
-    toggle.addEventListener('click', () => {
-      const on = toggle.getAttribute('aria-pressed') !== 'true'
-      setTelemetry(on)
-      toggle.setAttribute('aria-pressed', String(on))
-      // Turned on from off: this visit is sent from here on.
-      if (on) startTelemetry()
-    })
-    control = el(
-      'div',
-      { class: 'about-telemetry-switch' },
-      toggle,
-      el('span', { class: 'hint', text: 'Off sends nothing from this browser.' }),
-    )
-  }
-  return el(
-    'section',
-    { class: 'about-telemetry', attrs: { 'aria-labelledby': 'about-telemetry-title' } },
-    el('h3', { class: 'about-heading', text: 'Telemetry', attrs: { id: 'about-telemetry-title' } }),
-    what,
-    control,
-  )
 }
 
 /**
