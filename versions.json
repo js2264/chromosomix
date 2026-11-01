@@ -235,6 +235,13 @@
   ],
   "pulls": [
     {
+      "number": 153,
+      "commit": "7e1b541",
+      "title": "Remove telemetry entirely (§1, §11, §13, §18.10; §31 removed)",
+      "branch": "ccr-77e109fa-yl3f7a",
+      "date": "2026-11-01T07:29:26Z"
+    },
+    {
       "number": 151,
       "commit": "3d48cef",
       "title": "Service worker: answer only the app's own address, so llms.txt and a 404 open as themselves (§11)",
