@@ -156,8 +156,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   Firefox; and WebKit, Safari's engine — as a reader runs it (`notebooks/scripts/laptop.mjs`): the
   files the command names dropped on the landing page, a map framed on its whole genome at the
   command's resolution, the task opened from the Analysis panel, every flag of the command set in its
-  form, and **run** pressed once the browser is idle — a browser of its own for each, so nothing an
-  earlier run held is counted. Its time is the app's own, dispatch to result; its CPU time and peak
+  form, and **run** pressed once the map is drawn, its circles measured and the browser idle — a
+  browser of its own for each, so nothing an earlier run held is counted. Its time is the app's own, dispatch to result; its CPU time and peak
   memory are the page's, sampled five times a second as the operating system counts them, the same way
   in the three, with all of the browser's processes kept beside them. Every file a command names is
   read through before each run, so the first venue to read an 8.3 GB map does not pay alone for

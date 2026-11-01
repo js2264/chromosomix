@@ -10192,7 +10192,9 @@ in Playwright's build, the nearest a script comes to Safari — a browser of its
 files the command names dropped on the landing page — a map as a workspace names it, at the command's
 resolution, balanced, its whole genome on screen, with a set of loops as a track beside it, or tracks
 and a FASTA with its index alone — the task opened from the Analysis panel by its title, every flag of
-the command set in its form, the page left until the browser is idle, and **run** pressed.
+the command set in its form, the page left until the map is drawn, the app has measured which of its
+sequences are circles (§8.15) and the browser is idle — a tenth of a core, where an idle page with a
+map open keeps 2% busy in Chromium, 5% in Firefox and 6% in WebKit — and **run** pressed.
 `LAPTOP_BROWSERS` names the browsers, all three unless it says, and the page is of those it names. The
 time is the app's own, from the job's dispatch to its result, and the opening of the files is timed
 apart; the CPU time and the peak memory are the page's, sampled five times a second from the press to

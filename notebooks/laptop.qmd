@@ -388,8 +388,11 @@ gives in bytes and Linux in kilobytes).
 
 In the app, each command runs in each browser in turn, a browser of its own, launched for it and closed
 after it, so that nothing an earlier run read or drew is in what this one holds. Once the files are open
-and the form is set, the page is left until the browser is idle — what the app starts by itself once a
-map is open is over before the run — and then **run** is pressed. Until the console records the run's
+and the form is set, the page is left until the map is drawn, the app has measured which of its
+sequences are circles, and the browser is idle — what the app starts by itself once a map is open is
+over before the run — and then **run** is pressed. A page waiting on the disk spends no CPU, and the
+measure of the circles reads at a few percent of a core, so neither is told apart from idle by the CPU:
+the app's own word that it has drawn a map, and that it has measured its circles, is waited for. Until the console records the run's
 end, the browser's processes are sampled five times a second, the same way in the three: their CPU times
 and resident sets as the operating system counts them, from `/proc` on Linux and `ps` on macOS. The
 page's are the processes that render pages — Chromium's renderers, Firefox's web content processes,
