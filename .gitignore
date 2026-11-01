@@ -85,3 +85,5 @@ notebooks/*_files/
 notebooks/.quarto/
 # The notebook Quarto executes, written beside the .qmd for as long as a render runs.
 notebooks/*.quarto_ipynb
+# What notebooks/scripts/timing.plot.R and validation.plot.R draw, regenerated from the tables the site publishes.
+notebooks/*.pdf

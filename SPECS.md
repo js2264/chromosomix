@@ -10211,10 +10211,12 @@ measured, one row a run — on the command line or in a browser — with the mac
 version of the program it ran in (Node's, or the browser's) and the line the app's console wrote, and a
 second render of the same build reads back every run whose program is the same version, but for a run
 the app did not finish, so a browser added later is the only one run. The page is three tables of all
-23, the wall-clock time, the CPU time and the peak memory, each with a column for the command line and
-one for each browser; what the slowest and the largest were in each, each browser against the command
-line and against the first browser, and how many finished; the five analyses side by side at the two
-depths, a figure, every command and the line the app wrote for each in two blocks at the end, whether
+23, the wall-clock time, the CPU time and the memory, each with a column for the command line and one
+for each browser — the memory in a browser being what the run added to what the page held when **run**
+was pressed, the peak and that hold kept in the table to download —; what the slowest and the largest
+were in each, each browser against the command line and against the first browser, the geometric means
+of each browser's CPU time and peak memory over the command line's, and how many finished; the five
+analyses side by side at the two depths, a figure, every command and the line the app wrote for each in two blocks at the end, whether
 every browser wrote the same line, and every browser's line held to the command: every flag of the
 command with its value, and besides them only the task's parameters at their defaults and those its
 form answers from what is open, or the page says what else.

@@ -93,6 +93,7 @@ import tempfile
 import time
 import urllib.request
 from pathlib import Path
+from statistics import geometric_mean
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
@@ -506,6 +507,7 @@ for column in APP_ONLY:
     times[column] = times[column] if column in times else math.nan
 times = times.sort_values(['name', 'venue'], key=lambda column: column.map(
     {'name': ORDER, 'venue': VENUES}[column.name].index)).reset_index(drop=True)
+times['added_mb'] = times['peak_mb'] - times['rest_mb']
 TASK = times.drop_duplicates('name').set_index('name').loc[ORDER, ['data', 'analysis', 'resolution', 'command']]
 FAILED = times[times['error'] != '']
 
@@ -546,15 +548,15 @@ def megabytes(mb):
 unbroken = lambda seconds: duration(seconds).replace(' ', '\N{NO-BREAK SPACE}')
 
 
-def measure(heading, column, shown, before=False):
+def measure(heading, column, shown, added=False):
     """A table of one measure: each analysis, and a column for each venue under the measure's heading —
-    and, for the memory, what the page held before the run in each browser."""
+    but, for the memory, the command line's alone, and what the run added to the page in each browser."""
     table = pd.DataFrame({('', key): TASK[key].values for key in ['data', 'analysis', 'resolution']})
-    for venue, values in wide(column).items():
+    for venue, values in wide(column, VENUES[:1] if added else VENUES).items():
         table[(heading, venue)] = values.map(shown).values
-    if before:
-        for venue, values in wide('rest_mb', APPS).items():
-            table[('before the run', venue)] = values.map(shown).values
+    if added:
+        for venue, values in wide('added_mb', APPS).items():
+            table[('added by the run', venue)] = values.map(shown).values
     table.columns = pd.MultiIndex.from_tuples(table.columns)
     return table.style.hide(axis='index')
 ```
@@ -575,11 +577,11 @@ measure('wall-clock time', 'wall_s', unbroken)
 measure('CPU time', 'cpu_s', unbroken)
 ```
 
-### Peak memory
+### Memory
 
 ```{python}
 #| column: page
-measure('peak memory (MB)', 'peak_mb', megabytes, before=True)
+measure('peak memory (MB)', 'peak_mb', megabytes, added=True)
 ```
 
 :::
@@ -611,8 +613,17 @@ def ratios(series, of):
     return f'{series.median():.1f} times {of} at the median, from {series.min():.1f} to {series.max():.1f} times'
 
 
+def on_average(venue):
+    """A browser's CPU time and peak memory over the command line's, as geometric means of its analyses."""
+    cpu, memory = ((measured[venue] / measured['command line']).dropna() for measured in (CPU, PEAK))
+    if cpu.empty:
+        return f'{where(venue)}, no analysis finished in both to compare'
+    return (f"{where(venue)}, {geometric_mean(cpu):.1f} times the command line's CPU time and "
+            f"{geometric_mean(memory):.1f} times its peak memory")
+
+
 EXTREMES = {venue: extremes(venue) for venue in VENUES}
-WALL, PEAK = wide('wall_s'), wide('peak_mb')
+WALL, CPU, PEAK = wide('wall_s'), wide('cpu_s'), wide('peak_mb')
 #: Each browser's time over the command line's, analysis by analysis; and, for each browser after the
 #: first, its time and its memory over the first's.
 AGAINST_THE_LINE = {venue: (WALL[venue] / WALL['command line']).dropna() for venue in APPS}
@@ -642,6 +653,8 @@ print(f"- **Under a minute:** of the {len(ORDER)} analyses, {listing(under)}.")
 print(f"- **Slowest:** {'; '.join(slowest_each)}.")
 print(f"- **Most memory:** {'; '.join(largest_each)}.")
 print(f"- **The app against the command line:** {'; '.join(against_line)}.")
+print(f"- **On average:** {'; '.join(on_average(venue) for venue in APPS)}, counting what the page held before "
+      f"the run (geometric means over the analyses each finished).")
 if OTHERS:
     print(f"- **The browsers against {FIRST}:** {'; '.join(against_first)}.")
 if len(FAILED):
@@ -662,14 +675,15 @@ than the command line and more CPU.
 #| echo: false
 #| output: asis
 rest = wide('rest_mb', APPS).median()
-added = (wide('peak_mb', APPS) - wide('rest_mb', APPS)).median()
-print(f"The page's peak memory includes what it held before **run** was pressed, which the table gives "
-      f"beside it: the app itself, the files it had opened and the picture of them — at the median, "
-      f"{listing(f'{rest[venue]:,.0f} MB in {venue}' for venue in APPS)}. What a run added to that is, at "
-      f"the median, {listing(f'{added[venue]:,.0f} MB in {venue}' for venue in APPS)}. Its time leaves out "
-      f"the opening of the files, which on the command line is part of the run: reading a GTF of every "
-      f"RefSeq transcript, say, is done in the app when the file is dropped (`open_s` in the table under "
-      f"the results).")
+added = wide('added_mb', APPS).median()
+print(f"In a browser, the table gives what a run added to the page's memory — at the median, "
+      f"{listing(f'{added[venue]:,.0f} MB in {venue}' for venue in APPS)}: its peak less what it held when "
+      f"**run** was pressed, the app itself, the files it had opened and the picture of them — at the median, "
+      f"{listing(f'{rest[venue]:,.0f} MB in {venue}' for venue in APPS)}. The average above, the table "
+      f"below and the figure count the whole peak (`peak_mb`, `rest_mb` and `added_mb` in the table under "
+      f"the results). The app's time leaves out the opening of the files, which on the command line is part "
+      f"of the run: reading a GTF of every RefSeq transcript, say, is done in the app when the file is "
+      f"dropped (`open_s` there too).")
 ```
 
 The mouse and human Hi-C maps differ 16-fold in depth (69 million and 1.08 billion contacts), on genomes
