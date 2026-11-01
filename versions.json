@@ -235,6 +235,13 @@
   ],
   "pulls": [
     {
+      "number": 154,
+      "commit": "1c7df0e",
+      "title": "Notebooks: ask again when a download's server fails (§18.10)",
+      "branch": "ccr-08663c37-4kyek9",
+      "date": "2026-11-01T21:01:42Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
