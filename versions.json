@@ -236,10 +236,10 @@
   "pulls": [
     {
       "number": 153,
-      "commit": "7e1b541",
+      "commit": "a61def3",
       "title": "Remove telemetry entirely (§1, §11, §13, §18.10; §31 removed)",
       "branch": "ccr-77e109fa-yl3f7a",
-      "date": "2026-11-01T07:29:26Z"
+      "date": "2026-11-01T17:50:16Z"
     },
     {
       "number": 151,
