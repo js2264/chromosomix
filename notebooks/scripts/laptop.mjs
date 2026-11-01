@@ -471,6 +471,14 @@ async function prepare(page) {
   await row.scrollIntoViewIfNeeded()
   await row.click()
   await page.waitForSelector('.analysis-drawer', { state: 'visible' })
+  // A map still being read is not on screen yet, and a task run against it is refused: "no contact map
+  // in this view". A page waiting on the disk spends no CPU, so the browser's being idle does not say
+  // the map is there; the drawer naming what the task will run on does.
+  if (PLAN.workspace !== undefined) {
+    await page.waitForFunction(
+      () => /^will run on /.test(document.querySelector('.analysis-drawer .analysis-framing')?.textContent ?? ''),
+      null, { timeout: LIMIT_MS, polling: 500 })
+  }
   await sleep(1000)
   for (const setting of PLAN.set ?? []) await set(page, setting)
   // Nothing left focused, whose caret would blink, nor under the pointer, which would be redrawn

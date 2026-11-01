@@ -10180,8 +10180,11 @@ instead. Then it runs 23 analyses genome-wide: on the mouse map, coverage, P(s),
 directionality index, compartments (E1, unphased), loop calling, chromosight's loops, a pileup over them
 and a 3D model; five of these again on the human map, sixteen times deeper; P(s) at 50 bp, loops and a
 model on the yeast; and peak calling with IDR, interval overlap, a metaplot, track correlation, base
-composition and a motif search over the mouse genome. **Each runs on the command line**, a process of
-its own: `os.wait4` gives its CPU time and peak resident set, and the wall clock runs from its start to
+composition and a motif search over the mouse genome. Before each run, every file its command names
+is read through once, so that every run starts from files the system holds in memory, as a reader's do
+once opened, and none pays alone for a read from disk that the venue after it is spared — an 8.3 GB map
+read cold took the first venue to read it more than twice as long. **Each runs on the command line**, a
+process of its own: `os.wait4` gives its CPU time and peak resident set, and the wall clock runs from its start to
 its exit. **And in the app**, as a reader runs it (`notebooks/scripts/laptop.mjs`, the dist/ and
 dist-cli/ of one commit, as the parity holds them), **in each of the three browser engines Playwright
 drives headless** — Chromium, which Chrome and Edge are built on; Firefox; and WebKit, Safari's engine,

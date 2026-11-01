@@ -376,6 +376,12 @@ def session(name, args):
     return plan
 ```
 
+Each analysis is run on the command line and then in each browser, one after another, and the first of
+them to read a file would find it on disk where the others find it in the system's memory: an 8.3 GB map
+read from disk took the run that read it first more than twice as long. So before each run, on the
+command line or in a browser, every file the command names is read through once, and every run starts
+from files the system holds in memory, as a reader's do once they have opened them.
+
 On the command line, each command runs as a process of its own, and `os.wait4` returns what the system
 counted of it: its CPU time, user and system, and its peak resident memory (`ru_maxrss`, which macOS
 gives in bytes and Linux in kilobytes).
@@ -466,6 +472,14 @@ def save(rows):
     pd.DataFrame(rows).to_csv(TIMINGS, sep='\t', index=False)
 
 
+def warm(name, args):
+    """Read through every file a command names, so that no run pays alone for reading them from disk."""
+    for path in session(name, args)['files']:
+        with open(WORK / path, 'rb') as handle:
+            while handle.read(1 << 24):
+                pass
+
+
 # Each command on the command line and then in each browser — the pileup's loops and the overlap's peaks
 # are the command line's, so every venue reads the same files — and each run saved as soon as it is
 # measured, one row each.
@@ -476,6 +490,7 @@ for name, data, analysis, resolution, args in TASKS:
     for venue, browser in zip(VENUES, [None, *BROWSERS]):
         if venue in done:
             continue
+        warm(name, args)
         measured = on_the_command_line(name, args) if browser is None else in_the_app(name, args, browser)
         rows.append({**task, 'venue': venue, 'version': PROGRAMS[venue], **measured,
                      'command': 'chromosomix ' + ' '.join(args), **MACHINE})

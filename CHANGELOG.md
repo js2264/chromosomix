@@ -159,7 +159,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   form, and **run** pressed once the browser is idle — a browser of its own for each, so nothing an
   earlier run held is counted. Its time is the app's own, dispatch to result; its CPU time and peak
   memory are the page's, sampled five times a second as the operating system counts them, the same way
-  in the three, with all of the browser's processes kept beside them. `LAPTOP_BROWSERS` names the
+  in the three, with all of the browser's processes kept beside them. Every file a command names is
+  read through before each run, so the first venue to read an 8.3 GB map does not pay alone for
+  reading it from disk. `LAPTOP_BROWSERS` names the
   browsers, all three unless it says. The table under the results is one row a run; the page shows the
   time, the CPU time and the memory with a column for each venue, each browser against the command line
   and against Chromium, how many finished in each, the five analyses at two depths and the figure, and
