@@ -1,6 +1,13 @@
 {
-  "latest": "9c21388",
+  "latest": "9731db4",
   "versions": [
+    {
+      "commit": "9731db4",
+      "version": "0.19.0",
+      "date": "2026-11-01T19:24:42+01:00",
+      "subject": "0.19.0",
+      "tag": "v0.19.0"
+    },
     {
       "commit": "9c21388",
       "version": "0.18.0",
@@ -133,13 +140,6 @@
       "date": "2026-10-26T19:01:33+01:00",
       "subject": "0.17.0",
       "tag": "v0.17.0"
-    },
-    {
-      "commit": "bf8f7fc",
-      "version": "0.16.0",
-      "date": "2026-10-26T18:58:52+01:00",
-      "subject": "Update figure2 to include TAD pile-up APA",
-      "tag": ""
     },
     {
       "commit": "8d8450d",
