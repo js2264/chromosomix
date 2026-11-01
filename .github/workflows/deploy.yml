@@ -90,12 +90,6 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
           GOOGLE_API_KEY: ${{ vars.GOOGLE_API_KEY }}
           DROPBOX_APP_KEY: ${{ vars.DROPBOX_APP_KEY }}
-          # Where the site sends its telemetry, and its id there (SPECS §31,
-          # docs/deploy.md).
-          # This build only: the archived copy below, the previews, the
-          # installers and the package count nothing.
-          TELEMETRY_ENDPOINT: ${{ vars.TELEMETRY_ENDPOINT }}
-          TELEMETRY_WEBSITE: ${{ vars.TELEMETRY_WEBSITE }}
 
       # The files for language models — llms.txt, the pages it links under
       # llms/ and llms-full.txt — are written by the build above from this
