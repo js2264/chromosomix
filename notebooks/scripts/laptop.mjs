@@ -25,7 +25,7 @@
  * launched — WebKit's, on macOS, which launchd starts for it. The **page's** are those that render
  * pages: Chromium's renderers, Firefox's web content processes, WebKit's web processes — the page's
  * own, whose threads its workers are, where the app computes and holds what it reads, and any the
- * browser keeps spare. Its CPU time is the sum of what each spent across the run, and its peak memory
+ * browser keeps spare (and, on macOS, Firefox's for its add-ons, which nothing there tells apart). Its CPU time is the sum of what each spent across the run, and its peak memory
  * the largest of their summed resident sets — sampled, so a peak that lasts less than a sample can be
  * missed, where the command line's `ru_maxrss` cannot miss one. **All of the browser's** are counted
  * the same way beside them: the browser process, which reads a dropped file for the page, and its GPU,
@@ -75,8 +75,13 @@ if (!(PLAN.browser in BROWSERS)) {
 const LIMIT_MS = PLAN.limitMs ?? 3_600_000
 /** How often the processes are sampled while the run runs. */
 const EVERY_MS = 200
-/** Idle: every process together using less than this share of one core over {@link QUIET_MS}. */
-const QUIET_SHARE = 0.05
+/**
+ * Idle: every process together using less than this share of one core over {@link QUIET_MS}. With a
+ * map open and nothing running, the page and the browser's own processes keep about 2% of a core busy
+ * in Chromium, 5% in Firefox and 6% in WebKit, drawing and answering timers; a job of the app's keeps
+ * a whole core or more. A tenth of a core tells the two apart in all three.
+ */
+const QUIET_SHARE = 0.1
 const QUIET_MS = 2_000
 /** How long the page is waited on to be idle before the run is started anyway, and said so. */
 const SETTLE_LIMIT_MS = 120_000
@@ -195,23 +200,28 @@ function ours(processes, scope) {
   return [...found.values()]
 }
 
-const PAGE_NAMES = /^(Web Content|Isolated Web Co)/
+/** The names Linux gives Firefox's processes that render web pages, its own pages and add-ons apart. */
+const PAGE_NAMES = /^(Web Content|Isolated Web Co|file:\/\/ Content)/
 
 /**
- * What a process of the browser is, from its command line: `page` for one that renders pages and runs
- * their workers — Chromium's renderer; Firefox's web content process (Firefox itself on Linux,
- * `plugin-container` on macOS), whose type, `tab`, is the last word of its line, and which Linux
- * names; WebKit's web process — and otherwise the type the browser
- * gives it, or `browser` for the browser itself and what launched it.
+ * What a process of the browser is, from its name and command line: `page` for one that renders pages
+ * and runs their workers, and otherwise the type the browser gives it, or `browser` for the browser
+ * itself and what launched it. Chromium's renderers are `--type=renderer`. Firefox's child processes
+ * (Firefox itself on Linux, `plugin-container` on macOS) end their line with their type, and its web
+ * content processes are `tab` — as are those for its own pages and add-ons, which Linux tells apart by
+ * name and macOS does not, so that there they are the page's too. WebKit's web process is
+ * `WPEWebProcess` in Playwright's build for Linux, `WebKitWebProcess` in WebKitGTK and
+ * `com.apple.WebKit.WebContent` on macOS.
  */
 function kind({ command, name }) {
   const chromium = command.match(/\s--type=([\w-]+)/)
   if (chromium) return chromium[1] === 'renderer' ? 'page' : chromium[1]
-  if (/\s-contentproc(\s|$)|\bplugin-container\b|\s-childID\s/.test(command) || PAGE_NAMES.test(name)) {
+  if (/\s-contentproc(\s|$)|\bplugin-container\b|\s-childID\s/.test(command)) {
     const type = command.split(/\s+/).at(-1)
-    return type === 'tab' || PAGE_NAMES.test(name) ? 'page' : type
+    if (type !== 'tab') return type
+    return name === '' || PAGE_NAMES.test(name) ? 'page' : name.toLowerCase().replace(/\W+/g, '-')
   }
-  const webkit = command.match(/^\S*?(?:WebKit(\w+?)Process|com\.apple\.WebKit\.(\w+))(?:[.\s]|$)/)
+  const webkit = command.match(/^\S*?(?:(?:WPE|WebKit)(\w+?)Process|com\.apple\.WebKit\.(\w+))(?:[.\s]|$)/)
   if (webkit) {
     const type = webkit[1] ?? webkit[2]
     return type === 'Web' || type === 'WebContent' ? 'page' : type.toLowerCase()
@@ -342,14 +352,22 @@ function actions(page) {
   return page.evaluate(() => JSON.parse(localStorage.getItem('chromosomix:actions') ?? '{"entries":[]}').entries)
 }
 
-/** Press a panel's fold button, if the panel is not already showing. */
-async function show(page, panel) {
-  for (const button of await page.$$(`button[title^="Show the ${panel} panel"]`)) {
-    if (await button.isVisible()) {
-      await button.click()
-      await sleep(600)
-      return
+/**
+ * Press a panel's fold button until what the panel holds is on screen. The button is looked for again
+ * each time: on a machine that is busy the app can have drawn the map before the panel's own button,
+ * and a panel looked for once then was left folded, its rows out of reach.
+ */
+async function show(page, panel, holds) {
+  const deadline = Date.now() + 60_000
+  while (!(await page.locator(holds).first().isVisible())) {
+    if (Date.now() > deadline) throw new Error(`the ${panel} panel did not open`)
+    for (const button of await page.$$(`button[title^="Show the ${panel} panel"]`)) {
+      if (await button.isVisible()) {
+        await button.click()
+        break
+      }
     }
+    await sleep(600)
   }
 }
 
@@ -448,7 +466,7 @@ async function set(page, { key, value, option, ticks, on }) {
 
 /** The task opened from the Analysis panel and its form set. */
 async function prepare(page) {
-  await show(page, 'Analysis')
+  await show(page, 'Analysis', '.analysis-row-title')
   const row = page.locator('.analysis-row-title', { hasText: PLAN.task }).first()
   await row.scrollIntoViewIfNeeded()
   await row.click()
