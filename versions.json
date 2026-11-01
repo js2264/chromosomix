@@ -235,6 +235,13 @@
   ],
   "pulls": [
     {
+      "number": 152,
+      "commit": "c4ea1f1",
+      "title": "Laptop notebook: run each analysis in the app in Chromium, Firefox and WebKit (§18.10)",
+      "branch": "ccr-3ceefccc-h0uz5b",
+      "date": "2026-11-01T07:25:27Z"
+    },
+    {
       "number": 151,
       "commit": "3d48cef",
       "title": "Service worker: answer only the app's own address, so llms.txt and a 404 open as themselves (§11)",
