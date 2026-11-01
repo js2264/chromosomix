@@ -236,10 +236,10 @@
   "pulls": [
     {
       "number": 151,
-      "commit": "3d48cef",
+      "commit": "d704895",
       "title": "Service worker: answer only the app's own address, so llms.txt and a 404 open as themselves (§11)",
       "branch": "js/adoring-shannon-pg14tt",
-      "date": "2026-10-31T18:10:43Z"
+      "date": "2026-11-01T18:04:58Z"
     },
     {
       "number": 122,
