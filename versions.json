@@ -1,6 +1,13 @@
 {
-  "latest": "a51d315",
+  "latest": "712e1ea",
   "versions": [
+    {
+      "commit": "712e1ea",
+      "version": "0.18.0",
+      "date": "2026-11-01T18:37:51+01:00",
+      "subject": "ci: update laptop notebook",
+      "tag": ""
+    },
     {
       "commit": "a51d315",
       "version": "0.18.0",
@@ -132,13 +139,6 @@
       "version": "0.16.0",
       "date": "2026-10-25T23:13:16Z",
       "subject": "Validation: run pairtools with MPLBACKEND=agg",
-      "tag": ""
-    },
-    {
-      "commit": "21a4cf8",
-      "version": "0.16.0",
-      "date": "2026-10-25T20:09:41+01:00",
-      "subject": "Validation § 24: name its peaks' columns itself, not with § 5's `key` (#140)",
       "tag": ""
     },
     {
