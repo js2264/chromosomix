@@ -85,6 +85,8 @@ const QUIET_SHARE = 0.1
 const QUIET_MS = 2_000
 /** How long the page is waited on to be idle before the run is started anyway, and said so. */
 const SETTLE_LIMIT_MS = 120_000
+/** How long a map that has opened may take to be drawn before the run is given up. */
+const DRAWN_MS = 600_000
 /** Files that are another file's index, opened with it rather than as an entry of their own. */
 const INDEX = /\.(fai|tbi|csi|bai)$/i
 
@@ -471,13 +473,18 @@ async function prepare(page) {
   await row.scrollIntoViewIfNeeded()
   await row.click()
   await page.waitForSelector('.analysis-drawer', { state: 'visible' })
-  // A map still being read is not on screen yet, and a task run against it is refused: "no contact map
-  // in this view". A page waiting on the disk spends no CPU, so the browser's being idle does not say
-  // the map is there; the drawer naming what the task will run on does.
+  // A map still being read is not on screen yet, and a task run against it is refused: "this view has no
+  // contact map to run against". A page waiting on the disk spends no CPU, so the browser's being idle
+  // does not say the map is there; the app's own word that it has drawn one does (`perf/rendered.ts`).
+  // Not the drawer's "will run on", which WebKit leaves saying "no contact map" over a map it has drawn.
   if (PLAN.workspace !== undefined) {
     await page.waitForFunction(
-      () => /^will run on /.test(document.querySelector('.analysis-drawer .analysis-framing')?.textContent ?? ''),
-      null, { timeout: LIMIT_MS, polling: 500 })
+      () => performance.getEntriesByName('chromosomix:rendered', 'mark')
+        .some((mark) => mark.detail?.status === 'drawn' && mark.detail.maps.length > 0),
+      null, { timeout: Math.min(LIMIT_MS, DRAWN_MS), polling: 500 })
+      .catch(() => {
+        throw new Error(`the map was not drawn within ${DRAWN_MS / 60_000} minutes`)
+      })
   }
   await sleep(1000)
   for (const setting of PLAN.set ?? []) await set(page, setting)
