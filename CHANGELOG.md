@@ -166,7 +166,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   time, the CPU time and the memory with a column for each venue, each browser against the command line
   and against Chromium, how many finished in each, the five analyses at two depths and the figure, and
   the line each browser's console wrote for each run is held to the command it ran, flag by flag, and to
-  the others'. Its findings are written by the page itself, where they were inline expressions that a
+  the others'. The memory table's column for a browser is what the run added to what the page already
+  held, and a sentence gives the geometric means of each browser's CPU time and peak memory over the
+  command line's. Its findings are written by the page itself, where they were inline expressions that a
   Quarto before 1.4 printed as code. The runner's render installs Playwright's three browsers and may
   take close to six hours.
 
