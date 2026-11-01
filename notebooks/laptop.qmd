@@ -91,7 +91,6 @@ import subprocess
 import sys
 import tempfile
 import time
-import urllib.request
 from pathlib import Path
 from statistics import geometric_mean
 
@@ -99,6 +98,8 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 import pandas as pd
 import pyfaidx
+
+from download import download
 
 REDO = False
 
@@ -212,9 +213,7 @@ def fetch(name, url, expected):
         path.symlink_to(VALIDATION_DATA / name)
         return
     print('downloading', url)
-    part = path.with_name(name + '.part')
-    with urllib.request.urlopen(url) as response, open(part, 'wb') as out:
-        shutil.copyfileobj(response, out, 1 << 22)
+    part = download(url, path.with_name(name + '.part'))  # asked again when its server fails
     if md5(part) != expected:
         part.unlink()
         raise ValueError(f'{url} did not download as published: its MD5 is not {expected}.')

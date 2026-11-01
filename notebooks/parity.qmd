@@ -104,9 +104,10 @@ import shutil
 import subprocess
 import time
 import urllib.parse
-import urllib.request
 
 import pandas as pd
+
+from download import download
 
 for built, how in ((CLI, 'npm run build:cli'), (APP / 'index.html', 'npm run build')):
     if not built.exists():
@@ -129,15 +130,13 @@ def md5(path):
 
 
 def fetch(url, md5sum, name=None):
-    """A public file, fetched once into work/parity/data and held to its MD5: a file of that name
-    that is anything else is refused rather than compared."""
+    """A public file, fetched once into work/parity/data — asked again when its server fails, as
+    notebooks/scripts/download.py says — and held to its MD5: a file of that name that is anything
+    else is refused rather than compared."""
     path = DATA / (name or urllib.parse.unquote(url.rsplit('/', 1)[-1]))
     if not path.exists():
         print('fetching', url)
-        part = path.with_name(path.name + '.part')
-        with urllib.request.urlopen(url) as response, open(part, 'wb') as out:
-            shutil.copyfileobj(response, out, 1 << 22)
-        part.rename(path)
+        download(url, path)
     if md5(path) != md5sum:
         raise ValueError(f'{path} is not {url}: its MD5 is {md5(path)}, not {md5sum}. '
                          'Delete it, and it is fetched again.')

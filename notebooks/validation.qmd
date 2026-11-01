@@ -153,7 +153,6 @@ import subprocess
 import sys
 import time
 import urllib.parse
-import urllib.request
 import warnings
 from importlib.metadata import version
 
@@ -173,6 +172,8 @@ from matplotlib.spines import Spine
 from matplotlib.text import Text
 from matplotlib.ticker import FixedLocator
 from scipy import stats
+
+from download import download
 
 warnings.filterwarnings('ignore')
 if not CLI.exists():
@@ -201,15 +202,13 @@ PAIRTOOLS_ENV = {'MPLBACKEND': 'agg'}
 
 
 def fetch(url, name=None, md5=None):
-    """A public file, fetched once into work/validation/data, and held to `md5` where there is one: a
-    file of that name from anywhere else is refused rather than compared."""
+    """A public file, fetched once into work/validation/data — asked again when its server fails, as
+    notebooks/scripts/download.py says — and held to `md5` where there is one: a file of that name
+    from anywhere else is refused rather than compared."""
     path = DATA / (name or urllib.parse.unquote(url.rsplit('/', 1)[-1]))
     if not path.exists():
         print('fetching', url)
-        part = path.with_name(path.name + '.part')
-        with urllib.request.urlopen(url) as response, open(part, 'wb') as out:
-            shutil.copyfileobj(response, out, 1 << 22)
-        part.rename(path)
+        download(url, path)
     if md5 is not None:
         digest = hashlib.md5()
         with open(path, 'rb') as handle:

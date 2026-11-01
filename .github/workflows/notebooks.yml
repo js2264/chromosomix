@@ -72,7 +72,9 @@ name: Notebooks
 # `notebooks/requirements-higlass.txt`, higlass-python's environment, with
 # Ubuntu's libfuse 2 for the files it reads from a bucket.
 #
-# **What it costs.** Every run fetches its data rather than caching them: about
+# **What it costs.** Every run fetches its data rather than caching them —
+# through notebooks/scripts/download.py, which asks again when a server fails, as
+# GEO's answers one request in two with a 500 on some days — about
 # 9.8 GB for the validation (4DN's, UCSC's mm10 through iGenomes, GEO's yeast
 # Micro-C and ENCODE's GM12878 ChIP-seq and ATAC-seq, each from where it was
 # published, the 0.55 GB of 4DN's 27-GB GM12878 map that § 24 reads by range —

@@ -129,6 +129,8 @@ import numpy as np
 import pandas as pd
 from matplotlib.ticker import FuncFormatter, NullLocator
 
+from download import download, urlopen
+
 APP_COLOUR, REF = '#2a78d6', '#eb6834'
 INK, INK2, GRID, SURFACE, MISSING = '#0b0b0b', '#52514e', '#e7e6e2', '#fcfcfb', '#efeeea'
 plt.rcParams.update({
@@ -282,19 +284,17 @@ WHERE = {'local': 'from disk', 'cloud': 'from the bucket'}
 
 def remote_size(url):
     request = urllib.request.Request(url, method='HEAD')
-    with urllib.request.urlopen(request) as response:
+    with urlopen(request) as response:
         return int(response.headers['Content-Length'])
 
 
 def fetch_viewer_file(url, md5):
-    """A published file, fetched once into work/viewers/data and held to its MD5."""
+    """A published file, fetched once into work/viewers/data — asked again when its server fails, as
+    notebooks/scripts/download.py says — and held to its MD5."""
     path = VDATA / urllib.parse.unquote(url.rsplit('/', 1)[-1])
     if not path.exists():
         print('fetching', url)
-        part = path.with_name(path.name + '.part')
-        with urllib.request.urlopen(url) as response, open(part, 'wb') as out:
-            shutil.copyfileobj(response, out, 1 << 22)
-        part.rename(path)
+        download(url, path)
     digest = hashlib.md5()
     with open(path, 'rb') as handle:
         for block in iter(lambda: handle.read(1 << 22), b''):

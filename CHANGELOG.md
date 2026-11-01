@@ -10,6 +10,19 @@ The deployed site at <https://chromosomix.app/> is built from `main` on every pu
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Fixed
+
+- **The notebooks no longer fail on one failed download (§18.10).** Both runs of the Notebooks
+  workflow for 0.19.0 stopped a minute into the parity, on its first file: NCBI's server for GEO
+  answered `500 Internal Server Error`, as it did that day to about one request in two, and now and
+  then `403 Forbidden`, to requests it answered in full a second later. Every file the four notebooks
+  fetch now goes through `notebooks/scripts/download.py`, which asks again after a server's error, a
+  connection cut or timed out, or a body shorter than announced, with a wait that doubles to half a
+  minute, resumes from the byte it reached where the server takes a range, and gives up after twenty
+  failures in a row; the range reads and size checks of the timings' viewers do the same.
+
 ## [0.19.0] - 2026-11-01
 
 ### Added
