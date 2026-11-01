@@ -135,13 +135,29 @@ def _tables(name, folder):
 
         def shown(row, column, form):
             # The app's figures are blank for a run it did not finish, as is a table from before it had any.
-            value = row.get(column) or 'nan'
+            value = (row or {}).get(column) or 'nan'
             return '—' if value == 'nan' else form.format(float(value))
-        return _details(f'Every analysis ({len(rows)})', ['Data', 'Analysis', 'Resolution', 'Command line, s',
-                                                           'App, s', 'Command line, MB', 'App, MB'],
-                        [[r['data'], r['analysis'], r['resolution'], shown(r, 'wall_s', '{:,.1f}'),
-                          shown(r, 'app_wall_s', '{:,.1f}'), shown(r, 'peak_mb', '{:,.0f}'),
-                          shown(r, 'app_peak_mb', '{:,.0f}')] for r in rows])
+        if rows and 'venue' not in rows[0]:
+            # A table from before the app ran in more than one browser: one row an analysis, the app's
+            # figures in columns of their own.
+            return _details(f'Every analysis ({len(rows)})', ['Data', 'Analysis', 'Resolution', 'Command line, s',
+                                                               'App, s', 'Command line, MB', 'App, MB'],
+                            [[r['data'], r['analysis'], r['resolution'], shown(r, 'wall_s', '{:,.1f}'),
+                              shown(r, 'app_wall_s', '{:,.1f}'), shown(r, 'peak_mb', '{:,.0f}'),
+                              shown(r, 'app_peak_mb', '{:,.0f}')] for r in rows])
+        # One row a run, on the command line or in a browser: one line an analysis here, with a column
+        # for each venue's time and one for its memory.
+        venues, runs = [], {}
+        for r in rows:
+            venues += [r['venue']] if r['venue'] not in venues else []
+            runs.setdefault(r['name'], {})[r['venue']] = r
+        return _details(f'Every analysis ({len(runs)})',
+                        ['Data', 'Analysis', 'Resolution', *[f'{v[0].upper()}{v[1:]}, s' for v in venues],
+                         *[f'{v[0].upper()}{v[1:]}, MB' for v in venues]],
+                        [[first['data'], first['analysis'], first['resolution'],
+                          *[shown(by.get(v), 'wall_s', '{:,.1f}') for v in venues],
+                          *[shown(by.get(v), 'peak_mb', '{:,.0f}') for v in venues]]
+                         for by in runs.values() for first in [next(iter(by.values()))]])
     return []
 
 
