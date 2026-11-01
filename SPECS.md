@@ -10242,7 +10242,14 @@ stamp beside it (`pages.py committed`), the names its entry lists and nothing el
 They are documents, not tests: they need the data (about 6 GB for the analyses, 15 GB for the
 viewers, 160 MB for the parity and 13.7 GB for the laptop), the reference packages, yapc's own
 environment and higlass-python's, the two viewers and Playwright's browsers, and nothing in the suite
-runs them.
+runs them. Each file is fetched from where it was published, on every render, through
+`notebooks/scripts/download.py`, **which asks again when the server or the network fails** — a 500,
+502, 503, 504, 408, 425 or 429; a 403, which NCBI's server for GEO answers at random beside its 500s, to a request it
+answers in full a second later; a connection refused, reset or timed out; a body shorter than it was
+announced — after a wait that doubles from two seconds to half a minute, from the byte it reached
+where the server takes a range, and gives up only after twenty failures in a row with no byte between
+them, about eight minutes; any other 4xx is raised at once. One failed request was enough to stop a
+run, and on 1 November 2026 GEO failed one request in two.
 
 **They are published with every release, a job a notebook.** `.github/workflows/notebooks.yml`
 renders each on a fresh runner, with what `.github/actions/notebooks-setup` installs for it: the
