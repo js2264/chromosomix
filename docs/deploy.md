@@ -611,7 +611,8 @@ workflow** on any branch or tag, with the number of timed runs (four by default)
 publish. Each notebook renders in a job of its own, on a fresh runner, through the setup in
 `.github/actions/notebooks-setup`: the parity first, in about ten minutes, then the validation and
 the timings in one job (about three hours, the timings running the validation's commands on its
-inputs) beside the laptop (about an hour). A last job publishes only if the three pages rendered: it
+inputs) beside the laptop (about an hour on the command line and about as long again in each of
+the app's three browsers). A last job publishes only if the three pages rendered: it
 force-pushes them and the files beside them to the `notebooks` branch as one commit, attaches them
 to the release with the tables beside them — among them `validation.txt`, every number the
 validation's figures draw — and dispatches this deploy, which copies `validation/`, `timings/` and
@@ -623,11 +624,13 @@ page is published where, with which files beside it, is one table, `notebooks/sc
 
 **`/laptop/` is not the workflow's.** `notebooks/laptop.qmd` measures a genome-wide analysis on a
 laptop, so the page the site publishes is rendered by hand on one and committed as
-`notebooks/laptop.html` — the one page `.gitignore` lets through. To publish a new one, render it from
-the root of a clone and commit the file:
+`notebooks/laptop.html` — the one page `.gitignore` lets through. It runs each analysis on the command
+line and in the app in Chromium, Firefox and WebKit (`LAPTOP_BROWSERS` names fewer). To publish a new
+one, render it from the root of a clone and commit the file:
 
 ```bash
-npm ci && npm run build:cli
+npm ci && npm run build && npm run build:cli
+npm ci --prefix notebooks/viewers && npx --prefix notebooks/viewers playwright install chromium firefox webkit
 quarto render notebooks/laptop.qmd
 git add notebooks/laptop.html
 ```

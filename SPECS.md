@@ -10157,9 +10157,10 @@ differs**, or one side alone wrote it. Every file and its verdict is one line of
 `notebooks/work/parity/summary.tsv`.
 
 **And one for the reader's own machine.** `notebooks/laptop.qmd` answers what the other three do not
-— what a genome-wide analysis costs on a machine like the reader's, on the command line and in the app —
-with Quarto, pandas, matplotlib and pyfaidx, the built app and command line and Playwright's Chromium,
-and no reference package, so that a reader can render it on their own laptop. It downloads the
+— what a genome-wide analysis costs on a machine like the reader's, on the command line and in the app,
+in each of three browsers — with Quarto, pandas, matplotlib and pyfaidx, the built app and command line
+and Playwright's Chromium, Firefox and WebKit, and no reference package, so that a reader can render it
+on their own laptop. It downloads the
 validation's mouse map, yeast Micro-C, ATAC-seq replicates, mm10 and its RefSeq genes, and 4DN's IMR-90
 in situ Hi-C (Rao et al. 2014, 4DNFIJTOIGOI, 1.08 billion contacts): about 13.7 GB into
 `notebooks/work/laptop/data/`, each file held to its MD5, a file `validation.qmd` already holds linked
@@ -10167,26 +10168,44 @@ instead. Then it runs 23 analyses genome-wide: on the mouse map, coverage, P(s),
 directionality index, compartments (E1, unphased), loop calling, chromosight's loops, a pileup over them
 and a 3D model; five of these again on the human map, sixteen times deeper; P(s) at 50 bp, loops and a
 model on the yeast; and peak calling with IDR, interval overlap, a metaplot, track correlation, base
-composition and a motif search over the mouse genome. **Each runs twice.** On the command line, a
-process of its own: `os.wait4` gives its CPU time and peak resident set, and the wall clock runs from
-its start to its exit. **And in the app**, as a reader runs it, in a headless Chromium of its own
-(`notebooks/scripts/laptop.mjs`, the dist/ and dist-cli/ of one commit, as the parity holds them): the
+composition and a motif search over the mouse genome. Before each run, every file its command names
+is read through once, so that every run starts from files the system holds in memory, as a reader's do
+once opened, and none pays alone for a read from disk that the venue after it is spared — an 8.3 GB map
+read cold took the first venue to read it more than twice as long. **Each runs on the command line**, a
+process of its own: `os.wait4` gives its CPU time and peak resident set, and the wall clock runs from its start to
+its exit. **And in the app**, as a reader runs it (`notebooks/scripts/laptop.mjs`, the dist/ and
+dist-cli/ of one commit, as the parity holds them), **in each of the three browser engines Playwright
+drives headless** — Chromium, which Chrome and Edge are built on; Firefox; and WebKit, Safari's engine,
+in Playwright's build, the nearest a script comes to Safari — a browser of its own for each run: the
 files the command names dropped on the landing page — a map as a workspace names it, at the command's
 resolution, balanced, its whole genome on screen, with a set of loops as a track beside it, or tracks
 and a FASTA with its index alone — the task opened from the Analysis panel by its title, every flag of
-the command set in its form, the page left until Chromium is idle, and **run** pressed. The time is
-the app's own, from the job's dispatch to its result, and the opening of the files is timed apart; the
-CPU time and the peak memory are the page's, its renderer's, whose threads its workers are, sampled
-five times a second from the press to the console's record of the end — and all of Chromium's beside
-them, the browser that reads a dropped file for the page and the GPU process among them, where WebGL is
-drawn in SwiftShader and the page composited in software. Each result is written to
-`notebooks/work/laptop/timings.tsv` as soon as both are measured, with the machine, the build, the
-Chromium and the line the app's console wrote for the run, and a second render of the same build in
-the same Chromium reads it back instead of running again, but for a run the app did not finish. The
-page is a table of all 23, both ways, the five analyses side by side at the two depths, a figure, every
-command and every line the app wrote in two blocks at the end, and the line held to the command: every
-flag of the command with its value, and besides them only the task's parameters at their defaults and
-those its form answers from what is open, or the page says what else.
+the command set in its form, the page left until the map is drawn, the app has measured which of its
+sequences are circles (§8.15) and the browser is idle — a tenth of a core, where an idle page with a
+map open keeps 2% busy in Chromium, 5% in Firefox and 6% in WebKit — and **run** pressed.
+`LAPTOP_BROWSERS` names the browsers, all three unless it says, and the page is of those it names. The
+time is the app's own, from the job's dispatch to its result, and the opening of the files is timed
+apart; the CPU time and the peak memory are the page's, sampled five times a second from the press to
+the console's record of the end, as the operating system counts them, the same way in the three —
+`/proc` on Linux, `ps` on macOS: the processes that render pages, whose threads its workers are
+(Chromium's renderers, Firefox's web content processes, WebKit's web processes), and all of the
+browser's beside them, the browser that reads a dropped file for the page and its GPU, network and
+storage processes among them. Its processes are those below the script and any run from the browser's
+own folder that were not running before it was launched, which is how WebKit's are found on macOS,
+where launchd starts them. Chromium draws WebGL in SwiftShader and composites the page in software;
+Firefox and WebKit draw as Playwright launches them, Firefox allowed WebGL whatever its blocklist says
+of the machine's graphics. Each run is written to `notebooks/work/laptop/timings.tsv` as soon as it is
+measured, one row a run — on the command line or in a browser — with the machine, the build, the
+version of the program it ran in (Node's, or the browser's) and the line the app's console wrote, and a
+second render of the same build reads back every run whose program is the same version, but for a run
+the app did not finish, so a browser added later is the only one run. The page is three tables of all
+23, the wall-clock time, the CPU time and the peak memory, each with a column for the command line and
+one for each browser; what the slowest and the largest were in each, each browser against the command
+line and against the first browser, and how many finished; the five analyses side by side at the two
+depths, a figure, every command and the line the app wrote for each in two blocks at the end, whether
+every browser wrote the same line, and every browser's line held to the command: every flag of the
+command with its value, and besides them only the task's parameters at their defaults and those its
+form answers from what is open, or the page says what else.
 
 **The laptop's published page is rendered on a laptop.** What it measures is a reader's machine, so
 the page at `<site>/laptop/` is rendered by hand, on one, and committed as `notebooks/laptop.html` —
@@ -10205,7 +10224,7 @@ stamp beside it (`pages.py committed`), the names its entry lists and nothing el
 
 They are documents, not tests: they need the data (about 6 GB for the analyses, 15 GB for the
 viewers, 160 MB for the parity and 13.7 GB for the laptop), the reference packages, yapc's own
-environment and higlass-python's, the two viewers and Playwright's Chromium, and nothing in the suite
+environment and higlass-python's, the two viewers and Playwright's browsers, and nothing in the suite
 runs them.
 
 **They are published with every release, a job a notebook.** `.github/workflows/notebooks.yml`
@@ -10214,7 +10233,7 @@ app's build, and the reference environment pinned package by package in `noteboo
 which brings Quarto and every package the notebooks import; for the validation, yapc's environment
 (`requirements-yapc.txt`, IDR and yapc built at the commits the notebook cites), Boost-HiC's checkout,
 and Ubuntu's bedtools and seqkit; for the parity, the timings and the laptop, the two viewers with
-Playwright's Chromium; for the timings, higlass-python's environment with libfuse. The parity renders
+Playwright's Chromium, and for the laptop its Firefox and WebKit too; for the timings, higlass-python's environment with libfuse. The parity renders
 first, alone, so that a page that cannot render stops the run before the hours of the others; then
 the validation and the timings in one job — the timings run the validation's commands on the inputs it
 fetched and made, which no other runner holds — beside the laptop in another, which sets the
