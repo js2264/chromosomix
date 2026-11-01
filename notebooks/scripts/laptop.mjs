@@ -87,6 +87,8 @@ const QUIET_MS = 2_000
 const SETTLE_LIMIT_MS = 120_000
 /** How long a map that has opened may take to be drawn before the run is given up. */
 const DRAWN_MS = 600_000
+/** How long the app's measure of which sequences are circles is waited for, once the map is drawn. */
+const CIRCULARITY_MS = 120_000
 /** Files that are another file's index, opened with it rather than as an entry of their own. */
 const INDEX = /\.(fai|tbi|csi|bai)$/i
 
@@ -467,7 +469,7 @@ async function set(page, { key, value, option, ticks, on }) {
 }
 
 /** The task opened from the Analysis panel and its form set. */
-async function prepare(page) {
+async function prepare(page, result) {
   await show(page, 'Analysis', '.analysis-row-title')
   const row = page.locator('.analysis-row-title', { hasText: PLAN.task }).first()
   await row.scrollIntoViewIfNeeded()
@@ -485,6 +487,16 @@ async function prepare(page) {
       .catch(() => {
         throw new Error(`the map was not drawn within ${DRAWN_MS / 60_000} minutes`)
       })
+    // Once a map is drawn the app measures which of its sequences join their own ends (§8.15), reading
+    // behind the view at a few percent of a core, too little to keep the browser from looking idle, and
+    // a task run before it has answered treats a circle as a line: the yeast's chrM, in Chromium, whose
+    // line then lacked `--circular chrM`. It says it has answered by keeping what it measured; a file it
+    // does not measure keeps nothing, and the run goes on after {@link CIRCULARITY_MS}, saying so.
+    const started = Date.now()
+    const measured = await page.waitForFunction(
+      () => Object.keys(sessionStorage).some((key) => key.startsWith('chromosomix:ui:') && key.endsWith(':map:circular-evidence')),
+      null, { timeout: CIRCULARITY_MS, polling: 500 }).then(() => true, () => false)
+    Object.assign(result, { circularity: measured ? 'measured' : 'not seen', circularity_s: (Date.now() - started) / 1000 })
   }
   await sleep(1000)
   for (const setting of PLAN.set ?? []) await set(page, setting)
@@ -615,7 +627,7 @@ try {
   page.on('pageerror', (error) => errors.push(String(error)))
   try {
     await open(page, result)
-    await prepare(page)
+    await prepare(page, result)
     const settled = await settle(scope)
     result.settle_s = settled.ms / 1000
     if (!settled.quiet) result.busy = settled.spent
