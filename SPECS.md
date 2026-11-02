@@ -9361,6 +9361,27 @@ deepTools' within 5·10⁻⁶ and no cell of half a million differs past both to
 insulation's run went from 1.1 s to 1.7 s, its peak memory from 300 MB to 210 MB; about mouse RefSeq's
 35,034 TSSs (§ 14) the time is what it was, 5.5 s, in 350 MB rather than 410.
 
+**A scaled metaplot's abscissa is read by its landmarks.** Its x is a column, because the axis is three
+quantities end to end — base pairs before each feature, the share of the way through it, base pairs
+after it — and no one number is all three; it was labelled with the columns' numbers, `0`, `100`,
+`200`, `300`, under a curve whose reader wants to know where the features start and end. It is
+ticked at **`Start` and `End`**, the body's edges, the two points every feature in the set shares, and
+between and outside them at the finest round steps that fit the width it is drawn at, six ems apart at
+the least: a share of the body — `50%`, then quarters, tenths, twentieths — and a distance out from the
+nearer edge — `-5 kb` … `-1 kb` before the start, `+1 kb` … `+5 kb` after the end, as deepTools labels
+the plot — in steps of 1, 2, 2.5 or 5 of a decade, one that ends on the flank's far end preferred to
+one as fine that does not, and never finer than a column of either. So a figure in a drawer reads
+`-5 kb`, `-2.5 kb`, `Start`, `25%`, `50%`, `75%`, `End`, `+2.5 kb`, `+5 kb`; a wider one, or a window
+wheeled into the body, takes finer steps, and a PNG or a PDF, drawn in the figure's box on screen,
+carries the ticks the reader is looking at. `Start` and `End` are kept wherever they fall, however
+near each other. The axis runs from the outer edge of the first
+column to that of the last, where the flanks end, rather than between the columns' centres, and the
+crosshair and the tooltip spell a position as the ticks do — `37.4%`, `-150 bp`. The per-feature
+heatmap under it names the same landmarks where they fall — `-5 kb`, `Start`, `50%`, `End`, `+5 kb` —
+where it had five blank ticks spread evenly across it, and its TSV says where each stands, in columns.
+The x the TSV and the command line write for the curve are the columns, as they were
+(`figures/scaledTicks.ts`).
+
 **A pileup's axes are distances, in base pairs.** `-21 kb`, `0`, `+21 kb` — five labels along each
 axis, the ends at the ends, the sign written out on both sides because what a label says is *which
 side of the anchor*. They were counts of **bins**, which is a number only a reader holding the
@@ -10643,7 +10664,8 @@ refuses (§11, §15): one pass of the pointer over P(s) raised seven hundred vio
 of bare text with its swatches gone. The formatters' markup carries classes instead, and a series'
 swatch is an SVG `fill`. **Each coordinate is spelled as its axis spells it** — a sequence's name
 over its bar and `84.3 kb` along a P(s), where the library printed the raw number under the pointer,
-`6.00` and `84,281.00`; per cent where the axis is; and `2.24e-7` under ticks of `1e-7` rather than a
+`6.00` and `84,281.00`; per cent where the axis is; the place along a feature — `Start`, `37.4%`,
+`+1.2 kb` — on a scaled metaplot's columns (§18.8); and `2.24e-7` under ticks of `1e-7` rather than a
 run of zeros. The crosshair's two numbers on the axes are spelled the same way, where the library
 printed `387,269.00` along a P(s) in kb and `0.00` up its ordinate. Over a point, a histogram's
 bar, a box or a violin the series comes first, then the

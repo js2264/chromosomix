@@ -159,9 +159,18 @@ export function matrixScale(
  * drawing. One label per cell is the other case — a saddle's quantile groups, a
  * list of MAGs — and there each label names its own cell already.
  */
-export function spreadTicks(labels: readonly string[], cells: number): string[] {
+export function spreadTicks(labels: readonly string[], cells: number, at?: readonly number[]): string[] {
   const out = new Array<string>(Math.max(0, cells)).fill('')
   if (labels.length === 0 || cells <= 0) return out
+  // Placed by the output (`MatrixOutput.xTickAt`): each on the cell its share
+  // of the axis falls in, the first named keeping a cell two would share.
+  if (at !== undefined && at.length === labels.length) {
+    labels.forEach((label, index) => {
+      const cell = Math.min(cells - 1, Math.max(0, Math.floor(at[index] * cells)))
+      if (out[cell] === '') out[cell] = label
+    })
+    return out
+  }
   if (labels.length === cells) {
     for (let i = 0; i < cells; i++) out[i] = labels[i] ?? ''
     return out
@@ -418,7 +427,7 @@ export function matrixOptionOf(
   xAxes.push({
     type: 'category',
     gridIndex: 0,
-    data: spreadTicks(output.xTicks, output.ncols),
+    data: spreadTicks(output.xTicks, output.ncols, output.xTickAt),
     name: output.xLabel,
     nameLocation: 'middle',
     nameGap: size * 2.2,
@@ -657,7 +666,7 @@ export function matrixOptionOf(
 export function cellTooltip(
   output: MatrixOutput,
 ): (params: { value?: unknown }) => string {
-  const xLabels = spreadTicks(output.xTicks, output.ncols)
+  const xLabels = spreadTicks(output.xTicks, output.ncols, output.xTickAt)
   const yLabels = spreadTicks(output.yTicks, output.nrows)
   return (params) => {
     const cell = params.value

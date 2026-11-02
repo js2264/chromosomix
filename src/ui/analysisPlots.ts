@@ -1656,10 +1656,16 @@ export function drawMatrix(
   ctx.lineWidth = RULE_WIDTH
   ctx.font = theme.font
 
-  const xFractions = tickFractions(output.xTicks.length, output.ncols)
+  // Ticks the output placed itself (`MatrixOutput.xTickAt`) are each drawn, and
+  // labelled in the order given where the label clears every one already
+  // drawn — the output lists first what it most needs read. Evenly spaced ones
+  // are thinned to every k-th instead.
+  const placed = output.xTickAt !== undefined && output.xTickAt.length === output.xTicks.length
+  const xFractions = placed ? (output.xTickAt as number[]) : tickFractions(output.xTicks.length, output.ncols)
   let widestX = 0
   for (const label of output.xTicks) widestX = Math.max(widestX, ctx.measureText(label).width)
-  const xStride = labelStride(widestX + gap, xFractions, plot.width)
+  const xStride = placed ? 1 : labelStride(widestX + gap, xFractions, plot.width)
+  const drawn: Array<[number, number]> = []
   ctx.textAlign = 'center'
   ctx.textBaseline = 'top'
   output.xTicks.forEach((label, index) => {
@@ -1671,6 +1677,8 @@ export function drawMatrix(
     ctx.stroke()
     const half = ctx.measureText(label).width / 2
     const put = Math.min(Math.max(px, half), box.width - half)
+    if (placed && drawn.some(([left, right]) => put - half < right + gap && put + half > left - gap)) return
+    drawn.push([put - half, put + half])
     ctx.fillText(label, put, plot.y + plot.height + TICK_LENGTH + gap * 0.4)
   })
 

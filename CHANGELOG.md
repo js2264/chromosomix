@@ -12,6 +12,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Changed
+
+- **A scaled metaplot's x axis says where the features start and end (§18.8).** It was labelled
+  with column numbers — `0`, `100`, `200`, `300` — which told a reader nothing about the plot. It is
+  now ticked at `Start` and `End`, the edges of the rescaled body, with round steps that fit the
+  plot's width between and outside them: `25%`, `50%`, `75%` (or tenths) through the body, and
+  `-5 kb` … `-1 kb` before the start and `+1 kb` … `+5 kb` after the end along the flanks. A wider
+  figure and a window wheeled into one part of the axis take finer steps, and a PNG or PDF carries
+  the ticks on screen; the axis now reaches the flanks' far ends; and the crosshair and the tooltip spell the
+  position the same way (`37.4%`, `-150 bp`). The per-feature heatmap under it, which had five
+  blank ticks, names `-5 kb`, `Start`, `50%`, `End` and `+5 kb` where they fall. The numbers the
+  curve's TSV and the command line write are unchanged.
+
 ### Fixed
 
 - **The notebooks no longer fail on one failed download (§18.10).** Both runs of the Notebooks

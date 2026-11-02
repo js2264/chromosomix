@@ -20,7 +20,7 @@ import { describe, expect, it } from 'vitest'
 
 import { runMetaplot } from '@/analysis/run/metaplot'
 import type { TrackJobContext } from '@/analysis/job'
-import type { AnalysisFraming, CurveOutput, Params } from '@/analysis/types'
+import type { AnalysisFraming, CurveOutput, MatrixOutput, Params } from '@/analysis/types'
 import type { FeatureSet, TrackSampleSet } from '@/annotations/types'
 
 const FRAMING: AnalysisFraming = {
@@ -189,6 +189,40 @@ describe('the metaplot runner, over scaled regions', () => {
     expect(alone).toHaveLength(1)
     expect(alone[0]).toMatch(/^2 features were dropped/)
     expect(alone[0]).toContain('body width')
+  })
+
+  it('says where every feature starts and ends, on the curve and under the heatmap', async () => {
+    // The x of a scaled run is a column, and the only thing a column number
+    // tells a reader is that it is not a place. The curve carries the edges the
+    // figure's ticks are written from; column 40 is the body's first, and the
+    // body begins at its left edge, half a column before it.
+    const notes: string[] = []
+    const outputs = await runMetaplot(
+      job([[100_000, 105_000], [300_000, 350_000]], { ...PARAMS(['t1']), heatmap: true }, notes),
+    )
+    const curve = curveOf(outputs)
+    expect(curve.xScaled).toEqual({ from: -0.5, start: 39.5, end: 139.5, to: 179.5, flankStep: 50 })
+    // The step of the indicator is where the curve says the body is.
+    const y = Array.from(curve.series[0].y)
+    expect(y[39]).toBe(0)
+    expect(y[40]).toBe(1)
+
+    // The heatmap under it, with the same landmarks where they fall rather than
+    // evenly spread: a 2 kb flank is two ninths of the axis, not a quarter.
+    const matrix = outputs.find((output): output is MatrixOutput => output.kind === 'matrix')
+    expect(matrix?.xTicks).toEqual(['Start', 'End', '-2 kb', '+2 kb', '50%'])
+    expect(matrix?.xTickAt).toEqual([40 / 180, 140 / 180, 0, 1, 90 / 180])
+  })
+
+  it('names no flank under the heatmap when there is none', async () => {
+    const notes: string[] = []
+    const outputs = await runMetaplot(
+      job([[100_000, 105_000]], { ...PARAMS(['t1']), flank: 0, heatmap: true }, notes),
+    )
+    expect(curveOf(outputs).xScaled).toEqual({ from: -0.5, start: -0.5, end: 99.5, to: 99.5, flankStep: 50 })
+    const matrix = outputs.find((output): output is MatrixOutput => output.kind === 'matrix')
+    expect(matrix?.xTicks).toEqual(['Start', 'End', '50%'])
+    expect(matrix?.xTickAt).toEqual([0, 1, 0.5])
   })
 
   it('says nothing at all when every feature made a window', async () => {

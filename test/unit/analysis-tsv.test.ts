@@ -240,6 +240,21 @@ describe('outputToTsv, matrix', () => {
       ['1', '4', '', '6'],
     ])
   })
+
+  it('says where placed ticks stand, in columns, left to right', () => {
+    // A scaled metaplot's heatmap names its landmarks where they fall — Start
+    // and End wherever the flanks end — and lists them in the order they are
+    // labelled in, which is not the order along the axis. The file says each
+    // one's place, sorted, so it can be lined up against the column indices.
+    const placed: MatrixOutput = {
+      ...matrix,
+      xTicks: ['Start', 'End', '-1 kb', '+1 kb'],
+      xTickAt: [1 / 3, 2 / 3, 0, 1],
+    }
+    const text = textOf(outputToTsv(placed, PROVENANCE))
+    expect(text).toContain('# x ticks, at a column edge (0 to 3): -1 kb at 0, Start at 1, End at 2, +1 kb at 3')
+    expect(text).not.toContain('evenly spaced')
+  })
 })
 
 /**
