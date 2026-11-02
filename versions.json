@@ -242,6 +242,13 @@
   ],
   "pulls": [
     {
+      "number": 155,
+      "commit": "eeee127",
+      "title": "Label scaled metaplot axes by feature position, not column",
+      "branch": "js/ecstatic-davinci-a357jc",
+      "date": "2026-11-02T14:13:06Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
