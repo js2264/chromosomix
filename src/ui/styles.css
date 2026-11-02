@@ -11082,11 +11082,44 @@ body.is-carrying-card * {
   );
 }
 
+/* **A heading wraps rather than runs into the next cell** (§16.9). Its
+   controls are one group (`panels/deckHead.ts`), and where the name cannot
+   keep its 6rem beside them the group goes to a line of its own under it, at
+   the cell's right, and the name takes the whole first line. Four maps across
+   a column with two side panels open are cells of 154 pixels, and a heading of
+   a grip, a name, a sequence, a star, a chain and a × cannot be less than 196:
+   the name went to its floor — `Y…` — and the controls ran on past the cell's
+   edge, the chain drawn over the next cell's grip and name. The basis is the
+   name's own floor now, and the line the group leaves it is the reason for one:
+   a name the reader can read, which `Y…` was not. */
 .deck-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.1rem 0.25rem;
   min-width: 0;
+}
+
+/* The group, at the end of the line or under the name; and, in a cell too
+   narrow even for the group alone, wrapping within itself to the right rather
+   than out of the cell. */
+.deck-tools {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.2rem;
+  min-width: 0;
+  margin-left: auto;
+}
+
+/* Square, as `.btn-icon` means them to be: `.btn`'s side padding comes later
+   in this sheet and made the star and the chain 36 pixels wide round a
+   13-pixel mark — wide enough, beside a rung picker, to put the chain and the
+   × on a line apart from the star. The window's pill sets its own, after. */
+.deck-tools .btn-icon {
+  padding: 0.3rem 0.35rem;
 }
 
 /* A panel's name, which is an `<input>` that looks like text until it has the
@@ -11094,8 +11127,8 @@ body.is-carrying-card * {
    frame appears on hover so the gesture is discoverable, and only then: a deck
    of five boxed headings reads as a form rather than as five pictures. */
 .deck-name {
-  flex: 1 1 auto;
-  min-width: 2rem;
+  flex: 1 1 6rem;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -11187,6 +11220,10 @@ span.deck-name {
 
 .deck-entry {
   flex: 0 0 auto;
+  /* As wide as the rung it says, as `.deck-seq` is as wide as its sequence:
+     sized to the longest rung in the file, it put a narrow cell's × on a line
+     of its own under the rest of its heading's controls. */
+  field-sizing: content;
   padding: 0.05rem 0.15rem;
   border-color: transparent;
   background: none;

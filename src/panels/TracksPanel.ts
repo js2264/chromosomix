@@ -35,6 +35,7 @@ import { tabAmong } from '../ui/tabWalk'
 import { icon, iconButton } from '../ui/icons'
 import { clampCellHeight, heightBar } from './cellHeight'
 import { DECK_DRAG_TYPE } from './deck'
+import { deckTools } from './deckHead'
 import type { DeckCell } from './cell'
 import type { CellFigure } from './deckFigure'
 
@@ -143,11 +144,13 @@ export class TracksPanel implements DeckCell {
         { class: 'deck-head' },
         this.grip(),
         this.nameEl,
-        this.chain,
-        iconButton('x', 'Close the tracks cell (the tracks stay loaded)', () => props.onClose(), {
-          class: 'btn-close',
-          size: 14,
-        }),
+        deckTools(
+          this.chain,
+          iconButton('x', 'Close the tracks cell (the tracks stay loaded)', () => props.onClose(), {
+            class: 'btn-close',
+            size: 14,
+          }),
+        ),
       ),
       this.note,
       el(

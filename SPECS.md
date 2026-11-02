@@ -7057,6 +7057,18 @@ no deck: the 1D browser. **In a deck the first map's eye is its cell's**, as eve
 it used to put the map down for the browser there too, which re-read the state with no map to lead,
 and a deck of maps cannot stand beside a browser (§25.3): the companions went with it.
 
+**A cell's heading stays in its cell.** It is one line — a grip, the name, and then the cell's
+controls: its sequence, its rung, its own window, its star, its chain and its × — while the name can
+keep 6rem beside them. Where it cannot, the controls go **together** to a line of their own under
+the name, at the cell's right, and the name takes the whole first line; a cell too narrow even for
+the controls alone wraps them again, to the right, inside the cell. Every kind of cell does this, the
+first map's, a structure's, a tracks cell's and an empty one's among them. It used to be one line at
+any width: four maps across a column with two side panels open are cells of 154 pixels, under a
+heading that could not be less than 196, so the name went to a floor that showed one letter and the
+controls ran on past the cell's edge — the chain of one cell drawn over the grip and the name of the
+next. Wrapped one by one, the controls would leave a star above and a chain and a × below, which
+reads as two headings.
+
 **The first cell closes like any other.** Its × is on its heading, after its star and chain, while
 another cell is beside it — a × on the one cell of a deck would leave nothing on screen. What it does
 is the eye's: the cell leaves the screen, and it is **parked, not closed**. Its view stays mounted

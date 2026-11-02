@@ -23,6 +23,7 @@ node scripts/ui-methods.mjs gallery          # Model from the map under each Met
 node scripts/ui-structure-look.mjs gallery   # the structure cell's gestures: g-ghost-*, r*, t1 … t6
 node scripts/ui-stars.mjs gallery            # the deck's stars and empty cells: s1 … s8, s8a, s8b
 node scripts/ui-deck-reads.mjs gallery       # headings under zoom, own windows, the maps card: h*, w*, c*
+node scripts/ui-deck-heads.mjs gallery        # deck cells' headings in narrow cells (§16.9), every heading measured against its cell and any part outside it printed: two to five yeast maps across with General and Annotations open, the controls under the name from three across, a companion on a window of its own four across, the E. coli .mcool's rung picker, a map beside a model, a tracks cell and an empty cell, three across on a laptop, dark; dh00 is four across before the fix: dh00 … dh09, dh04b
 node scripts/ui-saves.mjs gallery            # every export through the save dialog: x1 … x3
 node scripts/ui-marks.mjs gallery            # marks on the card and the model's key: k1 … k5
 node scripts/ui-marks-hide.mjs gallery       # marks hidden and shown (§8.1): a row's eye, A off and back with a hand-hidden mark kept hidden, the map's menu on a rule, a mark alone and the rest back, the turned map's V, the 1D browser's menu and A there, the model's key and its menu on a marked bead, the palette's switch, dark: h01 … h14b

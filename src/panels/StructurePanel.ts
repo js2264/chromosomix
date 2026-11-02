@@ -148,6 +148,7 @@ import { openMenu } from '../ui/Menu'
 import { marksMenu } from '../ui/marksMenu'
 import { exportRow } from '../ui/exportRow'
 import { DECK_DRAG_TYPE } from './deck'
+import { deckTools } from './deckHead'
 import type { DeckCell } from './cell'
 import type { CellFigure } from './deckFigure'
 
@@ -667,11 +668,13 @@ export class StructurePanel implements DeckCell {
         { class: 'deck-head' },
         this.grip(),
         this.nameEl,
-        this.starButton,
-        iconButton('x', 'Close the structure cell (the model stays loaded)', () => props.onClose(), {
-          class: 'btn-close',
-          size: 14,
-        }),
+        deckTools(
+          this.starButton,
+          iconButton('x', 'Close the structure cell (the model stays loaded)', () => props.onClose(), {
+            class: 'btn-close',
+            size: 14,
+          }),
+        ),
       ),
       this.note,
       this.body,
