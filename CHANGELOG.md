@@ -12,6 +12,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Added
+
+- **The Contact maps card opens a map in a cell of its own (§16.9).** Under the lower triangle's
+  rectangle a second one, *Load a map into a cell of its own*, takes a cooler — or several, or a
+  row of the Files column — and opens each in the deck beside the map, the first empty cell or a new
+  one at the end. It is there whenever a map is open, and stays once a second file fills the lower
+  triangle and that rectangle goes; its hint says what the triangle's cannot, *a cooler at any bin
+  size*. The card's only drop with a map open used to be the triangle's, so a new file reached the
+  deck from the card by no road at all.
+
 ### Fixed
 
 - **The notebooks no longer fail on one failed download (§18.10).** Both runs of the Notebooks

@@ -1367,7 +1367,9 @@ Three refusals, each because the merged picture would otherwise be a lie rather 
 **The card asks for it only once there is a first map.** The zone is labelled *Load a map into the
 lower triangle* — not *a second map*, which is what §16's companion cell is called — and it is
 absent until a map is open, because a triangle of nothing is a promise with nothing to keep it
-(§8.5). A session with no map has one drop zone on that card, asking for a contact map.
+(§8.5). A session with no map has one drop zone on that card, asking for a contact map. Under it,
+once a map is open, stands *Load a map into a cell of its own*, the deck's door on the same card
+(§16.9), which stays when this one goes.
 
 The zone takes a file from the desktop and a **row out of the Files column** (§20.5) alike — the
 file behind the row read at the drop, through the folder it names, with the credential that folder
@@ -7013,6 +7015,24 @@ hidden, which have no cell to be in the order of. The card used to list the firs
 deck of four maps showed a card of one and the other three were named nowhere in the column; and
 then it listed the first map first wherever its cell had been moved to.
 
+**The card's last rectangle opens a map in a cell of its own**: *Load a map into a cell of its own*,
+under every row and under the lower triangle's rectangle (§5.7), the two being the two ways a second
+map is drawn — in this square, or beside it. It is there whenever a map is open and the deck may take
+one more map, and **it does not go when the square is full**: the triangle's rectangle is gone once
+a second file fills it, and this one has nothing to wait for. A deck past its last cell says so in
+its own bar, as it does for every other road in. What lands on it takes the road a file dropped on
+the window takes (`Session.dropFiles`) — **every file of the drop**, so several coolers are a deck
+of them, each in the first empty cell or a new one at the end of the grid, a saved workspace is
+still a workspace and a track still joins the tracks — and its chooser takes several files. A row
+out of the Files column (§20.5) goes the same way, with its folder's source and name. Its hint says
+the one thing the triangle's cannot: *a cooler at any bin size*, since two cells may be two
+resolutions (§16.4). It is absent on a file with a genome layer, which holds no deck (§16.8), and
+beside the 1D browser, where a deck holds tracks and models but no map (§25.3); on a view a deck
+cannot frame, a table, the map joins the deck all the same and waits, drawn, for a view that can.
+The card used to have no such door: a reader with one map and a second in hand had the lower
+triangle's rectangle as the only drop on the card, and the deck only by the `+` on the map's edge or
+a drop on the picture.
+
 Each companion's row has an **eye** and an **×**, and they are two acts, as on a track's row. The
 eye is the Structures card's (§25.3): lit, the map is in a cell, and pressing it takes the map out
 and keeps it on the card, dimmed, with its eye dark; pressed again, the map opens in the first
@@ -11026,7 +11046,8 @@ stack (§8.9), onto the rectangle in the middle of a map for that map alone — 
 (§8.1) — onto a companion, anywhere on its cell, for a track on that map, and onto a tracks cell for
 a track drawn in it (§16.9), onto the Tracks card, onto a deck's edge or an empty cell for a cell of
 its own (§16.9), onto a 3D cell for the model it draws (§25.3), onto the Contact maps card's *Load a
-map into the lower triangle* for the second file in the square (§5.7), onto an analysis form's file
+map into the lower triangle* for the second file in the square (§5.7) or its *Load a map into a cell
+of its own* for a cell of the deck (§16.9), onto an analysis form's file
 box as the run's input rather than as anything opened (§18.8), onto the content area, onto the
 landing page's drop zone — which replaces, because that is what the landing page has always meant.
 **A store's row is dragged the same way, to the same places** (§24.2): every row that is a file,
