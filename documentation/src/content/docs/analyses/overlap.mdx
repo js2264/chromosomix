@@ -1,6 +1,6 @@
 ---
 title: "Interval set overlap"
-description: "Measure how much two interval sets share, in bases and in features, and test it against the same set shuffled at random."
+description: "Measure how much two interval sets share, in bases and in features, and test it against one of them shuffled at random."
 ---
 
 import TaskCommand from '@components/TaskCommand.astro'
@@ -10,7 +10,7 @@ import TaskSummary from '@components/TaskSummary.astro'
 
 <TaskSummary id="overlap" />
 
-How many of my peaks sit on a promoter? How many domain boundaries fall on a CTCF peak? **Interval set overlap** compares two sets of intervals in bases, with a Jaccard index over the bases they share, and in features, counting those of each set that touch the other. With the shuffled null on, it also says whether that is more than intervals of the same sizes, on the same sequences, would give by chance. It is bedtools' `jaccard` and `intersect`, with `shuffle` for the null — the question that follows every set a task calls.
+How many of my peaks sit on a promoter? How many domain boundaries fall on a CTCF peak? **Interval set overlap** compares two sets of intervals in bases, with a Jaccard index over the bases they share, and in features, counting those of each set that touch the other. With the shuffled null on, it also says whether that is more than intervals of the same sizes, on the same sequences, would give by chance. It is bedtools' `jaccard` and `intersect`, with `shuffle` for the null, and the natural next step after any task that calls a set.
 
 ## Running it
 
