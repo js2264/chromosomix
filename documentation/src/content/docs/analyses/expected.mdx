@@ -83,8 +83,8 @@ grow noisy.
 - **The density is not quite HiContacts' on a matrix.** A matrix's separations sit on a lattice of its
   bin size, so near 10 kb on a 1 kb map one logarithmic bin holds two of them and the next holds one.
   Dividing each bin by its nominal width, as HiContacts does, puts a sawtooth of a factor of two into
-  the slope, through the very decade a shoulder is read in; chromosomix divides by the separation the
-  bin actually covers instead. Past about 50 kb at 1 kb bins the two agree, and the counts behind them
+  the curve, alternating bin by bin through the very decade a shoulder is read in; chromosomix divides
+  by the separation the bin actually covers instead. Past about 50 kb at 1 kb bins the two agree, and the counts behind them
   are HiContacts' own, which the app's tests hold it to.
 - **Validation.** As the expected, P(s) is identical to `cooltools.expected_cis`, pooled over the same
   logarithmic bins, on a yeast Micro-C map at 800 bp and a mouse Hi-C map at 10 kb.

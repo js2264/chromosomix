@@ -75,8 +75,8 @@ coordinate copied off the heading, the readout or another browser lands on the b
 | a gene's name or accession | that gene, from the starred feature set (below) |
 | a band, such as `Xq28` | that band, from a cytoBand you have loaded |
 
-Between two windows, a ` x ` with spaces round it, a `|` or simply a space before the second name
-works as well as `×`. A sequence may be written the way another tool spells it — `chr1` for a file
+Between two windows, an `x` with a space either side, a `|`, or simply a space before the second
+name works as well as `×`. A sequence may be written the way another tool spells it — `chr1` for a file
 that says `1` — and is still found. A name the file does not have is refused, with the names of the
 sequences it does have.
 

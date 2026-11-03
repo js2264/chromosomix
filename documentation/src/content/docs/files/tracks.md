@@ -18,7 +18,7 @@ says when they do not all match: *10 of 16 sequences matched; nothing is drawn o
 | Kind | Formats | Drawn as |
 | --- | --- | --- |
 | Signal | bigWig, bedGraph, wig | a value track |
-| Intervals | BED of 3 to 12 columns, narrowPeak, broadPeak, gappedPeak, bigBed | features |
+| Intervals | BED, narrowPeak, broadPeak, gappedPeak, bigBed | features |
 | Gene models | GTF, GFF3, genePred, genePredExt, refFlat, bigGenePred | transcripts with their exons |
 | Variants | VCF | the variants somebody called |
 | Reads | BAM, with its `.bai` or `.csi` | depth, and the reads themselves |
@@ -39,9 +39,9 @@ cheap.
 
 A **bedGraph** and a **wig** are the same kind of track written as text. They are read whole, and
 the summary for a window is worked out when the window is drawn. A bedGraph is recognised strictly
-— exactly four columns, numbers on every row, or a `track type=` line saying so — so a BED with a
-name column is never mistaken for one; a wig is recognised by its `fixedStep` or `variableStep`
-lines, and its 1-based positions are read as such.
+— exactly four columns, the fourth a number on every row, or a `track type=` line saying so — so a
+BED with a name column is never mistaken for one; a wig is recognised by its `fixedStep` or
+`variableStep` lines, and its 1-based positions are read as such.
 
 All three draw as a value track, with its own limits, colour and style, and can share an axis with
 other tracks; see [The genome browser](/browse/genome-browser/).

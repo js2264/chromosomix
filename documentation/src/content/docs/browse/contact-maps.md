@@ -30,8 +30,8 @@ it sees the same numbers drawn the same way.
 The key in the map's top-right corner names what the cells hold and the transform they are drawn in,
 gives the size of one cell on the line under that, and ends with the two ends of the colour scale
 and the ramp between them. Each of the two numbers is a button: click it to type a bound in its
-place, and empty it to hand that end back to automatic. The key stands aside on a narrow map, and **legend**, under
-**overlays**, hides it for a figure that has a key of its own.
+place, and empty it to hand that end back to automatic. The key stands aside on a narrow map, and
+**legend**, under **overlays**, hides it for a figure that has a key of its own.
 
 ## Resolution
 
@@ -51,7 +51,8 @@ resolution on its own. A task run while an added resolution is drawn reads the m
 too.
 
 A wide window may be drawn coarser than the resolution chosen, its bins summed into larger cells, and
-the summary line says so; [Resolution and the zoom](/browse/navigating/) explains how to read finer.
+the summary line says so; [Resolution and the zoom](/browse/navigating/#resolution-and-the-zoom)
+explains how to read finer.
 On the whole genome, the **level** select at the head of the **Sequences** card, in the **General**
 panel, switches between `bin × bin` and `chromosome × chromosome`, one cell for each chromosome.
 

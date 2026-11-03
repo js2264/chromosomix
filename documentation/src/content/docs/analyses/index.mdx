@@ -82,8 +82,8 @@ checked](/analyses/validation/) says what lies behind it.
 ## What a task reads
 
 **The map.** A task that reads a contact map reads the one that is open. On a [deck of maps side by
-side](/browse/deck/) it reads the **starred** map, the one whose heading has its star filled: its button
-then reads **run on ★**, and its tooltip names the map. **run on all N maps** beside it runs the task
+side](/browse/deck/) it reads the **starred** map, the one whose heading has its star filled: the
+drawer's button then reads **run on ★**, and its tooltip names the map. **run on all N maps** beside it runs the task
 once per map, in the grid's order. The drawer then gives each map's result a tab, and an **all maps**
 tab draws them together: the curves on one figure, a line per map, and the tables as one table whose
 first column names the map. A matrix stays on its own map's tab.
@@ -95,10 +95,10 @@ heading says it *reads the loaded tracks, not the map*.
 **How the map is drawn, as it is when you press run.** A task takes from the view what changes its
 numbers: the resolution the map is drawn at, the score it is drawn from, the sequences you declared
 circular, and the number of contacts it is drawn to, if you typed one in the breadcrumb's *contacts*
-box. That snapshot is the result's framing. Before a run
-the drawer's heading says *will run on …*; after it, *from …*. Pan or zoom afterwards and the result
-does not follow: it is a record of what it was computed from, the heading adds *the view has moved
-since*, and **recompute here** runs it again on the view as it is now.
+box. That snapshot is the result's framing. Before a run the drawer's heading says *will run on …*;
+after it, *from …*. Pan or zoom afterwards and the result does not follow: it is a record of what it was
+computed from, the heading adds *the view has moved since*, and **recompute here** runs it again on the
+view as it is now.
 
 **What it covers is the form's.** A task is not limited to the window on screen. It covers what its
 form names: the sequences ticked, which are all of them unless you untick some, an anchor, a feature
@@ -136,6 +136,8 @@ of three kinds:
 Nothing is read until you press **run**, so an expensive run is always your decision, and every run
 shows its progress while it goes and can be stopped. On a file on your disk a range request is a read
 from the disk; on a file at an address it is a request over the network, and the price says how many.
+Where neighbouring reads can be merged, as in a pileup over thousands of loops, the price is the most
+the run could need, so it is never dearer than the price said.
 
 **A run that cannot happen says why, in red, in the price's place, and run is greyed.** *Tick at least
 one sequence.* when none is ticked; *Name a locus to anchor the profile on — type one, or pick it on the

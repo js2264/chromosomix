@@ -4,9 +4,9 @@ description: "The contact-map formats chromosomix opens — .cool, .mcool, .hic,
 ---
 
 Every format below opens as a contact map. Drop one, open it by its address, or pick it from a
-folder or a store ([Opening files](/files/opening/)); it opens on its **Chromosomes** table, from
-which you open a chromosome, a region or the whole genome — see [Your first map](/start/first-map/)
-and [Reading a contact map](/browse/contact-maps/).
+folder or a store ([Opening files](/files/opening/)). A map opens on its **Chromosomes** table — an
+`.scool` on its **Cells** table — from which you open a chromosome, a region or the whole genome:
+see [Your first map](/start/first-map/) and [Reading a contact map](/browse/contact-maps/).
 
 | Format | What it is | How it is read |
 | --- | --- | --- |
@@ -22,9 +22,9 @@ Only maps with bins of one fixed size are read ([What is not opened](#what-is-no
 ## Coolers (.cool)
 
 A `.cool` is read where it is. Opening one reads a few kilobytes — its sequences, their lengths and
-the index into its pixels — and each view after that reads one bounded block of pixels, so a large
-file on a bucket opens as quickly as a small one on your disk. A cooler saved under `.h5` or
-`.hdf5` opens the same way.
+the index into its pixels — and each view after that reads one bounded block of pixels, so a file of
+several gigabytes on a bucket opens in a handful of requests. A cooler saved under `.h5` or `.hdf5`
+opens the same way.
 
 Its chromosomes are its sequences, in the file's order and spelled the file's way. A track or a
 second map that spells them differently still lines up with it
@@ -205,10 +205,10 @@ that asks for it opens on counts. Three normalisations computed from the counts 
 
 ## What is not opened
 
-- **Bins of different sizes.** A cooler whose bins are not one fixed size — fragment-level, or one
-  bin per contig — is refused, as are a fragment-level HiC-Pro map and a `.hic`'s fragment
-  resolutions. Bin the contacts at a fixed size (`cooler cload pairs` does it from the pairs file)
-  and open that.
+- **Bins of different sizes.** A cooler whose bins are not one fixed size — a fragment-level one,
+  say — is refused, as is a fragment-level HiC-Pro map, and a `.hic`'s fragment resolutions are not
+  offered. Bin the contacts at a fixed size (`cooler cload pairs` does it from the pairs file) and
+  open that.
 - **A compressed cooler.** A `.cool` or `.mcool` that has been gzipped or zipped is refused: HDF5 is
   read in place and cannot be decompressed on the way. Decompress it first. (A `.pairs.gz` and a
   `.matrix.gz` are read compressed.)

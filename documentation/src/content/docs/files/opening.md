@@ -89,9 +89,9 @@ its own. A row can also be dragged onto the map, exactly as a file from your des
 **choose a folder…** opens your system's folder picker. The folder is read in place, and nothing in
 it is sent anywhere. How long it stays connected depends on how you run chromosomix:
 
-- In the desktop app, the single HTML file, or the site installed as an app from Chrome or Edge,
-  the folder stays connected across restarts, and a workspace saved there remembers which of your
-  files came from it, so reopening the workspace finds them again.
+- In the desktop app — or in Chrome or Edge, with chromosomix installed as an app or opened as the
+  single HTML file — the folder stays connected across restarts, and a workspace saved there
+  remembers which of your files came from it, so reopening the workspace finds them again.
 - In an ordinary browser tab the button reads **choose a folder (this visit)…**: the folder is
   connected until you close the page, and nothing about it is kept.
 - Firefox and Safari have no folder picker. What they hand over is a snapshot of the file list for

@@ -13,8 +13,8 @@ import TaskSummary from '@components/TaskSummary.astro'
 The questions a library is judged by before anything is read off it, answered in one run and written as
 one page: how many contacts it holds and how many are cis, how they decay with distance, how evenly they
 cover the genome, which sequences keep to themselves, and down to which bin size the map still has
-contacts in most of its bins. Reach for it first on a new library, to keep beside a paper as its QC, and
-from a pipeline, where its MultiQC sections turn a batch of libraries into one report with a row each.
+contacts in most of its bins. Reach for it first on a new library, and from a pipeline, where its
+MultiQC sections turn a batch of libraries into one report with a row each.
 
 ## Running it
 
@@ -49,10 +49,11 @@ multiqc qc/
 
 ## Parameters
 
-**ladder from** decides the resolution everything is counted at. **the file's finest resolution**, the
-default, is opened beside the map for the pass, because a ladder that started from whatever resolution
-was on screen would say nothing of the finer ones the file holds; **this map's resolution** counts from
-the map instead. A map binned from a `.pairs` as it was opened is its own finest.
+**ladder from** decides the resolution the library's totals and the ladder are counted at. **the
+file's finest resolution**, the default, is opened beside the map for the pass, because a ladder that
+started from whatever resolution was on screen would say nothing of the finer ones the file holds;
+**this map's resolution** counts from the map instead. A map binned from a `.pairs` as it was opened is
+its own finest. P(s), coverage and cis and trans run on the map as it is open, as they do on their own.
 
 <TaskParameters id="mapreport" />
 

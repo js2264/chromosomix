@@ -19,8 +19,8 @@ fusion, a centromere cluster or a Rabl configuration, depending on the organism.
 ## Running it
 
 Open a contact map, then choose **Cis and trans per sequence** in the **2D tasks** card of the
-**Analysis** panel. Every sequence is ticked; untick the ones you want left out of the tables and the
-square, and press **run**. A sequence's share of its own contact needs every contact touching it, so
+**Analysis** panel. Every sequence is ticked; untick the ones you want left out of the results, and
+press **run**. A sequence's share of its own contact needs every contact touching it, so
 the run is one pass over the whole pixel table whatever is ticked, unless the whole file is already on
 screen at its own resolution and balanced the same way.
 
@@ -39,9 +39,9 @@ The same run from a shell:
 default, is the contacts between two sequences over what the two sequences' own trans contacts predict,
 scaled so that the expectation adds up to the trans contacts there are: 1 is what any two sequences of
 that depth would give, and a fusion is far above it. **raw contacts** is the count, and **per bin
-pair** the count divided by the two sequences' bin counts. **least contact worth listing** keeps a pair with only a few
-stray reads out of the top of the table, and **bars per sequence** draws the cis fraction, the trans
-fraction, or both stacked.
+pair** the count divided by the two sequences' bin counts. **least contact worth listing** keeps a pair
+with only a few stray reads out of the top of the table, and **bars per sequence** draws the cis
+fraction, the trans fraction, or both stacked.
 
 <TaskParameters id="cistrans" />
 
@@ -71,7 +71,7 @@ predict.
 
 The pairs table ranks the same pairs, strongest first: both sequences, their raw **Contacts**, and,
 against indifference, the **Expected** count beside **Observed / expected**. It lists the strongest 500
-by default and says how many more passed the threshold.
+by default, and says how many pairs passed the threshold when there are more.
 
 ## Things to know
 

@@ -54,8 +54,8 @@ total first: the chevrons after the **contacts** box do it in one press
 
 Balanced values are each file's own, in each file's own unit. A cooler balanced by `cooler balance`
 has rows that sum to one; a `.hic` balanced by Juicer's KR or SCALE has rows that sum to the
-library's depth per bin, and drawn beside a balanced cooler it saturates. Compare such a pair by their O/E, each over
-its own expected.
+library's depth per bin, and drawn beside a balanced cooler it saturates. Compare such a pair by
+their O/E, each over its own expected.
 
 Wherever you point, the readout gives both files' counts for that cell.
 
@@ -119,8 +119,8 @@ second caption line for the lower reading.
 
 Only the reading belongs to the lower triangle: the window, the resolution, the turn, the overlays
 and the tracks are the map's. A lower score that needs other numbers from the file — another column,
-or the counts where the upper triangle is balanced — reads the block a second time; one computed from
-the same numbers costs nothing more.
+or raw counts where the upper triangle is balanced, or the other way round — reads the block a second
+time; one computed from the same numbers costs nothing more.
 
 A second reading is offered on a map of one file: a region, the whole genome, or a selection of
 sequences. It is not offered beside a second file, which has its own claim on the lower triangle, nor

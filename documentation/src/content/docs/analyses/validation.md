@@ -5,10 +5,10 @@ description: "How every analysis is held to the package it reproduces on public 
 
 A task is only worth running here if its numbers are the numbers the field's own tools give, because
 an insulation score a few per cent away from cooltools' is worse than none: somebody will put it in a
-figure. So every task that re-implements a published method is run on public data both by chromosomix
-and by the package it reproduces, and the two are lined up number for number, in a notebook published
-with every release. Three more notebooks time the same commands, hold the app to its own command line,
-and measure what a run costs on a laptop.
+figure. So the tasks that re-implement a published method are run on public data both by chromosomix
+and by the package each reproduces, and the two are lined up number for number, in a notebook published
+with every release; the three that are not compared yet say so. Three more notebooks time the same
+commands, hold the app to its own command line, and measure what a run costs on a laptop.
 
 | Notebook | What it holds chromosomix to | Published at |
 | --- | --- | --- |
@@ -25,14 +25,14 @@ In the app, **About this viewer**, from the header or the command palette, lists
 Each analysis is run on the same public file twice: once by `chromosomix`, the command-line form of the
 **Analysis** panel, which runs the same code, and once by the reference package, called as its authors
 mean it to be called and never re-implemented. The two outputs are then matched bin by bin, or call by
-call. The references are the tools the field uses: cooltools for insulation, compartments and their
-saddle, P(s), coverage, virtual 4C, cis and trans per sequence and loop calling; coolpuppy for pileups;
-chromosight for pattern detection; domaincaller for the directionality index; Juicer for Arrowhead;
-yapc with IDR for peak calling; hicrep for reproducibility; pastis for the 3D model; deepTools for the
-metaplot and track correlation; bedtools for interval overlap; bioframe and Biopython for base
-composition and restriction sites; seqkit for the motif search; pairtools for Pairs QC; cooler for the
-map report; and pyBigWig, NumPy and SciPy for the fraction of signal in features and signal by group,
-where the reference is the arithmetic itself.
+call. The references are the tools the field uses: cooltools for diamond insulation, compartments and
+their saddle, P(s), coverage, virtual 4C, cis and trans per sequence and loop calling; coolpuppy for
+aggregate peak analysis; chromosight for pattern detection; domaincaller for the directionality index;
+Juicer Tools' Arrowhead for TAD annotation; yapc with IDR for peak calling; hicrep for reproducibility;
+pastis for the 3D model; deepTools for the metaplot and track correlation; bedtools for interval set
+overlap; bioframe and Biopython for base composition and restriction sites; seqkit for the motif search;
+pairtools for Pairs QC; cooler for the map report; and pyBigWig, NumPy and SciPy for the fraction of
+signal in features and signal by group, where the reference is the arithmetic itself.
 
 The data are public, and every file is named by its accession and fetched from where it was published:
 Hi-C of mouse, chicken and human cells from the 4DN Data Portal, a yeast Micro-C map from GEO, ChIP-seq
@@ -72,16 +72,16 @@ Analysis panel does.
 A green badge links to the task's section of the published notebook.
 
 The badge is read from the app's own table of references as this site is built, so it is the verdict
-for the version these pages describe. Beside the notebooks, the app's test suite holds its tasks to
-their references' own output on the yeast demo data; the notebooks do it again at full size, on the
-files the field works with.
+for the version these pages describe. Beside the notebooks, the app's test suite holds many of its
+tasks to their references' own output on the yeast demo data; the notebooks do it again at full size, on
+the files the field works with.
 
 ## The timings
 
 The first part of the timings measures **the time to a picture**: chromosomix, juicebox.js and HiGlass
 each drawing the same contact map with one track beside it, at the same resolution, from files on the
 machine and from the bucket they are published in. The second part runs **every command of the
-validation again**, each as a fresh process, four rounds round robin, with the two sides of each pair
+validation again**, each as a fresh process, four times round robin, with the two sides of each pair
 taking turns to go first, and measures for each its CPU time, its wall-clock time and its peak memory.
 Each chromosomix command's time is set beside its reference's. The command line runs a task on one
 core unless told otherwise, and a reference that takes a number of processes is given one per core, at
@@ -147,10 +147,10 @@ what machine, and closes on how long it took.
   build, the task and its version, the file, the framing and every parameter, and **copy provenance**
   in the drawer copies the same lines. That is what a methods section needs.
 - **Run it again from a shell.** The [console](/browse/console/) holds the `chromosomix` line of every
-  run, and **copy CLI command** copies one. Pin the version the app ran, which `chromosomix --version`
-  prints and the provenance names, with `npm install -g chromosomix@<version>` or
-  `npx chromosomix@<version>`, and the same line on the same file gives the same numbers: that is what
-  the parity checks. See [From the app to a script](/cli/from-the-app/).
+  run, and **copy CLI command** copies one. Pin the command to the version the app ran, which the
+  provenance names, with `npm install -g chromosomix@<version>` or `npx chromosomix@<version>`
+  (`chromosomix --version` prints the command's own), and the same line on the same file gives the same
+  numbers: that is what the parity checks. See [From the app to a script](/cli/from-the-app/).
 - **Keep the session.** An exported session holds every task's settings for its files, so opening it
   and pressing **run** repeats the analysis; see [Sessions, workspaces and
   links](/browse/sessions-and-links/).
