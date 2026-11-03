@@ -989,7 +989,12 @@ the first window.
 
 **Beside a gene model the box takes a feature's name too** — or its accession — from the starred
 set, and a band's from any karyotype loaded (§8.22), listing up to ten matches under it as it is
-typed (`annotations/search.ts`, shared with the browser's box, §5.8). A hit is written with the
+typed (`annotations/search.ts`, shared with the browser's box, §5.8). **Too, not instead**, and the
+list is ordered by it. A sequence's name heads the list wherever genes begin with it (`findContig`'s
+ladder, so `chrIV` and `iv` read as `IV`), and Enter, which takes the first row, opens the sequence:
+on the yeast genome `IV` is chromosome IV before it is IVY1, which it used to open. A name or
+accession typed whole comes next, before the names it begins: `RAD5` above RAD59, RAD57, RAD55 and
+RAD54, where file order put it fifth. Then the prefixes, in the file's order. A hit is written with the
 feature's **own** span, which is the number a reader copies into a primer tool or a paper; picking
 one opens the feature with a quarter of its length either side, put in the box in the display form,
 so it lands on the gene and not a base before it. The row used to print the start of that padded

@@ -83,13 +83,18 @@ sequences it does have.
 ### Go to a gene
 
 Load a gene model, or any set of named features, and the box searches it as you type, by name or by
-accession, listing up to ten matches. Each match shows the feature's own span. Picking one frames the
-gene with a quarter of its length either side, and a hundred bins either side of that are read as
-well, so zooming out finds its neighbourhood rather than the edge of the block. One feature set is
-searched at a time: the one whose star is filled on the **Tracks** card. Press another row's star to
-search that set instead.
+accession, listing up to ten matches: a gene named exactly as you typed it first, then the genes whose
+names begin so. Each match shows the feature's own span. Picking one frames the gene with a quarter of
+its length either side, and a hundred bins either side of that are read as well, so zooming out finds
+its neighbourhood rather than the edge of the block. One feature set is searched at a time: the one
+whose star is filled on the **Tracks** card. Press another row's star to search that set instead.
 
-![The locus box with RAD5 typed into it and nine genes whose names start so listed under it, each with its accession and its span.](../../../assets/screens/browse/navigating-gene-search.webp)
+![The locus box with RAD5 typed into it and nine genes listed under it, each with its accession and its span: RAD5 itself first, then RAD59, RAD57, RAD55 and the others whose names start so.](../../../assets/screens/browse/navigating-gene-search.webp)
+
+A sequence's name still opens the sequence. Where genes begin with it, as IVY1 begins with `IV`, the
+sequence heads the list and <kbd>Enter</kbd> opens it; the genes stay under it, a click away.
+
+![The locus box with IV typed into it: its first row, in bold, is IV · the whole sequence, and under it the gene IVY1 with its accession and its span.](../../../assets/screens/browse/navigating-sequence-first.webp)
 
 ## Go to another sequence
 

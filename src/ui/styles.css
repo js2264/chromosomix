@@ -1533,6 +1533,13 @@ p {
   cursor: default;
 }
 
+/* The sequence the text names, above the genes it also begins: what Enter
+   opens, set apart from the list it heads by the list's own hairline. */
+.search-hit.search-hit-typed {
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+
 .browser-zoom,
 /* The one part of a map's subtitle that moves, and the browser's own. Tabular
    figures so a digit changing under a drag does not shuffle the rest of the

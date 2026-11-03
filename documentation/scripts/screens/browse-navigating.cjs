@@ -2,9 +2,14 @@
  * Pictures for browse/navigating.md: the yeast Micro-C demo on a window of
  * chromosome IV with the pointer over the map — the hint under the key saying
  * what a drag will do, read as a Mac reads it (⌥) — and the locus box with the
- * genes it found for a name typed into it.
+ * genes it found for a name typed into it, and the sequence heading that list
+ * where its name is what was typed.
  *
  *   node documentation/scripts/screens/browse-navigating.cjs [out-dir]   # nav-hint, nav-genes
+ *   node documentation/scripts/screens/webp.mjs <out-dir>/nav-genes.png \
+ *     documentation/src/assets/screens/browse/navigating-gene-search.webp
+ *   node documentation/scripts/screens/webp.mjs <out-dir>/nav-sequence.png \
+ *     documentation/src/assets/screens/browse/navigating-sequence-first.webp
  */
 
 const { sleep, start } = require('./browse-lib.cjs')
@@ -37,7 +42,39 @@ const { sleep, start } = require('./browse-lib.cjs')
     await page.waitForSelector('.search-hits:not(.hidden) .search-hit', { timeout: 30000 })
     await sleep(800)
     console.log('hits:', await page.evaluate(() => [...document.querySelectorAll('.search-hits .search-hit')].map((n) => n.textContent)))
-    await app.shot('nav-genes')
+    // The box and the list under it, with a margin of the window round them:
+    // what the page's picture is, so it needs no crop after.
+    const clip = await page.evaluate(() => {
+      const box = document.querySelector('input.input-region')?.closest('.search-box')
+      const list = box?.querySelector('.search-hits')
+      if (!box || !list) return null
+      const a = box.getBoundingClientRect()
+      const b = list.getBoundingClientRect()
+      const pad = 14
+      const x = Math.max(0, Math.min(a.left, b.left) - pad)
+      const y = Math.max(0, Math.min(a.top, b.top) - pad)
+      return { x, y, width: Math.max(a.right, b.right) + pad - x, height: Math.max(a.bottom, b.bottom) + pad - y }
+    })
+    await app.shot('nav-genes', clip === null ? {} : { clip })
+
+    // A sequence's name that genes also begin: the sequence heads the list.
+    await page.keyboard.press('Control+a')
+    await page.keyboard.type('IV', { delay: 80 })
+    await page.waitForSelector('.search-hits:not(.hidden) .search-hit-typed', { timeout: 30000 })
+    await sleep(800)
+    console.log('hits:', await page.evaluate(() => [...document.querySelectorAll('.search-hits .search-hit')].map((n) => n.textContent)))
+    const named = await page.evaluate(() => {
+      const box = document.querySelector('input.input-region')?.closest('.search-box')
+      const list = box?.querySelector('.search-hits')
+      if (!box || !list) return null
+      const a = box.getBoundingClientRect()
+      const b = list.getBoundingClientRect()
+      const pad = 14
+      const x = Math.max(0, Math.min(a.left, b.left) - pad)
+      const y = Math.max(0, Math.min(a.top, b.top) - pad)
+      return { x, y, width: Math.max(a.right, b.right) + pad - x, height: Math.max(a.bottom, b.bottom) + pad - y }
+    })
+    await app.shot('nav-sequence', named === null ? {} : { clip: named })
   } finally {
     await app.close()
   }

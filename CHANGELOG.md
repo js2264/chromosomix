@@ -39,6 +39,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A sequence's name opens the sequence, and a gene typed whole is listed first (§5.4).** With a
+  gene model loaded, `IV` and Enter in a locus box opened the gene IVY1 rather than chromosome IV,
+  since Enter takes the first gene listed and IVY1 begins with `IV`; and `RAD5` was listed fifth,
+  after RAD59, RAD57, RAD55 and RAD54, so Enter opened RAD59. The sequence a name means now heads
+  the list wherever genes begin with it, read through every spelling the box accepts (`chrIV`,
+  `iv`), and a name or accession typed whole comes before the names it begins. The map's box, the
+  whole genome's and the 1D browser's all follow it.
 - **A host's error status is headed as the refusal it is (§10, §24.6).** A `404` or a `403` to the
   `HEAD` a remote file is opened with was headed *That URI does not parse*, and its message sent a
   reader with a private bucket to *Open a file → Private buckets*, which no longer exists. A
