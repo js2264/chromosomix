@@ -1,0 +1,33 @@
+---
+title: "Per-cell contact QC"
+description: "What each cell’s contacts look like, and where in the cycle that puts it."
+---
+
+import TaskCommand from '@components/TaskCommand.astro'
+import TaskOutputs from '@components/TaskOutputs.astro'
+import TaskParameters from '@components/TaskParameters.astro'
+import TaskSummary from '@components/TaskSummary.astro'
+
+<TaskSummary id="cellqc" />
+
+{/* TODO(docs): what the task answers, and when a reader reaches for it. */}
+
+## Running it
+
+{/* TODO(docs): where it is in the Analysis panel, what has to be open first, and what appears when it has run. */}
+
+The same run from a shell:
+
+<TaskCommand id="cellqc" />
+
+## Parameters
+
+<TaskParameters id="cellqc" />
+
+## What it writes
+
+<TaskOutputs id="cellqc" />
+
+## Reading the result
+
+{/* TODO(docs): how to read what it draws and writes, and what to watch for. */}
