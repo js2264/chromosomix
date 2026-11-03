@@ -32,7 +32,7 @@ Some commands have no key and are reached only from the palette, or from a butto
 | --- | --- |
 | File | **Add a file to this tab**, **Connect a local or remote folder** (**Connect a folder** in the single-file version), **Open a different file**, **Close this tab**, **Share this tab as a link**, **Add a map beside this one**, and in the 1D browser **Open a contact map on this genome** |
 | View | **Shrink the tracks to the shortest of them**, **Legend**, **Refine on zoom**, **Put every card back in its own panel** |
-| Help | **What this browser is remembering**, **Guided tutorial** (not in the single-file version), **About this viewer**, **Source on GitHub** |
+| Help | **What this browser is remembering**, **Guided tutorial** (not in the single-file version), **About this viewer**, **Documentation**, **Source on GitHub** |
 | Structure | **Mark a bead**, **Mark a loop**, **Measure** |
 
 ## The shortcuts dialog

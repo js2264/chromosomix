@@ -32,8 +32,8 @@ From left to right:
   [Sessions, workspaces and links](/browse/sessions-and-links/) says what the link and the file each
   keep.
 - **Search commands…**, the command search (below).
-- **About the window**: the theme (<kbd>T</kbd>), the keyboard shortcuts (<kbd>?</kbd>), the source
-  on GitHub, and *About this viewer* — what the app is, the guided tutorial, which build you are
+- **About the window**: the theme (<kbd>T</kbd>), the keyboard shortcuts (<kbd>?</kbd>), this
+  documentation (the open book), the source on GitHub, and *About this viewer* — what the app is, the guided tutorial, which build you are
   running, the notebooks that check it, and the licences of the projects it is built with.
 
 A button that has a key names it in its tooltip. In a narrow window the header wraps onto two
