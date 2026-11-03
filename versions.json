@@ -1,6 +1,13 @@
 {
-  "latest": "7dcf6ec",
+  "latest": "b497151",
   "versions": [
+    {
+      "commit": "b497151",
+      "version": "0.19.0",
+      "date": "2026-11-04T00:21:10+01:00",
+      "subject": "docs: live examples, the app itself in place of its picture (#158)",
+      "tag": ""
+    },
     {
       "commit": "7dcf6ec",
       "version": "0.19.0",
@@ -241,13 +248,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 158,
-      "commit": "31b950a",
-      "title": "Docs: live examples, the app itself in place of its picture (§32.4)",
-      "branch": "js/docs-live-examples",
-      "date": "2026-11-03T23:14:20Z"
-    },
     {
       "number": 156,
       "commit": "e5d7317",
