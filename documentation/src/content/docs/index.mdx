@@ -1,0 +1,41 @@
+---
+title: chromosomix documentation
+description: How to use chromosomix, the genome browser for Hi-C and Micro-C contact maps, genome tracks and 3D models, and the command line that runs its analyses.
+template: splash
+editUrl: false
+---
+
+import { Icon } from '@astrojs/starlight/components'
+import Masthead from '@components/Masthead.astro'
+import Tile from '@components/Tile.astro'
+import Tiles from '@components/Tiles.astro'
+
+<div class="cx-landing">
+  <Masthead />
+  <p class="cx-tagline">Contact maps, genome tracks and 3D models, side by side, straight from your files. Everything about using it is here.</p>
+  <div class="cx-actions">
+    <a class="cx-button cx-filled" href="/start/first-map/">Your first map <Icon name="right-arrow" size="1rem" /></a>
+    <a class="cx-button" href="/start/introduction/">What chromosomix is</a>
+  </div>
+
+  <Tiles kicker="New here?">
+    <Tile href="/start/first-map/" icon="rocket" title="Your first map">Open a public Hi-C map and find your way around it.</Tile>
+    <Tile href="/start/window/" icon="laptop" title="A tour of the window">The deck, the four panels, the console.</Tile>
+    <Tile href="/start/tutorial/" icon="seti:video" title="The guided tutorial">A first session, step by step, in the app itself.</Tile>
+    <Tile href="/start/where-to-run/" icon="puzzle" title="Web, desktop or one file">Where chromosomix runs, and offline.</Tile>
+  </Tiles>
+
+  <Tiles kicker="Your data">
+    <Tile href="/files/opening/" icon="document" title="Opening files">From your disk, a URL, a bucket, Drive or Dropbox.</Tile>
+    <Tile href="/files/contact-maps/" icon="seti:image" title="Contact maps">.cool, .mcool, .hic, HiC-Pro and .pairs.</Tile>
+    <Tile href="/files/tracks/" icon="seti:csv" title="Tracks and features">bigWig, BED, GTF, BAM, VCF and more.</Tile>
+    <Tile href="/files/stores/" icon="list-format" title="Data stores">4DN, ENCODE, IGV, DNA Zoo and track hubs.</Tile>
+  </Tiles>
+
+  <Tiles kicker="Going further">
+    <Tile href="/analyses/" icon="seti:graphql" title="Analyses">Every task, held to the package it reproduces.</Tile>
+    <Tile href="/cli/install/" icon="seti:shell" title="Command line">The same tasks in a script or a pipeline.</Tile>
+    <Tile href="/embed/jupyter/" icon="seti:python" title="Notebooks">The viewer in Jupyter, R Markdown and Shiny.</Tile>
+    <Tile href="/advanced/data-store/" icon="seti:db" title="Your own data store">Put your lab's data in the picker.</Tile>
+  </Tiles>
+</div>

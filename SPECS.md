@@ -15816,3 +15816,121 @@ starts the tutorial from the beginning.
 
 **It is in a chunk of its own**, fetched by the press that plays it: a reader who never asks for it
 pays for one `localStorage` read when the landing page or *About* is drawn.
+
+## 32. The documentation site
+
+**<https://doc.chromosomix.app>**, written for the people who use chromosomix — the browser, the files
+it opens, its analyses, the command line, the notebook widgets, and hosting data of their own — and
+for nobody else: this document, the glossary and the docblocks are where the code is explained, and
+the site has one page that points a contributor at them. Its source is `documentation/`, an Astro
+site built with Starlight and the Rapide theme. **Built**: the site, its theme, every guide, a page
+per task, the reference pages read from the app, the release notes, the versions and their menu, the
+workflow that publishes them (`.github/workflows/docs.yml`) and the checks below. **Not yet**: the
+pictures — a page marks where one belongs (`screenshot:` in a comment) and a later script will shoot
+them from the real app, as `scripts/ui-gallery.mjs` does — and the app's links to its own copy, from
+*About*, the palette and the command's `--help`, which wait until the domain answers so that the
+live site, deployed from `main` on every push (§11), never links to a page that is not there.
+
+§31 is left unused: it was the telemetry's, which 0.19.0 removed, and the changelog still cites it by
+that number.
+
+### 32.1 Where it is served, and why from a second repository
+
+GitHub Pages serves a repository's site under one custom domain, and this repository's is
+`chromosomix.app`. So the site is served from **js2264/chromosomix-docs**, from its `gh-pages`
+branch, under `doc.chromosomix.app` — and only served from there. **The source stays here**, beside
+the code it describes, for the two reasons the reference pages give: each copy is built from its own
+tag's code, so its parameters are that release's; and a change to what the app does and the change to
+the page that says so are one pull request. The second repository holds built pages and nothing a
+person edits; its `main` carries a README saying so.
+
+### 32.2 One copy per release
+
+```
+https://doc.chromosomix.app/               the latest release's copy
+https://doc.chromosomix.app/v0.20.0/       each release's copy, built from its tag, kept for ever
+https://doc.chromosomix.app/dev/           main's copy, rebuilt on every push
+https://doc.chromosomix.app/versions.json  what is published: the releases, the latest, main
+```
+
+- **The latest release is the highest version**, not the newest publish: a fix for an older line —
+  v0.19.1 after v0.20.0 — gets its copy under `/v0.19.1/` and leaves the root to v0.20.0. The root is
+  that release built a second time for the root, so a link without a version is a link to the
+  current documentation and stays one.
+- **Every copy's header carries a menu of every copy**, filled in the browser from `versions.json`,
+  which every copy reads at the site's root: a copy built for 0.20 lists 0.27 once 0.27 is out, which
+  a list baked in at build time could not. A choice keeps the page the reader is on where the other
+  copy has it, and goes to that copy's home where it does not.
+- **A copy says when it is not the latest.** Main's says so as it is built; a release's asks the
+  manifest and, if a higher release has a copy, says which and links the same page there. The root
+  copy never does.
+- **Search engines are sent to the root.** Every page of every copy names the root copy's page as its
+  canonical address, and main's copy carries `noindex`; `robots.txt` lets crawlers in, since a
+  disallowed page's `noindex` and canonical link are never read.
+- **Each copy opens its own app.** A release's copy, at its own path, opens that release's pinned
+  build (`chromosomix.app/v/<tag>/`, kept for ever, §11); the root copy and main's open the live app.
+- **Pages are written as if the site were at the root** — `[Opening files](/files/opening/)` — and
+  the build puts every such link under its copy's path, so no page carries a version, and no link goes
+  stale when the next release takes the root.
+- **The first copy is the first release that carries the site.** A tag from before it has nothing to
+  build, and the workflow says so rather than building something else under its name.
+- **The branch is one commit.** Each publish reads the branch's tip, changes what it changes, and
+  pushes a parentless commit over it with a lease on that tip: the repository holds the site, not
+  every version of every copy, and two publishes at once cannot undo each other — the second finds
+  the branch moved, reads it again and repeats. Anything lost is rebuilt from its tag.
+
+### 32.3 What is written by hand, and what is read from the app
+
+The guides are written by hand, and so is the prose of every task's page. **Everything else is read
+from the app's source as the copy is built** (`scripts/docs-data.mjs`, through
+`src/documentation/data.ts`, the way `scripts/llms.mjs` reads `src/llms/`), and nothing it writes is
+committed:
+
+- **Each task's facts**: its method and paper and how it came out in the validation (§18.10), with a
+  link to that section of the published notebook; where it is in the Analysis panel; what it reads
+  and runs first; the shape of its command; every parameter — its name in the form, its flag, what it
+  takes, its default and what it does — and what it writes. These are the registry's (`analysis/
+  catalogue.ts`, `analysis/references.ts`), so a parameter added to a descriptor is on its page the
+  next time the site is built.
+- **The reference pages**: link keys, the command line's usage and exit statuses, the embed's
+  messages, and the formats, hosts and stores — the pages the site serves to language models (§11),
+  each made a page of the site, its links to the others pointed at their pages here.
+- **The release notes**, one page per section of `CHANGELOG.md`, and on main's copy the unreleased
+  changes too; kept out of the search, where they would outnumber the guides.
+- **The look's tokens** — the palettes, the two fonts, the radius — from `src/ui/styles.css`, and the
+  mark from `public/icon-192.png`.
+
+Three things fail the build, and the pull-request job that builds the site the way main's copy is
+built, but at the root (`test.yml`, *docs*): **a task with no page**, or a page under `analyses/`
+that is no task's (`test/unit/docs-data.test.ts` says so first, in the suite); **a link to a page or
+a heading that does not exist**, checked over every page at the root, which is also where each
+release's root copy is built, before anything is published; and **a page still marked
+`TODO(docs)`**. A token the theme reads that the stylesheet no longer declares, and a validation
+section a task cites that the notebook no longer has, stop the data script.
+
+**Dev features are absent from the site** as from every static text around the app (§29.5): the
+multi-genome format and everything that needs it, editing the reference, the dot plot, and the switch.
+
+### 32.4 The look
+
+Starlight's layout, search and navigation, and Rapide's spacing and type, under the app's own look,
+so that a reader moving between the two knows they are one product: the app's palettes and neutral
+greys with one blue, and colour for meaning only (§26.5) — an aside is the accent rather than
+Rapide's purple, and green is kept for a task the validation found identical or equivalent, the
+Analysis panel's `?` written out as a badge; the landing page's grain, a sub-pixel dot every 10 px,
+behind the page and never behind the header or the sidebar, which are solid as the app's furniture
+is; the header on the raised surface with a hairline under it, the mark and the name on one line, and
+the search box drawn as *Search commands…*; a group's heading in small accented capitals, as *NEW
+HERE?*; the home page laid out as the landing page, its tiles drawn as the store tiles; the app's
+6 px corners and its two shadows. Rapide keeps all of its rules in one cascade layer, and the site's
+stylesheet is outside it, so the app's look wins without a fight over specificity.
+
+### 32.5 Publishing
+
+A push to `main` publishes main's copy. A `v*` tag that is the version `package.json` carries — the
+tag `npm version` makes, as `release.yml` requires — publishes that release's copy, built twice: for
+the root first, where every link is checked, then for its own path. Run by hand, it publishes a named
+release's copy again, or main's. The branch is written with a **deploy key**, since the workflow's
+token cannot push to another repository: the public half on js2264/chromosomix-docs with write
+access, the private half in this repository's `DOCS_DEPLOY_KEY` secret. **Without the key every copy
+is still built**, kept as the run's artifact, and the run says that it published nothing.

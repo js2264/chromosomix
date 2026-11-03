@@ -87,3 +87,14 @@ notebooks/.quarto/
 notebooks/*.quarto_ipynb
 # What notebooks/scripts/timing.plot.R and validation.plot.R draw, regenerated from the tables the site publishes.
 notebooks/*.pdf
+
+# The documentation site (documentation/, SPECS §32): its dependencies, its
+# build, and everything scripts/docs-data.mjs writes from the app before each
+# build — the data, the tokens, the mark, the reference and release pages.
+/documentation/node_modules/
+/documentation/dist/
+/documentation/.astro/
+/documentation/public/favicon.png
+/documentation/src/generated/
+/documentation/src/content/docs/reference/
+/documentation/src/content/docs/releases/

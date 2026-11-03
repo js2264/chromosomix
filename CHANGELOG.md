@@ -12,6 +12,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Added
+
+- **A documentation site, one copy per release (§32).** <https://doc.chromosomix.app> is written for
+  the people who use chromosomix: getting started, the files it opens and from where, using the
+  browser, every analysis, the command line, the notebook widgets, hosting data and publishing a
+  store of your own, privacy, and a glossary. Each task has a page whose method, validation result,
+  command and every parameter are read from the app's registry as the site is built, so they are
+  that release's; the reference pages for links, the command line, embedding and formats are the
+  ones the app writes for language models, and the release notes are this file, one page a release.
+  Every release gets its own copy, built from its tag, at `/v<version>/`; the latest is also at the
+  root and `main` at `/dev/`, and a menu in every copy's header lists them all. It is Starlight with
+  the Rapide theme in the app's own colours, grain and type. The source is `documentation/`
+  (`npm run docs:dev`); `.github/workflows/docs.yml` publishes it to the `gh-pages` branch of
+  js2264/chromosomix-docs with a deploy key, and builds without publishing until that key is set;
+  the pull-request suite builds it and checks every internal link.
+
 ### Fixed
 
 - **The notebooks no longer fail on one failed download (§18.10).** Both runs of the Notebooks

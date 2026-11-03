@@ -256,3 +256,35 @@ jobs:
           working-directory: widgets/r
           args: 'c("--no-manual")'
           error-on: '"warning"'
+
+  # The documentation site (SPECS §32): built as main's copy is, but at the root,
+  # which is the one place its link checker runs — every internal link of every
+  # page, generated or written, to a page or a heading that exists. It reads
+  # the app's source (`scripts/docs-data.mjs`), so a task added to the registry
+  # without a page, a token the theme reads that the stylesheet dropped, or a
+  # validation section a task cites that the notebook lost, fails here.
+  # `.github/workflows/docs.yml` publishes it; nothing here does.
+  docs:
+    name: the documentation site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            documentation/package-lock.json
+      # The site reads the app's source through Vite, and nothing an install
+      # script fetches (Electron's binary) is any part of that.
+      - run: npm ci --ignore-scripts
+      - run: npm ci --prefix documentation
+      - name: Build the site, every internal link checked
+        run: npm run docs:build
+      - name: Every page written
+        run: |
+          if grep -rln 'TODO(docs)' documentation/src/content/docs; then
+            echo "::error title=Unwritten pages::the pages above are still marked TODO(docs)"
+            exit 1
+          fi
