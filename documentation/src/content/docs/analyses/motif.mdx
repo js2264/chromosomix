@@ -16,7 +16,7 @@ Where is `GGTCANNNTGACC`? **Find a motif** searches a loaded reference for a mot
 
 Load the reference as a FASTA or a `.2bit` (see [Reference sequences](/files/sequences/)), then open **Find a motif** on the **1D tasks** card of the **Analysis** panel; until a reference is loaded it is listed greyed. No contact map is needed, so it runs in [the genome browser](/browse/genome-browser/) as well as beside a map. Choose the **reference**, type the **motif**, and tick the **sequences** to search. With every sequence ticked the whole reference is searched, sequences the map does not have included.
 
-A motif the search cannot read is refused before you press **Run**, with the reason beside the button. A reference held in memory is searched in one pass and reads nothing; a large FASTA opened with its index, or a `.2bit`, is read in pieces of 16 megabases, and the line beside **Run** gives how much that is.
+A motif the search cannot read is refused before you press **run**, with the reason beside the button. A reference held in memory is searched in one pass and reads nothing; a large FASTA opened with its index, or a `.2bit`, is read in pieces of 16 megabases, and the line beside **run** gives how much that is.
 
 When it has run, the sites are a track on the **Tracks** card, named after what was asked — `GATC (both strands)`, with `on chrI` added where fewer than all sequences were ticked — and the sites per bin are a second track, the same name with `density` after it, on the map's bins. With no contact map open there are no bins to count in, so only the sites are made, and the run says so. A note gives the number of sites found and on how many sequences.
 

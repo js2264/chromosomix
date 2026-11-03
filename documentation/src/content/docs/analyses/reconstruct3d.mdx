@@ -20,7 +20,7 @@ Open a contact map, then open **Model from the map** on the **3D tasks** card of
 
 **sequences** says what to model. It starts on what the map shows — the locus on screen, or every sequence on screen — and takes a locus or several sequences separated by commas; empty is the whole file. Every bin of the resolution the map is open at is one bead, so for a coarser model open the map at a coarser resolution first, which also means far less to read.
 
-Time and memory grow with the square of the number of beads, and there is no ceiling: the line beside **Run** gives the number of beads and their width, the time per hundred refinement steps and the memory the matrices will take, for you to weigh before you press it. A browser that cannot give that much memory says so in a note rather than failing.
+Time and memory grow with the square of the number of beads, and there is no ceiling: the line beside **run** gives the number of beads and their width, the time per hundred refinement steps and the memory the matrices will take, for you to weigh before you press it. A browser that cannot give that much memory says so in a note rather than failing.
 
 When it has run, the model is a new row of the **Structures** card in the **Annotations** panel, named after what was modelled — `3D model · chrIV`, `3D model · IV:1,000,001-1,400,000` or `3D model · 16 sequences` — and it opens in a structure cell of its own, beside whatever the deck already shows (see [3D models beside the map](/browse/structures/)). A second run never replaces the first: it is numbered `(2)`, then `(3)`, so models made with two methods, two exponents or two seeds can be set side by side. The drawer shows a table of how the model was made.
 
@@ -72,7 +72,7 @@ Check **Stopped on** first. *the step budget — raise it for a closer fit* mean
 
 ### A balanced map
 
-pastis-NB always reads the raw counts. Where the file carries balancing weights, it puts them into each pair's expected count, as pastis does, rather than dividing them out of the data: a balanced value is a count times two weights, and a negative binomial handed one would find no overdispersion and quietly become a Poisson. The coverage is still corrected, and a note says how. A bin the balancer rejected is left out of the model, as the balanced map leaves it out. Because of this, a pastis-NB run on a balanced view reads its counts from the file rather than borrowing the block on screen, and the line beside **Run** says so.
+pastis-NB always reads the raw counts. Where the file carries balancing weights, it puts them into each pair's expected count, as pastis does, rather than dividing them out of the data: a balanced value is a count times two weights, and a negative binomial handed one would find no overdispersion and quietly become a Poisson. The coverage is still corrected, and a note says how. A bin the balancer rejected is left out of the model, as the balanced map leaves it out. Because of this, a pastis-NB run on a balanced view reads its counts from the file rather than borrowing the block on screen, and the line beside **run** says so.
 
 ## Compared with pastis
 

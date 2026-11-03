@@ -12,20 +12,11 @@ import TaskSummary from '@components/TaskSummary.astro'
 
 Pattern detection finds the shapes a contact map is made of by matching them to a template. The map is detrended by its own distance law, every pixel in the scan band is scored by its Pearson correlation with the pattern's template, neighbouring candidates are suppressed, and each call that is left gets a Benjamini-Hochberg q-value. It is chromosight (Matthey-Doret et al. 2020), ported, and on a balanced file its calls are the ones `chromosight detect` makes on the same file.
 
-**Pattern** picks what to look for:
-
-- **loops**: focal contacts between two anchors, the classic dot off the diagonal;
-- **loops small**: the same at a tighter 7×7 template, for short-range dots;
-- **borders**: domain boundaries, the corner where one self-interacting block ends and the next begins;
-- **hairpins**: the fold-back signal of a hairpin, on the diagonal;
-- **centromeres**: the large-scale depletion around a centromere;
-- **stripes left** and **stripes right**: an architectural stripe running left or right from an anchor.
-
-For loops alone, [Loop calling](/analyses/loops/) answers the question another way, by testing each pixel against its local background.
+**Pattern** picks what to look for — loops, small loops, domain borders, hairpins, the depletion around a centromere, or a stripe running left or right from an anchor — and each pattern brings its own template and the thresholds chromosight tuned for it (below). For loops alone, [Loop calling](/analyses/loops/) answers the question another way, by testing each pixel against its local background.
 
 ## Running it
 
-Open a contact map, then the **Analysis** panel (<kbd>4</kbd>), and choose **Pattern detection** in the **2D tasks** card. Pick a **pattern**, tick the sequences to scan, and press **Run**. It is a scan: each sequence is read as a band along its diagonal, as wide as the pattern's scan distance, and the price beside **Run** counts the multiply-accumulates the correlation will take, which is where its time goes.
+Open a contact map, then the **Analysis** panel (<kbd>4</kbd>), and choose **Pattern detection** in the **2D tasks** card. Pick a **pattern**, tick the sequences to scan, and press **run**. It is a scan: each sequence is read as a band along its diagonal, as wide as the pattern's scan distance, and the price beside **run** counts the multiply-accumulates the correlation will take, which is where its time goes.
 
 The calls land on the map the moment the run finishes, as a set named for the pattern — **Detected loops**, **Detected borders** — a row of the **Tracks** card in the **Annotations** panel, marked `*`. For the off-diagonal patterns — loops and stripes — each call is a pair, drawn as a ring and leaving as a BEDPE; for the patterns that live on the diagonal — borders, hairpins and centromeres — each call is one bin, drawn as a short diagonal marker and leaving as a BED. In the drawer are the **pileup** of every called window, the **Score spectrum**, the **Loop spectrum** for the off-diagonal patterns, and a table of the strongest 200 calls; the set itself carries every one.
 

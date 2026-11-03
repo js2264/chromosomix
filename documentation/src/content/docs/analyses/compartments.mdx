@@ -14,7 +14,7 @@ Compartments finds the checkerboard of a chromosome's two kinds of chromatin, ea
 
 ## Running it
 
-Open a contact map at a resolution compartments suit: on a mammalian genome the usual bin is 250 kb, and 100 kb is the fine end of what is used. To phase the result, load what it should follow beside the map — a gene model such as a GTF, a track, or the genome's FASTA (see [Tracks and features](/files/tracks/) and [Reference sequences](/files/sequences/)). Then open the **Analysis** panel (<kbd>4</kbd>), choose **Compartments** in the **2D tasks** card, check what is chosen under **Phasing**, and press **Run**.
+Open a contact map at a resolution compartments suit: on a mammalian genome the usual bin is 250 kb, and 100 kb is the fine end of what is used. To phase the result, load what it should follow beside the map — a gene model such as a GTF, a track, or the genome's FASTA (see [Tracks and features](/files/tracks/) and [Reference sequences](/files/sequences/)). Then open the **Analysis** panel (<kbd>4</kbd>), choose **Compartments** in the **2D tasks** card, check what is chosen under **Phasing**, and press **run**.
 
 What comes back:
 
@@ -39,15 +39,7 @@ A gene model is loaded with `--features` and named the same way, `--features gen
 
 ## Parameters
 
-**Contacts** decides the shape of the run, not only its input:
-
-- **cis only**, the default, is one decomposition per sequence, over its own contacts: the per-chromosome compartment track, the cheapest of the three, and the one that runs at a fine resolution.
-- **cis and trans** is one decomposition over everything ticked, the cis and trans blocks together, each half divided by its own expectation. Ticking every chromosome is then a genome-wide answer the per-chromosome runs cannot give: two chromosomes in the same compartment touch each other in trans, and that is where a genome-wide eigenvector's signal comes from.
-- **trans only** uses the contacts between sequences alone, so no distance decay enters the answer. It needs two sequences or more.
-
-**Method** decides what is decomposed. **cooltools**, the default, decomposes observed/expected itself — clipped at its 99.9th percentile, less one, every gap read as expected — and scales each eigenvector by the square root of its eigenvalue, as cooltools writes it. **Lieberman-Aiden 2009** decomposes the Pearson correlation of observed/expected's rows, as the original paper did. The two agree where a chromosome has compartments to find, and part where it has none.
-
-**Diagonals to ignore** keeps the near-diagonal — self-ligation and unligated fragments, the largest cells of the map and the least structural — out of the matrix; 2 is cooltools' default. The phasing settings are explained under the result.
+**Contacts** and **method** decide the run. **Cis only**, the default, is the per-chromosome compartment track, and the one that runs at a fine resolution. **Cis and trans** over every chromosome is a genome-wide answer the per-chromosome runs cannot give: two chromosomes in the same compartment touch each other in trans, and that is where a genome-wide eigenvector's signal comes from. **Trans only** leaves the distance decay out of the answer altogether. Under **cooltools**, the default method, every gap of the matrix is read as expected and each eigenvector is scaled by the square root of its eigenvalue, so a track is on cooltools' own scale; **Lieberman-Aiden 2009** is the original paper's correlation of rows. The two agree where a chromosome has compartments to find, and part where it has none. **Diagonals to ignore** keeps the near-diagonal — self-ligation and unligated fragments, the largest cells of the map and the least structural — out of the matrix. The phasing settings are explained under the result.
 
 <TaskParameters id="compartments" />
 
@@ -94,7 +86,7 @@ AA and BB are named from the phasing. Under an ambiguous phasing the saddle also
 
 ### What to watch for
 
-- **Size.** Every matrix decomposed is held whole, and one past 8,192 bins a side is refused. Under **cis only** a sequence that large is skipped and named; under the other two the run is refused, saying what to untick or how coarse to open the file. Under **Lieberman-Aiden 2009** the correlation grows as the cube of the bins, and past about 2,000 the price beside **Run** says so and names a resolution of the file that fits.
+- **Size.** Every matrix decomposed is held whole, and one past 8,192 bins a side is refused. Under **cis only** a sequence that large is skipped and named; under the other two the run is refused, saying what to untick or how coarse to open the file. Under **Lieberman-Aiden 2009** the correlation grows as the cube of the bins, and past about 2,000 the price beside **run** says so and names a resolution of the file that fits.
 - **A chromosome with no compartments.** Its E1 is still whatever carries most of its map, which may be nothing you would call a compartment; a small **of contacts** share and a weak **r with phasing** are where that shows.
 - **Circular sequences.** A sequence ticked **circular** in the Chromosomes table is divided by its decay measured the short way round.
 

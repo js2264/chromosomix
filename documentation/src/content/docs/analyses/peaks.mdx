@@ -20,7 +20,7 @@ Load the coverage as a bigWig, bedGraph or wig (see [Tracks and features](/files
 
 To test the peaks, choose a second replicate of the same experiment under **replicate**. It starts on *None — no IDR* rather than on the next track along, because a second track in a session is as often another experiment, and IDR between two experiments reports their disagreement as if it were the peaks' irreproducibility. Tick the **sequences** to call on.
 
-The call reads every base of the ticked sequences at the file's own resolution, a scan the line beside **Run** prices; the map stays live while it runs, and it can be stopped.
+The call reads every base of the ticked sequences at the file's own resolution, a scan the line beside **run** prices; the map stays live while it runs, and it can be stopped.
 
 When it has run, the peaks are a track on the **Tracks** card, directly under the coverage they were called on, named `Peaks · ATAC.bw · no IDR` with one track, or `Peaks · rep1.bw + rep2.bw · IDR ≤ 0.05` with two. Each peak's summit — its most concave base — is drawn as its thick part, and the peaks are numbered `peak_1`, `peak_2` and so on along the genome. The drawer shows the curvature of every candidate, a table per sequence, the peaks at each of yapc's six IDR thresholds when a replicate was tested, and a row per peak with **list every peak**.
 

@@ -18,7 +18,7 @@ It is not [Find a motif](/analyses/motif/) with `GATC` typed in, because a site 
 
 Load the reference as a FASTA or a `.2bit`, then open **Restriction sites** on the **1D tasks** card of the **Analysis** panel. Choose the **reference** and the **enzyme**, and tick the **sequences** to cut. The enzyme starts on `none`, which leaves nothing to cut, so the form waits for your choice.
 
-No contact map is needed for the cuts. The count per bin needs the bins of an open map: without one, only the cuts are made, and the run says so. As with Find a motif, a reference held in memory is cut without a single read, and a large FASTA opened with its index, or a `.2bit`, is read 16 megabases at a time, which the line beside **Run** prices.
+No contact map is needed for the cuts. The count per bin needs the bins of an open map: without one, only the cuts are made, and the run says so. As with Find a motif, a reference held in memory is cut without a single read, and a large FASTA opened with its index, or a `.2bit`, is read 16 megabases at a time, which the line beside **run** prices.
 
 When it has run, the cuts are a track on the **Tracks** card named after the digest — `DpnII sites` for DpnII — and the count per bin a second track, `DpnII site density`. A note gives the number of cuts, the fragments they make and their mean length.
 

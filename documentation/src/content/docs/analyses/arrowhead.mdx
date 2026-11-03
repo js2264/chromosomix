@@ -16,7 +16,7 @@ Reach for it on a deep map, when nesting is the question, or when you want domai
 
 ## Running it
 
-Open a contact map, then the **Analysis** panel (<kbd>4</kbd>), and choose **TAD annotation** in the **2D tasks** card. Tick the sequences to call and press **Run**.
+Open a contact map, then the **Analysis** panel (<kbd>4</kbd>), and choose **TAD annotation** in the **2D tasks** card. Tick the sequences to call and press **run**.
 
 The domains open on the map as **Arrowhead domains**, a row of the **Tracks** card in the **Annotations** panel, marked `*`: the corner of each domain's square along the diagonal, which is where a nested domain is seen to be nested. Its **display** dropdown makes it a **1D track** of segments instead. In the drawer, **Arrowhead domains, as Juicer writes them** is a table of Juicer's own columns, and a note says how many domains were called and how many of them sit inside another.
 
@@ -46,7 +46,7 @@ Every setting is one of Juicer's, under its meaning and at its default, so a run
 
 ### How a domain is found
 
-Each square along the diagonal is turned into the arrowhead transform, which compares the contact a bin makes the same distance upstream and downstream of it. The corner of every candidate domain is then scored from the two triangles beside it, the upper and the lower: their means and mean signs, less their variances. Corners past the thresholds are joined into connected groups, and each group is reported at its best corner.
+Each square along the diagonal is turned into the arrowhead transform, which compares the contact a bin makes the same distance upstream and downstream of it. The corner of every candidate square is then scored from its upper and lower triangles: their means and mean signs, less their variances. Corners past the thresholds are joined into connected groups, and each group is reported at its best corner.
 
 Two passes decide which corners are kept:
 
