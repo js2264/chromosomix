@@ -50,6 +50,9 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,js}', 'electron/**/*.cts'],
+      // Named because vitest's own list has `.mts` but not `.cts`, and without
+      // it the `include` above drops the main process without a word.
+      extension: ['.ts', '.js', '.cts'],
       exclude: ['**/*.generated.ts', '**/*.d.ts'],
       reporter: ['text-summary', 'json-summary', 'html'],
       reportsDirectory: process.env.COVERAGE_DIR || 'coverage',

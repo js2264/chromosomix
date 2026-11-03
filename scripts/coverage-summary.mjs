@@ -17,20 +17,26 @@
  * *Not loaded* counts the files with code in them and not one line run: the
  * files no test imports, directly or through anything else.
  *
- *   node scripts/coverage-summary.mjs [--title <which run>] [--dir <reports>]
+ *   node scripts/coverage-summary.mjs [--title <which run>] [--dir <reports>] [--badge <file>]
  *
  * `--dir` defaults to `COVERAGE_DIR`, then `coverage/`, as vitest.config.ts's
  * does, so a run that moved its reports finds them without being told twice.
+ *
+ * `--badge` also writes the app's line coverage as a shields.io endpoint — the
+ * JSON `img.shields.io/endpoint?url=…` draws a badge from — which the Tests
+ * workflow publishes at `<site>/coverage/badge.json`, beside the report it
+ * summarises, and the README's badge reads (docs/deploy.md).
  */
 
-import { appendFileSync, readFileSync } from 'node:fs'
-import { relative, resolve, sep } from 'node:path'
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
+import { basename, dirname, relative, resolve, sep } from 'node:path'
 import { parseArgs } from 'node:util'
 
 const { values } = parseArgs({
   options: {
     title: { type: 'string' },
     dir: { type: 'string', default: process.env.COVERAGE_DIR || 'coverage' },
+    badge: { type: 'string' },
   },
 })
 
@@ -56,9 +62,20 @@ const empty = () => ({
   ...Object.fromEntries(METRICS.map((m) => [m, { total: 0, covered: 0 }])),
 })
 
+// The checkout the run measured, which need not be this one — a report made in
+// a copy elsewhere is read here as well: the deepest directory every file is
+// under, which is the checkout itself, since every run counts both `src/` and
+// `electron/` (vitest.config.ts), or one of the two if a report holds one only.
+const files = Object.keys(summary).filter((file) => file !== 'total')
+let base = dirname(files[0] ?? root)
+for (const file of files) {
+  while (base !== dirname(base) && !file.startsWith(base + sep)) base = dirname(base)
+}
+if (['src', 'electron'].includes(basename(base))) base = dirname(base)
+
 /** `src/ui/stores/x.ts` → `src/ui/`, `src/main.ts` → `src/*`, `electron/main.cts` → `electron/`. */
 function areaOf(file) {
-  const parts = relative(root, file).split(sep)
+  const parts = relative(base, file).split(sep)
   if (parts.length === 2) return `${parts[0]}/*`
   if (parts[0] === 'src') return `src/${parts[1]}/`
   return `${parts[0]}/`
@@ -66,8 +83,8 @@ function areaOf(file) {
 
 const all = empty()
 const areas = new Map()
-for (const [file, numbers] of Object.entries(summary)) {
-  if (file === 'total') continue
+for (const file of files) {
+  const numbers = summary[file]
   const area = areas.get(areaOf(file)) ?? empty()
   areas.set(areaOf(file), area)
   const neverRun = numbers.lines.total > 0 && numbers.lines.covered === 0
@@ -102,3 +119,13 @@ const table = [
 
 console.log(table)
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${table}\n`)
+
+if (values.badge) {
+  const lines = all.lines.total === 0 ? 0 : (100 * all.lines.covered) / all.lines.total
+  // Red under a half, then a step every ten points to bright green at ninety.
+  const color =
+    lines >= 90 ? 'brightgreen' : lines >= 80 ? 'green' : lines >= 70 ? 'yellowgreen' : lines >= 60 ? 'yellow' : lines >= 50 ? 'orange' : 'red'
+  const badge = { schemaVersion: 1, label: 'coverage', message: `${lines.toFixed(1)}%`, color }
+  writeFileSync(resolve(process.cwd(), values.badge), `${JSON.stringify(badge)}\n`)
+  console.log(`Badge: ${badge.message} (${color}) → ${values.badge}`)
+}

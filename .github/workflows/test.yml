@@ -99,6 +99,11 @@ jobs:
     env:
       # `secrets` cannot be read in an `if:`, so its presence travels in env.
       HAS_METACOOLER_TOKEN: ${{ secrets.METACOOLER_REPO_TOKEN != '' }}
+    # Whether the full suite ran and passed, which is what `coverage` below
+    # publishes from: a figure from a red suite, or from the public half alone,
+    # is not the app's.
+    outputs:
+      coverage: ${{ steps.full-suite.outcome == 'success' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -191,15 +196,17 @@ jobs:
         run: npm run fixtures
 
       - name: Full suite, against the Python oracles
+        id: full-suite
         if: steps.fixtures.outcome == 'success'
         run: npm test -- --coverage
 
       # The app-wide figure, which only this run can give: the twelve reader
       # suites and the request budgets over metacooler's fixtures are what the
-      # check job's figure leaves out.
+      # check job's figure leaves out. The badge goes in the report's directory,
+      # so the artifact below carries both to the `coverage` job.
       - name: Coverage of the full suite
         if: always() && steps.fixtures.outcome == 'success' && hashFiles('coverage/coverage-summary.json') != ''
-        run: node scripts/coverage-summary.mjs --title 'full suite'
+        run: node scripts/coverage-summary.mjs --title 'full suite' --badge coverage/badge.json
       - name: Keep the coverage report
         if: always() && steps.fixtures.outcome == 'success' && hashFiles('coverage/coverage-summary.json') != ''
         uses: actions/upload-artifact@v4
@@ -252,6 +259,59 @@ jobs:
           if [ "$DEMO_GOLDEN" != "success" ] && [ "$DEMO" = "success" ] && [ "$COOLER" = "success" ]; then
             echo "::warning title=Demo oracles drifted::rebuilding test/golden/demo with this cooler did not reproduce the committed files; run npm run fixtures:demo-golden and look at the diff."
           fi
+
+  # The full suite's coverage, published at `<site>/coverage/` — the report, and
+  # the `badge.json` the README's badge is drawn from — on the terms the stores
+  # and the notebooks are (docs/deploy.md): Pages replaces the whole site on
+  # every deployment and only deploy.yml deploys it, so this force-pushes the
+  # report to an orphan `coverage` branch as one commit and asks for a deploy,
+  # which copies the branch into `coverage/` then and on every run after.
+  #
+  # A job of its own so that the one holding a token that can write runs none
+  # of the code under test, only what the goldens job left in its artifact.
+  # Only a push to `main` publishes: a pull request's coverage is in its run's
+  # summary and its artifact, and is not the site's.
+  coverage:
+    name: publish the full suite's coverage
+    needs: goldens
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.goldens.outputs.coverage == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      # The `coverage` branch.
+      contents: write
+      # The deploy it asks for at the end.
+      actions: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-full
+          path: report
+
+      # One orphan commit, force-pushed: the branch's only interesting state is
+      # its tip, and the deploy clones it on every push to `main`.
+      - name: Publish to the coverage branch
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -s report/index.html && test -s report/badge.json
+          short=$(echo '${{ github.sha }}' | cut -c1-7)
+          cd report
+          git init --quiet --initial-branch coverage
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit --quiet -m "coverage: full suite at $short, $(jq -r .message badge.json) of lines"
+          git push --quiet --force "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" \
+            HEAD:refs/heads/coverage
+
+      # The publisher of the site, as stores.yml and notebooks.yml ask it. A run
+      # dispatched by the workflow token is one of the two kinds GitHub delivers
+      # for that token.
+      - name: Ask the deploy to publish the site
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy.yml --ref main --repo '${{ github.repository }}'
 
   # The notebook widgets (SPECS §21.5): the Python package under `widgets/python`
   # and the R package under `widgets/r`. Neither needs the app built — each test

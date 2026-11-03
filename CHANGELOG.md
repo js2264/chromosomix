@@ -20,6 +20,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the files each leaves unloaded; `coverage/index.html` is the file-by-file view. The Tests workflow
   reports the fixture-free suite's coverage on every push, and the full suite's where metacooler's
   fixtures let it run, in each job's summary, with the report kept as an artifact for two weeks.
+  After every green full suite on `main`, the report is published at
+  <https://chromosomix.app/coverage/>, and the README's **Coverage** badge shows its line coverage
+  (docs/deploy.md).
 
 ### Fixed
 
