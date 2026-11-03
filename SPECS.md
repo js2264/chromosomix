@@ -10174,13 +10174,16 @@ wrote in the last run is compared step by step — the loops by bin pair, the in
 its boundaries, E1 chromosome by chromosome, the pileup cell by cell.
 **And a third holds the app to its own command line.** `notebooks/parity.qmd` runs ten tasks in the
 app — this checkout's build, of the commit the command line is built from or nothing runs, served
-from loopback and driven in headless Chromium by `notebooks/scripts/parity.mjs` — and again from
-the line the console wrote for each run (§23.1), run as written in the folder holding the files with
-only `--out` added, and compares the files the two wrote: insulation, compartments phased by the
+from loopback and driven by `notebooks/scripts/parity.mjs` **in each of the three browser engines
+Playwright drives headless**, Chromium, Firefox and WebKit, in turn, each launched once before any is
+driven so that a missing one stops the page at once (`PARITY_BROWSERS` names them, all three unless it
+says) — and again from the line the console wrote for each run (§23.1), once a browser, run as written
+in the folder holding the files, on the files that browser's sessions read, with only `--out` added,
+and compares the files the two wrote, browser by browser: insulation, compartments phased by the
 sequence's GC, P(s), coverage, virtual 4C, loop calling and a motif search on GEO's yeast Micro-C
 (GSE151553) at 1.6 kb, framed on chrIV, which the map draws bin for bin where the whole genome is
 drawn in pooled bins, with UCSC's sacCer3 beside it;
-APA over the loops the app called there; and peak calling and the metaplot on GEO's yeast ATAC-seq and
+APA over the loops the app called there, in that browser; and peak calling and the metaplot on GEO's yeast ATAC-seq and
 its MACS2 peaks (GSM8640701), opened with no map. The files are opened as a reader opens them — a
 workspace dropped on the landing page and then the files it asks for, or the files alone — so the
 line names them as the shell will find them; every file the app offers for a run is saved through the
@@ -10188,8 +10191,9 @@ buttons a reader presses, the drawer's TSV, BED and BEDPE and each new track's b
 the Tracks card. Each is matched to the command line's by output and format and is **identical** — a
 bigWig byte for byte, a text file line for line with its provenance, the `#` lines that say when, by
 which build, from which file and in which words each surface frames a run, set aside — or its **data
-differs**, or one side alone wrote it. Every file and its verdict is one line of
-`notebooks/work/parity/summary.tsv`.
+differs**, or one side alone wrote it. Every file and its verdict, in each browser, is one line of
+`notebooks/work/parity/summary.tsv`, and the page says where the three browsers wrote one line for a
+run and where they did not.
 
 **And one for the reader's own machine.** `notebooks/laptop.qmd` answers what the other three do not
 — what a genome-wide analysis costs on a machine like the reader's, on the command line and in the app,
@@ -10277,7 +10281,7 @@ app's build, and the reference environment pinned package by package in `noteboo
 which brings Quarto and every package the notebooks import; for the validation, yapc's environment
 (`requirements-yapc.txt`, IDR and yapc built at the commits the notebook cites), Boost-HiC's checkout,
 and Ubuntu's bedtools and seqkit; for the parity, the timings and the laptop, the two viewers with
-Playwright's Chromium, and for the laptop its Firefox and WebKit too; for the timings, higlass-python's environment with libfuse. The parity renders
+Playwright's Chromium, and for the parity and the laptop its Firefox and WebKit too; for the timings, higlass-python's environment with libfuse. The parity renders
 first, alone, so that a page that cannot render stops the run before the hours of the others; then
 the validation and the timings in one job — the timings run the validation's commands on the inputs it
 fetched and made, which no other runner holds — beside the laptop in another, which sets the

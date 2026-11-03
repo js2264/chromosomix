@@ -12,8 +12,9 @@ name: Notebooks
 #                                         and HiGlass, timed; then every command
 #                                         of the validation, run again and timed
 #   https://chromosomix.app/parity/       notebooks/parity.qmd — ten tasks run
-#                                         in the app in headless Chromium, then
-#                                         from the line its console wrote, and
+#                                         in the app in headless Chromium,
+#                                         Firefox and WebKit, then from the
+#                                         line its console wrote in each, and
 #                                         the files the two wrote compared
 #
 # The fourth, notebooks/laptop.qmd — 23 analyses run genome-wide, each on the
@@ -35,7 +36,7 @@ name: Notebooks
 # artifacts instead.
 #
 # **One job a notebook.** `site` works out where the pages will be, for the
-# links between them. `parity` renders first, in about ten minutes, so that a
+# links between them. `parity` renders first, in about twenty minutes, so that a
 # page that cannot render fails the run before the hours of the others; then
 # `validation` and `laptop` run side by side, each on a runner of its own.
 # `laptop` takes the committed page out of the way first, so that what it
@@ -68,7 +69,7 @@ name: Notebooks
 # environment, as the `quarto-cli` package. The viewers the timings open on are
 # pinned in `notebooks/viewers/package.json` (juicebox.js, HiGlass and the
 # Playwright that drives Chromium for all three and for the parity and the
-# laptop, and Firefox and WebKit for the laptop), and HiGlass's tile server in
+# laptop, and Firefox and WebKit for the parity and the laptop), and HiGlass's tile server in
 # `notebooks/requirements-higlass.txt`, higlass-python's environment, with
 # Ubuntu's libfuse 2 for the files it reads from a bucket.
 #
@@ -207,8 +208,9 @@ jobs:
             echo "version=$(node -p "require('./package.json').version")"
           } >> "$GITHUB_OUTPUT"
 
-  # Ten tasks in the app, driven in the viewers' Chromium, and again from the
-  # lines its console wrote; first, being the shortest.
+  # Ten tasks in the app, driven in the viewers' Chromium, Firefox and WebKit
+  # in turn, and again from the lines its console wrote in each; first, being
+  # the shortest.
   parity:
     name: parity
     needs: site
@@ -224,6 +226,7 @@ jobs:
       - uses: ./.github/actions/notebooks-setup
         with:
           viewers: 'true'
+          browsers: chromium firefox webkit
 
       - name: Render the parity
         run: bash notebooks/scripts/memory.sh quarto render notebooks/parity.qmd

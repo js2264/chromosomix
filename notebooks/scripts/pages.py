@@ -123,14 +123,18 @@ def _tables(name, folder):
         return _details(f'Every verdict ({len(rows)})', ['§', 'Analysis', 'Reference', 'Verdict'],
                         [[r['§'], r['Analysis'], r['Reference'], r['Verdict']] for r in rows])
     if name == 'parity' and (folder / 'summary.tsv').exists():
+        # Each task in each browser the app ran in; a table from before there were three is Chromium's.
         cases = {}
         for row in _rows(folder / 'summary.tsv'):
-            cases.setdefault((row['case'], row['task']), []).append(row['verdict'])
-        return _details(f'Every task ({len(cases)})', ['Case', 'Task', 'Files', 'Identical', 'Data differs',
-                                                        'One side only'],
-                        [[case, f'`{task}`', len(v), v.count('identical'), v.count('data differs'),
+            browser = {'chromium': 'Chromium', 'firefox': 'Firefox', 'webkit': 'WebKit'}.get(
+                row.get('browser') or 'chromium', row.get('browser'))
+            cases.setdefault((row['case'], row['task'], browser), []).append(row['verdict'])
+        tasks = len({(case, task) for case, task, _ in cases})
+        return _details(f'Every task ({tasks}), in each browser', ['Case', 'Task', 'Browser', 'Files', 'Identical',
+                                                                   'Data differs', 'One side only'],
+                        [[case, f'`{task}`', browser, len(v), v.count('identical'), v.count('data differs'),
                           sum(x in ('browser only', 'command line only') for x in v)]
-                         for (case, task), v in cases.items()])
+                         for (case, task, browser), v in cases.items()])
     if name == 'laptop' and (folder / 'timings.tsv').exists():
         rows = _rows(folder / 'timings.tsv')
 

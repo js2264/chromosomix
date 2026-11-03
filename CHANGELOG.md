@@ -32,6 +32,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   step and the whole are timed — CPU, wall clock and peak memory — and what the two wrote is compared
   step by step. Every step is a line of `pipeline.tsv`, published beside the page and kept by a
   release, and `notebooks/scripts/timing.plot.R` draws it as panel c of the timing figure.
+- **The parity runs in Firefox and WebKit too (§18.10).** `notebooks/parity.qmd` drives its ten
+  tasks in each of the three engines Playwright drives headless — Chromium, Firefox and WebKit — and
+  runs the line each browser's console wrote on the files that browser's sessions read, so the
+  pileup is over the loops that browser called. Every file is compared browser by browser:
+  `summary.tsv` has a `browser` column, each case lists its verdict in each browser and says whether
+  the three wrote the same line, and `PARITY_BROWSERS` names fewer. The Notebooks workflow installs
+  the two for the parity's job.
 
 ### Fixed
 
