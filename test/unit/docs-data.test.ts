@@ -14,6 +14,8 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { taskCatalogue } from '@/analysis/catalogue'
+import { USAGE } from '@/cli/main'
+import { DOCS_URL } from '@/documentation/site'
 import { TASK_REFERENCES } from '@/analysis/references'
 import { asSitePage, PAGE_HOMES, unlabelled } from '@/documentation/data'
 import { resetDevFeatures } from '@/state/devFeatures'
@@ -131,5 +133,15 @@ describe('every task', () => {
       .map((name) => name.replace(/\.mdx?$/, ''))
       .filter((name) => name !== 'index' && name !== 'validation')
     expect([...pages].sort()).toEqual([...ids].sort())
+  })
+})
+
+describe('the doors to the site', () => {
+  it('open its root, which every copy is a menu away from', () => {
+    expect(DOCS_URL).toBe('https://doc.chromosomix.app/')
+  })
+
+  it('end the command’s --help', () => {
+    expect(USAGE.trimEnd().endsWith(DOCS_URL)).toBe(true)
   })
 })

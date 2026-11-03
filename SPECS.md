@@ -1141,7 +1141,9 @@ replaces the tab's file, and this adds to it.
 After back and forward in the same group, in this order, are the three that take the work out of the
 window: *Share this tab as a link*, *Save every tab as a file* and the console (§23). They used to
 sit on the far side of the command bar, away from the controls a reader's hand is already among; the
-far right is now only about the window itself — theme, shortcuts, source, about. Where the header
+far right is now only about the window itself — theme, shortcuts, documentation, source, about. The
+documentation is an open book linking to doc.chromosomix.app (§32) in a tab of its own, as the
+source does, and the palette has it as *Documentation* under Help, beside *Source on GitHub*. Where the header
 cannot hold the groups beside the command bar, it lets the bar's sentence shorten first; in a window
 narrower than 60rem the last group goes under the first, without its divider, rather than under the
 bar. An embed has no header and no buttons for these (§21).
@@ -15825,11 +15827,17 @@ for nobody else: this document, the glossary and the docblocks are where the cod
 the site has one page that points a contributor at them. Its source is `documentation/`, an Astro
 site built with Starlight and the Rapide theme. **Built**: the site, its theme, every guide, a page
 per task, the reference pages read from the app, the release notes, the versions and their menu, the
-workflow that publishes them (`.github/workflows/docs.yml`) and the checks below. **Not yet**: the
-pictures — a page marks where one belongs (`screenshot:` in a comment) and a later script will shoot
-them from the real app, as `scripts/ui-gallery.mjs` does — and the app's links to its own copy, from
-*About*, the palette and the command's `--help`, which wait until the domain answers so that the
-live site, deployed from `main` on every push (§11), never links to a page that is not there.
+workflow that publishes them (`.github/workflows/docs.yml`), the checks below, and the doors to it
+from the app: the header's book beside the shortcuts (§5.5), *Documentation* in the palette's Help,
+a line in *About* before the source, the last lines of the command's `--help`, and a badge in the
+README. **Not yet**: the pictures — a page marks where one belongs (`screenshot:` in a comment) and a
+later script will shoot them from the real app, as `scripts/ui-gallery.mjs` does.
+
+**Every door opens the root**, `https://doc.chromosomix.app/` (`documentation/site.ts`), not the
+build's own version's copy: the live site is built from `main` on every push (§11) and carries the
+version of the release before it, whose copy may not exist — 0.19.0 has none — nor say what `main`
+now does. The root is the latest release's copy, or main's until the first release, and its menu is
+one choice away from every other.
 
 §31 is left unused: it was the telemetry's, which 0.19.0 removed, and the changelog still cites it by
 that number.

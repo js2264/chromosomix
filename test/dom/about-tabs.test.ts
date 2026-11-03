@@ -125,6 +125,19 @@ describe('the tabs', () => {
   })
 })
 
+describe('the overview', () => {
+  it('links the documentation, in a tab of its own, before the source (§32)', () => {
+    openAbout('https://example.org/repo', null, undefined, null, null)
+    const links = [...document.querySelectorAll<HTMLAnchorElement>('#about-panel-overview a.link, [role="tabpanel"]:not([hidden]) a.link')]
+    const hrefs = links.map((link) => link.href)
+    const docs = hrefs.indexOf('https://doc.chromosomix.app/')
+    expect(docs).toBeGreaterThanOrEqual(0)
+    expect(hrefs.indexOf('https://example.org/repo')).toBeGreaterThan(docs)
+    expect(links[docs].textContent).toBe('doc.chromosomix.app')
+    expect(links[docs].target).toBe('_blank')
+  })
+})
+
 describe('the notebooks', () => {
   it('reads nothing until the tab is chosen, then every page’s stamp once', async () => {
     const notebooks = site()

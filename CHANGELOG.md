@@ -27,6 +27,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   (`npm run docs:dev`); `.github/workflows/docs.yml` publishes it to the `gh-pages` branch of
   js2264/chromosomix-docs with a deploy key, and builds without publishing until that key is set;
   the pull-request suite builds it and checks every internal link.
+- **The app opens its documentation (§5.5, §32).** An open book in the header, between the shortcuts
+  and the source, opens <https://doc.chromosomix.app> in a tab of its own; so do *Documentation* in
+  the palette's Help, a line in *About* before the source, and the last lines of
+  `chromosomix --help`. Each opens the site's root — the latest release's copy — since the live
+  site, built from `main`, cannot name a copy of its own. The README carries a badge for it.
 
 ### Fixed
 
