@@ -96,8 +96,9 @@ A `hic` track opens as a map rather than a track: it has a row of its own and is
 A large hub asks for a few of its tracks to be on when you connect, and the rest off. chromosomix
 reads the hub's answer the way UCSC does: a track with `visibility hide`, a subtrack with
 `parent <name> off`, and every subtrack of a hidden composite are off. **open with its tracks** loads
-only the tracks that are on, and the store's description says how many there are of each —
-*440 tracks, 20 on by default*. A track that is off is not absent: its row is there, to open by hand.
+only the tracks that are on, and the store's description says how many there are of each — for one
+published hub, *440 tracks, 20 on by default*. A track that is off is not absent: its row is there, to
+open by hand.
 
 ## What is left out
 

@@ -15,7 +15,7 @@ To open files that are already published, see [Opening files](/files/opening/).
 
 | The host must | Because |
 | --- | --- |
-| answer a `Range` request with `206 Partial Content`, and say `Accept-Ranges: bytes` | every read is a byte range; a host that ignores ranges and sends the whole file is refused rather than downloaded |
+| answer a `Range` request with `206 Partial Content`, and say `Accept-Ranges: bytes` | every read is a byte range; a contact map on a host that ignores ranges is refused rather than downloaded whole |
 | let other sites read the file (CORS): allow `GET` and `HEAD` and the `Range` request header, and expose the `Content-Length` and `Content-Range` response headers | the viewer runs on its own site, not on yours; the two exposed headers are the part most often forgotten |
 | send the file as it is, with no `Content-Encoding` | a range of a compressed response is a range of the compressed bytes; serve a `.gz` as the `.gz` it is |
 | send `Content-Type: application/octet-stream` | it keeps a CDN from sniffing and transforming the body |
@@ -42,9 +42,10 @@ Access-Control-Allow-Headers: Range
 Access-Control-Max-Age: 86400
 ```
 
-`Access-Control-Allow-Origin: *` lets every copy of the viewer read the file — the site, its pinned
-releases, a lab's [own copy](/advanced/self-hosting/) — which suits released data. Naming
-`https://chromosomix.app` instead admits the site alone; a figure embedded in somebody else's page is
+`Access-Control-Allow-Origin: *` lets every copy of the viewer read the file — the site and its
+pinned releases, the desktop app, a lab's [own copy](/advanced/self-hosting/) — which suits released
+data. Naming `https://chromosomix.app` instead admits the site and its releases alone: the desktop app
+reads as `app://viewer`, which such a list must name too. A figure embedded in somebody else's page is
 still the site reading, so it needs nothing more.
 
 :::caution[Compression is the failure you will not see]
@@ -348,9 +349,9 @@ configuration:
 ]
 ```
 
-Add the address of any other copy of the viewer your readers use to the second rule's
-`AllowedOrigins`. Check it with the preflight a browser sends before a signed read, which needs no key
-and must print `200`:
+Add any other copy of the viewer your readers use to the second rule's `AllowedOrigins` — your own
+copy's address, or `app://viewer` for the desktop app. Check the rule with the preflight a browser
+sends before a signed read, which needs no key and must print `200`:
 
 ```sh
 curl -sS -o /dev/null -w '%{http_code}\n' -X OPTIONS "$URL" \

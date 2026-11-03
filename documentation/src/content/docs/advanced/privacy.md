@@ -23,7 +23,7 @@ patient-derived data can be opened with the network unplugged.
 
 | What | From | When |
 | --- | --- | --- |
-| The app itself | the site that serves it: chromosomix.app, or your lab's [own copy](/advanced/self-hosting/) | when you load the page; after one visit the site's copy works offline, and what is kept for that is the app, never your data |
+| The app itself | the site that serves it: chromosomix.app, or your lab's [own copy](/advanced/self-hosting/) | when you load the page; after one visit chromosomix.app works offline, and what it keeps for that is the app, never your data |
 | A remote file | its own host, directly, a byte range at a time | when you open it |
 | A data store | the built-in ones from the site, Roadmap from WashU, any other from its own host | when you open the store, or follow a link that names it — never on load |
 | The example sessions and the tutorial | the public buckets their files are on | when you press one |
@@ -80,7 +80,7 @@ what is kept is which files were open and how you had them set up.
 | --- | --- |
 | Remembered workspace | the tabs you had open, offered back with **restore** when you next open the app afresh — never reopened unasked |
 | Console | the commands, files and exports of the last week, 500 lines at most |
-| Files you allowed | local files this browser may read again without your picking them (Chrome, Edge and the desktop app) |
+| Files you allowed | local files this browser may read again, with your permission, without your picking them again (Chrome, Edge and the desktop app) |
 | Folders you connected | folders the installed app may list and read until you disconnect them |
 | Where your files are | each file's path inside the folder it was opened from |
 | This window | the open tabs, filters, marks and bookmarks, gone when the window closes |

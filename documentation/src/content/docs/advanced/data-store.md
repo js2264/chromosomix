@@ -8,7 +8,8 @@ reference genomes and saved sessions, with enough about each — the assay, the 
 condition — to choose one without opening any. chromosomix draws it in the store drawer as a page of
 its own: a facet for each column with every value counted, a search box, a matrix of any two columns,
 and rows to open or to add to the tab in front. The built-in stores — 4DN, ENCODE, IGV's genomes and
-the rest, described in [Data stores](/files/stores/) — are this same file.
+the rest, described in [Data stores](/files/stores/) — are files of this same kind, and so, once read,
+is a [UCSC track hub](/advanced/track-hubs/).
 
 A store is a door, not a copy. A row names a file where it already is; nothing is read until a reader
 opens the store, and then nothing but the store file until they open a row.
@@ -62,10 +63,10 @@ edit into your own.
 
 ### The store
 
-| Field | | What it is |
+| Field | Required | What it is |
 | --- | --- | --- |
-| `kind` | required | always `"chromosomix.store"`. A JSON file without it is refused as not a store. |
-| `entries` | required | the rows, below. |
+| `kind` | yes | always `"chromosomix.store"`. A JSON file without it is refused as not a store. |
+| `entries` | yes | the rows, below. |
 | `version` | | `1`, the format this viewer reads, as a whole number. A store of a later version is refused, with a message saying so. |
 | `name` | | what the drawer calls the store, and the name of its tile once a reader remembers it. |
 | `description` | | one line under the name. |
@@ -78,10 +79,10 @@ edit into your own.
 
 ### An entry
 
-| Field | | What it is |
+| Field | Required | What it is |
 | --- | --- | --- |
-| `label` | required | the row's name, and the name the file takes once open — on its tab, its map or its track. |
-| `uri` | required | the file: a name relative to `base`, or a full address (see [Addresses](#addresses)). |
+| `label` | yes | the row's name, and the name the file takes once open — on its tab, its map or its track. |
+| `uri` | yes | the file: a name relative to `base`, or a full address (see [Addresses](#addresses)). |
 | `kind` | | `map`, `genome` or `workspace` (below). Left out, it is read from the file name. |
 | `size` | | the file's size in bytes, drawn on the row so that a reader sees what a large file costs before pressing it. |
 | `note` | | free text, shown on the row and matched by the search box: an accession, a paper, a replicate. |
@@ -91,10 +92,10 @@ edit into your own.
 ### Kinds of entry
 
 - **`map`** — a contact map: `.cool`, `.mcool`, `.hic`, `.scool`, `.pairs` or a HiC-Pro matrix.
-  Opened, it is the tab's map; added to a tab, it joins the deck beside the map in front.
-- **`genome`** — anything else a file can be: a track, a reference sequence, a 3D model. Opened on its
-  own it starts the [genome browser](/browse/genome-browser/) over its assembly; added to a tab with a
-  map, it becomes a track — or a 3D model, in a cell of its own.
+  Opened, it is a tab's map; added to the tab in front, it joins the deck beside its map.
+- **`genome`** — anything else a file can be: a track, a reference sequence, a 3D model. Opened, it
+  starts the [genome browser](/browse/genome-browser/) over its assembly; added to a tab with a map,
+  it becomes a track — or a 3D model, in a cell of its own.
 - **`workspace`** — a saved workspace, a `.chromosomix.json`, which opens as the tabs it holds (see
   [Saved sessions in a store](#saved-sessions-in-a-store)).
 
@@ -258,5 +259,5 @@ the file again, and the next reader to open the store gets the new rows.
 - Add new data under new names rather than replacing a file in place: a row, and every link that
   names it, then go on meaning the same file — and the data can keep its long cache lifetime.
 - Run `make_store.py` again after an upload, or edit the rows you added by hand, then run `check`.
-- Set `generatedAt` when a script writes the file, so readers of the JSON can tell which version
-  they have.
+- `make_store.py` stamps what it writes with `generatedAt`, and a store written by hand can carry the
+  same, so that anyone reading the JSON can tell which version they have.

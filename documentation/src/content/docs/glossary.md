@@ -82,8 +82,8 @@ structure dropped on it. See [Maps side by side](/browse/deck/).
 
 A sequence you declare to join its own ends — a bacterial chromosome, a plasmid — by its tick in the
 *circular* column of the Chromosomes table. A file's first opening ticks the sequences whose contacts
-across the join look like a circle's. A window may then cross the join, and most tasks measure the distance
-between two places the short way round.
+across the join look like a circle's. A window may then cross the join, and most tasks measure the
+distance between two places the short way round.
 
 ## Command palette
 
@@ -176,7 +176,8 @@ file, with no header and no tabs, and the Annotations and Aesthetics panels fold
 
 The three controls on each row of the **Contact maps**, **Tracks** and **Structures** cards. The eye
 shows or hides, keeping every setting; the × lets go; the grip drags the row up or down its card,
-onto a cell or onto an edge. See [Maps side by side](/browse/deck/).
+onto a cell, or onto a `+` edge to place it in a new cell there. See
+[Maps side by side](/browse/deck/).
 
 ## Facet
 
@@ -193,7 +194,7 @@ picks the set the feature search reads, and the one a task takes unless you choo
 
 ## Framing and provenance
 
-The **framing** is what a task runs on, taken when you press **Run**: the window, the bin size, the
+The **framing** is what a task runs on, taken when you press **run**: the window, the bin size, the
 score, the balancing, the contacts total, the circles and origins. It is a snapshot — pan away and the
 result stands, with an offer to compute it again. The **provenance** adds the task and its version,
 every parameter, the file, the build and the time; it is shown with the result and written into every
@@ -396,7 +397,7 @@ them, and <kbd>F2</kbd> or a double-click renames one; up to twelve can be open.
 ## Task
 
 One analysis in the **Analysis** panel, listed with its state on the **2D tasks**, **3D tasks** or
-**1D tasks** card. Pressed, it opens in the Analysis drawer — its parameters, **Run**, its progress and
+**1D tasks** card. Pressed, it opens in the Analysis drawer — its parameters, **run**, its progress and
 its results — while the map stays live. A greyed task says what to load first. See
 [How analyses run](/analyses/).
 

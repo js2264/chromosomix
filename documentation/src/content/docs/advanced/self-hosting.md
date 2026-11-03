@@ -37,8 +37,8 @@ Then open `https://lab.example.org/viewer/`. Four things to know about this copy
 - **Its address must end in `/`, or name `index.html`.** At `…/viewer` without the slash it looks for
   its files one folder too high.
 - **It has no offline mode.** It registers no service worker, since it cannot know whose site it is
-  on, so it is not installable and needs the network to load; and its **About** lists no other
-  versions.
+  on, so it is not installable and does not open without its server; and its **About** lists no
+  other versions.
 - **It has no Google or Dropbox sign-in, and opens no public Google Drive link.** Those need
   registrations made for one web address, and this copy can be served from any. Build a copy with your
   own ([below](#signing-in-to-google-and-dropbox)) if your readers need them. Dropbox share links, and
