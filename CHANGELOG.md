@@ -35,6 +35,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A host's error status is headed as the refusal it is (§10, §24.6).** A `404` or a `403` to the
+  `HEAD` a remote file is opened with was headed *That URI does not parse*, and its message sent a
+  reader with a private bucket to *Open a file → Private buckets*, which no longer exists. A
+  presigned link that had expired, which skips the `HEAD`, failed the range probe under *That host
+  does not serve byte ranges*. Both are now headed *The host would not give this file*, with advice
+  for a public file, a private bucket (*connect a bucket…*) and a presigned link, and an expired
+  presigned link says that it is one; a host that answers a range with the whole file is still told
+  it serves no ranges. The Google sign-in offer and the command line's whole download, which read
+  the same codes, are unchanged.
+- **The HiC-Pro conversion hint names `--one-based` (§3.9).** HiC-Pro numbers its bins from 1, and
+  `cooler load -f coo` reads a COO file's bin ids from 0 unless it is told otherwise.
+- **A store from a newer build is called a store (§24.1)**, in its own format's numbers: the refusal
+  said *workspace format 2* and the workspace version this build reads.
+- **The note for a hub on UCSC's servers says what works (§24.10)**: a copy of the hub and its files
+  on a host that sends the header, or the tracks dropped one by one. It sent the reader to a
+  connected folder, which lists a `hub.txt` dimmed and opens no hub.
 - **The directionality index's price refuses what its runner cannot score (§18.8).** A bin needs a
   whole window each side, so a sequence must be longer than twice the window; the price refused
   only one no longer than the window, and a sequence in between was priced, read and then dropped

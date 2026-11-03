@@ -122,6 +122,11 @@ hub says so. Pasting the hub's text (below) gets past its `hub.txt`, but its dat
 same servers and will not open either. chromosomix does not route your requests through a proxy to
 get round another host's headers.
 
+What works is a copy: put the hub and the files it names on a host that sends the header — a bucket
+of your own ([Hosting your data](/advanced/hosting/)) — and paste that copy's `hub.txt` address into
+the stores drawer. For a track or two, download them and drop them on the window instead. A
+connected folder lists a `hub.txt`, but does not open it as a hub.
+
 ## Pasting a hub
 
 When a hub's host will not answer, or while you are writing one, open **or paste the hub** under the

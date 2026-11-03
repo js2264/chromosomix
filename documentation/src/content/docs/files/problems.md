@@ -25,8 +25,8 @@ host must allow `GET` and `HEAD` from other sites, accept the `Range` header, an
 A message saying the host *serves ranges but does not expose its size* is the same fix: add both
 headers to the bucket's exposed headers.
 
-**That host does not serve byte ranges.** A request for one byte came back as something other than
-a part of the file. chromosomix reads a few kilobytes at a time, so a host without ranges would mean
+**That host does not serve byte ranges.** A request for one byte came back as the whole file, or as
+something else that is not a part of it. chromosomix reads a few kilobytes at a time, so a host without ranges would mean
 downloading the whole file for every look. Host the file on object storage, or download it and drop
 it. GEO and SRA download links serve no ranges and no CORS, and cannot be opened where they are.
 
@@ -36,12 +36,15 @@ downloaded whole and opens anyway; a larger one is refused as **Too much to down
 operation**. Object storage serves files uncompressed by default; GitHub Pages compresses and
 cannot be told not to. The desktop app asks hosts not to compress and does not meet this.
 
-**The host answered 403 or 404.** The address names nothing the host will hand over: the object is
-private, the address is wrong, or the file has moved. For a private bucket, connect it with a key
-([Opening files](/files/opening/)); a refusal that follows a key says the key reached the bucket and
-was rejected, and lists what to check — the region, the key's permissions, a session token that has
-expired. A presigned, signed or SAS link that worked yesterday and is refused today has expired: ask
-for a fresh one.
+**The host would not give this file.** The host answered with an error status, which the message
+names: 404 or 410 is no file at that address, 401 or 403 a file this page may not read. The object
+is private, the address is wrong, or the file has moved. A public file has to be readable by anyone;
+for a private bucket, connect it with its key (**connect a bucket…**, see
+[Opening files](/files/opening/)) and open the file from there. A refusal that follows a key says
+the key reached the bucket and was rejected, and lists what to check — the region, the key's
+permissions, a session token that has expired. A presigned, signed or SAS link that worked
+yesterday and is refused today has expired, and the message says it is a presigned link: ask for a
+fresh one.
 
 **A Google file answers 401 or 403.** A Drive file or a Cloud Storage object that is not public needs
 you to sign in to Google, and the refusal offers **sign in** — or **sign in again**, once an earlier
