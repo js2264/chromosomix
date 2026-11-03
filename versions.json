@@ -242,6 +242,13 @@
   ],
   "pulls": [
     {
+      "number": 156,
+      "commit": "e5d7317",
+      "title": "Add cell-of-its-own rectangle to Contact maps card",
+      "branch": "js/gracious-edison-jt8vg7",
+      "date": "2026-11-02T21:53:58Z"
+    },
+    {
       "number": 155,
       "commit": "eeee127",
       "title": "Label scaled metaplot axes by feature position, not column",
