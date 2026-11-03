@@ -16,7 +16,7 @@ open by address. Nothing is fetched until you open a store.
 The landing page's **Connect to a data store** is a grid of tiles, one per store; press one to
 open it.
 
-<!-- screenshot: the Connect to a data store tiles on the landing page, with the example sessions beside them -->
+![The landing page's Connect to a data store tiles, from RSG lab data to Add a custom store, with Just looking? and its four example sessions in the margin beside them.](../../../assets/screens/files/store-tiles.webp)
 
 | Store | What it holds | Drawn as |
 | --- | --- | --- |
@@ -47,7 +47,7 @@ every tile, to switch stores; a link button that copies a link to the store as y
 it; an arrow to the store's own website; and a download of the catalogue as the drawer holds it.
 The drawer is one per window, whichever tab is in front.
 
-<!-- screenshot: the store drawer open on 4DN beside a map, with facets ticked and the tray showing two files -->
+![The store drawer open on 4DN beside 4DN's K562 map of chr15 at 250 kb, with K562 ticked under Biosource and one value ticked under Format, leaving one experiment set's two bigWigs, both ticked, and the tray offering them with add to this tab, open together and clear.](../../../assets/screens/files/store-drawer.webp)
 
 The stores button in the header and the <kbd>\\</kbd> key open and close it, and so does **Stores**
 in the command palette; opened that way, it comes back on the store you were last on. <kbd>Esc</kbd>

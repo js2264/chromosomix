@@ -71,7 +71,7 @@ with their contacts added together. It opens on its **Cells** table — each cel
 and its `contacts` — and both layouts are read: the standard one `cooler.create_scool` writes, and
 the older one HiCMatrix and scHiCExplorer write.
 
-<!-- screenshot: the Cells table of an .scool with a few cells ticked and the sum button showing their count -->
+![The Cells table of a mouse single-cell .scool at 1 Mb, its 3,882 cells listed with their nnz and contacts, four of them ticked and the button reading sum 4 cells → beside sum all 3,882 →.](../../../assets/screens/files/scool-cells.webp)
 
 - Click a cell to open its own map.
 - Tick cells and press **sum N cells →** to draw them as one map. **sum all N →** is the
@@ -128,7 +128,7 @@ A 4DN `.pairs` file — plain, gzipped or bgzipped, with its `.px2` index or wit
 of contacts, not a matrix, and it states no bin size. So it is imported: the first open asks how to
 bin it, in a dialog headed **Bin** and the file's name.
 
-<!-- screenshot: the Bin dialog for a .pairs.gz, with its base resolution, ladder and cost line -->
+![The Bin dialog for an E. coli .pairs.gz with no .px2 index: a base resolution of 2000 bp, five ladder rungs from 2 kb to 40 kb, the cost line of 2,321 bins and at most 2,694,681 stored pixels, the download box ticked and build the map.](../../../assets/screens/files/pairs-bin.webp)
 
 - **Base resolution (bp)** opens on a value suggested from the file's own numbers, and snaps to a
   1-2-5 series.

@@ -9,7 +9,7 @@ message, a few lines of advice, and **open another file** (with **try again** wh
 help). A track that cannot be read stays a row of the Tracks card, with the reason in red under its
 name.
 
-<!-- screenshot: a refusal page for a remote map whose host blocks cross-origin reads, with its advice and buttons -->
+![The page that replaces a zebra finch .hic on GenomeArk's public bucket, which allows no cross-origin read: the heading That host will not let this page read the file, the message naming the missing Access-Control-Allow-Origin, three lines of advice, What the file actually says, and open another file.](../../../assets/screens/files/cors-refusal.webp)
 
 Two ways out work for almost any problem with a file on a server: download it and drop it on the
 window, where it is read from your disk; or ask whoever hosts it to serve it as

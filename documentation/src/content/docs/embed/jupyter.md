@@ -28,7 +28,7 @@ view = Chromosomix(
 view
 ```
 
-<!-- screenshot: the widget in a JupyterLab cell, the yeast Micro-C map of IV:1.0–1.4 Mb with its ATAC-seq and gene tracks -->
+![A JupyterLab notebook with the cell above run, and under it the widget: the viewer's bar, and the yeast Micro-C map of IV:1.0–1.4 Mb on a log10 scale with its ATAC-seq track and the start of its gene track under it, both side panels folded as strips.](../../../assets/screens/embed/jupyter-cell.webp)
 
 `region` frames the map, `tracks` are put beside it once it is drawn, in order, and every other keyword is a key of the view as a link to the app carries it — here, the counts on a log₁₀ scale. The file is read where it is, by range: nothing is copied into the notebook.
 

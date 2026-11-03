@@ -14,7 +14,8 @@
  * - **insulation** ENCODE's CTCF ChIP-seq of K562 added by its address, then
  *   Diamond insulation run on chr15 alone with its defaults and its drawer
  *   closed: the score and the boundaries left of the map, the domains on the
- *   diagonal.
+ *   diagonal, the Analysis panel open with the row saying *done*
+ *   (`insulation-analysis-folded`: the same with that panel folded).
  *
  * Network: the stores are read from the deployed site and the data from 4DN's
  * and ENCODE's buckets, so `HTTPS_PROXY` is handed to Chromium (see the lib).
@@ -114,14 +115,25 @@ const CTCF = 'https://encode-public.s3.amazonaws.com/2020/09/26/85161a5a-d6b5-49
     .click()
   await sleep(500)
   await page.click('.analysis-drawer .analysis-run > button')
-  await page.waitForFunction(
-    () =>
-      [...document.querySelectorAll('.analysis-row')]
-        .find((row) => row.querySelector('.analysis-row-title')?.textContent === 'Diamond insulation')
-        ?.querySelector('.analysis-chip')?.textContent === 'done',
-    null,
-    { timeout: 600000 },
-  )
+  // The row's chip reads a percentage while it runs and `done in …` after.
+  const chip = () =>
+    page.evaluate(
+      () =>
+        [...document.querySelectorAll('.analysis-row')]
+          .find((row) => row.querySelector('.analysis-row-title')?.textContent === 'Diamond insulation')
+          ?.querySelector('.analysis-chip')?.textContent ?? '',
+    )
+  const until = Date.now() + 1200000
+  let said = ''
+  for (;;) {
+    const now = await chip()
+    if (now !== said) console.log(`  insulation: ${now}`)
+    said = now
+    if (/^done/.test(now)) break
+    if (/^(failed|cancelled)/.test(now)) throw new Error(`insulation ${now}`)
+    if (Date.now() > until) throw new Error(`insulation still ${now} after twenty minutes`)
+    await sleep(2000)
+  }
   await sleep(1500)
   await page.keyboard.press('Escape')
   await sleep(1500)

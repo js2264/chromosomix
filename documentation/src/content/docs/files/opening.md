@@ -17,7 +17,7 @@ This page is about getting files in. What each format becomes is on its own page
 On the landing page, under **Load files**, drop files on the area that reads **Drop genomic files
 here**, or click it to choose them in your system's dialog. Several files can go at once.
 
-<!-- screenshot: the landing page, with Load files and its URL box, the Connect a local or remote folder buttons and the data store tiles -->
+![The landing page's three ways in: Load files with its drop area and, behind or a URL, the box for an address and open; the four buttons of Connect a local or remote folder; and the tiles of Connect to a data store.](../../../assets/screens/files/landing-ways-in.webp)
 
 Once a tab has something open, drop files anywhere on the window. To add one from a dialog
 instead, press the **+** in the header, **Add a file to this tab**. To replace what the tab holds,
@@ -71,7 +71,7 @@ When you will open one file after another from the same place, connect the place
 naming files one by one. The landing page's **Connect a local or remote folder** row has four
 buttons, and the command palette has the same command.
 
-<!-- screenshot: the Files panel listing a connected folder, with a .bam beside its dimmed .bai -->
+![The Files panel on a connected folder of the yeast demo's files, the pointer on the BAM's row with its two marks, add and open in a tab of its own, and its .bai index dimmed below it.](../../../assets/screens/files/files-panel.webp)
 
 A connected place appears in the **Files** panel at the left edge of the window, listed one level
 at a time: open a sub-folder to see inside it. Click a file's name to open it, or use the two marks

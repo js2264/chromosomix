@@ -582,6 +582,18 @@ main:has(.cx-landing) .content-panel:has(> .sl-container > h1#_top) {
   clip-path: inset(50%);
 }
 
+/* A picture of the app, framed as the app frames a card: its hairline, its
+   corner and its resting shadow, so a white panel does not run into the page
+   (`screens.mjs` marks them and holds each to the size the app drew it). */
+.sl-markdown-content img.cx-screen {
+  display: block;
+  height: auto;
+  border: 1px solid var(--cx-border);
+  border-radius: var(--cx-radius);
+  box-shadow: var(--cx-shadow-1);
+  background: var(--cx-bg-raised);
+}
+
 /* A key, drawn as a key: the app's hairline and resting surface, a heavier
    lower edge, the mono face. */
 .sl-markdown-content kbd {

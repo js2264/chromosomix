@@ -6,9 +6,11 @@
  * - **store-drawer** 4DN's K562 Hi-C (4DNESC23ZYOF) opened from the store on
  *   chr15 at 250 kb, then the drawer opened again from the header, on 4DN,
  *   dragged narrower by its edge so that the map shows beside it (the
- *   Aesthetics panel folded for the room), with three facets ticked — *K562
- *   (Tier 2)* under *Biosource*, SON TSA-seq under *Assay*, `bw` under
- *   *Format* — and two rows ticked, so that the tray offers them together.
+ *   Aesthetics panel folded for the room), with two facets ticked — K562
+ *   under *Biosource*, `bw` under *Format* — which leave one set's two
+ *   bigWigs, both ticked, so that the tray offers them together. (Narrowed to
+ *   one set on purpose: a group heading scrolled under the tray is drawn over
+ *   it, `.portal-group`'s z-index above the tray's.)
  *
  * Network: the stores are read from the deployed site and the map from 4DN's
  * bucket, so `HTTPS_PROXY` is handed to Chromium (see the lib).
@@ -34,7 +36,9 @@ const exactly = (text) => new RegExp(`^${text.replace(/[.*+?^$()|[\]{}\\]/g, (c)
   await page.waitForSelector('.picker-stores .store-tile[data-store="4dn"]', { timeout: 60000 })
   await w.quiet()
   await sleep(1000)
-  await w.shot('store-tiles', { clip: await around(page, ['.picker-store-section', '.picker-examples'], 20) })
+  // Short of the status bar under the window's edge.
+  const tiles = await around(page, ['.picker-store-section', '.picker-examples'], 20)
+  await w.shot('store-tiles', { clip: { ...tiles, height: tiles.height - 14 } })
 
   // The set opened with its tracks, on chr15 at 250 kb.
   await page.click('.picker-stores .store-tile[data-store="4dn"]')
@@ -96,8 +100,7 @@ const exactly = (text) => new RegExp(`^${text.replace(/[.*+?^$()|[\]{}\\]/g, (c)
     }
   }
   console.log('  facets:', await page.$$eval('.store-drawer .facet-label', (labels) => labels.map((l) => l.textContent)))
-  await tick('Biosource', 'K562 (Tier 2)')
-  await tick('Assay', 'TSA-seq (SON protein)')
+  await tick('Biosource', 'K562')
   await tick('Format', 'bw')
   await w.quiet()
   // Two rows of the answer, ticked.

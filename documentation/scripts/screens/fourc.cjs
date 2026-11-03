@@ -1,9 +1,9 @@
 /**
  * A 4C profile on the yeast Micro-C demo at 1 kb, chromosome IV (the picture of
  * `analyses/fourc.mdx`): the profile from IV:1,200,001-1,210,000 over P(s), the
- * anchor region left out, as a lane beside the map, then *pick on map* pressed again — lit, *pointing…* —
- * and a Shift-drag held across the anchor's stretch, the band it names drawn
- * on the map while the hand is still down.
+ * anchor region left out, as a lane beside the map; then *pick on map* pressed
+ * again — lit, *pointing…* — and a Shift-drag held across the anchor's stretch,
+ * the band it names drawn on the map while the hand is still down.
  *
  *   node documentation/scripts/screens/fourc.cjs <out-dir>
  *

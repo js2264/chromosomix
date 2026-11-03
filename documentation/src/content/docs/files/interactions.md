@@ -7,7 +7,7 @@ An interaction file lists pairs of places that touch: loop calls, ChIA-PET or Hi
 promoter–enhancer links. chromosomix draws them where they can be checked against the map — a ring
 round each pair on the map itself — or as arcs along an edge of the map and in the 1D browser.
 
-<!-- screenshot: a yeast micro-C map with a loop set drawn as rings on it, and the same set as arcs below the map -->
+![The yeast micro-C map of IV:1,000,001-1,400,000 with a set of loop calls drawn as rings on it, loaded from its interact file, and the same loops from the loop caller's .tsv drawn as arcs under the map.](../../../assets/screens/files/rings-and-arcs.webp)
 
 Load one as you would any track: drop it on the map, use the Tracks card's **Load a track**, or
 pick it from a folder, a store or an address ([Opening files](/files/opening/)).

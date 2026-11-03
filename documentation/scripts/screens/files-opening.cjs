@@ -8,7 +8,9 @@
  *   served the published site's own (`publishedKeys`) and shows the row
  *   chromosomix.app shows;
  * - **files-panel** the Files panel on a connected folder holding the yeast
- *   demo's files, its BAM offered beside the index it reads, which is dimmed.
+ *   demo's files, widened by its edge so that no name breaks, with the
+ *   pointer on the BAM's row, whose two marks it shows, and the index the BAM
+ *   reads dimmed under it.
  *   A headless browser cannot answer a folder dialog, so the dialog is stood in
  *   for, as `scripts/ui-files-routes.mjs` does: it hands back a real directory
  *   (in the origin's private file system) holding the demo's files, which the
@@ -52,7 +54,10 @@ const FILES = [
     await w.quiet()
     await sleep(1500)
     console.log('  folder row:', (await page.locator('.picker-providers').innerText()).replace(/\s+/g, ' '))
-    await w.shot('landing-ways-in', { clip: await around(page, ['.picker-load', '.picker-providers', '.picker-stores'], 24) })
+    // From the *Load files* heading to the foot of the tiles: not the masthead
+    // above it, nor the status bar under the window's edge.
+    const ways = await around(page, ['.picker-load .picker-heading', '.picker-load .load-box', '.picker-providers', '.picker-stores'], 12)
+    await w.shot('landing-ways-in', { clip: { ...ways, height: ways.height - 6 } })
     await w.context.close()
   }
 

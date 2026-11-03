@@ -1,9 +1,12 @@
 /**
  * Pictures for browse/structures.md: the yeast Micro-C demo with its 3D model
  * dropped on the Structures card, so that it opens in a cell beside the map;
- * the map moved to the whole of chromosome IV and the model framed on it; and
- * a bead pointed at — the status bar naming it
- * and each map drawing a dashed line down and across the heatmap at its place.
+ * the map moved to the whole of chromosome IV, from its crumb, and the model
+ * framed on it; and a bead of IV pointed at — the status bar naming it, and
+ * each map drawing a dashed line down and across the heatmap at its place.
+ *
+ * The crumb rather than `IV` typed in the locus box: there `IV` and Enter open
+ * the gene IVY1, not the chromosome.
  *
  *   node documentation/scripts/screens/browse-structures.cjs [out-dir]   # st-model, st-bead
  */

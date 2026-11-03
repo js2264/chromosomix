@@ -10,10 +10,10 @@ its beads are on, with the model given the screen.
 
 Every model is a row of the **Structures** card in the Annotations panel, whose **Load a
 structure** zone takes *a g3d (WashU, text or binary), a .3dg (Dip-C), a bed3d or a PDB this app
-wrote*. The row says what it holds — *2,412 beads · 5 kb · 16 sequences* — and its eye shows and
+wrote*. The row says what it holds — *2,431 beads · 5 kb · 16 sequences* — and its eye shows and
 hides the model's cell.
 
-<!-- screenshot: the Structures card with a phased model's row, and its cell beside a map with a locus lit on both homologues -->
+![The Structures card with the yeast model's row, 2,431 beads · 5 kb · 16 sequences, and the model's cell beside the yeast micro-C map, where the pointer on a cell 262 kb off the diagonal lights the beads at its two loci on chromosome IV, joined by a dashed chord.](../../../assets/screens/files/model-beside-map.webp)
 
 ## The formats
 

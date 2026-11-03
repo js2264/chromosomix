@@ -8,7 +8,7 @@ The window has the same parts whatever you open. From the top: the **header**, t
 browser or a deck of cells — with the **panels** either side of it, the **console** along the bottom
 when it is open, and the **status bar** at the foot.
 
-<!-- screenshot: the whole window with a map and its tracks open, the General and Aesthetics panels unfolded, each part labelled -->
+![The whole window on the yeast micro-C demo: the header, the tab, the trail ending in the resolution and contacts, the heading over the map, the map with its tracks under and beside it, the General panel open on the left and the Aesthetics panel on the right, the Annotations and Analysis panels folded to strips, and the status bar.](../../../assets/screens/start/window.webp)
 
 ## The header
 
@@ -112,7 +112,7 @@ holds **add a cell…** (a map from a file or a URL, the tab's 3D structure, or 
 **match all scales**, **match all resolutions**, how many cells across, the whole deck as one figure,
 and, at its far end, **close deck**. [Maps side by side](/browse/deck/) has the rest.
 
-<!-- screenshot: a deck of three cells — two maps and a 3D structure — with the deck's bar above them -->
+![A deck of three cells on the whole of yeast chromosome IV: a micro-C cooler and a Hi-C .hic side by side, the first starred and with its genes and ATAC lanes, and the yeast model beside them with chromosome IV lit and the rest ghosted, under the deck's bar from add a cell… to close deck.](../../../assets/screens/start/deck.webp)
 
 The pictures keep their light colours in the dark theme, as they will have in a figure.
 

@@ -8,7 +8,7 @@ your files. It runs entirely in your web browser — at <https://chromosomix.app
 or as a single HTML file — and nothing you open in it is uploaded anywhere. A `chromosomix` command
 line runs the same analyses in a script or a pipeline.
 
-<!-- screenshot: a yeast micro-C contact map with its loop calls, beside sequence, gene, ATAC and Pol II tracks -->
+![A yeast micro-C contact map of chromosome IV from 1.0 to 1.4 Mb with its loop calls ringed on it, the sequence's GC content, the genes, ATAC and the ATAC peaks under it, and the GC content, the genes, Pol II over input and the Pol II peaks beside it.](../../../assets/screens/start/yeast-microc.webp)
 
 ## What you can do with it
 

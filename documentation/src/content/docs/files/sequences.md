@@ -104,7 +104,7 @@ mitochondrion arrives looking like a short linear chromosome, with the contacts 
 bin to its first in the far corner of the map. You declare which sequences are circles, and the
 first time a file is opened, chromosomix proposes them.
 
-<!-- screenshot: the Chromosomes table of a bacterial map, with the circular and origin columns and a sequence ticked -->
+![The Chromosomes table of an E. coli .mcool on its first open, NC_000913.3 ticked in the circular column with its origin at 1, under the bar saying that it reads as circular, and the ↻ beside it on the General panel's Sequences card.](../../../assets/screens/files/circular-table.webp)
 
 **Where.** The **Chromosomes** table has a **circular** column of tick boxes, a sequence to a row,
 and an **origin** column beside it. A declared sequence wears a `↻` in the General panel's

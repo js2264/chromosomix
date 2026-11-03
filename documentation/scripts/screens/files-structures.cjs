@@ -3,10 +3,12 @@
  *
  * - **model-beside-map** the yeast micro-C cooler on IV:1,000,001-1,400,000
  *   with the demo's model dropped on the Structures card: the card's row
- *   (beads, bead width, sequences), and the model's cell beside the map with
- *   the pointer on a cell of the map off the diagonal, which lights the beads
- *   at its two loci. The demo's model is haploid — no phased model is among
- *   the data this was made with — so each locus is lit once.
+ *   (beads, bead width, sequences), and the model's cell beside the map,
+ *   framed on the maps' window and brought a little closer, with the pointer
+ *   on a cell of the map's lower triangle 262 kb off the diagonal, which
+ *   lights the beads at its two loci and joins them by a chord. The demo's
+ *   model is haploid — no phased model is among the data this was made with —
+ *   so each locus is lit once.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node documentation/scripts/screens/files-structures.cjs [out-dir]

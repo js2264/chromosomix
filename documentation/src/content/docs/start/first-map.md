@@ -28,7 +28,7 @@ Go to <https://chromosomix.app/>. The landing page offers three ways in:
   listed in a column you can browse.
 - **Connect to a data store**: catalogues of published data, one tile each.
 
-<!-- screenshot: the landing page, with the 4DN open data tile under Connect to a data store -->
+![The landing page: play the tutorial under New here?, Load files with its drop area and URL box, the four buttons that connect a folder, a bucket, Google Drive or Dropbox, and the data store tiles with the pointer on 4DN open data.](../../../assets/screens/start/landing.webp)
 
 ## Open a map from the 4DN store
 
@@ -44,7 +44,7 @@ The map opens on its **Chromosomes** table, one row per chromosome. The **Genera
 it, says what the file is: its bin size and its number of contacts under *File*, its chromosomes
 under *Sequences*, and anything else it carries under *Metadata*.
 
-<!-- screenshot: the Chromosomes table of the 4DN map, with the General panel open beside it -->
+![The Chromosomes table of 4DN's K562 map, a row per chromosome with its length, beside the General panel, whose File card gives its bin size, 25 kb as it opens, and a sum of 186,956,649 contacts, and whose Sequences card lists its chromosomes.](../../../assets/screens/start/chromosomes.webp)
 
 ## Pick a resolution and open a chromosome
 
@@ -91,7 +91,7 @@ When a window holds more bins than the picture has room for, it is drawn coarser
 bins, and the line under the title says so, as its *effective resolution*. <kbd>-</kbd> and
 <kbd>+</kbd> step one resolution coarser or finer from the keyboard.
 
-<!-- screenshot: chr15:38,100,001-50,025,000 at 5 kb, with 4DN's tracks under the map -->
+![chr15:38,100,001-50,025,000 at 5 kb, balanced on a log10 scale, with 4DN's compartment eigenvector, insulation score and boundaries drawn under the map.](../../../assets/screens/start/chr15-5kb.webp)
 
 ## Change the normalisation
 
@@ -149,7 +149,7 @@ of the map, the boundaries it called as a lane beside it, and the domains betwee
 along the diagonal. Each is a row of the Tracks card like any other, and the score's row can be saved
 as a bigWig that IGV and deepTools open.
 
-<!-- screenshot: chr15 at 5 kb with the computed insulation score and boundaries left of the map and domains on the diagonal -->
+![chr15:38,100,001-50,025,000 at 5 kb after Diamond insulation, its row on the Analysis panel saying done: the computed insulation score and the boundaries it called drawn left of the map, the domains as corners along the diagonal, and 4DN's tracks and ENCODE's CTCF signal under the map.](../../../assets/screens/start/insulation.webp)
 
 Open the console, from its button in the header or with <kbd>Ctrl</kbd> and the key left of
 <kbd>1</kbd> (<kbd>Ctrl</kbd>+<kbd>&#96;</kbd> on most keyboards, Control on a Mac too): the run is there

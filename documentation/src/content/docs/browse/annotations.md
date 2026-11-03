@@ -14,7 +14,7 @@ Loading tracks from files is covered in [Tracks and features](/files/tracks/) an
 [3D models beside the map](/browse/structures/). This page is about the marks you draw, the results
 an analysis leaves, the file's own columns and bookmarks.
 
-![The Annotations panel open beside a Micro-C map of yeast chromosome IV, its Manual annotations card listing four marks, a vertical line at 1.2 Mb, a horizontal line at 1.33 Mb, an arrowhead on a loop and a rectangle on a domain, each drawn on the map in its own colour.](../../../assets/screens/browse/annotations-manual-marks.webp)
+![The Annotations panel open beside a Micro-C map of yeast chromosome IV, its Manual annotations card listing four marks, a vertical line at 1.2 Mb, a horizontal line at 1.33 Mb, an arrowhead on a loop and a rectangle on the diagonal from 1.04 to 1.11 Mb, each drawn on the map in its own colour.](../../../assets/screens/browse/annotations-manual-marks.webp)
 
 ## Your own marks
 

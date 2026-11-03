@@ -15837,8 +15837,7 @@ per task, the reference pages read from the app, the release notes, the versions
 workflow that publishes them (`.github/workflows/docs.yml`), the checks below, and the doors to it
 from the app: the header's book beside the shortcuts (§5.5), *Documentation* in the palette's Help,
 a line in *About* before the source, the last lines of the command's `--help`, and a badge in the
-README. **Not yet**: the pictures — a page marks where one belongs (`screenshot:` in a comment) and a
-later script will shoot them from the real app, as `scripts/ui-gallery.mjs` does.
+README; and the pictures, every one of them the real app's (§32.4).
 
 **Every door opens the root**, `https://doc.chromosomix.app/` (`documentation/site.ts`), not the
 build's own version's copy: the live site is built from `main` on every push (§11) and carries the
@@ -15939,6 +15938,19 @@ the search box drawn as *Search commands…*; a group's heading in small accente
 HERE?*; the home page laid out as the landing page, its tiles drawn as the store tiles; the app's
 6 px corners and its two shadows. Rapide keeps all of its rules in one cascade layer, and the site's
 stylesheet is outside it, so the app's look wins without a fight over specificity.
+
+**Every picture of the app is the app**, shot by a script per page under
+`documentation/scripts/screens/`: Playwright on the dev server, 1440 × 900 at twice the density, in
+the light theme, each step waiting for the app's own report that a picture is finished
+(`chromosomix:rendered`), on the demo bucket's data and the public stores', cropped and written as
+WebP under `src/assets/screens/<section>/` by `webp.mjs`. None shows a dev feature, and where a page's
+example needed data the bucket does not have, the alt text says what was used instead. **Each is shown
+at the size the app drew it**: half its width in pixels, or the column where that is narrower
+(`src/lib/screens.mjs`), so a card of a panel is not the app at twice its size beside a window at
+half of it; and each is framed as the app frames a card, its hairline, corner and resting shadow, so
+a white panel does not run into the page. The suite holds every picture to a WebP under 300 KB that
+a page uses (`test/unit/docs-screens.test.ts`). A page marks a picture still to shoot with
+`screenshot:` in a comment.
 
 **The page of ways to use it draws each way rather than shooting it** (`start/ways.mdx`,
 `WayArt.astro`): a browser, a window of its own, a laptop, a file, a tagged release, a server, a page

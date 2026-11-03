@@ -11,7 +11,7 @@
  *   node documentation/scripts/screens/files-interactions.cjs [out-dir]
  */
 
-const { BASE, sleep, launch, newWindow, around } = require('./start-files-lib.cjs')
+const { BASE, sleep, launch, newWindow } = require('./start-files-lib.cjs')
 
 const OUT = process.argv[2] ?? 'screens/files-interactions'
 const YEAST = `${BASE}/demo/yeast`
@@ -64,7 +64,19 @@ const YEAST = `${BASE}/demo/yeast`
   await sleep(2500)
   await w.quiet()
   await sleep(1500)
-  // The map and the lane of arcs under it.
-  await w.shot('rings-and-arcs', { clip: await around(page, ['.heatmap-canvas', '.lane-canvas.lane-bottom'], 36) })
+  // The map and the lane of arcs under it, its name and grip included.
+  const clip = await page.evaluate(() => {
+    const map = document.querySelector('.heatmap-canvas').getBoundingClientRect()
+    const lane = document.querySelector('.lane-canvas.lane-bottom').getBoundingClientRect()
+    const left = Math.min(map.left, lane.left) - 16
+    const top = map.top - 12
+    return {
+      x: Math.round(left),
+      y: Math.round(top),
+      width: Math.round(Math.max(map.right, lane.right) + 16 - left),
+      height: Math.round(lane.bottom + 4 - top),
+    }
+  })
+  await w.shot('rings-and-arcs', { clip })
   await browser.close()
 })()

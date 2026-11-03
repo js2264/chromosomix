@@ -49,7 +49,7 @@ Above the view, one bar holds what a figure in somebody else's page owes its rea
 
 Notes about the file, and refusals, appear under the bar as they do in the app.
 
-<!-- screenshot: a page with an embedded yeast Micro-C map, the embed's one bar above it, both side panels folded -->
+![A plain web page with a heading, a paragraph and an embedded Micro-C map of yeast chromosome IV from 1.0 to 1.4 Mb; above the map the embed's one bar holds the chromosomix mark and name, the breadcrumb, the resolution and the buttons for the two panels and About, and the Annotations and Aesthetics panels are folded as strips on either edge.](../../../assets/screens/embed/web-page-iframe.webp)
 
 ## Driving it from the page
 

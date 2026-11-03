@@ -4,14 +4,18 @@
  * the yeast Micro-C demo on the lab's bucket, IV:1.0–1.4 Mb, balanced, log10,
  * in an `<iframe>` 640 high — framing the dev server's build of the app.
  *
- * The host page is a plain page of text written here and handed to the browser
- * by a route at http://example.org/figure.html (nothing is written to disk), so
- * that the frame is on another origin than the page, as it is on a lab's site.
+ * The host page is a plain page of text written here and served by a small
+ * HTTP server this script starts on another port of the loopback (nothing is
+ * written to disk), so that the frame is on another origin than the page, as
+ * it is on a lab's site. A real server rather than a route: Chrome's local
+ * network checks take a page fulfilled by a route for a public one, and refuse
+ * it a frame on the loopback.
  * The embed's one bar shows above the map, both side panels folded as strips.
  *
  *   node documentation/scripts/screens/embed-web-page.cjs [out-dir]   # em-page
  */
 
+const { createServer } = require('node:http')
 const { BASE, BUCKET, sleep, start } = require('./browse-lib.cjs')
 
 const SRC =
@@ -47,11 +51,15 @@ const HOST = `<!doctype html>
 </html>`
 
 ;(async () => {
+  const server = createServer((request, response) => {
+    response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    response.end(HOST)
+  })
+  await new Promise((done) => server.listen(0, '127.0.0.1', done))
   const app = await start(process.argv[2])
-  const { page, context } = app
-  await context.route('http://example.org/figure.html', (route) => route.fulfill({ contentType: 'text/html', body: HOST }))
+  const { page } = app
   try {
-    await page.goto('http://example.org/figure.html')
+    await page.goto(`http://127.0.0.1:${server.address().port}/figure.html`)
     const frame = await (await page.waitForSelector('iframe')).contentFrame()
     await frame.waitForSelector('.heatmap-canvas', { timeout: 180000 })
     await frame.waitForFunction(() => performance.getEntriesByName('chromosomix:rendered').length > 0, null, { timeout: 180000 })
@@ -62,5 +70,6 @@ const HOST = `<!doctype html>
     await app.shot('em-page', { fullPage: true })
   } finally {
     await app.close()
+    server.close()
   }
 })()

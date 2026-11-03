@@ -9,7 +9,7 @@ what to do with it and what it is for. It is the app itself, used on real data â
 not a sandbox: you press every control yourself, and the tutorial watches and moves on when you have
 done what it asked.
 
-<!-- screenshot: a tutorial step, with the window greyed, the resolution control lit and the card beside it -->
+![A step of the guided tutorial on 4DN's K562 map: the window greyed, the resolution control lit through the grey at 25 kb, and the card beside it, The map, step 7 of 58, asking to pick 250 kb, with back and skip step.](../../../assets/screens/start/tutorial-step.webp)
 
 In one session it opens a Hi-C map from the 4D Nucleome project (4DN), finds its compartments, its
 domains and a loop on one chromosome, saves what you made, and sets your results against the ones 4DN
@@ -80,7 +80,7 @@ Fifty-eight steps in twelve parts. Each part's name is printed over its steps on
 7. **Marks**: open the Annotations panel; mark the loop with an arrowhead and the weak border with a
    vertical line, typing each place into the Manual annotations card (or pressing *mark it for me*);
    read that border on your four insulation tracks.
-8. **Tracks**: save your insulation as a bigWig; draw the domains as a 1D track under the map rather
+8. **Tracks**: save your insulation as a bigWig; draw the domains as a 1D track beside the map rather
    than on it.
 9. **The figure**: export the map, the marks and every track as one vector PDF.
 10. **Track correlation**: run it over every track â€” 4DN's insulation and E1, your E1 and your

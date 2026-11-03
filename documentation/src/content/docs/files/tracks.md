@@ -8,7 +8,7 @@ on any of its four edges; open one with no map and chromosomix opens the 1D brow
 the file describes ([The genome browser](/browse/genome-browser/)). Each track is a row of the
 **Tracks** card in the Annotations panel, whose **Load a track** zone takes a drop or a click.
 
-<!-- screenshot: the Tracks card with a bigWig, a GTF and a BAM loaded, and the lanes they draw under a yeast map -->
+![The Tracks card with a bigWig, a GTF and a BAM dropped on it, four rows since the BAM is two, its depth and its reads, beside the yeast micro-C map of IV:1,200,001-1,340,000 with the ATAC signal, the genes and the BAM's depth drawn under it.](../../../assets/screens/files/tracks-card.webp)
 
 A file is told by what is in it, not only by its name, so a `.txt` of peaks or a headed `.tsv` of
 calls opens as what it is. A track's sequences are matched to the map's even when the two spell
@@ -100,7 +100,7 @@ A **BAM** opens as two rows, both read from the window on screen:
 - The reads row, *name · reads*, is the pile of individual reads, drawn in the 1D browser only,
   where a read has bases to be drawn along.
 
-<!-- screenshot: a BAM's depth and reads rows in the 1D browser, with mismatches coloured and a read's card open -->
+![The depth and reads rows of an RNA-seq BAM in the 1D browser at RPL10 on chrX, every read across one base coloured for the same substitution, with the card of one of those reads open over them.](../../../assets/screens/files/bam-reads.webp)
 
 **min MAPQ** and **hide duplicates** apply to both rows; the colouring, the layout of pairs and
 **split reads** to the pile alone. Where the reads disagree with the reference they are coloured,

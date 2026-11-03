@@ -1,13 +1,13 @@
 /**
  * The two pictures of `analyses/index.mdx`, on the yeast Micro-C demo,
  * chromosome IV: the drawer on Diamond insulation after a run, floating over
- * the map, and the drawer after a run of P(s) — its notes, its record line and
- * the curve with its exports.
+ * the map, and the drawer after a run of P(s) — its record line and the curve
+ * with its exports.
  *
  *   node documentation/scripts/screens/analyses-index.cjs <out-dir>
  *
  * index-01-insulation-drawer   the drawer over the map: the form's foot, run and its price, the record line
- * index-02-ps-drawer           P(s): the record line, the notes, the curve and its buttons
+ * index-02-ps-drawer           P(s): the record line, the curve and its buttons
  */
 
 const { DEMO, start } = require('./analyses-2d-lib.cjs')

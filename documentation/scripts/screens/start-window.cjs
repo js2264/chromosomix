@@ -68,8 +68,10 @@ const YEAST = `${BASE}/demo/yeast`
       const view = document.querySelector('.deck-bar').parentElement.getBoundingClientRect()
       const bar = document.querySelector('.deck-bar').getBoundingClientRect()
       const cell = document.querySelector('.deck-structure').getBoundingClientRect()
+      const lanes = [...document.querySelectorAll('.lane-canvas.lane-bottom')].map((n) => n.getBoundingClientRect().bottom)
       const top = view.top - 6
-      return { x: Math.round(bar.left - 16), y: Math.round(top), width: Math.round(bar.width + 32), height: Math.round(cell.bottom + 6 - top) }
+      const bottom = Math.max(cell.bottom, ...lanes) + 8
+      return { x: Math.round(bar.left - 10), y: Math.round(top), width: Math.round(bar.width + 26), height: Math.round(bottom - top) }
     })
     await w.shot('deck', { clip })
     await w.shot('deck-window')

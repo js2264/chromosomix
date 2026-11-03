@@ -35,7 +35,7 @@ chromosomix(
 
 At the console it opens in the RStudio viewer; in a chunk of an R Markdown or Quarto document, it is drawn on the rendered HTML page.
 
-<!-- screenshot: the widget on a rendered R Markdown page, the yeast Micro-C map of IV:1.0–1.4 Mb with its ATAC-seq and gene tracks -->
+![An R Markdown page rendered to HTML, showing the chunk above and under it the widget: the viewer's bar and the yeast Micro-C map of IV:1.0–1.4 Mb on a log10 scale, with its ATAC-seq track and the start of its gene track.](../../../assets/screens/embed/r-markdown-widget.webp)
 
 | Argument | What it is |
 | --- | --- |
@@ -106,7 +106,7 @@ server <- function(input, output, session) {
 shinyApp(ui, server)
 ```
 
-<!-- screenshot: the Shiny app above, with the region box, the map, and the region the reader is on printed under it -->
+![The Shiny app above after a press on Go: the Go to box holding IV:1150000-1300000, the widget's map gone to IV:1,150,001-1,300,000, and under it the region the viewer reports back to R, IV:1150000-1300000.](../../../assets/screens/embed/r-shiny-app.webp)
 
 - `chromosomixOutput()` places the widget (`"100%"` wide and `"600px"` high by default) and `renderChromosomix()` draws it. Drawn again, it is a new frame, and only the new widget's requests are made in it.
 - `chromosomixProxy("view")` drives the widget on screen without drawing it again: `chromosomix_goto()`, `chromosomix_navigate()` and `chromosomix_add()` take it in place of a widget. A request through a proxy is sent once the outputs of the same flush are, and one that reaches the page before its widget is drawn waits for it.

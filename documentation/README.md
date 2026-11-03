@@ -82,9 +82,16 @@ title is the page's `#`). Lead with what the reader wants to do; put the why aft
 - Keys as `<kbd>`: <kbd>Shift</kbd>.
 - `.md` for a page of prose; `.mdx` only for a page that uses a component. In MDX, `{`, `}` and `<`
   in prose are code: write them in backticks.
-- No pictures yet. Where one would help, leave a comment saying what it should show —
-  `<!-- screenshot: the Analysis panel with insulation run on chr15 -->`, or `{/* … */}` in MDX —
-  and the screenshot step fills it from the real app.
+- **A picture is the real app, never a drawing of it.** Shoot it with a script beside the others in
+  `scripts/screens/` — Playwright on `npm run dev`, 1440 × 900 at twice the density, the light theme,
+  each step waiting on the app's `chromosomix:rendered` — then crop it and write it as WebP:
+  `node scripts/screens/webp.mjs <raw.png> src/assets/screens/<section>/<name>.webp [x,y,width,height]`.
+  Keep it under 300 KB, free of dev features, on public data, and on a page:
+  `![What it shows, as someone who cannot see it would need it](../../../assets/screens/<section>/<name>.webp)`.
+  The build shows it at half its pixel width, the size the app drew it, framed as the app frames a
+  card (`src/lib/screens.mjs`); `test/unit/docs-screens.test.ts` checks the rest.
+- Where a picture would help and none is shot yet, leave a comment saying what it should show —
+  `<!-- screenshot: the Analysis panel with insulation run on chr15 -->`, or `{/* … */}` in MDX.
 
 **A task's page** keeps its components and its four headings — *Running it*, *Parameters*, *What it
 writes*, *Reading the result* — and its prose says what the task answers and when to reach for it,
