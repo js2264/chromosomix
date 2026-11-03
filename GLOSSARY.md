@@ -1062,7 +1062,7 @@ What this window has done, written as the commands that would do it again (§23,
 maps is six lines, each its own `chromosomix` command, a failure and a Stop included — and,
 commented, the files opened, the tracks loaded and the files written. What it hands over is a shell
 script; its **provenance** toggle puts each run's whole provenance block above its command, and is
-off by default. Window furniture, opened with `` ` `` and outliving every tab; kept in `localStorage`
+off by default. Window furniture, opened with Control and `` ` `` (`ui/commands.ts`, `console: 'ctrl+`'` — the key alone folds the Files column) and outliving every tab; kept in `localStorage`
 for seven days and 500 lines, and listed with what the browser is remembering; never in an embed.
 
 ---

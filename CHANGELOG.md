@@ -35,6 +35,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The directionality index's price refuses what its runner cannot score (§18.8).** A bin needs a
+  whole window each side, so a sequence must be longer than twice the window; the price refused
+  only one no longer than the window, and a sequence in between was priced, read and then dropped
+  without a score.
+- **The drawer says where a new 3D model goes (§25.3)**: a structure cell of its own, beside what the
+  deck shows, rather than *add one from the deck's bar if none is open*.
+- **SPECS, the notes under `docs/` and the glossary say what the code does** where they had drifted:
+  the tutorial's 58 steps (§30), which builds keep a connected folder (§24.2), the two 3D tasks'
+  ρ (§25.6), the desktop notes on compressed hosts, writing and what quitting leaves, the store
+  generator's anonymous listing, where the stored-data screen is, and the console's key.
 - **The notebooks no longer fail on one failed download (§18.10).** Both runs of the Notebooks
   workflow for 0.19.0 stopped a minute into the parity, on its first file: NCBI's server for GEO
   answered `500 Internal Server Error`, as it did that day to about one request in two, and now and

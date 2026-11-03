@@ -12185,10 +12185,12 @@ reasons, which the row treats alike: a **build** that cannot be registered (the 
 registration its maintainer provides (§24.7), where the pane's disabled button and the sentence
 beside it name the one thing a reader can do — ask them — and the landing page would be offering a
 bold sign-in answered by an environment variable's name. And *this machine* is
-worded identically on both screens: Chromium and the desktop build hold a directory as a grant that
-survives a reload, while Firefox and Safari hand over a snapshot of the file list that does not
-(§20), so the button reads *choose a folder…* on the first and *choose a folder (this visit)…* on
-the second — wherever it is drawn, since both now run the same picker. The row's buttons are
+worded identically on both screens: an installed app — the site installed from Chrome or Edge, the
+desktop build, the single file — keeps a directory as a grant that survives a restart, while a
+browser tab holds it for the visit, as Firefox and Safari, which hand over a snapshot of the file
+list, hold theirs (§20.6, `directoriesKept`), so the button reads *choose a folder…* in the first and
+*choose a folder (this visit)…* in the second — wherever it is drawn, since both now run the same
+picker. The row's buttons are
 likewise drawn as the panes' sign-ins are (`markButton`), so one gesture looks the same wherever it
 is met.
 
@@ -13936,9 +13938,13 @@ is a pastis-PM2), the MDS start and its seed, the likelihood steps and evaluatio
 optimiser stopped, and the final `−log L` less `Σ log c!` — the number pastis' objective returns.
 Both end with Spearman's ρ between `1/d` in the model and the contacts — **against `raw/(bᵢbⱼ)`
 where a bias was divided out**, which is exactly the balanced value, since balancing is `raw·wᵢwⱼ`;
-ranking against the raw counts would score the model on coverage it was right to have removed. So it
-is the same number *Model versus map* would give the row on a balanced map, and a reader can see how
-well the model honours the map before believing it.
+ranking against the raw counts would score the model on coverage it was right to have removed. It
+reads what *Model versus map* reads on a balanced map, so the two reward the same thing, but it is
+not quite that number: this one ranks the pairs the map counted — neighbours included, a pair with
+no contact left out, at most 200,000 taken evenly (`fitOfCounts`) — where *Model versus map* ranks
+every pair at least two bins apart, a pair with no contact included, sequence by sequence and copy by
+copy (`structure/versusMap.ts`, `agreement`). Either way a reader can see how well the model honours
+the map before believing it.
 
 **Its result is a row**, not a picture: a `structure` row on the Structures card, of kind
 `structure`, payload a bed3d-shaped feature set with its `model`, id `analysis:reconstruct3d:
@@ -15610,7 +15616,7 @@ an offer to play the tutorial is one more thing to read.
 **In *About*, straight after what the viewer is**, on its first tab — the answer to the question a
 reader who has just read that asks next, and the one way in a newcomer finds without being told where
 to look. One sentence, and one filled button that says what it will do: *play the tutorial* for a
-reader who has not begun it, *resume at step 32 of 50* for one who left it, with a quiet *start over*
+reader who has not begun it, *resume at step 32 of 58* for one who left it, with a quiet *start over*
 beside it, and *play the tutorial again* for one who finished it. The palette has it too, as *Guided tutorial* under
 Help, its hint saying which of the three a press will do.
 
@@ -15762,7 +15768,7 @@ grey and keeps nothing from the app, so the window can be used to get back to wh
 tail pointing into the hole from that side; in the bottom-right corner, with no tail, when the hole is
 the whole picture; at the bottom, centred, when nothing is lit. It glides from one control to the next
 rather than jumping, and its words come in rather than being swapped, so the eye follows the card to
-the next thing to press. Along its top it says the part, *step n of 50*, and *skip tutorial*, over a
+the next thing to press. Along its top it says the part, *step n of 58*, and *skip tutorial*, over a
 bar cut into the tour's parts, each filled as far as the reader has got through it. Then an icon for
 what the step asks — press, type, choose, drag, or only look — beside its title; one or two sentences;
 and *back* and *next* (*skip step* while the step waits, *finish* on the last, and no *back* on the
