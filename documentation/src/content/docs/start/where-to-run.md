@@ -12,6 +12,8 @@ runs the same analyses; what differs is where the app itself comes from, and so 
 - **One HTML file**: for a machine with no network at all.
 
 Your data is read the same way by all three, on your own machine, and none of them uploads it.
+[Ways to use chromosomix](/start/ways/) shows these three beside the others, from a notebook to a
+shell.
 
 ## At a glance
 

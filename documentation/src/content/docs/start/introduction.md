@@ -90,6 +90,7 @@ with a button that forgets all of it. [Privacy](/advanced/privacy/) has the whol
   [R, Quarto and Shiny](/embed/r/), or an `<iframe>` in [any web page](/embed/web-page/).
 - **The command line**, `chromosomix`, on any machine with Node ([Installing it](/cli/install/)).
 
+[Ways to use chromosomix](/start/ways/) shows them all side by side, and
 [Web, desktop or one file](/start/where-to-run/) says what differs between the first three.
 
 ## Where to go next

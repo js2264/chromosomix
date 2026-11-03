@@ -17,7 +17,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 - **A documentation site, one copy per release (§32).** <https://doc.chromosomix.app> is written for
   the people who use chromosomix: getting started, the files it opens and from where, using the
   browser, every analysis, the command line, the notebook widgets, hosting data and publishing a
-  store of your own, privacy, and a glossary. Each task has a page whose method, validation result,
+  store of your own, privacy, and a glossary. *Ways to use chromosomix* draws the nine places it
+  runs — the web app, installed or not, the desktop app, one HTML file, a fixed release, your own
+  server, a web page, a notebook and a shell — and says how to start each. Each task has a page whose method, validation result,
   command and every parameter are read from the app's registry as the site is built, so they are
   that release's; the reference pages for links, the command line, embedding and formats are the
   ones the app writes for language models, and the release notes are this file, one page a release.

@@ -14,6 +14,7 @@ export const GUIDES = [
     label: 'Get started',
     items: [
       ['start/introduction', 'What chromosomix is'],
+      ['start/ways', 'Ways to use it'],
       ['start/first-map', 'Your first map'],
       ['start/window', 'A tour of the window'],
       ['start/tutorial', 'The guided tutorial'],

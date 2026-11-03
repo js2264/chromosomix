@@ -15940,6 +15940,12 @@ HERE?*; the home page laid out as the landing page, its tiles drawn as the store
 6 px corners and its two shadows. Rapide keeps all of its rules in one cascade layer, and the site's
 stylesheet is outside it, so the app's look wins without a fight over specificity.
 
+**The page of ways to use it draws each way rather than shooting it** (`start/ways.mdx`,
+`WayArt.astro`): a browser, a window of its own, a laptop, a file, a tagged release, a server, a page
+with a frame, a notebook and a terminal, each around a contact map in the default colour map, warmest
+on its diagonal. The strokes and surfaces are the theme's tokens, so a drawing is redrawn with the
+theme, and a card falls to one column on a phone with its drawing beside its words.
+
 ### 32.5 Publishing
 
 A push to `main` publishes main's copy. A `v*` tag that is the version `package.json` carries — the
