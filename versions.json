@@ -242,6 +242,13 @@
   ],
   "pulls": [
     {
+      "number": 157,
+      "commit": "06c1b13",
+      "title": "Documentation site: Starlight in the app's look, one copy per release (§32)",
+      "branch": "js/fervent-curie-eyxluw",
+      "date": "2026-11-03T22:19:23Z"
+    },
+    {
       "number": 156,
       "commit": "e5d7317",
       "title": "Add cell-of-its-own rectangle to Contact maps card",
