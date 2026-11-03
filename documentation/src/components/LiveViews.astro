@@ -7,6 +7,12 @@
  * would otherwise load the viewer three times for a reader who came to read one
  * paragraph; the picture is what the page is, and the frame is what the reader
  * asked for. Without scripts the picture simply stays.
+ *
+ * **Live, the frame takes the page's width**, not the column's: from the edge
+ * of the sidebar to the edge of the window. A map in a column of text is a
+ * stamp, and the reader who pressed asked for the app. The contents list on the
+ * right is a fixed panel over that width, so it steps out of the way while a
+ * frame is under it, and comes back once the frame is scrolled past.
  */
 ---
 
@@ -14,6 +20,9 @@
   /** A triangle, as the app's play buttons draw one. */
   const PLAY =
     '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4.5 2.6v10.8L13.2 8z" fill="currentColor"/></svg>'
+
+  /** The space kept either side of a frame: the page's own gutter, less on a phone. */
+  const gutter = (): number => (window.innerWidth < 800 ? 8 : 24)
 
   function wire(holder: HTMLElement): void {
     const src = holder.dataset.live
@@ -48,18 +57,74 @@
     note.className = 'cx-live-note'
     note.append('The app itself: pan, zoom and change it, and nothing is kept. ', open, ' · ', back)
 
-    // The holder is the picture's width until the frame takes the column's.
+    // The holder is the picture's width until the frame takes the page's.
     const held = holder.style.maxWidth
     holder.style.maxWidth = 'none'
     holder.classList.add('is-live')
     holder.replaceChildren(frame, note)
+    stretch(holder)
+    look()
     back.addEventListener('click', () => {
       holder.style.maxWidth = held
+      holder.style.marginInlineStart = ''
+      holder.style.width = ''
       holder.classList.remove('is-live')
       holder.replaceChildren(...(picture === null ? [] : [picture]), button)
+      look()
       button.focus()
     })
   }
 
+  /**
+   * Widen a live holder from its column to the page: from the sidebar's edge —
+   * or the window's, where the sidebar is folded away — to the window's, less a
+   * gutter each side. Measured rather than written in CSS, because where the
+   * column sits between the two sidebars is Starlight's arithmetic, not ours.
+   */
+  function stretch(holder: HTMLElement): void {
+    const column = holder.parentElement
+    if (column === null) return
+    const sidebar = document.querySelector<HTMLElement>('.sidebar-pane')
+    const edge = sidebar !== null && sidebar.offsetWidth > 0 && getComputedStyle(sidebar).position === 'fixed'
+      ? sidebar.getBoundingClientRect().right
+      : 0
+    const left = edge + gutter()
+    const right = document.documentElement.clientWidth - gutter()
+    holder.style.marginInlineStart = `${left - column.getBoundingClientRect().left}px`
+    holder.style.width = `${Math.max(0, right - left)}px`
+  }
+
+  /** Fold the contents list away while a live frame is under it, and bring it back once none is. */
+  function look(): void {
+    const list = document.querySelector<HTMLElement>('.right-sidebar-panel')
+    if (list === null) return
+    const box = list.getBoundingClientRect()
+    let under = false
+    if (box.width > 0) {
+      for (const live of document.querySelectorAll<HTMLElement>('.cx-live.is-live')) {
+        const at = live.getBoundingClientRect()
+        if (at.right > box.left && at.left < box.right && at.bottom > box.top && at.top < box.bottom) under = true
+      }
+    }
+    document.documentElement.classList.toggle('cx-contents-away', under)
+  }
+
+  let pending = 0
+  /** Once a frame, however many events asked. */
+  function soon(work: () => void): void {
+    if (pending !== 0) return
+    pending = requestAnimationFrame(() => {
+      pending = 0
+      work()
+    })
+  }
+
   for (const holder of document.querySelectorAll<HTMLElement>('.cx-live')) wire(holder)
+  window.addEventListener('scroll', () => soon(look), { passive: true })
+  window.addEventListener('resize', () =>
+    soon(() => {
+      for (const live of document.querySelectorAll<HTMLElement>('.cx-live.is-live')) stretch(live)
+      look()
+    }),
+  )
 </script>
