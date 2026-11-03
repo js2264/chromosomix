@@ -10,17 +10,54 @@ import TaskSummary from '@components/TaskSummary.astro'
 
 <TaskSummary id="fourc" />
 
-{/* TODO(docs): what the task answers, and when a reader reaches for it. */}
+A virtual 4C profile is one row of the map: everything one locus, the anchor, touches, as a track along
+the genome. Reach for it to ask what a promoter, an enhancer or a boundary contacts, to read one locus's
+contacts against the tracks beside it, or to take a viewpoint out of the app as a bigWig. The task reads
+for itself, over the anchor's whole sequence or the whole genome, so the track is the same whatever was
+on screen when you ran it.
 
 ## Running it
 
-{/* TODO(docs): where it is in the Analysis panel, what has to be open first, and what appears when it has run. */}
+Open a contact map, then choose **4C profile from an anchor** in the **2D tasks** card of the
+**Analysis** panel, and name the **anchor**:
+
+- type a locus, 1-based and inclusive as IGV and samtools write them, such as `IV:1,200,001-1,210,000`,
+  or a whole sequence by its name; or
+- press **pick on map**, which then reads *pointing…*, and Shift-drag along either axis of the map: the
+  drag fills the box instead of zooming, once, and the box stays editable.
+
+Leave **cis only** on to read the anchor's own sequence: one dense square, a handful of range requests,
+or no reads at all when the map on screen already holds it. Turn it off for the whole genome: one pass
+over the pixel table as far as the anchor, about half the file, or all of it when the profile is divided
+by coverage. Then press **run**.
+
+The profile arrives as a row of the **Tracks** card in the **Annotations** panel, marked `*` and named
+after its anchor and what was done to it: *4C · IV:1,200,001-1,210,000*, followed by *(with trans)*,
+*· O/E*, *· per coverage* or *· anchor excluded* as they apply. Its bigWig, bedGraph and TSV are in the
+row's settings. A profile from another anchor is a row of its own; the same anchor run again replaces
+its row.
+
+{/* screenshot: a 4C profile over expected as a lane under a map, with pick on map lit in the drawer and the anchor's stretch marked */}
 
 The same run from a shell:
 
 <TaskCommand id="fourc" />
 
+Over the whole genome:
+
+```sh
+chromosomix fourc sample.cool --anchor IV:1,200,001-1,210,000 --no-cis --out results/
+```
+
 ## Parameters
+
+**normalisation** is one control with four answers, because its two divisions are independent. **by
+P(s)** divides each bin by what its separation from the anchor predicts, from the decay of the anchor's
+own sequence rather than the genome's, which takes distance out of the profile's shape. **by coverage**
+divides each bin by how much it is seen at all, centred on one so that the profile keeps its units,
+which stops a bin every contact misses reading as a dip. **by P(s) and coverage** does both, and **none**,
+the default, is the contacts as counted, which is what a bigWig of a 4C experiment holds. **exclude
+anchor region** leaves the anchor and one bin either side empty.
 
 <TaskParameters id="fourc" />
 
@@ -30,4 +67,34 @@ The same run from a shell:
 
 ## Reading the result
 
-{/* TODO(docs): how to read what it draws and writes, and what to watch for. */}
+**Raw**, a bin's value is its contacts with the anchor, summed over the anchor's bins, and balanced
+wherever the file carries weights. Contact falls by orders of magnitude with distance, so on a log scale
+a raw profile is a triangle with the anchor at its apex, and the contacts you ran it to find are bumps on
+its flanks: plain near the anchor, invisible a megabase away.
+
+**Over P(s)**, the profile is centred on 1, and a bin above 1 touches the anchor more than its distance
+predicts, wherever it is. Off the anchor's sequence, with **cis only** off, the expected is the mean of
+what the anchor reaches on the other sequences, so a profile with both halves carries one quantity.
+
+**The dips that remain** on a raw map are mostly coverage: a bin in a repeat, a bin with few restriction
+sites, a bin the mapper half lost is seen less by every anchor, and those dips sit exactly where a
+spurious contact is most tempting to believe. **by coverage** takes them out. A balanced map has had
+something much like it done already, which is what balancing is, so the division matters most on a raw
+one.
+
+**The anchor's own bins** are the brightest of the profile by orders of magnitude, its contact with
+itself and its shoulder. On an autoscaled track they set the scale every other bin is read on; **exclude
+anchor region** leaves them out, and the track's name says so.
+
+**Gaps and zeros.** With **cis only** on, every bin off the anchor's sequence is a gap, not 0: the run
+said nothing about it. A bin with no stored contact with the anchor is 0, and a bin the balancer dropped
+is a gap.
+
+## Things to know
+
+- **A task, not a view.** The profile is computed once, for the anchor's whole sequence or the whole
+  genome, and recorded with the framing it was run on; panning does not change it.
+- **Validation.** Over the whole genome, at three viewpoints on a mouse Hi-C map at 10 kb (the promoters
+  of *Sox2*, *Nanog* and *Pou5f1*), the profile is `cooltools.virtual4c`'s, to float32. The only bins
+  that differ are those cooltools leaves without a value, where chromosomix writes 0 because the map
+  holds no contact with the viewpoint, and the viewpoint itself.

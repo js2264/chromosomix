@@ -10,17 +10,38 @@ import TaskSummary from '@components/TaskSummary.astro'
 
 <TaskSummary id="cistrans" />
 
-{/* TODO(docs): what the task answers, and when a reader reaches for it. */}
+The first number most Hi-C papers quote, per sequence: how much of each chromosome's contact stays on it
+(cis) and how much reaches the others (trans). Beside it, a square of every sequence against every other
+says which pairs touch more than their depth predicts. Reach for it to see whether a library worked and
+whether the karyotype is what the assembly says: a pair well above the rest is a translocation, a
+fusion, a centromere cluster or a Rabl configuration, depending on the organism.
 
 ## Running it
 
-{/* TODO(docs): where it is in the Analysis panel, what has to be open first, and what appears when it has run. */}
+Open a contact map, then choose **Cis and trans per sequence** in the **2D tasks** card of the
+**Analysis** panel. Every sequence is ticked; untick the ones you want left out of the tables and the
+square, and press **run**. A sequence's share of its own contact needs every contact touching it, so
+the run is one pass over the whole pixel table whatever is ticked, unless the whole file is already on
+screen at its own resolution and balanced the same way.
+
+The drawer shows four results, from top to bottom: a table with a row per sequence, the same sequences'
+cis fractions as bars, a ranked table of sequence pairs, and the square between sequences.
+
+{/* screenshot: the drawer after a run on a chicken map, with the bars of cis fraction per sequence and the square between sequences against indifference */}
 
 The same run from a shell:
 
 <TaskCommand id="cistrans" />
 
 ## Parameters
+
+**off-diagonal value** decides what the pairs table and the square show. **against indifference**, the
+default, is the contacts between two sequences over what the two sequences' own trans contacts predict,
+scaled so that the expectation adds up to the trans contacts there are: 1 is what any two sequences of
+that depth would give, and a fusion is far above it. **raw contacts** is the count, and **per bin
+pair** the count divided by the two sequences' bin counts. **least contact worth listing** keeps a pair with only a few
+stray reads out of the top of the table, and **bars per sequence** draws the cis fraction, the trans
+fraction, or both stacked.
 
 <TaskParameters id="cistrans" />
 
@@ -30,4 +51,37 @@ The same run from a shell:
 
 ## Reading the result
 
-{/* TODO(docs): how to read what it draws and writes, and what to watch for. */}
+### Per sequence
+
+The table lists the sequences in the file's own order, the order the map is drawn in, each with its
+**Bins**, its **Cis**, **Trans** and **Total** contacts, its **Cis fraction** (the share of the
+contacts touching it that stay on it), **Trans / cis**, and **Contacts per bin**. The bars draw the cis
+fraction of each sequence in the same order, on a scale of 0 to 100 %, so a sequence that behaves unlike
+the others stands above or below its neighbours before you read a number. They are fractions rather than
+counts because a bar of contacts would only show how long each sequence is. A sequence with no contact
+at all has no fraction: it is a gap among the bars and a blank in the table, never 0.
+
+### Between sequences
+
+The square has a row and a column per ticked sequence, against indifference coloured blue below 1 and
+red above it, centred on 1. Each sequence against itself is left out, being one to three orders of
+magnitude above every other cell and so the whole colour scale. The axes name the sequences when there
+are forty or fewer. A cell well above 1 is a pair of sequences that touch more than their depths
+predict.
+
+The pairs table ranks the same pairs, strongest first: both sequences, their raw **Contacts**, and,
+against indifference, the **Expected** count beside **Observed / expected**. It lists the strongest 500
+by default and says how many more passed the threshold.
+
+## Things to know
+
+- **A summary, not a caller.** Pairs are ranked against a stated null with no significance attached:
+  the table says which pairs stand out, not that a translocation is there.
+- **Balanced where the file is.** The sums are of balanced contacts wherever the file carries weights;
+  `--no-balance` reads the raw counts. The [map report](/analyses/mapreport/) runs this task on the raw
+  counts.
+- **The square stops at 512 sequences.** Past that its cells are too small to be a picture, the run
+  says so, and the pairs table is the answer; the bars have no such limit.
+- **Validation.** On a chicken map of 36 sequences, from the macrochromosomes to microchromosomes a few
+  bins long, every sum is the one cooltools' `expected_cis` and `expected_trans` give, raw and balanced,
+  to the digits written, and every ratio to indifference is NumPy's over those sums.

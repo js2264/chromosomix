@@ -1,6 +1,6 @@
 ---
 title: "Base composition"
-description: "GC content, GC skew and AT skew per bin, as tracks."
+description: "Turn a reference sequence into tracks of GC content, GC skew, AT skew and cumulative GC skew, bin by bin."
 ---
 
 import TaskCommand from '@components/TaskCommand.astro'
@@ -10,17 +10,25 @@ import TaskSummary from '@components/TaskSummary.astro'
 
 <TaskSummary id="composition" />
 
-{/* TODO(docs): what the task answers, and when a reader reaches for it. */}
+A reference's own lane draws its GC content as a picture, sampled at whatever width the lane is drawn at. **Base composition** turns the reference into tracks on fixed bins — GC content, GC skew, AT skew and the cumulative GC skew — that sit beside the map, feed every task that reads a track and leave as bigWig. Beside a compartment call, GC content answers whether A is richer in GC than B; the skews are the mark a bacterial chromosome's replication leaves on its sequence, changing sign at the origin and at the terminus.
 
 ## Running it
 
-{/* TODO(docs): where it is in the Analysis panel, what has to be open first, and what appears when it has run. */}
+Load the reference as a FASTA or a `.2bit` (see [Reference sequences](/files/sequences/)), open **Base composition** on the **1D tasks** card of the **Analysis** panel, and choose it under **reference**. No contact map is needed: the bins are the open map's, at its resolution, and 10 kb with no map open, so [the genome browser](/browse/genome-browser/) with a FASTA in it is enough. The reference is read under the names of the sequences open.
+
+A reference held in memory is counted without a single read; a large FASTA opened with its index, or a `.2bit`, is counted a few megabases at a time, none of them kept, and the line beside **Run** gives how much that reads.
+
+When it has run, each track ticked is a row of the **Tracks** card, marked `*`, named after the reference and, where one was used, the window: `GC content · ref.fa`, `GC skew · ref.fa · 50,000 bp window`.
+
+{/* screenshot: GC content, GC skew and cumulative GC skew under a bacterial chromosome's map */}
 
 The same run from a shell:
 
 <TaskCommand id="composition" />
 
 ## Parameters
+
+**bin size** follows the open map's resolution until you type another, so the tracks line up with the map's bins; a number you type stays yours. **window** smooths a noisy skew without changing the grid it is drawn on: each bin is read over that many bases centred on it, rounded to an odd number of bins, and on a sequence declared circular the window wraps round the junction. The four toggles under **Tracks** choose which tracks are made.
 
 <TaskParameters id="composition" />
 
@@ -30,4 +38,14 @@ The same run from a shell:
 
 ## Reading the result
 
-{/* TODO(docs): how to read what it draws and writes, and what to watch for. */}
+- **GC content** is the share of G and C among the A, C, G and T of the bin, from 0 to 1. An `N`, or any other letter, is not counted, and a bin with none of the four is a gap.
+- **GC skew** is `(G − C) / (G + C)`, and **AT skew** `(A − T) / (A + T)`, each from −1 to 1. On a bacterial chromosome the GC skew changes sign at the origin of replication and again at the terminus.
+- **Cumulative GC skew** is the running sum of each bin's own skew along the sequence. Its minimum is the origin and its maximum the terminus, wherever the assembly happens to start, and a turning point is much easier to place than a sign change in a noisy trace. It sums each bin's own skew even when a window is set, and a gap adds nothing to it.
+
+[Origin and terminus](/analyses/oriter/) makes the call from the cumulative skew for you, and checks it against parS, matS and the Hi-C coverage. To ask whether A compartments are richer in GC than B, give the GC content track to [Signal by group](/analyses/groupsignal/) with a [compartment](/analyses/compartments/) call as the groups.
+
+A sequence of the map that the reference does not have is a gap on every track, and a note names it. One whose length differs from the map's — perhaps another assembly version — is read from its start, and is named too.
+
+## Compared with bioframe and Biopython
+
+In [the validation](https://chromosomix.app/validation/#base-composition), over mm10 in 10 kb bins, GC content agrees with bioframe's `frac_gc` and the GC skew with Biopython's `GC_skew` to the float32 the tracks are written in. The one difference is a bin with neither G nor C, such as a stretch of `N`: Biopython writes 0 there, where chromosomix writes no value.

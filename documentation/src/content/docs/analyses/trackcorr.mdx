@@ -1,6 +1,6 @@
 ---
 title: "Track correlation"
-description: "How much every pair of loaded tracks agrees."
+description: "Measure how much every pair of loaded tracks agrees, by Spearman’s or Pearson’s correlation over windows or over a feature set."
 ---
 
 import TaskCommand from '@components/TaskCommand.astro'
@@ -10,17 +10,23 @@ import TaskSummary from '@components/TaskSummary.astro'
 
 <TaskSummary id="trackcorr" />
 
-{/* TODO(docs): what the task answers, and when a reader reaches for it. */}
+Do two replicates agree? Does an insulation score follow a ChIP-seq track? **Track correlation** reads every track you choose over the same units — fixed windows along the genome, or the features of a set — and gives the correlation of every pair, as a matrix and as a table. It is the browser's counterpart of deepTools' `multiBigwigSummary` and `plotCorrelation`, and the cheapest way to ask whether experiments agree.
 
 ## Running it
 
-{/* TODO(docs): where it is in the Analysis panel, what has to be open first, and what appears when it has run. */}
+Load two or more tracks — bigWig, bedGraph, wig, or tracks other tasks made (see [Tracks and features](/files/tracks/)) — and open **Track correlation** on the **1D tasks** card of the **Analysis** panel; with fewer than two it is listed greyed with what to load. Tick the **tracks**. No contact map is needed.
+
+Every track is read at its own resolution, never from a zoom level; over fixed windows that means the whole track, a megabase at a time, which the line beside **Run** calls a scan. The drawer then shows the correlation matrix, the tracks along both sides on a diverging colour scale centred on 0, with how many units there were and how many were compared; and **Pairs**, every pair from the most correlated to the least.
+
+{/* screenshot: the correlation matrix of two ATAC-seq replicates and an insulation score, with the Pairs table */}
 
 The same run from a shell:
 
 <TaskCommand id="trackcorr" />
 
 ## Parameters
+
+**compare over** is the question. **fixed windows** asks whether the tracks agree everywhere, an answer the empty majority of the genome dominates. **a feature set** asks whether they agree where something is happening, which is usually what was meant: each feature's mean on each track. **window** is 100 bp by default, the width at which a coverage track has something to say about a peak; wider windows smear a peak into its neighbourhood before anything is compared. **method** is Spearman by default, which ranks the values first, so one very deep locus cannot carry the coefficient alone; Pearson is the linear correlation of the values themselves.
 
 <TaskParameters id="trackcorr" />
 
@@ -30,4 +36,12 @@ The same run from a shell:
 
 ## Reading the result
 
-{/* TODO(docs): how to read what it draws and writes, and what to watch for. */}
+A coefficient near 1 is two tracks that rise and fall together over the units; near 0, no relation; below 0, one is high where the other is low. Each unit's value is the exact mean over the bases the track has a value for. Over fixed windows only whole windows are used, so each sequence's last, shorter window is left out.
+
+### The units every pair shares
+
+A unit any one track lacks is left out of every pair, as deepTools' `plotCorrelation` leaves out a row with a missing value, so every coefficient in the matrix is over the same units. One track with gaps — an insulation score where the map was too sparse, a track with no value over empty stretches — therefore narrows every pair, the well-covered ones too. The note says how many units were left out, and **compared** beside **units** under the matrix says how many are left. With fewer than three compared, no pair has a coefficient. To compare two tracks over everything they share, run them on their own.
+
+## Compared with deepTools
+
+[The validation](https://chromosomix.app/validation/#track-correlation-deeptools) holds the coefficients — two mouse ATAC-seq replicates and an insulation score on chr19, at 100 bp, 1 kb and 10 kb, by Pearson and by Spearman — to an exact reference: pyBigWig's exact window means, correlated by SciPy over the same windows. deepTools is measured beside it and differs in one way: it reads a window's mean from a zoom level wherever the file has one fine enough, which moves its coefficients at the wider windows. At 100 bp no file has one, and deepTools agrees to the digits it writes — hence *equivalent* rather than identical.

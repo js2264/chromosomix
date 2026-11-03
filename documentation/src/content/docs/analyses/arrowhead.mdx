@@ -1,6 +1,6 @@
 ---
 title: "TAD annotation"
-description: "Contact domains by Juicer’s Arrowhead: nested where they nest, and none where there are none."
+description: "Call contact domains from the corners of the squares they make on the map, as Juicer's Arrowhead does: nested where they nest, and none where there are none."
 ---
 
 import TaskCommand from '@components/TaskCommand.astro'
@@ -10,17 +10,31 @@ import TaskSummary from '@components/TaskSummary.astro'
 
 <TaskSummary id="arrowhead" />
 
-{/* TODO(docs): what the task answers, and when a reader reaches for it. */}
+TAD annotation calls contact domains the way Juicer's Arrowhead does (Rao et al. 2014): from the corners of the squares domains make on the map, not from the dips of a track. So a domain can sit inside another, two can share an edge, and a stretch with no structure has no domain at all. The domains [diamond insulation](/analyses/insulation/) and the [directionality index](/analyses/di/) call are different in kind: they cut the sequence at a track's minima or sign flips, so they tile it, nothing nesting and nothing left over.
+
+Reach for it on a deep map, when nesting is the question, or when you want domains as `juicer_tools arrowhead` would report them, score for score.
 
 ## Running it
 
-{/* TODO(docs): where it is in the Analysis panel, what has to be open first, and what appears when it has run. */}
+Open a contact map, then the **Analysis** panel (<kbd>4</kbd>), and choose **TAD annotation** in the **2D tasks** card. Tick the sequences to call and press **Run**.
+
+The domains open on the map as **Arrowhead domains**, a row of the **Tracks** card in the **Annotations** panel, marked `*`: the corner of each domain's square along the diagonal, which is where a nested domain is seen to be nested. Its **display** dropdown makes it a **1D track** of segments instead. In the drawer, **Arrowhead domains, as Juicer writes them** is a table of Juicer's own columns, and a note says how many domains were called and how many of them sit inside another.
+
+{/* screenshot: a contact map with Arrowhead domains drawn as corners along the diagonal, some nested inside larger ones */}
 
 The same run from a shell:
 
 <TaskCommand id="arrowhead" />
 
+For example, two chromosomes of a `.hic` at 10 kb:
+
+```sh
+chromosomix arrowhead sample.hic::/resolutions/10000 --sequences 21,22 --out results/
+```
+
 ## Parameters
+
+Every setting is one of Juicer's, under its meaning and at its default, so a run left alone is Juicer's run. **Window** is Juicer's `-m`: each sequence is read as squares this many bins wide, each half over the next, and a domain wider than a square is not found — 2,000 bins is 20 Mb at 10 kb. It can be set from 30 to 4,000 bins. The thresholds of the two passes are Juicer's `-t` values; they are explained under the result below.
 
 <TaskParameters id="arrowhead" />
 
@@ -30,4 +44,33 @@ The same run from a shell:
 
 ## Reading the result
 
-{/* TODO(docs): how to read what it draws and writes, and what to watch for. */}
+### How a domain is found
+
+Each square along the diagonal is turned into the arrowhead transform, which compares the contact a bin makes the same distance upstream and downstream of it. The corner of every candidate domain is then scored from the two triangles beside it, the upper and the lower: their means and mean signs, less their variances. Corners past the thresholds are joined into connected groups, and each group is reported at its best corner.
+
+Two passes decide which corners are kept:
+
+- the **strict pass** keeps every corner whose two triangles' variances, summed, are at most **variance at most**, and whose triangles each reach **sign agreement at least** — how consistently a triangle points the way a domain's does;
+- the **lenient pass** asks no variance, and a sign agreement that starts at **sign agreement from** and is lowered by **in steps of** at a time, as far as **down to**, until the sequence has a domain. A domain only this pass finds is added where it is wider than **smallest lenient domain** and crosses no edge of a strict one.
+
+Domains near one another — within five bins, then ten — are merged into one at their furthest corner, with their scores averaged.
+
+### The table
+
+One row per domain, in genomic order:
+
+- **Start** and **End**: the starts of its two corner bins, as Juicer writes them, the end clamped to the sequence where the last corner is the sequence's last bin; and **Width (bins)**.
+- **Corner score**: the two triangles' difference in mean and in sign, less their variance — what a domain's evidence is ranked by. It is also each domain's score in the set and its BED.
+- **uVarScore** and **lVarScore**: the variances of the upper and the lower triangle.
+- **upSign** and **loSign**: how consistently each triangle points the way a domain's does, from −1 to 1.
+
+### What to watch for
+
+- **Depth.** Arrowhead needs a deep map. When it calls nothing the drawer says so, with Juicer's own warning that a map with fewer than about 300 million contacts may give few domains.
+- **Resolution.** Juicer picks 5 or 10 kb for itself from how deep the map is; here the map you opened is the resolution asked, as for every task. A run outside 5 to 25 kb says what Arrowhead was tuned at and what its window came to. On a budding-yeast Micro-C map at 1 kb it finds the small domains such a map shows, a quarter of them nested.
+- **Balancing.** A map is read balanced where the file carries weights, as Juicer reads a normalised map; a `.hic` is weighted by its own normalisation vectors. `--no-balance` on the command line is Juicer's `-k NONE`, and the drawer says when a run read the raw counts.
+- **Memory.** Each square is held dense while it is scored: about 16 MB of counts at the default window, and about 170 MB while its triangles are worked through, let go before the next square.
+
+## Compared with Juicer
+
+This is a port of `juicer_tools arrowhead` as Juicer Tools 1.22.01 runs it, and it does not improve on it: the quirks a first reading takes for oversights are kept, and every sum is taken in Juicer's order, so on the same counts the scores are Juicer's to the last bit. In [§ 28 of the validation](https://chromosomix.app/validation/#tad-annotation-juicer-arrowhead), on 4DN's in situ Hi-C of K562 at 10 kb, chromosomes 21 and 22, read by range by both tools, every one of Juicer's 177 domains on the raw counts and 200 with KR balancing is called at the same corners with the same five scores.

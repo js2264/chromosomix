@@ -1,6 +1,6 @@
 ---
 title: "Origin and terminus"
-description: "Where replication starts and ends, from the GC skew, parS, matS and coverage."
+description: "Place the replication origin and terminus of a bacterial chromosome from its GC skew, its parS and matS sites and its Hi-C coverage."
 ---
 
 import TaskCommand from '@components/TaskCommand.astro'
@@ -10,17 +10,35 @@ import TaskSummary from '@components/TaskSummary.astro'
 
 <TaskSummary id="oriter" />
 
-{/* TODO(docs): what the task answers, and when a reader reaches for it. */}
+The map of a bacterial chromosome is read from its origin of replication: its two arms are aligned about it, its secondary diagonal crosses the main one there, and a figure puts it in the middle. Nothing in a `.cool` says where it is, and most assemblies only happen to start near it. **Origin and terminus** reads both ends of replication from the sequence, checks them against the sites that mark them and against the coverage, and declares the origin for the rest of the app to read the arms from. Run it first on any bacterial genome.
 
 ## Running it
 
-{/* TODO(docs): where it is in the Analysis panel, what has to be open first, and what appears when it has run. */}
+Load the genome's FASTA (see [Reference sequences](/files/sequences/)), open **Origin and terminus** on the **1D tasks** card of the **Analysis** panel, and choose it under **reference**. A contact map is not needed, but run it beside the map: the loci then land on the map's sequences, under the map's names, where with no map they are the reference's own.
+
+For the coverage step, choose a raw Hi-C coverage track under **coverage** — [Coverage and marginals](/analyses/coverage/) makes one. It starts on *Do not use coverage*, because the first bigWig of a session is as likely to be a ChIP-seq track, and a ratio read off the wrong track looks like any other.
+
+Check first that the chromosome is ticked in the **circular** column of the **Chromosomes** table; the app ticks one it finds circular the first time a map is opened. A sequence read as a line has its origin at the first base split between its two ends, and the run says so.
+
+When it has run:
+
+- `Origin and terminus · genome.fa`, a track of two loci per sequence, `ori` and `ter`, each a skew window wide and centred on the call;
+- `parS sites` and `matS sites`, each followed by its motif: the sites found, as a track wherever there are any;
+- with a coverage track and a map open, the smoothed coverage as a track on the map's bins, its name ending `spline fit`;
+- **Origin and terminus per sequence**, a table in the drawer;
+- and the origin itself, written into the **origin** column of the **Chromosomes** table for every sequence you have not given one yourself.
+
+{/* screenshot: the ori and ter loci and the parS sites under an E. coli map, with the drawer's table */}
 
 The same run from a shell:
 
 <TaskCommand id="oriter" />
 
+From the shell, name a circular sequence with `--circular` — `chromosomix circular` on the map lists the sequences that join their own ends — and hand the origin the table reports to later runs, such as `interarm`, as `--origin`.
+
 ## Parameters
+
+The defaults are the published ones and suit most bacteria. The GC skew is read in 5 kb windows every 1 kb. parS, `TGTTNCACGTGNAACA` (Livny, Yamaichi & Waldor 2007), is searched with one mismatch because each genome carries variants of it; matS, `GTGACRNYGTCAC` (Mercier et al. 2008), is searched exactly because at one mismatch it turns up dozens of times by chance in a genome with no MatP. Empty either motif to skip its step. **spline knots** shapes the smoothed coverage, and is read only when a coverage track is chosen.
 
 <TaskParameters id="oriter" />
 
@@ -30,4 +48,28 @@ The same run from a shell:
 
 ## Reading the result
 
-{/* TODO(docs): how to read what it draws and writes, and what to watch for. */}
+### How a call is made
+
+The GC skew changes sign at the origin and at the terminus, so the cumulative skew has its minimum at one and its maximum at the other: those two turning points are the candidates. Which of them is the terminus is decided as Bacchus decides it (Lamy-Besnier et al. 2023), each step used only where the one before it has nothing to say:
+
+1. **matS**: where ten or more sites are found, the terminus is the candidate nearer their cluster. MatP's sites cluster in the terminus region of the enterobacteria.
+2. **parS**: where any are found, the terminus is the candidate farther from their cluster. ParB's sites cluster round the origin in most bacteria with a ParABS system.
+3. **coverage**: the terminus is the candidate with the lower smoothed coverage, since in a growing culture the origin has been copied, and seen, more often.
+4. Failing all three, the skew's own convention: the minimum is the origin, the maximum the terminus.
+
+### The table
+
+For each sequence: its length, whether it was read as circular or linear, **ori** and **ter** — the centres of the two loci, 1-based — **terminus placed by**, the step that decided it, the parS and matS sites found and how many parS sit in their cluster, and **ori/ter**: the highest smoothed coverage over the lowest, copies of the origin for every copy of the terminus. It is above 1 in a growing culture, and higher the faster the culture was replicating.
+
+### What to watch for
+
+- A terminus placed by matS, parS or coverage at the skew's minimum — where the skew alone would put the origin — is named in a note. It points to an unusual genome, an assembly error or a motif that does not fit this genome; check the assembly, or the motifs.
+- The loci are a skew window wide on purpose. The skew places a turning point only to within a window, and a one-base locus would claim a precision the method does not have.
+- A sequence shorter than four skew windows, or missing from the reference, is not placed, and the note names it.
+- The call reads each sequence whole, so a FASTA the app reads by range from its index — one over 64 MB — is declined with a note. A bacterial genome is far below that.
+
+### What reads the origin
+
+The origin declared here is what the [inter-arm alignment](/analyses/interarm/) reads the two arms from, and what the map's **ori** button puts in the middle of a circular sequence. A position you type into the **origin** column yourself is never overwritten by a run; the task's own is replaced by its next run, which is how you try other sites.
+
+The decision follows Bacchus's rules, but the task is not a port of a package, so it carries no validation badge.

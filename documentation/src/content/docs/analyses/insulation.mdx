@@ -1,6 +1,6 @@
 ---
 title: "Diamond insulation"
-description: "How much contact crosses each bin, and where the boundaries are."
+description: "Score how much contact crosses each bin of a contact map, and call the boundaries and the domains between them, as cooltools does."
 ---
 
 import TaskCommand from '@components/TaskCommand.astro'
@@ -10,17 +10,39 @@ import TaskSummary from '@components/TaskSummary.astro'
 
 <TaskSummary id="insulation" />
 
-{/* TODO(docs): what the task answers, and when a reader reaches for it. */}
+Diamond insulation asks, at every bin, how much contact crosses it. A square window slides along the diagonal, and where a domain boundary sits, little contact passes from one side to the other, so the score dips. Reach for it when you want domain boundaries as a track you can read against the map, as a set of calls, and as the domains between them — at one scale or several, in the numbers `cooltools.insulation` gives.
+
+It is one of three readings of domain structure, one value per bin: the [directionality index](/analyses/di/) asks which way a bin's contacts lean, and the [HiC score](/analyses/hicscore/) how much contact it makes with its neighbours. [TAD annotation](/analyses/arrowhead/) calls domains from their corners on the map instead, and lets them nest.
 
 ## Running it
 
-{/* TODO(docs): where it is in the Analysis panel, what has to be open first, and what appears when it has run. */}
+Open a contact map, then the **Analysis** panel (<kbd>4</kbd>), and choose **Diamond insulation** in the **2D tasks** card. Tick the sequences to score — every one is ticked to begin with — set the **window**, and press **Run**.
+
+A run lands as three rows of the **Tracks** card in the **Annotations** panel, each marked `*`:
+
+- the score, a track under the map, named after its window in base pairs — **Insulation · 100 kb** for the default 10 bins on a 10 kb map;
+- **Insulation boundaries**, one-bin segments directly under the score, each beside the dip it was called from;
+- **Insulation domains**, the spans between the boundaries, drawn on the map as the corner of each domain's square along the diagonal.
+
+Each called set has a **display** dropdown that moves it between a **1D track** and a **map overlay**; on the map the boundaries can be a **point** or a **short diagonal marker**. With **scales** above 1, the score is one lane of stacked heatmaps instead of one line per window (below).
+
+{/* screenshot: a contact map with Diamond insulation run, the score under it, the boundaries beneath the score, and the domains as corners along the diagonal */}
 
 The same run from a shell:
 
 <TaskCommand id="insulation" />
 
+For example, four scales from a 10-bin window on the 10 kb rung of an `.mcool`:
+
+```sh
+chromosomix insulation sample.mcool::/resolutions/10000 --window 10 --scales 4 --out results/
+```
+
+writes the scores as `sample.insulation.insulation-w10` to `sample.insulation.insulation-w80`, each as `.tsv`, `.bedGraph` and `.bw`, and the calls as `sample.insulation.insulation-boundaries` and `sample.insulation.insulation-domains`, each as `.tsv` and `.bed`.
+
 ## Parameters
+
+**Window** and **minimum prominence** decide what is called: the window is the scale the score is read at, and the prominence how deep a dip must be to count as a boundary. The window is a number of bins, so the same number is a different length on each resolution of a file; the track's name says what it came to. **Scales** adds wider windows to the same run for comparison — each twice the last — and does not change the calls, which are always made on the first window.
 
 <TaskParameters id="insulation" />
 
@@ -30,4 +52,42 @@ The same run from a shell:
 
 ## Reading the result
 
-{/* TODO(docs): how to read what it draws and writes, and what to watch for. */}
+### The score
+
+A bin's diamond is the `window × window` square whose corner is the bin's own pixel on the diagonal, less the diagonals **diagonals to ignore** leaves out. Its score is the mean of the cells in that square, divided by the median of those means over the bin's sequence, in log2. So 0 is a typical bin of that sequence, a negative score is a bin across which less contact passes than usual, and the boundaries are the dips. Being a ratio against each sequence's own median, the score does not grow with sequencing depth, which is what lets you compare it between chromosomes.
+
+The diamond never reaches from one sequence into the next. Near either end of a sequence, and beside bins the balancer dropped, it averages the cells it has, so every bin with a cell to average is scored — a sequence shorter than the window included — but on fewer cells. A bin whose diamond holds no value, or nothing but zeros, has no score: it is a gap in the track, never a trough.
+
+With several **scales** the run computes the window and its doublings — 10, 20, 40 and 80 bins for a window of 10 and four scales — and draws them as one lane of heatmaps, the widest on top. Each row is a smoother reading of the same boundaries, so a boundary that survives every scale is a stripe through the whole stack. The lane is an ordinary group of tracks: break it up or draw a row as a line from its settings.
+
+### The boundaries
+
+A boundary is a local minimum of the score whose prominence — how far the track must climb from the minimum before it falls lower — reaches **minimum prominence**, in log2 units. The minima are found only over the bins whose diamond holds at least **diamond coverage to call** of the cells of the fullest diamond in the run, so a sequence's ends and the edges of an unmappable stretch do not call boundaries from a handful of cells. **Minimum spacing** keeps only the stronger of two calls closer than that many bins; at 0 it does nothing.
+
+Each boundary is one bin wide and named `boundary_1`, `boundary_2`, … in genomic order, with its prominence as its score — the column to rank or filter the set by. If no minimum reaches the threshold, the drawer says so: lower the prominence, or widen the window.
+
+### The domains
+
+With **domains between them** on, each two consecutive boundaries on a sequence make a domain, from the bin of one call to the bin of the next, so the domains tile the stretch between a sequence's first boundary and its last. Nothing runs from a sequence's end to its first boundary: one edge is not a domain. Each domain is named `domain_1`, `domain_2`, …, and its score is the weaker of its two boundaries' prominences, so ranking by it ranks domains by their less well supported side.
+
+This is the set to pile up with [aggregate peak analysis](/analyses/apa/) as a scaled feature set — the domain pileup — or to set against loops and peaks in [interval set overlap](/analyses/overlap/).
+
+### What to watch for
+
+- **The near-diagonal.** The diamond's corner sits on the diagonal, where self-ligation and unligated fragments land, and at a small window those cells can be most of the mean. **Diagonals to ignore** at 2, cooltools' default, leaves the corner out; 0 counts every cell. Ignoring as many diagonals as the diamond spans leaves it empty, and the run refuses, saying why.
+- **Balancing.** A file that carries balancing weights is read balanced, as cooltools reads it; `--no-balance` on the command line reads the raw counts.
+- **Circular sequences.** A sequence ticked **circular** in the Chromosomes table is read round its junction, so the bins at its two ends are scored with whole diamonds. The boundaries are still called along it as a line, so the domain spanning the junction is never reported.
+- **Comparing maps.** On a deck, **run on all N maps** gives one track per map, and the **all maps** tab draws them on one axis. See [Maps side by side](/browse/deck/).
+
+## Compared with cooltools
+
+The score, the cells each diamond counts and the boundary strength are `cooltools.insulation`'s, bin for bin. In [§ 1 of the validation](https://chromosomix.app/validation/#diamond-insulation), on a mouse Hi-C map at 10 kb with a 100 kb window, every bin both tools score agrees within float32 rounding, and so do the strengths of the boundaries both call; § 24 does the same at four scales on GM12878. To set a cooltools run beside one of these, give both the same four numbers:
+
+| chromosomix | cooltools |
+| --- | --- |
+| `--window 10` (bins) | `window_bp=[100_000]` at 10 kb: the window times the bin size |
+| `--ignoreDiags 2` | `ignore_diags=2` |
+| `--minValid 0.5` | `min_frac_valid_pixels=0.5` |
+| `--prominence 0.2` | `threshold=0.2` |
+
+The boundaries' score is cooltools' `boundary_strength`. **Minimum spacing** and the domains are this app's own additions, made from the calls; neither changes the score.
