@@ -242,6 +242,13 @@
   ],
   "pulls": [
     {
+      "number": 158,
+      "commit": "31b950a",
+      "title": "Docs: live examples, the app itself in place of its picture (§32.4)",
+      "branch": "js/docs-live-examples",
+      "date": "2026-11-03T23:14:20Z"
+    },
+    {
       "number": 156,
       "commit": "e5d7317",
       "title": "Add cell-of-its-own rectangle to Contact maps card",
