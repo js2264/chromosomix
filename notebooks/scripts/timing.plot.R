@@ -32,7 +32,7 @@ jobs <- dat |>
     group_by(section, analysis, pair, side, run) |>
     summarise(
         tool = paste(unique(tool), collapse = ", "), order = min(order),
-        cpu = sum(cpu_s), mem = max(peak_mb), .groups = "drop"
+        cpu = sum(cpu_s), wall = sum(wall_s), mem = max(peak_mb), .groups = "drop"
     )
 
 folds <- jobs |>
@@ -40,6 +40,7 @@ folds <- jobs |>
     summarise(
         order = min(order), reference = tool[side == "reference"][1],
         CPU = mean(cpu[side == "reference"]) / mean(cpu[side == "chromosomix"]),
+        wall = mean(wall[side == "reference"]) / mean(wall[side == "chromosomix"]),
         # Each side's largest run, as the notebook's table reports them
         memory = max(mem[side == "reference"]) / max(mem[side == "chromosomix"]),
         .groups = "drop"
@@ -120,8 +121,8 @@ folds <- left_join(folds, rows, by = c("section", "analysis", "pair"))
 
 # Folds are ratios, so their mean is geometric
 caption <- with(folds, sprintf(
-    "On average, chromosomix runs %.1f× faster than the reference tools (CPU time) and uses %.1f× less peak memory (geometric means over the %d comparisons in b).",
-    exp(mean(log(CPU))), exp(mean(log(memory))), nrow(folds)
+    "On average, chromosomix runs %.1f× faster than the reference tools (CPU time), %.1f× faster on the wall clock, and uses %.1f× less peak memory (geometric means over the %d comparisons in b).",
+    exp(mean(log(CPU))), exp(mean(log(wall))), exp(mean(log(memory))), nrow(folds)
 ))
 message(caption)
 
@@ -241,20 +242,28 @@ names <- ggplot(rows, aes(0.98, label)) +
 grid <- table_of(meta, rows) +
     theme(axis.text.x.top = element_text(angle = 45, hjust = 0, vjust = 0))
 sides <- scale_colour_manual(values = c(chromosomix = APP, reference = REF))
+# CPU and wall-clock time on one axis, to read one against the other
+seconds <- scale_x_log10(limits = range(jobs$cpu, jobs$wall))
 cpu <- ggplot(jobs, aes(cpu, label, colour = side)) +
     common(rows) +
     runs() +
     sides +
-    scale_x_log10() +
+    seconds +
     labs(x = "CPU time (s)")
+wall <- ggplot(jobs, aes(wall, label, colour = side)) +
+    common(rows) +
+    runs() +
+    sides +
+    seconds +
+    labs(x = "Wall-clock time (s)")
 memory <- ggplot(jobs, aes(mem, label, colour = side)) +
     common(rows) +
     runs() +
     sides +
     scale_x_log10() +
     labs(x = "Peak memory (MB)")
-b <- names + grid + cpu + memory +
-    plot_layout(widths = c(3.2, 3.3, 2.6, 2.6), guides = "collect") &
+b <- names + grid + cpu + wall + memory +
+    plot_layout(widths = c(3.2, 3.3, 1.8, 1.8, 1.8), guides = "collect") &
     theme(legend.position = "top", legend.box.spacing = unit(0, "pt"), axis.text.y = element_blank(), axis.ticks.y = element_blank())
 
 # c: CPU against memory, one point a pair: top right is faster and lighter than the reference
@@ -282,7 +291,7 @@ c <- ggplot(folds, aes(CPU, memory, label = str_replace(as.character(label), " \
 fig <- wrap_elements(full = a) / wrap_elements(full = b) / wrap_elements(full = c) +
     plot_layout(heights = c(1, 1.6, 1.45)) +
     plot_annotation(
-        tag_levels = "a", caption = caption,
+        tag_levels = "a", caption = str_wrap(caption, 150),
         theme = theme(plot.background = element_blank(), plot.caption = element_text(size = 8, hjust = 0))
     ) &
     theme(plot.tag = element_text(face = "bold", size = 12), plot.background = element_blank())

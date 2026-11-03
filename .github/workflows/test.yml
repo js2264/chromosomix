@@ -63,8 +63,21 @@ jobs:
       # ever leave the repository.
       - name: Put the demo maps in place
         run: npm run fixtures:demo
+      # Measured over the whole app, not over the files the suite loads
+      # (vitest.config.ts): this half's figure, on every push. The full suite's
+      # is the goldens job's, where metacooler's fixtures let it run.
       - name: Tests that need no fixtures
-        run: npm run test:nofixtures
+        run: npm run test:nofixtures -- --coverage
+      - name: Coverage of the fixture-free suite
+        if: always() && hashFiles('coverage/coverage-summary.json') != ''
+        run: node scripts/coverage-summary.mjs --title 'fixture-free suite'
+      - name: Keep the coverage report
+        if: always() && hashFiles('coverage/coverage-summary.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-fixture-free
+          path: coverage/
+          retention-days: 14
       - name: Build
         run: npm run build
 
@@ -179,7 +192,21 @@ jobs:
 
       - name: Full suite, against the Python oracles
         if: steps.fixtures.outcome == 'success'
-        run: npm test
+        run: npm test -- --coverage
+
+      # The app-wide figure, which only this run can give: the twelve reader
+      # suites and the request budgets over metacooler's fixtures are what the
+      # check job's figure leaves out.
+      - name: Coverage of the full suite
+        if: always() && steps.fixtures.outcome == 'success' && hashFiles('coverage/coverage-summary.json') != ''
+        run: node scripts/coverage-summary.mjs --title 'full suite'
+      - name: Keep the coverage report
+        if: always() && steps.fixtures.outcome == 'success' && hashFiles('coverage/coverage-summary.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-full
+          path: coverage/
+          retention-days: 14
 
       # Without metacooler the full suite cannot run, but the suites the public
       # fixtures feed can — each of them skips by name in the always-on job.

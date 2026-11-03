@@ -12,6 +12,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Added
+
+- **Test coverage, over the whole app.** `npm run test:coverage` runs the full suite with V8
+  coverage over every file under `src/` and `electron/` — a file no test loads counts at zero, so
+  the figure is the app's and not the suite's — and prints it one row per area of the source, with
+  the files each leaves unloaded; `coverage/index.html` is the file-by-file view. The Tests workflow
+  reports the fixture-free suite's coverage on every push, and the full suite's where metacooler's
+  fixtures let it run, in each job's summary, with the report kept as an artifact for two weeks.
+
 ### Fixed
 
 - **The notebooks no longer fail on one failed download (§18.10).** Both runs of the Notebooks
