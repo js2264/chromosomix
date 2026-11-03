@@ -14,6 +14,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Live examples in the documentation (§32.4).** Ten pictures — the introduction's, moving around,
+  a contact map and its O/E, two maps compared, a ratio, one map read two ways, the 45° view, the
+  genome browser and an embed in a page — carry **Try it live**, which swaps the picture for the
+  app itself, embedded, on the same view of the demo data, with a line to open it in a tab of its
+  own or go back to the picture. Nothing of the app is loaded until it is pressed, and each copy of
+  the site embeds its own release's build.
 - **A documentation site, one copy per release (§32).** <https://doc.chromosomix.app> is written for
   the people who use chromosomix: getting started, the files it opens and from where, using the
   browser, every analysis, the command line, the notebook widgets, hosting data and publishing a
@@ -53,7 +59,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   ended at `con`, at 720 the resolution and the box were out of sight, and at 480 the frame scrolled
   sideways. The two now take a line of their own under the file and the place, together and with
   their labels, and the file is named in full where it fits; narrower, the brand keeps its mark
-  alone; and at a phone's width the contacts box is put away and the resolution kept.
+  alone; and at a phone's width the contacts box is put away and the resolution kept, its stops
+  wrapping and its slider gone, so a file of five resolutions keeps all five on the frame.
 - **The pointer gives a derived cell's reading and the count behind it (§7.5).** On one map drawn as
   O/E, the line under the map read `O/E 1.95× · balanced 1.95`, the count being the ratio drawn
   again, over a cell whose balanced count was 0.000537; and the card beside the pointer gave

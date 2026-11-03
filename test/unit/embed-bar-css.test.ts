@@ -77,9 +77,15 @@ describe('the embed’s bar in a narrowing frame', () => {
     expect(controls).toMatch(/\.embed-bar \.breadcrumb > \.crumb-res,\s*\.embed-bar \.breadcrumb > \.crumb-contacts \{\s*order: 2/)
   })
 
+  it('lets a phone’s frame keep every resolution, as wrapping stops rather than a slider off its edge', () => {
+    expect(declarationsIn(noBox, '.embed-bar .crumb-res > .res-slider')).toMatch(/display: none/)
+    expect(declarationsIn(noBox, '.embed-bar .res-stops')).toMatch(/flex-wrap: wrap/)
+  })
+
   it('never puts the resolution away', () => {
     for (const block of mediaBlocks()) {
-      expect(block.body, `@media (max-width: ${block.rem}rem)`).not.toMatch(/\.crumb-res[^{]*\{[^}]*display: none/)
+      // The control itself, not a part of it: its slider may go where its stops stay.
+      expect(block.body, `@media (max-width: ${block.rem}rem)`).not.toMatch(/\.crumb-res\s*\{[^}]*display: none/)
     }
   })
 })

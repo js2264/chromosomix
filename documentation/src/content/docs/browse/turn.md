@@ -9,7 +9,7 @@ picture to it. A domain becomes a triangle standing on the axis, a loop becomes 
 its own span, and the axis along the bottom is genomic position — the axis every track is drawn
 against, so a coverage profile underneath lines up with the picture rather than with one edge of it.
 
-![A Micro-C map of yeast chromosome IV from 1.0 to 1.4 Mb turned by 45°, its diagonal along the bottom and separation up the side, with the sequence's GC, the genes, ATAC-seq and its peaks, and Pol II over input lined up under it.](../../../assets/screens/browse/turn-turned-map.webp)
+![A Micro-C map of yeast chromosome IV from 1.0 to 1.4 Mb turned by 45°, its diagonal along the bottom and separation up the side, with the sequence's GC, the genes, ATAC-seq and its peaks, and Pol II over input lined up under it.](../../../assets/screens/browse/turn-turned-map.webp "live: #uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&balance=true&transform=log10&flip=true")
 
 ## Turning a map
 

@@ -8,7 +8,7 @@ along it: coverage, genes, peaks, reads, the sequence itself. It is not a separa
 same tracks, with the same settings, are drawn in lanes along the edges of a contact map, and the
 browser is what a tab shows when it holds a genome but no map.
 
-![The genome browser on 50 kb of yeast chromosome IV, with the sequence's GC content, the genes on both strands, MNase, ATAC-seq and its peaks, the Micro-C anchors, and Pol II over input with its peaks stacked under one ruler.](../../../assets/screens/browse/genome-browser-tracks.webp)
+![The genome browser on 50 kb of yeast chromosome IV, with the sequence's GC content, the genes on both strands, MNase, ATAC-seq and its peaks, the Micro-C anchors, and Pol II over input with its peaks stacked under one ruler.](../../../assets/screens/browse/genome-browser-tracks.webp "live: ?config=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_tracks.chromosomix.json")
 
 ## Opening it
 

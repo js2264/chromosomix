@@ -11325,7 +11325,9 @@ their labels — a zero-height break ordered between the trail and them, since p
 last item, the box, away from the resolution — and the trail names the file in full where it fits;
 below 50rem the brand keeps its mark and lets its name go; below 34rem, a phone's width, the contacts
 box is put away and the resolution kept, since it is the one of the two a reader looks at one figure
-with, and the full viewer the mark opens has both. The brand and the three buttons keep to the first
+with, and the full viewer the mark opens has both. There the resolution's slider goes too, and its
+stops wrap: a file of five resolutions ran past the frame at the fourth, and each stop is the same
+choice as the slider, a button that says its bin size. The brand and the three buttons keep to the first
 line throughout (`test/unit/embed-bar-css.test.ts` holds the order).
 
 **The two panel toggles and About**, right. The toggles are the panels' *own* buttons — the same
@@ -15977,6 +15979,19 @@ half of it; and each is framed as the app frames a card, its hairline, corner an
 a white panel does not run into the page. The suite holds every picture to a WebP under 300 KB that
 a page uses (`test/unit/docs-screens.test.ts`). A page marks a picture still to shoot with
 `screenshot:` in a comment.
+
+**A picture of the app can become the app.** A page marks one with the picture's title — `live:` and
+the part of a link after the app's address, `#uri=…` or `?config=…` for a published workspace
+(`documentation/src/lib/live.mjs`) — and the build keeps the picture and puts **Try it live** on
+its corner; a press swaps it for the app, embedded (§21), on that view, with a line under the frame
+that opens the same view in a tab of its own or puts the picture back. Nothing of the app is loaded
+before the press: a page with three live views would otherwise load the viewer three times for a
+reader who came for one paragraph, and the picture stays what a printed page, a search engine and a
+reader without scripts have. **Each copy embeds its own app** (`APP_URL`, §32.2): a release's copy
+that release's pinned build, so the live view is the version the page describes. The views are on
+the demo bucket's data, and the suite reads every link through the app's own link reader, so a key
+misspelt or a value the app refuses fails there rather than on the page
+(`test/unit/docs-live.test.ts`).
 
 **The page of ways to use it draws each way rather than shooting it** (`start/ways.mdx`,
 `WayArt.astro`): a browser, a window of its own, a laptop, a file, a tagged release, a server, a page

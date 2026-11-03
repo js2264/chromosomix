@@ -19,7 +19,7 @@ The first file is drawn above the diagonal and the second below it. The line bet
 matrix diagonal wherever you pan, so off the diagonal a block above the line is the first file alone,
 and its mirror image below the line is the second. The diagonal itself stays with the first file.
 
-![Hi-C maps of yeast chromosome IV from G1 and from G2/M cells in one square at 4 kb, G1 above the diagonal and G2/M below with its far corner paler, and the two files listed on the Contact maps card under ◥ and ◣.](../../../assets/screens/browse/comparing-two-files.webp)
+![Hi-C maps of yeast chromosome IV from G1 and from G2/M cells in one square at 4 kb, G1 above the diagonal and G2/M below with its far corner paler, and the two files listed on the Contact maps card under ◥ and ◣.](../../../assets/screens/browse/comparing-two-files.webp "live: #uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/meneu/HiC/HiC_Mpneumo_G1.mcool::/resolutions/4000&uri2=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/meneu/HiC/HiC_Mpneumo_G2M.mcool::/resolutions/4000&view=region&region=IV&balance=true&transform=log10")
 
 On the card each file has a row, `◥` for the upper triangle and `◣` for the lower. The second row's
 eye takes the lower triangle out of the picture and keeps the file open; its **×** closes it and goes
@@ -76,7 +76,7 @@ the two files agree — 1 for a ratio, 0 for a difference — so every cell that
 colour and only the disagreement is drawn. Going back to **split** gives the map its own scale back.
 The link carries the choice as `op`.
 
-![The log2 ratio of G2/M over G1 Hi-C across the whole of yeast chromosome IV at 8 kb on RdBu_r, red along the diagonal where G2/M has more contacts and blue further out, beside the Map card with compare set to ratio and O/E greyed.](../../../assets/screens/browse/comparing-ratio.webp)
+![The log2 ratio of G2/M over G1 Hi-C across the whole of yeast chromosome IV at 8 kb on RdBu_r, red along the diagonal where G2/M has more contacts and blue further out, beside the Map card with compare set to ratio and O/E greyed.](../../../assets/screens/browse/comparing-ratio.webp "live: #uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/meneu/HiC/HiC_Mpneumo_G2M.mcool::/resolutions/8000&uri2=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/meneu/HiC/HiC_Mpneumo_G1.mcool::/resolutions/8000&view=region&region=IV&balance=true&op=ratio&transform=log2&colormap=RdBu_r")
 
 Three things to know when reading one:
 
@@ -110,7 +110,7 @@ you move it from there. While it is on, a dot on the **◣ lower** tab tells you
 not a mirror. Switched off, the triangle is the mirror it always was, and its settings are kept for
 the next time.
 
-![A Micro-C map of yeast chromosome IV from 1.0 to 1.4 Mb at 2 kb, balanced in log10 above the diagonal and its O/E in log2 on RdBu_r below, each with its own key in the corner, marked ◥ and ◣, beside the Map card open on its lower tab with own reading on.](../../../assets/screens/browse/comparing-lower-reading.webp)
+![A Micro-C map of yeast chromosome IV from 1.0 to 1.4 Mb at 2 kb, balanced in log10 above the diagonal and its O/E in log2 on RdBu_r below, each with its own key in the corner, marked ◥ and ◣, beside the Map card open on its lower tab with own reading on.](../../../assets/screens/browse/comparing-lower-reading.webp "live: #uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&coarsen=2000&balance=true&transform=log10&lower=true&oe2=true&transform2=log2&colormap2=RdBu_r")
 
 Each reading has its own colour scale, measured on its own whole square, and its own key: the upper
 one marked `◥` and the lower one `◣`. The numbers on both keys can be clicked and typed, as on any

@@ -90,6 +90,14 @@ title is the page's `#`). Lead with what the reader wants to do; put the why aft
   `![What it shows, as someone who cannot see it would need it](../../../assets/screens/<section>/<name>.webp)`.
   The build shows it at half its pixel width, the size the app drew it, framed as the app frames a
   card (`src/lib/screens.mjs`); `test/unit/docs-screens.test.ts` checks the rest.
+- **A picture of a view the embed can open can become the app**: give it the title `live:` and
+  the part of the app's link after its address, the view the picture shows —
+  `![…](../../../assets/screens/browse/x.webp "live: #uri=https://…&view=region&region=IV")`, or
+  `"live: ?config=https://…/x.chromosomix.json"` for a published workspace. The build puts
+  **Try it live** on it (`src/lib/live.mjs`, `src/components/LiveViews.astro`), and
+  `test/unit/docs-live.test.ts` reads the link the way the app does. Open it in the embed first
+  (`?embed=1`): what the embed drops — the Analysis panel, the stores — a live view cannot show,
+  and a fragment does not apply on top of a `config`.
 - Where a picture would help and none is shot yet, leave a comment saying what it should show —
   `<!-- screenshot: the Analysis panel with insulation run on chr15 -->`, or `{/* … */}` in MDX.
 

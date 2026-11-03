@@ -1,0 +1,65 @@
+---
+/**
+ * The pictures that can become the app (`lib/live.mjs`, SPECS §32.4): a button
+ * on each, and the app itself in its place when the button is pressed.
+ *
+ * Nothing of the app is loaded before the press. A page with three live views
+ * would otherwise load the viewer three times for a reader who came to read one
+ * paragraph; the picture is what the page is, and the frame is what the reader
+ * asked for. Without scripts the picture simply stays.
+ */
+---
+
+<script>
+  /** A triangle, as the app's play buttons draw one. */
+  const PLAY =
+    '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4.5 2.6v10.8L13.2 8z" fill="currentColor"/></svg>'
+
+  function wire(holder: HTMLElement): void {
+    const src = holder.dataset.live
+    if (src === undefined || holder.querySelector('.cx-live-start') !== null) return
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'cx-live-start'
+    button.title = 'Open this view in the app itself, here on the page'
+    button.innerHTML = `${PLAY}<span>Try it live</span>`
+    button.addEventListener('click', () => start(holder, src, button))
+    holder.append(button)
+  }
+
+  function start(holder: HTMLElement, src: string, button: HTMLButtonElement): void {
+    const picture = holder.querySelector('img')
+    const frame = document.createElement('iframe')
+    frame.className = 'cx-live-frame'
+    frame.src = src
+    frame.title = holder.dataset.liveTitle ?? 'chromosomix, live'
+    frame.allow = 'clipboard-write; fullscreen'
+
+    const open = document.createElement('a')
+    open.href = holder.dataset.liveViewer ?? src
+    open.target = '_blank'
+    open.rel = 'noopener'
+    open.textContent = 'open it in a tab of its own'
+    const back = document.createElement('button')
+    back.type = 'button'
+    back.className = 'cx-live-back'
+    back.textContent = 'back to the picture'
+    const note = document.createElement('span')
+    note.className = 'cx-live-note'
+    note.append('The app itself: pan, zoom and change it, and nothing is kept. ', open, ' · ', back)
+
+    // The holder is the picture's width until the frame takes the column's.
+    const held = holder.style.maxWidth
+    holder.style.maxWidth = 'none'
+    holder.classList.add('is-live')
+    holder.replaceChildren(frame, note)
+    back.addEventListener('click', () => {
+      holder.style.maxWidth = held
+      holder.classList.remove('is-live')
+      holder.replaceChildren(...(picture === null ? [] : [picture]), button)
+      button.focus()
+    })
+  }
+
+  for (const holder of document.querySelectorAll<HTMLElement>('.cx-live')) wire(holder)
+</script>
