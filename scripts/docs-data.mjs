@@ -232,7 +232,7 @@ async function main() {
     write(
       join(CONTENT, page.path),
       frontMatter({ title: page.title, description: page.description, editUrl: false }) +
-        ':::note[Written from the app]\nThis page is generated from chromosomix’s own code each time the documentation is built, so it is exactly what this version accepts.\n:::\n\n' +
+        ':::note[Written from the app]\nThis page is generated from chromosomix’s own code each time the documentation is built, so it is exactly what this version accepts. The same text is served to AI agents, as Markdown, from [chromosomix.app/llms.txt](https://chromosomix.app/llms.txt).\n:::\n\n' +
         page.markdown,
     )
   }
