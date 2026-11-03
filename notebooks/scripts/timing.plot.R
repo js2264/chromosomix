@@ -266,30 +266,46 @@ b <- names + grid + cpu + wall + memory +
     plot_layout(widths = c(3.2, 3.3, 1.8, 1.8, 1.8), guides = "collect") &
     theme(legend.position = "top", legend.box.spacing = unit(0, "pt"), axis.text.y = element_blank(), axis.ticks.y = element_blank())
 
-# c: CPU against memory, one point a pair: top right is faster and lighter than the reference
+# c and d: CPU time, then wall-clock time, against memory, one point a pair: top right is faster and
+# lighter than the reference
 # Each label on two lines, the task above its reference, for the room 26 of them need
-c <- ggplot(folds, aes(CPU, memory, label = str_replace(as.character(label), " \\(vs ", "\n(vs "))) +
-    geom_hline(yintercept = 1, linetype = "dashed", colour = "grey40") +
-    geom_vline(xintercept = 1, linetype = "dashed", colour = "grey40") +
-    geom_point(aes(fill = type), shape = 21, colour = "black", size = 3, stroke = 0.5, show.legend = FALSE) +
-    ggrepel::geom_text_repel(
-        # P(s) on yeast sits in the crowd: left alone, its label lands on the Pairs QC point
-        nudge_x = if_else(str_detect(folds$label, "yeast"), -0.08, 0),
-        nudge_y = if_else(str_detect(folds$label, "yeast"), 0.27, 0),
-        size = 2.6, lineheight = 0.85, colour = "grey20", min.segment.length = 0, box.padding = 0.5, point.padding = 0.5, point.size = 3,
-        force = 3, max.overlaps = Inf, max.time = 5, max.iter = 1e5, seed = 1
-    ) +
-    scale_fill_manual(values = TYPES) +
-    # Room left of and below the crowded points for their labels
-    scale_x_log10(breaks = c(1, 2, 5, 10, 20, 50, 100), labels = \(x) str_c(x, "×"), expand = expansion(mult = c(0.12, 0.05))) +
-    scale_y_log10(breaks = c(0.5, 1, 2, 5, 10, 20, 50), labels = \(x) str_c(x, "×"), expand = expansion(mult = c(0.2, 0.05))) +
-    labs(x = "× faster than the reference (CPU time)", y = "× less peak memory than the reference") +
-    theme_bw(base_size = 8) +
-    bare +
-    theme(panel.grid.minor = element_blank())
+against_memory <- function(time, clock, left = 0.12, nudge_x = 0, nudge_y = 0) {
+    ggplot(folds, aes({{ time }}, memory, label = str_replace(as.character(label), " \\(vs ", "\n(vs "))) +
+        geom_hline(yintercept = 1, linetype = "dashed", colour = "grey40") +
+        geom_vline(xintercept = 1, linetype = "dashed", colour = "grey40") +
+        geom_point(aes(fill = type), shape = 21, colour = "black", size = 3, stroke = 0.5, show.legend = FALSE) +
+        ggrepel::geom_text_repel(
+            nudge_x = nudge_x, nudge_y = nudge_y,
+            size = 2.6, lineheight = 0.85, colour = "grey20", min.segment.length = 0, box.padding = 0.5, point.padding = 0.5, point.size = 3,
+            force = 3, max.overlaps = Inf, max.time = 5, max.iter = 1e5, seed = 1
+        ) +
+        scale_fill_manual(values = TYPES) +
+        # Room left of and below the crowded points for their labels
+        scale_x_log10(breaks = c(0.5, 1, 2, 5, 10, 20, 50, 100), labels = \(x) str_c(x, "×"), expand = expansion(mult = c(left, 0.05))) +
+        scale_y_log10(breaks = c(0.5, 1, 2, 5, 10, 20, 50), labels = \(x) str_c(x, "×"), expand = expansion(mult = c(0.2, 0.05))) +
+        labs(x = str_c("× faster than the reference (", clock, ")"), y = "× less peak memory than the reference") +
+        theme_bw(base_size = 8) +
+        bare +
+        theme(panel.grid.minor = element_blank())
+}
+# P(s) on yeast sits in c's crowd: left alone, its label lands on the Pairs QC point
+yeast <- str_detect(folds$label, "yeast")
+c <- against_memory(CPU, "CPU time", nudge_x = if_else(yeast, -0.08, 0), nudge_y = if_else(yeast, 0.27, 0))
+# In d, Coverage, slower than cooltools on the wall clock, wants more room on the left for its label,
+# and lifted; the label of the metaplot goes below the crowd at 1×, P(s) on yeast's above its own
+metaplot <- str_detect(folds$label, "^Metaplot \\(")
+coverage <- str_detect(folds$label, "^Coverage")
+d <- against_memory(wall, "wall-clock time",
+    left = 0.2,
+    nudge_x = case_when(metaplot ~ 0.12, yeast ~ 0.1, .default = 0),
+    nudge_y = case_when(metaplot ~ -0.2, yeast ~ 0.3, coverage ~ 0.25, .default = 0)
+)
 
-fig <- wrap_elements(full = a) / wrap_elements(full = b) / wrap_elements(full = c) +
-    plot_layout(heights = c(1, 1.6, 1.45)) +
+# Each panel in inches, as tall as it was when a, b and c shared an A4 page (595 × 841 pt, the device
+# rounding it down to whole points): the page grows to hold d. To the last digit, as ggrepel lays c's
+# labels out anew on any change to its size
+fig <- wrap_elements(full = a) / wrap_elements(full = b) / wrap_elements(full = c) / wrap_elements(full = d) +
+    plot_layout(heights = unit(2.534447638912377 * c(1, 1.6, 1.45, 1.45), "in")) +
     plot_annotation(
         tag_levels = "a", caption = str_wrap(caption, 150),
         theme = theme(plot.background = element_blank(), plot.caption = element_text(size = 8, hjust = 0))
@@ -308,8 +324,17 @@ unclip <- function(g) {
     if (inherits(g$vp, "viewport")) g$vp$clip <- NA
     g
 }
-cairo_pdf("timing_results.pdf", width = 8.27, height = 11.69)
-grid::grid.draw(unclip(patchworkGrob(fig)))
+# The page A4 wide, and as tall as the panels and what lies between and under them, the caption
+# among it, measured on the device that draws it
+cairo_pdf(tempfile(), width = 8.27, height = 11.69)
+page <- unclip(patchworkGrob(fig))
+height <- grid::convertHeight(sum(page$heights), "in", valueOnly = TRUE)
+dev.off()
+# The device rounds a page down to whole points, so up here; the figure laid from the page's top,
+# what that adds is blank under the caption
+cairo_pdf("timing_results.pdf", width = 8.27, height = ceiling(height * 72) / 72)
+grid::pushViewport(grid::viewport(y = 1, height = unit(height, "in"), just = "top"))
+grid::grid.draw(page)
 dev.off()
 
 # The tables are only read here, and downloaded again at every run
