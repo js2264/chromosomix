@@ -18,9 +18,9 @@ Load the reference as a FASTA or a `.2bit` (see [Reference sequences](/files/seq
 
 A reference held in memory is counted without a single read; a large FASTA opened with its index, or a `.2bit`, is counted a few megabases at a time, none of them kept, and the line beside **run** gives how much that reads.
 
-When it has run, each track ticked is a row of the **Tracks** card, marked `*`, named after the reference and, where one was used, the window: `GC content · ref.fa`, `GC skew · ref.fa · 50,000 bp window`.
+When it has run, each track ticked is a row of the **Tracks** card, marked `*`, named after the reference and, where one was used, the window: `GC content · ref`, `GC skew · ref · 50,000 bp window`.
 
-{/* screenshot: GC content, GC skew and cumulative GC skew under a bacterial chromosome's map */}
+![The E. coli K-12 map of its whole chromosome at 10 kb with cumulative GC skew, GC skew and GC content as three new lanes along its left edge, the cumulative skew at its highest near the terminus at 1.6 Mb and at its lowest near the origin at 3.9 Mb.](../../../assets/screens/analyses/composition-ecoli.webp)
 
 The same run from a shell:
 

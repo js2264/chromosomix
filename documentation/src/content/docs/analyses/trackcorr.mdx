@@ -18,7 +18,7 @@ Load two or more tracks — bigWig, bedGraph, wig, or tracks other tasks made (s
 
 Every track is read at its own resolution, never from a zoom level; over fixed windows that means the whole track, a megabase at a time, which the line beside **run** calls a scan. The drawer then shows the correlation matrix, the tracks along both sides on a diverging colour scale centred on 0, with how many units there were and how many were compared; and **Pairs**, every pair from the most correlated to the least.
 
-{/* screenshot: the correlation matrix of two ATAC-seq replicates and an insulation score, with the Pairs table */}
+![The drawer of Track correlation for two ATAC-seq replicates and a 40 kb insulation score: the Spearman matrix over the 127,117 windows all three share, and the Pairs table, with ρ = 0.945 between the replicates and about 0 between either and the insulation.](../../../assets/screens/analyses/trackcorr-atac-replicates.webp)
 
 The same run from a shell:
 

@@ -20,7 +20,7 @@ The model and the map meet at the map's bins: each bin takes the mean position o
 
 It reads one square of the map per sequence the model covers, at the map's bin size. What it makes is drawn in the drawer: the model's distances and the contacts they predict as two matrices, the distance by separation beside the map's own P(s), and a table of the agreement for every sequence.
 
-{/* screenshot: the drawer of Model versus map on a yeast chromosome, the predicted-contacts matrix above the distance and P(s) curves */}
+![The drawer of Model versus map for the demo's yeast model against chromosome IV read at 5 kb: the contacts the model predicts, 1/d³ on a colour scale topped at 0.001 in the figure's own settings, run as a band along the diagonal with a spot at the centromere, above the model's mean distance by separation.](../../../assets/screens/analyses/structuremap-predicted.webp)
 
 The same run from a shell:
 
@@ -28,7 +28,7 @@ The same run from a shell:
 
 ## Parameters
 
-**sequences** decides which sequence the pictures are of — the first one named — while the table covers every sequence named. **exponent α** changes only the predicted-contacts picture: the agreement is a rank correlation, and every power of `1/d` ranks the pairs alike. Use the exponent the model was made with, 3 for a model made here at the default.
+**sequences** decides which sequence the pictures are of — the first one named — while the table covers every sequence the model and the map share, named or not. **exponent α** changes only the predicted-contacts picture: the agreement is a rank correlation, and every power of `1/d` ranks the pairs alike. Use the exponent the model was made with, 3 for a model made here at the default.
 
 <TaskParameters id="structuremap" />
 

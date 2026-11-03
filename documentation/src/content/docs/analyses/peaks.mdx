@@ -22,9 +22,9 @@ To test the peaks, choose a second replicate of the same experiment under **repl
 
 The call reads every base of the ticked sequences at the file's own resolution, a scan the line beside **run** prices; the map stays live while it runs, and it can be stopped.
 
-When it has run, the peaks are a track on the **Tracks** card, directly under the coverage they were called on, named `Peaks · ATAC.bw · no IDR` with one track, or `Peaks · rep1.bw + rep2.bw · IDR ≤ 0.05` with two. Each peak's summit — its most concave base — is drawn as its thick part, and the peaks are numbered `peak_1`, `peak_2` and so on along the genome. The drawer shows the curvature of every candidate, a table per sequence, the peaks at each of yapc's six IDR thresholds when a replicate was tested, and a row per peak with **list every peak**.
+When it has run, the peaks are a track on the **Tracks** card, directly under the coverage they were called on, named `Peaks · ATAC · no IDR` with one track, or `Peaks · rep1 + rep2 · IDR ≤ 0.05` with two. Each peak's summit — its most concave base — is drawn as its thick part, and the peaks are numbered `peak_1`, `peak_2` and so on along the genome. The drawer shows the curvature of every candidate, a table per sequence, the peaks at each of yapc's six IDR thresholds when a replicate was tested, and a row per peak with **list every peak**.
 
-{/* screenshot: a peak call under the ATAC-seq coverage it was called on, beside the drawer's curvature figure */}
+![The yeast ATAC-seq coverage in the 1D browser at IV:1,246,215-1,295,987 with its new lane, Peaks · Yeast_ATAC · no IDR, directly under it, beside the drawer's curvature of every candidate, where the 5,000 strongest kept as peaks sit well above those below the cut on a log axis.](../../../assets/screens/analyses/peaks-atac.webp)
 
 The same run from a shell:
 

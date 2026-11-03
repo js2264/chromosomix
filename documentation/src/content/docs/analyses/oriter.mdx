@@ -22,13 +22,13 @@ Check first that the chromosome is ticked in the **circular** column of the **Ch
 
 When it has run:
 
-- `Origin and terminus · genome.fa`, a track of two loci per sequence, `ori` and `ter`, each a skew window wide and centred on the call;
+- `Origin and terminus · genome`, a track of two loci per sequence, `ori` and `ter`, each a skew window wide and centred on the call;
 - the parS and matS sites found, when there are any, each set a track named after its motif — `parS sites · TGTTNCACGTGNAACA`;
 - with a coverage track and a map open, the smoothed coverage as a track on the map's bins, its name ending `spline fit`;
 - **Origin and terminus per sequence**, a table in the drawer;
 - and the origin itself, written into the **origin** column of the **Chromosomes** table for every sequence you have not given one yourself.
 
-{/* screenshot: the ori and ter loci and the parS sites under an E. coli map, with the drawer's table */}
+![The E. coli K-12 map at 10 kb with the matS sites, clustered about ter, and the ori and ter loci as lanes along its left edge, beside the drawer's table: NC_000913.3 read as circular, ori at 3,924,501 and ter at 1,552,501, the terminus placed by the nearest matS cluster, no parS site found.](../../../assets/screens/analyses/oriter-ecoli.webp)
 
 The same run from a shell:
 

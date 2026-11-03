@@ -170,6 +170,22 @@ async function open(out, { width = 1440, height = 900, drawer = null } = {}) {
     scroller.scrollTop += hit.getBoundingClientRect().top - scroller.getBoundingClientRect().top - offset
     return true
   }, { needle, offset })
+  /** Scroll the drawer so the figure block whose heading matches `head` starts `offset` pixels under its top. */
+  const scrollDrawerToBlock = (head, offset = 6) => page.evaluate(({ head, offset }) => {
+    const re = new RegExp(head)
+    const block = [...document.querySelectorAll('.analysis-drawer .figure-block')].find((b) => re.test(b.querySelector('.analysis-figure-head')?.textContent ?? ''))
+    if (block === undefined) return false
+    let scroller = block.parentElement
+    while (scroller !== null && !(scroller.scrollHeight > scroller.clientHeight && /auto|scroll/.test(getComputedStyle(scroller).overflowY))) scroller = scroller.parentElement
+    if (scroller === null) { block.scrollIntoView({ block: 'start' }); return true }
+    scroller.scrollTop += block.getBoundingClientRect().top - scroller.getBoundingClientRect().top - offset
+    return true
+  }, { head, offset })
+  /** Where every figure block of the drawer is, in CSS pixels, with its heading. */
+  const blocks = () => page.evaluate(() => [...document.querySelectorAll('.analysis-drawer .figure-block')].map((b) => {
+    const r = b.getBoundingClientRect()
+    return { head: (b.querySelector('.analysis-figure-head')?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 48), x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }
+  }))
   /** A file fetched in the page and dropped on the card's drop zone reading `zone`. */
   const drop = (url, name, zone) => page.evaluate(async ({ url, name, zone }) => {
     const target = [...document.querySelectorAll('.ann-drop')].find((el) => new RegExp(zone).test(el.textContent ?? ''))
@@ -182,6 +198,20 @@ async function open(out, { width = 1440, height = 900, drawer = null } = {}) {
     }
   }, { url, name, zone })
   const dropTrack = (url, name) => drop(url, name, 'Load a track')
+  /** An address typed into the header's `+` and opened: a map beside, a track under, read by range. */
+  const addByUrl = async (url) => {
+    await page.locator('.app-head .head-add').click()
+    await sleep(700)
+    await page.locator('.modal-panel input.input-url').fill(url)
+    await page.locator('.modal-panel button', { hasText: /^open$/ }).click()
+    await sleep(1500)
+  }
+  /** Every sequence of a `sequences` field ticked, from its own `all`. */
+  const tickAll = async (label = 'sequences') => {
+    const all = field(label).locator('button, a, span', { hasText: /^all$/ }).first()
+    if (await all.count()) { await all.click(); await sleep(600); return true }
+    return false
+  }
   /** A model dropped on the Structures card, as `scripts/ui-gallery.mjs` drops it. */
   const dropStructure = (url, name) => page.evaluate(async ({ url, name }) => {
     const card = document.querySelector('.structure-card')
@@ -204,7 +234,7 @@ async function open(out, { width = 1440, height = 900, drawer = null } = {}) {
     console.log('page errors:', errors.length === 0 ? 'none' : errors.slice(0, 8))
     await browser.close()
   }
-  return { page, errors, shot, fold, mapDrawn, until, openTask, closeDrawer, field, pick, only, type, toggle, run, notes, scrollDrawerTo, drop, dropTrack, dropStructure, box, close }
+  return { page, errors, shot, fold, mapDrawn, until, openTask, closeDrawer, field, pick, only, type, toggle, run, notes, scrollDrawerTo, scrollDrawerToBlock, blocks, drop, dropTrack, addByUrl, tickAll, dropStructure, box, close }
 }
 
 module.exports = { open, sleep, BASE, BUCKET }

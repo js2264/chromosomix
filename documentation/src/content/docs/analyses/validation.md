@@ -50,7 +50,7 @@ published beside the page:
 - **`validation.txt`**, every number the figures draw, one row a mark, so that any figure can be drawn
   again from the table alone.
 
-<!-- screenshot: the published validation page, on the coverage section, with its figure of chromosomix against cooltools -->
+![The published validation notebook at its coverage section, where figure 9 sets chromosomix's coverage against cooltools' less the diagonal, raw and balanced, and along chr11 from 30 to 40 Mb, with the table of contents open at 9 · Coverage.](../../../assets/screens/analyses/validation-coverage.webp)
 
 ## What the badge on a task's page means
 

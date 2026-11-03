@@ -13,7 +13,7 @@ const MAP = `${BASE}/demo/ecoli/Ecoli.mcool::/resolutions/10000`
 const FASTA = `${BUCKET}/ecoli_naps/ecoli_k12_mg1655.fa`
 
 ;(async () => {
-  const s = await open(OUT, { drawer: Number(process.env.SCREENS_DRAWER ?? 560) })
+  const s = await open(OUT, { drawer: Number(process.env.SCREENS_DRAWER ?? 720) })
   const { page } = s
   try {
     await page.goto(`${BASE}/#uri=${encodeURIComponent(MAP)}&view=region&region=NC_000913.3&transform=log10&balance=true`)
@@ -27,11 +27,23 @@ const FASTA = `${BUCKET}/ecoli_naps/ecoli_k12_mg1655.fa`
     await sleep(6000)
     await s.fold('Fold the Annotations panel')
     await s.fold('Fold the General panel')
-    await s.fold('Fold the Aesthetics panel')
+    // Aesthetics left open: the deck is narrower and the map sits left of the
+    // drawer rather than under it.
     await s.openTask('Origin and terminus')
     await s.shot('oriter-form')
     await s.run('Origin and terminus per sequence')
     console.log('notes:\n' + (await s.notes()))
+    console.log('table:', await page.evaluate(() => {
+      const t = [...document.querySelectorAll('.analysis-drawer table')].find((x) => /terminus/.test(x.textContent ?? ''))
+      return t ? [...t.querySelectorAll('tr')].map((r) => [...r.children].map((c) => c.textContent.trim()).join(' | ')).join('\n') : 'none'
+    }))
+    // The run's banner (where the origin went) is left up: put away, it gives
+    // the map the room to grow under the drawer. Then the tracks' names to the
+    // map's corners (the name column, `u`), so no name is written over the
+    // loci it labels.
+    await page.evaluate(() => document.activeElement?.blur())
+    await page.keyboard.press('u')
+    await sleep(2500)
     await s.shot('oriter-result')
     await s.scrollDrawerTo('Origin and terminus per sequence', 60)
     await sleep(1200)
