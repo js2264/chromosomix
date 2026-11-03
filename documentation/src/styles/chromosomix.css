@@ -596,7 +596,8 @@ main:has(.cx-landing) .content-panel:has(> .sl-container > h1#_top) {
 
 /* A picture that can become the app (`lib/live.mjs`): the picture, held to its
    own width, with the button on its lower corner as the app puts its own on a
-   card; pressed, the app in a frame the column's width, and a line under it. */
+   card; pressed, the app in a frame the page's width (`LiveViews.astro`
+   measures it), and a line under it. */
 .sl-markdown-content .cx-live {
   position: relative;
   display: block;
@@ -628,15 +629,24 @@ main:has(.cx-landing) .content-panel:has(> .sl-container > h1#_top) {
   outline: 2px solid var(--cx-accent);
   outline-offset: 2px;
 }
-/* Above Starlight's own rule for a frame in a page, which sizes it as a picture. */
+/* Above Starlight's own rule for a frame in a page, which sizes it as a picture.
+   As tall as most of the window, since it is as wide as the page. */
 .sl-markdown-content .cx-live-frame {
   display: block;
   width: 100%;
-  height: clamp(26rem, 72vh, 40rem);
+  height: clamp(26rem, 80vh, 54rem);
   border: 1px solid var(--cx-border);
   border-radius: var(--cx-radius);
   box-shadow: var(--cx-shadow-1);
   background: var(--cx-bg-raised);
+}
+/* The contents list steps aside while a live frame is under it. */
+.right-sidebar-panel {
+  transition: opacity 160ms ease;
+}
+.cx-contents-away .right-sidebar-panel {
+  opacity: 0;
+  pointer-events: none;
 }
 .cx-live-note {
   display: block;

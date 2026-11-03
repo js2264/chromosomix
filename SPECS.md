@@ -15984,7 +15984,12 @@ a page uses (`test/unit/docs-screens.test.ts`). A page marks a picture still to 
 the part of a link after the app's address, `#uri=…` or `?config=…` for a published workspace
 (`documentation/src/lib/live.mjs`) — and the build keeps the picture and puts **Try it live** on
 its corner; a press swaps it for the app, embedded (§21), on that view, with a line under the frame
-that opens the same view in a tab of its own or puts the picture back. Nothing of the app is loaded
+that opens the same view in a tab of its own or puts the picture back. **Live, the frame takes the
+page's width** — from the sidebar's edge to the window's, measured, since where the column sits
+between the two sidebars is Starlight's arithmetic — and as much of the window's height: a map in a
+column of text is a stamp, and the reader who pressed asked for the app. The contents list on the
+right is a fixed panel over that width, so it steps aside while a frame is under it and comes back
+once the frame is scrolled past (`components/LiveViews.astro`). Nothing of the app is loaded
 before the press: a page with three live views would otherwise load the viewer three times for a
 reader who came for one paragraph, and the picture stays what a printed page, a search engine and a
 reader without scripts have. **Each copy embeds its own app** (`APP_URL`, §32.2): a release's copy
