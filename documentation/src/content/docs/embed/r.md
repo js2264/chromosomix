@@ -35,7 +35,7 @@ chromosomix(
 
 At the console it opens in the RStudio viewer; in a chunk of an R Markdown or Quarto document, it is drawn on the rendered HTML page.
 
-![An R Markdown page rendered to HTML, showing the chunk above and under it the widget: the viewer's bar and the yeast Micro-C map of IV:1.0–1.4 Mb on a log10 scale, with its ATAC-seq track and the start of its gene track.](../../../assets/screens/embed/r-markdown-widget.webp)
+![An R Markdown page rendered to HTML, showing the chunk above and under it the widget: the viewer's bar, on two lines at this width, and the yeast Micro-C map of IV:1.0–1.4 Mb on a log10 scale, with its ATAC-seq track under it.](../../../assets/screens/embed/r-markdown-widget.webp)
 
 | Argument | What it is |
 | --- | --- |

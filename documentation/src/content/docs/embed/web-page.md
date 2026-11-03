@@ -47,9 +47,15 @@ Above the view, one bar holds what a figure in somebody else's page owes its rea
 - next to it, the breadcrumb: the file, and where the reader is in it;
 - on the right, the buttons that open the **Annotations** and **Aesthetics** panels — each hidden while its panel has nothing to show — and **About this viewer**, which says what the viewer is, that nothing is uploaded, which build is in the frame, and where its source is.
 
+In a narrower frame the bar takes a second line rather than cutting anything off: the resolution and
+the contacts box move under the file and the place, together and with their labels, which is how an
+R Markdown page or a column of a lab's site shows it. Narrower still, the mark stands without the
+name beside it, and in a frame as narrow as a phone the contacts box is put away and the resolution
+kept; the full viewer, which the mark opens, has both.
+
 Notes about the file, and refusals, appear under the bar as they do in the app.
 
-![A plain web page with a heading, a paragraph and an embedded Micro-C map of yeast chromosome IV from 1.0 to 1.4 Mb; above the map the embed's one bar holds the chromosomix mark and name, the breadcrumb, the resolution and the buttons for the two panels and About, and the Annotations and Aesthetics panels are folded as strips on either edge.](../../../assets/screens/embed/web-page-iframe.webp)
+![A plain web page with a heading, a paragraph and an embedded Micro-C map of yeast chromosome IV from 1.0 to 1.4 Mb; above the map the embed's one bar holds the chromosomix mark and name, the breadcrumb and, on a second line under it, the resolution and the contacts box, with the buttons for the two panels and About on the right, and the Annotations and Aesthetics panels are folded as strips on either edge.](../../../assets/screens/embed/web-page-iframe.webp)
 
 ## Driving it from the page
 

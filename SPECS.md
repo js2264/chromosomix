@@ -11315,6 +11315,19 @@ copying it copies where the reader actually is.
 **The file and where they are in it**, next: the ordinary breadcrumb (§5.5), in the same slot the
 session fills in a window, with its own frame taken off so the row reads as one bar.
 
+**A narrower frame gives way in an order, and nothing is cut off.** The breadcrumb is one row that
+scrolls, and the end it scrolled out of sight was the resolution and the contacts box: at 1,040
+pixels the box's example was cut, at 910 — an R Markdown page's width — the row ended at `con`, at
+720 both were gone with nothing to say so, and at 480 the frame itself scrolled sideways. Inside the
+frame the viewport is the frame, so the bar answers media queries (`styles.css`): below 72rem the two
+controls of how the picture is drawn take a line of their own under the trail, together and with
+their labels — a zero-height break ordered between the trail and them, since plain wrapping takes the
+last item, the box, away from the resolution — and the trail names the file in full where it fits;
+below 50rem the brand keeps its mark and lets its name go; below 34rem, a phone's width, the contacts
+box is put away and the resolution kept, since it is the one of the two a reader looks at one figure
+with, and the full viewer the mark opens has both. The brand and the three buttons keep to the first
+line throughout (`test/unit/embed-bar-css.test.ts` holds the order).
+
 **The two panel toggles and About**, right. The toggles are the panels' *own* buttons — the same
 objects the header holds in a window, so there is one fold path and not a second written for frames —
 and each hides itself when its column has nothing to show. About is the same dialog the header opens,

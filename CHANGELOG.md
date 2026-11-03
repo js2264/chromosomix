@@ -39,6 +39,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **An embed's bar fits a narrower frame (§21.3).** The bar was one row that scrolled, so in a frame
+  of 1,040 pixels the contacts box's example was cut, at 910, the width of an R Markdown page, the row
+  ended at `con`, at 720 the resolution and the box were out of sight, and at 480 the frame scrolled
+  sideways. The two now take a line of their own under the file and the place, together and with
+  their labels, and the file is named in full where it fits; narrower, the brand keeps its mark
+  alone; and at a phone's width the contacts box is put away and the resolution kept.
 - **The pointer gives a derived cell's reading and the count behind it (§7.5).** On one map drawn as
   O/E, the line under the map read `O/E 1.95× · balanced 1.95`, the count being the ratio drawn
   again, over a cell whose balanced count was 0.000537; and the card beside the pointer gave
