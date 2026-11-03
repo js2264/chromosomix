@@ -48,7 +48,8 @@ Each cell's heading has a chain, lit while that map follows the others. Press it
 on its own, and press it again to put it back in step. A map off the chain reads a window of its own:
 draw a box on it with <kbd>⌥ Option</kbd> held (<kbd>Alt</kbd> on Windows and Linux), and that map
 alone reads the window, as finely as its resolution allows. The window shows as a pill in the map's
-heading, with **widen 3×** and a **×** that gives the map back to the deck.
+heading, with a zoom-out button that widens it three times about what is on screen, and a **×** that
+gives the map back to the deck's window.
 
 The sequence picker beside each map's name opens a whole sequence. On any map but the first,
 picking one takes that map off the chain onto the whole of that sequence, so a Micro-C map can stay
@@ -149,14 +150,14 @@ it travels in a saved workspace and in a shared link, for the maps the recipient
 
 ## Cells that are not maps
 
-- A **tracks cell** is a genome browser of the tab's own tracks, drawing only the tracks you put on it:
-  drop a track file or a **Tracks** card row on it, or pick it in a track's **location**. It follows
-  the maps and the maps follow it, but it has no locus box of its own — the one above the grid steers
-  it — and in it <kbd>-</kbd> and <kbd>+</kbd> step the deck's resolution. Its heading is a name you
-  can change, so two stacks read *G1* and *G2M*, and a bar under it sets its height. Its chain
-  unhooks it from the maps.
-- A **structure cell** draws a 3D model of the genome with a camera of its own; two cells of one model
-  are two views of it ([3D models beside the map](/browse/structures/)).
+- A **tracks cell** is a genome browser of the tab's own tracks, drawing only the tracks you put on
+  it: drop a track file or a **Tracks** card row on it, or pick it in a track's **location**. It
+  follows the maps and the maps follow it, but it has no locus box of its own — the one above the
+  grid steers it — and in it <kbd>-</kbd> and <kbd>+</kbd> step the deck's resolution. Its heading
+  is a name you can change, so two stacks read *G1* and *G2M*, and a bar under it sets its height.
+  Its chain unhooks it from the maps.
+- A **structure cell** draws a 3D model of the genome with a camera of its own; two cells of one
+  model are two views of it ([3D models beside the map](/browse/structures/)).
 
 Open one with **add a 3D structure** or **add a tracks cell**, in the row that **add a cell…** opens,
 or by dropping a track or a structure on an empty cell or a `+`. A tab showing the genome browser can
@@ -165,9 +166,9 @@ tab of its own.
 
 ## A deck in a link
 
-The deck is part of the address. `maps=` lists the cells beside the first map, in order, joined by `|`:
-a map's address, `tracks` for a tracks cell, `3d` for a structure cell, and `~` for an empty cell or
-for a file on your own disk, which no link can carry. The first map is `uri`
+The deck is part of the address. `maps=` lists the cells beside the first map, in order, joined by
+`|`: a map's address, `tracks` for a tracks cell, `3d` for a structure cell, and `~` for an empty
+cell or for a file on your own disk, which no link can carry. The first map is `uri`
 ([Link keys](/reference/links/)). A deck of files at public addresses opens the same for whoever
 follows the link; a local map arrives as an empty cell saying a map was here, so the count and the
 order of the cells survive.
@@ -180,8 +181,8 @@ with the tab, in a saved workspace and in a link from **Share this tab as a link
 
 ## What it costs
 
-Each map is read on its own, and the memory one map alone may use is shared out between the maps: in a
-deck of four, each map gets a quarter. A deck therefore never costs more than the single map it
+Each map is read on its own, and the memory one map alone may use is shared out between the maps:
+in a deck of four, each map gets a quarter. A deck therefore never costs more than the single map it
 replaced, and a window a map cannot afford at its own bins is drawn summed into coarser cells rather
 than refused. Empty cells, tracks cells and structure cells take no share. A deck holds at most 64
 cells, eight by eight; at the limit the `+` greys and says why.

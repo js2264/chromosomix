@@ -54,3 +54,19 @@ export const baseLinks =
         mdxJsxFlowElement: mdxElement,
         mdxJsxTextElement: mdxElement,
       })
+
+/**
+ * Every Markdown table in a box of its own that scrolls sideways when the
+ * table is wider than the column — a phone, a table of flags — so that the
+ * page never does. The table inside stays as wide as the column where it fits.
+ * The tables the components draw carry the same box already.
+ */
+export const scrollingTables = defineHastPlugin({
+  name: 'chromosomix-scrolling-tables',
+  element: {
+    filter: ['table'],
+    visit(node, ctx) {
+      ctx.wrapNode(node, { type: 'element', tagName: 'div', properties: { className: ['cx-table-wrap'] }, children: [] })
+    },
+  },
+})

@@ -1,6 +1,6 @@
 ---
 title: "When a file will not open"
-description: "The refusals and warnings chromosomix gives when a file cannot be opened or drawn, what each one means, and what to do about it."
+description: "When chromosomix cannot open or draw a file it says why, and this page explains each refusal and what to do about it."
 ---
 
 When chromosomix cannot open a file, it says which file, what state it is in and what to do.
@@ -89,12 +89,13 @@ reason in its tooltip:
 
 ## A contact map that cannot be read
 
-**Variable-bin file.** chromosomix reads maps whose bins are one fixed size. A fragment-level or
-contig-level cooler, a fragment-level HiC-Pro map, and the fragment resolutions of a `.hic` are not
-read. Bin the contacts at a fixed size — `cooler cload pairs` does it from the pairs — and open that.
+**Variable-bin file.** chromosomix reads maps whose bins are one fixed size. A cooler whose bins
+differ in size, such as a fragment-level one, and a fragment-level HiC-Pro map are refused, and the
+fragment resolutions of a `.hic` are not offered. Bin the contacts at a fixed size —
+`cooler cload pairs` does it from the pairs — and open that.
 
-**A version of `.hic` outside 7 to 9.** Versions before 7 predate the index chromosomix reads by.
-Convert the file with `hic2cool`, or run Juicer Tools `pre` again.
+**This is a version … .hic file.** chromosomix reads `.hic` versions 7, 8 and 9; versions before 7
+predate the index it reads by. Convert the file with `hic2cool`, or run Juicer Tools `pre` again.
 
 **This is half of a contact map.** A HiC-Pro `.matrix` opened without its `_abs.bed`. Drop the two
 together, connect the folder they are in and pick the matrix there, or name the bed with
@@ -124,9 +125,10 @@ the end must not come before the start, and neither may fall outside the sequenc
 across a sequence's end is allowed only on a sequence declared circular
 ([Reference sequences](/files/sequences/)).
 
-Two opens are questions rather than refusals: a remote `.scool`, which asks whether to download it
-whole or read it in small pieces, and a HiC-Pro matrix over 200 MB, which says what reading it whole
-will cost. Both are described on [Contact maps](/files/contact-maps/).
+Three opens are questions rather than refusals: a `.pairs` file, which asks how to bin it; a remote
+`.scool`, which asks whether to download it whole or read it in small pieces; and a HiC-Pro matrix
+over 200 MB, which says what reading it whole will cost. All three are described on
+[Contact maps](/files/contact-maps/).
 
 ## An index that is missing or unusable
 
@@ -159,7 +161,8 @@ instead.
   sequences the map holds ([Tracks and features](/files/tracks/)).
 - **A bigBed past a million intervals** is cut off at the millionth, and says so.
 - **A HiC-Pro matrix past about 250 million pixels** is not a browser tab's job: convert the two
-  files to a `.cool` with `cooler load -f coo`.
+  files to a `.cool` with `cooler load -f coo --one-based <abs.bed> <matrix> out.cool` (HiC-Pro
+  numbers its bins from 1), and open that.
 - **A whole download past about 2 GB** — a remote `.scool` you chose to download whole — is more
   than a tab can hold: download the file yourself and drop it, and it is read from your disk.
 
@@ -208,5 +211,6 @@ See [Web, desktop or one file](/start/where-to-run/).
 ## Something else
 
 **Something went wrong** is the heading for a failure that is none of the above. Try again, and if it
-persists, copy the message under the heading into a report — [Source code and contributing](/contributing/)
-says where to send it.
+persists, report it on [the project's GitHub issues](https://github.com/js2264/chromosomix/issues)
+with the message under the heading copied in. [Source code and contributing](/contributing/) has
+more on the project.

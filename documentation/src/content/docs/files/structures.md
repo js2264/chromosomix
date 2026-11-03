@@ -1,6 +1,6 @@
 ---
 title: "3D models"
-description: "The 3D chromatin model formats chromosomix opens — g3d text and binary, Dip-C's .3dg, bed3d and its own PDB — what each holds, and how a model is matched to the map."
+description: "chromosomix opens 3D chromatin models as g3d text or binary, Dip-C's .3dg, bed3d or its own PDB, and matches each to the map by sequence name and base pair."
 ---
 
 A 3D model is a file of beads, each a stretch of the genome with a place in space. Drop one beside a
@@ -25,11 +25,11 @@ hides the model's cell.
 | binary g3d | — | the container `g3dtools load` writes: a header and a compressed block per resolution |
 | PDB | atoms | a model chromosomix wrote, and only that ([below](#pdb-files)) |
 
-Each opens from your disk or by address, gzipped or not.
+Each opens from your disk or by address, and the text formats gzipped or not.
 
-**Haplotypes.** The last column is `m`, `p` or `s` — or `maternal`, `paternal` and `shared` — and a
-phased model has two chains for each chromosome, drawn as two homologues. Any other word there is a
-category of its own, as `g3dtools` allows.
+**Haplotypes.** The optional last column is `m`, `p` or `s` — or `maternal`, `paternal` and
+`shared` — and a phased model has two chains for each chromosome, drawn as two homologues. Any
+other word there is a category of its own, as `g3dtools` allows.
 
 **Bead width.** A g3d does not state how wide its beads are, so the width is taken as the commonest
 step between consecutive starts and printed on the row: a model meant to be at 10 kb that reads

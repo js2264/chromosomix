@@ -1,6 +1,6 @@
 ---
 title: "Tracks and features"
-description: "The 1D files chromosomix draws beside a contact map or in its genome browser — signal, intervals, gene models, variants, reads, methylation, charts, ideograms and splice junctions — and how each is read."
+description: "chromosomix draws signal, intervals, gene models, variants, reads, methylation, charts, ideograms and splice junctions beside a contact map or in its genome browser, each read from its own format."
 ---
 
 A track is anything laid along the genome. Drop one on an open map and it is drawn beside the map,
@@ -93,12 +93,12 @@ its type, `QUAL`, `filter`, and the `AF`, `DP` and `SVTYPE` of its `INFO`.
 
 A **BAM** opens as two rows, both read from the window on screen:
 
-- **depth**, under the file's name, is a value track like a bigWig, beside a map or in the browser.
-  A bin holds the mean depth: a deletion counts as covered and a skipped intron does not, secondary
-  and supplementary alignments are left out, and duplicates are kept unless you switch on **hide
-  duplicates**.
-- **reads**, as *name · reads*, is the pile of individual reads, drawn in the 1D browser only, where
-  a read has bases to be drawn along.
+- The depth row, under the file's name, is a value track like a bigWig, beside a map or in the
+  browser. A bin holds the mean depth: a deletion counts as covered and a skipped intron does not,
+  secondary and supplementary alignments are left out, and duplicates are kept unless you switch on
+  **hide duplicates**.
+- The reads row, *name · reads*, is the pile of individual reads, drawn in the 1D browser only,
+  where a read has bases to be drawn along.
 
 <!-- screenshot: a BAM's depth and reads rows in the 1D browser, with mismatches coloured and a read's card open -->
 

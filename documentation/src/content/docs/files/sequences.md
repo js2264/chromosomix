@@ -1,6 +1,6 @@
 ---
 title: "Reference sequences"
-description: "FASTA and .2bit reference sequences — how chromosomix reads them, how it matches chromosome names that differ between files, and how to declare a sequence circular."
+description: "chromosomix reads FASTA and .2bit reference sequences, matches chromosome names that differ between files, and lets you declare which sequences are circular."
 ---
 
 A reference sequence is the assembly itself: every sequence, its exact length, and its bases.
@@ -51,10 +51,9 @@ tracks get their sequence ([Data stores](/files/stores/)).
 
 A `.2bit` is read by range as an indexed FASTA is, with the same limits. Its gaps are read as runs
 of `N`, not as whatever bases the file packed under them; soft-masking is not shown, every base
-being drawn in capitals. Refused: a
-version-1 `.2bit`, the variant for files over 4 GB (convert it with `twoBitToFa` and
-`faToTwoBit`); a file declaring more than 100,000 sequences; and one that ends part-way through,
-which says it is truncated.
+being drawn in capitals. Refused: a version-1 `.2bit`, the variant for files over 4 GB (convert it
+with `twoBitToFa` and `faToTwoBit`); a file declaring more than 100,000 sequences; and one that ends
+part-way through, which says it is truncated.
 
 ## One genome, many names
 
@@ -81,8 +80,8 @@ The rules are built never to match two different sequences quietly:
 - **The whole list decides.** `X` is chromosome ten in a file that also counts `IX` and `XI`, as
   budding yeast does, and the sex chromosome in one whose numerals stop at `V`, as *C. elegans*'s
   do; a list that numbers chromosomes both ways — a host with a yeast spike-in — keeps `X` as the
-  sex chromosome. In a list of thousands of sequences, a bare number is an assembler's contig id
-  and matches only as spelled.
+  sex chromosome. A bare number in a list longer than any genome's set of chromosomes — an
+  assembler's contigs `1`, `2`, `3`… — is an id, and matches only as spelled.
 - **Not equated:** a chromosome arm and its chromosome (*Drosophila*'s `2L` and `2R` are not `2`);
   a patch or one parent's copy and the chromosome (`_random`, `_alt`, `_fix`, `_hap1`, `_maternal`);
   a linkage group (`LG`) and a chromosome number; and a name that follows no convention, which
@@ -122,7 +121,7 @@ unticked. A small circle read at a coarse resolution may be left for you to tick
 **What a tick changes.**
 
 - A window can be typed across the junction — `chrom:2,900,000-100,000` on a 3 Mb circle is the
-  200 kb either side of the origin — and is read round the circle.
+  200 kb that span it — and is read round the circle.
 - The map offers **ori**, which frames the whole circle with its origin in the middle, the two arms
   running out to the corners; and **arms**, which takes the observed-over-expected along both arms
   rather than along the diagonal alone. See [Reading a contact map](/browse/contact-maps/).

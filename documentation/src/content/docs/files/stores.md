@@ -1,6 +1,6 @@
 ---
 title: "Data stores"
-description: "What a data store is, the stores built into chromosomix, how to connect a UCSC track hub or a store of your own, and how to find and open files from the store drawer."
+description: "A data store is a catalogue of somebody's files that chromosomix opens in a drawer, whether one of its built-in stores, a UCSC track hub or a store a lab publishes."
 ---
 
 A data store is somebody's shelf of files — a consortium's, a lab's, a genome collection — with
@@ -164,9 +164,9 @@ A store's rows are read exactly as the files they name would be:
 - **A bucket key.** A store, or a file, on a private bucket is read with the key of the bucket you
   connected that covers it ([Opening files](/files/opening/)). The key is kept in this browser.
 - **Google.** A public Drive file opens with the site's own key, built in; nothing is asked of you.
-  A private Drive file or Cloud Storage object needs you to sign in to Google, and the sign-in lasts
-  as long as the tab — about an hour. When it runs out, the refusal that follows offers to **sign
-  in again**.
+  A private Drive file or Cloud Storage object needs you to sign in to Google. The sign-in lasts
+  about an hour, and never longer than the tab; when it runs out, the refusal that follows offers
+  to **sign in again**.
 - **Dropbox.** Signing in lets you browse your Dropbox; the sign-in, too, lives only in the tab.
 
 No server stands between you and the data, so chromosomix has no proxy to send a refused request

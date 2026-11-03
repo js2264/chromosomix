@@ -85,9 +85,10 @@ in view.
   up or down the stack.
 - Drag across a lane to move its ceiling, or scroll over it with <kbd>⌘</kbd> held (<kbd>Alt</kbd>
   on Windows and Linux).
-- Right-click a lane for **Copy this** (the lane alone, as a PNG), **Hide**, **Remove** and
-  **Duplicate**, a copy with every setting, ready to restyle. Right-clicked on a feature, the menu also
-  names the feature, copies its name or position, and zooms to frame it.
+- Right-click a lane for **Copy this** (the lane alone, as a PNG), **Colour…**, the **Range**
+  (**Auto**, or a fixed `0 – 10` and the like), **Hide**, **Remove** and **Duplicate**, a copy with
+  every setting, ready to restyle. Right-clicked on a feature, the menu starts with the feature:
+  **About it…**, **Zoom to it**, **Copy its name** and **Copy its position**.
 
 A bar under the last lane makes every track taller or shorter together, each in proportion: drag it,
 step it with the arrow keys, or double-click it to fill the window; <kbd>Esc</kbd> during a drag puts
@@ -232,7 +233,8 @@ draw the track on that edge. A lane dragged by its handle moves to another edge.
 
 Lanes above and below the map grow up the page, as in every genome browser. The stacks down the two
 sides are those turned over the diagonal: the left one grows away from the map and the right one
-towards it, and **Grow away from the map**, on a lane's right-click menu, turns a lane over. A file
+towards it. **Grow away from the map** (or **Grow towards the map**), on a lane's right-click menu,
+turns a lane over, and **Draw it** on the same menu moves it to another edge. A file
 of pairs — a BEDPE, interact or longrange file — and called loops are drawn on the map itself, as
 circles, and can be drawn as arcs along an edge instead.
 

@@ -1,6 +1,6 @@
 ---
 title: "Interactions"
-description: "Files of paired loci — BEDPE, interact, bigInteract and longrange — drawn as rings on the contact map, or as arcs beside it and in the 1D browser."
+description: "BEDPE, interact, bigInteract and longrange files of paired loci are drawn as rings on the contact map, or as arcs beside it and in the 1D browser."
 ---
 
 An interaction file lists pairs of places that touch: loop calls, ChIA-PET or HiChIP loops,
@@ -16,14 +16,15 @@ pick it from a folder, a store or an address ([Opening files](/files/opening/)).
 
 | Format | On disk | Read as |
 | --- | --- | --- |
-| BEDPE | `chrom1 start1 end1 chrom2 start2 end2`, then anything, 0-based | the six columns; also a table with a header row naming those six columns, such as a loop caller's `.tsv` |
+| BEDPE | `chrom1 start1 end1 chrom2 start2 end2` and optional columns after them, 0-based | the six columns; also a table with a header row naming those six columns, such as a loop caller's `.tsv` |
 | `interact` | UCSC's BED5+13: a span covering both ends, then each end's sequence, start, end, name and strand | ranked by its `value` |
 | `bigInteract` | the same rows in a bigBed | recognised by its schema |
 | `longrange`, `longTabix` | a BED3 and a fourth column, `chrom:start-end,score` | the score optional; mirrored lines folded into one |
 
-Each is recognised by its columns, and before any BED reading is tried, so a loop set saved as
-`.txt` or `.tsv` opens as pairs. A file named `.interact`, `.bigInteract`, `.longrange` or
-`.longTabix` is held to looser tests, since its name has already said what it is.
+Each is recognised by its columns, so a loop set saved as `.txt` or `.tsv` opens as pairs; an
+`interact` or `longrange` file is told apart before anything tries to read it as a BED. A file named
+`.interact`, `.bigInteract`, `.longrange` or `.longTabix` is held to looser tests, since its name
+has already said what it is.
 
 ## How each is read
 
@@ -44,8 +45,8 @@ that calls it `1` ([Reference sequences](/files/sequences/)).
 
 ## On the map
 
-A loaded set of pairs opens on the map, a ring round each pair. A ring is an outline beside the
-pixels it points at, never drawn over them, so the contacts it claims stay visible.
+A loaded set of pairs opens on the map, a ring round each pair. A ring is an outline round the
+pixel it points at, never drawn over it, so the contacts it claims stay visible.
 
 A set is drawn only on the maps it is placed on. Dropped on a map — on the rectangle in its middle
 that reads **on this map** while you drag — it is drawn there and nowhere else. In a deck, its row

@@ -1,6 +1,6 @@
 ---
 title: "Opening files"
-description: "Every way to open a file in chromosomix — from your disk, by its address, from a connected folder, Google Drive, Dropbox or a data store — and what is read, and when."
+description: "chromosomix opens files from your disk, from an address, from a connected folder, Google Drive or Dropbox, or from a data store, and reads each one only as far as you look."
 ---
 
 chromosomix reads your files where they are. A file on your disk is read in place by the page,

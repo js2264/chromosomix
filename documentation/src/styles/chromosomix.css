@@ -193,7 +193,12 @@ site-search kbd {
 }
 
 /* ---- the version notice ------------------------------------------------ */
+/* As wide as the column of text, whatever it says: Rapide sets a banner at the
+   end of its row, so a short one would otherwise sit off to the right. */
 .cx-version-notice {
+  box-sizing: border-box;
+  width: calc(100% - 2 * var(--sl-content-pad-x));
+  max-width: var(--sl-content-width);
   background: var(--cx-warn-soft);
   color: var(--cx-text);
   border: 1px solid color-mix(in srgb, var(--cx-warn) 45%, transparent);
@@ -287,10 +292,21 @@ site-search kbd {
   background: transparent;
   padding: 0;
 }
-/* A table wider than the column scrolls inside its own box, never the page. */
+/* A table wider than the column scrolls inside its own box, never the page
+   (`scrollingTables` puts every Markdown table in one). */
 .cx-table-wrap {
+  max-width: 100%;
   overflow-x: auto;
   border-radius: var(--cx-radius);
+}
+/* Rapide makes the page a grid when it has a banner, as every copy but the
+   root's does; a grid's column grows to its widest table or line of code
+   unless it may shrink, and the page then scrolls sideways on a phone. */
+[data-has-sidebar] main:has(.sl-banner) {
+  grid-template-columns: minmax(0, 1fr);
+}
+main > .content-panel {
+  min-width: 0;
 }
 .cx-table-wrap table {
   margin: 0;
@@ -563,4 +579,17 @@ main:has(.cx-landing) .content-panel:has(> .sl-container > h1#_top) {
   height: 1px;
   overflow: hidden;
   clip-path: inset(50%);
+}
+
+/* A key, drawn as a key: the app's hairline and resting surface, a heavier
+   lower edge, the mono face. */
+.sl-markdown-content kbd {
+  font: 500 0.78em / 1 var(--cx-mono);
+  padding: 0.16em 0.42em;
+  border: 1px solid var(--cx-border-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--cx-bg-raised);
+  color: var(--cx-text);
+  white-space: nowrap;
 }

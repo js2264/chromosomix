@@ -20,7 +20,7 @@ import { defineConfig } from 'astro/config'
 import starlightLinksValidator from 'starlight-links-validator'
 import starlightThemeRapide from 'starlight-theme-rapide'
 
-import { baseLinks } from './src/lib/base-links.mjs'
+import { baseLinks, scrollingTables } from './src/lib/base-links.mjs'
 import { sidebar } from './src/lib/sidebar.mjs'
 import { BASE, IS_DEV, REPOSITORY, SITE, VALIDATE_LINKS } from './src/lib/site.mjs'
 
@@ -58,7 +58,7 @@ export default defineConfig({
   site: SITE,
   base: BASE,
   trailingSlash: 'always',
-  markdown: { processor: satteri({ hastPlugins: [baseLinks] }) },
+  markdown: { processor: satteri({ hastPlugins: [baseLinks, scrollingTables] }) },
   integrations: [
     starlight({
       title: 'chromosomix',

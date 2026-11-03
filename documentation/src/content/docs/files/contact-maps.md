@@ -1,6 +1,6 @@
 ---
 title: "Contact maps"
-description: "The contact-map formats chromosomix opens — .cool, .mcool, .hic, .scool, HiC-Pro and .pairs — how each is read, and which balancing each offers."
+description: "chromosomix opens contact maps as .cool, .mcool, .hic and .scool files, HiC-Pro matrices and .pairs files, each read in its own way and balanced with the weights it carries."
 ---
 
 Every format below opens as a contact map. Drop one, open it by its address, or pick it from a
@@ -112,7 +112,12 @@ cost before the read starts (**read all …**), and the read can be cancelled.
 
 About 100 million pixels is comfortable, and past about 250 million it is not a browser tab's job.
 That covers any small genome at any resolution, and human down to about 250 kb. For a finer map,
-convert the same two files to a `.cool` once with `cooler load -f coo`, and open that.
+convert the same two files to a `.cool` once, and open that. HiC-Pro numbers its bins from 1, which
+cooler has to be told:
+
+```sh
+cooler load -f coo --one-based sample_10000_abs.bed sample_10000.matrix sample_10000.cool
+```
 
 Not read: fragment-level maps (`GENOME_FRAGMENT`), which are refused, and the `.biases` file. To see
 normalised counts, open the matrix in `iced/`.
