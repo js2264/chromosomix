@@ -254,7 +254,8 @@ automatic. Only a bare Tab walks: <kbd>Ctrl</kbd>+<kbd>Tab</kbd> is still your b
 
 - **A tab's name**: <kbd>F2</kbd> or a double-click to rename, <kbd>Enter</kbd> to keep the name,
   <kbd>Esc</kbd> to abandon it.
-- **Dialogs** close with <kbd>Esc</kbd>, and so does the [console](/browse/console/).
+- **Dialogs** close with <kbd>Esc</kbd>, and so do the Analysis drawer, the stores drawer and the
+  [console](/browse/console/).
 - **Placing marks**: <kbd>Esc</kbd> stops placing them, as **done** does, and <kbd>Shift</kbd> while
   drawing a rectangle locks it to the diagonal. See [Annotations and bookmarks](/browse/annotations/).
 - **A 3D model**: drag to turn, scroll to zoom, <kbd>Shift</kbd> and drag to move it,

@@ -49,9 +49,9 @@ tooltip names the resolution it will use.
 ## Where a file goes
 
 Every export opens your system's save dialog, in your Downloads folder, with a name ready to change,
-where the browser has one, as Chromium-based browsers do. Cancel it and nothing is written. Firefox and Safari have no such dialog, so the file is a plain download under the suggested
-name. The card then says which file it saved, and the [console](/browse/console/) records every file
-written.
+where the browser has one, as Chromium-based browsers do. Cancel it and nothing is written. Firefox
+and Safari have no such dialog, so the file is a plain download under the suggested name. The card
+then says which file it saved, and the [console](/browse/console/) records every file written.
 
 ## Several maps as one figure
 
@@ -146,8 +146,8 @@ A figure and a file each say where they came from:
   `chromosomix` command that repeats the run;
 - a TSV and a bedGraph open with that record as `#` lines, such as `# file:`, `# task:`,
   `# framing:` and one `# param` line per parameter. A called set's BED opens with one `#` line
-  naming the set, the view it was called from and when. A bigWig has nowhere to put the record, so save the
-  TSV beside it;
+  naming the set, the view it was called from and when. A bigWig has nowhere to put the record, so
+  save the TSV beside it;
 - a model's bed3d opens with a `#` line naming the model, what it was made from and when, and its PDB
   with a TITLE saying the same.
 
@@ -171,4 +171,4 @@ other tools read:
 
 The bigWig is written by chromosomix itself, with no `bedGraphToBigWig` step. A bedGraph has one
 line per bin that has a value, and leaves out the bins that have none rather than writing them as 0.
-Where each of these buttons is, is on [Annotations and bookmarks](/browse/annotations/).
+[Annotations and bookmarks](/browse/annotations/) says where each of these buttons is.

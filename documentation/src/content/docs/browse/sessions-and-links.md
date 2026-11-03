@@ -36,14 +36,14 @@ opens another file.
 chromosomix has no server, so everything it remembers is kept in your own browser, on this
 computer. It keeps which files were open and how you had them set up, never a copy of the data.
 
-| What | Kept until |
+| What | How long |
 | --- | --- |
-| The tabs of this window, and each tab's tracks, marks, bookmarks, filters and settings | you close the browser tab or window. A reload keeps them |
-| Every tab's whole setup, as a remembered workspace | it is kept up to date as you work and outlives closing the browser. The × on its offer deletes it |
-| Preferences: the theme, the columns' folds and widths, where cards are, the overlays, the figure caption switch | you forget everything |
-| The [console](/browse/console/)'s record | seven days, or 500 lines |
-| Permission to read files you opened from your disk, where the browser offers it | you forget everything |
-| Folders, stores and buckets you connected, and bucket keys | you disconnect them, or forget everything |
+| The tabs of this window, and each tab's tracks, marks, bookmarks, filters and settings | Until you close the browser tab or window. A reload keeps them |
+| Every tab's whole setup, as a remembered workspace | Kept up to date as you work, and outlives closing the browser. The × on its offer deletes it |
+| Preferences: the theme, the columns' folds and widths, where cards are, the overlays, the figure caption switch | Until you forget everything |
+| The [console](/browse/console/)'s record | Seven days, or 500 lines |
+| Permission to read files you opened from your disk, where the browser offers it | Until you forget everything |
+| Folders, stores and buckets you connected, and bucket keys | Until you disconnect them, or forget everything |
 
 ### After a reload
 
@@ -142,7 +142,7 @@ A link to a view carries no tracks, marks or bookmarks: those belong to the tab.
 
 ### Sharing a whole tab
 
-**Share this tab as a link**, the link button in the header or in the command palette, opens
+The link button in the header, **Share this tab as a link** (also in the command palette), opens
 **Share this tab**: a link that carries everything in the tab, which means the view, the tracks and
 their colours, the marks and the bookmarks. It is copied to the clipboard as the dialog opens, and
 the line under it says so. Its copy button copies it again.
@@ -177,9 +177,9 @@ release is also kept for good at its own address, `https://chromosomix.app/v/<ta
 `https://chromosomix.app/v/v0.13.0/`), which takes the same links. A link in a paper, a figure
 legend or a notebook that must draw the same picture in five years should name a release.
 
-On the website, **About this viewer** has **Run build**, which switches to another published build. The view in the address
-bar and the open tabs come with you; a file from your own disk has to be dropped again, as after any
-reload. A release also gives its permanent address there. A pinned build says so in a bar at the
-corner of the window, with a **newest build** button to go back.
+On the website, **About this viewer** has **Run build**, which switches to another published build.
+The view in the address bar and the open tabs come with you; a file from your own disk has to be
+dropped again, as after any reload. A release also gives its permanent address there. A pinned build
+says so in a bar at the corner of the window, with a **newest build** button to go back.
 
 To show a view inside another web page, see [Embedding in a web page](/embed/web-page/).

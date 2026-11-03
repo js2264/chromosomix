@@ -174,10 +174,10 @@ export all follow it.
   transform, range and colour map. It is a virtual 4C, read in space. A pair the map never counted
   is the bottom of the scale.
 
-Then **haplotype** for a phased model, any column the file carries (marked *from the file*), the
-values of each loaded track at every bead (marked *· track*), and each set of features (marked
-*· features*). A feature set whose features carry names, such as a compartment call's `A` and `B`,
-is offered a second time as *· names*, the names as categories. With **compare with** set,
+Then **haplotype** for a phased model, any further column of the model's own file (marked *from the
+file*), the values of each loaded track at every bead (marked *· track*), and each set of features
+(marked *· features*). A feature set whose features carry names, such as a compartment call's `A`
+and `B`, is offered a second time as *· names*, the names as categories. With **compare with** set,
 **displacement** colours each bead by how far it is from the same bead in the other model.
 
 A track's values at each bead are read the way its lane reads them, on the lane's own limits, so a
