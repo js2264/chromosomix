@@ -16,8 +16,9 @@
  * gives it, and every default is `dots()`'s.
  *
  * **The kernel is the one setting with no default.** cooltools recommends the
- * HiCCUPS kernels Rao et al. used for bins of 4 to 28 kb — `w = 7, p = 4` at
- * 5 kb, `5, 2` at 10 kb, `3, 1` at 25 kb — and refuses any other resolution
+ * HiCCUPS kernels Rao et al. used for bins of 4 to 28 kb — `w = 7, p = 4` from
+ * 4 kb (theirs at 5 kb), `5, 2` from 8 kb (at 10 kb), `3, 1` from 18 kb (at
+ * 25 kb), as `recommendedKernel` in `hiccupsShape.ts` cuts them — and refuses any other resolution
  * unless it is handed kernels; its Python API takes them. So the two
  * half-widths are seeded from that table where it has an answer, and where it
  * has none — a 1 kb yeast map, a 50 kb map — the boxes are empty and the run is

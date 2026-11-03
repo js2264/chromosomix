@@ -119,6 +119,7 @@ import { Session, reserveSessionIds, type SessionHost } from './Session'
 import { EmbedChannel, embedChannel } from './EmbedChannel'
 import { TabStrip } from './TabStrip'
 import { highestId, readSessions, writeSessions, type SessionSnapshot } from './sessions'
+import { DOCS_URL } from '../documentation/site'
 
 /** Where "source" points, from the about dialog and the header. */
 const REPO_URL = 'https://github.com/js2264/chromosomix'
@@ -570,6 +571,17 @@ export class App implements SessionHost {
     })
     source.appendChild(icon('github'))
 
+    // How to use it, beside how it is made: doc.chromosomix.app (§32), in a tab
+    // of its own, as the source is — a reader halfway through a figure does not
+    // want this one navigated away.
+    const docs = el('a', {
+      class: 'btn btn-icon',
+      href: DOCS_URL,
+      title: 'Documentation: the browser, the files it opens, every analysis and the command line',
+      attrs: { target: '_blank', rel: 'noopener noreferrer', 'aria-label': 'documentation' },
+    })
+    docs.appendChild(icon('book-open'))
+
     const head = el(
       'header',
       { class: 'app-head' },
@@ -668,11 +680,12 @@ export class App implements SessionHost {
         'div',
         { class: 'head-actions' },
         // About the window rather than the work in it: theme, shortcuts,
-        // source, about.
+        // documentation, source, about.
         this.theme.el,
         iconButton('keyboard', withKey('Keyboard shortcuts', KEYS.shortcuts), () =>
           this.openShortcutsDialog(),
         ),
+        docs,
         source,
         iconButton('info', 'About this viewer', () => this.openAboutDialog()),
       ),
@@ -2633,6 +2646,13 @@ export class App implements SessionHost {
             },
           ]),
       { id: 'about', group: 'Help', title: 'About this viewer', run: () => this.openAboutDialog() },
+      {
+        id: 'docs',
+        group: 'Help',
+        title: 'Documentation',
+        hint: 'doc.chromosomix.app: the browser, the files it opens, every analysis and the command line',
+        run: () => window.open(DOCS_URL, '_blank', 'noopener'),
+      },
       {
         id: 'source',
         group: 'Help',

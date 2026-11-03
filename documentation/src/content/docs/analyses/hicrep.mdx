@@ -1,0 +1,69 @@
+---
+title: "Reproducibility"
+description: "Score how well the contact maps on screen agree with HiCRep's stratum-adjusted correlation, pooled over every sequence, per sequence and by separation."
+---
+
+import TaskCommand from '@components/TaskCommand.astro'
+import TaskOutputs from '@components/TaskOutputs.astro'
+import TaskParameters from '@components/TaskParameters.astro'
+import TaskSummary from '@components/TaskSummary.astro'
+
+<TaskSummary id="hicrep" />
+
+Reproducibility answers *are these replicates* with a number: HiCRep's stratum-adjusted correlation coefficient, the SCC (Yang et al. 2017), for every pair of maps on screen. A plain Pearson correlation of two contact maps comes out near 0.9 even for two unrelated maps of the same assembly, because almost all of a map's variance is the one gradient every Hi-C map has, its fall with distance. HiCRep takes that away: it smooths both maps, correlates each diagonal — each separation — on its own, where the decay the two share is a constant and adds nothing, and pools the per-diagonal correlations with weights that count each diagonal by the number of positions it compares.
+
+Reach for it to check replicates before merging them, to see which libraries of a set agree, or to put a number on how far two conditions are apart.
+
+## Running it
+
+Put the maps side by side in one deck, at the same resolution: press **+** along the edge of the map to open a cell beside it and drop another file in (see [Maps side by side](/browse/deck/)). Until a second map is open the row waits, saying so. Then open the **Analysis** panel (<kbd>4</kbd>), choose **Reproducibility** in the **2D tasks** card, and press **run**. The other maps are the deck's, in the order they are on screen and under the names you gave them; there is no second file picker, and every pair of maps is compared.
+
+A stratum is a diagonal offset in bins, so only maps on the same grid can be compared: a map at another resolution is left out and named in the notes, and a run with no other map on its grid is refused before it starts. Open them at one resolution — an `.mcool` opens at any rung it carries. A sequence with the same name but a different length in two maps is left out, with a note.
+
+The drawer shows four things:
+
+- **Stratum-adjusted correlation**, the matrix of every pair of maps, on a fixed 0 to 1 scale so that two runs are the same picture where they are the same result;
+- **Pooled over every sequence**, a table of every pair, highest first;
+- **Per sequence**, every pair on every sequence, with the number of strata each pooled;
+- **Correlation by separation**, a line per pair of the correlation at each separation.
+
+![A deck of three chicken maps of chromosome 7 at 100 kb, DT40 cells in G2 and 5 and 60 minutes into mitosis, beside the Reproducibility drawer: the coefficient matrix over 36 sequences, G2 against 5 min at 0.62 and 60 min against G2 and 5 min at 0.15 and 0.22, the pooled and per-sequence tables, and the correlation by separation with a line per pair.](../../../assets/screens/analyses/hicrep-deck-drawer.webp)
+
+The same run from a shell, with each other map named after `--against`:
+
+<TaskCommand id="hicrep" />
+
+```sh
+chromosomix hicrep rep1.mcool::/resolutions/100000 --against rep2.mcool::/resolutions/100000 \
+  --against rep3.mcool::/resolutions/100000 --out results/
+```
+
+## Parameters
+
+Both settings are part of the answer, not only of the cost, so compare coefficients computed with the same settings at the same resolution. **Furthest separation compared** is how many strata count. A far stratum weighs about as much as a near one, so moving it moves the coefficient, as hicrep's `dBPMax` does: 5 Mb is 50 strata at 100 kb. **Smoothing half-width** is the 2D mean filter applied to both maps before they are correlated, 1 bin by default; at 0 the coefficient measures depth as much as structure, and two shallow replicates can score worse than two deep maps of different conditions.
+
+<TaskParameters id="hicrep" />
+
+## What it writes
+
+<TaskOutputs id="hicrep" />
+
+## Reading the result
+
+### The coefficient
+
+An SCC is a correlation, at most 1, and two maps that agree in structure score near it. The pooled coefficient weights every stratum of every sequence by the positions it compares, so a long chromosome counts for more than a short one, rather than every sequence counting alike. **Per sequence** shows where a pair's agreement comes from: one sequence far below the others is worth opening on the deck.
+
+### Correlation by separation
+
+The line that says more than the number. Two maps that agree near the diagonal and part further from it differ in depth; two that disagree at every separation are two experiments. Where a stratum compares nothing, the line has a gap rather than a zero.
+
+### What to watch for
+
+- **Balancing.** A map is read balanced where the file carries weights. HiCRep is defined over raw counts; on a balanced map a cell the balancer dropped leaves the smoothing window, and a position whose whole window was dropped leaves the comparison. In the app a balanced file is always read balanced; to compute hicrep's own number from the raw counts, run it with `--no-balance` on the command line.
+- **The resolution.** The same pair of files gives a different coefficient at another bin size, since both settings are counts of bins.
+- **Run on every map.** On a deck, every map's run computes the same pairs, so the **all maps** tab shows the comparison once rather than once per map.
+
+## Compared with hicrep
+
+The arithmetic is `hicrep` 0.2.6's, the Python implementation of the R package: the upper triangle, with the main diagonal and every diagonal past the furthest compared set to zero before smoothing; the window's mean over the cells it covers inside the sequence; each diagonal correlated over the positions where either map has a contact; and a diagonal with a constant side pooled as zero, with its weight. In [§ 7 of the validation](https://chromosomix.app/validation/#reproducibility-hicrep), on three chicken Hi-C maps at 100 kb, raw counts, 50 strata and a smoothing of 1, every pair on every chromosome long enough for those strata agrees with hicrep within the rounding of the four decimals the coefficient is written to.

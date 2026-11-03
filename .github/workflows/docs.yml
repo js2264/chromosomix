@@ -1,0 +1,240 @@
+name: Documentation
+
+# Builds the documentation site (documentation/, SPECS §32) and publishes it at
+# https://doc.chromosomix.app, one copy per release:
+#
+#   https://doc.chromosomix.app/            the latest release's copy
+#   https://doc.chromosomix.app/v0.20.0/    each release's copy, built from its tag, kept for ever
+#   https://doc.chromosomix.app/dev/        main's copy, rebuilt on every push
+#   https://doc.chromosomix.app/versions.json   what is published, which every copy's version menu reads
+#
+# **Where it is published.** The `gh-pages` branch of js2264/chromosomix-docs,
+# which GitHub Pages serves from the branch under the custom domain: this
+# repository's own Pages site is chromosomix.app, and a repository has one.
+# That branch is storage and site at once, one commit with no history — each
+# publish fetches its tip, changes what it changes (`scripts/docs-publish.mjs`),
+# and pushes a new parentless commit over it, so the repository holds the site
+# and not every version of every copy ever built. Anything lost can be built
+# again from its tag.
+#
+# **The key.** The workflow token cannot push to another repository, so the
+# branch is written with a deploy key: the public half on js2264/chromosomix-docs
+# with write access, the private half in this repository's `DOCS_DEPLOY_KEY`
+# secret (documentation/README.md). Without it, every copy is still built — and
+# kept as the run's artifact — and the run says it published nothing.
+#
+# **When.** A push to main builds main's copy. A `v*` tag builds that release's
+# copy twice — once for `/<tag>/`, once for the root, where its internal links
+# are all checked — and the root is replaced only when the tag is the highest
+# release, so a fix for an older line does not take the root from a newer one.
+# Run by hand with a tag to build a release's copy again; with none, on main,
+# to rebuild main's.
+#
+# **Two at once.** Each ref has a concurrency group of its own, so a release is
+# never the pending run a newer push to main displaces; and the push is a
+# `--force-with-lease` on the tip this run read, so two publishes cannot undo
+# each other: the second finds the branch moved, reads it again and repeats.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'A release tag to publish its copy again (e.g. v0.20.0); empty for main'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOCS_REPOSITORY: js2264/chromosomix-docs
+  DOCS_BRANCH: gh-pages
+
+jobs:
+  publish:
+    name: build and publish the documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Which copy
+        id: which
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ -n "$INPUT_TAG" ]; then tag="$INPUT_TAG"
+          elif [ "$REF_TYPE" = tag ]; then tag="$REF_NAME"
+          else tag=''
+          fi
+          if [ -n "$tag" ]; then
+            if ! printf '%s' "$tag" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+              echo "::notice title=No copy for this tag::$tag is not a release (v<major>.<minor>.<patch>), so it has no copy of the documentation."
+              echo "kind=none" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "kind=release" >> "$GITHUB_OUTPUT"
+            echo "ref=$tag" >> "$GITHUB_OUTPUT"
+            echo "version=$tag" >> "$GITHUB_OUTPUT"
+          elif [ "$REF_NAME" = main ]; then
+            echo "kind=dev" >> "$GITHUB_OUTPUT"
+            echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            echo "version=dev" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Not published::main's copy is published from main only, and $REF_NAME is not main. Name a tag to publish a release's copy."
+            echo "kind=none" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.which.outputs.kind != 'none'
+        with:
+          ref: ${{ steps.which.outputs.ref }}
+
+      # A release's copy is built from its tag, and a tag `npm version` made is
+      # the version package.json carries (release.yml refuses any other). A tag
+      # from before the documentation existed has nothing to build.
+      - name: The tag is a release with documentation
+        if: steps.which.outputs.kind == 'release'
+        env:
+          TAG: ${{ steps.which.outputs.version }}
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error title=Not a release tag::$TAG is on a commit whose package.json says $version."
+            exit 1
+          fi
+          if [ ! -f documentation/package.json ]; then
+            echo "::error title=No documentation at this tag::$TAG predates the documentation site, so it has no copy to build."
+            exit 1
+          fi
+
+      - name: Describe the commit
+        if: steps.which.outputs.kind != 'none'
+        id: commit
+        run: |
+          echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "date=$(git log -1 --format=%cI)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        if: steps.which.outputs.kind != 'none'
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            documentation/package-lock.json
+
+      # The site reads the app's source through Vite (scripts/docs-data.mjs);
+      # nothing an install script fetches, Electron's binary, is any of that.
+      - name: Install
+        if: steps.which.outputs.kind != 'none'
+        run: |
+          npm ci --ignore-scripts
+          npm ci --prefix documentation
+
+      - name: Build main's copy, for /dev/
+        if: steps.which.outputs.kind == 'dev'
+        env:
+          DOCS_VERSION: dev
+          DOCS_BASE: /dev/
+          DOCS_APP_URL: https://chromosomix.app/
+          DOCS_COMMIT: ${{ steps.commit.outputs.short }}
+        run: |
+          npm run docs:build
+          mv documentation/dist "$RUNNER_TEMP/docs-dev"
+
+      # The root copy first: it is built at the root, where every internal link
+      # is checked, so a release with a broken link stops here, before anything
+      # is published. The copy for its own path is the same pages.
+      - name: Build the release's copies, for the root and for its own path
+        if: steps.which.outputs.kind == 'release'
+        env:
+          DOCS_VERSION: ${{ steps.which.outputs.version }}
+          DOCS_COMMIT: ${{ steps.commit.outputs.short }}
+        run: |
+          set -euo pipefail
+          DOCS_BASE=/ DOCS_APP_URL=https://chromosomix.app/ npm run docs:build
+          mv documentation/dist "$RUNNER_TEMP/docs-root"
+          DOCS_BASE="/$DOCS_VERSION/" DOCS_APP_URL="https://chromosomix.app/v/$DOCS_VERSION/" npm run docs:build
+          mv documentation/dist "$RUNNER_TEMP/docs-release"
+
+      - name: Keep the built copies with the run
+        if: steps.which.outputs.kind != 'none'
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation-${{ steps.which.outputs.version }}
+          path: ${{ runner.temp }}/docs-*
+          retention-days: 14
+
+      # `secrets` cannot be read in an `if:`, so its presence travels in an output.
+      - name: Is there a key to publish with
+        if: steps.which.outputs.kind != 'none'
+        id: key
+        env:
+          KEY: ${{ secrets.DOCS_DEPLOY_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::notice title=Documentation built, not published::The DOCS_DEPLOY_KEY secret is not set (documentation/README.md), so the copies above are this run's artifact and nothing was pushed to ${DOCS_REPOSITORY}."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Checked out with the deploy key, which this checkout keeps configured
+      # for the pushes below; GitHub's host keys come with it.
+      - name: Check out the published site
+        if: steps.key.outputs.present == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.DOCS_REPOSITORY }}
+          ref: ${{ env.DOCS_BRANCH }}
+          path: published
+          fetch-depth: 1
+          ssh-key: ${{ secrets.DOCS_DEPLOY_KEY }}
+
+      - name: Publish
+        if: steps.key.outputs.present == 'true'
+        env:
+          KIND: ${{ steps.which.outputs.kind }}
+          VERSION: ${{ steps.which.outputs.version }}
+          COMMIT: ${{ steps.commit.outputs.short }}
+          DATE: ${{ steps.commit.outputs.date }}
+        run: |
+          set -euo pipefail
+          publisher="$GITHUB_WORKSPACE/scripts/docs-publish.mjs"
+          if [ "$KIND" = dev ]; then
+            args=(--dev "$RUNNER_TEMP/docs-dev")
+            message="dev: main's copy from $COMMIT"
+          else
+            args=(--release "$VERSION" "$RUNNER_TEMP/docs-release" --root "$RUNNER_TEMP/docs-root")
+            message="$VERSION: the release's copy, from $COMMIT"
+          fi
+          cd published
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for attempt in 1 2 3 4 5; do
+            git fetch --quiet --depth 1 origin "$DOCS_BRANCH"
+            tip=$(git rev-parse FETCH_HEAD)
+            git checkout --quiet --force --detach FETCH_HEAD
+            git clean -fdxq
+            node "$publisher" . "${args[@]}" --commit "$COMMIT" --date "$DATE"
+            git checkout --quiet --orphan "publish-$attempt"
+            git add -A
+            git commit --quiet -m "$message"
+            if git push --quiet --force-with-lease="$DOCS_BRANCH:$tip" origin "HEAD:refs/heads/$DOCS_BRANCH"; then
+              echo "Published: $message" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "$DOCS_BRANCH moved while this run was publishing; reading it again."
+            sleep $((attempt * 10))
+          done
+          echo "::error title=Not published::$DOCS_BRANCH kept moving; nothing was pushed."
+          exit 1

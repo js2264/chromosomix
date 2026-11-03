@@ -1,0 +1,34 @@
+---
+/**
+ * What a task writes, from the registry: each kind of result and the files
+ * the command line writes it as, and the files a run leaves as a whole.
+ */
+import { task } from '../lib/tasks.mjs'
+
+interface Props {
+  id: string
+}
+const entry = task(Astro.props.id)
+---
+
+<ul class="cx-outputs">
+  {
+    entry.outputs.map((output) => (
+      <li>
+        <strong>{output.kind}</strong>: {output.files}
+      </li>
+    ))
+  }
+  {
+    entry.documents.map((document) => (
+      <li>
+        <strong>{document.label}</strong>: <code>{`<file stem>.${document.file}`}</code>
+        {document.shellOnly && ' (written by the command line only)'}
+      </li>
+    ))
+  }
+</ul>
+<p class="cx-note">
+  On the command line every file goes into <code>--out</code> as <code>&lt;file stem&gt;.{entry.id}.&lt;output&gt;.&lt;ext&gt;</code>,
+  and each TSV opens with <code>#</code> lines naming the build, the file and every parameter that produced it.
+</p>

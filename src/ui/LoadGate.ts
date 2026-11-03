@@ -183,9 +183,9 @@ function askHicProLoad(error: ViewerError): Promise<ScoolReading> {
           el('p', {
             class: 'hint',
             text:
-              'A finer resolution than this is better converted: cooler load -f coo turns the ' +
-              'same two files into a .cool, which opens here in a few requests however large ' +
-              'it is.',
+              'A finer resolution than this is better converted: cooler load -f coo --one-based ' +
+              '(HiC-Pro numbers its bins from 1) turns the same two files into a .cool, which ' +
+              'opens here in a few requests however large it is.',
           }),
         )
       },

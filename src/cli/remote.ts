@@ -207,8 +207,8 @@ function servedWhole(error: unknown): error is ViewerError {
 /**
  * What opening an address by range was refused with, as this command says it.
  *
- * `RemoteRangeSource` speaks to a page — a bucket's CORS, *Open a file →
- * Private buckets* — and names the address whole, signature and all. A shell's
+ * `RemoteRangeSource` speaks to a page — a bucket's CORS, *connect a bucket…*
+ * — and names the address whole, signature and all. A shell's
  * sentence names the status, or the cause of a request that got no answer, and
  * the address as {@link shownOf} has it.
  */

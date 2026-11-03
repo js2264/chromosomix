@@ -989,7 +989,12 @@ the first window.
 
 **Beside a gene model the box takes a feature's name too** — or its accession — from the starred
 set, and a band's from any karyotype loaded (§8.22), listing up to ten matches under it as it is
-typed (`annotations/search.ts`, shared with the browser's box, §5.8). A hit is written with the
+typed (`annotations/search.ts`, shared with the browser's box, §5.8). **Too, not instead**, and the
+list is ordered by it. A sequence's name heads the list wherever genes begin with it (`findContig`'s
+ladder, so `chrIV` and `iv` read as `IV`), and Enter, which takes the first row, opens the sequence:
+on the yeast genome `IV` is chromosome IV before it is IVY1, which it used to open. A name or
+accession typed whole comes next, before the names it begins: `RAD5` above RAD59, RAD57, RAD55 and
+RAD54, where file order put it fifth. Then the prefixes, in the file's order. A hit is written with the
 feature's **own** span, which is the number a reader copies into a primer tool or a paper; picking
 one opens the feature with a quarter of its length either side, put in the box in the display form,
 so it lands on the gene and not a base before it. The row used to print the start of that padded
@@ -1141,7 +1146,9 @@ replaces the tab's file, and this adds to it.
 After back and forward in the same group, in this order, are the three that take the work out of the
 window: *Share this tab as a link*, *Save every tab as a file* and the console (§23). They used to
 sit on the far side of the command bar, away from the controls a reader's hand is already among; the
-far right is now only about the window itself — theme, shortcuts, source, about. Where the header
+far right is now only about the window itself — theme, shortcuts, documentation, source, about. The
+documentation is an open book linking to doc.chromosomix.app (§32) in a tab of its own, as the
+source does, and the palette has it as *Documentation* under Help, beside *Source on GitHub*. Where the header
 cannot hold the groups beside the command bar, it lets the bar's sentence shorten first; in a window
 narrower than 60rem the last group goes under the first, without its divider, rather than under the
 bar. An embed has no header and no buttons for these (§21).
@@ -2970,6 +2977,14 @@ not line up, and evaluating both onto a uniform grid smears every boundary that 
 so a sharp edge in a control becomes a ramp and the ratio against it spikes at exactly the position
 that mattered. A derived lane fetches nothing of its own — both operands go through the ordinary sample
 cache — so it inherits §8.4's pan-and-zoom-free rule from the two it is made of.
+
+**The pointer reads a derived cell twice**: the derived value — `O/E 1.95×`, `expected 0.0021`,
+`G1 / G2M 0.48×` — and under it the count it was read from, each file's own, from the block the
+worker sent rather than the value drawn, which *is* the derivation (`ui/MapReadout.ts`). The card
+beside the pointer gives the two on two lines, and the line under the map on one. One map drawn as
+O/E used to print the ratio it drew as the balanced count — `O/E 1.95× · balanced 1.95` over a cell
+whose balanced count was 0.000537 — and its card had no line for the reading at all. A map smoothed
+and otherwise as read gives the count as smoothed, which is what is drawn.
 
 **What a link carries.** The normalisation is a `score` and needs no key of its own, and so is the
 baseline drawn instead of divided by, plain or along the arms (`score=baseline`,
@@ -5770,6 +5785,7 @@ tooltip, rather than live and answering with a dialog (§8.5).
 | HiC-Pro matrix with no bin file | Name the bin file it looked for, and the three ways to supply one (§3.9) |
 | A `.pairs` with no bin size, a remote `.scool`, a HiC-Pro matrix over 200 MB | Not shown as refusals: each is a question the app asks — a bin size (§3.7), which cost to pay (§3.8), whether to read it whole (§3.9) — and the open is made again with the answer |
 | Remote: ranges unsupported / CORS blocked | Distinguish the two; name the host |
+| Remote: the host answers with an error status | Headed *The host would not give this file*, whichever code carries it — `bad-uri` from the `HEAD`, `remote-no-ranges` from the range probe a presigned link is opened with — naming the host and the status; a presigned link says it is one, since one refused has expired. The codes stay, because the Google sign-in offer reads a `401` or `403` under either (`googleRefusal`, `ui/ErrorView.ts`) and the command line downloads whole only after a success status (`servedWhole`, `cli/remote.ts`) |
 | Remote: the host compresses the file in transit | `remote-compressed`, naming the host and the encoding: ranges would address the compressed stream. Up to 128 MiB as sent, the object is downloaded whole instead and opens; above that it is refused as too much to download (`remote-too-large`). The desktop build asks for an uncompressed transfer and meets neither (§15) |
 | BAM with no index beside it | Not a refusal: read by search (§8.13), and the row's summary says so and names the index it did not find. Refused only where the file's length cannot be learnt, since a search needs one — and then name the `#index=<url>` convention |
 | BAM whose index cannot be read | Read by search, the summary naming the index that did not read and what went wrong with it |
@@ -11299,6 +11315,19 @@ copying it copies where the reader actually is.
 **The file and where they are in it**, next: the ordinary breadcrumb (§5.5), in the same slot the
 session fills in a window, with its own frame taken off so the row reads as one bar.
 
+**A narrower frame gives way in an order, and nothing is cut off.** The breadcrumb is one row that
+scrolls, and the end it scrolled out of sight was the resolution and the contacts box: at 1,040
+pixels the box's example was cut, at 910 — an R Markdown page's width — the row ended at `con`, at
+720 both were gone with nothing to say so, and at 480 the frame itself scrolled sideways. Inside the
+frame the viewport is the frame, so the bar answers media queries (`styles.css`): below 72rem the two
+controls of how the picture is drawn take a line of their own under the trail, together and with
+their labels — a zero-height break ordered between the trail and them, since plain wrapping takes the
+last item, the box, away from the resolution — and the trail names the file in full where it fits;
+below 50rem the brand keeps its mark and lets its name go; below 34rem, a phone's width, the contacts
+box is put away and the resolution kept, since it is the one of the two a reader looks at one figure
+with, and the full viewer the mark opens has both. The brand and the three buttons keep to the first
+line throughout (`test/unit/embed-bar-css.test.ts` holds the order).
+
 **The two panel toggles and About**, right. The toggles are the panels' *own* buttons — the same
 objects the header holds in a window, so there is one fold path and not a second written for frames —
 and each hides itself when its column has nothing to show. About is the same dialog the header opens,
@@ -12183,10 +12212,12 @@ reasons, which the row treats alike: a **build** that cannot be registered (the 
 registration its maintainer provides (§24.7), where the pane's disabled button and the sentence
 beside it name the one thing a reader can do — ask them — and the landing page would be offering a
 bold sign-in answered by an environment variable's name. And *this machine* is
-worded identically on both screens: Chromium and the desktop build hold a directory as a grant that
-survives a reload, while Firefox and Safari hand over a snapshot of the file list that does not
-(§20), so the button reads *choose a folder…* on the first and *choose a folder (this visit)…* on
-the second — wherever it is drawn, since both now run the same picker. The row's buttons are
+worded identically on both screens: an installed app — the site installed from Chrome or Edge, the
+desktop build, the single file — keeps a directory as a grant that survives a restart, while a
+browser tab holds it for the visit, as Firefox and Safari, which hand over a snapshot of the file
+list, hold theirs (§20.6, `directoriesKept`), so the button reads *choose a folder…* in the first and
+*choose a folder (this visit)…* in the second — wherever it is drawn, since both now run the same
+picker. The row's buttons are
 likewise drawn as the panes' sign-ins are (`markButton`), so one gesture looks the same wherever it
 is met.
 
@@ -13934,9 +13965,13 @@ is a pastis-PM2), the MDS start and its seed, the likelihood steps and evaluatio
 optimiser stopped, and the final `−log L` less `Σ log c!` — the number pastis' objective returns.
 Both end with Spearman's ρ between `1/d` in the model and the contacts — **against `raw/(bᵢbⱼ)`
 where a bias was divided out**, which is exactly the balanced value, since balancing is `raw·wᵢwⱼ`;
-ranking against the raw counts would score the model on coverage it was right to have removed. So it
-is the same number *Model versus map* would give the row on a balanced map, and a reader can see how
-well the model honours the map before believing it.
+ranking against the raw counts would score the model on coverage it was right to have removed. It
+reads what *Model versus map* reads on a balanced map, so the two reward the same thing, but it is
+not quite that number: this one ranks the pairs the map counted — neighbours included, a pair with
+no contact left out, at most 200,000 taken evenly (`fitOfCounts`) — where *Model versus map* ranks
+every pair at least two bins apart, a pair with no contact included, sequence by sequence and copy by
+copy (`structure/versusMap.ts`, `agreement`). Either way a reader can see how well the model honours
+the map before believing it.
 
 **Its result is a row**, not a picture: a `structure` row on the Structures card, of kind
 `structure`, payload a bed3d-shaped feature set with its `model`, id `analysis:reconstruct3d:
@@ -15608,7 +15643,7 @@ an offer to play the tutorial is one more thing to read.
 **In *About*, straight after what the viewer is**, on its first tab — the answer to the question a
 reader who has just read that asks next, and the one way in a newcomer finds without being told where
 to look. One sentence, and one filled button that says what it will do: *play the tutorial* for a
-reader who has not begun it, *resume at step 32 of 50* for one who left it, with a quiet *start over*
+reader who has not begun it, *resume at step 32 of 58* for one who left it, with a quiet *start over*
 beside it, and *play the tutorial again* for one who finished it. The palette has it too, as *Guided tutorial* under
 Help, its hint saying which of the three a press will do.
 
@@ -15760,7 +15795,7 @@ grey and keeps nothing from the app, so the window can be used to get back to wh
 tail pointing into the hole from that side; in the bottom-right corner, with no tail, when the hole is
 the whole picture; at the bottom, centred, when nothing is lit. It glides from one control to the next
 rather than jumping, and its words come in rather than being swapped, so the eye follows the card to
-the next thing to press. Along its top it says the part, *step n of 50*, and *skip tutorial*, over a
+the next thing to press. Along its top it says the part, *step n of 58*, and *skip tutorial*, over a
 bar cut into the tour's parts, each filled as far as the reader has got through it. Then an icon for
 what the step asks — press, type, choose, drag, or only look — beside its title; one or two sentences;
 and *back* and *next* (*skip step* while the step waits, *finish* on the last, and no *back* on the
@@ -15816,3 +15851,145 @@ starts the tutorial from the beginning.
 
 **It is in a chunk of its own**, fetched by the press that plays it: a reader who never asks for it
 pays for one `localStorage` read when the landing page or *About* is drawn.
+
+## 32. The documentation site
+
+**<https://doc.chromosomix.app>**, written for the people who use chromosomix — the browser, the files
+it opens, its analyses, the command line, the notebook widgets, and hosting data of their own — and
+for nobody else: this document, the glossary and the docblocks are where the code is explained, and
+the site has one page that points a contributor at them. Its source is `documentation/`, an Astro
+site built with Starlight and the Rapide theme. **Built**: the site, its theme, every guide, a page
+per task, the reference pages read from the app, the release notes, the versions and their menu, the
+workflow that publishes them (`.github/workflows/docs.yml`), the checks below, and the doors to it
+from the app: the header's book beside the shortcuts (§5.5), *Documentation* in the palette's Help,
+a line in *About* before the source, the last lines of the command's `--help`, and a badge in the
+README; and the pictures, every one of them the real app's (§32.4).
+
+**Every door opens the root**, `https://doc.chromosomix.app/` (`documentation/site.ts`), not the
+build's own version's copy: the live site is built from `main` on every push (§11) and carries the
+version of the release before it, whose copy may not exist — 0.19.0 has none — nor say what `main`
+now does. The root is the latest release's copy, or main's until the first release, and its menu is
+one choice away from every other.
+
+§31 is left unused: it was the telemetry's, which 0.19.0 removed, and the changelog still cites it by
+that number.
+
+### 32.1 Where it is served, and why from a second repository
+
+GitHub Pages serves a repository's site under one custom domain, and this repository's is
+`chromosomix.app`. So the site is served from **js2264/chromosomix-docs**, from its `gh-pages`
+branch, under `doc.chromosomix.app` — and only served from there. **The source stays here**, beside
+the code it describes, for the two reasons the reference pages give: each copy is built from its own
+tag's code, so its parameters are that release's; and a change to what the app does and the change to
+the page that says so are one pull request. The second repository holds built pages and nothing a
+person edits; its `main` carries a README saying so.
+
+### 32.2 One copy per release
+
+```
+https://doc.chromosomix.app/               the latest release's copy
+https://doc.chromosomix.app/v0.20.0/       each release's copy, built from its tag, kept for ever
+https://doc.chromosomix.app/dev/           main's copy, rebuilt on every push
+https://doc.chromosomix.app/versions.json  what is published: the releases, the latest, main
+```
+
+- **The latest release is the highest version**, not the newest publish: a fix for an older line —
+  v0.19.1 after v0.20.0 — gets its copy under `/v0.19.1/` and leaves the root to v0.20.0. The root is
+  that release built a second time for the root, so a link without a version is a link to the
+  current documentation and stays one.
+- **Every copy's header carries a menu of every copy**, filled in the browser from `versions.json`,
+  which every copy reads at the site's root: a copy built for 0.20 lists 0.27 once 0.27 is out, which
+  a list baked in at build time could not. A choice keeps the page the reader is on where the other
+  copy has it, and goes to that copy's home where it does not.
+- **A copy says when it is not the latest.** Main's says so as it is built; a release's asks the
+  manifest and, if a higher release has a copy, says which and links the same page there. The root
+  copy never does.
+- **Search engines are sent to the root.** Every page of every copy names the root copy's page as its
+  canonical address, and main's copy carries `noindex`; `robots.txt` lets crawlers in, since a
+  disallowed page's `noindex` and canonical link are never read.
+- **Each copy opens its own app.** A release's copy, at its own path, opens that release's pinned
+  build (`chromosomix.app/v/<tag>/`, kept for ever, §11); the root copy and main's open the live app.
+- **Pages are written as if the site were at the root** — `[Opening files](/files/opening/)` — and
+  the build puts every such link under its copy's path, so no page carries a version, and no link goes
+  stale when the next release takes the root.
+- **The first copy is the first release that carries the site.** A tag from before it has nothing to
+  build, and the workflow says so rather than building something else under its name.
+- **The branch is one commit.** Each publish reads the branch's tip, changes what it changes, and
+  pushes a parentless commit over it with a lease on that tip: the repository holds the site, not
+  every version of every copy, and two publishes at once cannot undo each other — the second finds
+  the branch moved, reads it again and repeats. Anything lost is rebuilt from its tag.
+
+### 32.3 What is written by hand, and what is read from the app
+
+The guides are written by hand, and so is the prose of every task's page. **Everything else is read
+from the app's source as the copy is built** (`scripts/docs-data.mjs`, through
+`src/documentation/data.ts`, the way `scripts/llms.mjs` reads `src/llms/`), and nothing it writes is
+committed:
+
+- **Each task's facts**: its method and paper and how it came out in the validation (§18.10), with a
+  link to that section of the published notebook; where it is in the Analysis panel; what it reads
+  and runs first; the shape of its command; every parameter — its name in the form, its flag, what it
+  takes, its default and what it does — and what it writes. These are the registry's (`analysis/
+  catalogue.ts`, `analysis/references.ts`), so a parameter added to a descriptor is on its page the
+  next time the site is built.
+- **The reference pages**: link keys, the command line's usage and exit statuses, the embed's
+  messages, and the formats, hosts and stores — the pages the site serves to language models (§11),
+  each made a page of the site, its links to the others pointed at their pages here.
+- **The release notes**, one page per section of `CHANGELOG.md`, and on main's copy the unreleased
+  changes too; kept out of the search, where they would outnumber the guides.
+- **The look's tokens** — the palettes, the two fonts, the radius — from `src/ui/styles.css`, and the
+  mark from `public/icon-192.png`.
+
+Three things fail the build, and the pull-request job that builds the site the way main's copy is
+built, but at the root (`test.yml`, *docs*): **a task with no page**, or a page under `analyses/`
+that is no task's (`test/unit/docs-data.test.ts` says so first, in the suite); **a link to a page or
+a heading that does not exist**, checked over every page at the root, which is also where each
+release's root copy is built, before anything is published; and **a page still marked
+`TODO(docs)`**. A token the theme reads that the stylesheet no longer declares, and a validation
+section a task cites that the notebook no longer has, stop the data script.
+
+**Dev features are absent from the site** as from every static text around the app (§29.5): the
+multi-genome format and everything that needs it, editing the reference, the dot plot, and the switch.
+
+### 32.4 The look
+
+Starlight's layout, search and navigation, and Rapide's spacing and type, under the app's own look,
+so that a reader moving between the two knows they are one product: the app's palettes and neutral
+greys with one blue, and colour for meaning only (§26.5) — an aside is the accent rather than
+Rapide's purple, and green is kept for a task the validation found identical or equivalent, the
+Analysis panel's `?` written out as a badge; the landing page's grain, a sub-pixel dot every 10 px,
+behind the page and never behind the header or the sidebar, which are solid as the app's furniture
+is; the header on the raised surface with a hairline under it, the mark and the name on one line, and
+the search box drawn as *Search commands…*; a group's heading in small accented capitals, as *NEW
+HERE?*; the home page laid out as the landing page, its tiles drawn as the store tiles; the app's
+6 px corners and its two shadows. Rapide keeps all of its rules in one cascade layer, and the site's
+stylesheet is outside it, so the app's look wins without a fight over specificity.
+
+**Every picture of the app is the app**, shot by a script per page under
+`documentation/scripts/screens/`: Playwright on the dev server, 1440 × 900 at twice the density, in
+the light theme, each step waiting for the app's own report that a picture is finished
+(`chromosomix:rendered`), on the demo bucket's data and the public stores', cropped and written as
+WebP under `src/assets/screens/<section>/` by `webp.mjs`. None shows a dev feature, and where a page's
+example needed data the bucket does not have, the alt text says what was used instead. **Each is shown
+at the size the app drew it**: half its width in pixels, or the column where that is narrower
+(`src/lib/screens.mjs`), so a card of a panel is not the app at twice its size beside a window at
+half of it; and each is framed as the app frames a card, its hairline, corner and resting shadow, so
+a white panel does not run into the page. The suite holds every picture to a WebP under 300 KB that
+a page uses (`test/unit/docs-screens.test.ts`). A page marks a picture still to shoot with
+`screenshot:` in a comment.
+
+**The page of ways to use it draws each way rather than shooting it** (`start/ways.mdx`,
+`WayArt.astro`): a browser, a window of its own, a laptop, a file, a tagged release, a server, a page
+with a frame, a notebook and a terminal, each around a contact map in the default colour map, warmest
+on its diagonal. The strokes and surfaces are the theme's tokens, so a drawing is redrawn with the
+theme, and a card falls to one column on a phone with its drawing beside its words.
+
+### 32.5 Publishing
+
+A push to `main` publishes main's copy. A `v*` tag that is the version `package.json` carries — the
+tag `npm version` makes, as `release.yml` requires — publishes that release's copy, built twice: for
+the root first, where every link is checked, then for its own path. Run by hand, it publishes a named
+release's copy again, or main's. The branch is written with a **deploy key**, since the workflow's
+token cannot push to another repository: the public half on js2264/chromosomix-docs with write
+access, the private half in this repository's `DOCS_DEPLOY_KEY` secret. **Without the key every copy
+is still built**, kept as the run's artifact, and the run says that it published nothing.

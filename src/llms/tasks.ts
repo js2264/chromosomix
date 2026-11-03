@@ -79,7 +79,7 @@ export function synopsisOf(task: CatalogueTask): string {
 }
 
 /** The cell that says what a parameter takes. */
-function takes(param: CatalogueParam): string {
+export function takes(param: CatalogueParam): string {
   const parts: string[] = []
   switch (param.kind) {
     case 'choice':
@@ -124,7 +124,7 @@ function takes(param: CatalogueParam): string {
   return parts.join('; ')
 }
 
-const KIND_WORD: Readonly<Record<string, string>> = {
+export const KIND_WORD: Readonly<Record<string, string>> = {
   featureSet: 'a feature set',
   pairSet: 'a set of pairs',
   track: 'a signal track',
@@ -132,7 +132,7 @@ const KIND_WORD: Readonly<Record<string, string>> = {
 }
 
 /** The cell that says what happens when the flag is left out. */
-function fallback(param: CatalogueParam): string {
+export function fallback(param: CatalogueParam): string {
   if (param.defaultNote !== undefined) return param.defaultNote
   if (param.default === undefined || param.default === null) return param.optional === true ? 'not used' : '—'
   if (param.default === '') return 'empty'
@@ -146,7 +146,7 @@ function lowered(text: string): string {
 }
 
 /** What a parameter is, in a sentence: its label, its hint, its choices' hints. */
-function about(param: CatalogueParam): string {
+export function about(param: CatalogueParam): string {
   const label = param.label.charAt(0).toUpperCase() + param.label.slice(1)
   const sentences = [param.hint === undefined ? `${label}.` : `${label}: ${param.hint}`]
   const explained = (param.choices ?? []).filter((choice) => choice.hint !== undefined || choice.label !== choice.value)

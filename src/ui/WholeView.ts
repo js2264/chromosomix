@@ -257,6 +257,12 @@ export interface WholeViewProps {
    */
   annotations?: AnnotationContext
   /**
+   * The sequence a name typed into the box means, as the file names it, or
+   * `null` (`findContig`'s ladder: `chr4`, `4` and `IV` alike). With genes on
+   * offer the box lists it first, so `IV` opens chromosome IV and not IVY1.
+   */
+  sequenceNamed?(text: string): string | null
+  /**
    * A second cooler in the lower-left triangle (`render/compare.ts`).
    *
    * Read with the same request, after the first — sequentially rather than in
@@ -409,7 +415,12 @@ export class WholeView {
       // reads what it shows back through `typedLocusToRegion`.
       ...(store === undefined
         ? {}
-        : { suggest: (text: string) => featureSuggestions(store, text, 'display') }),
+        : {
+            suggest: (text: string) => featureSuggestions(store, text, 'display'),
+            ...(props.sequenceNamed === undefined
+              ? {}
+              : { sequence: (text: string) => props.sequenceNamed?.(text) ?? null }),
+          }),
     })
     this.gate = el('div', { class: 'gate hidden' })
     this.progressBar.max = 1

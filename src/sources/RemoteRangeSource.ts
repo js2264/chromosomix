@@ -257,10 +257,8 @@ export class RemoteRangeSource implements ByteSource {
         'bad-uri',
         options.credential === undefined
           ? `${host} answered ${head.status} ${head.statusText} to a HEAD of ${url}; ` +
-            'the viewer needs a publicly readable object, or a bucket entry holding a key ' +
-            'for it (Open a file → Private buckets). A presigned link is read without this ' +
-            'probe and does not reach here, so a URL carrying a signature in its query that ' +
-            'fails has expired rather than been rejected for its method.'
+            'the viewer needs a publicly readable object, or a bucket connected with a key ' +
+            'for it (connect a bucket…, on the landing page or in the Files column).'
           : `${host} answered ${head.status} ${head.statusText} to a signed HEAD of ${url}. ` +
             'The key reached the bucket and was rejected: check that the region on the ' +
             'bucket entry matches the bucket, that the key is allowed `s3:GetObject` on ' +
@@ -347,8 +345,20 @@ export class RemoteRangeSource implements ByteSource {
         // viewer reads in slices and where to host the file, twice, an inch
         // apart. What the advice cannot know is which host, which URL and what
         // came back instead of a 206, so that is what stays here.
-        `${host} does not serve HTTP range requests: a “Range: bytes=0-0” request for ` +
-          `${url} returned ${probe.status}, not 206 Partial Content.`,
+        //
+        // An error status is not a host that ignores `Range`: it is the
+        // address's own answer — no file, or not for this page — and the page
+        // heads it as a refusal (`ErrorView`, `REFUSED_GUIDANCE`). It is where
+        // a presigned link arrives once it has expired, since it skips the
+        // `HEAD` above, so a signed address says so.
+        probe.status >= 400
+          ? `${host} answered ${probe.status} ${probe.statusText} to a request for the first ` +
+              `byte of ${url}` +
+              (isSignedUrl(url)
+                ? ': this is a presigned link, and a host refuses one once it has expired.'
+                : '.')
+          : `${host} does not serve HTTP range requests: a “Range: bytes=0-0” request for ` +
+              `${url} returned ${probe.status}, not 206 Partial Content.`,
         { url, host, status: probe.status },
       )
     }

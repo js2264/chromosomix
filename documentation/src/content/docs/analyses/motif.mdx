@@ -1,0 +1,57 @@
+---
+title: "Find a motif"
+description: "Find every place a motif occurs in a reference sequence, as a track of sites and a count of sites per bin."
+---
+
+import TaskCommand from '@components/TaskCommand.astro'
+import TaskOutputs from '@components/TaskOutputs.astro'
+import TaskParameters from '@components/TaskParameters.astro'
+import TaskSummary from '@components/TaskSummary.astro'
+
+<TaskSummary id="motif" />
+
+Where is `GGTCANNNTGACC`? **Find a motif** searches a loaded reference for a motif written in IUPAC letters, on both strands and with mismatches if you allow them, and lays out every match twice: as a set of sites you can browse, colour and export, and as a count of sites per bin beside the map. Reach for it for a binding-site consensus, a repeat, a telomere sequence or any short pattern. For where an enzyme cuts, use [Restriction sites](/analyses/restriction/), which knows where in its site each enzyme cuts.
+
+## Running it
+
+Load the reference as a FASTA or a `.2bit` (see [Reference sequences](/files/sequences/)), then open **Find a motif** on the **1D tasks** card of the **Analysis** panel; until a reference is loaded it is listed greyed. No contact map is needed, so it runs in [the genome browser](/browse/genome-browser/) as well as beside a map. Choose the **reference**, type the **motif**, and tick the **sequences** to search. With every sequence ticked the whole reference is searched, sequences the map does not have included.
+
+A motif the search cannot read is refused before you press **run**, with the reason beside the button. A reference held in memory is searched in one pass and reads nothing; a large FASTA opened with its index, or a `.2bit`, is read in pieces of 16 megabases, and the line beside **run** gives how much that is.
+
+When it has run, the sites are a track on the **Tracks** card, named after what was asked — `GATC (both strands)`, with `on chrI` added where fewer than all sequences were ticked — and the sites per bin are a second track, the same name with `density` after it, on the map's bins. With no contact map open there are no bins to count in, so only the sites are made, and the run says so. A note gives the number of sites found and on how many sequences.
+
+![The yeast Micro-C map of IV between 1.0 and 1.4 Mb with two new lanes along its left edge: the GATC sites on both strands, 1,277 of them in view, and the number of sites in each 1 kb bin.](../../../assets/screens/analyses/motif-gatc.webp)
+
+The same run from a shell:
+
+<TaskCommand id="motif" />
+
+## Parameters
+
+The motif is all most runs set. It is read in IUPAC — A C G T U and the ambiguity codes — with case and spaces ignored, so a motif copied from a paper as `GGTCA NNN TGACC` works as it is, and every overlapping match is counted. **both strands** is on because a motif occurs on both strands of the molecule whether you searched both or not; a palindrome is still reported once. **mismatches** is for a consensus with variants, such as a binding site; leave it at 0 for an exact string such as a restriction site or a telomere repeat. It never reaches the motif's length, and an `N` in the motif is always free.
+
+<TaskParameters id="motif" />
+
+## What it writes
+
+<TaskOutputs id="motif" />
+
+## Reading the result
+
+### The sites
+
+One interval per match, as long as the motif, named by the pattern and the strand. A palindrome searched on both strands is one site with no strand. Where mismatches were allowed, the score column holds how many positions each site differs by, which is the column to filter on to keep the exact matches.
+
+### The density
+
+The sites in each bin, as a count. A bin with no site is a zero, not a gap: a stretch without a site is a finding. At the scale of a chromosome the density is the picture to read, where the sites are a picket fence; zoomed in to a few kilobases, read the sites.
+
+### Things to watch for
+
+- An `N` in the reference never matches a base the motif names, so an assembly gap is not a run of matches.
+- One run reports at most 500,000 sites. A search that reaches the limit stops there and says so; narrow the motif, or tick fewer sequences.
+- Each search is its own pair of tracks. A second motif, or the same motif on other sequences, adds rows rather than replacing them; running the same search again updates its own.
+
+## Compared with seqkit
+
+In [the validation](https://chromosomix.app/validation/#motif-search-seqkit), the AP-1 site `TGACTCA` allowing one mismatch and the GATA site `WGATAR` searched exactly, along mouse chr19 on both strands, give the same sites on the same strands as `seqkit locate`. The one difference in how they are written: seqkit reports a site that reads the same on both strands twice, once per strand, where chromosomix reports it once.

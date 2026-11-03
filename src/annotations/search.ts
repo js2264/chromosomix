@@ -1,11 +1,15 @@
 /**
  * Finding a feature by name, for whichever box a reader typed into.
  *
- * A linear scan over the `name` arrays, capped at the first handful of hits. An
- * index would be the right answer for a million-feature set and is the wrong
- * answer here: the arrays are already in memory, the scan stops at ten matches,
- * and building an index on load would cost every reader who never types in this
- * box.
+ * Two linear scans over the `name` arrays. **A name typed whole comes first**:
+ * `RAD5` is the gene asked for, and a list in file order put RAD59, RAD57, RAD55
+ * and RAD54 above it, so Enter opened RAD59. That scan has to see the whole set
+ * — the one exact match may be the last feature in it — so it compares lengths
+ * before it compares letters, and a million-feature set costs it a millisecond.
+ * Then the prefixes, which stop at the first handful of hits. An index would be
+ * the right answer for a million-feature set and is the wrong answer here: the
+ * arrays are already in memory, and building an index on load would cost every
+ * reader who never types in this box.
  *
  * **One feature set, the starred one.** Searching every loaded annotation at
  * once answers "GAL4" with the same gene four times over, differing only in
@@ -76,7 +80,7 @@ export interface FeatureHit {
 
 /**
  * Features whose **name or accession** starts with `text`, from the set the star
- * picks.
+ * picks — those it names exactly first.
  *
  * Both, because genomics addresses one gene two ways and a reader uses whichever
  * the thing they are reading used. `LipL1` is what a paper calls it and
@@ -112,30 +116,50 @@ export function findFeatures(store: AnnotationStore, text: string, limit = MAX_H
   return hits
 }
 
-/** The genes of the search source whose name or accession starts with `query`. */
+/**
+ * The genes of the search source whose name or accession is `query`, then those
+ * whose name or accession starts with it, in the file's order within each.
+ */
 function geneHits(set: FeatureSet, label: string, query: string, limit: number, hits: FeatureHit[]): void {
+  const exact = new Set<number>()
+  for (let i = 0; i < set.length && exact.size < limit; i++) {
+    if (spells(set.name[i], query) || spells(set.id[i], query)) exact.add(i)
+  }
+  for (const i of exact) hits.push(geneHit(set, i, label))
   for (let i = 0; i < set.length && hits.length < limit; i++) {
+    if (exact.has(i)) continue
     const name = set.name[i]
     const id = set.id[i]
     const matched =
       (name !== '' && name.toLowerCase().startsWith(query)) ||
       (id !== '' && id.toLowerCase().startsWith(query))
-    if (!matched) continue
-    const pad = Math.max(FEATURE_MIN_PAD, Math.round((set.end[i] - set.start[i]) * FEATURE_PAD))
-    hits.push({
-      // A gene the file identifies but does not name is drawn as its accession
-      // already (`annotations/parse.ts`), so the two are equal rather than the
-      // name being empty — and a hit found by id alone still has something to
-      // print. `name` is what to read; `id` is what to read it *by*.
-      name: name !== '' ? name : id,
-      id: id === name ? '' : id,
-      contig: set.contigs[set.contig[i]],
-      start: Math.max(0, set.start[i] - pad),
-      end: set.end[i] + pad,
-      featureStart: set.start[i],
-      featureEnd: set.end[i],
-      source: label,
-    })
+    if (matched) hits.push(geneHit(set, i, label))
+  }
+}
+
+/** Whether `value` is `query` whatever its case: the length first, which rules out nearly every name for nothing. */
+function spells(value: string, query: string): boolean {
+  return value.length === query.length && value.toLowerCase() === query
+}
+
+/** Feature `i` as a hit: its own span, and the padded window that opens it. */
+function geneHit(set: FeatureSet, i: number, label: string): FeatureHit {
+  const name = set.name[i]
+  const id = set.id[i]
+  const pad = Math.max(FEATURE_MIN_PAD, Math.round((set.end[i] - set.start[i]) * FEATURE_PAD))
+  return {
+    // A gene the file identifies but does not name is drawn as its accession
+    // already (`annotations/parse.ts`), so the two are equal rather than the
+    // name being empty — and a hit found by id alone still has something to
+    // print. `name` is what to read; `id` is what to read it *by*.
+    name: name !== '' ? name : id,
+    id: id === name ? '' : id,
+    contig: set.contigs[set.contig[i]],
+    start: Math.max(0, set.start[i] - pad),
+    end: set.end[i] + pad,
+    featureStart: set.start[i],
+    featureEnd: set.end[i],
+    source: label,
   }
 }
 

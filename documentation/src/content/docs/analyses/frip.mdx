@@ -1,0 +1,51 @@
+---
+title: "Fraction of signal in features"
+description: "Measure the share of each track’s signal that lies inside a feature set, beside the share of the genome the set covers."
+---
+
+import TaskCommand from '@components/TaskCommand.astro'
+import TaskOutputs from '@components/TaskOutputs.astro'
+import TaskParameters from '@components/TaskParameters.astro'
+import TaskSummary from '@components/TaskSummary.astro'
+
+<TaskSummary id="frip" />
+
+FRiP, the fraction of reads in peaks, is the oldest signal-to-noise number of ChIP-seq. **Fraction of signal in features** takes it of whatever is loaded: for each track, the share of everything it carries that lies inside a chosen set of intervals. Beside it is the share of the genome the set covers, and the ratio of the two — the enrichment — is the column to read. Reach for it to check a library against its peaks, to rank several tracks by how much they prefer a set, or to ask how much of a signal sits in domains, promoters or any other set.
+
+## Running it
+
+Load one or more tracks and a feature set — a peak set, a BED of domains, a GTF (see [Tracks and features](/files/tracks/)) — then open **Fraction of signal in features** on the **1D tasks** card of the **Analysis** panel, tick the **tracks** and choose the **features**. No contact map is needed.
+
+The drawer shows one table, a row per track, the strongest enrichment first, and with **score every feature** a second table with a row per feature.
+
+![The drawer of Fraction of signal in features for two ATAC-seq replicates over the 2,439 merged peaks of the first: FRiPs of 0.5327 and 0.4816 in a set covering 0.1487 of the genome, enrichments of 3.58 and 3.24.](../../../assets/screens/analyses/frip-atac-replicates.webp)
+
+The same run from a shell:
+
+<TaskCommand id="frip" />
+
+## Parameters
+
+**read features at** is how finely the features are read. At 0, the default, it reads about 50 samples across a feature of the set's median width, which is fine enough at the edges, where it matters. **score every feature** adds the table of every feature's signal, mean and share of the track's total, which shows whether the FRiP belongs to the set or to a handful of its features.
+
+<TaskParameters id="frip" />
+
+## What it writes
+
+<TaskOutputs id="frip" />
+
+## Reading the result
+
+- **FRiP** is the signal inside the set over the signal everywhere. Signal is an area — value × bases — so a wide feature weighs by its width, as in every published FRiP, rather than a 200 bp peak and a 20 kb domain counting alike.
+- **Genome covered** is the set's bases over the assembly's.
+- **Enrichment** is FRiP over genome covered. 1 is a track with no preference for the set: 30 % of the signal in 30 % of the genome. The same 30 % in half a per cent of the genome is a sixtyfold enrichment.
+- **Signal inside** and **Signal total** are the two areas.
+- **Set with data** is the share of the set's bases the track has any value for. A low one means the FRiP is a statement about a small part of the set.
+
+The features are merged before they are measured, so a base two of them share — the transcripts of one gene in a GTF — counts once rather than once per row, which would push the FRiP, and the genome covered, past what the set really holds. The table's title says how many merged features there were.
+
+The features are read finely and the whole track coarsely, from a zoom level where the file has one fine enough: a sum weighted by span gives the same area at any resolution except at a boundary, and a set of peaks is nothing but boundaries while a whole sequence has almost none. The note gives both resolutions.
+
+## Compared with ENCODE's FRiP
+
+This is FRiP as the ENCODE guidelines define it (Landt et al. 2012), taken of a track's signal rather than of reads. In [the validation](https://chromosomix.app/validation/#fraction-of-signal-in-features-pybigwig), two mouse ATAC-seq replicates on chr19 over two sets — their peaks, and promoters that overlap one another — give every feature's signal and mean, and every FRiP, share covered and enrichment, as pyBigWig's exact sums and NumPy give them, to the places they are written. Reading the whole track from a zoom level moves a FRiP by less than the last of its four decimals.

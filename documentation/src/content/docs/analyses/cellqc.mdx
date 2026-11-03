@@ -1,0 +1,76 @@
+---
+title: "Per-cell contact QC"
+description: "What each cell’s contacts look like, and where in the cycle that puts it."
+---
+
+import TaskCommand from '@components/TaskCommand.astro'
+import TaskOutputs from '@components/TaskOutputs.astro'
+import TaskParameters from '@components/TaskParameters.astro'
+import TaskSummary from '@components/TaskSummary.astro'
+
+<TaskSummary id="cellqc" />
+
+The cells of a single-cell Hi-C library differ less by depth than by where in the cell cycle they were
+fixed, and a pseudo-bulk summed across phases smears the very structure you opened the file to see. The
+**Cells** table can rank cells only by what the file records about them, such as their stored pixels
+and contacts, which describes the sequencing more than the contacts. This task measures each cell of an
+`.scool` from its own contacts instead: its cis and trans shares, and the share of its contacts in four
+bands of separation, Nagano et al. (2017)'s, whose near band against its mitotic band draws the cell
+cycle as a horseshoe. Reach for it before you tick the cells to sum.
+
+## Running it
+
+Open an `.scool`; it opens on its **Cells** table. **Per-cell contact QC** is in the **2D tasks** card
+of the **Analysis** panel, and only for such a file. Leave **cells** on **every cell in the file**, since
+this is the answer that helps you choose, or pick **the ticked ones only**, and press **run**. The run
+is one pass over each cell's own pixels: the same reads that summing those cells costs.
+
+The drawer shows a table with a row per cell and the phasing scatter, a point per cell. The cells'
+shares also arrive as columns of the **Cells** table, where they sort like any other column: sort by the
+near or the mitotic share, tick a run of cells, and sum them.
+
+![The Cells table of an .scool of 3,882 single mouse cells at 1 Mb, its new share columns sorted by the mitotic band, 2 Mb–12 Mb, from 0.423 down, beside the drawer on the Cell-cycle phasing scatter: a point per cell, near share across and mitotic share up, most in a dense cloud below about 0.12 and an arc of cells rising out of it to above 0.4.](../../../assets/screens/analyses/cellqc-scatter-cells.webp)
+
+The same run from a shell:
+
+<TaskCommand id="cellqc" />
+
+## Parameters
+
+The three band edges are in base pairs, unlike every other setting about the matrix, because they are
+the paper's numbers and the axes of its figure: the near band runs from 23 kb to 2 Mb, the mitotic band
+from 2 Mb to 12 Mb, and everything beyond is the far band. They are sized for mouse; on a smaller genome,
+set them to its scale.
+
+<TaskParameters id="cellqc" />
+
+## What it writes
+
+<TaskOutputs id="cellqc" />
+
+## Reading the result
+
+### The table
+
+A row per cell: its name, whether it is **Ticked**, its **Contacts** and **Stored pixels**, its **Cis**
+and **Trans** shares, and the share of its contacts in each band, headed by the band's edges — `< 23 kb`,
+`23 kb–2 Mb`, `2 Mb–12 Mb` and `> 12 Mb` at the defaults. Every share is of all the cell's contacts, trans
+included, so that a cell with an unusual trans share is not made to look ordinary. A contact within one
+bin has a separation of 0 and counts in the first band, among the self-ligation and unligated ends that
+band is there to keep apart from structure. A cell with no contact at all has blank shares, not zeros.
+
+### The phasing scatter
+
+Each point is a cell, its near share across and its mitotic share up. Across a population the cells
+fall on a horseshoe, and where a cell lies along it is where it was in the cycle: cells just after
+mitosis carry a large mitotic band and little near contact, cells in G1 the reverse, and cells in S and
+G2 lie between. The task does not assign a phase or cluster the cells: where to cut the horseshoe is a
+choice, and it is yours, made by ticking cells in the **Cells** table.
+
+## Things to know
+
+- **Small genomes.** On an assembly whose longest sequence lies inside the near band — a yeast, for
+  one — the mitotic and far bands are empty by construction and the scatter says nothing. The run's note
+  says so; set the band edges to that assembly's scale.
+- **Not yet validated.** The bands are Nagano et al.'s, but the [validation](/analyses/validation/) does
+  not yet compare this task with a reference, so its badge is not green.

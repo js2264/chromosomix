@@ -850,6 +850,29 @@ That stamp is also the *anchor* for the version dropdown directly beneath it: th
 how the picker knows which of the published builds is the one currently running. See
 [Every push stays reachable](#every-push-stays-reachable).
 
+## The documentation site, which is deployed elsewhere
+
+<https://doc.chromosomix.app> is not part of this site and nothing above publishes it. Its source is
+`documentation/`, and `.github/workflows/docs.yml` builds it — main's copy on every push, a release's
+on its tag — and writes it into the `gh-pages` branch of **js2264/chromosomix-docs**, which GitHub
+Pages serves under its own domain: a repository has one Pages domain, and this one's is
+`chromosomix.app`. The contract is SPECS §32, and `documentation/README.md` says how to build it.
+
+It needs three things set up once, outside the repository:
+
+1. **The domain verified** for the account that owns the repositories (*Settings → Pages → Add a
+   domain*, `chromosomix.app`), so that no other account's Pages site can claim one of its
+   subdomains while `doc` points at GitHub.
+2. **A deploy key**: an SSH key pair with no passphrase, the public half on js2264/chromosomix-docs
+   (*Settings → Deploy keys*, with **Allow write access**), the private half in this repository's
+   `DOCS_DEPLOY_KEY` secret. Until it is set the workflow builds every copy, keeps them as the run's
+   artifact, and says it published nothing.
+3. **Pages on js2264/chromosomix-docs** from the `gh-pages` branch, its root, with the custom domain
+   `doc.chromosomix.app` (the branch's `CNAME` says the same, and every publish writes it), a `CNAME`
+   record `doc` → `js2264.github.io.` at the DNS host, and **Enforce HTTPS** once the certificate is
+   issued. Every `.app` domain is HTTPS-only in browsers, so until then the address shows a
+   certificate error.
+
 ## What CI does not do
 
 The deploy workflow typechecks (`npm run build` runs `tsc --noEmit` first) and builds. It does
