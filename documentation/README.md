@@ -59,7 +59,7 @@ task runs).
 **What is true.** Every sentence must be something the app does in this version. The sources are
 SPECS.md (the contract: a section marked *built* is what the app does), the README, `docs/*.md`, and
 the code for the exact words on screen (`src/ui/`). Name a control as the app labels it, in **bold**:
-**Load files**, **Analysis**, **Run**. If a detail cannot be checked — a shortcut, a default, a limit
+**Load files**, **Analysis**, **run**. If a detail cannot be checked — a shortcut, a default, a limit
 — leave it out rather than guess. **Dev features are not documented at all**, not even by name
 (SPECS §29): the multi-genome format (`.metacool`, `.mmetacool`) with its genomes table, genome views
 and metagenome tasks; editing the reference (§27); the dot plot (§28); the DNA Bacterial Zoo store;
