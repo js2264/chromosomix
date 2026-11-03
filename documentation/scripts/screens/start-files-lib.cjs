@@ -74,15 +74,19 @@ async function newWindow(browser, out, { width = 1440, height = 900, scale = 2, 
   })
   if (published) {
     const keys = await publishedKeys(context)
-    // In dev, the build's defines reach the page as globals set by this module.
-    await context.route(`${BASE}/@vite/env`, async (route) => {
+    if (Object.values(keys).some((value) => value === '')) throw new Error(`the published page's keys were not found: ${JSON.stringify(keys)}`)
+    // In dev, the build's defines reach the page as globals set by Vite's
+    // client env module, under either of the names Vite has served it as.
+    const env = async (route) => {
       const response = await route.fetch()
       let body = await response.text()
       for (const [key, value] of Object.entries(keys)) {
         body = body.replace(`"${key}": ""`, `"${key}": ${JSON.stringify(value)}`)
       }
       await route.fulfill({ response, body })
-    })
+    }
+    await context.route(`${BASE}/@vite/env`, env)
+    await context.route(`${BASE}/node_modules/vite/dist/client/env.mjs*`, env)
   }
   // No save dialog: an export arrives as a plain download.
   await context.addInitScript(() => {
@@ -131,7 +135,21 @@ async function newWindow(browser, out, { width = 1440, height = 900, scale = 2, 
         count,
         { timeout: ms },
       )
-      .catch(() => console.log('  tracks still reading'))
+      .catch(async () => {
+        const rows = await page.$$eval('.annotation-card .ann-row', (all) =>
+          all.map((row) => row.textContent?.replace(/\s+/g, ' ').trim().slice(0, 160)),
+        )
+        console.log(`  tracks still reading (${rows.length} rows, ${count} awaited):\n    ${rows.join('\n    ')}`)
+      })
+  }
+  /** A row of the Tracks card, by the name in its box. */
+  const row = async (test) => {
+    const names = await page.$$eval('.annotation-card .ann-row', (all) =>
+      all.map((r) => r.querySelector('input.ann-name')?.value ?? ''),
+    )
+    const at = names.findIndex(test)
+    if (at < 0) throw new Error(`no such row among: ${names.join(', ')}`)
+    return page.locator('.annotation-card .ann-row').nth(at)
   }
   /** The first *visible* button whose title starts with `title`. */
   const fold = async (title) => {
@@ -168,13 +186,14 @@ async function newWindow(browser, out, { width = 1440, height = 900, scale = 2, 
       { selector, urls, text },
     )
   }
-  const shot = async (name, options = {}) => {
-    await page.mouse.move(2, 450).catch(() => {})
+  /** A PNG of the window, or of `options.clip`; the pointer is moved off the picture unless `keepPointer`. */
+  const shot = async (name, options = {}, { keepPointer = false } = {}) => {
+    if (!keepPointer) await page.mouse.move(2, 450).catch(() => {})
     await sleep(300)
     await page.screenshot({ path: join(out, `${name}.png`), ...options })
     console.log(`shot ${name}`)
   }
-  return { context, page, errors, quiet, opened, tracksRead, fold, drop, shot }
+  return { context, page, errors, quiet, opened, tracksRead, row, fold, drop, shot }
 }
 
 /** The box of an element, in CSS pixels, or `null`. */
@@ -184,4 +203,25 @@ const box = (page, selector) =>
     return r === undefined ? null : { x: r.left, y: r.top, width: r.width, height: r.height }
   }, selector)
 
-module.exports = { BASE, sleep, launch, newWindow, box }
+/**
+ * The smallest box holding the first visible match of every selector, grown by
+ * `pad` and kept inside the window: what a picture of those parts is clipped to.
+ */
+const around = (page, selectors, pad = 12) =>
+  page.evaluate(
+    ({ selectors, pad }) => {
+      const boxes = selectors.map((s) => {
+        const node = [...document.querySelectorAll(s)].find((n) => n.getClientRects().length > 0)
+        if (node === undefined) throw new Error(`nothing to frame: ${s}`)
+        return node.getBoundingClientRect()
+      })
+      const left = Math.max(0, Math.min(...boxes.map((b) => b.left)) - pad)
+      const top = Math.max(0, Math.min(...boxes.map((b) => b.top)) - pad)
+      const right = Math.min(window.innerWidth, Math.max(...boxes.map((b) => b.right)) + pad)
+      const bottom = Math.min(window.innerHeight, Math.max(...boxes.map((b) => b.bottom)) + pad)
+      return { x: Math.round(left), y: Math.round(top), width: Math.round(right - left), height: Math.round(bottom - top) }
+    },
+    { selectors, pad },
+  )
+
+module.exports = { BASE, sleep, launch, newWindow, box, around }

@@ -11,7 +11,7 @@ from the map and measuring one against it are analyses:
 [Model from the map](/analyses/reconstruct3d/), [Model versus map](/analyses/structuremap/) and
 [Spatial tracks](/analyses/spatialtracks/).
 
-<!-- screenshot: a yeast Micro-C map with its 3D model in a cell beside it, one bead hovered and the dashed lines it puts on the map -->
+![A Micro-C map of the whole of yeast chromosome IV with its 3D model in a cell beside it, chromosome IV drawn in its colour and the other chromosomes ghosted; a bead at 1.105 Mb is hovered, the map draws a dashed line down and across at its place, and the status bar names the bead.](../../../assets/screens/browse/structures-bead-hover.webp)
 
 ## Opening a model
 

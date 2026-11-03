@@ -44,7 +44,7 @@ Two keys reach the card from anywhere:
 The copy button always copies a PNG, whatever the format beside it says. While PDF is chosen, its
 tooltip names the resolution it will use.
 
-<!-- screenshot: the Export card of the Aesthetics panel, with PDF (vector) chosen and the caption switch on -->
+![The Export card at the top of the Aesthetics panel, with PDF (vector) chosen, no resolution beside it, the save and copy buttons, and the caption switch on.](../../../assets/screens/browse/figures-export-card.webp)
 
 ## Where a file goes
 

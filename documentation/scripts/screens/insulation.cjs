@@ -1,12 +1,13 @@
 /**
- * Diamond insulation on the yeast Micro-C demo, chromosome IV (the pictures of
- * `analyses/insulation.mdx`, and the drawer of `analyses/index.mdx`).
+ * Diamond insulation on the yeast Micro-C demo, chromosome IV (the picture of
+ * `analyses/insulation.mdx`).
  *
  *   node documentation/scripts/screens/insulation.cjs <out-dir>
  *
- * insulation-01-drawer   the Analysis column and the drawer on Diamond insulation after a run
- * insulation-02-map      the drawer put away: the score under the map, the boundaries under
- *                        the score, the domains as corners along the diagonal
+ * insulation-00-form     the drawer on Diamond insulation as it opens
+ * insulation-01-drawer   the drawer after a run
+ * insulation-02-map      the drawer put away: the score in a lane beside the map, the
+ *                        boundaries beside it, the domains as corners along the diagonal
  */
 
 const { DEMO, start } = require('./analyses-2d-lib.cjs')

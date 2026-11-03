@@ -15,7 +15,7 @@ On a deck run with **run on all maps**, the **all maps** tab copies one command 
 
 The console records the window's day: every analysis run, as the command that repeats it, and every file opened, track loaded and file written, as a comment. Open it with the console button in the header, after the save button, or with <kbd>Ctrl</kbd> and the key left of <kbd>1</kbd>: <kbd>Ctrl</kbd>+<kbd>&#96;</kbd> on a QWERTY keyboard. It is <kbd>Ctrl</kbd> on a Mac too, not <kbd>⌘</kbd>.
 
-<!-- screenshot: the console along the bottom of the window, with two runs of insulation and a file opened, the provenance toggle off -->
+![The console with today's three lines: the yeast Micro-C cooler opened, then two runs of insulation as the chromosomix commands that repeat them, at a window of 10 and of 20, with the provenance switch off in its heading.](../../../assets/screens/cli/console-two-runs.webp)
 
 A run's line is written when the run starts, not when you look at its result, so a run you changed since, a run on the fifth map of a batch and a run that failed all have theirs. A batch over a deck is a line per map.
 

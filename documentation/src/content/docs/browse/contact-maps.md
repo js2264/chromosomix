@@ -23,7 +23,7 @@ How the map is drawn is set on the **Map** card in the **Aesthetics** panel, fro
 Except for the overlays and the diagonal lock, these settings are part of the link, so whoever opens
 it sees the same numbers drawn the same way.
 
-<!-- screenshot: the Map card beside a balanced map of yeast chromosome IV -->
+![A balanced Micro-C map of the whole of yeast chromosome IV, with the Aesthetics panel beside it showing the Export card and the Map card, from its picture row through score, smooth, transform, colours and clip to the overlays.](../../../assets/screens/browse/contact-maps-map-card.webp)
 
 ## The key
 
@@ -232,4 +232,4 @@ Right-click a cell for:
   **Arrowhead** at the cell, added to the **Manual annotations** card;
 - **Copy coordinates**: the cell's two positions, counted from 1 and without separators.
 
-<!-- screenshot: the hover card over an off-diagonal cell of a balanced O/E map -->
+![The card beside the pointer on a cell off the diagonal of a balanced map of yeast chromosome IV, reading IV, 1,126,001 × 1,241,001, 115.0 kb apart and balanced 0.000537, with the crosshair's two lines through the cell.](../../../assets/screens/browse/contact-maps-hover-card.webp)

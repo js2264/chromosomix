@@ -68,10 +68,29 @@ async function start(out, { width = 1440, height = 900, mac = false, init = null
     return page.evaluate(() => window.__reports.at(-1))
   }
 
-  /** Go to an address of the app and wait for its picture. */
+  /**
+   * Go to an address of the app and wait for its picture. Through a blank page,
+   * so that a link differing from the last only after its `#` is a fresh
+   * document too, and the reports counted are its own.
+   */
   async function open(address, options = {}) {
+    await page.goto('about:blank')
     await page.goto(address.startsWith('http') ? address : `${BASE}/${address.replace(/^\//, '')}`)
     return rendered(0, options)
+  }
+
+  /**
+   * Wait until `predicate` holds in the page, then until two seconds pass with
+   * no new report: a second file arriving is drawn after the first report.
+   */
+  async function until(predicate, arg = null, { timeout = 180000 } = {}) {
+    await page.waitForFunction(predicate, arg, { timeout })
+    for (let i = 0; i < 15; i++) {
+      const n = await seen()
+      await sleep(2000)
+      if ((await seen()) === n) break
+    }
+    await sleep(800)
   }
 
   /** Do something that changes the picture, and wait for it to be drawn again. */
@@ -130,7 +149,7 @@ async function start(out, { width = 1440, height = 900, mac = false, init = null
     await browser.close()
   }
 
-  return { browser, context, page, dir, errors, seen, rendered, open, redraw, shot, press, palette, around, close }
+  return { browser, context, page, dir, errors, seen, rendered, open, until, redraw, shot, press, palette, around, close }
 }
 
 module.exports = { BASE, BUCKET, sleep, start }

@@ -4,7 +4,7 @@
  * the map, and the drawer after a run of P(s) — its notes, its record line and
  * the curve with its exports.
  *
- *   node documentation/scripts/screens/index.cjs <out-dir>
+ *   node documentation/scripts/screens/analyses-index.cjs <out-dir>
  *
  * index-01-insulation-drawer   the drawer over the map: the form's foot, run and its price, the record line
  * index-02-ps-drawer           P(s): the record line, the notes, the curve and its buttons
@@ -41,11 +41,8 @@ const OUT = process.argv[2] ?? 'screens/analyses'
     await s.run('Log-log slope')
     console.log('notes:', JSON.stringify(await s.notes()))
     console.log('figures:', JSON.stringify(await s.figures()))
-    await page.evaluate(() => {
-      const body = document.querySelector('.analysis-drawer-body')
-      const run = document.querySelector('.analysis-drawer .analysis-run')
-      if (body && run) body.scrollTop += run.getBoundingClientRect().top - body.getBoundingClientRect().top - 8
-    })
+    // The record line at the top of the drawer, the curve and its exports whole under it.
+    await s.scrollDrawerTo('.plot-icon-row', 'copy provenance', 8)
     await s.shot('index-02-ps-drawer')
   } finally {
     await s.close()

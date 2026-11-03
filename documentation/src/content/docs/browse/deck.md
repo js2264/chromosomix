@@ -9,7 +9,7 @@ beside a Micro-C one are read against each other at a glance, each on its own co
 have to share coordinates but not a grid: they may be at different resolutions, in different file
 formats, and spell their sequences differently.
 
-<!-- screenshot: a 2 × 2 deck of yeast Micro-C maps at one locus, with a track under each -->
+![A 2 × 2 deck of four yeast maps at IV:1.0–1.4 Mb, two Micro-C maps above and the G1 and G2/M Hi-C maps below, at 1, 1.6 and 2 kb, each on its own colour scale with the ATAC-seq track under it, and a note on the second that its file spells the sequence chrIV.](../../../assets/screens/browse/deck-four-maps.webp)
 
 ## Making a deck
 

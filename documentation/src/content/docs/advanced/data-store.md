@@ -14,7 +14,7 @@ is a [UCSC track hub](/advanced/track-hubs/).
 A store is a door, not a copy. A row names a file where it already is; nothing is read until a reader
 opens the store, and then nothing but the store file until they open a row.
 
-<!-- screenshot: the store drawer open on a lab's own store, its facets down the side and its rows beside them -->
+![The store drawer open on a lab's own store, "My lab’s maps", with the facets Assay, Condition and Format down the side, each value counted, and its eleven rows beside them: Micro-C and Hi-C maps, a workspace and the yeast tracks, each with its cells and its size.](../../../assets/screens/advanced/lab-store-drawer.webp)
 
 ## A first store
 

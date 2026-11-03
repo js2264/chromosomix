@@ -1,7 +1,8 @@
 /**
  * Pictures for browse/structures.md: the yeast Micro-C demo with its 3D model
- * dropped on the Structures card, so that it opens in a cell beside the map,
- * framed on the map's window, and a bead pointed at — the status bar naming it
+ * dropped on the Structures card, so that it opens in a cell beside the map;
+ * the map moved to the whole of chromosome IV and the model framed on it; and
+ * a bead pointed at — the status bar naming it
  * and each map drawing a dashed line down and across the heatmap at its place.
  *
  *   node documentation/scripts/screens/browse-structures.cjs [out-dir]   # st-model, st-bead
@@ -39,6 +40,11 @@ const { BASE, sleep, start } = require('./browse-lib.cjs')
     await app.press('Fold the Annotations panel')
     await app.press('Fold the Aesthetics panel')
     await app.rendered(0)
+    // The whole of IV, so that its whole chain is drawn and the rest ghosted.
+    await app.redraw(() => page.locator('.breadcrumb .crumb', { hasText: /^IV$/ }).first().click())
+    console.log('heading:', await page.evaluate(() => document.querySelector('input.input-region')?.value))
+    await page.click('.structure-frame')
+    await sleep(3000)
     await page.mouse.move(5, 450)
     await app.shot('st-model')
 
@@ -51,7 +57,7 @@ const { BASE, sleep, start } = require('./browse-lib.cjs')
         await page.mouse.move(canvas.x + (canvas.width * i) / 64, canvas.y + (canvas.height * j) / 64)
         await sleep(25)
         const said = await readout()
-        if (/bead \d+ of/.test(said) && /IV:1,[0-3]/.test(said)) found = said
+        if (/bead \d+ of/.test(said) && /^IV:/.test(said)) found = said
       }
     }
     console.log('bead:', found)

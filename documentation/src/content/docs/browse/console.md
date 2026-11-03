@@ -8,7 +8,7 @@ you run is written there as the `chromosomix` command line that repeats it, at t
 Tune a run on screen until the picture is right, then take its line to a shell for the other two
 hundred files, or into the methods section of a paper.
 
-<!-- screenshot: the console open along the bottom of the window under a map, with today's runs as chromosomix commands and one file written -->
+![The console open along the bottom of the window under a Micro-C map of yeast chromosome IV, listing today's four lines: the file opened, two runs of insulation as chromosomix commands, and the figure's PDF written.](../../../assets/screens/browse/console-today.webp)
 
 ## Opening it
 

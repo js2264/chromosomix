@@ -29,7 +29,7 @@ of its tracks until you open one. Its page is headed by the hub's own name.
 
 The arrow at the head of the drawer, on this door, goes to UCSC's own list of public hubs.
 
-<!-- screenshot: a track hub open in the store drawer, rows grouped by assembly with "open with its tracks" on the heading -->
+![The store drawer open on the yeast demo's assembly hub, its hub.txt address in the box, the facets Assembly, Genome, Role, Format and Group down the side, and its nine rows, the .2bit sequence and eight tracks, grouped under the sacCer3_syn40 heading with "open with its tracks" on it.](../../../assets/screens/advanced/track-hub-drawer.webp)
 
 ## What is read
 
