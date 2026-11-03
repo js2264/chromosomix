@@ -3,9 +3,10 @@ library(tidyverse)
 library(patchwork)
 setwd("~/Documents/Koszul/__Bioinfo/repos/chromosomix/notebooks/")
 
-# The timing notebook's two tables, as chromosomix.app/timings publishes them
+# The timing notebook's three tables, as chromosomix.app/timings publishes them
 download.file("https://chromosomix.app/timings/timings.tsv", "timing_results.tsv")
 download.file("https://chromosomix.app/timings/viewers.tsv", "viewers_results.tsv")
+download.file("https://chromosomix.app/timings/pipeline.tsv", "pipeline_results.tsv")
 
 APP <- "#2b6fd6"
 REF <- "#e8622c"
@@ -119,10 +120,26 @@ meta <- meta |>
 jobs <- left_join(jobs, rows, by = c("section", "analysis", "pair"))
 folds <- left_join(folds, rows, by = c("section", "analysis", "pair"))
 
+# The pipeline on a deep human map: chromosomix's start-up (`--version`, paid by each of its four
+# commands), its four commands and their sum, against one Python script's imports, steps and whole
+pipeline <- read_tsv("pipeline_results.tsv") |>
+    mutate(label = fct_rev(fct_inorder(task)))
+# Each side's mean over the runs, for the caption
+whole <- pipeline |>
+    filter(step == "total") |>
+    summarise(wall = mean(wall_s), cpu = mean(cpu_s), .by = side)
+minutes <- \(s) if_else(s >= 90, sprintf("%.1f min", s / 60), sprintf("%.0f s", s))
+
 # Folds are ratios, so their mean is geometric
 caption <- with(folds, sprintf(
     "On average, chromosomix runs %.1f× faster than the reference tools (CPU time), %.1f× faster on the wall clock, and uses %.1f× less peak memory (geometric means over the %d comparisons in b).",
     exp(mean(log(CPU))), exp(mean(log(wall))), exp(mean(log(memory))), nrow(folds)
+))
+caption <- str_c(caption, sprintf(
+    " Loop calling, insulation, compartments and APA over the whole IMR-90 map (c) take %s in chromosomix, on one thread, and %s in one Python script running cooltools and coolpuppy on %d processes (%.1f× on the wall clock, %.1f× in CPU time).",
+    minutes(whole$wall[whole$side == "chromosomix"]), minutes(whole$wall[whole$side == "reference"]),
+    max(pipeline$threads), whole$wall[whole$side == "reference"] / whole$wall[whole$side == "chromosomix"],
+    whole$cpu[whole$side == "reference"] / whole$cpu[whole$side == "chromosomix"]
 ))
 message(caption)
 
@@ -266,7 +283,67 @@ b <- names + grid + cpu + wall + memory +
     plot_layout(widths = c(3.2, 3.3, 1.8, 1.8, 1.8), guides = "collect") &
     theme(legend.position = "top", legend.box.spacing = unit(0, "pt"), axis.text.y = element_blank(), axis.ticks.y = element_blank())
 
-# c and d: CPU time, then wall-clock time, against memory, one point a pair: top right is faster and
+# c: the pipeline, in b's columns, one line a step between the start-up and the whole
+steps <- pipeline |>
+    distinct(label, step) |>
+    mutate(
+        shade = as.integer(label) %% 2 == 0,
+        analysis = !step %in% c("start-up", "total"),
+        # Every step over the whole genome of one map, so what tells them apart is what each reads, and how
+        resolution = case_when(step == "compartments" ~ "250kb", analysis ~ "10kb", .default = ""),
+        settings = case_match(step,
+            "start-up" ~ "--version; imports",
+            "loops" ~ "cooltools.dots' defaults",
+            "insulation" ~ "window of 10 bins",
+            "compartments" ~ "3 eigenvectors, GC-phased",
+            "apa" ~ "±5 bins, O/E, every loop",
+            "total" ~ "4 commands; 1 script"
+        )
+    )
+p_names <- ggplot(steps, aes(0.98, label)) +
+    common(steps) +
+    geom_text(aes(label = label, fontface = if_else(analysis, "bold", "bold.italic")), hjust = 1, size = 2, colour = "grey20") +
+    scale_x_continuous(limits = c(0, 1), expand = c(0, 0)) +
+    # What the data are, once for the whole panel: as its title, outside the lines the panels share
+    labs(title = "Human IMR-90 Hi-C, 3.1 Gb, 1.08 billion contacts\n(4DNFIJTOIGOI), whole genome") +
+    theme_void() +
+    theme(plot.title = element_text(size = 6, hjust = 1, colour = "grey20", lineheight = 0.95))
+p_grid <- steps |>
+    select(label, resolution, settings) |>
+    pivot_longer(-label) |>
+    mutate(name = fct_inorder(name)) |>
+    table_of(steps) +
+    theme(axis.text.x.top = element_text(angle = 45, hjust = 0, vjust = 0))
+# The whole set apart from its steps by a rule, as a sum is
+total <- geom_hline(yintercept = 1.5, colour = "grey40", linewidth = 0.3)
+p_seconds <- scale_x_log10(limits = range(pipeline$cpu_s, pipeline$wall_s))
+p_cpu <- ggplot(pipeline, aes(cpu_s, label, colour = side)) +
+    common(steps) +
+    total +
+    runs() +
+    sides +
+    p_seconds +
+    labs(x = "CPU time (s)")
+p_wall <- ggplot(pipeline, aes(wall_s, label, colour = side)) +
+    common(steps) +
+    total +
+    runs() +
+    sides +
+    p_seconds +
+    labs(x = "Wall-clock time (s)")
+# A step of the script's is weighed between its marks only, so a short one can hold no weighing
+p_memory <- ggplot(filter(pipeline, !is.na(peak_mb)), aes(peak_mb, label, colour = side)) +
+    common(steps) +
+    total +
+    runs() +
+    sides +
+    scale_x_log10() +
+    labs(x = "Peak memory (MB)")
+c <- p_names + p_grid + p_cpu + p_wall + p_memory +
+    plot_layout(widths = c(3.2, 3.3, 1.8, 1.8, 1.8), guides = "collect") &
+    theme(legend.position = "top", legend.box.spacing = unit(0, "pt"), axis.text.y = element_blank(), axis.ticks.y = element_blank())
+
+# d and e: CPU time, then wall-clock time, against memory, one point a pair: top right is faster and
 # lighter than the reference
 # Each label on two lines, the task above its reference, for the room 26 of them need
 against_memory <- function(time, clock, left = 0.12, nudge_x = 0, nudge_y = 0) {
@@ -288,24 +365,25 @@ against_memory <- function(time, clock, left = 0.12, nudge_x = 0, nudge_y = 0) {
         bare +
         theme(panel.grid.minor = element_blank())
 }
-# P(s) on yeast sits in c's crowd: left alone, its label lands on the Pairs QC point
+# P(s) on yeast sits in d's crowd: left alone, its label lands on the Pairs QC point
 yeast <- str_detect(folds$label, "yeast")
-c <- against_memory(CPU, "CPU time", nudge_x = if_else(yeast, -0.08, 0), nudge_y = if_else(yeast, 0.27, 0))
-# In d, Coverage, slower than cooltools on the wall clock, wants more room on the left for its label,
+d <- against_memory(CPU, "CPU time", nudge_x = if_else(yeast, -0.08, 0), nudge_y = if_else(yeast, 0.27, 0))
+# In e, Coverage, slower than cooltools on the wall clock, wants more room on the left for its label,
 # and lifted; the label of the metaplot goes below the crowd at 1×, P(s) on yeast's above its own
 metaplot <- str_detect(folds$label, "^Metaplot \\(")
 coverage <- str_detect(folds$label, "^Coverage")
-d <- against_memory(wall, "wall-clock time",
+e <- against_memory(wall, "wall-clock time",
     left = 0.2,
     nudge_x = case_when(metaplot ~ 0.12, yeast ~ 0.1, .default = 0),
     nudge_y = case_when(metaplot ~ -0.2, yeast ~ 0.3, coverage ~ 0.25, .default = 0)
 )
 
-# Each panel in inches, as tall as it was when a, b and c shared an A4 page (595 × 841 pt, the device
-# rounding it down to whole points): the page grows to hold d. To the last digit, as ggrepel lays c's
-# labels out anew on any change to its size
-fig <- wrap_elements(full = a) / wrap_elements(full = b) / wrap_elements(full = c) / wrap_elements(full = d) +
-    plot_layout(heights = unit(2.534447638912377 * c(1, 1.6, 1.45, 1.45), "in")) +
+# Each panel in inches, as tall as it was when a, b and the first scatter shared an A4 page (595 × 841
+# pt, the device rounding it down to whole points): the page grows to hold c and e. To the last digit,
+# as ggrepel lays d's and e's labels out anew on any change to their size
+fig <- wrap_elements(full = a) / wrap_elements(full = b) / wrap_elements(full = c) / wrap_elements(full = d) /
+    wrap_elements(full = e) +
+    plot_layout(heights = unit(2.534447638912377 * c(1, 1.6, 0.85, 1.45, 1.45), "in")) +
     plot_annotation(
         tag_levels = "a", caption = str_wrap(caption, 150),
         theme = theme(plot.background = element_blank(), plot.caption = element_text(size = 8, hjust = 0))
@@ -338,4 +416,4 @@ grid::grid.draw(page)
 dev.off()
 
 # The tables are only read here, and downloaded again at every run
-unlink(c("timing_results.tsv", "viewers_results.tsv"))
+unlink(c("timing_results.tsv", "viewers_results.tsv", "pipeline_results.tsv"))

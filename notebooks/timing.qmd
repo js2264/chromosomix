@@ -1,6 +1,6 @@
 ---
 title: "chromosomix against reference implementations: time"
-subtitle: "A map and a track from a file to a picture in three viewers, and every command of the validation, run again and timed"
+subtitle: "A map and a track from a file to a picture in three viewers, every command of the validation run again and timed, and four analyses over a whole human map, start to finish"
 format:
   html:
     toc: true
@@ -27,11 +27,12 @@ from rendered import Render
 
 R = Render('timing')
 print(R.head(also=f"The commands are {R.anchor('validation', 'the validation')}’s, as it ran them. "
-                  f"Beside this page: {R.download('viewers.tsv')}, every picture timed in a viewer, and "
-                  f"{R.download('timings.tsv')}, every timed command, one row each."))
+                  f"Beside this page: {R.download('viewers.tsv')}, every picture timed in a viewer, "
+                  f"{R.download('timings.tsv')}, every timed command, one row each, and "
+                  f"{R.download('pipeline.tsv')}, every step of the pipeline on a deep human map."))
 ```
 
-The page is in two parts. The first, **[Time to a picture](#time-to-a-picture)**, times three viewers
+The page is in three parts. The first, **[Time to a picture](#time-to-a-picture)**, times three viewers
 — chromosomix, juicebox.js and HiGlass — drawing the same contact map and one track beside it, at the
 same resolution, from files on this machine and from the bucket they are published in. The second,
 from **[The machine](#the-machine)** on, times the analyses: `{python} R.link('validation')` runs each
@@ -46,12 +47,15 @@ each, so that a pool of forked workers is not counted again in every worker — 
 second while the command runs, and never less than the largest resident set any one of them reached,
 which a sample can miss. A reference that runs four processes holds what the four hold. Where the
 system does not list a process's children, as macOS does not, the peak memory is that largest resident
-set alone.
+set alone. The third, **[A deep human map, start to finish](#a-deep-human-map-start-to-finish)**, times
+four analyses one after the other over the whole of a human map of a billion contacts, by four
+`chromosomix` commands and by one Python script, measured the same way.
 
 Every run of a command is one line of **`notebooks/work/validation/timings.tsv`**, a tidy table — one
-row per command and run, one column per variable, the machine and the versions included — and every
-picture a viewer was timed on is one line of **`viewers.tsv`** beside it, in the same form; every table
-and figure below is drawn from those two.
+row per command and run, one column per variable, the machine and the versions included — every
+picture a viewer was timed on is one line of **`viewers.tsv`** beside it, in the same form, and every
+step of the pipeline one line of **`pipeline.tsv`**; every table and figure below is drawn from those
+three.
 
 **To render.** Render `validation.qmd` first: it fetches the data, makes every input and writes the
 command list. The viewers need the app built, the two viewers and a browser for them, and
@@ -67,10 +71,13 @@ QUARTO_PYTHON=refs/bin/python quarto render notebooks/timing.qmd
 ```
 
 The viewers' files (about 15 GB, most of it the mouse map in its two formats) are fetched once into
-`notebooks/work/viewers/data/`.
+`notebooks/work/viewers/data/`, and the pipeline's (11.5 GB: the human map, and hg38 for its GC
+content) into `notebooks/work/pipeline/data/` — the map linked instead from `laptop.qmd`'s folder, where
+that holds it.
 
-A second render reads the tables rather than timing again (`REDO`, `REDO_VIEWERS`), unless the
-command list, the pictures, the number of runs or the `chromosomix` build has changed.
+A second render reads the tables rather than timing again (`REDO`, `REDO_VIEWERS`, `REDO_PIPELINE`),
+unless the command list, the pictures, the number of runs, the pipeline's script or the `chromosomix`
+build has changed.
 `.github/workflows/notebooks.yml` renders both notebooks on every release, on a fresh GitHub runner
 each time, and publishes this page at <https://chromosomix.app/timings/> with the two tables beside
 it; the block under the title says which render, and which machine, this is.
@@ -106,6 +113,13 @@ VIEWER_PLAN = VWORK / 'plan.json'
 VIEWER_RESULTS = VWORK / 'results.jsonl'
 VIEWER_SHOTS = VWORK / 'pictures'
 VIEWER_TABLE = WORK / 'viewers.tsv'
+
+#: Runs of the pipeline on the deep map, each side once a run (PIPELINE_RUNS overrides it), and whether
+#: to time it again. One: loop calling over a whole human genome is the longest command on the page.
+PIPELINE_RUNS = int(os.environ.get('PIPELINE_RUNS', 1))
+REDO_PIPELINE = False
+PWORK = REPO / 'notebooks' / 'work' / 'pipeline'
+PIPELINE_TABLE = WORK / 'pipeline.tsv'
 ```
 
 ```{python}
@@ -732,23 +746,28 @@ def pss_kb(pid):
         return 0
 
 
-def weigh(pid, done, peak):
-    """Every EVERY seconds until `done`, the processes under `pid` weighed together, the most into `peak[0]`."""
+def weigh(pid, done, peak, samples=None):
+    """Every EVERY seconds until `done`, the processes under `pid` weighed together, the most into `peak[0]`,
+    and each weighing into `samples`, with when it was taken, where there is a list to keep them."""
     while True:
-        peak[0] = max(peak[0], sum(pss_kb(p) for p in under(pid)))
+        held = sum(pss_kb(p) for p in under(pid))
+        peak[0] = max(peak[0], held)
+        if samples is not None:
+            samples.append((time.time(), held))
         if done.wait(EVERY):
             return
 
 
-def timed(argv, extra):
-    """One run, from work/validation/: CPU seconds of the process and every process it started and waited
-    for, wall seconds, and the most memory they held together, in MB."""
+def timed(argv, extra, cwd=WORK, samples=None):
+    """One run, from `cwd` (work/validation/): CPU seconds of the process and every process it started and
+    waited for, wall seconds, and the most memory they held together, in MB; every weighing of them into
+    `samples`, if it is a list."""
     env = None if extra is None else dict(os.environ, **extra)
     with tempfile.TemporaryFile() as err:
         start = time.perf_counter()
-        process = subprocess.Popen(argv, cwd=WORK, env=env, stdout=subprocess.DEVNULL, stderr=err)
+        process = subprocess.Popen(argv, cwd=cwd, env=env, stdout=subprocess.DEVNULL, stderr=err)
         done, peak = threading.Event(), [0]
-        weigher = threading.Thread(target=weigh, args=(process.pid, done, peak), daemon=True)
+        weigher = threading.Thread(target=weigh, args=(process.pid, done, peak, samples), daemon=True)
         if WEIGHS:
             weigher.start()
         _, status, usage = os.wait4(process.pid, 0)
@@ -961,8 +980,9 @@ labels = [f"{row['section']} · {row['analysis']} · {row['tool']}" + (f" ({row[
           for row in JOB_ROWS]
 ax.set_yticks(y, labels, fontsize=8)
 ax.set_xscale('log')
-EVERY = np.concatenate([row['runs'] for row in JOB_ROWS])
-ax.set_xlim(EVERY.min() / 1.5, EVERY.max() * 1.5)
+# Not EVERY, the weighing's interval, which the pipeline's runs below read again.
+ALL_RUNS = np.concatenate([row['runs'] for row in JOB_ROWS])
+ax.set_xlim(ALL_RUNS.min() / 1.5, ALL_RUNS.max() * 1.5)
 ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f'{v:g}'))
 ax.xaxis.set_minor_locator(NullLocator())
 ax.set(xlabel='CPU time (s)', ylim=(-0.5, len(JOB_ROWS) - 0.5))
@@ -991,11 +1011,451 @@ ax.legend(loc='lower right')
 plt.show()
 ```
 
+## A deep human map, start to finish
+
+Each command above is one analysis, timed alone, on a map of at most 69 million contacts. This last
+part times what a reader runs on a deep map: four analyses, one after the other, over the whole genome
+of 4DN's in situ Hi-C of IMR-90 (Rao et al. 2014; 4DNFIJTOIGOI, GRCh38, 1.08 billion contacts, an
+8.3 GB `.mcool`), each with the settings its section of the validation holds it to:
+
+1. **Loop calling** at 10 kb: HiCCUPS as `cooltools.dots` computes it, at its Python API's defaults,
+   over the expected with the first two diagonals left out (§ 19);
+2. **Diamond insulation** at 10 kb, a window of 10 bins, 100 kb, and its boundaries (§ 1);
+3. **Compartments** at 250 kb: three cis eigenvectors, signed by each bin's GC content, which is
+   worked out once beforehand — `bioframe.frac_gc` over hg38 as Illumina iGenomes distributes UCSC's —
+   and given to both (§ 3);
+4. **APA over every loop** step 1 called: five bins either side of each, ±50 kb, every window over the
+   expected, the first two diagonals left out and no loop for being near the diagonal (§ 11, *over the
+   expected, every loop*).
+
+**chromosomix** runs them as a shell script would: four commands, one after the other, the last
+reading the loops the first wrote. **The reference** is one Python script,
+`notebooks/scripts/cooltools_pipeline.py`, which runs the four through cooltools and coolpuppy in one
+process, its pileup over the loops `cooltools.dots` called and the expected computed for them. So the
+script pays for its pileup's expected in loop calling, where `chromosomix apa` computes its own, along
+the diagonals its windows reach; and chromosomix's compartments draw the saddle too, at the task's
+default, which `cooltools.eigs_cis` does not. `chromosomix` computes on one thread; the script gives
+every call that takes them as many processes as every reference above was given (the `threads`
+column).
+
+**Start-up, each step and the whole.** A command's start-up is the program loaded and nothing done,
+`chromosomix --version`, timed as a command of its own, which each of the four pays again before its
+task: each step is its command, from its launch to its exit, its own start-up and the opening of the
+map included, and the whole is the four. The script's start-up runs from its launch to the end of its
+imports — Python itself, cooler, cooltools and coolpuppy — and each step from the end of the one before
+it to its own, as the script writes them down; the whole is the process, from its launch to its exit.
+CPU time and memory are measured as for every command above: a command's, and the script's whole, by
+`os.wait4` and by weighing its processes every `EVERY` seconds; a step of the script's, by the CPU its
+process and every child it had waited for had used at either end — cooltools' and coolpuppy's pools are
+waited for when each call returns — and by the most its processes held together in the weighings taken
+between them.
+
+**One run of each side, unless `PIPELINE_RUNS` says otherwise.** Each side reads the map from the disk,
+the page cache emptied before it where the machine lets the benchmark do so; where it does not, the map
+is read through once before each side instead, so that both find it in memory (the `page_cache`
+column). Over several runs the two take turns to go first. Every step of every run, its start-up and the
+whole among them, is one line of **`notebooks/work/validation/pipeline.tsv`**, published beside
+`timings.tsv`.
+
+```{python}
+import cooler
+
+PIPELINE_DATA = PWORK / 'data'
+#: The map, and the sequence its compartments are signed by: where each is published, and its MD5.
+PIPELINE_FILES = {
+    '4DNFIJTOIGOI.mcool': (f'{FOURDN_FILES}/b4939d95-4121-4f86-9cc8-29a34eb834ef/4DNFIJTOIGOI.mcool',
+                           '659f9dc7613650494aa5ed4138e2e17e'),
+    'hg38.fa': ('https://ngi-igenomes.s3.amazonaws.com/igenomes/Homo_sapiens/UCSC/hg38/Sequence/WholeGenomeFasta/'
+                'genome.fa', '9ce261c4aaf4b6092888ef298d190da2'),
+}
+#: Where laptop.qmd keeps the same map, which is linked from there rather than fetched again.
+LAPTOP_DATA = REPO / 'notebooks' / 'work' / 'laptop' / 'data'
+
+
+def md5_of(path):
+    digest = hashlib.md5()
+    with open(path, 'rb') as handle:
+        for block in iter(lambda: handle.read(1 << 22), b''):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def pipeline_file(name, url, md5):
+    """A published file, in work/pipeline/data — linked from the laptop's folder where that holds it, and
+    otherwise fetched once, asked again when its server fails — and held to its MD5."""
+    path = PIPELINE_DATA / name
+    if not path.exists() and (LAPTOP_DATA / name).exists():
+        path.symlink_to((LAPTOP_DATA / name).resolve())
+    if not path.exists():
+        print('fetching', url)
+        download(url, path)
+    if md5_of(path) != md5:
+        raise ValueError(f'{path} is not {url}: its MD5 is not {md5}. Delete it, and it is fetched again.')
+    return path
+
+
+PIPELINE_DATA.mkdir(parents=True, exist_ok=True)
+P_MISSING = sum(remote_size(url) for name, (url, _) in PIPELINE_FILES.items()
+                if not (PIPELINE_DATA / name).exists() and not (LAPTOP_DATA / name).exists())
+P_FREE = shutil.disk_usage(PIPELINE_DATA).free
+if P_MISSING > P_FREE - 2e9:
+    raise OSError(f'The pipeline’s files need {P_MISSING / 1e9:.1f} GB more in {PIPELINE_DATA}, '
+                  f'and {P_FREE / 1e9:.1f} GB are free.')
+IMR90, HG38 = (pipeline_file(name, *where) for name, where in PIPELINE_FILES.items())
+
+# The GC content of each 250-kb bin of the map, once: a table for cooltools, a bedGraph for chromosomix.
+GC_TSV, GC_BEDGRAPH = PWORK / 'gc-250kb.tsv', PWORK / 'gc-250kb.bedGraph'
+if REDO_PIPELINE or not GC_TSV.exists():
+    import bioframe
+    import pyfaidx
+
+    pyfaidx.Faidx(str(HG38)).close()
+    _bins = cooler.Cooler(f'{IMR90}::/resolutions/250000').bins()[['chrom', 'start', 'end']][:]
+    _gc = bioframe.frac_gc(_bins, bioframe.load_fasta(str(HG38), engine='pyfaidx'))
+    _gc.to_csv(GC_TSV, sep='\t', index=False)
+    _gc.dropna()[['chrom', 'start', 'end', 'GC']].to_csv(GC_BEDGRAPH, sep='\t', header=False, index=False)
+_c10 = cooler.Cooler(f'{IMR90}::/resolutions/10000')
+_gc_bins = pd.read_csv(GC_TSV, sep='\t')
+measures({'map': f"{IMR90.name} ({IMR90.stat().st_size / 1e9:.1f} GB): {len(_c10.chromnames)} sequences, "
+                 f"{_c10.info['sum']:,} contacts",
+          'at 10 kb': f"{_c10.info['nbins']:,} bins, {_c10.info['nnz']:,} pixels",
+          'at 250 kb, GC content': f"{len(_gc_bins):,} bins, {int(_gc_bins['GC'].notna().sum()):,} with sequence",
+          'sequence': f'{HG38.name} ({HG38.stat().st_size / 1e9:.1f} GB)'})
+```
+
+The commands, from `notebooks/work/pipeline/`, as the first run wrote them; each run writes into a
+folder of its own side, emptied before it:
+
+```{python}
+from importlib.metadata import version as installed_version
+
+CLI = REPO / 'dist-cli' / 'chromosomix.mjs'
+PIPELINE_SCRIPT = REPO / 'notebooks' / 'scripts' / 'cooltools_pipeline.py'
+#: The four steps, in their order: what the tables call each, and what it reads.
+PIPELINE_STEPS = {'loops': ('Loop calling', '10 kb'), 'insulation': ('Diamond insulation', '10 kb, 10 bins'),
+                  'compartments': ('Compartments', '250 kb, GC-phased'),
+                  'apa': ('APA over every loop', '10 kb, ±5 bins, over the expected')}
+#: And the start-up before them, and the whole of them.
+PIPELINE_TASKS = {'start-up': ('Start-up', ''), **PIPELINE_STEPS, 'total': ('Total', '')}
+P_THREADS = LISTED['threads']
+P_SIDES = {'chromosomix': 'chromosomix',
+           'reference': ', '.join(f'{name} {installed_version(name)}' for name in ('cooltools', 'coolpuppy', 'cooler'))}
+P_SCRIPT = hashlib.sha256(PIPELINE_SCRIPT.read_bytes()).hexdigest()[:10]
+P_OUT = {side: PWORK / 'runs' / side for side in P_SIDES}
+
+
+def p_rel(path):
+    return os.path.relpath(path, PWORK)
+
+
+def p_map(bp):
+    return f'{p_rel(IMR90)}::/resolutions/{bp}'
+
+
+def app_argv(step, out):
+    """chromosomix's command for one step, writing into `out`: the pileup reads the loops the first wrote there."""
+    program = ['node', p_rel(CLI)]
+    if step == 'start-up':
+        return [*program, '--version']
+    argv = {'loops': ['loops', p_map(10_000)],
+            'insulation': ['insulation', p_map(10_000), '--window', '10'],
+            'compartments': ['compartments', p_map(250_000), '--components', '3', '--phaseTrack', p_rel(GC_BEDGRAPH)]}
+    if step == 'apa':
+        argv['apa'] = ['apa', p_map(10_000), '--pairs', p_rel(one_file(out / 'loops', '*.loops-calls.bedpe')),
+                       '--mode', 'fixed', '--window', '5', '--minDiag', '2', '--minDist', '0', '--norm', 'oe']
+    return [*program, *argv[step], '--out', p_rel(out / step)]
+
+
+def script_argv(out):
+    """The script's one command, writing beside `out/cooltools` and its marks to `out/marks.json`."""
+    return [sys.executable, p_rel(PIPELINE_SCRIPT), p_rel(IMR90), p_rel(GC_TSV), p_rel(out / 'cooltools'),
+            str(P_THREADS), p_rel(out / 'marks.json')]
+
+
+def one_file(folder, pattern):
+    hits = sorted(Path(folder).glob(pattern))
+    if len(hits) != 1:
+        raise FileNotFoundError(f'{len(hits)} files match {pattern} in {folder}')
+    return hits[0]
+
+
+def typed_line(argv):
+    """A command as a reader would type it."""
+    if argv[:2] == ['node', p_rel(CLI)]:
+        argv = ['chromosomix', *argv[2:]]
+    return shlex.join(['python' if a == sys.executable else a for a in argv])
+
+
+def settle():
+    """Before each side: the page cache emptied where the machine lets the benchmark do so, so that each reads
+    the map from the disk, as at a first opening; elsewhere the map read through once, so that each finds it
+    in memory. Which of the two, as the table says it."""
+    subprocess.run(['sync'])
+    try:
+        if subprocess.run(['sudo', '-n', 'sh', '-c', 'echo 3 > /proc/sys/vm/drop_caches'],
+                          capture_output=True).returncode == 0:
+            return 'dropped'
+    except FileNotFoundError:
+        pass
+    with open(IMR90, 'rb') as handle:
+        while handle.read(1 << 24):
+            pass
+    return 'read through'
+
+
+#: The columns of pipeline.tsv, in order: the side and the step, the run, what it cost, where.
+PIPELINE_COLUMNS = ['side', 'tool', 'version', 'step', 'task', 'reads', 'run', 'went_first', 'page_cache',
+                    'threads', 'cpu_s', 'wall_s', 'peak_mb', 'started', *MACHINE, 'chromosomix', 'script', 'map',
+                    'command_line']
+
+
+def p_row(side, step, run, first, cache, cost, line, started):
+    return {'side': side, 'tool': 'chromosomix' if side == 'chromosomix' else 'cooltools, coolpuppy',
+            'version': LISTED['chromosomix'] if side == 'chromosomix' else P_SIDES[side], 'step': step,
+            'task': PIPELINE_TASKS[step][0], 'reads': PIPELINE_TASKS[step][1], 'run': run,
+            'went_first': first == side, 'page_cache': cache,
+            'threads': 1 if side == 'chromosomix' else P_THREADS, 'cpu_s': cost['cpu_s'], 'wall_s': cost['wall_s'],
+            'peak_mb': cost['peak_mb'], 'started': started, **MACHINE, 'chromosomix': LISTED['chromosomix'],
+            'script': P_SCRIPT, 'map': IMR90.name, 'command_line': line}
+
+
+def app_side(run, first):
+    """chromosomix's side of one run: its start-up, its four commands and their whole."""
+    out = P_OUT['chromosomix']
+    shutil.rmtree(out, ignore_errors=True)
+    out.mkdir(parents=True)
+    cache, rows = settle(), []
+    for step in ['start-up', *PIPELINE_STEPS]:
+        argv = app_argv(step, out)
+        started = time.strftime('%Y-%m-%dT%H:%M:%S')
+        rows.append(p_row('chromosomix', step, run, first, cache, timed(argv, None, cwd=PWORK), typed_line(argv),
+                          started))
+    steps = rows[1:]
+    whole = {'cpu_s': sum(r['cpu_s'] for r in steps), 'wall_s': sum(r['wall_s'] for r in steps),
+             'peak_mb': max(r['peak_mb'] for r in steps)}
+    rows.append(p_row('chromosomix', 'total', run, first, cache, whole,
+                      '; '.join(r['command_line'] for r in steps), steps[0]['started']))
+    return rows
+
+
+def script_side(run, first):
+    """The script's side of one run: its start-up and four steps as it marked them, and its whole."""
+    out = P_OUT['reference']
+    shutil.rmtree(out, ignore_errors=True)
+    out.mkdir(parents=True)
+    cache, samples = settle(), []
+    argv = script_argv(out)
+    started = time.strftime('%Y-%m-%dT%H:%M:%S')
+    launched = time.time()
+    whole = timed(argv, None, cwd=PWORK, samples=samples)
+    marks = {mark['step']: mark for mark in json.loads((out / 'marks.json').read_text())['marks']}
+    rows, before = [], {'time': launched, 'cpu_s': 0.0}
+    for step, mark in [('start-up', marks['imported']), *((step, marks[step]) for step in PIPELINE_STEPS)]:
+        held = [kb for at, kb in samples if before['time'] <= at <= mark['time']]
+        cost = {'cpu_s': mark['cpu_s'] - before['cpu_s'], 'wall_s': mark['time'] - before['time'],
+                'peak_mb': max(held) / 1024 if held else np.nan}
+        rows.append(p_row('reference', step, run, first, cache, cost, typed_line(argv), started))
+        before = mark
+    rows.append(p_row('reference', 'total', run, first, cache, whole, typed_line(argv), started))
+    return rows
+
+
+def pipeline():
+    rows = []
+    PIPELINE_TABLE.parent.mkdir(parents=True, exist_ok=True)
+    for run in range(1, PIPELINE_RUNS + 1):
+        # chromosomix first on odd runs, the script on even ones.
+        order = ['chromosomix', 'reference'] if run % 2 == 1 else ['reference', 'chromosomix']
+        for side in order:
+            rows += app_side(run, order[0]) if side == 'chromosomix' else script_side(run, order[0])
+        # Written after every run, so a long benchmark that is stopped keeps the runs it finished.
+        pd.DataFrame(rows, columns=PIPELINE_COLUMNS).to_csv(PIPELINE_TABLE, sep='\t', index=False)
+
+
+def pipeline_current():
+    """Whether pipeline.tsv holds every step of PIPELINE_RUNS runs, by this chromosomix and this script."""
+    if REDO_PIPELINE or not PIPELINE_TABLE.exists():
+        return False
+    held = pd.read_csv(PIPELINE_TABLE, sep='\t', keep_default_na=False)
+    return (list(held.columns) == PIPELINE_COLUMNS and set(held['run']) == set(range(1, PIPELINE_RUNS + 1))
+            and len(held) == PIPELINE_RUNS * 2 * len(PIPELINE_TASKS)
+            and set(held['chromosomix']) == {LISTED['chromosomix']} and set(held['script']) == {P_SCRIPT}
+            and all(P_OUT[side].exists() for side in P_SIDES))
+
+
+if not pipeline_current():
+    pipeline()
+steps = pd.read_csv(PIPELINE_TABLE, sep='\t', keep_default_na=False, na_values=[''])
+for side, rows in steps.groupby('side', sort=False):
+    print(f'# {rows["tool"].iloc[0]}')
+    lines = rows.loc[(rows['run'] == 1) & ~rows['step'].isin(['total']), 'command_line']
+    print('\n'.join(f'$ {line}' for line in dict.fromkeys(lines)), end='\n\n')
+measures({'runs': PIPELINE_RUNS, 'lines in the table': len(steps),
+          'measured': f"{steps['started'].min()} to {steps['started'].max()}",
+          'page cache before each side': ', '.join(sorted(set(steps['page_cache']))),
+          'reference': P_SIDES['reference'], 'table': os.path.relpath(PIPELINE_TABLE, REPO)})
+```
+
+CPU and wall-clock seconds and peak memory, mean over the runs, for each side's start-up, each step
+and the whole:
+
+```{python}
+#| column: page
+P_SIDE_NAMES = {'chromosomix': 'chromosomix', 'reference': 'cooltools, coolpuppy'}
+p_mean = (steps.groupby(['step', 'side'], sort=False)
+          .agg(cpu=('cpu_s', 'mean'), wall=('wall_s', 'mean'), peak=('peak_mb', 'max')).reset_index())
+p_table = p_mean.pivot(index='step', columns='side', values=['cpu', 'wall', 'peak']).reindex(list(PIPELINE_TASKS))
+p_shown = pd.DataFrame({'step': [PIPELINE_TASKS[s][0] for s in p_table.index],
+                        'reads': [PIPELINE_TASKS[s][1] for s in p_table.index]})
+for measure, unit in (('cpu', 'CPU s'), ('wall', 'wall s'), ('peak', 'peak MB')):
+    for side in P_SIDES:
+        p_shown[f'{P_SIDE_NAMES[side]}, {unit}'] = p_table[(measure, side)].to_numpy()
+p_shown['× faster, wall'] = p_table[('wall', 'reference')].to_numpy() / p_table[('wall', 'chromosomix')].to_numpy()
+show(p_shown, **{column: '{:,.0f}' for column in p_shown.columns if column.endswith('MB')},
+     **{'× faster, wall': '{:.1f}×'})
+```
+
+Both sides did the same work: what each wrote in the last run, step by step, against the other's.
+
+```{python}
+APP_P, REF_P = P_OUT['chromosomix'], P_OUT['reference']
+
+
+def app_table(folder, pattern):
+    return pd.read_csv(one_file(folder, pattern), sep='\t', comment='#')
+
+
+p_agree = []
+# Loop calling: the same bin pairs.
+_app_dots = app_table(APP_P / 'loops', '*.loops-table.tsv')
+_ref_dots = pd.read_csv(REF_P / 'cooltools-loops.tsv', sep='\t').rename(columns={'chrom1': 'sequence'})
+_dots = _app_dots.merge(_ref_dots, on=['sequence', 'start1', 'start2'], how='outer', indicator=True)
+p_agree.append({'step': 'Loop calling', 'chromosomix': f'{len(_app_dots):,} loops',
+                'cooltools, coolpuppy': f'{len(_ref_dots):,} loops',
+                'agreement': f"{int((_dots['_merge'] == 'both').sum()):,} at the same bin pair, "
+                             f"{int((_dots['_merge'] != 'both').sum()):,} in one only"})
+# Insulation: every bin both score, and the boundaries.
+_app_ins = app_table(APP_P / 'insulation', '*.insulation-w10.tsv')['value'].to_numpy(float)
+_ref_table = pd.read_csv(REF_P / 'cooltools-insulation.tsv', sep='\t')
+_ref_ins = _ref_table['log2_insulation_score_100000'].to_numpy(float)
+_both = np.isfinite(_app_ins) & np.isfinite(_ref_ins)
+_app_b = app_table(APP_P / 'insulation', '*.insulation-boundaries.tsv')
+_ref_b = _ref_table.loc[_ref_table['is_boundary_100000'].astype(bool), ['chrom', 'start']]
+_same_b = len(_app_b[['chrom', 'start']].merge(_ref_b, on=['chrom', 'start']))
+p_agree.append({'step': 'Diamond insulation', 'chromosomix': f'{len(_app_b):,} boundaries',
+                'cooltools, coolpuppy': f'{len(_ref_b):,} boundaries',
+                'agreement': f'{_same_b:,} boundaries at the same bin; over {_both.sum():,} bins, the score '
+                             f'within {np.abs(_app_ins[_both] - _ref_ins[_both]).max():.1e}'})
+# Compartments: E1, chromosome by chromosome, chrY left out as § 3 leaves it out.
+_app_e1 = app_table(APP_P / 'compartments', '*.compartment-e1.tsv')['value'].to_numpy(float)
+_ref_vec = pd.read_csv(REF_P / 'cooltools-eigenvectors.tsv', sep='\t')
+_rs = {}
+for _chrom in _ref_vec['chrom'].unique():
+    _s = (_ref_vec['chrom'] == _chrom).to_numpy()
+    _ok = _s & np.isfinite(_app_e1) & np.isfinite(_ref_vec['E1'].to_numpy(float))
+    if _chrom != 'chrY' and _ok.sum() > 2:
+        _rs[_chrom] = np.corrcoef(_app_e1[_ok], _ref_vec['E1'].to_numpy(float)[_ok])[0, 1]
+_low = min(_rs, key=_rs.get)
+p_agree.append({'step': 'Compartments', 'chromosomix': 'E1, E2, E3', 'cooltools, coolpuppy': 'E1, E2, E3',
+                'agreement': f'E1 at 1 − r ≤ {max(1 - _rs[_low], 1e-16):.0e} (Pearson) on each of {len(_rs)} '
+                             f'chromosomes, {_low} the furthest'})
+# The pileup: cell for cell.
+_app_apa = app_table(APP_P / 'apa', '*.apa-0.tsv')
+_app_apa = _app_apa.set_index(_app_apa.columns[0]).to_numpy(float)
+_ref_apa = np.loadtxt(REF_P / 'cooltools-apa.tsv', delimiter='\t')
+_cells = np.isfinite(_app_apa) & np.isfinite(_ref_apa)
+_rel = np.abs(_app_apa - _ref_apa)[_cells] / np.maximum(np.abs(_ref_apa[_cells]), 1e-300)
+p_agree.append({'step': 'APA over every loop', 'chromosomix': f'{_app_apa.shape[0]} × {_app_apa.shape[1]}',
+                'cooltools, coolpuppy': f'{_ref_apa.shape[0]} × {_ref_apa.shape[1]}',
+                'agreement': f'{_cells.sum()} cells, within {_rel.max():.1e} of each other, relative; '
+                             f'{int((np.isfinite(_app_apa) != np.isfinite(_ref_apa)).sum())} empty in one only'})
+show(pd.DataFrame(p_agree))
+```
+
+```{python}
+#| label: fig-pipeline
+#| fig-cap: "The four analyses over the whole IMR-90 map, one after the other: chromosomix's four commands and the one Python script, each run a dot and the mean a bar, on logarithmic axes. chromosomix's start-up is `chromosomix --version`, which each of its four commands pays again; the script's, Python and its imports, paid once. A step of chromosomix's is its command, start-up included."
+P_ROWS = list(PIPELINE_TASKS)
+fig, axes = plt.subplots(1, 3, figsize=(11, 0.42 * len(P_ROWS) + 1.4), sharey=True, layout='constrained')
+y = {step: k for k, step in enumerate(P_ROWS[::-1])}
+for ax, (column, label) in zip(axes, (('cpu_s', 'CPU time (s)'), ('wall_s', 'wall-clock time (s)'),
+                                      ('peak_mb', 'peak memory (MB)'))):
+    for k, step in enumerate(P_ROWS):
+        if k % 2:
+            ax.axhspan(y[step] - 0.5, y[step] + 0.5, color=MISSING, lw=0, zorder=0)
+    for side, offset in (('chromosomix', 0.15), ('reference', -0.15)):
+        colour = APP_COLOUR if side == 'chromosomix' else REF
+        rows = steps[steps['side'] == side]
+        for step in P_ROWS:
+            values = rows.loc[rows['step'] == step, column].dropna().to_numpy(float)
+            if values.size == 0:
+                continue
+            at = y[step] + offset
+            ax.scatter(values, np.full(values.size, at), s=16, color=colour, alpha=0.6, lw=0, zorder=3)
+            ax.plot([values.mean()] * 2, [at - 0.12, at + 0.12], color=colour, lw=2.5, zorder=4)
+    ax.set_xscale('log')
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f'{v:g}'))
+    ax.set(xlabel=label, ylim=(-0.5, len(P_ROWS) - 0.5))
+    ax.grid(axis='y', visible=False)
+axes[0].set_yticks([y[s] for s in P_ROWS], [f'{PIPELINE_TASKS[s][0]}' + (f'\n{PIPELINE_TASKS[s][1]}'
+                                                                           if PIPELINE_TASKS[s][1] else '')
+                                             for s in P_ROWS], fontsize=8)
+axes[-1].scatter([], [], s=24, color=APP_COLOUR, label='chromosomix')
+axes[-1].scatter([], [], s=24, color=REF, label='cooltools, coolpuppy')
+# Above the panels: inside one, it lands on the whole's points.
+fig.legend(*axes[-1].get_legend_handles_labels(), loc='outside upper right', ncols=2)
+plt.show()
+```
+
+```{python}
+def p_value(step, side, column):
+    return float(steps.loc[(steps['step'] == step) & (steps['side'] == side), column].mean())
+
+
+def minutes(seconds):
+    return f'{seconds / 60:.1f} min' if seconds >= 90 else f'{seconds:.0f} s'
+
+
+P_TEXT = {'app': minutes(p_value('total', 'chromosomix', 'wall_s')),
+          'ref': minutes(p_value('total', 'reference', 'wall_s')),
+          'wall': f"{p_value('total', 'reference', 'wall_s') / p_value('total', 'chromosomix', 'wall_s'):.1f}",
+          'cpu': f"{p_value('total', 'reference', 'cpu_s') / p_value('total', 'chromosomix', 'cpu_s'):.1f}",
+          'app_peak': f"{steps.loc[steps['side'] == 'chromosomix', 'peak_mb'].max() / 1024:.1f} GB",
+          'ref_peak': f"{steps.loc[steps['side'] == 'reference', 'peak_mb'].max() / 1024:.1f} GB",
+          'app_start': f"{p_value('start-up', 'chromosomix', 'wall_s'):.2f} s",
+          'ref_start': f"{p_value('start-up', 'reference', 'wall_s'):.1f} s",
+          'loops': f"{p_value('loops', 'reference', 'wall_s') / p_value('loops', 'chromosomix', 'wall_s'):.1f}"}
+
+
+def against(step):
+    """A step of chromosomix's against the script's: × on the wall clock and × in CPU time, above 1 faster."""
+    name = PIPELINE_TASKS[step][0]
+    return (f"{name if name[:3].isupper() else name.lower()}, "
+            f"{p_value(step, 'reference', 'wall_s') / p_value(step, 'chromosomix', 'wall_s'):.1f}× on the wall clock "
+            f"and {p_value(step, 'reference', 'cpu_s') / p_value(step, 'chromosomix', 'cpu_s'):.1f}× in CPU time")
+
+
+P_SLOWER = [step for step in PIPELINE_STEPS if p_value(step, 'chromosomix', 'wall_s') > p_value(step, 'reference', 'wall_s')]
+P_TEXT['slower'] = ('In none of the four is chromosomix slower on the wall clock.' if not P_SLOWER else
+                    'On one thread against the script\'s processes, chromosomix is slower on the wall clock at '
+                    + '; '.join(against(step) for step in P_SLOWER) + '.')
+```
+
+Over the whole IMR-90 map, the four analyses take **`{python} P_TEXT['app']`** in `chromosomix` and
+**`{python} P_TEXT['ref']`** in the Python script: `{python} P_TEXT['wall']` times less wall-clock time
+on one thread against the script's `{python} str(P_THREADS)` processes, and `{python} P_TEXT['cpu']` times less CPU
+time; at most `{python} P_TEXT['app_peak']` of memory against `{python} P_TEXT['ref_peak']`. Loop
+calling is most of either side, and `{python} P_TEXT['loops']` times faster on the wall clock in
+`chromosomix`. `{python} P_TEXT['slower']` Starting takes `chromosomix` `{python} P_TEXT['app_start']`
+a command, four times, and the script `{python} P_TEXT['ref_start']`, once.
+
 ```{python}
 #| echo: false
 #| output: asis
 print(R.foot(summary=f"chromosomix takes {TEXT['fold']}× less CPU time than the references over {TEXT['n']} pairs "
                      f"({TEXT['range']}), and {TEXT['wall']}× less wall-clock time. On the same file from disk, "
                      f"juicebox.js's time to a picture over chromosomix's is {V_TEXT['juicebox_local']}, "
-                     f"HiGlass's {V_TEXT['higlass_local']}."))
+                     f"HiGlass's {V_TEXT['higlass_local']}. Loops, insulation, compartments and APA over a "
+                     f"whole human map of 1.08 billion contacts: {P_TEXT['app']} in chromosomix, "
+                     f"{P_TEXT['ref']} in cooltools and coolpuppy ({P_TEXT['wall']}× on the wall clock)."))
 ```

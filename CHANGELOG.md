@@ -23,6 +23,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   After every green full suite on `main`, the report is published at
   <https://chromosomix.app/coverage/>, and the README's **Coverage** badge shows its line coverage
   (docs/deploy.md).
+- **The timings end on a deep human map, start to finish (§18.10).** `notebooks/timing.qmd` now
+  times four analyses one after the other over the whole genome of 4DN's IMR-90 in situ Hi-C
+  (4DNFIJTOIGOI, 1.08 billion contacts): loop calling and diamond insulation (10 bins) at 10 kb,
+  compartments at 250 kb phased by GC content, and APA over every loop called, over the expected.
+  `chromosomix` runs them as four commands; the reference is one Python script running cooltools and
+  coolpuppy in one process (`notebooks/scripts/cooltools_pipeline.py`). Each side's start-up, each
+  step and the whole are timed — CPU, wall clock and peak memory — and what the two wrote is compared
+  step by step. Every step is a line of `pipeline.tsv`, published beside the page and kept by a
+  release, and `notebooks/scripts/timing.plot.R` draws it as panel c of the timing figure.
 
 ### Fixed
 

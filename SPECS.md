@@ -10152,6 +10152,26 @@ juicebox.js by its last repaint covering the state asked for and its track's til
 tile in view fetched and drawn. Four rounds, the viewers taking turns to go first; every run, and
 every cell refused, is one line of `notebooks/work/validation/viewers.tsv`, with the requests and
 bytes the page asked for, the machine and every version.
+**And they close on a deep human map, start to finish.** After the analyses, `notebooks/timing.qmd`
+times four of them one after the other over the whole genome of 4DN's in situ Hi-C of IMR-90 (Rao et
+al. 2014, 4DNFIJTOIGOI, 1.08 billion contacts, 8.3 GB, linked from the laptop's folder where that holds
+it), each at its section's settings: loop calling at 10 kb, as § 19 runs it; diamond insulation at
+10 kb, a window of 10 bins; compartments at 250 kb, three eigenvectors phased by GC content
+(`bioframe.frac_gc` over hg38 as Illumina iGenomes distributes it, worked out once and given to both);
+and APA over every loop the first called, ±5 bins, over the expected. `chromosomix` runs them as a shell
+script does, four commands, the pileup reading the loops the first wrote; the reference is **one Python
+script**, `notebooks/scripts/cooltools_pipeline.py`, running `cooltools.expected_cis` and `dots`,
+`insulation`, `eigs_cis` and coolpuppy's pileup over `dots`' loops and that expected in one process,
+with as many processes as the references above. Each side's **start-up** is timed apart —
+`chromosomix --version`, the program loaded and nothing done, which each command pays again, and the
+script's launch to the end of its imports — then **each step** — a command; or the stretch between two
+of the marks the script writes, its CPU time from the usage of the process and of the children it has
+waited for at either end, its memory from the weighings between them — and **the whole**. One run of
+each side, unless `PIPELINE_RUNS` says otherwise, the sides taking turns to go first over several, and
+before each the page cache emptied where the runner allows and the map read through once where it does
+not; every step of every run is one line of `notebooks/work/validation/pipeline.tsv`, and what the two
+wrote in the last run is compared step by step — the loops by bin pair, the insulation bin by bin and
+its boundaries, E1 chromosome by chromosome, the pileup cell by cell.
 **And a third holds the app to its own command line.** `notebooks/parity.qmd` runs ten tasks in the
 app — this checkout's build, of the commit the command line is built from or nothing runs, served
 from loopback and driven in headless Chromium by `notebooks/scripts/parity.mjs` — and again from
@@ -10240,7 +10260,7 @@ stamp beside it (`pages.py committed`), the names its entry lists and nothing el
 `laptop/` until one is committed.
 
 They are documents, not tests: they need the data (about 6 GB for the analyses, 15 GB for the
-viewers, 160 MB for the parity and 13.7 GB for the laptop), the reference packages, yapc's own
+viewers, 11.5 GB for the timings' deep map and its sequence, 160 MB for the parity and 13.7 GB for the laptop), the reference packages, yapc's own
 environment and higlass-python's, the two viewers and Playwright's browsers, and nothing in the suite
 runs them. Each file is fetched from where it was published, on every render, through
 `notebooks/scripts/download.py`, **which asks again when the server or the network fails** — a 500,
@@ -10273,9 +10293,9 @@ even when it fails: the validation alone, with the timing rounds it finished, wh
 A last job publishes the validation, the timings and the parity only if the three rendered —
 `pages.py published` names them — at `<site>/validation/`, `<site>/timings/` and `<site>/parity/`,
 each a self-contained page with its tables beside it (`commands.json`, `summary.tsv` and
-`validation.txt`, every command, every verdict and every number its figures draw; `timings.tsv` and
-`viewers.tsv`; the parity's `summary.tsv`, every file compared); a release keeps its own copies of the
-three pages and of the five tables as assets. **The runner's laptop is published nowhere**: not to the
+`validation.txt`, every command, every verdict and every number its figures draw; `timings.tsv`,
+`viewers.tsv` and `pipeline.tsv`; the parity's `summary.tsv`, every file compared); a release keeps its
+own copies of the three pages and of the six tables as assets. **The runner's laptop is published nowhere**: not to the
 site, whose `laptop/` is the committed page, nor to a release, whose laptop is the one committed in its
 source; it is the run's artifact, and its section of the run's summary, and whether it rendered decides
 nothing about publishing the others. It runs when a release is published and on demand. Each page opens on a

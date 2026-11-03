@@ -78,9 +78,10 @@ name: Notebooks
 # 9.8 GB for the validation (4DN's, UCSC's mm10 through iGenomes, GEO's yeast
 # Micro-C and ENCODE's GM12878 ChIP-seq and ATAC-seq, each from where it was
 # published, the 0.55 GB of 4DN's 27-GB GM12878 map that § 24 reads by range —
-# chr19 at 10 kb and at 2 kb — and the demo's 1.5 GB yeast contact list) and 15 GB more for the viewers
+# chr19 at 10 kb and at 2 kb — and the demo's 1.5 GB yeast contact list), 15 GB more for the viewers
 # (4DN's chicken and mouse maps in both formats, the mouse's 13 GB of it, and
-# the app's yeast demo); 160 MB for the parity (GEO's yeast Micro-C and
+# the app's yeast demo) and 11.5 GB more for the timings' last part (4DN's
+# 8.3 GB IMR-90 map, and hg38 through iGenomes for its GC content); 160 MB for the parity (GEO's yeast Micro-C and
 # ATAC-seq, UCSC's sacCer3); 13.7 GB for the laptop (the validation's mouse
 # and yeast maps, ATAC-seq and mm10, and 4DN's 8.3 GB IMR-90 map). A cache
 # that size would evict the repository's npm and Electron caches, and the
@@ -90,7 +91,10 @@ name: Notebooks
 # timings in about twenty minutes a run, so four of each fit the six hours a
 # job may take — four, an even number, so that each side of a pair goes first
 # in as many rounds as the other (timing.qmd's `round_of`), and as many as
-# there are viewers, so that each goes first once a picture. The laptop takes
+# there are viewers, so that each goes first once a picture. The four analyses
+# over the whole IMR-90 map that end the timings take about a quarter of an
+# hour a run, both sides, most of it `cooltools.dots`: one run, unless asked for
+# more. The laptop takes
 # about an hour on the command line, half of it peak calling over the whole
 # mouse genome, and about as long again in each of the app's three browsers,
 # which comes close to the six hours a job may take. Every
@@ -124,13 +128,14 @@ name: Notebooks
 # `validation.txt` beside the validation, every command it ran, every verdict
 # and every number its figures draw, one row a mark (33 MB, most of it
 # Boost-HiC's two maps of chr19 and the metaplot over two tracks);
-# `timings.tsv` beside the timings, every timed run, one row each, and
-# `viewers.tsv`, every picture timed in a viewer; `summary.tsv` beside the
+# `timings.tsv` beside the timings, every timed run, one row each,
+# `viewers.tsv`, every picture timed in a viewer, and `pipeline.tsv`, every
+# step of the four analyses over the IMR-90 map; `summary.tsv` beside the
 # parity, every file the app and the command line wrote, and its verdict. A
-# release also gets the three pages and the five tables as assets of its own —
-# `validation-<tag>.tsv` and `.txt`, `timings-<tag>.tsv`, `viewers-<tag>.tsv`
-# and `parity-<tag>.tsv` — so a release's numbers outlive the next release's
-# pages; its laptop page is the one committed in its source.
+# release also gets the three pages and the six tables as assets of its own —
+# `validation-<tag>.tsv` and `.txt`, `timings-<tag>.tsv`, `viewers-<tag>.tsv`,
+# `pipeline-<tag>.tsv` and `parity-<tag>.tsv` — so a release's numbers outlive
+# the next release's pages; its laptop page is the one committed in its source.
 
 on:
   release:
@@ -145,6 +150,10 @@ on:
         description: 'Rounds of the viewers’ pictures (timing.qmd); four, so each viewer goes first once a picture'
         type: number
         default: 4
+      pipeline_runs:
+        description: 'Runs of the four analyses over the whole IMR-90 map that end the timings; a quarter of an hour each'
+        type: number
+        default: 1
       publish:
         description: 'Publish the pages at <site>/validation/, <site>/timings/ and <site>/parity/ (never the laptop’s)'
         type: boolean
@@ -247,6 +256,7 @@ jobs:
       NOTEBOOKS_SITE: ${{ needs.site.outputs.url }}
       TIMING_RUNS: ${{ inputs.runs || 4 }}
       VIEWER_RUNS: ${{ inputs.viewer_runs || 4 }}
+      PIPELINE_RUNS: ${{ inputs.pipeline_runs || 1 }}
     steps:
       - uses: actions/checkout@v4
 
@@ -259,7 +269,7 @@ jobs:
       - name: Render the validation
         run: bash notebooks/scripts/memory.sh quarto render notebooks/validation.qmd
 
-      - name: Render the timings, ${{ env.VIEWER_RUNS }} rounds of pictures and ${{ env.TIMING_RUNS }} runs of each command
+      - name: Render the timings, ${{ env.VIEWER_RUNS }} rounds of pictures, ${{ env.TIMING_RUNS }} runs of each command and ${{ env.PIPELINE_RUNS }} of the pipeline
         run: bash notebooks/scripts/memory.sh quarto render notebooks/timing.qmd
 
       # An hour of validation is worth keeping when the timings after it fail,

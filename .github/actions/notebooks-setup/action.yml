@@ -24,7 +24,7 @@ runs:
   using: composite
   steps:
     # The validation's and the timings' data, their outputs and three Python environments need about
-    # 30 GB, and the laptop's data 14 GB; a fresh runner has about half of that free. Toolchains and
+    # 42 GB, and the laptop's data 14 GB; a fresh runner has about half of that free. Toolchains and
     # browsers no notebook uses make the room — the viewers run in Playwright's own Chromium.
     - name: Make room
       shell: bash
