@@ -21,10 +21,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   runs — the web app, installed or not, the desktop app, one HTML file, a fixed release, your own
   server, a web page, a notebook and a shell — and says how to start each. Its 75 pictures are the
   real app, shot by a script per page on the demo data and shown at the size the app drew them.
-  Each task has a page whose method, validation result,
-  command and every parameter are read from the app's registry as the site is built, so they are
-  that release's; the reference pages for links, the command line, embedding and formats are the
-  ones the app writes for language models, and the release notes are this file, one page a release.
+  Each task has a page whose method, validation result, command and every parameter are read from
+  the app's registry as the site is built, so they are that release's; the reference pages for
+  links, the command line, embedding and formats are the ones the app writes for language models,
+  and the release notes are this file, one page a release.
   Every release gets its own copy, built from its tag, at `/v<version>/`; the latest is also at the
   root and `main` at `/dev/`, and a menu in every copy's header lists them all. It is Starlight with
   the Rapide theme in the app's own colours, grain and type. The source is `documentation/`
@@ -36,6 +36,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the palette's Help, a line in *About* before the source, and the last lines of
   `chromosomix --help`. Each opens the site's root — the latest release's copy — since the live
   site, built from `main`, cannot name a copy of its own. The README carries a badge for it.
+- **Test coverage, over the whole app.** `npm run test:coverage` runs the full suite with V8
+  coverage over every file under `src/` and `electron/` — a file no test loads counts at zero, so
+  the figure is the app's and not the suite's — and prints it one row per area of the source, with
+  the files each leaves unloaded; `coverage/index.html` is the file-by-file view. The Tests workflow
+  reports the fixture-free suite's coverage on every push, and the full suite's where metacooler's
+  fixtures let it run, in each job's summary, with the report kept as an artifact for two weeks.
+  After every green full suite on `main`, the report is published at
+  <https://chromosomix.app/coverage/>, and the README's **Coverage** badge shows its line coverage
+  (docs/deploy.md).
 
 ### Fixed
 

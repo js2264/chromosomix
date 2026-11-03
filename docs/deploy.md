@@ -652,6 +652,28 @@ their address. A reader whose worker predates this sees the app at those address
 the update the app offers. Absent until the workflow has published once; the first run is by
 hand, or the next release.
 
+### And the test coverage
+
+`/coverage/` is the full suite's coverage report, file by file, as the last green run of it on
+`main` measured it, and `/coverage/badge.json` is that run's line coverage as a shields.io
+endpoint, which the README's **Coverage** badge is drawn from. The goldens job of
+`.github/workflows/test.yml` is the only run that has the whole suite — metacooler's fixtures need
+the `METACOOLER_REPO_TOKEN` it checks out with — so it writes both, from
+`npm test -- --coverage` and `node scripts/coverage-summary.mjs --badge`, into its `coverage-full`
+artifact; a job of its own, `coverage`, which runs none of the code under test, force-pushes that
+artifact to the `coverage` branch as one commit and dispatches this deploy, which copies the
+branch's tree into `coverage/` then and on every run after — the stores' and the notebooks'
+arrangement once more. Only a push to `main` publishes, and only when the full suite passed: a
+pull request's coverage is in its run's summary and artifact, and a figure from a red suite or
+from the fixture-free half alone is not the app's.
+
+The badge is read from the site rather than from the branch over `raw.githubusercontent.com` for
+the stores' reason, and so that the figure on the badge is always the figure on the page it links
+to. The report is about 43 MB, every source file drawn with its counts, and replaces the last one
+rather than adding to it. The service worker leaves `/coverage/` to the network like the
+notebooks' addresses. Absent until the first green full suite on `main` after this arrangement
+landed, and until then the badge says it could not read the file.
+
 ## Why Pages works at all for this app
 
 Worth recording, because it is the usual reason a wasm app *cannot* be on Pages: GitHub Pages does
