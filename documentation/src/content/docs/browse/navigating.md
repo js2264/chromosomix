@@ -25,7 +25,7 @@ refits.
 The drag and the wheel stop at the edges of the block that was read. To see past them, change the
 range: type a wider window, press a zoom-out step, or click a cell (below).
 
-![A Micro-C map of yeast chromosome IV from 1.0 to 1.4 Mb with the pointer over it, and under the key in its top-right corner the lines "⌥ + drag to zoom into a region", "⇧ + ⌥ + drag to zoom along the diagonal" and "click to see the whole of IV".](../../../assets/screens/browse/navigating-zoom-hint.webp)
+![A Micro-C map of yeast chromosome IV from 1.0 to 1.4 Mb with the pointer over it, and under the key in its top-right corner the lines "⌥ + drag to zoom into a region", "⇧ + ⌥ + drag to zoom along the diagonal" and "click to see the whole of IV".](../../../assets/screens/browse/navigating-zoom-hint.webp "live: #uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&balance=true&transform=log10")
 
 ## Zoom into a region
 

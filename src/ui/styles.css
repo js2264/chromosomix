@@ -1804,6 +1804,23 @@ p {
   .embed-bar .breadcrumb > .crumb-contacts {
     display: none;
   }
+
+  /* A file of several resolutions draws a slider and a stop for each, and the
+     row ran past a phone's frame at the fourth stop. The stops are the same
+     choice as the slider, each a button that says its bin size, so the slider
+     goes and the stops wrap: every resolution stays one press away. */
+  .embed-bar .crumb-res {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+
+  .embed-bar .crumb-res > .res-slider {
+    display: none;
+  }
+
+  .embed-bar .res-stops {
+    flex-wrap: wrap;
+  }
 }
 
 /*

@@ -51,11 +51,11 @@ In a narrower frame the bar takes a second line rather than cutting anything off
 the contacts box move under the file and the place, together and with their labels, which is how an
 R Markdown page or a column of a lab's site shows it. Narrower still, the mark stands without the
 name beside it, and in a frame as narrow as a phone the contacts box is put away and the resolution
-kept; the full viewer, which the mark opens, has both.
+kept, every one of its bin sizes a button; the full viewer, which the mark opens, has both.
 
 Notes about the file, and refusals, appear under the bar as they do in the app.
 
-![A plain web page with a heading, a paragraph and an embedded Micro-C map of yeast chromosome IV from 1.0 to 1.4 Mb; above the map the embed's one bar holds the chromosomix mark and name, the breadcrumb and, on a second line under it, the resolution and the contacts box, with the buttons for the two panels and About on the right, and the Annotations and Aesthetics panels are folded as strips on either edge.](../../../assets/screens/embed/web-page-iframe.webp)
+![A plain web page with a heading, a paragraph and an embedded Micro-C map of yeast chromosome IV from 1.0 to 1.4 Mb; above the map the embed's one bar holds the chromosomix mark and name, the breadcrumb and, on a second line under it, the resolution and the contacts box, with the buttons for the two panels and About on the right, and the Annotations and Aesthetics panels are folded as strips on either edge.](../../../assets/screens/embed/web-page-iframe.webp "live: #uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&transform=log10&balance=true")
 
 ## Driving it from the page
 

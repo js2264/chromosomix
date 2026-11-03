@@ -594,6 +594,67 @@ main:has(.cx-landing) .content-panel:has(> .sl-container > h1#_top) {
   background: var(--cx-bg-raised);
 }
 
+/* A picture that can become the app (`lib/live.mjs`): the picture, held to its
+   own width, with the button on its lower corner as the app puts its own on a
+   card; pressed, the app in a frame the column's width, and a line under it. */
+.sl-markdown-content .cx-live {
+  position: relative;
+  display: block;
+  width: fit-content;
+}
+.sl-markdown-content .cx-live.is-live {
+  width: 100%;
+}
+.cx-live-start {
+  position: absolute;
+  right: 0.7rem;
+  bottom: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.8rem 0.45rem 0.65rem;
+  border: 1px solid var(--cx-accent);
+  border-radius: 999px;
+  background: var(--cx-accent);
+  color: var(--cx-on-accent);
+  font: 600 0.8rem / 1 var(--cx-sans);
+  box-shadow: var(--cx-shadow-2);
+  cursor: pointer;
+}
+.cx-live-start:hover {
+  filter: brightness(1.08);
+}
+.cx-live-start:focus-visible {
+  outline: 2px solid var(--cx-accent);
+  outline-offset: 2px;
+}
+/* Above Starlight's own rule for a frame in a page, which sizes it as a picture. */
+.sl-markdown-content .cx-live-frame {
+  display: block;
+  width: 100%;
+  height: clamp(26rem, 72vh, 40rem);
+  border: 1px solid var(--cx-border);
+  border-radius: var(--cx-radius);
+  box-shadow: var(--cx-shadow-1);
+  background: var(--cx-bg-raised);
+}
+.cx-live-note {
+  display: block;
+  margin-top: 0.45rem;
+  color: var(--cx-text-dim);
+  font-size: 0.8rem;
+}
+.cx-live-back {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cx-accent);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
 /* A key, drawn as a key: the app's hairline and resting surface, a heavier
    lower edge, the mono face. */
 .sl-markdown-content kbd {
