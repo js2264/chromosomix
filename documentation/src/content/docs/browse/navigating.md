@@ -25,7 +25,7 @@ refits.
 The drag and the wheel stop at the edges of the block that was read. To see past them, change the
 range: type a wider window, press a zoom-out step, or click a cell (below).
 
-<!-- screenshot: a window of yeast chromosome IV with the hint "⌥ + drag to zoom into a region" under the key in the map's corner -->
+![A Micro-C map of yeast chromosome IV from 1.0 to 1.4 Mb with the pointer over it, and under the key in its top-right corner the lines "⌥ + drag to zoom into a region", "⇧ + ⌥ + drag to zoom along the diagonal" and "click to see the whole of IV".](../../../assets/screens/browse/navigating-zoom-hint.webp)
 
 ## Zoom into a region
 
@@ -89,7 +89,7 @@ well, so zooming out finds its neighbourhood rather than the edge of the block. 
 searched at a time: the one whose star is filled on the **Tracks** card. Press another row's star to
 search that set instead.
 
-<!-- screenshot: the locus box with gene matches listed under it -->
+![The locus box with RAD5 typed into it and nine genes whose names start so listed under it, each with its accession and its span.](../../../assets/screens/browse/navigating-gene-search.webp)
 
 ## Go to another sequence
 
