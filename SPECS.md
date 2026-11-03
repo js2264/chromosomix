@@ -2978,6 +2978,14 @@ so a sharp edge in a control becomes a ramp and the ratio against it spikes at e
 that mattered. A derived lane fetches nothing of its own — both operands go through the ordinary sample
 cache — so it inherits §8.4's pan-and-zoom-free rule from the two it is made of.
 
+**The pointer reads a derived cell twice**: the derived value — `O/E 1.95×`, `expected 0.0021`,
+`G1 / G2M 0.48×` — and under it the count it was read from, each file's own, from the block the
+worker sent rather than the value drawn, which *is* the derivation (`ui/MapReadout.ts`). The card
+beside the pointer gives the two on two lines, and the line under the map on one. One map drawn as
+O/E used to print the ratio it drew as the balanced count — `O/E 1.95× · balanced 1.95` over a cell
+whose balanced count was 0.000537 — and its card had no line for the reading at all. A map smoothed
+and otherwise as read gives the count as smoothed, which is what is drawn.
+
 **What a link carries.** The normalisation is a `score` and needs no key of its own, and so is the
 baseline drawn instead of divided by, plain or along the arms (`score=baseline`,
 `score=armbaseline`); the baseline divided by is

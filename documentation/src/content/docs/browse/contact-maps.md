@@ -215,11 +215,11 @@ Tracks, loop calls and the marks you draw are placed beside and over the map too
 ## Hovering a cell
 
 Point at a cell and a card beside the pointer reads it: the sequence, or the two off the diagonal;
-the two positions, counted from 1; how far apart they are; and what the cell holds, with the derived
-value where there is one and the counts behind it. With a second file in the lower triangle it gives
-both files' counts. The same reading is written on the status line at the foot of the window, which
-keeps it after the pointer has moved on, and **tooltip** (<kbd>p</kbd>) puts the card away and leaves
-the status line.
+the two positions, counted from 1; how far apart they are; and what the cell holds: on a map drawn as
+O/E, say, the ratio on one line and, under it, the count it was read from, which says whether to
+believe it. With a second file in the lower triangle it gives both files' counts. The same reading
+is written on the status line at the foot of the window, which keeps it after the pointer has moved
+on, and **tooltip** (<kbd>p</kbd>) puts the card away and leaves the status line.
 
 Over the map the pointer is a small ring, and the crosshair's lines stop short of it, so the cell
 under it and its neighbours stay in view. Holding <kbd>Shift</kbd> snaps the reading onto the
@@ -232,4 +232,4 @@ Right-click a cell for:
   **Arrowhead** at the cell, added to the **Manual annotations** card;
 - **Copy coordinates**: the cell's two positions, counted from 1 and without separators.
 
-![The card beside the pointer on a cell off the diagonal of a balanced map of yeast chromosome IV, reading IV, 1,126,001 × 1,241,001, 115.0 kb apart and balanced 0.000537, with the crosshair's two lines through the cell.](../../../assets/screens/browse/contact-maps-hover-card.webp)
+![The card beside the pointer on a cell off the diagonal of yeast chromosome IV drawn as O/E, reading IV, 1,126,001 × 1,241,001, 115.0 kb apart, O/E 1.95× and, under it, the balanced count the ratio was read from, 0.000537, with the crosshair's two lines through the cell.](../../../assets/screens/browse/contact-maps-hover-card.webp)

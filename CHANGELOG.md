@@ -39,6 +39,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The pointer gives a derived cell's reading and the count behind it (§7.5).** On one map drawn as
+  O/E, the line under the map read `O/E 1.95× · balanced 1.95`, the count being the ratio drawn
+  again, over a cell whose balanced count was 0.000537; and the card beside the pointer gave
+  `balanced 1.95` alone. Both now give the derived value, the card on a line of its own, and under
+  it the cell's own count; the expected map and the O/E along the arms read the same way.
 - **A sequence's name opens the sequence, and a gene typed whole is listed first (§5.4).** With a
   gene model loaded, `IV` and Enter in a locus box opened the gene IVY1 rather than chromosome IV,
   since Enter takes the first gene listed and IVY1 begins with `IV`; and `RAD5` was listed fifth,

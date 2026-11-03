@@ -6269,12 +6269,14 @@ canvas.is-frozen {
 
 .cell-tip-pos,
 .cell-tip-distance,
+.cell-tip-reading,
 .cell-tip-count {
   font-family: var(--mono);
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
 
+.cell-tip-reading,
 .cell-tip-count {
   color: var(--text);
 }
