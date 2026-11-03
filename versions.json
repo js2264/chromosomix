@@ -243,10 +243,10 @@
   "pulls": [
     {
       "number": 157,
-      "commit": "06c1b13",
-      "title": "Documentation site: Starlight in the app's look, one copy per release (§32)",
+      "commit": "acac754",
+      "title": "Documentation site (§32), its pictures, and the fixes writing it found",
       "branch": "js/fervent-curie-eyxluw",
-      "date": "2026-11-03T22:19:23Z"
+      "date": "2026-11-03T22:34:51Z"
     },
     {
       "number": 156,
