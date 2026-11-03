@@ -1,6 +1,13 @@
 {
-  "latest": "997e59c",
+  "latest": "58460a4",
   "versions": [
+    {
+      "commit": "58460a4",
+      "version": "0.19.0",
+      "date": "2026-11-03T16:28:08+01:00",
+      "subject": "feat: add test coverage reporting and configuration",
+      "tag": ""
+    },
     {
       "commit": "997e59c",
       "version": "0.19.0",
@@ -132,13 +139,6 @@
       "version": "0.17.0",
       "date": "2026-10-29T15:06:29+01:00",
       "subject": "Domain pileup over expected: coolpuppy's rescaled local window (#141)",
-      "tag": ""
-    },
-    {
-      "commit": "b5fedcd",
-      "version": "0.17.0",
-      "date": "2026-10-26T19:53:46+01:00",
-      "subject": "ci: update laptop notebook",
       "tag": ""
     },
     {
