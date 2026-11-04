@@ -11369,9 +11369,14 @@ counts out the window's furniture: the header, the tab strip, the breadcrumb row
 A frame has this one bar instead, and the budgets still took all four out: in an 850-pixel frame the
 map stopped 120 pixels short of the frame's foot, over a band of empty page, however much room it had
 to grow. So the frame's root is marked (`is-embed`), the tab strip's allowance is nothing there, and
-every budget gives back `--embed-room`: the header, the breadcrumb row and the status bar, less this
-bar — measured, 53, 36 and 34 pixels against 38, a little less on a phone, where the bar is a line
-taller (`test/unit/embed-room-css.test.ts`).
+every budget gives back `--embed-room`: the header, the breadcrumb row and the status bar — 53, 36
+and 34 pixels, measured as the tab strip's allowance is — less this bar's own height, which the app
+measures as the bar draws it (`--embed-bar-h`, `App.ts`), since it is not one number: one line of 38
+pixels in a wide frame, two below 72rem, three below 50rem and more on a phone, and a fixed
+allowance ran the `+` row off the foot of every frame under 72rem
+(`test/unit/embed-room-css.test.ts`). The view's own heading is still counted as one line, as it is
+in a window: where a narrow view column — a frame with both panels open — wraps the locus box under
+the title, the deck runs that line, 20 to 30 pixels, past the frame's foot.
 
 **The two panel toggles and About**, right. The toggles are the panels' *own* buttons — the same
 objects the header holds in a window, so there is one fold path and not a second written for frames —

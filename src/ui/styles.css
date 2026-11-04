@@ -1695,13 +1695,16 @@ p {
  * anything at all.
  */
 /* The frame's share of the window (`--embed-room` at the top of this sheet):
-   no tab strip, and the header, the breadcrumb row and the status bar, less
-   this bar, given back to the picture. Measured, as `--tabstrip-h` is: 53, 36
-   and 34 pixels against the bar's 38; a phone's frame draws the bar taller
-   (below). */
+   no tab strip, and the header, the breadcrumb row and the status bar —
+   measured as `--tabstrip-h` is, 53, 36 and 34 pixels, 7.65rem — less this bar,
+   given back to the picture. The bar's own height is measured by the app
+   (`--embed-bar-h`, `App.ts`), because it is not one number: one line of 38
+   pixels in a wide frame, two below 72rem, three below 50rem and more on a
+   phone, and a fixed allowance ran the "+" row off the foot of every frame
+   narrower than 72rem. */
 .is-embed {
   --tabstrip-h: 0rem;
-  --embed-room: 5.25rem;
+  --embed-room: calc(7.65rem - var(--embed-bar-h, 2.4rem));
 }
 
 .embed-bar {
@@ -1828,12 +1831,6 @@ p {
 @media (max-width: 34rem) {
   .embed-bar .breadcrumb > .crumb-contacts {
     display: none;
-  }
-
-  /* Eight pixels taller here, where the resolution's stops wrap: that much
-     less of the window to give back (`.is-embed`, above). */
-  .is-embed {
-    --embed-room: 4.75rem;
   }
 
   /* A file of several resolutions draws a slider and a stop for each, and the

@@ -47,13 +47,17 @@ describe('a frame’s share of the window', () => {
   it('is the header, the breadcrumb row and the status bar, less the embed’s bar, in a frame with no tab strip', () => {
     const frame = rule('.is-embed')
     expect(frame).toMatch(/--tabstrip-h: 0rem;/)
-    const room = Number(/--embed-room: ([\d.]+)rem;/.exec(frame)?.[1])
-    // 53 + 36 + 34 − 38 pixels, measured: a little over five rem.
-    expect(room).toBeGreaterThan(5)
-    expect(room).toBeLessThan(5.5)
+    const room = /--embed-room: calc\(([\d.]+)rem - var\(--embed-bar-h, ([\d.]+)rem\)\);/.exec(frame)
+    expect(room, 'the room is the furniture less the measured bar').not.toBeNull()
+    // 53 + 36 + 34 pixels of furniture, measured: a little over seven and a half rem…
+    expect(Number(room?.[1])).toBeGreaterThan(7.5)
+    expect(Number(room?.[1])).toBeLessThan(7.8)
+    // …and, until the bar is measured, the one line it is in a wide frame.
+    expect(Number(room?.[2])).toBe(2.4)
   })
 
-  it('is asked for by the embed’s own root', () => {
+  it('is asked for by the embed’s own root, with its bar’s height as the bar draws it', () => {
     expect(app).toContain("root.classList.toggle('is-embed', this.embed)")
+    expect(app).toMatch(/new ResizeObserver\([\s\S]{0,200}--embed-bar-h[\s\S]{0,200}\.observe\(bar\)/)
   })
 })

@@ -825,8 +825,17 @@ export class App implements SessionHost {
     // The stylesheet's word for the same subtraction: every picture sized
     // against the window's height counts out a header, a tab strip, the
     // breadcrumb row and the status bar, and a frame has one bar instead of
-    // the four (`--embed-room` in `ui/styles.css`).
+    // the four (`--embed-room` in `ui/styles.css`). The bar is not one height —
+    // a narrower frame gives the resolution and the contacts box a line of their
+    // own, and a phone's the trail too (§21.3) — so it is measured, and the view
+    // measured again whenever it changes.
     root.classList.toggle('is-embed', this.embed)
+    if (bar !== null && typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(() => {
+        root.style.setProperty('--embed-bar-h', `${bar.getBoundingClientRect().height}px`)
+        this.current?.relayout()
+      }).observe(bar)
+    }
     root.append(
       ...(bar === null
         ? [head, this.tabs.el, this.restoreSlot, this.noticeSlot, this.breadcrumbSlot]
