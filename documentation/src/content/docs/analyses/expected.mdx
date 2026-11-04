@@ -10,27 +10,20 @@ import TaskSummary from '@components/TaskSummary.astro'
 
 <TaskSummary id="expected" />
 
-P(s) is how contact falls with the distance between two loci along the sequence, and the first curve to
-draw of any contact map, since every map has a diagonal. Its log-log slope, drawn under it, is where a
-shoulder or a plateau shows that the curve itself hides. Reach for it to describe how a genome folds, or
-to compare two libraries, conditions or organisms on one axis. Its expected form, described below, is
-also what the 4C profile over P(s), the compartments, the inter-arm alignment and the pileups divide by;
-each computes its own, so changing this task's settings changes none of them.
+P(s), how contact falls with the distance between two loci along the sequence, is the first curve to
+draw of any contact map; its log-log slope shows a shoulder or a plateau the curve hides. Use it to
+compare libraries, conditions or organisms on one axis. The 4C profile, the compartments, the inter-arm
+alignment and the pileups each compute their own expected, so this task's settings change none of them.
 
 ## Running it
 
-Open a contact map, then choose **Contact probability P(s)** in the **2D tasks** card of the
-**Analysis** panel; it is offered on every map. With **scope** on **chromosome**, the default, there is
-one curve per ticked sequence; **whole genome** pools every sequence into one curve. Press **run**. The
-price depends on what is already drawn: no reads when the block on screen holds every ticked sequence at
-the file's own bins, balanced the same way; a dense square per sequence for up to four; and one pass
-over the pixel table beyond that.
+Open a contact map, choose **Contact probability P(s)** in the **2D tasks** card of the **Analysis**
+panel, and press **run**. With **scope** on **chromosome**, the default, there is one curve per ticked
+sequence; **whole genome** pools every sequence into one.
 
-The drawer shows two figures, both on logarithmic axes: **Contact probability P(s)**, a line per
-sequence, and **Log-log slope of P(s)** under it. Both open on separations from 4 kb to 1 Mb, which is
-past the ligation artefacts at one end and inside the shortest chromosome at the other. The curve runs
-from the minimum separation to the longest sequence whatever the window says: the wheel, a dragged
-rectangle or the bounds in the figure's settings show the rest, and **fit** shows all of it.
+The drawer shows **Contact probability P(s)**, a line per sequence, over **Log-log slope of P(s)**, on
+logarithmic axes. Both open on 4 kb to 1 Mb, past the ligation artefacts and inside the shortest
+chromosome; the curve runs further, and **fit** shows all of it.
 
 ![Contact probability P(s) of the yeast Micro-C map in the drawer, a line for each of its 16 chromosomes on log-log axes from 4 kb to 1 Mb, with Log-log slope of P(s) under it.](../../../assets/screens/analyses/expected-curves.webp)
 
@@ -46,13 +39,12 @@ chromosomix expected sample.mcool::/resolutions/1000 --quantity expected --scope
 
 ## Parameters
 
-**quantity** is the one to choose with care, because two different things are called P(s).
-**probability density**, the default, is the share of all cis contacts at each separation, per base pair,
-as HiContacts' `distanceLaw` reports it. **expected (cooltools)** is the mean contact per pair of bins
-that far apart, as `cooltools expected-cis` reports it, and the quantity most published scaling exponents
-refer to. **minimum separation**, in bins, leaves out the diagonal and the one beside it by default, as
-cooltools does: they hold self-ligation and unligated fragments rather than contacts between loci.
-**log bins per step** trades the smoothness of the tail against the detail of the shoulder.
+**quantity** matters, because two things are called P(s). **probability density**, the default, is the
+share of all cis contacts at each separation, per base pair, as HiContacts' `distanceLaw` reports it.
+**expected (cooltools)** is the mean contact per pair of bins that far apart, as `cooltools expected-cis`
+reports it, and what most published scaling exponents use. **minimum separation** leaves out the
+diagonal and the one beside it by default, as cooltools does: they hold self-ligation and unligated
+fragments. **log bins per step** trades a smooth tail against a detailed shoulder.
 
 <TaskParameters id="expected" />
 
@@ -62,34 +54,21 @@ cooltools does: they hold self-ligation and unligated fragments rather than cont
 
 ## Reading the result
 
-### The curve
+The curve is straight on the log-log axes wherever contact falls as a power of the separation. The two
+quantities agree at short separations and part near the length of the longest sequence: on the yeast
+demo map they are within 1 % below 10 kb, 13 % apart at 100 kb and a factor of fifty apart at 1.2 Mb,
+while on a mammalian map they agree over every separation anybody fits. Compare curves of one quantity,
+and say which a figure shows.
 
-Contact falls by orders of magnitude with separation, and the curve is straight on the log-log axes
-wherever it falls as a power of the separation. The two quantities draw the same picture while the
-separation is short against the sequences, and part as it nears the length of the longest, where fewer
-and fewer pairs of bins are that far apart: on the yeast demo map they are within 1 % of each other
-below 10 kb, 13 % apart at 100 kb and a factor of fifty apart at 1.2 Mb, while on a mammalian map they
-agree over every separation anybody fits. Compare curves of one quantity, and say which a figure shows.
+The slope, `d log P / d log s`, is the local exponent of the decay. Towards the length of the longest
+sequence each point rests on fewer pairs of bins, and both figures grow noisy.
 
-### The slope
+### What to watch for
 
-The second figure is `d log P / d log s`, the local exponent of the decay, on the same separations as the
-curve above it. A shoulder or a plateau, which the curve hides, is plain on the slope. Towards the length
-of the longest sequence each point rests on fewer and fewer pairs of bins, and the curve and its slope
-grow noisy.
-
-## Things to know
-
-- **The density is not quite HiContacts' on a matrix.** A matrix's separations sit on a lattice of its
-  bin size, so near 10 kb on a 1 kb map one logarithmic bin holds two of them and the next holds one.
-  Dividing each bin by its nominal width, as HiContacts does, puts a sawtooth of a factor of two into
-  the curve, alternating bin by bin through the very decade a shoulder is read in; chromosomix divides
-  by the separation the bin actually covers instead. Past about 50 kb at 1 kb bins the two agree, and the counts behind them
-  are HiContacts' own, which the app's tests hold it to.
-- **Validation.** As the expected, P(s) is identical to `cooltools.expected_cis`, pooled over the same
-  logarithmic bins, on a yeast Micro-C map at 800 bp and a mouse Hi-C map at 10 kb.
-- **The four orientations have moved.** The decay of each of the four read orientations is drawn by
-  [Pairs QC](/analyses/pairsqc/), from the records of a `.pairs`, beside the rest of what they say about
-  the library.
-- **Counts, not another score.** A pass over the whole pixel table reads the stored counts. On a map
-  drawn from another score column, the run says so; a run over one sequence measures that column.
+- **The density is not quite HiContacts' on a matrix.** HiContacts divides each logarithmic bin by its
+  nominal width, which on a 1 kb map puts a sawtooth of a factor of two into the curve near 10 kb;
+  chromosomix divides by the separation the bin actually covers. Past about 50 kb at 1 kb bins the two
+  agree.
+- **The four read orientations** are drawn by [Pairs QC](/analyses/pairsqc/), from a `.pairs`.
+- **Counts, not another score.** On a map drawn from another score column, a pass over the whole pixel
+  table reads the stored counts, and the run says so; a run over one sequence measures that column.

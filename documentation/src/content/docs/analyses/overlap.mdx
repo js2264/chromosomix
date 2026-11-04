@@ -10,13 +10,11 @@ import TaskSummary from '@components/TaskSummary.astro'
 
 <TaskSummary id="overlap" />
 
-How many of my peaks sit on a promoter? How many domain boundaries fall on a CTCF peak? **Interval set overlap** compares two sets of intervals in bases, with a Jaccard index over the bases they share, and in features, counting those of each set that touch the other. With the shuffled null on, it also says whether that is more than intervals of the same sizes, on the same sequences, would give by chance. It is bedtools' `jaccard` and `intersect`, with `shuffle` for the null, and the natural next step after any task that calls a set.
+How many of my peaks sit on a promoter? **Interval set overlap** measures what two interval sets share, in bases and in features, and with a shuffled null whether that is more than chance.
 
 ## Running it
 
-Load two interval sets — BED, narrowPeak, GTF and the like, or sets other tasks called, such as a [peak call](/analyses/peaks/) or [insulation](/analyses/insulation/)'s boundaries — and open **Interval set overlap** on the **1D tasks** card of the **Analysis** panel. Choose the **first set** and the **second set**. No contact map is needed. Both sets are already in memory, so the comparison reads nothing; the shuffles are a pass over the sets each, with a progress bar and a cancel.
-
-The drawer shows **Overlap**, a table of the measures, and with **shuffled null** on a second table that sets them against the shuffles.
+Load two interval sets, such as a BED, narrowPeak or GTF, or a set another task called. Open **Interval set overlap** on the **1D tasks** card of the **Analysis** panel and choose the **first set** and the **second set**; no map is needed. The drawer shows **Overlap**, and with **shuffled null** on, a second table against the shuffles.
 
 ![The drawer of Interval set overlap for the yeast demo's ATAC-seq peaks against the genes of its GTF: the Overlap table, a Jaccard of 0.0224 with 31 % of the peaks on a gene, and the table against 1,000 shuffles of the peaks, where every measure is depleted to between a quarter and two fifths of the null at a p of 0.001.](../../../assets/screens/analyses/overlap-atac-genes.webp)
 
@@ -26,7 +24,7 @@ The same run from a shell:
 
 ## Parameters
 
-**least of a feature covered** is the share of a feature that must lie inside the other set for it to count as hit; the default, a millionth, is any overlap at all for a feature shorter than a megabase. **shuffled null** turns the test on. **set that moves** says which set is shuffled, and it matters, because the question is not symmetric: *are my peaks on promoters* moves the peaks; *are promoters on my peaks* moves the promoters. More **shuffles** give a finer p: the smallest a run can report is one over the number of shuffles plus one.
+**least of a feature covered** is the share of a feature that must lie inside the other set for it to be hit; the default is any overlap at all for a feature shorter than a megabase. **shuffled null** turns the test on, and **set that moves** is the set shuffled, which matters: *are my peaks on promoters* moves the peaks. More **shuffles** give a finer p.
 
 <TaskParameters id="overlap" />
 
@@ -38,24 +36,24 @@ The same run from a shell:
 
 ### The overlap
 
-- **Jaccard (bases)** is the shared bases over the bases in either set, from 0 to 1, and the same whichever set is first; 1 is two identical sets.
-- **Shared bases**, **Bases in either**, and each set's own bases are counted after each set's own overlaps are merged, so a GTF with a row per transcript does not count a base twice.
-- **First set hit** and **Second set hit** are the share of each set's features that touch the other, with the counts beside them. Unlike the Jaccard they are not symmetric: forty peaks of a hundred on a promoter is not forty promoters of a thousand on a peak.
+- **Jaccard (bases)**: the shared bases over the bases in either set, from 0 to 1 and the same whichever set is first; 1 is two identical sets.
+- **Shared bases**, **Bases in either** and each set's own bases count a base once, after a set's own overlaps are merged, such as a GTF's transcripts.
+- **First set hit** and **Second set hit**: the share of each set's features that touch the other, with the counts. They are not symmetric: forty peaks of a hundred on a promoter is not forty promoters of a thousand on a peak.
 
 ### Against the shuffles
 
-None of those numbers has a scale of its own: forty per cent of a set on another is either the finding the run was made for or exactly what any intervals covering that much of the genome would give. With **shuffled null** on, the set that moves is put down at random within the sequences it already occupies, keeping how many features each of them has and every feature's length, as `bedtools shuffle -chrom` does, once for each shuffle. The second table sets the observed Jaccard, shared bases and features hit against that null:
+Forty per cent of a set on another may be what any intervals covering that much of the genome would give. The second table sets the observed Jaccard, shared bases and features hit against the shuffles:
 
 - **Observed**, and **Expected**, the null's mean;
 - **Fold**, observed over expected, and **z**;
 - **p**, a permutation p on the tail the observation fell on, named under **Tail** as *enriched* or *depleted*.
 
-A good result is a fold well away from 1 with a small p. The p carries Phipson and Smyth's `+1`, so it never reaches zero: with 1,000 shuffles the smallest is about 0.001, and a p at that floor means more shuffles may give a smaller one. The same seed gives the same null.
+A good result is a fold well away from 1 with a small p. The p never reaches zero: with 1,000 shuffles the smallest is about 0.001, and a p at that floor may fall with more shuffles. The same seed gives the same null.
 
-### Things to watch for
+### What to watch for
 
-The null needs each sequence's length. A sequence whose length the session does not know is drawn over the furthest position either set reaches there, which is shorter than the sequence and overstates the enrichment; the run names those sequences. A session opened from interval files alone knows only the lengths they imply, which are lower bounds too. Open the map, a `chrom.sizes` or a bigWig beside the sets to give the shuffle the real lengths.
+The shuffle needs each sequence's length. Where the session does not know one, it uses the furthest position either set reaches there, which overstates the enrichment, and names the sequence. Open the map, a `chrom.sizes` or a bigWig beside the sets to give it the real lengths.
 
 ## Compared with bedtools
 
-In [the validation](https://chromosomix.app/validation/#interval-overlap-bedtools), mouse ATAC-seq peaks against promoters on chr19 count the same shared bases, the same bases in either and the same peaks on a promoter as bedtools' `jaccard` and `intersect -u`. The null — the peaks moved at random within their chromosome, keeping their lengths, a thousand times — is the same distribution as `bedtools shuffle -chrom`'s; since both draw at random, the two nulls are compared as distributions rather than draw for draw.
+In [the validation](https://chromosomix.app/validation/#interval-overlap-bedtools), the counts are those of bedtools' `jaccard` and `intersect -u`, and the null is distributed as `bedtools shuffle -chrom`'s.

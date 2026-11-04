@@ -94,8 +94,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 - **The documentation looks like the app (§32.4).** Its header is the app's header, measure for
   measure: the bar's height and padding, the mark, the search well and the app's buttons. The home
   page's rows follow the sidebar's order, and *Open the browser* sits beside *What chromosomix is*.
-  And a live view's right side, under the contents list, takes the pointer again: the list's column,
-  folded away or not, was still catching every click there.
+  The guides are a third shorter — 112,000 words down to 73,000 — and keep every control, default,
+  limit and warning they named. And a live view's right side, under the contents list, takes the
+  pointer again: the list's column, folded away or not, was still catching every click there.
 - **An embed's bar fits a narrower frame (§21.3).** The bar was one row that scrolled, so in a frame
   of 1,040 pixels the contacts box's example was cut, at 910, the width of an R Markdown page, the row
   ended at `con`, at 720 the resolution and the box were out of sight, and at 480 the frame scrolled

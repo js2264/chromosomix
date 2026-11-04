@@ -10,19 +10,15 @@ import TaskSummary from '@components/TaskSummary.astro'
 
 <TaskSummary id="reconstruct3d" />
 
-A contact map counts how often two places of the genome were caught together; a 3D model is a chain of beads, one per bin, placed so that their distances explain those counts. **Model from the map** builds one from the map you have open, so you can look at the fold beside the map it came from, colour it by any track, and hold it against the map with [Model versus map](/analyses/structuremap/). Reach for it when your sample has no published model, or to see how a model changes with the method, the exponent or the starting point.
-
-A model is one reading of the map, not the only one: the map fixes it only up to a mirror image, and two starting points can settle in two different optima. The sections below say how to tell what the map pins down from what it does not.
+**Model from the map** builds a 3D model of the open map: a chain of beads, one per bin, placed so that their distances explain the counts. Look at it beside the map, colour it by a track, or hold it against the map with [Model versus map](/analyses/structuremap/). A model is one reading of the map: the map fixes it only up to a mirror image, and two starts can settle in two optima.
 
 ## Running it
 
-Open a contact map, then open **Model from the map** on the **3D tasks** card of the **Analysis** panel. It is the first task of the card and the only one that needs no model loaded. In a deck it models the starred map.
+Open a contact map, then **Model from the map**, first on the **3D tasks** card of the **Analysis** panel. It needs no model loaded, and on a deck it models the starred map.
 
-**sequences** says what to model. It starts on what the map shows — the locus on screen, or every sequence on screen — and takes a locus or several sequences separated by commas; empty is the whole file. Every bin of the resolution the map is open at is one bead, so for a coarser model open the map at a coarser resolution first, which also means far less to read.
+**sequences** starts on what the map shows and takes a locus or comma-separated sequences; empty is the whole file. Each bin at the open resolution is one bead, so for a coarser model open the map at a coarser resolution. Time and memory grow with the square of the beads, with no ceiling: the line beside **run** gives the beads, the time per hundred refinement steps and the memory, and a browser that cannot give that much says so.
 
-Time and memory grow with the square of the number of beads, and there is no ceiling: the line beside **run** gives the number of beads and their width, the time per hundred refinement steps and the memory the matrices will take, for you to weigh before you press it. A browser that cannot give that much memory says so in a note rather than failing.
-
-When it has run, the model is a new row of the **Structures** card in the **Annotations** panel, named after what was modelled — `3D model · chrIV`, `3D model · IV:1,000,001-1,400,000` or `3D model · 16 sequences` — and it opens in a structure cell of its own, beside whatever the deck already shows (see [3D models beside the map](/browse/structures/)). A second run never replaces the first: it is numbered `(2)`, then `(3)`, so models made with two methods, two exponents or two seeds can be set side by side. The drawer shows a table of how the model was made.
+The model becomes a row of the **Structures** card in the **Annotations** panel, named after what was modelled, such as `3D model · chrIV`, and opens in a structure cell of its own ([3D models beside the map](/browse/structures/)). A second run never replaces the first: it is numbered `(2)`, then `(3)`.
 
 ![The yeast Micro-C map of IV:1,000,001-1,400,000 at 1 kb beside the structure cell holding the model Model from the map made of it, with the drawer's table of how it was made: pastis-NB, 373 beads of 400 cells, stopped on the step budget, Spearman ρ 0.899.](../../../assets/screens/analyses/reconstruct3d-yeast-iv.webp)
 
@@ -30,16 +26,11 @@ The same run from a shell:
 
 <TaskCommand id="reconstruct3d" />
 
-From the shell the model is written as a bed3d and a PDB beside its TSV files. pastis-NB's fit runs on one thread unless you give `--threads`; the model is the same, bit for bit, on any number of threads.
+The shell writes a bed3d and a PDB beside the TSV files. pastis-NB's fit runs on one thread unless you give `--threads`; the model is the same on any number.
 
 ## Parameters
 
-**method** is the choice that changes the model rather than the speed. The two options are the two readings of a contact count the literature takes:
-
-- **pastis-NB · a count is a count**, the default, treats each count as drawn from a negative binomial whose mean falls with distance, and finds the model that makes the counts most probable. A pair counted zero times is weak evidence that its beads are far apart, so nothing has to be invented, and a pair seen often holds its beads more firmly with no weighting set by hand.
-- **ShRec3D · a count is a distance** turns each count into a distance, `d = c^(−1/α)`, fills in the pairs the map never counted, starts from classical multidimensional scaling and refines by SMACOF, each pair weighted as **weight pairs by** says. It is faster, and what most published models were made with.
-
-**exponent α** is 3 by default, the fractal-globule value. Neither method fits it: it is yours to set, and it is the same number Model versus map assumes, so a model made here means by it what a model made by either published tool does. **seed**, offered under pastis-NB, is where the beads start before the fit. **refinement steps** caps the fit, which stops earlier once a step stops improving it.
+**method** changes the model, not just the speed. **pastis-NB · a count is a count**, the default, finds the model that makes the counts most probable under a negative binomial whose mean falls with distance: a zero count is weak evidence that two beads are far apart, not a distance to invent. **ShRec3D · a count is a distance** turns each count into a distance, `d = c^(−1/α)`, fills in the pairs the map never counted, and refines a classical multidimensional scaling by SMACOF, weighted as **weight pairs by** says; it is faster. **exponent α**, 3 by default, is the fractal-globule value, the one Model versus map assumes; neither method fits it.
 
 <TaskParameters id="reconstruct3d" />
 
@@ -47,41 +38,31 @@ From the shell the model is written as a bed3d and a PDB beside its TSV files. p
 
 <TaskOutputs id="reconstruct3d" />
 
-The model leaves as a bed3d — `chrom start end x y z`, the format [3D models](/files/structures/) describes, which opens here again — and as a PDB for PyMOL and the other molecular viewers, from the **bed3d** and **PDB** buttons of its row, from the drawer and from the shell. A PDB can number at most 99,999 beads and 9,999 to a chain; past that the PDB button is disabled with the reason, and the shell writes the bed3d alone.
+The model saves as a bed3d (`chrom start end x y z`, the [3D models](/files/structures/) format, which opens here again) and as a PDB for PyMOL and other molecular viewers, from the **bed3d** and **PDB** buttons of its row, the drawer or the shell. A PDB holds at most 99,999 beads, 9,999 to a chain; past that the **PDB** button is disabled and the shell writes the bed3d alone. A saved session keeps the recipe, not the coordinates: after a reload the row comes back detached, with **recompute**. Export the bed3d to keep the coordinates.
 
 ## Reading the result
 
 ### The model
 
-The model has no physical unit. It is centred and scaled to a root-mean-square radius of 1, because a map carries no unit and neither method puts one in, so every distance read from it — a measurement in the cell, the [spatial tracks](/analyses/spatialtracks/) — is in model units, comparable within one model.
+The model has no unit: it is centred and scaled to a root-mean-square radius of 1, so a distance read from it, in the cell or by the [spatial tracks](/analyses/spatialtracks/), is in model units, comparable within one model.
 
-It is fixed only up to a mirror image: a model and its reflection explain the counts equally well, so two runs can come out in opposite hands and no rotation will bring one onto the other. The mirror toggles on the **frame** row of the **3D structure** card bring one model into the other's hand. **compare with** then lays another model over this one and says how many beads matched and the RMSD between them, and colouring by displacement shows where the two differ.
-
-Under pastis-NB, run it from two or three seeds. What every seed agrees on is what the map pins down; what changes between seeds is the optimum the fit happened to settle in. The same settings on the same map always give the same model.
+Two runs can come out as mirror images, which no rotation brings together: flip one with the mirror toggles on the **frame** row of the **3D structure** card. **compare with** lays another model over this one and gives the beads matched and the RMSD; colouring by displacement shows where they differ. Under pastis-NB, run two or three values of **seed**: what every seed agrees on is what the map pins down. The same settings on the same map always give the same model.
 
 ### The table
 
-The drawer's table says what was solved and how:
-
-- **Contacts**, **Beads** and **Pairs counted**: where the counts were read from, how many beads were placed of the bins read, and how many pairs the map counted. A bin the map counted nothing on — a filtered bin, a gap — is left out, and a note says how many.
-- Under pastis-NB: the law of a pair's mean; whether the file's balancing weights were folded into it; how many zeros were used as evidence; the overdispersion, as a curve `r` against the mean, given near the diagonal and at the farthest separation — a smaller `r` is more overdispersed, and *none* means the counts turned out Poisson and the fit is pastis-PM2; the MDS start and its seed; the steps; why the fit stopped, under **Stopped on**; and `−log L` as pastis' own objective gives it.
+- **Contacts**, **Beads** and **Pairs counted**: where the counts came from, how many beads were placed of the bins read, and how many pairs the map counted. A bin with no counts, filtered or a gap, is left out, and a note says how many.
+- Under pastis-NB: the law of a pair's mean, whether balancing weights were folded into it, and how many zeros were used; the overdispersion `r` against the mean, near the diagonal and at the farthest separation (a smaller `r` is more overdispersed; *none* means the counts were Poisson and the fit is pastis-PM2); the MDS start and its seed; the steps; **Stopped on**; and `−log L`, pastis' own objective.
 - Under ShRec3D: the distance law, the weighting, the steps taken and the final weighted stress.
-- **Spearman ρ (1/d vs contacts)**: how well the model's distances rank the pairs the map counted. 1 is a model that orders every pair as the map does.
+- **Spearman ρ (1/d vs contacts)**: how well the model's distances rank the pairs the map counted; 1 orders every pair as the map does.
 
-Check **Stopped on** first. *the step budget — raise it for a closer fit* means the fit was still improving when **refinement steps** ran out; run it again with more. For the agreement sequence by sequence, with the model's distances drawn beside the map's contacts, run [Model versus map](/analyses/structuremap/) on the new model.
+Check **Stopped on** first: *the step budget — raise it for a closer fit* means the fit was still improving when **refinement steps** ran out, so run it again with more. For the agreement sequence by sequence, run [Model versus map](/analyses/structuremap/) on the new model.
 
 ### A balanced map
 
-pastis-NB always reads the raw counts. Where the file carries balancing weights, it puts them into each pair's expected count, as pastis does, rather than dividing them out of the data: a balanced value is a count times two weights, and a negative binomial handed one would find no overdispersion and quietly become a Poisson. The coverage is still corrected, and a note says how. A bin the balancer rejected is left out of the model, as the balanced map leaves it out. Because of this, a pastis-NB run on a balanced view reads its counts from the file rather than borrowing the block on screen, and the line beside **run** says so.
+pastis-NB always reads the raw counts. Balancing weights go into each pair's expected count, as in pastis, rather than being divided out, and a bin the balancer rejected is left out. The coverage is still corrected; a note says how. So on a balanced view it reads its counts from the file, not the block on screen, and the line beside **run** says so.
 
 ## Compared with pastis
 
-The default method is pastis-NB as pastis runs it (Varoquaux, Noble & Vert 2023; GitHub `6888ac2`, α = 3, zeros used), function for function: the counts' mean and variance at each separation and the dispersion fitted against the mean, pastis' MDS start from beads placed at random in a cube — drawn as numpy draws them, so seed `s` places every bead where pastis' `random_state=s` does — and the same L-BFGS fit to pastis' tolerances. In [the validation](https://chromosomix.app/validation/#d-model-pastis-nb), on a yeast Micro-C map at 12.8 kb, chromosomix and pastis started from the same seed give the same model, judged against how alike pastis' own runs from different seeds are.
+The default method is pastis-NB as pastis runs it (Varoquaux, Noble & Vert 2023; GitHub `6888ac2`, α = 3, zeros used), function for function: seed `s` places every bead where pastis' `random_state=s` does. In [the validation](https://chromosomix.app/validation/#d-model-pastis-nb), on a yeast Micro-C map at 12.8 kb, the two give the same model from the same seed. One departure: a separation whose counts are not overdispersed beyond sampling noise is left out of the dispersion's fit, and with fewer than three left the counts are read as Poisson; a real map clears that floor. There are no restarts: one model per seed, as in pastis.
 
-One departure is deliberate. A separation whose counts are not overdispersed beyond sampling noise is left out of the dispersion's fit, and with fewer than three separations left the counts are read as Poisson. A real map clears that floor by far at every separation, so there the curve is pastis'. And there are no restarts: one model per seed, as pastis gives.
-
-ShRec3D (Lesne et al. 2014) departs from its paper in three named ways: an uncounted pair is filled with the mean observed distance at the same separation on the same sequence, because the paper's shortest-path filling would not finish in a browser tab; the classical solution is refined by SMACOF rather than kept as it is; and that refinement is weighted by the counts.
-
-## Things to know
-
-A model is not stored in a saved session; its recipe is. After a reload its row comes back detached with **recompute**, which opens the task in the drawer to run again; the same settings give the same model, since the run is deterministic. Export the bed3d to keep the coordinates themselves.
+ShRec3D (Lesne et al. 2014) departs from its paper in three ways: an uncounted pair takes the mean observed distance at its separation on its sequence, not a shortest path; the classical solution is refined by SMACOF; and that refinement is weighted by the counts.
