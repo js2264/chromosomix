@@ -1533,6 +1533,13 @@ p {
   cursor: default;
 }
 
+/* The sequence the text names, above the genes it also begins: what Enter
+   opens, set apart from the list it heads by the list's own hairline. */
+.search-hit.search-hit-typed {
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+
 .browser-zoom,
 /* The one part of a map's subtitle that moves, and the browser's own. Tabular
    figures so a digit changing under a drag does not shuffle the rest of the
@@ -1728,6 +1735,92 @@ p {
   gap: 0.15rem;
   flex: 0 0 auto;
   margin-left: auto;
+}
+
+/*
+ * **A narrower frame gives way in an order, rather than clipping the row's
+ * end** (§21.3). The breadcrumb is one row that scrolls, and the end that
+ * scrolled out of sight was the resolution and the contacts box: at 1,040
+ * pixels the box's example was cut, at 910 — an R Markdown page's width — the
+ * row ended at `con`, and at 720 the two were gone, with nothing saying they
+ * were there to be scrolled to. Frames that narrow are where an embed lives: a
+ * notebook cell, a rendered report, a paper's supplement.
+ *
+ * In the frame the viewport *is* the frame, so these are media queries. First
+ * the two controls that say how the picture is drawn take a line of their own
+ * under the trail, together and with their labels: a zero-height break,
+ * ordered between the trail and them, is what keeps the pair from being
+ * split, as plain wrapping split it — the last item, the box, went first. The
+ * trail then has a line to itself, so the file is named in full where it fits,
+ * and the brand and the three buttons keep to the first line. Then the brand
+ * keeps its mark and lets its name go, which keeps the trail on one line down
+ * to 720 pixels: the mark is still the link out, and About still says whose
+ * viewer this is. Last, in a frame a phone could be, the contacts box is put
+ * away and the resolution kept: of the two it is the one a reader looks at one
+ * figure with, and the total every map is drawn to is a press away, in the
+ * full viewer the mark opens.
+ */
+@media (max-width: 72rem) {
+  .embed-bar {
+    align-items: flex-start;
+  }
+
+  .embed-bar > .embed-brand {
+    margin-top: 0.2rem;
+  }
+
+  .embed-bar .breadcrumb {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    row-gap: 0.15rem;
+  }
+
+  .embed-bar .breadcrumb::before {
+    content: '';
+    order: 1;
+    flex: 0 0 100%;
+    height: 0;
+  }
+
+  .embed-bar .breadcrumb > .crumb-res,
+  .embed-bar .breadcrumb > .crumb-contacts {
+    order: 2;
+  }
+
+  .embed-bar .breadcrumb > .crumb-res,
+  .embed-bar .breadcrumb > .crumb-contacts:first-of-type {
+    margin-left: 0;
+    padding-left: 0.25rem;
+  }
+}
+
+@media (max-width: 50rem) {
+  .embed-brand-name {
+    display: none;
+  }
+}
+
+@media (max-width: 34rem) {
+  .embed-bar .breadcrumb > .crumb-contacts {
+    display: none;
+  }
+
+  /* A file of several resolutions draws a slider and a stop for each, and the
+     row ran past a phone's frame at the fourth stop. The stops are the same
+     choice as the slider, each a button that says its bin size, so the slider
+     goes and the stops wrap: every resolution stays one press away. */
+  .embed-bar .crumb-res {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+
+  .embed-bar .crumb-res > .res-slider {
+    display: none;
+  }
+
+  .embed-bar .res-stops {
+    flex-wrap: wrap;
+  }
 }
 
 /*
@@ -6262,12 +6355,14 @@ canvas.is-frozen {
 
 .cell-tip-pos,
 .cell-tip-distance,
+.cell-tip-reading,
 .cell-tip-count {
   font-family: var(--mono);
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
 
+.cell-tip-reading,
 .cell-tip-count {
   color: var(--text);
 }

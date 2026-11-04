@@ -189,9 +189,10 @@ knowing about:
 
 [igv]: https://s3.amazonaws.com/igv.org.genomes/genomes.json
 
-The `bucket` front end lists with `ListObjectsV2`, so the prefix's bucket needs `s3:ListBucket`
-granted to `*` for that prefix ([hosting.md](hosting.md), *Making a public bucket browsable*), or
-run it from a machine whose AWS credentials cover it. It emits no columns: what a bucket knows
+The `bucket` front end lists with an anonymous `ListObjectsV2` — the script signs nothing, so the
+credentials of the machine it runs on make no difference — and the prefix's bucket therefore needs
+`s3:ListBucket` granted to `*` for that prefix ([hosting.md](hosting.md), *Making a public bucket
+browsable*); a bucket that refuses anonymous listing is reported as such. It emits no columns: what a bucket knows
 about a file is its name and its size. Add columns by hand, or generate them from your own sample
 sheet; the format is plain JSON and the `check` front end will tell you if a row is malformed.
 

@@ -4303,6 +4303,16 @@ export class Session {
    *
    * @internal SessionDeck builds a tracks cell's axis with it.
    */
+  /**
+   * The sequence a name typed into a map's locus box means, as the open file
+   * names it, or `null`: `findContig`'s ladder, so `chr4`, `4` and `IV` are one
+   * sequence, as they are when the box opens one.
+   */
+  private sequenceNamed(text: string): string | null {
+    const assembly = this.file === null ? null : this.assemblyOfFile(this.file)
+    return assembly === null ? null : (findContig(assembly, text)?.name ?? null)
+  }
+
   assemblyOfFile(file: OpenFile): Assembly | null {
     const contigs = contigPairs(file.contigs)
     if (contigs.length === 0) return null
@@ -7798,6 +7808,7 @@ export class Session {
         return new WholeView({
           client: this.clientOf(),
           caption: this.captionFor(state),
+          sequenceNamed: (text: string) => this.sequenceNamed(text),
           ...(picker
             ? {
                 wholeFileLevel: {
@@ -7901,6 +7912,7 @@ export class Session {
     const view = new WholeView({
       client: this.clientOf(),
       caption: this.captionFor(state),
+      sequenceNamed: (text: string) => this.sequenceNamed(text),
       binsize: file.info.binsize ?? 1,
       rungs: file.info.entries,
       ...this.pooledProps(state),
@@ -8103,6 +8115,7 @@ export class Session {
     const view = new RegionView({
       client: this.clientOf(),
       caption: this.captionFor(state),
+      sequenceNamed: (text: string) => this.sequenceNamed(text),
       ...(keep === undefined ? {} : { boxControl: keep }),
       binsize: this.file?.info.binsize ?? 1,
       rungs: this.file?.info.entries,

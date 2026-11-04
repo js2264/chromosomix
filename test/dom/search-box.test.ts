@@ -194,3 +194,66 @@ describe('a view that has moved', () => {
     expect(box.input.value).toBe('half a locu')
   })
 })
+
+// On the yeast genome `IV` is chromosome IV and the first letters of IVY1, and
+// Enter took the gene: a list hanging under the box decided what a sequence's
+// name meant. The name the view acts on as typed heads the list instead.
+describe('a sequence’s name', () => {
+  const IVY: Suggestion[] = [
+    { label: 'IVY1 · YDL137W · IV:824,445-1,026,487 · genes', value: 'IV:824,445-1,026,487' },
+    { label: 'IVY2 · YDL138W · IV:820,000-821,000 · genes', value: 'IV:820,000-821,000' },
+  ]
+
+  function named(): { box: SearchBox; got: Array<[string, Suggestion | undefined]> } {
+    const got: Array<[string, Suggestion | undefined]> = []
+    const box = new SearchBox({
+      placeholder: 'a sequence, or a gene',
+      onSubmit: (text, hit) => got.push([text, hit]),
+      suggest: (text) => (text.trim().length < 2 ? [] : IVY.filter((hit) => hit.label.toLowerCase().startsWith(text.trim().toLowerCase()))),
+      // The file's own spelling, whatever the reader typed: `chrIV` and `iv` are IV.
+      sequence: (text) => (['iv', 'chriv', '4'].includes(text.toLowerCase()) ? 'IV' : null),
+    })
+    document.body.appendChild(box.el)
+    return { box, got }
+  }
+
+  it('heads the list when genes begin with it, and is what Enter opens, as typed', () => {
+    const { box, got } = named()
+    typeInto(box, 'IV')
+    expect(textsOf(box.el, '.search-hit')).toEqual(['IV · the whole sequence', IVY[0].label, IVY[1].label])
+    expect(box.el.querySelector('.search-hit')?.classList.contains('search-hit-typed')).toBe(true)
+    enter(box)
+    expect(got).toEqual([['IV', undefined]])
+    expect(box.input.value).toBe('IV')
+  })
+
+  it('is the file’s own name for the sequence, whatever spelling was typed', () => {
+    const { box, got } = named()
+    typeInto(box, 'iv')
+    enter(box)
+    expect(got).toEqual([['IV', undefined]])
+  })
+
+  it('leaves the genes under it a click away, each still a hit', () => {
+    const { box, got } = named()
+    typeInto(box, 'IV')
+    all<HTMLButtonElement>(box.el, '.search-hit')[1].dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    expect(got).toEqual([[IVY[0].value, IVY[0]]])
+  })
+
+  it('adds nothing where no gene begins with it, so no list appears', () => {
+    const { box, got } = named()
+    typeInto(box, '4')
+    expect(all(box.el, '.search-hit')).toHaveLength(0)
+    enter(box)
+    expect(got).toEqual([['4', undefined]])
+  })
+
+  it('is no row at all where the text names no sequence', () => {
+    const { box, got } = named()
+    typeInto(box, 'IVY')
+    expect(textsOf(box.el, '.search-hit')).toEqual([IVY[0].label, IVY[1].label])
+    enter(box)
+    expect(got).toEqual([[IVY[0].value, IVY[0]]])
+  })
+})

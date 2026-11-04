@@ -177,6 +177,7 @@ import { ViewerError } from '../errors'
 import { parseUri } from '../uri'
 import type { ByteSource } from '../types'
 import { COMMIT, VERSION } from '../version'
+import { DOCS_URL } from '../documentation/site'
 
 /**
  * Which build wrote a file, after the `# chromosomix` every export opens with:
@@ -2401,6 +2402,9 @@ and an indexed FASTA are read by range, as the app reads them, and nothing of
 them is written to disk. What is read whole — a feature file, a HiC-Pro
 matrix, a workspace, or any file whose host serves no range — is fetched into
 $TMPDIR, with its progress on stderr, and removed when the command ends.
+
+Every task, what it reads and writes, and how to read a result:
+${DOCS_URL}
 `
 
 /**

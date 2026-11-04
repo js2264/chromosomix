@@ -1644,8 +1644,8 @@ export class AnalysisDrawer {
           ? `${fmt.int(outputs.length)} tracks added to the Tracks card in the Annotations panel, marked *.`
           : 'Added to the Tracks card in the Annotations panel, marked *.'
         : where === 'structure'
-          ? 'Added to the Structures card in the Annotations panel, and shown in the deck’s ' +
-            'structure cell (add one from the deck’s bar if none is open).'
+          ? 'Added to the Structures card in the Annotations panel, and shown in a structure ' +
+            'cell of its own, beside what the deck already shows.'
           : where === 'overlay' && this.context()?.hasMap === false
             ? many
               ? `${fmt.int(outputs.length)} sets added to the Tracks card in the Annotations panel as 1D tracks, marked *.`

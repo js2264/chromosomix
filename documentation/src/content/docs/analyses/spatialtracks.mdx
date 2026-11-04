@@ -1,0 +1,65 @@
+---
+title: "Spatial tracks"
+description: "Turn a 3D model into tracks along the genome: radial position, distance to a locus and local compaction."
+---
+
+import TaskCommand from '@components/TaskCommand.astro'
+import TaskOutputs from '@components/TaskOutputs.astro'
+import TaskParameters from '@components/TaskParameters.astro'
+import TaskSummary from '@components/TaskSummary.astro'
+
+<TaskSummary id="spatialtracks" />
+
+Every bead of a model has a place, and from the places come numbers along the genome. **Spatial tracks** turns a model into up to three tracks on the map's bins — how far each bin sits from the model's centre, how far from a locus you choose, and how tightly the chain is packed around it — so the model can be read with everything that reads a track: beside the map, as a colouring of the model itself, and in every 1D task.
+
+## Running it
+
+Like [Model versus map](/analyses/structuremap/), it is listed greyed on the **3D tasks** card of the **Analysis** panel until a contact map is open and a model is on the **Structures** card. Choose the model under **structure**. For the distance track, give a locus under **distance to**: type it, or press **pick on map** and <kbd>Shift</kbd>-drag over the stretch on the map, which fills the box. Left empty, only the other two tracks are made. The task reads nothing from the map but its bins, so it costs no reads.
+
+The tracks are added to the **Tracks** card in the **Annotations** panel, marked `*`, and drawn as lanes beside the map, each named after the model:
+
+- **Radial position**, the distance from the model's centre;
+- **Local compaction**, with the window in its name — `Local compaction (±5 beads)`;
+- **Distance to the centre of** the locus, when one was given.
+
+On a phased model each haplotype has tracks of its own.
+
+![The three spatial tracks of a model made from the yeast map of IV:1,000,001-1,400,000, the distance to IV:1,250,001-1,255,000, the local compaction and the radial position, as lanes along the map's left edge, beside the model in its cell coloured by its radial position from 0.511 to 1.347.](../../../assets/screens/analyses/spatialtracks-radial.webp)
+
+The same run from a shell:
+
+<TaskCommand id="spatialtracks" />
+
+## Parameters
+
+**compaction window** sets the scale of the compaction track: each bead is compared with this many neighbours either side along its chain, so a small window follows the chain bead by bead and a wider one averages over a longer stretch of it. **distance to** takes a point or a window; a window is measured from the centre of the beads it covers.
+
+<TaskParameters id="spatialtracks" />
+
+## What it writes
+
+<TaskOutputs id="spatialtracks" />
+
+## Reading the result
+
+Every value is a distance in the model's own units — a root-mean-square radius of 1 for a model made by [Model from the map](/analyses/reconstruct3d/), whatever units its file used for one you loaded — so the tracks compare positions along one model, not between models in different units. Each bin takes the mean over the beads whose middles fall in it, and a bin no bead falls in is a gap.
+
+### Radial position
+
+The distance from the centre of mass of every bead the model and the map share. On a model of a whole genome that is the centre of the whole, and a high value is a bin far out from it; on a model of one chromosome it is that chromosome's own centre.
+
+### Distance to a locus
+
+The spatial virtual 4C: how far every bin is from the centre of the locus, low being close. Set it beside the map's own [4C profile](/analyses/fourc/) from the same anchor: a model that honours the map puts near the anchor what the map counted often with it.
+
+### Local compaction
+
+Each bead's mean distance to its neighbours along the chain, within the window either side. Small is compact. A bead with no neighbour on its sequence has no value.
+
+### Using the tracks
+
+They are tracks in every sense. Colour the model by one under **colour by** on the **3D structure** card; compare radial position between A and B [compartments](/analyses/compartments/) with [Signal by group](/analyses/groupsignal/); or set compaction against [insulation](/analyses/insulation/) with [Track correlation](/analyses/trackcorr/).
+
+## Things to know
+
+The task follows no published package, so it carries no validation badge: the three tracks are measured directly on the model's coordinates. Where no bead of the model lies at the locus under **distance to**, the distance track is not made, and a note says so.

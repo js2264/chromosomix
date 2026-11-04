@@ -1,0 +1,72 @@
+---
+title: "Loop calling"
+description: "Call loops as pixels enriched over their local background, as HiCCUPS does in cooltools.dots, with every call's expecteds and q-values."
+---
+
+import TaskCommand from '@components/TaskCommand.astro'
+import TaskOutputs from '@components/TaskOutputs.astro'
+import TaskParameters from '@components/TaskParameters.astro'
+import TaskSummary from '@components/TaskSummary.astro'
+
+<TaskSummary id="loops" />
+
+Loop calling answers one question — *where are the loops* — by testing every pixel of the map against its own neighbourhood. A pixel is called where it holds more contacts than four local backgrounds say it should, after a false-discovery correction, and enriched pixels close together are one loop. It is HiCCUPS (Rao et al. 2014) as `cooltools.dots` computes it, with the defaults of its Python API.
+
+[Pattern detection](/analyses/chromosight/) answers a wider question by template matching, and loops are one of the shapes it can be handed. The two read the same map and call different things; run both when it matters which loops you trust.
+
+## Running it
+
+It needs a map that carries balancing weights, since the expected each pixel is tested against is the balanced map's: on a file with none the row waits, saying to run `cooler balance` on it. Open the **Analysis** panel (<kbd>4</kbd>), choose **Loop calling** in the **2D tasks** card, tick the sequences to scan, and press **run**. It is a scan: each sequence is read as a band along its diagonal, as far out as **furthest from the diagonal**, and the price beside **run** says how much that is.
+
+**Called loops**, the loop set, lands on the map as a ring round every loop the moment the run finishes; it is a row of the **Tracks** card in the **Annotations** panel, marked `*`, whose **display** turns it into **arcs (1D track)**. In the drawer are a table of every call, the **Loop spectrum**, and **Contacts needed, by λ-chunk**. The notes say which kernel ran, how far the scan reached, how many pixels were scored and how many passed, and how many clusters survived the filter.
+
+![A yeast map of chromosome IV from 1,030 to 1,140 kb with three called loops drawn as rings, beside the drawer narrowed to show the table of the 17 loops called on IV.](../../../assets/screens/analyses/loops-rings-table.webp)
+
+The same run from a shell:
+
+<TaskCommand id="loops" />
+
+The loops it calls are a loop set like any other: pile them up with [aggregate peak analysis](/analyses/apa/) to see what they look like on average.
+
+## Parameters
+
+**The kernel is the one setting with no default.** cooltools has kernels for bins of 4 to 28 kb — **outer half-width** 7 and **inner half-width** 4 from 4 kb, 5 and 2 from 8 kb, 3 and 1 from 18 kb, Rao et al.'s — and the two boxes are filled from that table for the map you opened. On a map outside it, such as a 1 kb yeast map or a 50 kb one, the boxes are empty and the run is refused until you fill them: the inner half-width is a loop's own size, and the outer how far the neighbourhoods reach.
+
+**Furthest from the diagonal** and **clustering radius** start at 10 Mb and 20 kb in the map's bins, as `dots()` sets them, and follow a change of resolution until you type a number of your own. The **false discovery rate** is 0.1.
+
+<TaskParameters id="loops" />
+
+## What it writes
+
+<TaskOutputs id="loops" />
+
+## Reading the result
+
+### How a pixel is called
+
+Each pixel is compared with four neighbourhoods of its own: the donut around it, a bar through it vertically and one horizontally, and the square below and left of it, towards the diagonal — each out to the outer half-width, with the square of the inner half-width about the pixel left out. Each gives a *locally adjusted expected*, λ: the distance decay at the pixel, scaled by what the neighbourhood holds over what the decay says it should, and brought back to the pixel's raw counts so that a raw count is tested against a Poisson tail.
+
+Pixels are grouped into **λ-chunks** of like expected, and Benjamini–Hochberg runs within each chunk, kernel by kernel, at the **false discovery rate**. A pixel that passes in all four neighbourhoods is enriched. Enriched pixels within the **clustering radius** of each other are one loop, called at its brightest pixel; then the **enrichment filter** keeps a loop at 1.5 times its vertical and horizontal expecteds, 1.75 times its donut and lower-left ones and twice one of those two, and a single-pixel cluster only where its four q-values sum to 0.02 or less. A clustering radius of 0 keeps every enriched pixel as a call, with no filter.
+
+### The table and the loop set
+
+The table has a row per loop: **Start 1** and **Start 2**, the bins of its two anchors, and their **Separation (bp)**; **Observed**, the raw contacts in the pixel; **Enrichment**, observed over the donut's λ; the four λ, in raw counts; the four q-values; and **Cluster**, how many enriched pixels its cluster held. The loop set carries the same calls, each anchor one bin wide, scored by its enrichment, and leaves as a BEDPE.
+
+### The loop spectrum
+
+Each loop's enrichment over its donut against how far apart its anchors are: a cloud of points, with the median in log-spaced bands drawn through it. A pileup averages separation away, and a set whose short-range calls are loops and whose long-range ones are noise averages into one plausible dot; here they are apart. Scores that fall steadily with separation, or that pile up at the nearest separation the scan can reach, are the two shapes to be wary of.
+
+### Contacts needed, by λ-chunk
+
+For each chunk of like expected, the count a pixel had to reach to pass, kernel by kernel, against the line where a pixel merely meets its expected. It is the correction drawn. On a sparse map it is where you see that the map was held to thresholds nothing in it could reach.
+
+### What to watch for
+
+- **Near the diagonal.** A kernel needs its whole neighbourhood, so the nearest pixel that can be tested is twice the outer half-width and two bins from the diagonal, and a bin the balancer dropped takes out the pixels within the outer half-width of it. The notes say how near the scan could come.
+- **Band size.** A sequence whose band would not fit a scan is skipped and named: bring **furthest from the diagonal** down, or open the file at a coarser resolution.
+- **Too bright for the chunks.** A pixel whose expected is past the last λ-chunk stops the run, which says so: raise the **λ-chunks**, up to 50.
+- **Nothing passed.** When no pixel reaches all four thresholds the run says so and still draws the λ-chunk thresholds, which show how far out of reach they were.
+
+## Compared with cooltools
+
+Every default is the Python API's `dots()`: a 10 Mb scan, a 20 kb clustering radius, an FDR of 0.1 and 40 λ-chunks. cooltools' command line has others — 2 Mb, 39 kb and 0.02 — so give the same numbers to compare a `cooltools dots` run from a shell. In [§ 19 of the validation](https://chromosomix.app/validation/#loop-calling-cooltools), genome-wide on a mouse Hi-C map at 10 kb, it calls the same loops at the same pixels as `cooltools.dots`, with the same contacts and cluster sizes, and the four expecteds and q-values of every loop agree to the digits it writes.

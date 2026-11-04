@@ -1,0 +1,61 @@
+---
+title: "HiC score"
+description: "Measure how much contact each bin makes with its nearest neighbours, the reading of how tightly a stretch is folded against itself that Bignaud et al. (2024) use."
+---
+
+import TaskCommand from '@components/TaskCommand.astro'
+import TaskOutputs from '@components/TaskOutputs.astro'
+import TaskParameters from '@components/TaskParameters.astro'
+import TaskSummary from '@components/TaskSummary.astro'
+
+<TaskSummary id="hicscore" />
+
+The HiC score is the mean contact a bin makes with its nearest neighbours along the chromosome. Where [diamond insulation](/analyses/insulation/) and the [directionality index](/analyses/di/) ask where a domain ends, this asks how tightly a stretch is folded against itself — the reading Bignaud et al. (2024) use on bacterial maps at 2 kb, which is what its default is set for.
+
+It is a third reading rather than a third smoothing of the same one. Insulation and the index are ratios, and deliberately blind to depth; this is a mean of the map's own values, and is not. A region that has lost its local structure has a smaller HiC score and an unremarkable insulation score, because the ratio insulation is measured against fell with it.
+
+## Running it
+
+Open a contact map, then the **Analysis** panel (<kbd>4</kbd>), and choose **HiC score** in the **2D tasks** card. Tick the sequences to score and press **run**. It reads little of the map: at the default, two bins out from the diagonal and no further.
+
+One track joins the **Tracks** card of the **Annotations** panel, marked `*`: **HiC score · 3 diag**, in contacts. The drawer notes how far the line reaches on this file and how many cells each value averages — at the defaults on a 2 kb map, 4 kb either way and five cells.
+
+![An E. coli contact map at 2 kb from 1.0 to 2.0 Mb with its HiC score, HiC score · 3 diag, in a lane to the left of the map on a scale of 0 to 0.369.](../../../assets/screens/analyses/hicscore-track.webp)
+
+The same run from a shell:
+
+<TaskCommand id="hicscore" />
+
+## Parameters
+
+**Diagonals** sets the reach: how many diagonals the bin's line crosses, counting the main one. At 3 — the main diagonal and the one either side, five cells reaching two bins each way — it is the bacterial reading at 2 kb; a map with much larger domains wants more. It is a count of diagonals rather than a distance because the same distance is three diagonals at one resolution and one at the next. It is the authors' R script's `num_diagonals` plus one: that script counts only the diagonals beside the main one.
+
+**Diagonals to ignore** matters more than its default of 0 suggests; see below.
+
+<TaskParameters id="hicscore" />
+
+## What it writes
+
+<TaskOutputs id="hicscore" />
+
+## Reading the result
+
+### The value
+
+Each bin's value is the mean of the cells on its own straight line through the diagonal, out to **diagonals** − 1 bins either way: five cells at the default. One line, not the bin's whole row and column, because the map is symmetric and those carry the same contacts twice; and a line, not a square, because every cell on it involves the bin being scored. A square window would also count cells between its neighbours that do not involve the bin at all, and on a bacterial map those borrowed cells spread one bright bin into a three-bin plateau.
+
+The value is in the map's own units — counts on a raw map, the balanced map's values on a balanced one — so it rises and falls with how deeply the map was sequenced, and it is read against the rest of the same map: high where a stretch is folded tightly on itself, low where it has lost its local structure.
+
+### Ends and gaps
+
+A bin needs a whole line through it. The first and last **diagonals** − 1 bins of a linear sequence are gaps rather than values that fade towards zero, which would read as *this end is unstructured*; the drawer says so. A sequence ticked **circular** in the Chromosomes table has no ends, and every bin on it is scored.
+
+Inside a line, a cell the balancer dropped counts as nothing: the mean there is genuinely smaller, and is never scaled up as though the missing cells had been average. A bin with a smaller share of usable cells on its line than **minimum coverage of the line** asks has no value at all.
+
+### The main diagonal
+
+At three diagonals the main diagonal is the bulk of each line. It is where self-ligation and undigested fragments land, and on a balanced map it is the one place the weights were never fitted: cooler's balancer leaves its ignored diagonals out of its solve and then scales them anyway. A peak carried by that cell is carried by the protocol, and looks exactly like a peak in the biology. Run it again with **diagonals to ignore** at 1, which leaves the main diagonal out, and see whether what you are reading survives.
+
+## Compared with the authors' script
+
+The badge says the HiC score is not yet compared with its reference: the validation notebook does not run it. Its line is the one the authors' R script sums, and at one locus of an *E. coli* map the mean here, times the number of cells, is that script's sum to the last digit.

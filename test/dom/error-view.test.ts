@@ -317,9 +317,12 @@ describe('a Google host saying “not you”', () => {
     site.googleClientId = CLIENT_ID
     const { view } = build(refusedHead('rsglab-data.s3.eu-west-3.amazonaws.com'))
     expect(buttonLabels(view.el)).toEqual(['open another file'])
-    expect(textsOf(view.el, '.advice li')).toEqual([
-      'Expected file, or file::group — for example file.mmetacool::entries/rep1.',
-    ])
+    // Headed as the host's refusal it is, with the bucket-key story in its
+    // advice — where it once had a parse error's, an address syntax, over a 403.
+    const advice = textsOf(view.el, '.advice li')
+    expect(title(view)).toBe('The host would not give this file')
+    expect(advice.join(' ')).toContain('A private bucket is read with its key')
+    expect(advice.join(' ')).not.toMatch(/Google|sign in/i)
   })
 
   it('ignores a status that is not about authorisation', () => {
@@ -451,5 +454,32 @@ describe('with the multi-genome format switched off (§29)', () => {
   it('still names the fix a plain file has', () => {
     const { view } = build(new ViewerError('variable-bins', 'the reader’s sentence'))
     expect(textsOf(view.el, '.advice li').join(' ')).toContain('cooler cload pairs')
+  })
+})
+
+describe('a host that answered with an error status', () => {
+  beforeEach(() => resetDevFeatures(false))
+
+  it.each([
+    ['bad-uri', 404, 'the HEAD of a file that is not there'],
+    ['bad-uri', 403, 'the HEAD of a file this page may not read'],
+    ['remote-no-ranges', 403, 'the range probe of a presigned link that has expired'],
+    ['remote-no-ranges', 404, 'the range probe of a file that is not there'],
+  ] as const)('%s with %i — %s — is headed as a refusal, not a parse or a missing range', (code, status, _what) => {
+    const { view } = build(new ViewerError(code, 'the reader’s sentence', { url: 'https://bucket.example/a.mcool', host: 'bucket.example', status }))
+    expect(title(view)).toBe('The host would not give this file')
+    const advice = textsOf(view.el, '.advice li').join(' ')
+    expect(advice).toContain('connect a bucket…')
+    expect(advice).not.toContain('Private buckets')
+  })
+
+  it('leaves a host that answered a range with the whole file under its own heading', () => {
+    const { view } = build(new ViewerError('remote-no-ranges', 'the reader’s sentence', { url: 'https://h.example/a', host: 'h.example', status: 200 }))
+    expect(title(view)).toBe('That host does not serve byte ranges')
+  })
+
+  it('leaves an address that does not parse under its own heading', () => {
+    const { view } = build(new ViewerError('bad-uri', 'URI has an empty file path', { uri: '::x' }))
+    expect(title(view)).toBe('That URI does not parse')
   })
 })

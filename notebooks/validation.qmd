@@ -37,7 +37,7 @@ Each analysis is run on the same public file twice: by **`chromosomix`**, the co
 the app's Analysis panel (the same code), and by the **reference package** it reproduces, called as
 its authors intend. The two outputs are matched bin by bin or call by call. Every command is printed
 as it ran, from `notebooks/work/validation/`, and written to `commands.json` there, from which
-`{python} R.link('timing')` runs each again and times it — those of §§ 20–23 aside, which are
+`{python} R.link('timing')` runs each again and times it — those of §§ 20–23 and 27 aside, which are
 compared here and not timed.
 
 Every number a figure draws is one line of **`validation.txt`**, beside `commands.json`: a tidy table,
@@ -1040,40 +1040,8 @@ PS_CASES = {'yeast Micro-C, 800 bp': ('yeast', YEAST_800, f'{YEAST}::/resolution
 EXPECTED = script('cooltools_expected_cis')
 
 
-def bands(n_valid, separations, binsize, first):
-    """The run of consecutive diagonals behind each separation the app wrote: from `first`, then from
-    where the last ended, the longest run whose valid-pixel-weighted mean matches it to its six written
-    digits."""
-    k = np.arange(len(n_valid), dtype=float)
-    cn = np.concatenate([[0.0], np.cumsum(n_valid)])
-    ck = np.concatenate([[0.0], np.cumsum(n_valid * k)])
-    runs, lo = [], first
-    for x in separations:
-        tolerance = max(0.5, abs(x) * 5e-6)
-        match = None
-        for hi in range(lo + 1, len(n_valid) + 1):
-            w = cn[hi] - cn[lo]
-            if w <= 0:
-                continue
-            mean = (ck[hi] - ck[lo]) / w * binsize
-            if abs(mean - x) <= tolerance:
-                match = hi
-            elif mean > x + tolerance:
-                break
-        if match is None:
-            raise ValueError(f'no run of diagonals from {lo} has its mean at {x}')
-        runs.append((lo, match))
-        lo = match
-    return runs
-
-
-def kept_from(path):
-    """The first diagonal the app kept: its minimum separation, as the table's header records it, and
-    never the diagonal itself, which the expected leaves out whatever it says."""
-    for line in open(path):
-        if line.startswith('# param minSeparation:'):
-            return max(1, int(float(line.split(':', 1)[1])))
-    raise ValueError(f'{path} does not say its minimum separation')
+# Which diagonals each of the app's points pools: notebooks/scripts/ps_bands.py, shared with the timings.
+from ps_bands import bands, kept_from
 
 
 ps = {}
@@ -4206,7 +4174,7 @@ measures({'sequences, R64-1-1 and the contact list': f"{len(R64_LENGTHS)}: {', '
 
 The reference's commands: the digest, and the 5 kb map `cooler cload pairs` bins from § 25's contact
 list, whose bins the cuts are counted on. The map is also the binning Pairs QC does itself, and its
-coverage is § 27's, so it is listed with § 27's commands and timed against Pairs QC.
+coverage is § 27's, so it is listed with § 27's commands, and like them is not timed.
 
 ```{python}
 reference('bioframe-digest', RS_ANALYSIS, 'bioframe, Biopython',
@@ -4216,7 +4184,7 @@ reference('bioframe-digest', RS_ANALYSIS, 'bioframe, Biopython',
 reference('cooler-cload', PQ_ANALYSIS, 'cooler',
           ['cooler', 'cload', 'pairs', '-c1', 2, '-p1', 3, '-c2', 4, '-p2', 5, f'{rel(R64_SIZES)}:{RS_BIN}', CH128,
            OUT], out=RS / f'CH128.{RS_BIN}.cool',
-          env={'PATH': f'{Path(PYTHON).parent}{os.pathsep}{os.environ["PATH"]}'})
+          env={'PATH': f'{Path(PYTHON).parent}{os.pathsep}{os.environ["PATH"]}'}, bench=False)
 ```
 
 chromosomix's: the sites on that map, whose bins the density is counted on.
@@ -4377,31 +4345,32 @@ it checks chromosomix's placement end by end.
 | the pairs' statistics | `pairsqc`, its table | `pairtools stats` (§ 25's) |
 
 The reference's commands: each end's fragment and what is counted from it, and the coverage of
-§ 26's map. `pairtools stats` is § 25's command and output; it is listed here again so that the
-timing weighs Pairs QC against every reference command it stands for, `cooler cload` among them.
+§ 26's map. `pairtools stats` is § 25's command and output; it is listed here again so that these are
+every reference command Pairs QC stands for, `cooler cload` among them. Pairs QC is compared here and
+not timed: none of these commands, nor chromosomix's, is in `{python} R.link('timing')`.
 
 ```{python}
 # Once on the top strand's fragments, for the + ends, and once on the bottom strand's, for the − ends.
 for strand, suffix in (('top', ''), ('bottom', '-bottom')):
     reference(f'pairtools-restrict-{strand}', PQ_ANALYSIS, 'pairtools',
               [PAIRTOOLS, 'restrict', '-f', RS / f'digest.frags{suffix}.bed', CH128, '-o', OUT],
-              out=RS / f'CH128.restricted{suffix}.pairs.gz', env=PAIRTOOLS_ENV)
+              out=RS / f'CH128.restricted{suffix}.pairs.gz', env=PAIRTOOLS_ENV, bench=False)
 reference('restriction-reference', PQ_ANALYSIS, 'pandas',
           [PYTHON, script('restriction_reference'), R64_FA, ENZYME, RS / 'CH128.restricted.pairs.gz',
            RS / 'CH128.restricted-bottom.pairs.gz', OUT, -2],
-          out=RS / 'pairtools', made=RS / 'pairtools.summary.tsv')
+          out=RS / 'pairtools', made=RS / 'pairtools.summary.tsv', bench=False)
 reference('cooltools-coverage-sites', PQ_ANALYSIS, 'cooltools',
           [PYTHON, script('cooltools_coverage_sites'), RS / f'CH128.{RS_BIN}.cool', RS / 'digest.sites.tsv', OUT,
-           THREADS], out=RS / 'coverage', made=RS / 'coverage.summary.tsv', threads=THREADS)
+           THREADS], out=RS / 'coverage', made=RS / 'coverage.summary.tsv', threads=THREADS, bench=False)
 reference('pairsqc-pairtools-stats', PQ_ANALYSIS, 'pairtools', [PAIRTOOLS, 'stats', CH128, '-o', OUT],
-          out=PS / 'pairtools.stats', env=PAIRTOOLS_ENV)
+          out=PS / 'pairtools.stats', env=PAIRTOOLS_ENV, bench=False)
 ```
 
 chromosomix's: Pairs QC on the contact list itself, binned at the same 5 kb.
 
 ```{python}
 mr('pairsqc', CH128, '--bin-size', RS_BIN, '--sequence', R64_FA, '--enzyme', ENZYME, out=RS / 'app-pairsqc',
-   name='pairsqc', analysis=PQ_ANALYSIS)
+   name='pairsqc', analysis=PQ_ANALYSIS, bench=False)
 ```
 
 ```{python}

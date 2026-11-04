@@ -45,6 +45,7 @@
  * {@link drawingOf}, which is a real context rather than a silent one.
  */
 
+import { resetRendered } from '@/perf/rendered'
 import { VectorPage } from '@/ui/vector'
 
 /** Undo whatever {@link setUpDom} installed. */
@@ -135,6 +136,11 @@ export function setUpDom(options: { canvas?: 'null' | 'stub' } = {}): DomTeardow
 
   return () => {
     stopApps()
+    // The rendered report's look again (`src/perf/rendered.ts`), armed for
+    // 250 ms while a panel still waits: left running, it fires with the
+    // document gone and throws on `requestAnimationFrame` into whichever file
+    // the worker runs next, as the status bar's tick did.
+    resetRendered()
     prototype.getContext = original
     globals['ImageData'] = hadImageData
     globals['OffscreenCanvas'] = hadOffscreen

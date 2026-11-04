@@ -1,0 +1,126 @@
+---
+title: "Pairs QC"
+description: "A library’s records: pairtools stats, P(s) by orientation, and restriction fragments."
+---
+
+import TaskCommand from '@components/TaskCommand.astro'
+import TaskOutputs from '@components/TaskOutputs.astro'
+import TaskParameters from '@components/TaskParameters.astro'
+import TaskSummary from '@components/TaskSummary.astro'
+
+<TaskSummary id="pairsqc" />
+
+Before a map is read, the library behind it is judged by its records: how many read pairs mapped, how
+many were duplicates, how much is cis and at what separations, and how short a separation its four read
+orientations can be believed at. A library cut with a restriction enzyme raises one more question: how
+many pairs are not a contact at all, but a fragment that was never ligated, closed on itself or joined
+back to its neighbour. None of that survives binning, which sums the four orientations together and
+forgets where in a bin a read ended, so this task reads the `.pairs` the map was made from and counts
+what `pairtools stats` and `pairtools restrict` count.
+
+## Running it
+
+Open the map, then choose **Pairs QC** in the **2D tasks** card of the **Analysis** panel. Where the
+records come from depends on how the map was opened:
+
+- **A map binned from a `.pairs` as you opened it** had its records counted by that import. The
+  statistics and the orientation curves cost nothing, and the form asks for no file.
+- **A map opened as a matrix**, such as a `.cool`, an `.mcool` or a `.hic`, keeps no records, so the
+  form asks for the `.pairs` it was made from: drop it on the form's drop area, click the area to choose
+  it, or type its address in the box under it. It is read for its records alone: nothing is binned and
+  the map does not change. **run** is refused until one is named.
+
+Drop the `.pairs` on the form itself: dropped anywhere else in the window, it is opened as a map.
+
+For the restriction statistics, load the reference the reads were mapped to, a FASTA or a `.2bit` (see
+[Reference sequences](/files/sequences/)), and choose it and the library's enzyme under **Restriction
+enzyme**. Pairs QC then runs [Restriction sites](/analyses/restriction/) first to cut the reference, and
+reads every record against the cuts. With no reference, or the enzyme left at **none**, the run is the
+pairtools counts alone.
+
+The drawer shows the pairtools figures and their table, then, with a reference and an enzyme, four
+figures of the restriction fragments.
+
+![P(s) by pair orientation from Pairs QC on a yeast Hi-C library binned from its .pairs: the curves of the four orientations, ++, +−, −+ and −−, apart below about 1.5 kb, where +− rises in a hump near 300 bp, and lying on top of one another from there out to 1 Mb.](../../../assets/screens/analyses/pairsqc-orientation.webp)
+
+The same run from a shell:
+
+<TaskCommand id="pairsqc" />
+
+From a shell the `.pairs` can be the map itself, binned at the resolution `--bin-size` names, with the
+reference loaded by `--sequence`:
+
+```sh
+chromosomix pairsqc sample.pairs.gz --bin-size 10000 --sequence ref.fa.gz --enzyme DpnII --out qc/
+```
+
+## Parameters
+
+Two answers matter: the `.pairs`, where the map was not binned from one, and the **enzyme**, which must
+be the one the library was cut with, since every class below is read against its cuts. **Arima** stands
+for its kit's two enzymes, and **custom** takes enzymes by name, aliases such as MboI included, or sites
+typed with a `^` where they cut. A Micro-C or Omni-C library is cut by a nuclease, not an enzyme: leave
+**enzyme** at **none**.
+
+<TaskParameters id="pairsqc" />
+
+## What it writes
+
+<TaskOutputs id="pairsqc" />
+
+## Reading the result
+
+### The pairtools counts
+
+- **P(s) by pair orientation**: the decay of the cis records in each of the four orientations, `++`,
+  `+-`, `-+` and `--`, all four divided by one shared total. Ligation does not know which way a fragment
+  pointed, so at long range the four lie on top of each other; at short range they part, where
+  self-circles, dangling ends and undigested fragments outnumber contacts. The separation where they meet
+  is the shortest the library can be read at, and it is usually shorter than one bin of the map. The
+  run's note gives it by pairtools' rule — past the last separation at which one orientation strays more
+  than 5 % from the mean of the four — and warns that a sparse tail of chance strays can put it further
+  out than the curves suggest.
+- **Pair types**: how many records had each pairtools pair type, most common first.
+- **Cis and trans**: the shares of the mapped, non-duplicate pairs that are cis and trans, and cis at
+  least 1, 2, 4, 10, 20 and 40 kb apart, on a scale of 0 to 1 and named by pairtools' own keys.
+- **pairtools stats**: every entry `pairtools stats` writes but its three long lists, in its keys and its
+  spelling of a number, so that a row can be laid beside a line of a `.stats` file.
+
+### The restriction fragments
+
+With a reference and an enzyme, both ends of every mapped, non-duplicate pair are placed in the fragments
+between the enzyme's cuts, and each pair takes a class from its two ends' fragments and strands, the ends
+in order along the sequence:
+
+| Class | The two ends |
+| --- | --- |
+| valid | anything not below: a contact |
+| re-ligation | in two neighbouring fragments, `+-`: a fragment joined back to its neighbour, or a site left uncut |
+| dangling | in one fragment, `+-`: a fragment that was never ligated |
+| self-circle | in one fragment, `-+`: a fragment closed on itself |
+| same-strand | in one fragment, `++` or `--` |
+| trans | on two sequences |
+
+Four figures follow:
+
+- **Pair classes by orientation**: the classes as bars stacked by the two ends' strands, followed by the
+  same counts as a table, with each class's share of the pairs placed.
+- **Distance from a read to the next cut**, in the direction the read points, as a histogram per strand.
+  A dangling end's two reads both give its fragment's length, so the two strands lie together.
+- **Read ends per fragment**: how many ends each of the reference's fragments holds, in powers of two,
+  with how many fragments hold any at all in the figure's title.
+- **Coverage against sites**: each bin of the map, its raw contacts against the enzyme's cuts in it, with
+  Spearman's ρ between the two in the title. The mean coverage for a number of cuts is drawn only where at
+  least five bins share it, so that one bright bin in a repeat does not draw the line.
+
+## Things to know
+
+- **Each end is placed by its own strand's cut.** An enzyme that leaves an overhang cuts the bottom strand
+  a few bases from the top strand's cut, and a `-` read starts on the bottom strand: for DpnII its end lies
+  3 bp past the top strand's cut. Placed by the top strand's cuts alone, as one run of `pairtools restrict`
+  places every end, a DpnII library's dangling ends fall in two neighbouring fragments and are counted as
+  re-ligations. Pairs QC places a `+` end by the top strand's cuts and a `-` end by the bottom strand's.
+- **Validation.** On a yeast Hi-C contact list against DpnII sites, at 5 kb, the statistics are
+  `pairtools stats`' key for key, and the classes, distances, fragments seen and coverage against sites
+  are those of `pairtools restrict`, run once per strand, and of `cooltools.coverage`: every count is the
+  same.

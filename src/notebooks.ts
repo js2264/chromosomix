@@ -62,15 +62,16 @@ export const NOTEBOOKS: readonly Notebook[] = [
     path: 'parity',
     title: 'Parity',
     what:
-      'Ten tasks run in the app, in a headless browser, then again from the line its console wrote, ' +
-      'and every file the two wrote compared.',
+      'Ten tasks run in the app, in headless Chromium, Firefox and WebKit, then again from the line its ' +
+      'console wrote in each, and every file the two wrote compared.',
   },
   {
     path: 'laptop',
     title: 'Laptop',
     what:
       'What a genome-wide analysis costs on a laptop: 23 of them run on the command line and in the ' +
-      'app, with their time and peak memory. Render it on your own to measure yours.',
+      'app, with their time and peak memory, then six over a deep human map, start to finish, against ' +
+      'cooltools and coolpuppy. Render it on your own to measure yours.',
     byHand: true,
   },
 ]

@@ -165,6 +165,12 @@ export interface RegionViewProps {
    */
   annotations?: AnnotationContext
   /**
+   * The sequence a name typed into the box means, as the file names it, or
+   * `null` (`findContig`'s ladder: `chr4`, `4` and `IV` alike). With genes on
+   * offer the box lists it first, so `IV` opens chromosome IV and not IVY1.
+   */
+  sequenceNamed?(text: string): string | null
+  /**
    * A second cooler in the lower-left triangle (`render/compare.ts`).
    *
    * The same block, read from the other file. The two agree about contigs and
@@ -532,6 +538,9 @@ export class RegionView {
                 ...hit,
                 value: regionLabel(hit.value),
               })),
+            ...(props.sequenceNamed === undefined
+              ? {}
+              : { sequence: (text: string) => props.sequenceNamed?.(text) ?? null }),
           }),
     })
     // Ordinary bordered buttons, like `go` beside them: these move the view, and

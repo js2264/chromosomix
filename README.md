@@ -1,7 +1,9 @@
 # chromosomix
 
 [![Web app](https://img.shields.io/badge/web%20app-chromosomix.app-1f6feb)](https://chromosomix.app/)
+[![Documentation](https://img.shields.io/badge/docs-doc.chromosomix.app-1f6feb)](https://doc.chromosomix.app/)
 [![Tests](https://github.com/js2264/chromosomix/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/js2264/chromosomix/actions/workflows/test.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fchromosomix.app%2Fcoverage%2Fbadge.json)](https://chromosomix.app/coverage/)
 [![Deploy](https://github.com/js2264/chromosomix/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/js2264/chromosomix/actions/workflows/deploy.yml)
 [![npm](https://img.shields.io/npm/v/chromosomix?logo=npm)](https://www.npmjs.com/package/chromosomix)
 [![Release](https://img.shields.io/github/v/release/js2264/chromosomix?logo=github)](https://github.com/js2264/chromosomix/releases)
@@ -568,8 +570,8 @@ bedtools and a dozen others — on public data, command for command, in a notebo
 release: <https://chromosomix.app/validation/>, with every number its figures draw in one table beside
 it, <https://chromosomix.app/validation/validation.txt>; and how long each command takes beside its
 reference, <https://chromosomix.app/timings/>. A third notebook holds the app to this command: ten
-tasks run in the app, in a headless browser, then from the line its console wrote for each, and every
-file the two wrote compared, <https://chromosomix.app/parity/>. And what the commands cost on a machine
+tasks run in the app, in headless Chromium, Firefox and WebKit, then from the line its console wrote
+for each, and every file the two wrote compared, <https://chromosomix.app/parity/>. And what the commands cost on a machine
 like yours — the time and the peak memory of 23 analyses run genome-wide, up to a 1.08-billion-contact
 human map — is <https://chromosomix.app/laptop/>, rendered on a laptop and committed as
 `notebooks/laptop.html`; render `notebooks/laptop.qmd` with Quarto from a clone to measure your own: it

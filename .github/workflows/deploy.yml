@@ -31,6 +31,7 @@ env:
   ARCHIVE_BRANCH: pages-archive
   STORES_BRANCH: stores
   NOTEBOOKS_BRANCH: notebooks
+  COVERAGE_BRANCH: coverage
 
 jobs:
   build:
@@ -182,6 +183,22 @@ jobs:
             echo "No $NOTEBOOKS_BRANCH branch yet — /validation/, /timings/ and /parity/ appear once the Notebooks workflow has run."
           fi
 
+      # The full suite's coverage report and the badge.json the README's badge
+      # is drawn from, which the `coverage` job of test.yml keeps on a branch of
+      # its own after every green full suite on `main`, on the same terms again.
+      # Absent until that job has published once, and the badge says so.
+      - name: Fetch the coverage report
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          remote="https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
+          if git ls-remote --exit-code --heads "$remote" "$COVERAGE_BRANCH" >/dev/null 2>&1; then
+            git clone --quiet --depth 1 --branch "$COVERAGE_BRANCH" "$remote" coverage-report
+          else
+            echo "No $COVERAGE_BRANCH branch yet — /coverage/ appears once the Tests workflow has published the full suite's."
+          fi
+
       # Previews belong to open pull requests, and preview.yml removes one when
       # its pull request closes. That removal is *event-shaped* and can be lost:
       # merging a pull request fires `pull_request: closed` and `push` to main
@@ -267,6 +284,9 @@ jobs:
       # and committed as notebooks/laptop.html: `pages.py committed` writes it
       # as `laptop/index.html` and unpacks the table and the stamp the page
       # carries beside it. No `laptop/` until one is committed.
+      #
+      # `coverage/` is the coverage branch's tree, every file of it but its
+      # `.git`: the HTML report and `badge.json`.
       - name: Assemble the site
         run: |
           set -euo pipefail
@@ -283,8 +303,12 @@ jobs:
             if [ -f "rendered/$page/index.html" ]; then cp -R "rendered/$page" "dist/$page"; fi
           done
           python3 notebooks/scripts/pages.py committed dist
+          if [ -f coverage-report/index.html ]; then
+            cp -R coverage-report dist/coverage
+            rm -rf dist/coverage/.git
+          fi
           parts=(dist dist/v)
-          for part in dist/pr dist/stores dist/validation dist/timings dist/parity dist/laptop; do
+          for part in dist/pr dist/stores dist/validation dist/timings dist/parity dist/laptop dist/coverage; do
             if [ -d "$part" ]; then parts+=("$part"); fi
           done
           du -sh "${parts[@]}"
