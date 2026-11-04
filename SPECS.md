@@ -10133,7 +10133,7 @@ round robin, each a fresh process — all but the ones that would time a job twi
 jobs: one seed of the shifted controls, the *Sox2* viewpoint of virtual 4C, Boost-HiC on chr1, and
 APA raw and over controls but not over the expected, where coolpuppy is handed an expected computed
 beforehand — and none of the four analyses after loop calling, from cis and trans to signal by group,
-whose commands it lists and does not run: they are validated, and not timed. **The two sides of a
+nor Pairs QC, whose commands it lists and does not run: they are validated, and not timed. **The two sides of a
 pair take turns to go first**: the even rounds run each analysis's references before its
 `chromosomix` commands, because the side that goes first is the one that reads
 from the disk what the page cache let go since the round before, and in one order that wait was
@@ -10168,28 +10168,6 @@ juicebox.js by its last repaint covering the state asked for and its track's til
 tile in view fetched and drawn. Four rounds, the viewers taking turns to go first; every run, and
 every cell refused, is one line of `notebooks/work/validation/viewers.tsv`, with the requests and
 bytes the page asked for, the machine and every version.
-**And they close on a deep human map, start to finish.** After the analyses, `notebooks/timing.qmd`
-times four of them one after the other over the whole genome of 4DN's in situ Hi-C of IMR-90 (Rao et
-al. 2014, 4DNFIJTOIGOI, 1.08 billion contacts, 8.3 GB, linked from the laptop's folder where that holds
-it), each at its section's settings: loop calling at 10 kb, as § 19 runs it; diamond insulation at
-10 kb, a window of 10 bins; compartments at 250 kb, three eigenvectors phased by GC content
-(`bioframe.frac_gc` over hg38 as Illumina iGenomes distributes it, worked out once and given to both);
-and APA over every loop the first called, ±5 bins, raw: no expected on either side. `chromosomix` runs them as a shell
-script does, four commands, the pileup reading the loops the first wrote; the reference is **one Python
-script**, `notebooks/scripts/cooltools_pipeline.py`, running `cooltools.expected_cis` and `dots`,
-`insulation`, `eigs_cis` and coolpuppy's pileup over `dots`' loops and that expected in one process,
-with as many processes as the references above. Each side's **start-up** is timed apart —
-`chromosomix --version`, the program loaded and nothing done, which each command pays again, and the
-script's launch to the end of its imports — then **each step** — a command; or the stretch between two
-of the marks the script writes, its CPU time from the usage of the process and of the children it has
-waited for at either end, its memory from the weighings between them — and **the whole**. One run of
-each side, unless `PIPELINE_RUNS` says otherwise, the sides taking turns to go first over several, and
-before each the page cache emptied where the runner allows and the map read through once where it does
-not; every step of every run is one line of `notebooks/work/validation/pipeline.tsv`, with when in its
-side's run it began and ended, every weighing of each side's processes, with its time and its step, one
-line of `pipeline-memory.tsv` beside it — the page draws the first run's memory against the wall clock,
-each phase shaded — and what the two wrote in the last run is compared step by step — the loops by bin pair, the insulation bin by bin and
-its boundaries, E1 chromosome by chromosome, the pileup cell by cell.
 **And a third holds the app to its own command line.** `notebooks/parity.qmd` runs ten tasks in the
 app — this checkout's build, of the commit the command line is built from or nothing runs, served
 from loopback and driven by `notebooks/scripts/parity.mjs` **in each of the three browser engines
@@ -10216,10 +10194,10 @@ run and where they did not.
 **And one for the reader's own machine.** `notebooks/laptop.qmd` answers what the other three do not
 — what a genome-wide analysis costs on a machine like the reader's, on the command line and in the app,
 in each of three browsers — with Quarto, pandas, matplotlib and pyfaidx, the built app and command line
-and Playwright's Chromium, Firefox and WebKit, and no reference package, so that a reader can render it
-on their own laptop. It downloads the
-validation's mouse map, yeast Micro-C, ATAC-seq replicates, mm10 and its RefSeq genes, and 4DN's IMR-90
-in situ Hi-C (Rao et al. 2014, 4DNFIJTOIGOI, 1.08 billion contacts): about 13.7 GB into
+and Playwright's Chromium, Firefox and WebKit, and for its last part alone four reference packages, so
+that a reader can render it on their own laptop. It downloads the
+validation's mouse map, yeast Micro-C, ATAC-seq replicates, mm10 and its RefSeq genes, 4DN's IMR-90
+in situ Hi-C (Rao et al. 2014, 4DNFIJTOIGOI, 1.08 billion contacts) and hg38: about 16.9 GB into
 `notebooks/work/laptop/data/`, each file held to its MD5, a file `validation.qmd` already holds linked
 instead. Then it runs 23 analyses genome-wide: on the mouse map, coverage, P(s), insulation, the
 directionality index, compartments (E1, unphased), loop calling, chromosight's loops, a pileup over them
@@ -10267,6 +10245,38 @@ every browser wrote the same line, and every browser's line held to the command:
 command with its value, and besides them only the task's parameters at their defaults and those its
 form answers from what is open, or the page says what else.
 
+**And it closes on a deep human map, start to finish, against the packages it reproduces.** After
+the 23, `notebooks/laptop.qmd` times six analyses one after the other over the same IMR-90 map, each at
+its section of the validation's settings: loop calling at 10 kb, as § 19 runs it; diamond insulation
+at 10 kb, a window of 10 bins; compartments at 250 kb, three eigenvectors phased by GC content
+(`bioframe.frac_gc` over hg38 as Illumina iGenomes distributes it, worked out once and given to both);
+APA over every loop the first called, ±5 bins, raw: no expected on either side; P(s) at 10 kb, every
+diagonal, as § 4 runs it; and a virtual 4C at 10 kb from one bin, the one holding *MYC*'s
+transcription start (chr8:127,730,001-127,740,000), in cis only — the task's default, where § 10 reads
+the whole genome. `chromosomix` runs them as a shell script does, six commands, the pileup reading the
+loops the first wrote; the reference is **one Python script**, `notebooks/scripts/cooltools_pipeline.py`,
+running `cooltools.expected_cis` and `dots`, `insulation`, `eigs_cis`, coolpuppy's pileup over `dots`'
+loops, `expected_cis` again over every diagonal for the P(s), and `virtual4c`, mapped over the
+viewpoint's chromosome alone, in one process, with one process a core, at most four, as the
+validation gives its references, but for the 4C, one chromosome in one. Each side's **start-up** is
+timed apart — `chromosomix --version`, the program loaded and nothing done, which each command pays
+again, and the script's launch to the end of its imports — then **each step** — a command; or the
+stretch between two of the marks the script writes, its CPU time from the usage of the process and of
+the children it has waited for at either end, its memory from the weighings between them — and **the
+whole**. The memory is weighed four times a second, the process and every process under it found by
+their parents as `ps` lists them, on Linux and on a Mac alike: their proportional set sizes where the
+system gives them, their resident sets elsewhere, and never less than `ru_maxrss`. One run of each
+side, unless `PIPELINE_RUNS` says otherwise, the sides taking turns to go first over several, and
+before each the page cache emptied where the machine allows and the map read through once where it
+does not; every step of every run is one line of `notebooks/work/laptop/pipeline.tsv`, with when in
+its side's run it began and ended, every weighing of each side's processes, with its time and its
+step, one line of `pipeline-memory.tsv` beside it — both carried in the page, as its table is; the page
+draws the first run's memory against the wall clock, each phase shaded — and what the two wrote in the
+last run is compared step by step — the loops by bin pair, the insulation bin by bin and its
+boundaries, E1 chromosome by chromosome, the pileup cell by cell, P(s) point by point over the
+diagonals each point pools, the 4C bin by bin. This part alone needs the reference packages, cooler,
+cooltools, coolpuppy and bioframe, at the versions `notebooks/requirements.txt` pins.
+
 **The laptop's published page is rendered on a laptop.** What it measures is a reader's machine, so
 the page at `<site>/laptop/` is rendered by hand, on one, and committed as `notebooks/laptop.html` —
 the one rendered page `.gitignore` lets through; its data and the measurements a second render reads
@@ -10274,16 +10284,17 @@ back stay in `notebooks/work/`, uncommitted, since a runner of the same build wo
 instead of measuring itself. The page is one file that is the whole of it: it links the other pages
 on the site (NOTEBOOKS_SITE, or `package.json`'s `homepage`) rather than as files beside it, which a
 laptop does not have, and it **carries** what is published beside it rather than linking it — its
-table under the results and its `rendered.json` in its closing line, each a link that downloads the
+table under the results, the deep map's two tables under its part and its `rendered.json` in its
+closing line, each a link that downloads the
 file from the page itself (`Render.attach()`) — so the page reads the same from the disk it was
 rendered on and from the site, and its table cannot disagree with its picture. Its block says it was
 rendered by hand, on the machine named under it, as the page is published. Publishing a render is
-committing that file: every deploy writes it as `laptop/index.html` and unpacks the table and the
+committing that file: every deploy writes it as `laptop/index.html` and unpacks the tables and the
 stamp beside it (`pages.py committed`), the names its entry lists and nothing else, and makes no
 `laptop/` until one is committed.
 
 They are documents, not tests: they need the data (about 6 GB for the analyses, 15 GB for the
-viewers, 11.5 GB for the timings' deep map and its sequence, 160 MB for the parity and 13.7 GB for the laptop), the reference packages, yapc's own
+viewers, 160 MB for the parity and 16.9 GB for the laptop), the reference packages, yapc's own
 environment and higlass-python's, the two viewers and Playwright's browsers, and nothing in the suite
 runs them. Each file is fetched from where it was published, on every render, through
 `notebooks/scripts/download.py`, **which asks again when the server or the network fails** — a 500,
@@ -10316,9 +10327,9 @@ even when it fails: the validation alone, with the timing rounds it finished, wh
 A last job publishes the validation, the timings and the parity only if the three rendered —
 `pages.py published` names them — at `<site>/validation/`, `<site>/timings/` and `<site>/parity/`,
 each a self-contained page with its tables beside it (`commands.json`, `summary.tsv` and
-`validation.txt`, every command, every verdict and every number its figures draw; `timings.tsv`,
-`viewers.tsv`, `pipeline.tsv` and `pipeline-memory.tsv`; the parity's `summary.tsv`, every file compared);
-a release keeps its own copies of the three pages and of the seven tables as assets. **The runner's laptop is published nowhere**: not to the
+`validation.txt`, every command, every verdict and every number its figures draw; `timings.tsv` and
+`viewers.tsv`; the parity's `summary.tsv`, every file compared);
+a release keeps its own copies of the three pages and of the five tables as assets. **The runner's laptop is published nowhere**: not to the
 site, whose `laptop/` is the committed page, nor to a release, whose laptop is the one committed in its
 source; it is the run's artifact, and its section of the run's summary, and whether it rendered decides
 nothing about publishing the others. It runs when a release is published and on demand. Each page opens on a

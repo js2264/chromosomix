@@ -57,15 +57,18 @@ class Page:
     local: bool = False
 
 
+#: The laptop's tables, carried in its page and unpacked beside it: every run of its 23 analyses, and every step
+#: of its deep human map with every weighing of that map's memory.
+LAPTOP_FILES = {'timings.tsv': None, 'pipeline.tsv': None, 'pipeline-memory.tsv': None}
+
 PAGES = {
     'validation': Page('validation', 'Validation', 'validation', 'validation',
                        {'commands.json': None, 'summary.tsv': 'validation-{tag}.tsv',
                         'validation.txt': 'validation-{tag}.txt'}),
     'timing': Page('timings', 'Timings', 'validation', 'validation',
-                   {'timings.tsv': 'timings-{tag}.tsv', 'viewers.tsv': 'viewers-{tag}.tsv',
-                    'pipeline.tsv': 'pipeline-{tag}.tsv', 'pipeline-memory.tsv': 'pipeline-memory-{tag}.tsv'}),
+                   {'timings.tsv': 'timings-{tag}.tsv', 'viewers.tsv': 'viewers-{tag}.tsv'}),
     'parity': Page('parity', 'Parity', 'parity', 'parity', {'summary.tsv': 'parity-{tag}.tsv'}),
-    'laptop': Page('laptop', 'Laptop', 'laptop', 'laptop', {'timings.tsv': None}, local=True),
+    'laptop': Page('laptop', 'Laptop', 'laptop', 'laptop', LAPTOP_FILES, local=True),
 }
 
 

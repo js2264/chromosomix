@@ -52,17 +52,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   After every green full suite on `main`, the report is published at
   <https://chromosomix.app/coverage/>, and the README's **Coverage** badge shows its line coverage
   (docs/deploy.md).
-- **The timings end on a deep human map, start to finish (§18.10).** `notebooks/timing.qmd` now
-  times four analyses one after the other over the whole genome of 4DN's IMR-90 in situ Hi-C
-  (4DNFIJTOIGOI, 1.08 billion contacts): loop calling and diamond insulation (10 bins) at 10 kb,
-  compartments at 250 kb phased by GC content, and APA over every loop called, raw.
-  `chromosomix` runs them as four commands; the reference is one Python script running cooltools and
-  coolpuppy in one process (`notebooks/scripts/cooltools_pipeline.py`). Each side's start-up, each
-  step and the whole are timed — CPU, wall clock and peak memory — and what the two wrote is compared
-  step by step. Every step is a line of `pipeline.tsv`, and every weighing of each side's memory,
-  four a second, a line of `pipeline-memory.tsv`, both published beside the page and kept by a
-  release; the page and `notebooks/scripts/timing.plot.R`'s panel c draw the memory against the wall
-  clock, each phase shaded, its peak and the end of each side marked.
+- **The laptop ends on a deep human map, start to finish, against the packages it reproduces
+  (§18.10).** `notebooks/laptop.qmd` now times six analyses one after the other over 4DN's IMR-90 in
+  situ Hi-C (4DNFIJTOIGOI, 1.08 billion contacts): loop calling and diamond insulation (10 bins) at
+  10 kb, compartments at 250 kb phased by GC content, APA over every loop called, raw, P(s) at 10 kb
+  over every diagonal, and a virtual 4C at 10 kb from the bin of *MYC*'s promoter, in cis — the first
+  five over the whole genome. `chromosomix` runs them as six commands; the reference is one Python
+  script running cooltools and coolpuppy in one process (`notebooks/scripts/cooltools_pipeline.py`).
+  Each side's start-up, each step and the whole are timed — CPU, wall clock and peak memory, the
+  memory weighed four times a second on a Mac as on Linux — and what the two wrote is compared step
+  by step. Every step is a line of `pipeline.tsv`, and every weighing of each side's memory a line of
+  `pipeline-memory.tsv`, both carried in the page and unpacked beside it at `laptop/`; the page and
+  `notebooks/scripts/timing.plot.R`'s panel c draw the memory against the wall clock, each phase
+  shaded, its peak and the end of each side marked. The laptop needs cooler, cooltools, coolpuppy and
+  bioframe for this part, and hg38 (3.2 GB) for its GC content.
 - **The parity runs in Firefox and WebKit too (§18.10).** `notebooks/parity.qmd` drives its ten
   tasks in each of the three engines Playwright drives headless — Chromium, Firefox and WebKit — and
   runs the line each browser's console wrote on the files that browser's sessions read, so the
@@ -79,6 +82,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   its page held 160 MB to 1.4 GB before the run began. The table now gives the whole peak in every venue,
   the page's in each browser, the app itself included, and beside it, for each browser, what the run
   added; the sentence under the tables gives the median of each.
+- **The timings no longer time Pairs QC (§18.10).** Its seven commands — `chromosomix pairsqc`, and
+  `cooler cload`, `pairtools restrict` on each strand, the counts drawn from them, the coverage
+  against the cuts and `pairtools stats` as its reference — are written to `commands.json` and not
+  run by `notebooks/timing.qmd`, as §§ 20–23's are not: Pairs QC is still held to them in
+  `notebooks/validation.qmd` § 27, and timed nowhere. `notebooks/scripts/timing.plot.R` draws no
+  point for it.
 
 ### Fixed
 

@@ -13,9 +13,9 @@ commands, hold the app to its own command line, and measure what a run costs on 
 | Notebook | What it holds chromosomix to | Published at |
 | --- | --- | --- |
 | Validation | the package each task reproduces, on public data | <https://chromosomix.app/validation/> |
-| Timings | the same packages, in time and memory, two other viewers in time to a picture, and a script of four analyses over a whole human map | <https://chromosomix.app/timings/> |
+| Timings | the same packages, in time and memory, and two other viewers in time to a picture | <https://chromosomix.app/timings/> |
 | Parity | its own command line: the same run in the app, in three browsers, and in a shell, file for file | <https://chromosomix.app/parity/> |
-| Laptop | what a genome-wide run costs on a laptop, on the command line and in three browsers | <https://chromosomix.app/laptop/> |
+| Laptop | what a genome-wide run costs on a laptop, on the command line and in three browsers, and six analyses over a deep human map against cooltools and coolpuppy | <https://chromosomix.app/laptop/> |
 
 In the app, **About this viewer**, from the header or the command palette, lists the four under
 **Notebooks**, each with the one line of what it found and when it was rendered.
@@ -86,19 +86,10 @@ taking turns to go first, and measures for each its CPU time, its wall-clock tim
 Each chromosomix command's time is set beside its reference's. The command line runs a task on one
 core unless told otherwise, and a reference that takes a number of processes is given one per core, at
 most four. A few analyses are compared and not timed: cis and trans per sequence, the saddle, the
-fraction of signal in features and signal by group.
+fraction of signal in features, signal by group and Pairs QC.
 
-The last part times **four analyses one after the other over a deep map**: the whole genome of 4DN's
-in situ Hi-C of IMR-90, 1.08 billion contacts — loop calling and diamond insulation at 10 kb,
-compartments at 250 kb phased by GC content, and aggregate peak analysis over every loop called, raw.
-chromosomix runs them as four commands, as a shell script would; the reference is one Python script
-running cooltools and coolpuppy in one process. Each side's start-up, each step and the whole are
-timed, and what the two wrote is compared step by step.
-
-Beside the page: **`timings.tsv`**, every timed run, **`viewers.tsv`**, every picture timed in a
-viewer, **`pipeline.tsv`**, every step of the four analyses over the deep map, each with the machine
-and every version, and **`pipeline-memory.tsv`**, the memory each side held through them, weighed four
-times a second.
+Beside the page: **`timings.tsv`**, every timed run, and **`viewers.tsv`**, every picture timed in a
+viewer, each with the machine and every version.
 
 ## The parity
 
@@ -129,17 +120,28 @@ over the whole mouse genome — on the command line and then in the app, in Chro
 Safari's engine. Each run's wall-clock time, CPU time and peak memory are tabulated, with the command
 and the line the app's console wrote for it.
 
+It ends on **six analyses one after the other over the deep map**, 4DN's in situ Hi-C of IMR-90, 1.08
+billion contacts — over the whole genome, loop calling and diamond insulation at 10 kb, compartments at
+250 kb phased by GC content, aggregate peak analysis over every loop called, raw, and P(s) at 10 kb;
+and on chromosome 8 alone, a virtual 4C at 10 kb from the bin of *MYC*'s promoter. chromosomix runs
+them as six commands, as a shell script would; the reference is one Python script running cooltools
+and coolpuppy in one process. Each side's start-up, each step and the whole are timed, the memory each
+side holds weighed four times a second through them, and what the two wrote is compared step by step.
+The page carries both tables, **`pipeline.tsv`** and **`pipeline-memory.tsv`**.
+
 The page at <https://chromosomix.app/laptop/> is rendered by hand, on a laptop, which its opening block
 names. To measure your own, render it from the root of a clone of
 [the repository](https://github.com/js2264/chromosomix), on a laptop that is plugged in and otherwise
-idle. It needs Quarto, Python with pandas, matplotlib and pyfaidx, Node, and Playwright's browsers, but
-no reference package. It downloads about 13.7 GB of data, and takes about twenty minutes on the command
-line and about as long again in Chromium; Firefox and WebKit take their own time, which the results give.
+idle. It needs Quarto, Python with pandas, matplotlib and pyfaidx, Node, and Playwright's browsers, and
+for its last part cooler, cooltools, coolpuppy and bioframe. It downloads about 16.9 GB of data, and
+takes about twenty minutes on the command line and about as long again in Chromium; Firefox and WebKit
+take their own time, which the results give, and the deep map's six analyses about a quarter of an hour
+more.
 
 ```sh
 npm ci && npm run build && npm run build:cli
 npm ci --prefix notebooks/viewers && npx --prefix notebooks/viewers playwright install chromium firefox webkit
-pip install jupyter pandas matplotlib pyfaidx
+pip install jupyter pandas matplotlib pyfaidx bioframe==0.8.0 cooler==0.10.4 cooltools==0.7.1 coolpuppy==1.1.0
 quarto render notebooks/laptop.qmd
 ```
 

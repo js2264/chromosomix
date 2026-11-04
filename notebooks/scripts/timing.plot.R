@@ -3,11 +3,12 @@ library(tidyverse)
 library(patchwork)
 setwd("~/Documents/Koszul/__Bioinfo/repos/chromosomix/notebooks/")
 
-# The timing notebook's four tables, as chromosomix.app/timings publishes them
+# The timing notebook's two tables, as chromosomix.app/timings publishes them, and the laptop's two of
+# its deep human map, as chromosomix.app/laptop unpacks them from the committed page
 download.file("https://chromosomix.app/timings/timings.tsv", "timing_results.tsv")
 download.file("https://chromosomix.app/timings/viewers.tsv", "viewers_results.tsv")
-download.file("https://chromosomix.app/timings/pipeline.tsv", "pipeline_results.tsv")
-download.file("https://chromosomix.app/timings/pipeline-memory.tsv", "pipeline_memory_results.tsv")
+download.file("https://chromosomix.app/laptop/pipeline.tsv", "pipeline_results.tsv")
+download.file("https://chromosomix.app/laptop/pipeline-memory.tsv", "pipeline_memory_results.tsv")
 
 APP <- "#2b6fd6"
 REF <- "#e8622c"
@@ -20,9 +21,9 @@ everything <- read_tsv("timing_results.tsv") |>
     ungroup()
 dat <- everything |>
     # One variant a task is enough, but for P(s) on two genomes; and the analyses up to §19, with
-    # §24's five steps on GM12878 and Pairs QC (§27)
+    # §24's five steps on GM12878
     filter(
-        section <= 19 | section %in% c(24, 27),
+        section <= 19 | section == 24,
         !(section == 9 & pair == "raw"),
         !(section == 11 & pair != "raw"),
         !(section == 14 & pair == "TSS"),
@@ -136,7 +137,7 @@ caption <- with(folds, sprintf(
     exp(mean(log(CPU))), exp(mean(log(wall))), exp(mean(log(memory))), nrow(folds)
 ))
 caption <- str_c(caption, sprintf(
-    " Loop calling, insulation, compartments and APA over the whole IMR-90 map (c) take %s in chromosomix, on one thread, and %s in one Python script running cooltools and coolpuppy on %d processes (%.1f× on the wall clock, %.1f× in CPU time).",
+    " Loop calling, insulation, compartments, APA, P(s) and a virtual 4C over the IMR-90 map (c, on the laptop) take %s in chromosomix, on one thread, and %s in one Python script running cooltools and coolpuppy on %d processes (%.1f× on the wall clock, %.1f× in CPU time).",
     minutes(whole$wall[whole$side == "chromosomix"]), minutes(whole$wall[whole$side == "reference"]),
     max(pipeline$threads), whole$wall[whole$side == "reference"] / whole$wall[whole$side == "chromosomix"],
     whole$cpu[whole$side == "reference"] / whole$cpu[whole$side == "chromosomix"]
@@ -285,8 +286,11 @@ b <- names + grid + cpu + wall + memory +
 
 # c: the pipeline against the wall clock, its first run: the memory each side's processes held
 # together, weighed every quarter of a second, each phase shaded behind it, its peak marked and where it
-# finished. chromosomix's phases are its four commands back to back, each paying its own start-up
-PHASES <- c(`start-up` = "#d9d9d9", loops = "#cfe3c1", insulation = "#f5e2ad", compartments = "#dcd2ec", apa = "#c6e2ea")
+# finished. chromosomix's phases are its six commands back to back, each paying its own start-up
+PHASES <- c(
+    `start-up` = "#d9d9d9", loops = "#cfe3c1", insulation = "#f5e2ad", compartments = "#dcd2ec", apa = "#c6e2ea",
+    ps = "#f4cfc7", fourc = "#e4d6c3"
+)
 phase_names <- pipeline |>
     distinct(step, task) |>
     deframe()
@@ -307,7 +311,10 @@ weighed <- read_tsv("pipeline_memory_results.tsv") |>
 peaks <- weighed |>
     slice_max(mb, n = 1, by = side, with_ties = FALSE) |>
     left_join(transmute(filter(first, step == "total"), side, most = peak_mb), by = "side") |>
-    mutate(task = phase_names[step], task = if_else(step == "apa", task, str_to_lower(task)))
+    # Its first letter lowered, unless what follows it is not a small letter (APA, P(s))
+    mutate(task = phase_names[step], task = if_else(
+        str_detect(task, "^.[a-z]"), str_c(str_to_lower(str_sub(task, 1, 1)), str_sub(task, 2)), task
+    ))
 top <- max(weighed$mb) / 1024 * 1.3
 c <- ggplot(weighed, aes(seconds / 60, mb / 1024)) +
     geom_rect(
@@ -333,7 +340,7 @@ c <- ggplot(weighed, aes(seconds / 60, mb / 1024)) +
     scale_y_continuous(limits = c(0, top), expand = c(0, 0)) +
     labs(
         x = "Wall-clock time (min)", y = "Memory (GB)",
-        title = "Human IMR-90 Hi-C (4DNFIJTOIGOI), 1.08 billion contacts, whole genome"
+        title = "Human IMR-90 Hi-C (4DNFIJTOIGOI), 1.08 billion contacts, on the laptop"
     ) +
     theme_bw(base_size = 7) +
     bare +

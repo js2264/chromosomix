@@ -19,7 +19,9 @@ name: Notebooks
 #
 # The fourth, notebooks/laptop.qmd — 23 analyses run genome-wide, each on the
 # command line and in the app in headless Chromium, Firefox and WebKit, with
-# their time and peak memory — is meant for a laptop. The page at
+# their time and peak memory, then six over a deep human map one after the
+# other, by chromosomix and by cooltools and coolpuppy — is meant for a
+# laptop. The page at
 # https://chromosomix.app/laptop/ is rendered by hand on one and committed as
 # notebooks/laptop.html, and deploy.yml publishes that file. This workflow
 # renders it on a runner too, keeps it as the run's artifact and writes it into
@@ -81,10 +83,10 @@ name: Notebooks
 # published, the 0.55 GB of 4DN's 27-GB GM12878 map that § 24 reads by range —
 # chr19 at 10 kb and at 2 kb — and the demo's 1.5 GB yeast contact list), 15 GB more for the viewers
 # (4DN's chicken and mouse maps in both formats, the mouse's 13 GB of it, and
-# the app's yeast demo) and 11.5 GB more for the timings' last part (4DN's
-# 8.3 GB IMR-90 map, and hg38 through iGenomes for its GC content); 160 MB for the parity (GEO's yeast Micro-C and
-# ATAC-seq, UCSC's sacCer3); 13.7 GB for the laptop (the validation's mouse
-# and yeast maps, ATAC-seq and mm10, and 4DN's 8.3 GB IMR-90 map). A cache
+# the app's yeast demo); 160 MB for the parity (GEO's yeast Micro-C and
+# ATAC-seq, UCSC's sacCer3); 16.9 GB for the laptop (the validation's mouse
+# and yeast maps, ATAC-seq and mm10, 4DN's 8.3 GB IMR-90 map, and hg38
+# through iGenomes for its GC content). A cache
 # that size would evict the repository's npm and Electron caches, and the
 # buckets answer a runner at hundreds of megabytes a second. From nothing, the
 # validation renders in about an hour on a standard runner, every reference run
@@ -92,13 +94,12 @@ name: Notebooks
 # timings in about twenty minutes a run, so four of each fit the six hours a
 # job may take — four, an even number, so that each side of a pair goes first
 # in as many rounds as the other (timing.qmd's `round_of`), and as many as
-# there are viewers, so that each goes first once a picture. The four analyses
-# over the whole IMR-90 map that end the timings take about a quarter of an
-# hour a run, both sides, most of it `cooltools.dots`: one run, unless asked for
-# more. The laptop takes
+# there are viewers, so that each goes first once a picture. The laptop takes
 # about an hour on the command line, half of it peak calling over the whole
 # mouse genome, and about as long again in each of the app's three browsers,
-# which comes close to the six hours a job may take. Every
+# which comes close to the six hours a job may take; the six analyses over the
+# IMR-90 map that end it take about a quarter of an hour a run more, both
+# sides, most of it `cooltools.dots`: one run, unless asked for more. Every
 # runner is a different machine, which is why each page says which one it ran
 # on.
 #
@@ -129,15 +130,15 @@ name: Notebooks
 # `validation.txt` beside the validation, every command it ran, every verdict
 # and every number its figures draw, one row a mark (33 MB, most of it
 # Boost-HiC's two maps of chr19 and the metaplot over two tracks);
-# `timings.tsv` beside the timings, every timed run, one row each,
-# `viewers.tsv`, every picture timed in a viewer, `pipeline.tsv`, every
-# step of the four analyses over the IMR-90 map, and `pipeline-memory.tsv`,
-# their memory weighed four times a second; `summary.tsv` beside the
+# `timings.tsv` beside the timings, every timed run, one row each, and
+# `viewers.tsv`, every picture timed in a viewer; `summary.tsv` beside the
 # parity, every file the app and the command line wrote, and its verdict. A
-# release also gets the three pages and the seven tables as assets of its own —
-# `validation-<tag>.tsv` and `.txt`, `timings-<tag>.tsv`, `viewers-<tag>.tsv`,
-# `pipeline-<tag>.tsv`, `pipeline-memory-<tag>.tsv` and `parity-<tag>.tsv` — so a release's numbers outlive
-# the next release's pages; its laptop page is the one committed in its source.
+# release also gets the three pages and the five tables as assets of its own —
+# `validation-<tag>.tsv` and `.txt`, `timings-<tag>.tsv`, `viewers-<tag>.tsv`
+# and `parity-<tag>.tsv` — so a release's numbers outlive the next release's
+# pages; its laptop page is the one committed in its source, which carries
+# its tables, the deep human map's `pipeline.tsv` and `pipeline-memory.tsv`
+# among them.
 
 on:
   release:
@@ -153,7 +154,7 @@ on:
         type: number
         default: 4
       pipeline_runs:
-        description: 'Runs of the four analyses over the whole IMR-90 map that end the timings; a quarter of an hour each'
+        description: 'Runs of the six analyses over the IMR-90 map that end the laptop; a quarter of an hour each'
         type: number
         default: 1
       publish:
@@ -260,7 +261,6 @@ jobs:
       NOTEBOOKS_SITE: ${{ needs.site.outputs.url }}
       TIMING_RUNS: ${{ inputs.runs || 4 }}
       VIEWER_RUNS: ${{ inputs.viewer_runs || 4 }}
-      PIPELINE_RUNS: ${{ inputs.pipeline_runs || 1 }}
     steps:
       - uses: actions/checkout@v4
 
@@ -273,7 +273,7 @@ jobs:
       - name: Render the validation
         run: bash notebooks/scripts/memory.sh quarto render notebooks/validation.qmd
 
-      - name: Render the timings, ${{ env.VIEWER_RUNS }} rounds of pictures, ${{ env.TIMING_RUNS }} runs of each command and ${{ env.PIPELINE_RUNS }} of the pipeline
+      - name: Render the timings, ${{ env.VIEWER_RUNS }} rounds of pictures and ${{ env.TIMING_RUNS }} runs of each command
         run: bash notebooks/scripts/memory.sh quarto render notebooks/timing.qmd
 
       # An hour of validation is worth keeping when the timings after it fail,
@@ -294,10 +294,12 @@ jobs:
           overwrite: true
 
   # 23 analyses run genome-wide, on the command line and in the app, on this
-  # job's runner: the same kind of machine as the timings', with no reference
-  # package beside them, and Playwright's Chromium, Firefox and WebKit for the
-  # app. A render that outruns the job keeps the runs it measured: each is
-  # written to the table as it is, and gathered whatever happened.
+  # job's runner: the same kind of machine as the timings', with Playwright's
+  # Chromium, Firefox and WebKit for the app; then six over the IMR-90 map, one
+  # after the other, by chromosomix and by cooltools and coolpuppy from the
+  # reference environment. A render that outruns the job keeps the runs it
+  # measured: each is written to the table as it is, and gathered whatever
+  # happened.
   laptop:
     name: laptop
     needs: [site, parity]
@@ -307,6 +309,7 @@ jobs:
       contents: read
     env:
       NOTEBOOKS_SITE: ${{ needs.site.outputs.url }}
+      PIPELINE_RUNS: ${{ inputs.pipeline_runs || 1 }}
     steps:
       - uses: actions/checkout@v4
 
@@ -321,7 +324,7 @@ jobs:
       - name: Set the committed page aside
         run: rm -f notebooks/laptop.html
 
-      - name: Render the laptop
+      - name: Render the laptop, and ${{ env.PIPELINE_RUNS }} run of each side over the IMR-90 map
         run: bash notebooks/scripts/memory.sh quarto render notebooks/laptop.qmd
 
       # Each analysis is written to its table as it is measured, so a render
