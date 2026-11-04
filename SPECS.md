@@ -1374,7 +1374,9 @@ Three refusals, each because the merged picture would otherwise be a lie rather 
 **The card asks for it only once there is a first map.** The zone is labelled *Load a map into the
 lower triangle* — not *a second map*, which is what §16's companion cell is called — and it is
 absent until a map is open, because a triangle of nothing is a promise with nothing to keep it
-(§8.5). A session with no map has one drop zone on that card, asking for a contact map.
+(§8.5). A session with no map has one drop zone on that card, asking for a contact map. Under it,
+once a map is open, stands *Load a map into a cell of its own*, the deck's door on the same card
+(§16.9), which stays when this one goes.
 
 The zone takes a file from the desktop and a **row out of the Files column** (§20.5) alike — the
 file behind the row read at the drop, through the folder it names, with the credential that folder
@@ -7029,6 +7031,24 @@ hidden, which have no cell to be in the order of. The card used to list the firs
 deck of four maps showed a card of one and the other three were named nowhere in the column; and
 then it listed the first map first wherever its cell had been moved to.
 
+**The card's last rectangle opens a map in a cell of its own**: *Load a map into a cell of its own*,
+under every row and under the lower triangle's rectangle (§5.7), the two being the two ways a second
+map is drawn — in this square, or beside it. It is there whenever a map is open and the deck may take
+one more map, and **it does not go when the square is full**: the triangle's rectangle is gone once
+a second file fills it, and this one has nothing to wait for. A deck past its last cell says so in
+its own bar, as it does for every other road in. What lands on it takes the road a file dropped on
+the window takes (`Session.dropFiles`) — **every file of the drop**, so several coolers are a deck
+of them, each in the first empty cell or a new one at the end of the grid, a saved workspace is
+still a workspace and a track still joins the tracks — and its chooser takes several files. A row
+out of the Files column (§20.5) goes the same way, with its folder's source and name. Its hint says
+the one thing the triangle's cannot: *a cooler at any bin size*, since two cells may be two
+resolutions (§16.4). It is absent on a file with a genome layer, which holds no deck (§16.8), and
+beside the 1D browser, where a deck holds tracks and models but no map (§25.3); on a view a deck
+cannot frame, a table, the map joins the deck all the same and waits, drawn, for a view that can.
+The card used to have no such door: a reader with one map and a second in hand had the lower
+triangle's rectangle as the only drop on the card, and the deck only by the `+` on the map's edge or
+a drop on the picture.
+
 Each companion's row has an **eye** and an **×**, and they are two acts, as on a track's row. The
 eye is the Structures card's (§25.3): lit, the map is in a cell, and pressing it takes the map out
 and keeps it on the card, dimmed, with its eye dark; pressed again, the map opens in the first
@@ -7052,6 +7072,18 @@ keeps its meaning, the lower triangle taken away (§5.7), and so does the first 
 no deck: the 1D browser. **In a deck the first map's eye is its cell's**, as every other map's is —
 it used to put the map down for the browser there too, which re-read the state with no map to lead,
 and a deck of maps cannot stand beside a browser (§25.3): the companions went with it.
+
+**A cell's heading stays in its cell.** It is one line — a grip, the name, and then the cell's
+controls: its sequence, its rung, its own window, its star, its chain and its × — while the name can
+keep 6rem beside them. Where it cannot, the controls go **together** to a line of their own under
+the name, at the cell's right, and the name takes the whole first line; a cell too narrow even for
+the controls alone wraps them again, to the right, inside the cell. Every kind of cell does this, the
+first map's, a structure's, a tracks cell's and an empty one's among them. It used to be one line at
+any width: four maps across a column with two side panels open are cells of 154 pixels, under a
+heading that could not be less than 196, so the name went to a floor that showed one letter and the
+controls ran on past the cell's edge — the chain of one cell drawn over the grip and the name of the
+next. Wrapped one by one, the controls would leave a star above and a chain and a × below, which
+reads as two headings.
 
 **The first cell closes like any other.** Its × is on its heading, after its star and chain, while
 another cell is beside it — a × on the one cell of a deck would leave nothing on screen. What it does
@@ -9377,6 +9409,27 @@ deepTools' within 5·10⁻⁶ and no cell of half a million differs past both to
 insulation's run went from 1.1 s to 1.7 s, its peak memory from 300 MB to 210 MB; about mouse RefSeq's
 35,034 TSSs (§ 14) the time is what it was, 5.5 s, in 350 MB rather than 410.
 
+**A scaled metaplot's abscissa is read by its landmarks.** Its x is a column, because the axis is three
+quantities end to end — base pairs before each feature, the share of the way through it, base pairs
+after it — and no one number is all three; it was labelled with the columns' numbers, `0`, `100`,
+`200`, `300`, under a curve whose reader wants to know where the features start and end. It is
+ticked at **`Start` and `End`**, the body's edges, the two points every feature in the set shares, and
+between and outside them at the finest round steps that fit the width it is drawn at, six ems apart at
+the least: a share of the body — `50%`, then quarters, tenths, twentieths — and a distance out from the
+nearer edge — `-5 kb` … `-1 kb` before the start, `+1 kb` … `+5 kb` after the end, as deepTools labels
+the plot — in steps of 1, 2, 2.5 or 5 of a decade, one that ends on the flank's far end preferred to
+one as fine that does not, and never finer than a column of either. So a figure in a drawer reads
+`-5 kb`, `-2.5 kb`, `Start`, `25%`, `50%`, `75%`, `End`, `+2.5 kb`, `+5 kb`; a wider one, or a window
+wheeled into the body, takes finer steps, and a PNG or a PDF, drawn in the figure's box on screen,
+carries the ticks the reader is looking at. `Start` and `End` are kept wherever they fall, however
+near each other. The axis runs from the outer edge of the first
+column to that of the last, where the flanks end, rather than between the columns' centres, and the
+crosshair and the tooltip spell a position as the ticks do — `37.4%`, `-150 bp`. The per-feature
+heatmap under it names the same landmarks where they fall — `-5 kb`, `Start`, `50%`, `End`, `+5 kb` —
+where it had five blank ticks spread evenly across it, and its TSV says where each stands, in columns.
+The x the TSV and the command line write for the curve are the columns, as they were
+(`figures/scaledTicks.ts`).
+
 **A pileup's axes are distances, in base pairs.** `-21 kb`, `0`, `+21 kb` — five labels along each
 axis, the ends at the ends, the sign written out on both sides because what a label says is *which
 side of the anchor*. They were counts of **bins**, which is a number only a reader holding the
@@ -10133,7 +10186,7 @@ round robin, each a fresh process — all but the ones that would time a job twi
 jobs: one seed of the shifted controls, the *Sox2* viewpoint of virtual 4C, Boost-HiC on chr1, and
 APA raw and over controls but not over the expected, where coolpuppy is handed an expected computed
 beforehand — and none of the four analyses after loop calling, from cis and trans to signal by group,
-whose commands it lists and does not run: they are validated, and not timed. **The two sides of a
+nor Pairs QC, whose commands it lists and does not run: they are validated, and not timed. **The two sides of a
 pair take turns to go first**: the even rounds run each analysis's references before its
 `chromosomix` commands, because the side that goes first is the one that reads
 from the disk what the page cache let go since the round before, and in one order that wait was
@@ -10168,28 +10221,6 @@ juicebox.js by its last repaint covering the state asked for and its track's til
 tile in view fetched and drawn. Four rounds, the viewers taking turns to go first; every run, and
 every cell refused, is one line of `notebooks/work/validation/viewers.tsv`, with the requests and
 bytes the page asked for, the machine and every version.
-**And they close on a deep human map, start to finish.** After the analyses, `notebooks/timing.qmd`
-times four of them one after the other over the whole genome of 4DN's in situ Hi-C of IMR-90 (Rao et
-al. 2014, 4DNFIJTOIGOI, 1.08 billion contacts, 8.3 GB, linked from the laptop's folder where that holds
-it), each at its section's settings: loop calling at 10 kb, as § 19 runs it; diamond insulation at
-10 kb, a window of 10 bins; compartments at 250 kb, three eigenvectors phased by GC content
-(`bioframe.frac_gc` over hg38 as Illumina iGenomes distributes it, worked out once and given to both);
-and APA over every loop the first called, ±5 bins, raw: no expected on either side. `chromosomix` runs them as a shell
-script does, four commands, the pileup reading the loops the first wrote; the reference is **one Python
-script**, `notebooks/scripts/cooltools_pipeline.py`, running `cooltools.expected_cis` and `dots`,
-`insulation`, `eigs_cis` and coolpuppy's pileup over `dots`' loops and that expected in one process,
-with as many processes as the references above. Each side's **start-up** is timed apart —
-`chromosomix --version`, the program loaded and nothing done, which each command pays again, and the
-script's launch to the end of its imports — then **each step** — a command; or the stretch between two
-of the marks the script writes, its CPU time from the usage of the process and of the children it has
-waited for at either end, its memory from the weighings between them — and **the whole**. One run of
-each side, unless `PIPELINE_RUNS` says otherwise, the sides taking turns to go first over several, and
-before each the page cache emptied where the runner allows and the map read through once where it does
-not; every step of every run is one line of `notebooks/work/validation/pipeline.tsv`, with when in its
-side's run it began and ended, every weighing of each side's processes, with its time and its step, one
-line of `pipeline-memory.tsv` beside it — the page draws the first run's memory against the wall clock,
-each phase shaded — and what the two wrote in the last run is compared step by step — the loops by bin pair, the insulation bin by bin and
-its boundaries, E1 chromosome by chromosome, the pileup cell by cell.
 **And a third holds the app to its own command line.** `notebooks/parity.qmd` runs ten tasks in the
 app — this checkout's build, of the commit the command line is built from or nothing runs, served
 from loopback and driven by `notebooks/scripts/parity.mjs` **in each of the three browser engines
@@ -10216,10 +10247,10 @@ run and where they did not.
 **And one for the reader's own machine.** `notebooks/laptop.qmd` answers what the other three do not
 — what a genome-wide analysis costs on a machine like the reader's, on the command line and in the app,
 in each of three browsers — with Quarto, pandas, matplotlib and pyfaidx, the built app and command line
-and Playwright's Chromium, Firefox and WebKit, and no reference package, so that a reader can render it
-on their own laptop. It downloads the
-validation's mouse map, yeast Micro-C, ATAC-seq replicates, mm10 and its RefSeq genes, and 4DN's IMR-90
-in situ Hi-C (Rao et al. 2014, 4DNFIJTOIGOI, 1.08 billion contacts): about 13.7 GB into
+and Playwright's Chromium, Firefox and WebKit, and for its last part alone four reference packages, so
+that a reader can render it on their own laptop. It downloads the
+validation's mouse map, yeast Micro-C, ATAC-seq replicates, mm10 and its RefSeq genes, 4DN's IMR-90
+in situ Hi-C (Rao et al. 2014, 4DNFIJTOIGOI, 1.08 billion contacts) and hg38: about 16.9 GB into
 `notebooks/work/laptop/data/`, each file held to its MD5, a file `validation.qmd` already holds linked
 instead. Then it runs 23 analyses genome-wide: on the mouse map, coverage, P(s), insulation, the
 directionality index, compartments (E1, unphased), loop calling, chromosight's loops, a pileup over them
@@ -10257,14 +10288,47 @@ version of the program it ran in (Node's, or the browser's) and the line the app
 second render of the same build reads back every run whose program is the same version, but for a run
 the app did not finish, so a browser added later is the only one run. The page is three tables of all
 23, the wall-clock time, the CPU time and the memory, each with a column for the command line and one
-for each browser — the memory in a browser being what the run added to what the page held when **run**
-was pressed, the peak and that hold kept in the table to download —; what the slowest and the largest
+for each browser — the memory as the whole peak, the page's in a browser with what it held when **run**
+was pressed, and beside it, for each browser, what the run added to that hold, the hold itself kept in
+the table to download —; what the slowest and the largest
 were in each, each browser against the command line and against the first browser, the geometric means
 of each browser's CPU time and peak memory over the command line's, and how many finished; the five
 analyses side by side at the two depths, a figure, every command and the line the app wrote for each in two blocks at the end, whether
 every browser wrote the same line, and every browser's line held to the command: every flag of the
 command with its value, and besides them only the task's parameters at their defaults and those its
 form answers from what is open, or the page says what else.
+
+**And it closes on a deep human map, start to finish, against the packages it reproduces.** After
+the 23, `notebooks/laptop.qmd` times six analyses one after the other over the same IMR-90 map, each at
+its section of the validation's settings: loop calling at 10 kb, as § 19 runs it; diamond insulation
+at 10 kb, a window of 10 bins; compartments at 250 kb, three eigenvectors phased by GC content
+(`bioframe.frac_gc` over hg38 as Illumina iGenomes distributes it, worked out once and given to both);
+APA over every loop the first called, ±5 bins, raw: no expected on either side; P(s) at 10 kb, every
+diagonal, as § 4 runs it; and a virtual 4C at 10 kb from one bin, the one holding *MYC*'s
+transcription start (chr8:127,730,001-127,740,000), in cis only — the task's default, where § 10 reads
+the whole genome. `chromosomix` runs them as a shell script does, six commands, the pileup reading the
+loops the first wrote; the reference is **one Python script**, `notebooks/scripts/cooltools_pipeline.py`,
+running `cooltools.expected_cis` and `dots`, `insulation`, `eigs_cis`, coolpuppy's pileup over `dots`'
+loops, `expected_cis` again over every diagonal for the P(s), and `virtual4c`, mapped over the
+viewpoint's chromosome alone, in one process, with one process a core, at most four, as the
+validation gives its references, but for the 4C, one chromosome in one. Each side's **start-up** is
+timed apart — `chromosomix --version`, the program loaded and nothing done, which each command pays
+again, and the script's launch to the end of its imports — then **each step** — a command; or the
+stretch between two of the marks the script writes, its CPU time from the usage of the process and of
+the children it has waited for at either end, its memory from the weighings between them — and **the
+whole**. The memory is weighed four times a second, the process and every process under it found by
+their parents as `ps` lists them, on Linux and on a Mac alike: their proportional set sizes where the
+system gives them, their resident sets elsewhere, and never less than `ru_maxrss`. One run of each
+side, unless `PIPELINE_RUNS` says otherwise, the sides taking turns to go first over several, and
+before each the page cache emptied where the machine allows and the map read through once where it
+does not; every step of every run is one line of `notebooks/work/laptop/pipeline.tsv`, with when in
+its side's run it began and ended, every weighing of each side's processes, with its time and its
+step, one line of `pipeline-memory.tsv` beside it — both carried in the page, as its table is; the page
+draws the first run's memory against the wall clock, each phase shaded — and what the two wrote in the
+last run is compared step by step — the loops by bin pair, the insulation bin by bin and its
+boundaries, E1 chromosome by chromosome, the pileup cell by cell, P(s) point by point over the
+diagonals each point pools, the 4C bin by bin. This part alone needs the reference packages, cooler,
+cooltools, coolpuppy and bioframe, at the versions `notebooks/requirements.txt` pins.
 
 **The laptop's published page is rendered on a laptop.** What it measures is a reader's machine, so
 the page at `<site>/laptop/` is rendered by hand, on one, and committed as `notebooks/laptop.html` —
@@ -10273,16 +10337,17 @@ back stay in `notebooks/work/`, uncommitted, since a runner of the same build wo
 instead of measuring itself. The page is one file that is the whole of it: it links the other pages
 on the site (NOTEBOOKS_SITE, or `package.json`'s `homepage`) rather than as files beside it, which a
 laptop does not have, and it **carries** what is published beside it rather than linking it — its
-table under the results and its `rendered.json` in its closing line, each a link that downloads the
+table under the results, the deep map's two tables under its part and its `rendered.json` in its
+closing line, each a link that downloads the
 file from the page itself (`Render.attach()`) — so the page reads the same from the disk it was
 rendered on and from the site, and its table cannot disagree with its picture. Its block says it was
 rendered by hand, on the machine named under it, as the page is published. Publishing a render is
-committing that file: every deploy writes it as `laptop/index.html` and unpacks the table and the
+committing that file: every deploy writes it as `laptop/index.html` and unpacks the tables and the
 stamp beside it (`pages.py committed`), the names its entry lists and nothing else, and makes no
 `laptop/` until one is committed.
 
 They are documents, not tests: they need the data (about 6 GB for the analyses, 15 GB for the
-viewers, 11.5 GB for the timings' deep map and its sequence, 160 MB for the parity and 13.7 GB for the laptop), the reference packages, yapc's own
+viewers, 160 MB for the parity and 16.9 GB for the laptop), the reference packages, yapc's own
 environment and higlass-python's, the two viewers and Playwright's browsers, and nothing in the suite
 runs them. Each file is fetched from where it was published, on every render, through
 `notebooks/scripts/download.py`, **which asks again when the server or the network fails** — a 500,
@@ -10315,9 +10380,9 @@ even when it fails: the validation alone, with the timing rounds it finished, wh
 A last job publishes the validation, the timings and the parity only if the three rendered —
 `pages.py published` names them — at `<site>/validation/`, `<site>/timings/` and `<site>/parity/`,
 each a self-contained page with its tables beside it (`commands.json`, `summary.tsv` and
-`validation.txt`, every command, every verdict and every number its figures draw; `timings.tsv`,
-`viewers.tsv`, `pipeline.tsv` and `pipeline-memory.tsv`; the parity's `summary.tsv`, every file compared);
-a release keeps its own copies of the three pages and of the seven tables as assets. **The runner's laptop is published nowhere**: not to the
+`validation.txt`, every command, every verdict and every number its figures draw; `timings.tsv` and
+`viewers.tsv`; the parity's `summary.tsv`, every file compared);
+a release keeps its own copies of the three pages and of the five tables as assets. **The runner's laptop is published nowhere**: not to the
 site, whose `laptop/` is the committed page, nor to a release, whose laptop is the one committed in its
 source; it is the run's artifact, and its section of the run's summary, and whether it rendered decides
 nothing about publishing the others. It runs when a release is published and on demand. Each page opens on a
@@ -10685,7 +10750,8 @@ refuses (§11, §15): one pass of the pointer over P(s) raised seven hundred vio
 of bare text with its swatches gone. The formatters' markup carries classes instead, and a series'
 swatch is an SVG `fill`. **Each coordinate is spelled as its axis spells it** — a sequence's name
 over its bar and `84.3 kb` along a P(s), where the library printed the raw number under the pointer,
-`6.00` and `84,281.00`; per cent where the axis is; and `2.24e-7` under ticks of `1e-7` rather than a
+`6.00` and `84,281.00`; per cent where the axis is; the place along a feature — `Start`, `37.4%`,
+`+1.2 kb` — on a scaled metaplot's columns (§18.8); and `2.24e-7` under ticks of `1e-7` rather than a
 run of zeros. The crosshair's two numbers on the axes are spelled the same way, where the library
 printed `387,269.00` along a P(s) in kb and `0.00` up its ordinate. Over a point, a histogram's
 bar, a box or a violin the series comes first, then the
@@ -11068,7 +11134,8 @@ stack (§8.9), onto the rectangle in the middle of a map for that map alone — 
 (§8.1) — onto a companion, anywhere on its cell, for a track on that map, and onto a tracks cell for
 a track drawn in it (§16.9), onto the Tracks card, onto a deck's edge or an empty cell for a cell of
 its own (§16.9), onto a 3D cell for the model it draws (§25.3), onto the Contact maps card's *Load a
-map into the lower triangle* for the second file in the square (§5.7), onto an analysis form's file
+map into the lower triangle* for the second file in the square (§5.7) or its *Load a map into a cell
+of its own* for a cell of the deck (§16.9), onto an analysis form's file
 box as the run's input rather than as anything opened (§18.8), onto the content area, onto the
 landing page's drop zone — which replaces, because that is what the landing page has always meant.
 **A store's row is dragged the same way, to the same places** (§24.2): every row that is a file,

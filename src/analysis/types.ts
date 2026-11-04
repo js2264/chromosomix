@@ -876,6 +876,29 @@ export interface CurveSeries {
   stack?: string
 }
 
+/**
+ * A scaled-region abscissa, in its own x units — a column of the plot each
+ * (`CurveOutput.xScaled`).
+ *
+ * The body runs from {@link start} to {@link end}, and every feature is
+ * stretched to fit it; the flanks run out from them to {@link from} and
+ * {@link to}, {@link flankStep} base pairs a unit. Every position is an edge
+ * between two columns, not a column's centre: the body begins where its first
+ * column's left edge is, which is half a column before that column's x.
+ */
+export interface ScaledAxis {
+  /** The far end of the upstream flank: the left edge of the first column. */
+  from: number
+  /** Where every feature starts: the left edge of the body's first column. */
+  start: number
+  /** Where every feature ends: the right edge of the body's last column. */
+  end: number
+  /** The far end of the downstream flank: the right edge of the last column. */
+  to: number
+  /** Base pairs a unit of x stands for in either flank. */
+  flankStep: number
+}
+
 export interface CurveOutput {
   kind: 'curve'
   id: string
@@ -920,6 +943,19 @@ export interface CurveOutput {
    * way every other figure does.
    */
   xTicks?: string[]
+  /**
+   * Where a scaled-region abscissa's parts meet, where x is one (§18.8).
+   *
+   * A scaled metaplot's x is the column, because the axis is three quantities
+   * laid end to end — base pairs before each feature, the proportion of the way
+   * through it, base pairs after it — and no one number is all three. This says
+   * where they meet, and the figure writes its ticks in their terms: `Start`
+   * and `End` at the body's edges, per cent of the way through between them,
+   * `-1 kb` and `+1 kb` from them outside (`figures/scaledTicks.ts`). The x
+   * values stay columns, so the TSV a reader checks the figure against is the
+   * one it was.
+   */
+  xScaled?: ScaledAxis
   /**
    * The output already compares **every map on screen** — a reproducibility
    * run's lines, its matrix and its tables, each about every pair of maps.
@@ -970,6 +1006,15 @@ export interface MatrixOutput {
   /** Tick labels along each axis, evenly spaced; empty for none. */
   xTicks: string[]
   yTicks: string[]
+  /**
+   * Where each of {@link xTicks} stands, as a fraction of the axis from its
+   * left edge to its right; absent where they are evenly spaced.
+   *
+   * For an abscissa whose landmarks are not evenly spread: a scaled metaplot's
+   * `Start` and `End` are wherever its flanks end, which is a quarter and three
+   * quarters of the way across only when the body is twice as wide as a flank.
+   */
+  xTickAt?: number[]
   /** Colormap name from `render/colormaps.ts`. */
   colormap: string
   /**

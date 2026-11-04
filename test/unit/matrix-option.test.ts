@@ -237,6 +237,15 @@ describe('the ticks', () => {
   it('keeps both ends where there are more labels than cells', () => {
     expect(spreadTicks(['a', 'b', 'c', 'd'], 2)).toEqual(['a', 'd'])
   })
+
+  it('puts a placed label on the cell its share of the axis falls in', () => {
+    // A scaled metaplot's `Start` is wherever its flank ends — here after two
+    // of eight cells — and the first label given keeps a cell two would share.
+    expect(spreadTicks(['Start', 'End', 'edge'], 8, [0.25, 0.75, 0.76])).toEqual([
+      '', '', 'Start', '', '', '', 'End', '',
+    ])
+    expect(spreadTicks(['-1 kb', '+1 kb'], 4, [0, 1])).toEqual(['-1 kb', '', '', '+1 kb'])
+  })
 })
 
 describe('the pointer', () => {

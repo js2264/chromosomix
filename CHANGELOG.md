@@ -32,6 +32,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   closes. Its live views open the preview's own app, its banner names the pull request, and the
   pull request's comment gives both addresses. Documentation that does not build leaves the app's
   preview published, and the comment says so.
+- **The Contact maps card opens a map in a cell of its own (§16.9).** Under the lower triangle's
+  rectangle a second one, *Load a map into a cell of its own*, takes a cooler — or several, or a
+  row of the Files column — and opens each in the deck beside the map, the first empty cell or a new
+  one at the end. It is there whenever a map is open, and stays once a second file fills the lower
+  triangle and that rectangle goes; its hint says what the triangle's cannot, *a cooler at any bin
+  size*. The card's only drop with a map open used to be the triangle's, so a new file reached the
+  deck from the card by no road at all.
 - **Live examples in the documentation (§32.4).** Ten pictures — the introduction's, moving around,
   a contact map and its O/E, two maps compared, a ratio, one map read two ways, the 45° view, the
   genome browser and an embed in a page — carry **Try it live**, which swaps the picture for the
@@ -70,17 +77,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   After every green full suite on `main`, the report is published at
   <https://chromosomix.app/coverage/>, and the README's **Coverage** badge shows its line coverage
   (docs/deploy.md).
-- **The timings end on a deep human map, start to finish (§18.10).** `notebooks/timing.qmd` now
-  times four analyses one after the other over the whole genome of 4DN's IMR-90 in situ Hi-C
-  (4DNFIJTOIGOI, 1.08 billion contacts): loop calling and diamond insulation (10 bins) at 10 kb,
-  compartments at 250 kb phased by GC content, and APA over every loop called, raw.
-  `chromosomix` runs them as four commands; the reference is one Python script running cooltools and
-  coolpuppy in one process (`notebooks/scripts/cooltools_pipeline.py`). Each side's start-up, each
-  step and the whole are timed — CPU, wall clock and peak memory — and what the two wrote is compared
-  step by step. Every step is a line of `pipeline.tsv`, and every weighing of each side's memory,
-  four a second, a line of `pipeline-memory.tsv`, both published beside the page and kept by a
-  release; the page and `notebooks/scripts/timing.plot.R`'s panel c draw the memory against the wall
-  clock, each phase shaded, its peak and the end of each side marked.
+- **The laptop ends on a deep human map, start to finish, against the packages it reproduces
+  (§18.10).** `notebooks/laptop.qmd` now times six analyses one after the other over 4DN's IMR-90 in
+  situ Hi-C (4DNFIJTOIGOI, 1.08 billion contacts): loop calling and diamond insulation (10 bins) at
+  10 kb, compartments at 250 kb phased by GC content, APA over every loop called, raw, P(s) at 10 kb
+  over every diagonal, and a virtual 4C at 10 kb from the bin of *MYC*'s promoter, in cis — the first
+  five over the whole genome. `chromosomix` runs them as six commands; the reference is one Python
+  script running cooltools and coolpuppy in one process (`notebooks/scripts/cooltools_pipeline.py`).
+  Each side's start-up, each step and the whole are timed — CPU, wall clock and peak memory, the
+  memory weighed four times a second on a Mac as on Linux — and what the two wrote is compared step
+  by step. Every step is a line of `pipeline.tsv`, and every weighing of each side's memory a line of
+  `pipeline-memory.tsv`, both carried in the page and unpacked beside it at `laptop/`; the page and
+  `notebooks/scripts/timing.plot.R`'s panel c draw the memory against the wall clock, each phase
+  shaded, its peak and the end of each side marked. The laptop needs cooler, cooltools, coolpuppy and
+  bioframe for this part, and hg38 (3.2 GB) for its GC content.
 - **The parity runs in Firefox and WebKit too (§18.10).** `notebooks/parity.qmd` drives its ten
   tasks in each of the three engines Playwright drives headless — Chromium, Firefox and WebKit — and
   runs the line each browser's console wrote on the files that browser's sessions read, so the
@@ -88,6 +98,31 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   `summary.tsv` has a `browser` column, each case lists its verdict in each browser and says whether
   the three wrote the same line, and `PARITY_BROWSERS` names fewer. The Notebooks workflow installs
   the two for the parity's job.
+
+### Changed
+
+- **A scaled metaplot's x axis says where the features start and end (§18.8).** It was labelled
+  with column numbers — `0`, `100`, `200`, `300` — which told a reader nothing about the plot. It is
+  now ticked at `Start` and `End`, the edges of the rescaled body, with round steps that fit the
+  plot's width between and outside them: `25%`, `50%`, `75%` (or tenths) through the body, and
+  `-5 kb` … `-1 kb` before the start and `+1 kb` … `+5 kb` after the end along the flanks. A wider
+  figure and a window wheeled into one part of the axis take finer steps, and a PNG or PDF carries
+  the ticks on screen; the axis now reaches the flanks' far ends; and the crosshair and the tooltip
+  spell the position the same way (`37.4%`, `-150 bp`). The per-feature heatmap under it, which had
+  five blank ticks, names `-5 kb`, `Start`, `50%`, `End` and `+5 kb` where they fall. The numbers
+  the curve's TSV and the command line write are unchanged.
+- **The laptop notebook's memory table gives a browser's whole peak (§18.10).** Its column for a
+  browser was what a run added to what the page held when **run** was pressed, beside the command
+  line's whole peak, so the app read as lighter than the command line in 49 of its 69 runs, though
+  its page held 160 MB to 1.4 GB before the run began. The table now gives the whole peak in every venue,
+  the page's in each browser, the app itself included, and beside it, for each browser, what the run
+  added; the sentence under the tables gives the median of each.
+- **The timings no longer time Pairs QC (§18.10).** Its seven commands — `chromosomix pairsqc`, and
+  `cooler cload`, `pairtools restrict` on each strand, the counts drawn from them, the coverage
+  against the cuts and `pairtools stats` as its reference — are written to `commands.json` and not
+  run by `notebooks/timing.qmd`, as §§ 20–23's are not: Pairs QC is still held to them in
+  `notebooks/validation.qmd` § 27, and timed nowhere. `notebooks/scripts/timing.plot.R` draws no
+  point for it.
 
 ### Fixed
 
@@ -101,6 +136,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   The guides are a third shorter — 112,000 words down to 73,000 — and keep every control, default,
   limit and warning they named. And a live view's right side, under the contents list, takes the
   pointer again: the list's column, folded away or not, was still catching every click there.
+- **A deck cell's heading no longer runs into the next cell (§16.9).** Four maps across a column
+  with two side panels open are cells of 154 pixels, and a heading — a grip, the name, the sequence,
+  the star, the chain and the × — could not be less than 196: the name was cut to one letter and the
+  controls ran on past the cell's edge, the chain drawn over the next cell's grip and name. Where the
+  name cannot keep 6rem beside them, the controls now go together to a line under it, at the cell's
+  right, and the name takes the whole first line; in a narrower cell still they wrap again inside
+  it. Every kind of cell does this — the first map's, a structure's, a tracks cell's, an empty one.
+  The star and the chain in a heading are square, where `.btn`'s padding had made them 36 pixels
+  wide round a 13-pixel mark, and a collection's rung picker is as wide as the rung it shows, as the
+  sequence picker beside it already was — so a narrow cell's controls fit under its name on one line.
 - **An embed's bar fits a narrower frame (§21.3).** The bar was one row that scrolled, so in a frame
   of 1,040 pixels the contacts box's example was cut, at 910, the width of an R Markdown page, the row
   ended at `con`, at 720 the resolution and the box were out of sight, and at 480 the frame scrolled

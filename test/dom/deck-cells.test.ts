@@ -1693,3 +1693,42 @@ describe('an empty cell', () => {
     expect(deck.mapList.map((map) => map.label).slice(1)).toEqual(['rep2.cool'])
   })
 })
+
+/**
+ * A heading's controls are one group, so a narrow cell wraps them together
+ * under its name rather than running them on into the next cell (§16.9). The
+ * wrapping itself is the stylesheet's (`test/unit/deck-head-css.test.ts`) and
+ * the browser's; what is asserted here is the shape every kind of cell gives
+ * its heading — the first map's, a map's, a structure's, a tracks cell's and an
+ * empty one's — since a heading built without the group overflows exactly as
+ * before.
+ */
+describe('every cell’s heading', () => {
+  it('ends in one group holding all of its controls, after the name', () => {
+    const { deck } = make(fakeStore([structureEntry()]), tracksContext())
+    deck.add({ kind: 'remote', uri: 'https://example.org/rep2.cool' })
+    deck.add({ kind: 'structure' })
+    deck.add({ kind: 'tracks' })
+    deck.add({ kind: 'vacant' })
+    deck.apply(state('https://example.org/rep2.cool|3d|tracks|~'))
+    const heads = all<HTMLElement>(deck.el, '.deck-grid > .deck-panel .deck-head:not(.hidden)')
+    const kinds = heads.map((head) => head.closest('.deck-panel')?.className ?? '')
+    expect(kinds.some((cls) => cls.includes('is-lead'))).toBe(true)
+    expect(kinds.some((cls) => cls.includes('deck-structure'))).toBe(true)
+    expect(kinds.some((cls) => cls.includes('deck-tracks'))).toBe(true)
+    expect(kinds.some((cls) => cls.includes('is-vacant'))).toBe(true)
+    expect(heads.length).toBeGreaterThanOrEqual(5)
+    for (const head of heads) {
+      const where = head.closest('.deck-panel')?.className
+      const last = head.lastElementChild
+      expect(last?.classList.contains('deck-tools'), `${where}: the heading ends in its controls`).toBe(true)
+      expect(last?.querySelector('.btn-close'), `${where}: the × is among them`).not.toBeNull()
+      // Nothing a reader presses stands outside the group, bar the grip.
+      const loose = [...head.children].filter(
+        (child) => child !== last && !child.classList.contains('deck-grip') && !child.classList.contains('deck-name'),
+      )
+      expect(loose.map((child) => child.className), `${where}: controls outside the group`).toEqual([])
+      expect(head.querySelector('.deck-name')?.parentElement, `${where}: the name is the heading's own`).toBe(head)
+    }
+  })
+})

@@ -56,8 +56,7 @@ export const NOTEBOOKS: readonly Notebook[] = [
     title: 'Timings',
     what:
       'The time to a picture beside juicebox.js and HiGlass, on the same files, then every command of ' +
-      'the validation run again and timed against its reference, and four analyses over a whole human ' +
-      'map, start to finish.',
+      'the validation run again and timed against its reference.',
   },
   {
     path: 'parity',
@@ -71,7 +70,8 @@ export const NOTEBOOKS: readonly Notebook[] = [
     title: 'Laptop',
     what:
       'What a genome-wide analysis costs on a laptop: 23 of them run on the command line and in the ' +
-      'app, with their time and peak memory. Render it on your own to measure yours.',
+      'app, with their time and peak memory, then six over a deep human map, start to finish, against ' +
+      'cooltools and coolpuppy. Render it on your own to measure yours.',
     byHand: true,
   },
 ]
