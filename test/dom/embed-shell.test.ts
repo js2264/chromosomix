@@ -109,6 +109,35 @@ describe('a window mounted as an embed', () => {
     expect(all(root, '.panel-column .panel-tab')).toHaveLength(2)
   })
 
+  it('opens the columns its page asks for, and remembers nothing of them', () => {
+    // `?panels=` is the host's choice, not the reader's memory (§21.2): the
+    // documentation's live views ask for both columns open beside the picture
+    // they teach, and a published figure asks for nothing and gets them folded.
+    // Asked of the columns themselves: with no file open each has nothing to
+    // show and stands as its strip, whatever its fold, until one arrives.
+    const unfolded = (search: string): boolean[] => {
+      const app = windowAt(search).app as unknown as Record<string, { isCollapsed: boolean }>
+      return [app['annotationsPanel'].isCollapsed, app['aestheticsPanel'].isCollapsed].map((folded) => !folded)
+    }
+    expect(unfolded('?embed=1')).toEqual([false, false])
+    teardown()
+    teardown = setUpDom()
+    expect(unfolded('?embed=1&panels=open')).toEqual([true, true])
+    teardown()
+    teardown = setUpDom()
+    expect(unfolded('?embed=1&panels=aesthetics')).toEqual([false, true])
+    expect(Object.keys(window.localStorage).filter((key) => /fold|panel/i.test(key))).toEqual([])
+  })
+
+  it('marks its root as a frame, for the room the stylesheet gives the picture', () => {
+    // `--embed-room` (§21.3): the budgets sized against the window give back the
+    // furniture a frame does not have, and only under this mark.
+    expect(windowAt('?embed=1').root.classList.contains('is-embed')).toBe(true)
+    teardown()
+    teardown = setUpDom()
+    expect(windowAt('').root.classList.contains('is-embed')).toBe(false)
+  })
+
   it('keeps the view and the place a remark can land', () => {
     const { root } = windowAt('?embed=1')
     // Everything a session mounts into has to still be here, or an embed is not

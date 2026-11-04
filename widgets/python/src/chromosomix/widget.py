@@ -146,7 +146,8 @@ class Chromosomix(anywidget.AnyWidget):
     key of the view state as the app's address bar carries it, one value each —
     `transform`, `colormap`, `balance`, `vmin`, `vmax`, `oe`, `smooth`, `view`, ….
     `viewer` names the build (`chromosomix.viewer`); `height` is the cell's, in
-    pixels.
+    pixels, and the reader can change it with the grip under the frame, which
+    writes the height they leave it at back to `height`.
     """
 
     _esm = Path(__file__).parent / 'static' / 'widget.js'
@@ -155,6 +156,7 @@ class Chromosomix(anywidget.AnyWidget):
     src = traitlets.Unicode('').tag(sync=True)
     #: What the frame adds once it is up — the tracks a fragment has no word for.
     files = traitlets.List(traitlets.Unicode(), default_value=[]).tag(sync=True)
+    #: The frame's height in pixels: set here, or by the reader dragging the grip under it.
     height = traitlets.Int(600).tag(sync=True)
     title = traitlets.Unicode('chromosomix').tag(sync=True)
     #: Where the view is, as the viewer last said: the app's view state, or `None` for its picker.

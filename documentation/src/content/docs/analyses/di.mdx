@@ -10,15 +10,13 @@ import TaskSummary from '@components/TaskSummary.astro'
 
 <TaskSummary id="di" />
 
-The directionality index asks of every bin which way its contacts lean. Inside a domain a bin talks to both sides about equally; near a domain's start nearly everything it touches is downstream, and near its end nearly everything is upstream. So the index draws each domain as a run of positive values followed by a run of negative ones, and the flip from negative to positive between two domains is a border. It is Dixon et al.'s 2012 statistic, the one their domain calls were made from.
+The directionality index asks which way each bin's contacts lean. Near a domain's start nearly everything a bin touches is downstream, near its end upstream, so each domain is a run of positive values then negative ones, and the flip from negative to positive between two domains is a border.
 
-It is the other answer to the question [diamond insulation](/analyses/insulation/) asks. Insulation finds where little contact crosses a bin, whatever is on either side of it; the index finds where a bin's contacts change side, which also marks the inside edges of a domain. A border both agree about is a border: run both, and count how many of one set sit on the other with [interval set overlap](/analyses/overlap/).
+[Diamond insulation](/analyses/insulation/) finds where little contact crosses a bin; the index, where a bin's contacts change side. A border both agree about is a border: count how many of one set sit on the other with [interval set overlap](/analyses/overlap/).
 
 ## Running it
 
-Open a contact map, then the **Analysis** panel (<kbd>4</kbd>), and choose **Directionality index** in the **2D tasks** card. Tick the sequences to score, set the **window**, and press **run**. The drawer notes what the window came to on the file in front of you — *A 50-bin window is 2 Mb at this file’s 40,000 bp resolution.*
-
-A run lands as three rows of the **Tracks** card in the **Annotations** panel, each marked `*`: the index itself, a track beside the map named after its window (**DI · 2 Mb** for the default 50 bins on a 40 kb map); **DI borders**, one-bin segments directly beside it; and **DI domains**, the spans between the borders, drawn on the map as the corner of each domain's square along the diagonal. Each called set's **display** dropdown moves it between a **1D track** and a **map overlay**.
+In the **Analysis** panel (<kbd>4</kbd>), choose **Directionality index**, tick the sequences, set the **window**, and press **run**. Three rows land in the **Tracks** card of the **Annotations** panel, marked `*`: the index, named after its window (**DI · 2 Mb** for the default 50 bins on a 40 kb map); **DI borders**, one-bin segments beside it; and **DI domains**, drawn on the map as the corner of each domain's square. A called set's **display** moves it between a **1D track** and a **map overlay**.
 
 ![A map of GM12878 in situ Hi-C at 50 kb over chromosome 6 from 120 to 140 Mb, with the directionality index, DI · 2 Mb, in a lane to its left, swinging to either side of zero at the edges of the domains, the DI borders in the lane beyond it, and the domains drawn as corners along the diagonal.](../../../assets/screens/analyses/di-tracks.webp)
 
@@ -34,9 +32,7 @@ chromosomix di sample.mcool::/resolutions/50000 --window 40 --out results/
 
 ## Parameters
 
-**Window** is the one to set for your map. It is how many bins either side of each bin are summed, and 50 is Dixon et al.'s 2 Mb at the 40 kb they worked at — so the same 2 Mb is 200 bins on a 10 kb map, and a 50-bin window on a 1 kb bacterial map is 50 kb, a different reading of the genome. Give it the same number as insulation's **window** to read the two at one scale. Below five bins, each side is a sum over a handful of cells a row, and the drawer warns.
-
-**Minimum prominence** decides how many borders are called (below); **minimum coverage of each side** decides which bins are scored at all.
+**Window** is the one to set for your map: the bins summed either side of each bin. The default, 50, is Dixon et al.'s 2 Mb at 40 kb; the same 2 Mb is 200 bins on a 10 kb map. Give it insulation's **window** to read the two at one scale. Below five bins, the drawer warns.
 
 <TaskParameters id="di" />
 
@@ -48,28 +44,25 @@ chromosomix di sample.mcool::/resolutions/50000 --window 40 --out results/
 
 ### The index
 
-With A the contact a bin makes with the **window** bins upstream of it and B with the window bins downstream, its value is `sign(B − A) · (A − B)² / (A + B)`: a signed χ² against a bin that favours neither side. Positive, the bin looks downstream, as the first half of a domain does; negative, it looks upstream, as the second half does; near 0, it is even-handed. A χ² grows with how deeply the map was sequenced, so compare the shape of two tracks rather than their values.
+With A a bin's contact with the **window** bins upstream and B with those downstream, its value is `sign(B − A) · (A − B)² / (A + B)`: a signed χ² against a bin that favours neither side. Positive, the bin looks downstream, as a domain's first half does; negative, upstream, as its second half does; near 0, it is even-handed. A χ² grows with sequencing depth, so compare the shapes of two tracks, not their values.
 
-A bin needs a whole window on both sides. The first and last **window** bins of a linear sequence have no value, and a sequence no longer than twice the window is not scored. **Minimum coverage of each side** leaves out a bin where either side has less than that share of usable cells: beside a stretch the balancer dropped, one sum would rest on a few cells and the other on fifty, and their χ² would be enormous exactly where a boundary is most tempting to believe. Each side is tested on its own, because a full window one way and an empty one the other is the worst case and would pass a test on the total.
+A bin needs a whole window on both sides: the first and last **window** bins of a linear sequence have no value, and a sequence no longer than twice the window is not scored. **Minimum coverage of each side** leaves out a bin where either side has less than that share of usable cells, as beside a dropped stretch the χ² would be huge exactly where a boundary is most tempting to believe.
 
-**Diagonals to ignore** is 0 by default, where insulation's is 2. The index subtracts two sums that both contain the near-diagonal, so it largely cancels, and Dixon et al.'s own numbers were computed with every cell in. The bin's contact with itself is never in either sum.
+**Diagonals to ignore** is 0 by default, where insulation's is 2: the near-diagonal is in both sums and largely cancels.
 
 ### The borders and the domains
 
-Read flip by flip, a track that stutters across zero has crossings a bin apart, and only one of them is an edge. So the index is first scaled by its median absolute value and summed along the sequence: the running sum climbs through every downstream-leaning stretch and falls through every upstream-leaning one, each border becomes a trough, and a stutter becomes a dimple on a trough's flank. Troughs are then kept by their prominence, the way insulation's boundaries are.
+The index is scaled by its median absolute value and summed along the sequence. The running sum climbs through downstream-leaning stretches and falls through upstream-leaning ones, so each border is a trough, and a stutter across zero only a dimple on its flank. Troughs are kept by prominence, as insulation's boundaries are.
 
-**Minimum prominence** is therefore in *bins of steady bias*, not in χ²: at the default of 10, the track must carry about ten bins of ordinary lean on both sides of a flip. Because those units do not move with depth, a prominence that worked on one map is worth trying on the next. Each border is placed one bin past its trough — the first bin that looks downstream again, which opens the new domain — and named `border_1`, `border_2`, … in genomic order, with its prominence as its score. **Minimum spacing** keeps the stronger of two borders closer than that many bins.
+**Minimum prominence** is therefore in *bins of steady bias*, not χ²: at the default of 10, the track must carry about ten bins of ordinary lean on both sides of a flip. The units do not move with depth, so a prominence that worked on one map is worth trying on the next. Each border sits on the first bin of the new domain, one past its trough, is named `border_1`, `border_2`, … in genomic order, and is scored by its prominence. **Minimum spacing** keeps the stronger of two borders closer than that many bins.
 
-The domains run from each border to the next on its sequence, so they tile the stretch between a sequence's first border and its last; each is named `domain_1`, `domain_2`, … and scored by the weaker of its two borders. A stretch with no value carries the running sum across it but cannot be the floor of a trough.
+The domains run from each border to the next on its sequence, named `domain_1`, `domain_2`, … and scored by their weaker border. A stretch with no value carries the running sum across it, but cannot be a trough's floor.
 
 ### What to watch for
 
-- **The window on this file.** The same number of bins is a different distance on every resolution; read the drawer's note, or the track's name, before comparing with a published window.
-- **Circular sequences.** A sequence ticked **circular** in the Chromosomes table is read round its junction, so every bin is scored. The borders are still called along it as a line, so the domain spanning the junction is never reported.
-- **Balancing.** A file with balancing weights is read balanced; `--no-balance` on the command line reads the raw counts.
+- **The window on this file.** The same number of bins is a different distance at every resolution. The drawer says what it came to, as in *A 50-bin window is 2 Mb at this file’s 40,000 bp resolution.*, and so does the track's name: check it before comparing with a published window.
+- **Circular sequences.** A sequence ticked **circular** in the Chromosomes table is read round its junction, so every bin is scored, but the domain spanning the junction is never reported.
 
 ## Compared with domaincaller and Dixon et al.
 
-The index is `domaincaller`'s `calDI`. In [§ 2 of the validation](https://chromosomix.app/validation/#directionality-index), on a mouse Hi-C map at 50 kb with a 40-bin (2 Mb) window and every cell counted, every bin both tools score agrees within float32 rounding, and every sign agrees. The bins only domaincaller scores are this task's coverage rule at chromosome ends and beside gaps: domaincaller gives a score everywhere.
-
-The borders are not Dixon et al.'s hidden Markov model. The model leaves stretches it calls unorganised in no domain at all, where borders-between-borders tile, so a published domain set can have gaps that these domains do not.
+The index is `domaincaller`'s `calDI`. In [§ 2 of the validation](https://chromosomix.app/validation/#directionality-index), on a mouse Hi-C map at 50 kb with a 2 Mb window, every bin both tools score agrees within float32 rounding; the bins only domaincaller scores are those this task's coverage rule leaves out. The borders are not Dixon et al.'s hidden Markov model, which leaves stretches it calls unorganised in no domain, so a published domain set can have gaps that these domains do not.

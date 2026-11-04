@@ -3,18 +3,26 @@
  * Above every page: the page's own banner where it has one, then which
  * version this is when it is not the latest release.
  *
- * Main's copy says so as it is built. A release's copy cannot know at build
- * time whether a later release will follow it, so it asks the manifest in the
- * browser and speaks only when one has: the root copy is always the latest and
- * never does.
+ * Main's copy says so as it is built, and so does a pull request's preview,
+ * which links its pull request and never asks the manifest: it is served on
+ * the app's site, whose `/versions.json` is the app's. A release's copy cannot
+ * know at build time whether a later release will follow it, so it asks the
+ * manifest in the browser and speaks only when one has: the root copy is
+ * always the latest and never does.
  */
 import Default from '@astrojs/starlight/components/Banner.astro'
-import { BASE, IS_DEV, MANIFEST, VERSION } from '../lib/site.mjs'
+import { BASE, IS_DEV, MANIFEST, PREVIEW, PREVIEW_URL, SITE, VERSION } from '../lib/site.mjs'
 ---
 
 <Default />
 {
-  IS_DEV ? (
+  PREVIEW !== null ? (
+    <div class="sl-banner cx-version-notice" data-pagefind-ignore>
+      This is a <strong>preview</strong> of <a href={PREVIEW_URL}>pull request #{PREVIEW}</a>, for its review: it is
+      replaced on every push and taken down when the pull request closes. The published documentation is at{' '}
+      <a href={`${SITE}/`}>doc.chromosomix.app</a>.
+    </div>
+  ) : IS_DEV ? (
     <div class="sl-banner cx-version-notice" data-pagefind-ignore data-cx-dev data-manifest={MANIFEST}>
       This is the documentation of chromosomix’s <strong>unreleased</strong> version, built from <code>main</code>.
       <span data-cx-latest-offer hidden>

@@ -14,6 +14,24 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **An embed opens its side panels when its page asks (§21.2).** `?embed=1&panels=open` opens the
+  Annotations and Aesthetics panels, `panels=annotations` or `panels=aesthetics` one of them; without
+  it they arrive folded, as before. Written nowhere, like any fold in a frame.
+- **The notebook widgets can be resized by the reader (§21.5).** A grip under the Jupyter widget's
+  and the R widget's frame changes its height, dragged or with the arrow keys, and a double click
+  puts back the height the notebook gave. In Python the reader's height is `widget.height`; in
+  Shiny it comes back as `input$<id>_height`.
+- **The documentation turns the page with the arrow keys, and a live view can be resized (§32.4).**
+  Left and right go to the previous and the next page, except in a field, the search or a block that
+  scrolls. Pressed, a live view opens with the app's two panels unfolded in a frame wide enough for
+  them, and the grip under its corner resizes it, by dragging or with the arrow keys. The page on
+  embedding shows a frame any page can make resizable, with a few lines of script.
+- **A pull request's preview carries its documentation (§32.5).** Beside the preview's app at
+  `chromosomix.app/pr/<number>/`, the documentation of the same head is published at
+  `chromosomix.app/pr/<number>/docs/`, replaced on every push and removed when the pull request
+  closes. Its live views open the preview's own app, its banner names the pull request, and the
+  pull request's comment gives both addresses. Documentation that does not build leaves the app's
+  preview published, and the comment says so.
 - **The Contact maps card opens a map in a cell of its own (§16.9).** Under the lower triangle's
   rectangle a second one, *Load a map into a cell of its own*, takes a cooler — or several, or a
   row of the Files column — and opens each in the deck beside the map, the first empty cell or a new
@@ -21,7 +39,6 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   triangle and that rectangle goes; its hint says what the triangle's cannot, *a cooler at any bin
   size*. The card's only drop with a map open used to be the triangle's, so a new file reached the
   deck from the card by no road at all.
-
 - **Live examples in the documentation (§32.4).** Ten pictures — the introduction's, moving around,
   a contact map and its O/E, two maps compared, a ratio, one map read two ways, the 45° view, the
   genome browser and an embed in a page — carry **Try it live**, which swaps the picture for the
@@ -109,6 +126,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **An embedded map takes the frame's height (§21.3).** Every picture sized against the window counted
+  out a header, a tab strip, a breadcrumb row and a status bar that a frame does not have, so in an
+  850-pixel frame the map stopped 120 pixels short of the foot, over a band of empty page. It now
+  grows into it.
+- **The documentation looks like the app (§32.4).** Its header is the app's header, measure for
+  measure: the bar's height and padding, the mark, the search well and the app's buttons. The home
+  page's rows follow the sidebar's order, and *Open the browser* sits beside *What chromosomix is*.
+  The guides are a third shorter — 112,000 words down to 73,000 — and keep every control, default,
+  limit and warning they named. And a live view's right side, under the contents list, takes the
+  pointer again: the list's column, folded away or not, was still catching every click there.
 - **A deck cell's heading no longer runs into the next cell (§16.9).** Four maps across a column
   with two side panels open are cells of 154 pixels, and a heading — a grip, the name, the sequence,
   the star, the chain and the × — could not be less than 196: the name was cut to one letter and the
@@ -119,7 +146,6 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   The star and the chain in a heading are square, where `.btn`'s padding had made them 36 pixels
   wide round a 13-pixel mark, and a collection's rung picker is as wide as the rung it shows, as the
   sequence picker beside it already was — so a narrow cell's controls fit under its name on one line.
-
 - **An embed's bar fits a narrower frame (§21.3).** The bar was one row that scrolled, so in a frame
   of 1,040 pixels the contacts box's example was cut, at 910, the width of an R Markdown page, the row
   ended at `con`, at 720 the resolution and the box were out of sight, and at 480 the frame scrolled

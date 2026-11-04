@@ -18,6 +18,11 @@
 // An address the kernel gives may be relative to the page the notebook is on —
 // a JupyterHub's `proxy/<port>/` path to the kernel's file server — so every
 // one is made absolute here, against this page, before the frame sees it.
+//
+// The reader can change the frame's height with the grip under its corner,
+// dragged or stepped by the arrow keys, as the documentation's live views
+// resize theirs (SPECS §21.5). The height they leave it at is the widget's
+// `height`, written back to Python.
 
 const ALLOW = 'clipboard-write; fullscreen; local-network-access; local-network; loopback-network'
 /** What a `ready` without an `accepts` list means: a build from before `add`. */
@@ -64,6 +69,70 @@ function frameAddress(src) {
   return url
 }
 
+/** Three strokes in a corner, the mark the documentation's live views put on their grip. */
+const GRIP =
+  '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M14 4 4 14M14 8.5 8.5 14M14 13l-1 1" ' +
+  'fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'
+/** The shortest frame the grip leaves, in pixels: below it the viewer's own controls overlap. */
+const MIN_HEIGHT = 288
+/** How far one arrow key moves the frame's foot, in pixels. */
+const STEP = 32
+
+/**
+ * A grip that sets a height: dragged, stepped by the arrow keys, and put back
+ * to `asked()` by a double click. `show` follows the hand on every move, and
+ * `keep` is told the height the reader let go at. While it is dragged the frame
+ * lets the pointer through, or the drag would stall the moment it shrank the
+ * frame under the hand, which then took the pointer.
+ */
+function heightGrip({ current, show, keep, asked, frame }) {
+  const grip = document.createElement('button')
+  grip.type = 'button'
+  grip.className = 'chromosomix-grip'
+  grip.title = 'Drag to change the viewer’s height, or use the arrow keys; double-click to put it back'
+  grip.setAttribute('aria-label', 'Resize the viewer')
+  grip.innerHTML = GRIP
+  grip.style.cssText =
+    'display:inline-grid;place-items:center;width:1.6rem;height:1.6rem;margin:0;padding:0;' +
+    'border:1px solid rgba(128,128,128,0.55);border-radius:6px;background:transparent;color:inherit;' +
+    'opacity:0.75;cursor:ns-resize;touch-action:none'
+  const clamp = (height) => Math.round(Math.max(MIN_HEIGHT, height))
+  grip.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return
+    event.preventDefault()
+    const from = event.clientY
+    const start = current()
+    let height = start
+    grip.setPointerCapture?.(event.pointerId)
+    const held = frame()
+    if (held !== null) held.style.pointerEvents = 'none'
+    const move = (next) => {
+      height = clamp(start + next.clientY - from)
+      show(height)
+    }
+    const end = () => {
+      grip.removeEventListener('pointermove', move)
+      grip.removeEventListener('pointerup', end)
+      grip.removeEventListener('pointercancel', end)
+      const now = frame()
+      if (now !== null) now.style.pointerEvents = ''
+      if (held !== null && held !== now) held.style.pointerEvents = ''
+      if (height !== start) keep(height)
+    }
+    grip.addEventListener('pointermove', move)
+    grip.addEventListener('pointerup', end)
+    grip.addEventListener('pointercancel', end)
+  })
+  grip.addEventListener('keydown', (event) => {
+    const by = { ArrowUp: -STEP, ArrowDown: STEP }[event.key]
+    if (by === undefined) return
+    event.preventDefault()
+    keep(clamp(current() + by))
+  })
+  grip.addEventListener('dblclick', () => keep(clamp(asked())))
+  return grip
+}
+
 function render({ model, el }) {
   const notice = document.createElement('div')
   notice.setAttribute('role', 'status')
@@ -89,12 +158,41 @@ function render({ model, el }) {
   let refused = 0
   /** The `loads` the frame on screen was made for. */
   let loaded = model.get('loads')
+  /** The height Python last asked for, which a double click on the grip goes back to. */
+  let asked = model.get('height')
+  /** While the grip writes the reader's height, so the write is not taken for Python's. */
+  let writing = false
 
   const size = () => {
     if (frame === null) return
     frame.style.height = `${model.get('height')}px`
     frame.title = model.get('title') || 'chromosomix'
   }
+  /** A height Python set, as the one to go back to; the reader's own is not one. */
+  const resized = () => {
+    if (!writing) asked = model.get('height')
+    size()
+  }
+  const keep = (height) => {
+    writing = true
+    model.set('height', height)
+    model.save_changes()
+    writing = false
+  }
+  const foot = document.createElement('div')
+  foot.style.cssText = 'display:flex;justify-content:flex-end;padding-top:0.25rem'
+  foot.appendChild(
+    heightGrip({
+      current: () => model.get('height'),
+      show: (height) => {
+        if (frame !== null) frame.style.height = `${height}px`
+      },
+      keep,
+      asked: () => asked,
+      frame: () => frame,
+    }),
+  )
+  el.appendChild(foot)
   const post = (message) => frame?.contentWindow?.postMessage(message, origin)
   /** Files for the frame: added where it takes them, said on the page where it does not. */
   const addFiles = (files) => {
@@ -158,7 +256,7 @@ function render({ model, el }) {
       files = (model.get('files') || []).map(absolute)
       next.src = url.href
     }
-    if (frame === null) el.appendChild(next)
+    if (frame === null) el.insertBefore(next, foot)
     else frame.replaceWith(next)
     frame = next
     size()
@@ -202,7 +300,7 @@ function render({ model, el }) {
   window.addEventListener('message', onMessage)
   model.on('change:requests', flush)
   model.on('change:loads', load)
-  model.on('change:height', size)
+  model.on('change:height', resized)
   model.on('change:title', size)
   load()
 
@@ -210,7 +308,7 @@ function render({ model, el }) {
     window.removeEventListener('message', onMessage)
     model.off('change:requests', flush)
     model.off('change:loads', load)
-    model.off('change:height', size)
+    model.off('change:height', resized)
     model.off('change:title', size)
   }
 }

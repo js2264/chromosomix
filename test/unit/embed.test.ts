@@ -14,15 +14,43 @@
 import { describe, expect, it } from 'vitest'
 
 import { mergeState } from '@/app/EmbedChannel'
-import { readMounting } from '@/embed'
+import { readMounting, readPanels } from '@/embed'
 import { EMPTY_VIEW } from '@/state/facets'
 import type { ViewState } from '@/types'
 
 const AT = 'https://viewer.example/app/'
 
+describe('the columns a frame opens with', () => {
+  it('are none unless asked for', () => {
+    expect(readPanels(null)).toEqual([])
+    expect(readPanels('')).toEqual([])
+    expect(readMounting('?embed=1', AT).panels).toEqual([])
+  })
+
+  it('are both for open, and each by its name', () => {
+    expect(readPanels('open')).toEqual(['annotations', 'aesthetics'])
+    expect(readPanels('all')).toEqual(['annotations', 'aesthetics'])
+    expect(readPanels('aesthetics')).toEqual(['aesthetics'])
+    expect(readPanels('Annotations')).toEqual(['annotations'])
+    // In the order the frame mounts them, each once, whatever the order asked.
+    expect(readPanels('aesthetics, annotations,aesthetics')).toEqual(['annotations', 'aesthetics'])
+  })
+
+  it('pass over a name this build does not have, and keep the rest', () => {
+    expect(readPanels('analysis,aesthetics')).toEqual(['aesthetics'])
+    expect(readPanels('files')).toEqual([])
+  })
+
+  it('are read beside the rest of the mount', () => {
+    const read = readMounting('?embed=1&config=s.json&panels=open', AT)
+    expect(read.embed).toBe(true)
+    expect(read.panels).toEqual(['annotations', 'aesthetics'])
+  })
+})
+
 describe('reading a mount', () => {
   it('is a plain window when nothing is asked for', () => {
-    const plain = { embed: false, config: null, store: null, storeView: EMPTY_VIEW }
+    const plain = { embed: false, config: null, store: null, storeView: EMPTY_VIEW, panels: [] }
     expect(readMounting('', AT)).toEqual(plain)
     expect(readMounting('?other=1', AT)).toEqual(plain)
   })

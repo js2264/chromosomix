@@ -3,67 +3,52 @@ title: "Comparing two maps"
 description: "Give the lower half of a map's square to a second file, or to a second reading of the same file, or reduce two maps to their ratio or difference."
 ---
 
-A contact map is symmetric, so half of every square is a mirror of the other half and says nothing
-new. chromosomix can give that half to something else: a second file, or a second reading of the
-same file. The picture is then no longer symmetric, and the eye reads a broken symmetry far faster
-than it compares two pictures side by side.
+A contact map is symmetric, so its lower half can show something else: a second file, or the same
+file read another way.
 
 ## Two files in one square
 
 1. Open the first map.
-2. In the **Annotations** panel, the **Contact maps** card now offers **Load a map into the lower
-   triangle**. Drop a map file on it, drag a row onto it from the **Files** panel, or click it to
-   choose a file.
+2. On the **Contact maps** card, in the **Annotations** panel, use **Load a map into the lower
+   triangle**: drop a map file on it, drag a row onto it from the **Files** panel, or click it.
 
-The first file is drawn above the diagonal and the second below it. The line between them is the
-matrix diagonal wherever you pan, so off the diagonal a block above the line is the first file alone,
-and its mirror image below the line is the second. The diagonal itself stays with the first file.
+The first file is drawn above the diagonal, the second below; the diagonal itself is the first
+file's.
 
 ![Hi-C maps of yeast chromosome IV from G1 and from G2/M cells in one square at 4 kb, G1 above the diagonal and G2/M below with its far corner paler, and the two files listed on the Contact maps card under ◥ and ◣.](../../../assets/screens/browse/comparing-two-files.webp "live: #uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/meneu/HiC/HiC_Mpneumo_G1.mcool::/resolutions/4000&uri2=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/meneu/HiC/HiC_Mpneumo_G2M.mcool::/resolutions/4000&view=region&region=IV&balance=true&transform=log10")
 
-On the card each file has a row, `◥` for the upper triangle and `◣` for the lower. The second row's
-eye takes the lower triangle out of the picture and keeps the file open; its **×** closes it and goes
-back to one map. Closing the first file leaves the second as an ordinary map. **swap sides** puts the
-other file above the diagonal. Either map can be given a name of its own on its row, and that name is
-used wherever the map is named, the readout included.
-
-The comparison is part of the link, as `uri2`, so a comparison of two files at public addresses is a
-link you can send. It survives a change of resolution: the second file follows at the same bin size,
-from its own resolutions, and the card says so where it has no such resolution.
+- Each file has a row on the card, `◥` upper and `◣` lower. The lower row's eye hides the lower
+  triangle and keeps the file open; its **×** closes it. Closing the first file leaves the second as
+  an ordinary map.
+- **swap sides** puts the other file above the diagonal.
+- A name typed on a row is used wherever the map is named.
+- Hovering a cell gives both files' counts.
+- The link carries the second file as `uri2`. On a change of resolution it follows at the same bin
+  size, or the card says it has none.
 
 ### What the two files must share
 
-The two triangles are one grid, so the files have to agree about it, and the card refuses a pair that
-does not, saying why:
+The card refuses a pair that does not share one grid, and says why:
 
-- **The same bin size.** One grid cannot hold two resolutions: open the matching resolution of the
-  second file.
-- **The same sequences, in the same order, at the same lengths.** Two spellings of one name, such as
-  `chr1` and `1` or `chrM` and `MT`, are not a difference, and the second file may carry more
-  sequences after the first file's last. One name at two lengths is a difference: it is what tells
-  hg19 from hg38.
-
-Maps that do not share a grid can still be compared [side by side](/browse/deck/).
+- **The same bin size**: open the matching resolution of the second file.
+- **The same sequences, in the same order, at the same lengths.** `chr1` and `1`, or `chrM` and
+  `MT`, count as one name, and the second file may have extra sequences after the first file's last.
+  One name at two lengths, as in hg19 and hg38, is a difference.
 
 ### One scale for both
 
-Both triangles are drawn on one colour scale, so one colour is one number on both sides of the line.
-Two libraries of different depth then differ everywhere by their depth alone, so draw both to one
-total first: the chevrons after the **contacts** box do it in one press
+Both triangles share one colour scale, so libraries of different depth differ everywhere by depth
+alone: draw both to one total first, with the chevrons after the **contacts** box
 ([Drawing maps to one total](/browse/contact-maps/#drawing-maps-to-one-total)).
 
-Balanced values are each file's own, in each file's own unit. A cooler balanced by `cooler balance`
-has rows that sum to one; a `.hic` balanced by Juicer's KR or SCALE has rows that sum to the
-library's depth per bin, and drawn beside a balanced cooler it saturates. Compare such a pair by
-their O/E, each over its own expected.
-
-Wherever you point, the readout gives both files' counts for that cell.
+Balanced values keep each file's own unit. A cooler balanced by `cooler balance` has rows that sum
+to one; a `.hic` balanced by Juicer's KR or SCALE has rows that sum to the library's depth per bin,
+and saturates beside the cooler. Compare such a pair by their O/E.
 
 ## Ratio and difference
 
-Past a certain similarity the eye cannot find a difference between two triangles. **compare**, which
-appears on the **Map** card under the **picture** row once a second file is open, reduces the pair to
-the difference itself:
+Once a second file is open, **compare**, on the **Map** card under the **picture** row, reduces the
+pair to what differs:
 
 | compare | Draws |
 |---|---|
@@ -72,80 +57,47 @@ the difference itself:
 | **difference** | the first file minus the second, over the whole square |
 
 A ratio opens on `log2` and a difference on a linear scale, both on a diverging ramp centred where
-the two files agree — 1 for a ratio, 0 for a difference — so every cell that matches is the neutral
-colour and only the disagreement is drawn. Going back to **split** gives the map its own scale back.
-The link carries the choice as `op`.
+the files agree (1 or 0), so only the disagreement shows. **split** gives the map its own scale
+back. The link carries the choice as `op`.
 
 ![The log2 ratio of G2/M over G1 Hi-C across the whole of yeast chromosome IV at 8 kb on RdBu_r, red along the diagonal where G2/M has more contacts and blue further out, beside the Map card with compare set to ratio and O/E greyed.](../../../assets/screens/browse/comparing-ratio.webp "live: #uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/meneu/HiC/HiC_Mpneumo_G2M.mcool::/resolutions/8000&uri2=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/meneu/HiC/HiC_Mpneumo_G1.mcool::/resolutions/8000&view=region&region=IV&balance=true&op=ratio&transform=log2&colormap=RdBu_r")
 
-Three things to know when reading one:
+- **A ratio needs contacts in both files.** A cell empty in either is drawn in the ramp's middle
+  colour, and the readout says there is no value. A difference keeps its zeros.
+- **Depth shows as a flat wash**: a ratio of raw counts is roughly the ratio of the depths
+  everywhere. Draw both to one total, or compare balanced values.
+- **A ratio is not divided by the expected**: the second map is the baseline, so **O/E** is greyed
+  while a ratio is drawn. It applies again under **split** and **difference**.
 
-- **A ratio is made only where both files have contacts.** A cell empty in either has no ratio: it is
-  drawn in the ramp's middle colour, and the readout says there is no value there. A difference keeps
-  its zeros, since it can subtract them.
-- **Depth shows up as a flat wash.** The raw counts of two libraries differ by roughly their depth,
-  so the ratio of raw counts is about that one number everywhere. Draw both to one total, or compare
-  balanced values.
-- **A ratio is not divided by the expected.** The second map is already the baseline, and the decay
-  with distance the two share divides out with it, so **O/E** is greyed while the ratio is drawn. It
-  applies again under **split** and **difference**.
-
-Smoothing is applied to each file before the two are combined, so a smoothed ratio is the ratio of two
-smoothed maps. Zoomed out, where one pixel stands for many cells, a ratio or a difference is pooled
-by how far each cell departs from no change, so neither direction fades from the picture.
+Each file is smoothed before the two are combined. Zoomed out, cells are pooled by how far they
+depart from no change, so neither direction fades.
 
 ## Two readings of one file
 
-The lower triangle can also show the same file read another way: balanced counts above the diagonal
-and their O/E below, raw counts against a smoothed map, a correlation against the counts it was made
-from. The two are then one picture read against itself at every position.
+To draw, say, balanced counts above the diagonal and their O/E below:
 
-1. On the **Map** card, under its title, there are two tabs: **◥ map**, the card as it always is, and
-   **◣ lower**.
-2. On **◣ lower**, switch **own reading** on.
-3. Set the lower triangle's **score**, **smooth**, **O/E**, **transform**, **colours** and **clip**.
+1. On the **Map** card, open the **◣ lower** tab, beside **◥ map**.
+2. Switch **own reading** on. The lower reading starts as a copy of the upper one.
+3. Set its **score**, **smooth**, **O/E**, **transform**, **colours** and **clip**.
 
-Switching it on changes nothing at first: the lower reading starts as a copy of the upper one, and
-you move it from there. While it is on, a dot on the **◣ lower** tab tells you the lower triangle is
-not a mirror. Switched off, the triangle is the mirror it always was, and its settings are kept for
-the next time.
+While it is on, a dot marks the **◣ lower** tab. Switched off, the triangle mirrors again and keeps
+its settings for next time.
 
 ![A Micro-C map of yeast chromosome IV from 1.0 to 1.4 Mb at 2 kb, balanced in log10 above the diagonal and its O/E in log2 on RdBu_r below, each with its own key in the corner, marked ◥ and ◣, beside the Map card open on its lower tab with own reading on.](../../../assets/screens/browse/comparing-lower-reading.webp "live: #uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&coarsen=2000&balance=true&transform=log10&lower=true&oe2=true&transform2=log2&colormap2=RdBu_r")
 
-Each reading has its own colour scale, measured on its own whole square, and its own key: the upper
-one marked `◥` and the lower one `◣`. The numbers on both keys can be clicked and typed, as on any
-map. The readout names the reading the pointer is over, and a saved figure carries both keys and a
-second caption line for the lower reading.
+Each reading has its own colour scale and key, `◥` or `◣`. The readout names the reading under the
+pointer, and a saved figure carries both keys and a second caption line. The window, resolution,
+turn, overlays and tracks stay the map's.
 
-Only the reading belongs to the lower triangle: the window, the resolution, the turn, the overlays
-and the tracks are the map's. A lower score that needs other numbers from the file — another column,
-or raw counts where the upper triangle is balanced, or the other way round — reads the block a second
-time; one computed from the same numbers costs nothing more.
-
-A second reading is offered on a map of one file: a region, the whole genome, or a selection of
-sequences. It is not offered beside a second file, which has its own claim on the lower triangle, nor
-in a deck, where the **Map** card sets whichever map is starred. A link carries it as `lower=true`
-with `score2`, `oe2`, `smooth2`, `transform2`, `colormap2`, `vmin2` and `vmax2`
+It is offered on a map of one file, not beside a second file nor in a deck. A link carries it as
+`lower=true` with `score2`, `oe2`, `smooth2`, `transform2`, `colormap2`, `vmin2` and `vmax2`
 ([Link keys](/reference/links/)).
 
 ## One square or side by side
 
-A file blended into this square has to share its grid; a file beside it, in a
-[deck](/browse/deck/), has only to share its coordinates.
+Maps at different bin sizes or with different sequence lists, more than two maps, or maps each on
+its own colour scale go [side by side](/browse/deck/) instead; only one square draws a ratio or a
+difference. A tab can do both: a deck whose first map has a second file in its lower triangle.
 
-| | One square | Side by side |
-|---|---|---|
-| Bin sizes | must match | may differ |
-| Sequence lists | must match, in order and length | each map uses its own |
-| Colour scale | one for both | one for each map |
-| How many maps | two | as many as the deck holds |
-
-Use one square for the strongest comparison two maps allow — two conditions or two replicates at one
-resolution, read position by position, or reduced to a ratio or a difference, which only one square
-draws. Use side by side for maps that do not share a grid, for more than two, or to keep each map on
-its own scale. A tab can hold both at once: a deck whose first map has a second file in its lower
-triangle.
-
-Two tracks can be compared the same way: tick both on the **Tracks** card and choose **combine…**,
-then **ratio** or **difference** ([The genome browser](/browse/genome-browser/)). Turned by 45°, a
-square of two maps becomes two bands either side of one axis ([The 45° view](/browse/turn/)).
+To compare two tracks, tick both on the **Tracks** card, choose **combine…**, then **ratio** or
+**difference** ([The genome browser](/browse/genome-browser/)).

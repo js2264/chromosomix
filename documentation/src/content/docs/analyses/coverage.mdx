@@ -10,26 +10,18 @@ import TaskSummary from '@components/TaskSummary.astro'
 
 <TaskSummary id="coverage" />
 
-A bin's coverage, or marginal, is every contact with an end in it. It is the track to put under a map
-before reading anything into a pale stretch: a bin that every contact misses — a repeat, a bin with few
-restriction sites, a stretch the mapper half lost — is pale on the map for the same reason a
-compartment or a boundary can be, and only its coverage beside it tells the two apart. It is also the
-check on a balanced file, whose total coverage should be flat by construction. Split into cis and trans,
-it says how much of each bin's contact stays on its own sequence.
+A bin's coverage, or marginal, is every contact with an end in it: the track that tells a pale stretch
+of the map caused by the bin from one caused by the fold, and the check on a balanced file. Split into
+cis and trans, it says how much of each bin's contact stays on its own sequence.
 
 ## Running it
 
-Open a contact map, then choose **Coverage and marginals** in the **2D tasks** card of the **Analysis**
-panel. The form offers four tracks, each on or off: **total coverage**, on, and **cis fraction**, **cis
-coverage** and **trans coverage**, off. Turn on the ones you want and press **run**.
+Open a contact map, choose **Coverage and marginals** in the **2D tasks** card of the **Analysis**
+panel, turn on the tracks you want — **total coverage**, on by default, and **cis fraction**, **cis
+coverage** and **trans coverage** — and press **run**.
 
-A marginal counts every contact touching a bin, wherever its other end lies, so it cannot be read off one
-sequence's square: the run is one pass over the whole pixel table. It costs no reads only when the whole
-file is already on screen at its own resolution, read the way the run asks.
-
-Each track arrives as a row of the **Tracks** card in the **Annotations** panel, marked `*`, in one
-colour: *Coverage · total*, *Coverage · cis*, *Coverage · trans* and *Cis fraction*. It is drawn beside
-the map and in the genome browser like any loaded track, and its bigWig, bedGraph and TSV are in the
+Each track is a row of the **Tracks** card in the **Annotations** panel, marked `*`: *Coverage · total*,
+*Coverage · cis*, *Coverage · trans* and *Cis fraction*, with its bigWig, bedGraph and TSV in the
 row's settings.
 
 ![A yeast map of chromosome IV from 800 kb to 1.2 Mb with Cis fraction and Coverage · total in two lanes to its left, the total dropping almost to nothing beside each of the pale stripes that cross the map.](../../../assets/screens/analyses/coverage-tracks.webp)
@@ -46,10 +38,9 @@ chromosomix coverage sample.mcool::/resolutions/10000 --cis --trans --fraction -
 
 ## Parameters
 
-**use balancing weights** is the one to decide. Off, the default, the tracks are of the raw counts,
-which is coverage as depth: what tells a coverage artefact from structure. On, they are of the balanced
-values, which is how to check the balancing itself. Unlike every other task, coverage asks rather than
-taking the file's weights for granted, and on the command line its switch is its own `--balance`.
+Unlike every other task, coverage reads the raw counts unless you turn on **use balancing weights**
+(`--balance` on the command line). Raw, the tracks are coverage as depth, which tells an artefact from
+structure; balanced, they check the balancing.
 
 <TaskParameters id="coverage" />
 
@@ -62,32 +53,25 @@ taking the file's weights for granted, and on the command line its switch is its
 ### Total coverage
 
 Each bin's value is the number of contacts with an end in it, its contact with itself counted once. On
-the raw counts it follows how well the bin is seen: a dip is a bin that every contact misses, and a pale
-stripe on the map over a dip is a property of the bin, not of how the chromosome folds. Look at the two
-together before calling a pale stretch a domain or a compartment.
-
-A bin with no contact at all reads 0: the file stores only the pixels that hold contacts, so an absent
-pixel is a zero it asserts, not a missing value. With **use balancing weights** on, a bin the balancer
-dropped is a gap, with no value, and the rest should be flat along every sequence; a balanced total
-that is not flat is a file whose weights do not fit its counts.
+the raw counts a dip is a bin every contact misses, and a pale stripe on the map over a dip is a property
+of the bin, not of the fold: look at the two together before calling a pale stretch a domain or a
+compartment. A bin with no contact reads 0, since the file stores only pixels that hold contacts. With
+**use balancing weights** on, a bin the balancer dropped is a gap, and the rest should be flat; a
+balanced total that is not flat is a file whose weights do not fit its counts.
 
 ### Cis, trans and the cis fraction
 
 Cis coverage counts the contacts whose other end is on the bin's own sequence, trans coverage those whose
-other end is on another sequence, and the two add up to the total. The cis fraction is
-`cis / (cis + trans)`, between 0 and 1: of the contacts the bin has, the share that stays on its own
-sequence, which says which stretches of the assembly behave unlike the rest. It is a share rather than
-a ratio of cis to trans, which would be infinite wherever a bin has no trans contact, and a bin with no
-contact at all has no cis fraction: it is a gap, not 0. The same question, one value per sequence, is
-[Cis and trans per sequence](/analyses/cistrans/).
+other end is on another, and the two add up to the total. The cis fraction, `cis / (cis + trans)`, from 0
+to 1, is the share of a bin's contacts that stays on its own sequence, and picks out stretches of the
+assembly that behave unlike the rest. A bin with no contact has no cis fraction: a gap, not 0. One value
+per sequence is [Cis and trans per sequence](/analyses/cistrans/).
 
-## Things to know
+### What to watch for
 
-- **The diagonal is counted once.** cooltools' `coverage` adds every pixel at both its ends, so a bin's
-  contact with itself counts twice there; here it is one contact. Take each bin's own diagonal pixel off
-  cooltools' value and the two agree: the validation finds them identical on a mouse map at 10 kb, raw
-  and balanced, with the same bins left without a value.
-- **The map report counts differently.** Its contacts per bin count a contact within one bin twice, as
-  Juicer does, so that a coarser bin is exactly the sum of its finer ones; they are not quite these.
-- **Counts, not another score.** The pass over the pixel table reads the stored counts. On a map drawn
-  from another score column, the run's note says the marginals are of the counts.
+- **The diagonal is counted once.** cooltools' `coverage` counts a bin's contact with itself twice; take
+  each bin's own diagonal pixel off cooltools' value and the two agree, raw and balanced.
+- **The map report counts differently**: its contacts per bin count a contact within one bin twice, as
+  Juicer does.
+- **Counts, not another score.** On a map drawn from another score column, the marginals are of the
+  counts, and the run's note says so.

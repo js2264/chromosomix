@@ -34,7 +34,9 @@ inputs named after the output: \code{input$<id>_state} is where the view is --
 the app's view state, a list, \code{NULL} on its picker -- and changes as the
 reader pans, zooms and changes the scale; \code{input$<id>_rendered} is the report
 of the last finished picture (what is drawn, at what resolution);
-\code{input$<id>_version} the viewer's version, once its frame is up.
+\code{input$<id>_version} the
+viewer's version, once its frame is up; and \code{input$<id>_height} the height
+in pixels the reader left the widget at with the grip under its frame.
 
 \code{chromosomixProxy()} drives a widget already on screen, without drawing it
 again: \code{\link{chromosomix_goto}}, \code{\link{chromosomix_navigate}} and
