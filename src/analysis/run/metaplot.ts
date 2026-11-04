@@ -41,6 +41,7 @@ import {
 } from '../job'
 import { makeRandom } from '../random'
 import type { CurveSeries, MatrixOutput, TaskOutput } from '../types'
+import { scaledLabel } from './labels'
 
 /** One feature, flattened out of the parallel arrays a `FeatureSet` keeps. */
 interface Feature {
@@ -291,6 +292,8 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
     label: 'Metaplot',
     series,
     xLabel: axis.label,
+    // A scaled region's column, spelled by where it is along the feature.
+    ...(axis.scaled === undefined ? {} : { xScaled: axis.scaled }),
     // A y axis still reading *Mean signal* over standardised rows would name a
     // unit the numbers are no longer in — the one lie a relabelled axis is for.
     yLabel: zscore ? 'Signal (z-score, per track)' : 'Mean signal',
@@ -452,14 +455,29 @@ export function clipOf(values: Float32Array): [number, number] | null {
  * cannot be lined up against the curve at all. The ends are the axis's own ends
  * (`figures/matrixOption.spreadTicks`), so the two pictures agree column for
  * column.
+ *
+ * A scaled region's are its landmarks, where they fall: `Start` and `End` at
+ * the body's edges, which are wherever the flanks end — evenly spread only when
+ * the body is twice a flank — then the flanks' far ends and the middle of the
+ * body, spelled as the curve's ticks are (`run/labels.scaledLabel`). In that
+ * order, which is the order the painter labels them in, each where it clears
+ * the ones before: a ten-column body between two 5 kb flanks keeps both its
+ * edges named and loses its `50%`.
  */
-function heatmapTicks(layout: Layout): string[] {
-  const { x } = axisFor(layout)
-  if (x.length === 0) return []
-  const scaled = layout.bodyTo > layout.bodyFrom
-  // In the scaled layout the abscissa is a slot number, which is not a unit
-  // anybody reads; the three parts are named in the axis label instead.
-  if (scaled) return ['', '', '', '', '']
+function heatmapTicks(layout: Layout): { labels: string[]; at?: number[] } {
+  const { x, scaled } = axisFor(layout)
+  if (x.length === 0) return { labels: [] }
+  if (scaled !== undefined) {
+    const marks = [scaled.start, scaled.end]
+    if (scaled.start > scaled.from) marks.push(scaled.from)
+    if (scaled.to > scaled.end) marks.push(scaled.to)
+    marks.push((scaled.start + scaled.end) / 2)
+    const span = scaled.to - scaled.from
+    return {
+      labels: marks.map((mark) => scaledLabel(scaled, mark)),
+      at: marks.map((mark) => (mark - scaled.from) / span),
+    }
+  }
   // **The axis's own ends, not the bins' centres.** `axisFor` answers with the
   // centre of each column, so the middle column of a 50 bp grid is at +25 and
   // the first at −1,975: true to the half bin, and an axis nobody can read,
@@ -470,11 +488,13 @@ function heatmapTicks(layout: Layout): string[] {
   const step = layout.flankStep > 0 ? layout.flankStep : 1
   const lo = x[0] - step / 2
   const hi = x[x.length - 1] + step / 2
-  return [0, 0.25, 0.5, 0.75, 1].map((fraction) => {
-    const value = lo + fraction * (hi - lo)
-    const kb = Math.abs(value) >= 10_000
-    return kb ? `${Number((value / 1000).toFixed(1))} kb` : String(Math.round(value))
-  })
+  return {
+    labels: [0, 0.25, 0.5, 0.75, 1].map((fraction) => {
+      const value = lo + fraction * (hi - lo)
+      const kb = Math.abs(value) >= 10_000
+      return kb ? `${Number((value / 1000).toFixed(1))} kb` : String(Math.round(value))
+    }),
+  }
 }
 
 /** One curve's rows, kept for its heatmap: its group's features, one row each. */
@@ -558,6 +578,7 @@ function heatmapOf(
     values.set(rows.subarray(order[row] * layout.slots, (order[row] + 1) * layout.slots), row * layout.slots)
   }
   const clip = clipOf(values)
+  const ticks = heatmapTicks(layout)
   return {
     kind: 'matrix',
     id: index === 0 ? 'metaplot-heatmap' : `metaplot-heatmap-${index + 1}`,
@@ -573,7 +594,8 @@ function heatmapOf(
       run.tracks === 1
         ? `Features, strongest first (${count.toLocaleString()})`
         : `Features, strongest first across ${run.tracks} tracks (${count.toLocaleString()})`,
-    xTicks: heatmapTicks(layout),
+    xTicks: ticks.labels,
+    ...(ticks.at === undefined ? {} : { xTickAt: ticks.at }),
     yTicks: [],
     colormap: 'viridis',
     ...(clip === null ? {} : { range: clip }),

@@ -378,11 +378,23 @@ function matrixToTsv(output: MatrixOutput): string[] {
 
   const perCell = (ticks: readonly string[], count: number): boolean =>
     ticks.length === count && count > 0
+  const placed = output.xTickAt
   for (const [axis, ticks, count] of [
     ['x', output.xTicks, output.ncols],
     ['y', output.yTicks, output.nrows],
   ] as const) {
-    if (ticks.length === 0 || perCell(ticks, count)) continue
+    if (ticks.length === 0) continue
+    if (axis === 'x' && placed !== undefined && placed.length === ticks.length) {
+      // Placed ticks say where, in columns from the axis's left edge, left to
+      // right: `Start at 100` is the edge between columns 99 and 100.
+      const where = ticks
+        .map((tick, index) => ({ tick, column: placed[index] * count }))
+        .sort((a, b) => a.column - b.column)
+        .map((one) => `${cell(one.tick)} at ${fixed(one.column, 4)}`)
+      lines.push(`# ${axis} ticks, at a column edge (0 to ${count}): ${where.join(', ')}`)
+      continue
+    }
+    if (perCell(ticks, count)) continue
     lines.push(`# ${axis} ticks, evenly spaced across the axis: ${ticks.map(cell).join(', ')}`)
   }
 

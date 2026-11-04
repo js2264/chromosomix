@@ -40,6 +40,7 @@
 
 import type { TrackSamples } from '../annotations/types'
 import { nanMean, nanMedian, nanTrimmedMean } from './stats'
+import type { ScaledAxis } from './types'
 
 /** Where on a feature a reference-point window is centred. */
 export type Reference = 'start' | 'end' | 'centre'
@@ -620,15 +621,29 @@ function nanSd(blocks: ReadonlyArray<ArrayLike<number>>, mean: number): number {
  *
  * The alternative — pretending the body is some number of base pairs — puts a
  * scale on the axis that is true of no feature in the set.
+ *
+ * `scaled` is where those three regions meet, in the axis's own units, for the
+ * ticks to be written from: `Start` and `End` at the body's edges, a share of
+ * the body between them, a distance from the nearer edge outside. Edges, not
+ * centres — column `bodyFrom` is the body's first and is drawn at its own
+ * index, so the body begins half a column before it.
  */
-export function axisFor(layout: Layout): { x: Float64Array; label: string } {
+export function axisFor(layout: Layout): { x: Float64Array; label: string; scaled?: ScaledAxis } {
   const out = new Float64Array(layout.slots)
   const scaled = layout.bodyTo > layout.bodyFrom
   for (let slot = 0; slot < layout.slots; slot++) {
     out[slot] = scaled ? slot : (slot - layout.bodyFrom + 0.5) * layout.flankStep
   }
+  if (!scaled) return { x: out, label: 'Distance from the anchor (bp)' }
   return {
     x: out,
-    label: scaled ? 'Position (upstream · body · downstream)' : 'Distance from the anchor (bp)',
+    label: 'Position (upstream · body · downstream)',
+    scaled: {
+      from: -0.5,
+      start: layout.bodyFrom - 0.5,
+      end: layout.bodyTo - 0.5,
+      to: layout.slots - 0.5,
+      flankStep: layout.flankStep,
+    },
   }
 }

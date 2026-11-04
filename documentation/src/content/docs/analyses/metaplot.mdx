@@ -40,7 +40,7 @@ The same run from a shell:
 
 ### The profile
 
-Each column is the average, over the features that reach it, of the track's mean over the bases the column covers. A feature with no value in a column is left out of that column, never counted as zero. The x axis is the distance from the anchor in base pairs, or, in a scaled window, upstream, body and downstream.
+Each column is the average, over the features that reach it, of the track's mean over the bases the column covers. A feature with no value in a column is left out of that column, never counted as zero. The x axis is the distance from the anchor in base pairs. In a scaled window it is marked **Start** and **End** where every feature's body begins and ends; between them, the share of the way through the body (`25%`, `50%`, `75%`, or tenths); outside them, the distance from the nearer of the two, `-1 kb` before the start and `+1 kb` after the end, as deepTools labels the same plot. A wider figure, or a window wheeled into one part of the axis, takes finer steps, and the pointer reads its position the same way (`37.4%`, `-150 bp`). The heatmap under it marks the flanks' ends, **Start**, `50%` and **End** where they fall.
 
 The band is a 95 % bootstrap interval by default, drawn by resampling the features, so it says how sure the average is for this set; a narrow band is a well-determined line. **SD** draws the spread of the features instead, which says how alike they are. A **median** or a **trimmed** mean — the mean of the middle 80 % — keeps a few extreme features from carrying the line.
 
