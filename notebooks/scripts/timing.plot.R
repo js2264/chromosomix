@@ -296,7 +296,7 @@ steps <- pipeline |>
             "loops" ~ "cooltools.dots' defaults",
             "insulation" ~ "window of 10 bins",
             "compartments" ~ "3 eigenvectors, GC-phased",
-            "apa" ~ "±5 bins, O/E, every loop",
+            "apa" ~ "±5 bins, raw, every loop",
             "total" ~ "4 commands; 1 script"
         )
     )

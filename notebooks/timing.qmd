@@ -1024,17 +1024,16 @@ of 4DN's in situ Hi-C of IMR-90 (Rao et al. 2014; 4DNFIJTOIGOI, GRCh38, 1.08 bil
 3. **Compartments** at 250 kb: three cis eigenvectors, signed by each bin's GC content, which is
    worked out once beforehand — `bioframe.frac_gc` over hg38 as Illumina iGenomes distributes UCSC's —
    and given to both (§ 3);
-4. **APA over every loop** step 1 called: five bins either side of each, ±50 kb, every window over the
-   expected, the first two diagonals left out and no loop for being near the diagonal (§ 11, *over the
-   expected, every loop*).
+4. **APA over every loop** step 1 called: five bins either side of each, ±50 kb, of balanced counts
+   with no expected — the pileup raw — the first two diagonals left out and no loop for being near
+   the diagonal (§ 11, *raw, every loop*).
 
 **chromosomix** runs them as a shell script would: four commands, one after the other, the last
 reading the loops the first wrote. **The reference** is one Python script,
 `notebooks/scripts/cooltools_pipeline.py`, which runs the four through cooltools and coolpuppy in one
-process, its pileup over the loops `cooltools.dots` called and the expected computed for them. So the
-script pays for its pileup's expected in loop calling, where `chromosomix apa` computes its own, along
-the diagonals its windows reach; and chromosomix's compartments draw the saddle too, at the task's
-default, which `cooltools.eigs_cis` does not. `chromosomix` computes on one thread; the script gives
+process, its pileup over the loops `cooltools.dots` called. Neither side's pileup reads an expected,
+so neither is spared one the other pays for; chromosomix's compartments draw the saddle too, at the
+task's default, which `cooltools.eigs_cis` does not. `chromosomix` computes on one thread; the script gives
 every call that takes them as many processes as every reference above was given (the `threads`
 column).
 
@@ -1134,7 +1133,7 @@ PIPELINE_SCRIPT = REPO / 'notebooks' / 'scripts' / 'cooltools_pipeline.py'
 #: The four steps, in their order: what the tables call each, and what it reads.
 PIPELINE_STEPS = {'loops': ('Loop calling', '10 kb'), 'insulation': ('Diamond insulation', '10 kb, 10 bins'),
                   'compartments': ('Compartments', '250 kb, GC-phased'),
-                  'apa': ('APA over every loop', '10 kb, ±5 bins, over the expected')}
+                  'apa': ('APA over every loop', '10 kb, ±5 bins, raw')}
 #: And the start-up before them, and the whole of them.
 PIPELINE_TASKS = {'start-up': ('Start-up', ''), **PIPELINE_STEPS, 'total': ('Total', '')}
 P_THREADS = LISTED['threads']
@@ -1162,7 +1161,7 @@ def app_argv(step, out):
             'compartments': ['compartments', p_map(250_000), '--components', '3', '--phaseTrack', p_rel(GC_BEDGRAPH)]}
     if step == 'apa':
         argv['apa'] = ['apa', p_map(10_000), '--pairs', p_rel(one_file(out / 'loops', '*.loops-calls.bedpe')),
-                       '--mode', 'fixed', '--window', '5', '--minDiag', '2', '--minDist', '0', '--norm', 'oe']
+                       '--mode', 'fixed', '--window', '5', '--minDiag', '2', '--minDist', '0', '--norm', 'none']
     return [*program, *argv[step], '--out', p_rel(out / step)]
 
 

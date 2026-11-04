@@ -10158,7 +10158,7 @@ al. 2014, 4DNFIJTOIGOI, 1.08 billion contacts, 8.3 GB, linked from the laptop's 
 it), each at its section's settings: loop calling at 10 kb, as § 19 runs it; diamond insulation at
 10 kb, a window of 10 bins; compartments at 250 kb, three eigenvectors phased by GC content
 (`bioframe.frac_gc` over hg38 as Illumina iGenomes distributes it, worked out once and given to both);
-and APA over every loop the first called, ±5 bins, over the expected. `chromosomix` runs them as a shell
+and APA over every loop the first called, ±5 bins, raw: no expected on either side. `chromosomix` runs them as a shell
 script does, four commands, the pileup reading the loops the first wrote; the reference is **one Python
 script**, `notebooks/scripts/cooltools_pipeline.py`, running `cooltools.expected_cis` and `dots`,
 `insulation`, `eigs_cis` and coolpuppy's pileup over `dots`' loops and that expected in one process,
