@@ -36,11 +36,13 @@ view
 | `tracks` | files added once the view is drawn, in order, as the header's **+** adds them: tracks, maps, 3D models, workspaces |
 | `region` | where the map is framed: `'IV:1000000-1400000'`, counted from 0 as cooler counts, or `('IV', 1_000_000, 1_400_000)` |
 | `locus` | where a 1D browser is placed: `'IV:400,001-460,000'`, 1-based |
-| `height` | the cell's height in pixels; 600 by default |
+| `height` | the frame's height in pixels; 600 by default |
 | `viewer` | the build of the viewer in the frame ([below](#which-viewer)) |
 | any other keyword | a key of the view from [Link keys](/reference/links/): `transform`, `colormap`, `balance`, `vmin`, `vmax`, `oe`, `smooth`, `view`… |
 
 A key takes one value, as a link writes it: `maps='a.cool|b.cool'`, not a list. A path under `uri`, `uri2` or `maps` is served from the kernel like the map.
+
+To make the frame taller or shorter, drag the grip under its corner, or focus it and use the arrow keys; a double click puts back the height you gave. The height you leave it at is the widget's `height`, so `view.height` reads what is on screen.
 
 ## Moving it from Python
 

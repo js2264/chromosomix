@@ -4,12 +4,14 @@
  * `widgets/r/inst/examples/demo.Rmd`, rendered by R Markdown with the repository's
  * yeast demo from this disk and the package build in `dist/`, then served from
  * the R session that rendered it — its file server is what the frames read —
- * and shot widget by widget: the map and its three tracks; the same map moved
+ * and shot widget by widget: the map and its three tracks, then dragged taller
+ * by the grip under it; the same map moved
  * before it was drawn by `chromosomix_goto()`, `chromosomix_navigate()` and
  * `chromosomix_add()`; a 1D browser placed by `chromosomix_goto()`. Then
  * `widgets/r/inst/examples/app.R` in Shiny, driven through its own controls — a
  * region typed and gone to, observed / expected ticked, the 3D model added —
- * with the state the viewer sent back to R printed under them.
+ * with the state the viewer sent back to R printed under them, and the widget
+ * dragged shorter by its grip, with the height R is told (rw07).
  *
  * Every widget is shot once its frame has reported a finished picture of what
  * was asked of it (`chromosomix:rendered`, whose report carries the view state),
@@ -167,6 +169,25 @@ await sleep(1000)
 await page.screenshot({ path: `${OUT}/rw00-rmarkdown-page.png` })
 console.log('shot rw00-rmarkdown-page')
 await shoot(widget(0), 'rw01-rmarkdown-map')
+/** Drag a widget's grip down by `by` pixels, and say how tall the widget was and is. */
+const dragGrip = async (target, by, what) => {
+  const grip = target.locator('button.chromosomix-grip')
+  await grip.scrollIntoViewIfNeeded()
+  await sleep(800)
+  const height = () => target.evaluate((el) => Math.round(el.getBoundingClientRect().height))
+  const before = await height()
+  const at = await grip.boundingBox()
+  const pageOf = target.page()
+  await pageOf.mouse.move(at.x + at.width / 2, at.y + at.height / 2)
+  await pageOf.mouse.down()
+  await pageOf.mouse.move(at.x + at.width / 2, at.y + at.height / 2 + by, { steps: 12 })
+  await pageOf.mouse.up()
+  await sleep(2500)
+  console.log(`the grip on ${what}: ${before} → ${await height()} px`)
+}
+// The grip under the frame (§21.5): the widget 200 pixels taller, its map with it.
+await dragGrip(widget(0), 200, 'the map')
+await shoot(widget(0), 'rw01b-rmarkdown-dragged-taller')
 await settle(page, 1, ['region=IV:1150000-1300000', 'oe=true', 'maps='], 'the map moved before it was drawn', 3)
 await shoot(widget(1), 'rw02-rmarkdown-moved')
 await settle(page, 2, ['view=browser', 'locus='], 'the browser', 3)
@@ -235,6 +256,12 @@ console.log(`R was told:\n${await stateText()}`)
 await sleep(1500)
 await app.screenshot({ path: `${OUT}/rw05-shiny-driven.png` })
 console.log('shot rw05-shiny-driven')
+// The grip in Shiny: the widget 150 pixels shorter, and the height R is told.
+await dragGrip(app.locator('.html-widget').first(), -150, 'the Shiny map')
+await app.waitForFunction(() => /px/.test(document.querySelector('#height')?.textContent ?? ''), null, { timeout: 15000 }).catch(() => {})
+console.log('R was told:', (await app.locator('#height').textContent())?.trim())
+await app.screenshot({ path: `${OUT}/rw07-shiny-dragged-shorter.png` })
+console.log('shot rw07-shiny-dragged-shorter')
 console.log(`--- what the frame said\n${(await app.evaluate(() => window.__heard)).join('\n')}`)
 
 shiny.child.kill()

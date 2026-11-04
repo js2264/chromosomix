@@ -5,7 +5,9 @@
 # The map, its tracks and the controls beside it: a region typed and gone to,
 # the scale and observed / expected, and the 3D model added beside the map —
 # each through `chromosomixProxy()`, without drawing the view again. Under the
-# controls, where the reader has taken the view, from `input$view_state`.
+# controls, where the reader has taken the view, from `input$view_state`, and
+# the height they dragged the viewer to with the grip under it, from
+# `input$view_height`.
 #
 # The files are the repository's yeast demo, from its bucket; `CHROMOSOMIX_DEMO`
 # names a directory of the same files on this disk, served from this session.
@@ -31,7 +33,8 @@ ui <- fluidPage(
       actionButton("model", "Add the 3D model"),
       hr(),
       h4("Where the reader is"),
-      verbatimTextOutput("state")
+      verbatimTextOutput("state"),
+      textOutput("height")
     ),
     mainPanel(
       width = 9,
@@ -75,6 +78,11 @@ server <- function(input, output, session) {
       assign("oe", isTRUE(state$oe), envir = pushed)
       updateCheckboxInput(session, "oe", value = isTRUE(state$oe))
     }
+  })
+
+  # The height the reader left the viewer at with the grip under it, once they have.
+  output$height <- renderText({
+    if (is.null(input$view_height)) "" else sprintf("height %d px", as.integer(input$view_height))
   })
 
   # What the viewer said last, as the address bar would carry it.

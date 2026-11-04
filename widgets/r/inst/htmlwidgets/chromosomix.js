@@ -32,6 +32,11 @@
 // An address R gives may be relative to the page — a proxy's path to the R
 // session's file server — so every one is made absolute here, against this
 // page, before the frame sees it.
+//
+// The reader can change the widget's height with the grip under the frame's
+// corner, dragged or stepped by the arrow keys, as the documentation's live
+// views resize theirs and the Jupyter widget its own (SPECS §21.5). In Shiny the
+// height they leave it at comes back as `input$<id>_height`.
 
 (function () {
   var ALLOW = 'clipboard-write; fullscreen; local-network-access; local-network; loopback-network'
@@ -84,6 +89,73 @@
     return value !== null && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0
   }
 
+  /** Three strokes in a corner, the mark the documentation's live views put on their grip. */
+  var GRIP =
+    '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M14 4 4 14M14 8.5 8.5 14M14 13l-1 1" ' +
+    'fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'
+  /** The shortest widget the grip leaves, in pixels: below it the viewer's own controls overlap. */
+  var MIN_HEIGHT = 288
+  /** How far one arrow key moves the widget's foot, in pixels. */
+  var STEP = 32
+
+  /**
+   * A grip that sets a height: dragged, stepped by the arrow keys, and put back
+   * to `asked()` by a double click. `show` follows the hand on every move, and
+   * `keep` is told the height the reader let go at. While it is dragged the
+   * frame lets the pointer through, or the drag would stall the moment it shrank
+   * the frame under the hand, which then took the pointer.
+   */
+  function heightGrip(options) {
+    var grip = document.createElement('button')
+    grip.type = 'button'
+    grip.className = 'chromosomix-grip'
+    grip.title = 'Drag to change the viewer\u2019s height, or use the arrow keys; double-click to put it back'
+    grip.setAttribute('aria-label', 'Resize the viewer')
+    grip.innerHTML = GRIP
+    grip.style.cssText =
+      'display:inline-grid;place-items:center;width:1.6rem;height:1.6rem;margin:0;padding:0;' +
+      'border:1px solid rgba(128,128,128,0.55);border-radius:6px;background:transparent;color:inherit;' +
+      'opacity:0.75;cursor:ns-resize;touch-action:none'
+    function clamp(height) {
+      return Math.round(Math.max(MIN_HEIGHT, height))
+    }
+    grip.addEventListener('pointerdown', function (event) {
+      if (event.button !== 0) return
+      event.preventDefault()
+      var from = event.clientY
+      var start = options.current()
+      var height = start
+      if (grip.setPointerCapture && event.pointerId !== undefined) grip.setPointerCapture(event.pointerId)
+      var held = options.frame()
+      held.style.pointerEvents = 'none'
+      function move(next) {
+        height = clamp(start + next.clientY - from)
+        options.show(height)
+      }
+      function end() {
+        grip.removeEventListener('pointermove', move)
+        grip.removeEventListener('pointerup', end)
+        grip.removeEventListener('pointercancel', end)
+        held.style.pointerEvents = ''
+        options.frame().style.pointerEvents = ''
+        if (height !== start) options.keep(height)
+      }
+      grip.addEventListener('pointermove', move)
+      grip.addEventListener('pointerup', end)
+      grip.addEventListener('pointercancel', end)
+    })
+    grip.addEventListener('keydown', function (event) {
+      var by = event.key === 'ArrowUp' ? -STEP : event.key === 'ArrowDown' ? STEP : 0
+      if (by === 0) return
+      event.preventDefault()
+      options.keep(clamp(options.current() + by))
+    })
+    grip.addEventListener('dblclick', function () {
+      options.keep(clamp(options.asked()))
+    })
+    return grip
+  }
+
   function newFrame() {
     var frame = document.createElement('iframe')
     frame.setAttribute('allow', ALLOW)
@@ -113,6 +185,36 @@
       el.appendChild(notice)
       var frame = newFrame()
       el.appendChild(frame)
+
+      /** The widget's height as drawn, or as htmlwidgets set it before it is laid out. */
+      function height() {
+        return el.getBoundingClientRect().height || parseFloat(el.style.height) || 0
+      }
+      /** The height R gave the widget, which a double click on the grip goes back to. */
+      var asked = null
+      var foot = document.createElement('div')
+      foot.style.cssText = 'flex:0 0 auto;display:flex;justify-content:flex-end;padding-top:0.25rem'
+      foot.appendChild(
+        heightGrip({
+          current: height,
+          show: function (h) {
+            if (asked === null) asked = height()
+            el.style.height = h + 'px'
+          },
+          keep: function (h) {
+            if (asked === null) asked = height()
+            el.style.height = h + 'px'
+            tell('height', h)
+          },
+          asked: function () {
+            return asked === null ? height() : asked
+          },
+          frame: function () {
+            return frame
+          },
+        }),
+      )
+      el.appendChild(foot)
 
       /** The value R last gave; `null` before the widget is drawn. */
       var x = null

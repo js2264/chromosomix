@@ -11465,6 +11465,13 @@ nothing else: no second renderer, no kernel-side reader, no data through the ker
   viewer behind a redirect is still spoken to.
 - **The viewer to Python is traitlets.** Every `state` lands in `state`, a traitlet a cell can
   `observe`; every finished picture's report in `rendered`; the build's version in `version`.
+- **The reader can resize the frame**, by the grip under its corner, as a live view in the
+  documentation resizes its own (§32.4): a drag sets the height, the arrow keys step it by 32 pixels,
+  a double click puts back the height Python last set, and nothing is left shorter than 288 pixels,
+  where the viewer's own controls start to overlap. The height the reader lets go at is `height`,
+  written back to Python, so a cell that reads it reads what is on screen and a second view of the
+  widget follows. While the grip is dragged the frame lets the pointer through, or the drag would
+  stall the moment it shrank the frame under the hand, which then took the pointer.
 - **A frame that cannot take files says so.** The tracks and every `add` reach the frame as
   `chromosomix:add`, which a viewer before 0.17.0 does not know (§21.4): its `ready` lists no
   `accepts`. The widget then sends it nothing, and says above the frame how many files were not
@@ -11536,6 +11543,9 @@ region =, tracks =, ...)` writes the same fragment in the same order; `chromosom
 - **What the viewer says reaches R only in Shiny**, as inputs named after the output:
   `input$<id>_state`, `input$<id>_rendered`, `input$<id>_version` — and `input$<id>_notice`, the
   same notice the widget shows above a frame too old to take files.
+- **The grip is the Jupyter widget's**, under the frame's corner: it sets the widget's own height,
+  the frame filling it, a double click puts back the height R gave it, and in Shiny the height the
+  reader lets go at comes back as `input$<id>_height`; a static page keeps it for the visit.
 - **The file server is httpuv**, on `127.0.0.1` in the R session: one `Range`, CORS for any origin,
   the private-network preflight, a `.gz` sent as its bytes, a directory under a 128-bit token
   (`openssl` where installed, else the system's random source, never R's generator, which a

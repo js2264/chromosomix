@@ -107,6 +107,10 @@ A key takes one value, written as the address bar writes it — `genomes = "a,b"
 `uri`, `uri2` and each of a deck's `maps` are files, served like any other. With no map, `locus` (or
 `region`) and the other keywords are laid on once the tracks are in.
 
+The reader can change the widget's height with the grip under the frame, by dragging it or with the
+arrow keys; a double click puts back the `height` it was given. In Shiny the height they leave it at
+comes back as `input$<id>_height`, in pixels.
+
 ## How it works
 
 The widget is the viewer's embed (`?embed=1`, SPECS §21 in the repository) in an `<iframe>`. Its

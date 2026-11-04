@@ -48,6 +48,8 @@ chromosomix(
 
 A key takes one value, as a link writes it: `maps = "a.cool|b.cool"`, not a vector. A path under `uri`, `uri2` or `maps` is served like the map.
 
+To make the widget taller or shorter, drag the grip under the frame's corner, or focus it and use the arrow keys; a double click puts back the `height` it was given.
+
 ## Moving it before it is drawn
 
 A rendered page has no R behind it, so lay requests on the widget. The frame makes them in order, each once the one before is done, and again when it reloads:
@@ -111,6 +113,7 @@ shinyApp(ui, server)
 | `input$view_rendered` | the report of the last finished picture: what is drawn, at which resolution |
 | `input$view_version` | the viewer's version, once its frame is up |
 | `input$view_notice` | what the frame could not do — a viewer too old to take files |
+| `input$view_height` | the height in pixels the reader left the widget at with the grip under it |
 
 A fuller app comes with the package: `shiny::runApp(system.file("examples", "app.R", package = "chromosomix"))`.
 

@@ -17,6 +17,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 - **An embed opens its side panels when its page asks (§21.2).** `?embed=1&panels=open` opens the
   Annotations and Aesthetics panels, `panels=annotations` or `panels=aesthetics` one of them; without
   it they arrive folded, as before. Written nowhere, like any fold in a frame.
+- **The notebook widgets can be resized by the reader (§21.5).** A grip under the Jupyter widget's
+  and the R widget's frame changes its height, dragged or with the arrow keys, and a double click
+  puts back the height the notebook gave. In Python the reader's height is `widget.height`; in
+  Shiny it comes back as `input$<id>_height`.
 - **The documentation turns the page with the arrow keys, and a live view can be resized (§32.4).**
   Left and right go to the previous and the next page, except in a field, the search or a block that
   scrolls. Pressed, a live view opens with the app's two panels unfolded in a frame wide enough for
