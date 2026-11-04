@@ -583,13 +583,26 @@ them: a preview is somebody's work in progress, and a reviewer should not have t
 a release by its label. The service worker passes navigations under `pr/` through exactly as it does
 under `v/`, and `recoverPinnedNavigation()` covers both prefixes, for the reason given above.
 
+**The documentation comes with it.** The same job builds the documentation of the same head
+(`npm run docs:build`, SPECS §32.5) for `pr/<number>/docs/` and copies it into the preview's directory
+before the archive is written, so it is published, replaced and removed with the app and with nothing
+of its own: `chromosomix.app/pr/<number>/docs/` beside `chromosomix.app/pr/<number>/`. Its live
+views embed the preview's app (`DOCS_APP_URL`), its banner names the pull request, and it leaves the
+commit out of its footer so that a page a push did not change stays the same bytes and the archive
+branch keeps one copy of it. The comment on the pull request gives both addresses. A push whose
+documentation does not build — a task added before its page — still gets the preview of its app: the
+two documentation steps may fail without failing the job, the comment then says the documentation was
+not built and links the run, and the Tests workflow is what fails the pull request.
+
 **Whose code runs.** A pull request from a fork carries a read-only token and no secrets, and this
 job needs to write a branch. It is skipped for forks at the job's `if` rather than granted
 `pull_request_target`, which would run the fork's code with this repository's permissions. A
 maintainer who wants a preview of a fork's change pushes it to a branch here.
 
-**What it costs.** One pinned build per open pull request, ~5 MB, inside the same 1 GB budget the
-archive lives in, and gone when the pull request is. A pull request open for a month with fifty
+**What it costs.** One pinned build per open pull request, the size of an archived push (above),
+and its documentation, ~19 MB, inside the same 1 GB budget the archive lives in, and gone when the
+pull request is. Almost half of the documentation is its pictures, the same bytes in every preview
+and every push, which the archive branch stores once. A pull request open for a month with fifty
 pushes still costs one directory.
 
 ### The generated stores are published here too

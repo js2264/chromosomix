@@ -23,7 +23,7 @@ import starlightThemeRapide from 'starlight-theme-rapide'
 import { baseLinks, scrollingTables } from './src/lib/base-links.mjs'
 import { trueSizeScreens } from './src/lib/screens.mjs'
 import { sidebar } from './src/lib/sidebar.mjs'
-import { BASE, IS_DEV, REPOSITORY, SITE, VALIDATE_LINKS } from './src/lib/site.mjs'
+import { BASE, IS_DEV, PREVIEW, REPOSITORY, SITE, VALIDATE_LINKS } from './src/lib/site.mjs'
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url))
 
@@ -68,7 +68,9 @@ export default defineConfig({
       logo: { src: './src/generated/mark.png', alt: '' },
       favicon: '/favicon.png',
       head: IS_DEV ? [{ tag: 'meta', attrs: { name: 'robots', content: 'noindex' } }] : [],
-      editLink: { baseUrl: `${REPOSITORY}/edit/main/documentation/` },
+      // A preview's page is its pull request's, which main's file may not have
+      // yet: a change to it goes through the pull request, which its footer links.
+      editLink: PREVIEW === null ? { baseUrl: `${REPOSITORY}/edit/main/documentation/` } : {},
       lastUpdated: false,
       tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 3 },
       customCss: ['./src/generated/tokens.css', './src/styles/chromosomix.css'],

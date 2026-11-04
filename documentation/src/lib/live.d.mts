@@ -8,3 +8,5 @@ export declare function embedAddress(app: string, link: string): string
 
 /** The address of the same view in the full app, for a tab of its own. */
 export declare function viewerAddress(app: string, link: string): string
+export declare const PANELS_FROM: number
+export declare function withPanels(address: string): string

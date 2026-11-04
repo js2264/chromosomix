@@ -1,230 +1,153 @@
 ---
 title: How analyses run
-description: How to open, set up and run a task from the Analysis panel, what it reads and costs before it runs, and where its results go.
+description: How to run a task from the Analysis panel, what it reads and costs, and where its results go.
 ---
 
 import TaskIndex from '@components/TaskIndex.astro'
 
-Every analysis in chromosomix runs on your own machine, over the files you opened: in the browser, from
-the **Analysis** panel, or in a shell with the `chromosomix` command line, which runs the same code with
-the same parameters. Nothing is uploaded and no server computes anything. This page covers what every
-task has in common; each task's own page, listed [at the end](#every-task), says what it computes and
-how to read it.
+Every analysis runs on your own machine, over the files you opened: in the **Analysis** panel, or in a
+shell with the `chromosomix` command line, which runs the same code. Nothing is uploaded. This page covers
+what every task has in common; each task's own page is listed [at the end](#every-task).
 
 ## Running a task
 
-1. Open the **Analysis** panel, the right-most column of the window. <kbd>4</kbd> shows it and folds it
-   away again.
-2. Click a task's row. The drawer opens down the right of the window with the task's form, the price
-   of the run and **run**.
-3. Set the form, read the price, and press **run**. The task's row counts while it runs; the results
-   appear in the drawer, and beside the map when they are a track or a set of intervals.
+1. Open the **Analysis** panel, the right-most column. <kbd>4</kbd> shows and hides it.
+2. Click a task's row. The drawer opens with its form, the price of the run and **run**.
+3. Set the form, read the price, and press **run**. The results appear in the drawer, and beside the map
+   when they are a track or a set of intervals.
 
 ![The drawer open over a yeast map on Diamond insulation after a run: the foot of its form, run with its price beside it, the record line with copy provenance and copy CLI command, the run's two notes, and the score and two called sets it added to the Tracks card.](../../../assets/screens/analyses/index-drawer.webp)
 
-The drawer floats over the map rather than squeezing it, and every shortcut keeps working behind it;
-drag its left edge to widen it. <kbd>Esc</kbd> or its ✕ puts it away, unless the caret is in one of its
-boxes: a run carries on, its row in the panel says so, and opening the task again brings back its form
-and its figures.
+The drawer floats over the map; drag its left edge to widen it. Its ✕, or <kbd>Esc</kbd> when the caret
+is not in one of its boxes, puts it away. A run carries on, and opening the task again brings back its
+form and figures.
 
 ## The Analysis panel
 
-The panel lists the tasks the open file offers, in three cards cut by what the question is about:
-**2D tasks** are about the contact matrix, **3D tasks** about a model of beads in space, and **1D
-tasks** about a track or a set of intervals along the sequence. Within a card, a task that makes what
-the others read comes first: *Model from the map* opens the 3D card, since with no model loaded it is
-the one thing to do there.
-
-Each row has the task's title, a line saying what it does, and its state:
+Tasks sit in three cards: **2D tasks** about the contact matrix, **3D tasks** about a model of beads in
+space, and **1D tasks** about tracks and intervals along the sequence. Each row shows the task, a line on
+what it does, and its state:
 
 | The row says | Which means |
 | --- | --- |
-| never run | It has not been run on this file. |
-| queued | It is waiting for the job in front of it: one job runs at a time. |
-| a percentage, or *running*, with a turning ring | It is running. The line under the title says which step, and a stop button is on the row. In a batch over a deck, a second mark says which map of how many, *2 of 5*. |
-| done in … | It finished, in that long. |
-| failed | It stopped on an error, and the line under the title says why. |
+| never run | Not run on this file yet. |
+| queued | Waiting: one job runs at a time. |
+| a percentage, or *running*, with a turning ring | Running. The line under the title names the step, and the row has a stop button. Over a deck, *2 of 5* says which map. |
+| done in … | Finished, in that long. |
+| failed | Stopped on an error; the line under the title says why. |
 | cancelled | You stopped it. |
 
-**The box above the cards** narrows the list as you type. Every word must be found in a task's title,
-its line, its card's heading or one of its other names, so *TAD* finds the tasks that call domains,
-*pileup* finds aggregate peak analysis, *A/B* the compartments and *decay* P(s). <kbd>Enter</kbd> opens
-the first task left that can run, and <kbd>Esc</kbd> empties the box. A task that is running goes on
-running while the filter hides its row.
+**The box above the cards** filters the list. Every word must match a task's title, line, card or other
+names: *TAD* finds the domain callers, *pileup* aggregate peak analysis, *A/B* the compartments, *decay*
+P(s). <kbd>Enter</kbd> opens the first task that can run; <kbd>Esc</kbd> empties the box.
 
-**A greyed row is waiting for a file.** The task applies to what is open, and the line under it says
-what to load: *Load a loop set (BEDPE), or a feature set (BED, GTF).* on aggregate peak analysis before
-any loops are loaded, *Open a second map beside this one — press + along the edge of the map.* on
-reproducibility. Where every waiting row of a card waits for the same thing, the card says it once,
-under its heading; the row's tooltip says it either way. A task that could never mean anything for the
-open file is not listed at all: per-cell contact QC is there only for an `.scool`.
+**A greyed row is waiting for a file** and says what to load, such as *Load a loop set (BEDPE), or a
+feature set (BED, GTF).* A task that cannot apply to the open file is not listed: per-cell contact QC
+appears only for an `.scool`. With no contact map open, only the 1D tasks run; on a deck with no map
+starred, the map tasks wait until you star one.
 
-**Without a contact map**, with tracks and sequences open in the [genome
-browser](/browse/genome-browser/), each 1D task runs as soon as what it reads is loaded, and every task
-that reads a map waits on *Open a contact map.* **On a deck with no map starred**, the panel says that
-only the 1D tasks can run, and every task that reads a map stays greyed until you star one.
-
-### The `?` beside a task
-
-A task that re-implements a published method has a `?` at the right of its row, after its state. Point
-at it, or tap it on a touch screen, for the method and whose it is, how the task came out against it in
-the validation, and the paper's DOI as a link.
-
-- **Green**: the validation found the task identical or equivalent to the package it reproduces.
-- **In the text's colour**: the task has not been compared with its reference yet. These are the
-  scalogram, the HiC score and per-cell contact QC.
-- **No `?`**: the task follows no published method, so there is nothing to cite. These are inter-arm
-  alignment, origin and terminus, model versus map and spatial tracks.
-
-The same verdict is the badge at the top of each task's page. [How the results are
-checked](/analyses/validation/) says what lies behind it.
+**The `?`** after a task's state marks one that re-implements a published method. Point at it, or tap it,
+for the method, the paper's DOI and how the task came out in [the validation](/analyses/validation/):
+green if identical or equivalent, in the text's colour if not compared yet.
 
 ## What a task reads
 
-**The map.** A task that reads a contact map reads the one that is open. On a [deck of maps side by
-side](/browse/deck/) it reads the **starred** map, the one whose heading has its star filled: the
-drawer's button then reads **run on ★**, and its tooltip names the map. **run on all N maps** beside it runs the task
-once per map, in the grid's order. The drawer then gives each map's result a tab, and an **all maps**
-tab draws them together: the curves on one figure, a line per map, and the tables as one table whose
-first column names the map. A matrix stays on its own map's tab.
+- **The map**: the open one. On a [deck of maps side by side](/browse/deck/), the **starred** one, and
+  the button reads **run on ★**. **run on all N maps** runs once per map and gives each map a tab; the
+  **all maps** tab draws the curves on one figure and the tables as one, its first column naming the map.
+- **The tracks**: a 1D task reads the loaded tracks, feature sets and sequences, never a map, and runs
+  once, even on a deck.
+- **The view, as it is when you press run**, for what changes the numbers: the resolution, the score the
+  map is drawn from, the sequences declared circular, and the number of contacts typed in the
+  breadcrumb's *contacts* box. The drawer's heading gives this framing (*will run on …*, then *from …*).
+  The result does not follow a later pan or zoom: the heading adds *the view has moved since*, and
+  **recompute here** runs it on the view as it is now.
+- **What the form names**, not the window on screen: the sequences ticked (all, unless you untick some),
+  an anchor, a feature set.
+- **The map's resolution**: one the file stores or one you added (marked `*`, as in `3 kb*`), never the
+  coarser cells of a zoomed-out picture. To run at another, open the map at it. The map report is the
+  exception: its ladder counts from the file's finest resolution.
+- **Balanced counts**, wherever the file carries weights, however the map is drawn; `--no-balance` on the
+  command line reads the raw counts. Coverage is the one task that asks, raw unless you turn its weights
+  on; the map report reads its coverage and its cis and trans raw.
 
-**The tracks.** A 1D task reads the loaded tracks, feature sets and sequences, and never a map. Its
-button is a plain **run** on a deck too, and it runs once, whichever map is starred; the drawer's
-heading says it *reads the loaded tracks, not the map*.
-
-**How the map is drawn, as it is when you press run.** A task takes from the view what changes its
-numbers: the resolution the map is drawn at, the score it is drawn from, the sequences you declared
-circular, and the number of contacts it is drawn to, if you typed one in the breadcrumb's *contacts*
-box. That snapshot is the result's framing. Before a run the drawer's heading says *will run on …*;
-after it, *from …*. Pan or zoom afterwards and the result does not follow: it is a record of what it was
-computed from, the heading adds *the view has moved since*, and **recompute here** runs it again on the
-view as it is now.
-
-**What it covers is the form's.** A task is not limited to the window on screen. It covers what its
-form names: the sequences ticked, which are all of them unless you untick some, an anchor, a feature
-set. Where the block already drawn holds what a run needs, at the file's own bins and balanced the same
-way, the task uses it and reads nothing; otherwise it reads the file itself.
-
-**The resolution is the map's.** A task runs at the resolution the map is open at, a resolution the file
-stores or one you added (marked `*`, as in `3 kb*`), and never at the coarser cells a zoomed-out picture
-pools for drawing. To run at another resolution, open the map at it. The map report is the exception:
-its resolution ladder is counted from the file's finest resolution, whatever is on screen.
-
-**Balancing is the file's.** A map is read balanced wherever the file carries balancing weights, however
-the picture is drawn, and the form does not ask; on the command line, `--no-balance` reads the raw
-counts. Coverage is the one task that asks, and reads raw counts unless you turn its weights on; the
-map report reads its coverage and its cis and trans from the raw counts.
-
-Settings about the matrix, such as a window, a reach or a trim near the diagonal, are counted in bins of
-the map, so a number means the same cells at every resolution; where it matters, the run's notes say
-what it came to in base pairs. Settings about a track, such as a metaplot's flank, are in base pairs.
-
-The form keeps what you set for each task on each file, and opens on the task's defaults the first time.
-Those settings are kept with the session and travel in an exported one, so that repeating an analysis
-is opening the session and pressing **run**.
+Settings about the matrix, such as a window or a trim near the diagonal, are in bins, so a number means
+the same cells at every resolution; the run's notes give base pairs where it matters. Settings about a
+track, such as a metaplot's flank, are in base pairs. The form keeps your settings for each task on each
+file, and an exported session carries them: repeating an analysis is opening it and pressing **run**.
 
 ## What it costs, before you press run
 
-Beside **run**, before anything is read, the drawer says in words what the run will read. A run is one
-of three kinds:
+Beside **run**, the drawer says what the run will read:
 
 - **Nothing to read**: *Computed from the block already on screen. No reads.*
-- **A few reads**: so many range requests, for one dense square over the sequence the task needs.
-- **A pass over the file**: *One pass over the whole pixel table*, or so many strips read along the
-  diagonals.
+- **A few reads**: so many range requests, for one dense square.
+- **A pass over the file**: *One pass over the whole pixel table*, or so many strips along the diagonals.
 
-Nothing is read until you press **run**, so an expensive run is always your decision, and every run
-shows its progress while it goes and can be stopped. On a file on your disk a range request is a read
-from the disk; on a file at an address it is a request over the network, and the price says how many.
-Where neighbouring reads can be merged, as in a pileup over thousands of loops, the price is the most
-the run could need, so it is never dearer than the price said.
+Nothing is read until you press **run**. Where reads can be merged, as in a pileup over thousands of loops,
+the price is the most the run could need.
 
-**A run that cannot happen says why, in red, in the price's place, and run is greyed.** *Tick at least
-one sequence.* when none is ticked; *Name a locus to anchor the profile on — type one, or pick it on the
-map.* on a 4C profile with no anchor; or a limit and the ways round it: compartments refuse a matrix of
-more than 8,192 bins a side, rather than coarsening it without saying so, and say to untick some
-sequences, open the file at a coarser resolution, or read the cis contacts alone.
+**A run that cannot happen says why, in red, and run is greyed**: *Tick at least one sequence.*, or a limit
+and the ways round it. Compartments, for instance, refuse a matrix of more than 8,192 bins a side, and say
+to untick some sequences, open a coarser resolution or read the cis contacts alone.
 
 ## While it runs
 
-A task runs in a worker of its own, apart from the one that reads the map for the picture, so **the
-map stays live**: pan, zoom, open another chromosome, or switch to another tab and come back, and the
-job is still running and its row still counting. One job runs at a time in a session. Press **run** on a
-second task and it waits, *queued*, until the first is done. Closing the session's tab cancels its job.
+The map stays live: pan, zoom or switch tabs, and the job keeps running. One job runs at a time in a
+session; a second waits, *queued*. Closing the session's tab cancels its job.
 
-**To stop a job**, press the stop button on its row, or **cancel** beside **run**. A task that reads the
-map stops at its next chunk of work. A 1D task stops at its next read of a track or a sequence, and a
-pass with no read in it runs to its end and its answer is thrown away. Either way the row says
-*cancelled* and nothing is added beside the map.
+To stop a job, press the stop button on its row or **cancel** beside **run**. It stops at its next chunk
+of work or read (a pass with no read in it runs to its end and its answer is dropped), the row says
+*cancelled*, and nothing is added beside the map.
 
 ## What comes out
 
-When a run finishes, the drawer shows, under **run**:
+Under **run**, a finished run shows:
 
-- **The record line**, *computed in 2.0 s at 20:49:46*, with the exact time in its tooltip, then **copy
-  provenance**, which copies the task, its version, every parameter, the framing, the file and the
-  build, and **copy CLI command**, the same run as a command line.
-- **The run's notes**, when it has any: what it left out, what a setting came to on this file, why a
-  figure is empty. Read them before the numbers.
-- **Its results**: each figure with its exports, and, for what went beside the map, a sentence saying
-  where, with each output's name and its exports.
+- **The record line**, *computed in 2.0 s at 20:49:46*, with **copy provenance** (the task, its version,
+  every parameter, the framing, the file and the build) and **copy CLI command**.
+- **The run's notes**: what it left out, what a setting came to on this file, why a figure is empty. Read
+  them before the numbers.
+- **Its results**, each with its exports.
 
 ![The drawer after a run of P(s) on the yeast Micro-C map, its framing in the heading, the record line computed in 1.8 s with copy provenance and copy CLI command, and the curve under it with its TSV, PNG, PDF and Copy buttons.](../../../assets/screens/analyses/index-result.webp)
 
-A task makes one or more of five kinds of result.
+A result takes one of three forms:
 
-**A value per bin becomes a track.** It is a row of the **Tracks** card in the **Annotations** panel,
-marked `*` after its name, drawn beside the map and in the genome browser exactly as a loaded bigWig is,
-with the same colour, height, scale, limits, style and edges. Its tooltip is its provenance, and its
-settings hold its exports: bigWig, bedGraph and TSV. The rows one run makes share one colour, and
-running the task again replaces them where they are. The drawer says in a sentence where they went, and
-lists each with its TSV.
+- **A value per bin is a track**: a row of the **Tracks** card in the **Annotations** panel, marked `*`,
+  drawn beside the map and in the genome browser like a loaded bigWig. Its tooltip is its provenance and
+  its settings hold its exports: bigWig, bedGraph and TSV. Running the task again replaces it.
+- **A called set** (boundaries, domains, peaks, loops, sites) is one row whose **display** is a **1D
+  track** or a **map overlay**. On the map a place is a point or a short diagonal marker (its **look**), an
+  extent the corner of its square, a pair a ring. It saves as BED, or BEDPE for pairs, and TSV.
+- **Curves, matrices and tables** are figures in the drawer. Zoom a curve with the wheel or a dragged
+  rectangle; **log x**, **log y** and **fit** set its axes. A table sorts by a click on a column and
+  filters by its box; it shows positions 1-based and saves them 0-based, as a BED holds them. A figure
+  saves as **PNG** at 300 dpi or vector **PDF**, **Copy** puts it on the clipboard, **TSV** saves its
+  numbers, and the sliders button opens its settings ([Figures and export](/browse/figures/)).
 
-**A called set is one row with a display.** Boundaries, domains, peaks, loops and sites each arrive as
-one row of the Tracks card, whose **display** puts it in one of two places: **1D track**, a lane of
-segments beside the map, or **map overlay**, drawn on the map. On the map a place, such as a boundary,
-is a point or a short diagonal marker (its **look**), an extent such as a domain is the corner of the
-square it claims, and a pair is a ring. Each task opens its sets where they are read: boundaries under
-the score they were called from, domains and loops on the map. A set leaves as BED, or BEDPE for pairs,
-and as TSV.
+Every TSV, bedGraph and BED opens with `#` lines naming the build, the task and its version, the file, the
+framing and every parameter. A bigWig cannot hold them, so a TSV is offered beside it.
 
-**Curves, matrices and tables are figures in the drawer.** A curve zooms with the wheel or a dragged
-rectangle, its axes switch with **log x** and **log y**, and **fit** puts it back. A table sorts by a
-click on a column and filters by its box; it prints a position 1-based, as the rest of the app does, and
-saves it 0-based in its TSV, as a BED holds it, which the TSV's `# columns` line says. Each figure saves
-as **PNG** at 300 dpi or **PDF**, a vector page, or goes to the clipboard with **Copy**; its numbers save
-as **TSV**; and the sliders button beside them opens its settings at the size of the window. See
-[Figures and export](/browse/figures/).
+**older**, **newer** and **latest** step through the last nine runs of each task on each map; the line
+between them says which is shown and, in its tooltip, which parameter differs from the latest. The
+heading, **recompute here**, the command line and every export follow the run on screen.
 
-**Every result can be saved as a TSV**, and every TSV, bedGraph and BED a task writes opens with `#`
-lines naming the build, the task and its version, the file, the framing and every parameter, so a number
-in a figure can be traced to what made it. A bigWig has nowhere to hold those lines, which is why a TSV
-is offered beside it.
-
-**Earlier runs are kept.** The drawer holds the latest run of each task on each map and the eight before
-it. **older**, **newer** and **latest** step through them; the line between them says which run is on
-screen, and its tooltip says which parameter differs from the latest. Everything follows the run on
-screen: the heading's framing, **recompute here**, the command line and every export.
-
-**Values are not kept over a reload; the recipe is.** The drawer's results are gone after a reload, and
-a computed track comes back saying *values not kept over the reload*, with **recompute** beside it: its
-settings were kept and only the numbers have to be worked out again. Opening the same file at another
-resolution keeps its computed tracks, live, on the bins they were computed on. Opening another file
-leaves them behind.
+A reload keeps the recipe, not the values: the drawer's results are gone, and a computed track comes back
+saying *values not kept over the reload*, with **recompute** beside it. The same file opened at another
+resolution keeps its computed tracks; another file leaves them behind.
 
 ## The same run from a shell
 
-Every run is written to the [console](/browse/console/) as the `chromosomix` command that repeats it,
-the moment it starts: the task, the file, the window, the balancing and every parameter. It is one
-line per job, so a batch over a deck is a line per map, and a run that failed or was stopped still has
-its line. **copy CLI command** under a result puts the same line on the clipboard. Run it in a shell as
-it stands, adding `--out` to name the folder the files go to (the current one otherwise); anything a
-shell cannot be told is written as a `#` note above the line. [From the app to a
-script](/cli/from-the-app/) takes it from there, and [Installing it](/cli/install/) gets you the
-command.
+Every run is written to the [console](/browse/console/), as it starts, as the `chromosomix` command that
+repeats it: a line per job, failed and stopped runs included. **copy CLI command** copies it. Run it as it
+stands, adding `--out` for the folder the files go to (the current one otherwise); what a shell cannot be
+told is a `#` note above the line. See [From the app to a script](/cli/from-the-app/) and
+[Installing it](/cli/install/).
 
 ## Every task
 
-Each task below has a page with what it reads and writes and every parameter, written from the app's own registry. The badge says how it came out against the package it reproduces in [the validation](/analyses/validation/).
+Each task's page gives what it reads and writes and every parameter; the badge says how it came out in
+[the validation](/analyses/validation/).
 
 <TaskIndex />

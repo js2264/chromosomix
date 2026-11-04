@@ -7,18 +7,28 @@
  * choice keeps the page the reader is on where the other copy has it.
  */
 import Default from '@astrojs/starlight/components/SiteTitle.astro'
-import { BASE, MANIFEST, VERSION, VERSION_LABEL } from '../lib/site.mjs'
+import { BASE, MANIFEST, PREVIEW, VERSION, VERSION_LABEL } from '../lib/site.mjs'
 ---
 
 <div class="cx-title">
   <Default />
   <span class="cx-docs" aria-hidden="true">docs</span>
-  <label class="cx-version">
-    <span class="sr-only">Documentation version</span>
-    <select data-cx-versions data-current={VERSION} data-base={BASE} data-manifest={MANIFEST}>
-      <option value={BASE} selected>{VERSION_LABEL}</option>
-    </select>
-  </label>
+  {
+    PREVIEW === null ? (
+      <label class="cx-version">
+        <span class="sr-only">Documentation version</span>
+        <select data-cx-versions data-current={VERSION} data-base={BASE} data-manifest={MANIFEST}>
+          <option value={BASE} selected>{VERSION_LABEL}</option>
+        </select>
+      </label>
+    ) : (
+      // A preview is one copy of one pull request, beside its app on a site
+      // whose `/versions.json` is the app's: there is no menu of copies to fill.
+      <span class="cx-version cx-version-preview" title={`A preview of pull request #${PREVIEW}`}>
+        {VERSION_LABEL}
+      </span>
+    )
+  }
 </div>
 
 <script>

@@ -11,6 +11,9 @@
  *   DOCS_APP_URL   the app this copy opens: the live site for main and for the
  *                  root copy, the release's own pinned build for a release
  *   DOCS_COMMIT    the commit it was built from, for the footer
+ *   DOCS_PREVIEW   the pull request a preview copy is of, a number: set only
+ *                  by the preview workflow, for the copy served beside that
+ *                  pull request's app at `pr/<number>/docs/` (SPECS §32.5)
  */
 
 const env = process.env
@@ -34,8 +37,28 @@ export const MANIFEST = '/versions.json'
 /** The repository, for edit links and links to its files. */
 export const REPOSITORY = 'https://github.com/js2264/chromosomix'
 
-/** How this copy names itself in its header: `v0.20.0`, or `dev` for main. */
-export const VERSION_LABEL = IS_DEV ? 'dev' : VERSION
+/** The number in `DOCS_PREVIEW`, or `null` for anything that is not a pull request's. */
+export function previewOf(value) {
+  const number = Number((value ?? '').trim())
+  return Number.isInteger(number) && number > 0 ? number : null
+}
+
+/**
+ * The pull request this copy previews, or `null` for every published copy.
+ *
+ * A preview is main's copy in every other respect — unreleased, kept out of
+ * search engines — but it is served beside the pull request's app on
+ * chromosomix.app, where `/versions.json` is the app's manifest and not this
+ * site's: so it carries no version menu, and says what it is in a banner of its
+ * own rather than offering the latest release.
+ */
+export const PREVIEW = previewOf(env.DOCS_PREVIEW)
+
+/** The pull request's page, for a preview's banner and footer. */
+export const PREVIEW_URL = PREVIEW === null ? null : `${REPOSITORY}/pull/${PREVIEW}`
+
+/** How this copy names itself in its header: `v0.20.0`, `dev` for main, `#158` for a preview. */
+export const VERSION_LABEL = PREVIEW !== null ? `#${PREVIEW}` : IS_DEV ? 'dev' : VERSION
 
 /**
  * Whether to check every internal link: on wherever the copy is served at the

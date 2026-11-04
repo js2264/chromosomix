@@ -10,15 +10,13 @@ import TaskSummary from '@components/TaskSummary.astro'
 
 <TaskSummary id="structuremap" />
 
-A 3D model makes a prediction about the map beside it: beads close together in space should have been caught together often. **Model versus map** sets the model's distances against the map's contacts at the map's own bins — as pictures, and as one number per sequence — so you can judge how far to trust a model before reading anything off it, whether you made it with [Model from the map](/analyses/reconstruct3d/) or loaded it from a file.
+Beads close together in a 3D model should have been caught together often on the map. **Model versus map** sets the model's distances against the map's contacts, as pictures and as one number per sequence, so you can judge a model before reading anything off it.
 
 ## Running it
 
-It needs a contact map open and a model on the **Structures** card: a g3d, `.3dg` or bed3d file, a PDB that chromosomix wrote (see [3D models](/files/structures/)), or a model from Model from the map. Until both are there it is listed greyed on the **3D tasks** card of the **Analysis** panel, with what to load. Choose the model under **structure** and the sequences under **sequences**.
+Open a contact map and put a model on the **Structures** card: a g3d, `.3dg` or bed3d file, a PDB that chromosomix wrote ([3D models](/files/structures/)), or one from [Model from the map](/analyses/reconstruct3d/). Then, on the **3D tasks** card of the **Analysis** panel, greyed until both are there, choose the model under **structure** and the **sequences**.
 
-The model and the map meet at the map's bins: each bin takes the mean position of the beads whose middles fall in it, and a bin no bead falls in is left out rather than filled in. So the model need not be at the map's resolution — a model coarser than the map simply leaves bins out. The two must name their sequences alike; where they share no name, the run says so and stops.
-
-It reads one square of the map per sequence the model covers, at the map's bin size. What it makes is drawn in the drawer: the model's distances and the contacts they predict as two matrices, the distance by separation beside the map's own P(s), and a table of the agreement for every sequence.
+The model must name its sequences as the map does, or the run stops and says so. Each bin takes the mean position of the beads whose middles fall in it, so the model need not be at the map's resolution; a bin no bead falls in is left out.
 
 ![The drawer of Model versus map for the demo's yeast model against chromosome IV read at 5 kb: the contacts the model predicts, 1/d³ on a colour scale topped at 0.001 in the figure's own settings, run as a band along the diagonal with a spot at the centromere, above the model's mean distance by separation.](../../../assets/screens/analyses/structuremap-predicted.webp)
 
@@ -28,7 +26,7 @@ The same run from a shell:
 
 ## Parameters
 
-**sequences** decides which sequence the pictures are of — the first one named — while the table covers every sequence the model and the map share, named or not. **exponent α** changes only the predicted-contacts picture: the agreement is a rank correlation, and every power of `1/d` ranks the pairs alike. Use the exponent the model was made with, 3 for a model made here at the default.
+**sequences** decides which sequence the pictures are of, the first one named; the table covers every sequence the model and the map share. **exponent α** changes only the predicted-contacts picture, since every power of `1/d` ranks the pairs alike: use the exponent the model was made with, 3 for a model made here at the default.
 
 <TaskParameters id="structuremap" />
 
@@ -40,16 +38,14 @@ The same run from a shell:
 
 ### The agreement
 
-The table gives, for each sequence — and each haplotype, on a phased model — **Spearman ρ (1/d vs contacts)**: the rank correlation between the inverse of the model's distance and the observed contacts, over every pair of modelled bins at least two bins apart. 1 is a model that orders every pair as the map does; near 0, the model's distances say nothing about the contacts. **Bins modelled** and **Pairs compared** say how much of the sequence that number is about: a model that covers a third of the bins is judged on that third.
+The table gives, for each sequence, and each haplotype on a phased model, **Spearman ρ (1/d vs contacts)**: the rank correlation between the inverse of the model's distance and the observed contacts, over every pair of modelled bins at least two bins apart. 1 is a model that orders every pair as the map does; near 0, its distances say nothing about the contacts. **Bins modelled** and **Pairs compared** say how much of the sequence that number is about.
 
-Being a rank, ρ ignores the exponent and the model's scale, so two models in different units that order the pairs alike score alike. It is not the same number as the ρ at the end of Model from the map's table, which is taken over every pair the map counted, across sequences.
+Being a rank, ρ ignores the exponent and the model's scale. It is not the ρ at the end of Model from the map's table, which is over every pair the map counted, across sequences.
 
 ### The pictures
 
-- **Model distances** is the model's distance between every two bins of the sequence, a square in the map's frame.
-- **Predicted contacts** is those distances turned into the contact map the model predicts, `1/d^α`, up to scale. Set it beside the map: a faithful model predicts the same domains and the same far contacts.
-- **Model distance by separation** is the model's mean distance at each genomic separation, on log–log axes, followed by its log–log slope — the spatial counterpart of P(s) — and **The map's P(s) over the same bins** is the map's mean contact at each separation over exactly those bins. Read the two together: where the map's contacts fall away with separation, the model's distances should rise.
+- **Model distances**: the model's distance between every two bins of the sequence, in the map's frame.
+- **Predicted contacts**: the contact map those distances predict, `1/d^α`, up to scale. A faithful model predicts the map's domains and far contacts.
+- **Model distance by separation**: the model's mean distance at each separation, on log–log axes, then its slope, beside **The map's P(s) over the same bins**. Where the map's contacts fall away with separation, the model's distances should rise.
 
-## Things to know
-
-The task follows no published method, so it carries no validation badge; its arithmetic is held by the app's own tests. To compare one model with another rather than with the map, use **compare with** on the **3D structure** card, which superposes the two and gives the RMSD between them.
+To compare one model with another, use **compare with** on the **3D structure** card, which gives the RMSD between the two.

@@ -444,6 +444,16 @@ export class App implements SessionHost {
     this.aestheticsPanel = new SidePanel(AESTHETICS_PANEL, relayout, settled, remembers)
     this.analysisPanel = new SidePanel(ANALYSIS_PANEL, relayout, settled, remembers)
     this.filesPanel = new SidePanel(FILES_PANEL, relayout, settled, remembers)
+    // Unless the page that frames this one asks for them open (`?panels=`,
+    // `embed.ts`): the documentation's live views show the controls beside the
+    // picture they teach. Opened as the reader would open them, and like any
+    // fold in a frame, remembered nowhere.
+    if (this.embed) {
+      for (const name of mounting().panels) {
+        const panel = name === 'annotations' ? this.annotationsPanel : this.aestheticsPanel
+        panel.reveal()
+      }
+    }
     this.files = new FilesCard({
       // The panel's arrow means what the header's `+` means, so it goes to the
       // same place: a second map beside the one that is open, anything else on
@@ -812,6 +822,20 @@ export class App implements SessionHost {
     // slot stays: it is where a session's remarks and refusals land, and an
     // embed that swallowed those would fail silently for the one reader who
     // could report it.
+    // The stylesheet's word for the same subtraction: every picture sized
+    // against the window's height counts out a header, a tab strip, the
+    // breadcrumb row and the status bar, and a frame has one bar instead of
+    // the four (`--embed-room` in `ui/styles.css`). The bar is not one height —
+    // a narrower frame gives the resolution and the contacts box a line of their
+    // own, and a phone's the trail too (§21.3) — so it is measured, and the view
+    // measured again whenever it changes.
+    root.classList.toggle('is-embed', this.embed)
+    if (bar !== null && typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(() => {
+        root.style.setProperty('--embed-bar-h', `${bar.getBoundingClientRect().height}px`)
+        this.current?.relayout()
+      }).observe(bar)
+    }
     root.append(
       ...(bar === null
         ? [head, this.tabs.el, this.restoreSlot, this.noticeSlot, this.breadcrumbSlot]

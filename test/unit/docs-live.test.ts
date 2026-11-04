@@ -17,9 +17,10 @@ import { join, relative } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { readMounting } from '@/embed'
 import { parseViewState, serialiseViewState } from '@/state/ViewState'
 
-import { embedAddress, liveLink, viewerAddress } from '../../documentation/src/lib/live.mjs'
+import { PANELS_FROM, embedAddress, liveLink, viewerAddress, withPanels } from '../../documentation/src/lib/live.mjs'
 
 const DOCS = join(__dirname, '..', '..', 'documentation', 'src', 'content', 'docs')
 
@@ -65,6 +66,22 @@ describe('a live view’s link', () => {
       'https://chromosomix.app/v/v0.20.0/?embed=1&config=https://x/y.chromosomix.json',
     )
     expect(viewerAddress(app, '#uri=a.cool')).toBe('https://chromosomix.app/v/v0.20.0/#uri=a.cool')
+  })
+
+  it('opens the app’s two side panels in a frame wide enough for them, as the app reads the query', () => {
+    const app = 'https://chromosomix.app/'
+    for (const link of ['#uri=a.cool&view=region', '?config=https://x/y.chromosomix.json']) {
+      const address = withPanels(embedAddress(app, link))
+      const mount = readMounting(new URL(address).search, app)
+      expect(mount.embed).toBe(true)
+      expect(mount.panels).toEqual(['annotations', 'aesthetics'])
+      // The view itself is untouched: the fragment, or the workspace, as the title named it.
+      if (link.startsWith('#')) expect(new URL(address).hash).toBe(link)
+      else expect(mount.config).toBe('https://x/y.chromosomix.json')
+    }
+    // A laptop's page is wide enough; a phone's is not.
+    expect(PANELS_FROM).toBeGreaterThan(390)
+    expect(PANELS_FROM).toBeLessThanOrEqual(1100)
   })
 })
 

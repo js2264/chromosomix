@@ -1,6 +1,7 @@
 // The widget's script (inst/htmlwidgets/chromosomix.js), run in Node against a
 // stand-in for the page — elements, frames that record what they are posted,
-// htmlwidgets and Shiny — and asked what it sends the frame. Run by
+// htmlwidgets and Shiny — and asked what it sends the frame, and what the grip
+// under the frame does to the widget's height. Run by
 // test-widget-script.R: `node widget-script.cjs <chromosomix.js>`; it exits
 // non-zero, saying which check failed, if one does.
 
@@ -25,8 +26,25 @@ function page({ shiny = false } = {}) {
     attributes: {},
     hidden: false,
     textContent: '',
+    children: [],
+    listeners: {},
     setAttribute(key, value) {
       this.attributes[key] = value
+    },
+    appendChild(child) {
+      this.children.push(child)
+      return child
+    },
+    addEventListener(type, listener) {
+      ;(this.listeners[type] ??= []).push(listener)
+    },
+    removeEventListener(type, listener) {
+      this.listeners[type] = (this.listeners[type] ?? []).filter((each) => each !== listener)
+    },
+    /** An event of `type` on this element, as the browser would hand it to each listener. */
+    fire(type, event = {}) {
+      const handed = { preventDefault() {}, ...event }
+      for (const listener of [...(this.listeners[type] ?? [])]) listener(handed)
     },
   })
   const document = {
@@ -81,6 +99,8 @@ function page({ shiny = false } = {}) {
         id,
         style: {},
         children: [],
+        // No layout on this page: a box has no height but the one its style says.
+        getBoundingClientRect: () => ({ width: 0, height: 0 }),
         appendChild(child) {
           this.children.push(child)
           return child
@@ -131,10 +151,11 @@ const x = (more = {}) => ({
 const checks = []
 const check = (name, body) => checks.push([name, body])
 
-check('every value is drawn in a new frame, the notice kept above it', () => {
+check('every value is drawn in a new frame, the notice kept above it and the grip under it', () => {
   const p = page()
   const el = p.element('w')
-  const notice = el.children[0]
+  const [notice, , foot] = el.children
+  assert.equal(foot.children[0].className, 'chromosomix-grip')
   const first = p.frameOf(el)
   p.widget(el).renderValue(x())
   const drawn = p.frameOf(el)
@@ -146,7 +167,7 @@ check('every value is drawn in a new frame, the notice kept above it', () => {
   const again = p.frameOf(el)
   assert.notEqual(again, drawn)
   assert.equal(again.src, drawn.src)
-  assert.deepEqual(el.children, [notice, again])
+  assert.deepEqual(el.children, [notice, again, foot])
   assert.equal(el.style.display, 'flex')
   assert.equal(el.style.flexDirection, 'column')
   p.ready(el)
@@ -276,6 +297,33 @@ check('a frame too old to take files says so above the new frame', () => {
   assert.equal(p.inputs.w_notice, notice.textContent)
   p.widget(el).renderValue(x())
   assert.equal(notice.hidden, true)
+})
+
+check('the grip under the frame sets the widget\'s height, and Shiny is told it', () => {
+  const p = page({ shiny: true })
+  const el = p.element('w')
+  el.style.height = '600px'
+  p.widget(el).renderValue(x())
+  const grip = el.children[2].children[0]
+  const frame = p.frameOf(el)
+  grip.fire('pointerdown', { button: 0, clientY: 100, pointerId: 1 })
+  grip.fire('pointermove', { clientY: 250 })
+  // The frame lets the pointer through while the grip is dragged, and has it back after.
+  assert.equal(frame.style.pointerEvents, 'none')
+  assert.equal(el.style.height, '750px')
+  grip.fire('pointerup')
+  assert.equal(frame.style.pointerEvents, '')
+  assert.equal(p.inputs.w_height, 750)
+  grip.fire('keydown', { key: 'ArrowUp' })
+  assert.equal(el.style.height, '718px')
+  assert.equal(p.inputs.w_height, 718)
+  // A double click puts back the height R gave it; nothing goes under the viewer's controls.
+  grip.fire('dblclick')
+  assert.equal(el.style.height, '600px')
+  grip.fire('pointerdown', { button: 0, clientY: 900, pointerId: 1 })
+  grip.fire('pointermove', { clientY: 0 })
+  grip.fire('pointerup')
+  assert.equal(el.style.height, '288px')
 })
 
 let failed = 0

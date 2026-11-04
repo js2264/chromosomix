@@ -3,7 +3,7 @@ title: "Embedding in a web page"
 description: "Put a live chromosomix view in any web page as an iframe, and move it or follow the reader from the page around it with postMessage."
 ---
 
-The viewer goes into any HTML page as an `<iframe>`: nothing to install, no script to load, nothing to add to the page's headers. A lab's site, a course page or a paper's supplementary material then holds the map itself — the reader pans, zooms and changes the colours — read from where the data are published.
+The viewer goes into any HTML page as an `<iframe>`, with nothing to install and no script to add.
 
 ## An iframe
 
@@ -14,63 +14,78 @@ The viewer goes into any HTML page as an `<iframe>`: nothing to install, no scri
   title="Micro-C of yeast chromosome IV"></iframe>
 ```
 
-The `src` is a link to a view, with `?embed=1` before the `#`. The easiest way to write one is to open the view in the app, copy the address from the browser's bar, and put `?embed=1` in front of its `#`. Every key the part after the `#` can hold is on [Link keys](/reference/links/).
+The `src` is the address of a view open in the app, with `?embed=1` put before its `#` ([Link keys](/reference/links/)).
 
-- A link from the app's share dialog works the same way, and so does `?embed=1&config=<address>`, which opens a published workspace with its tracks, colours and marks.
-- With nothing after `?embed=1`, the frame is the landing page with **Load files** alone, where a reader opens a file of their own.
-- The files must be at addresses the reader's browser can reach, on a server that allows the viewer to read them: see [Hosting your data](/advanced/hosting/). The frame's requests come from the viewer's own origin, so a bucket that admits the viewer admits every page that embeds it, and the page around the frame needs no particular headers.
-- A file on your own disk cannot be embedded for others, as it cannot be linked to.
+- A link from the share dialog works too, and `?embed=1&config=<address>` opens a published workspace with its tracks, colours and marks.
+- With nothing after `?embed=1`, the frame is the landing page with **Load files** alone.
+- The files must be on a host that lets the viewer read them ([Hosting your data](/advanced/hosting/)); the page around the frame needs no particular headers.
+- A file on your own disk cannot be embedded for others.
+
+The view fills the frame and follows its size: a taller frame draws a larger map.
+
+### A frame the reader can resize
+
+Put the frame in a box the browser lets the reader resize by its corner. The padding keeps the corner's grip clear of the frame, and the script lets the pointer through the frame while the box is dragged, without which the drag stalls as soon as it shrinks the box:
+
+```html
+<div class="chromosomix-frame"
+  style="resize: both; overflow: hidden; width: 100%; height: 640px; padding-bottom: 14px; box-sizing: border-box">
+  <iframe
+    src="https://chromosomix.app/?embed=1#uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&transform=log10&balance=true"
+    style="display: block; width: 100%; height: 100%; border: 0" loading="lazy"
+    title="Micro-C of yeast chromosome IV"></iframe>
+</div>
+<script>
+  for (const box of document.querySelectorAll('.chromosomix-frame')) {
+    box.addEventListener('pointerdown', (event) => {
+      if (event.target === box) box.querySelector('iframe').style.pointerEvents = 'none'
+    })
+  }
+  addEventListener('pointerup', () => {
+    for (const frame of document.querySelectorAll('.chromosomix-frame iframe')) frame.style.pointerEvents = ''
+  })
+</script>
+```
 
 ### Pin a release
 
-`https://chromosomix.app/` is the newest build, and changes with it. Every release is also kept for good at its own address, which takes the same query and fragment:
+`https://chromosomix.app/` is the newest build. Every release is also kept for good at its own address, with the same query and fragment:
 
 ```text
 https://chromosomix.app/v/v0.19.0/?embed=1#uri=…
 ```
 
-A figure in a paper, or any page that must draw the same picture in five years, should name one. A copy of the viewer on your own server is framed the same way: see [Running your own copy](/advanced/self-hosting/).
+A paper's figure should name one. A copy on your own server is framed the same way ([Running your own copy](/advanced/self-hosting/)).
 
 ## What an embed keeps and drops
 
-An embed is the view alone, seeded by its `src`.
-
-- **It keeps** the view and its gestures, the keyboard shortcuts, and the **Annotations** and **Aesthetics** panels, which control the picture: which lanes are drawn, and how they are coloured and scaled. Both start folded, as named strips on either edge, so the map has the room. A reader can still drop a file of their own on the frame; it is read where it is, and nothing is uploaded.
-- **It drops** the window around the view: the header, the tab strip, the card that offers to restore the reader's last workspace, the status bar, the store catalogue and the console, and the **Files**, **General** and **Analysis** panels. Its landing page offers **Load files** alone, without the store tiles.
-- **It remembers nothing.** An embed writes nothing to the reader's browser storage and adds nothing to their back button, so it shows what its `src` says every time the page loads. It installs nothing for offline use, and shows no notice of a newer build.
+- **It keeps** the view, its gestures and shortcuts, and the **Annotations** and **Aesthetics** panels, folded as strips on either edge. Add `&panels=open` to the query to open both (`panels=annotations` or `panels=aesthetics` for one). A reader can still drop a file of their own on it; nothing is uploaded.
+- **It drops** the header, the tab strip, the offer to restore the last workspace, the status bar, the store catalogue, the console, and the **Files**, **General** and **Analysis** panels.
+- **It remembers nothing.** No browser storage, no history, no offline install, no notice of a newer build: it shows what its `src` says on every load.
 
 ## Its one bar
 
-Above the view, one bar holds what a figure in somebody else's page owes its reader:
+- On the left, the chromosomix mark and name, which open the view where the reader is in the full app, in a new tab; then the breadcrumb.
+- On the right, buttons for the **Annotations** and **Aesthetics** panels (hidden while a panel has nothing to show), and **About this viewer**, which names the build in the frame and its source.
 
-- on the left, the chromosomix mark and name: a link that opens this same view in the full app, in a new tab. It follows the reader, so it opens where they are;
-- next to it, the breadcrumb: the file, and where the reader is in it;
-- on the right, the buttons that open the **Annotations** and **Aesthetics** panels — each hidden while its panel has nothing to show — and **About this viewer**, which says what the viewer is, that nothing is uploaded, which build is in the frame, and where its source is.
-
-In a narrower frame the bar takes a second line rather than cutting anything off: the resolution and
-the contacts box move under the file and the place, together and with their labels, which is how an
-R Markdown page or a column of a lab's site shows it. Narrower still, the mark stands without the
-name beside it, and in a frame as narrow as a phone the contacts box is put away and the resolution
-kept, every one of its bin sizes a button; the full viewer, which the mark opens, has both.
-
-Notes about the file, and refusals, appear under the bar as they do in the app.
+In a narrow frame the bar takes two lines; at phone width the contacts box goes and each bin size is a button. Notes and refusals appear under the bar, as in the app.
 
 ![A plain web page with a heading, a paragraph and an embedded Micro-C map of yeast chromosome IV from 1.0 to 1.4 Mb; above the map the embed's one bar holds the chromosomix mark and name, the breadcrumb and, on a second line under it, the resolution and the contacts box, with the buttons for the two panels and About on the right, and the Annotations and Aesthetics panels are folded as strips on either edge.](../../../assets/screens/embed/web-page-iframe.webp "live: #uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&transform=log10&balance=true")
 
 ## Driving it from the page
 
-The page around the frame can move the view, put tracks beside it, and be told where the reader has taken it, by `postMessage`. There are six messages, each an object with a `type`, listed with their fields on [Embedding messages](/reference/embedding/). A few rules shape every host page:
+The page around the frame can move the view, add tracks and follow the reader with six `postMessage` messages, each an object with a `type`, listed on [Embedding messages](/reference/embedding/).
 
-- **The page speaks first.** The frame sends `chromosomix:ready` once, when it is listening, and nothing else until the page has sent it something. Put your listener in place before the frame loads: the script before the `<iframe>`, or the `src` set from the script.
-- **Only the page that framed it is answered**, at the origin it spoke from. A reader may open their own file in the frame, and no other page learns which. This also works from a page opened from disk.
+- **The page speaks first.** The frame sends `chromosomix:ready` once, then nothing until the page sends it something: put your listener in place before the frame loads.
+- **Only the page that framed it is answered**, at the origin it spoke from, even a page opened from disk.
 - **Messages are carried out in order.** A `chromosomix:navigate` sent after a `chromosomix:add` waits for the files to open.
-- **A navigate is a patch.** Its `state` holds only the keys to change, as a link writes them; a key given `null` is removed. Each move is answered with `chromosomix:state`, which says where the view actually went: a key the frame cannot read is dropped, so read the answer.
-- **Adding files needs 0.17.0 or later.** `chromosomix:add` takes `http(s)` addresses, at most 64. The `accepts` list in `chromosomix:ready` says whether the build in the frame takes it.
-- **`chromosomix:rendered` marks a finished picture**: its `report.status` is `drawn`, `gated` (waiting for the reader to agree to a large read) or `error`. It is the moment to take a screenshot.
+- **A navigate is a patch.** Its `state` holds only the keys to change, as a link writes them; `null` removes a key. The `chromosomix:state` answer says where the view actually went, without keys the frame cannot read.
+- **Adding files needs 0.17.0 or later.** `chromosomix:add` takes up to 64 `http(s)` addresses; the `accepts` list in `chromosomix:ready` says whether the build takes it.
+- **`chromosomix:rendered` marks a finished picture**, the moment for a screenshot: its `report.status` is `drawn`, `gated` (waiting for the reader to agree to a large read) or `error`.
 
 ### A worked example
 
-A map with buttons beside it that move it, a track a link cannot carry, and a caption that follows the reader:
+Buttons that move the map, a track a link cannot carry, and a caption that follows the reader:
 
 ```html
 <iframe id="figure" width="100%" height="640" style="border: 0"
@@ -119,10 +134,10 @@ A map with buttons beside it that move it, a track a link cannot carry, and a ca
 </script>
 ```
 
-- The `src` is set last, once the listener is in place, so the frame's `ready` cannot be missed.
-- On `ready`, the page adds the ATAC-seq track where the build takes files, and otherwise asks where the view is. Either way the frame answers with a `chromosomix:state`, and from then on it sends one on every move the reader makes, which keeps the caption current.
-- Each button sends a patch: the region to show, written as a link writes it, with `region2` and `focus` given `null` so that an off-diagonal block or a zoom the reader left is removed and the map is the square asked for.
+- The `src` is set last, once the listener is in place, so `ready` cannot be missed.
+- On `ready`, the page adds the ATAC-seq track if the build takes files, or else asks where the view is. Either way a `chromosomix:state` answers, then one on every move, which keeps the caption current.
+- Each button sends a patch: the region, with `region2` and `focus` set to `null` to clear any off-diagonal block or zoom.
 
 ## In a notebook
 
-The Jupyter widget and the R htmlwidget are this same frame, driven from Python and from R: see [Jupyter notebooks](/embed/jupyter/) and [R, Quarto and Shiny](/embed/r/).
+The [Jupyter](/embed/jupyter/) widget and the [R](/embed/r/) htmlwidget are this same frame, driven from Python and R.

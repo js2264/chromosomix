@@ -88,6 +88,7 @@ behind JupyterHub it cannot read them at all, and a build served beside them is 
 | `view.state` | where the view is now — the app's view state, a traitlet to `observe` |
 | `view.rendered` | the last finished picture: what is drawn, at which resolution |
 | `view.notice` | what the frame could not do — a viewer too old to take files — or `''` |
+| `view.height` | the frame's height in pixels: set it, or let the reader drag the grip under the frame, which writes it back |
 
 ```python
 view.observe(lambda change: print(change['new'].get('region')), names='state')

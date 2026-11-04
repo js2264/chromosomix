@@ -10,19 +10,13 @@ import TaskSummary from '@components/TaskSummary.astro'
 
 <TaskSummary id="peaks" />
 
-Most peak callers read the reads, and a bigWig holds only the coverage they left. **Peak calling** finds peaks on the track itself, as yapc does (Jänes et al. 2018): a peak is a stretch where the smoothed signal curves down. Found by its shape rather than its height, a peak needs no background model of a signal that has already been normalised, and two summits on one shoulder come out as two peaks rather than one wide one. With a second replicate, IDR — the reproducibility test ENCODE's pipelines use — decides which peaks are real.
-
-Reach for it with an ATAC-seq, DNase-seq or ChIP-seq track when you want a peak set and have no peak file: [FRiP](/analyses/frip/), the [metaplot](/analyses/metaplot/) and the [overlap test](/analyses/overlap/) all read one.
+**Peak calling** finds peaks on a coverage track by their shape, as yapc does: a peak is a stretch where the smoothed signal curves down, so it needs no background model, and two summits on one shoulder are two peaks. A second replicate is tested with IDR, as ENCODE does. Use it on an ATAC-seq, DNase-seq or ChIP-seq track that has no peak file; [FRiP](/analyses/frip/), the [metaplot](/analyses/metaplot/) and the [overlap test](/analyses/overlap/) read the result.
 
 ## Running it
 
-Load the coverage as a bigWig, bedGraph or wig (see [Tracks and features](/files/tracks/)), open **Peak calling** on the **1D tasks** card of the **Analysis** panel, and choose it under **track**. No contact map is needed; a peak set is most often wanted in [the genome browser](/browse/genome-browser/).
+Load the coverage ([Tracks and features](/files/tracks/)), open **Peak calling** on the **1D tasks** card of the **Analysis** panel, choose it under **track** and tick the **sequences**; no map is needed. To test the peaks, choose a second replicate of the same experiment under **replicate**. It starts on *None — no IDR*, because IDR between two different experiments reports their disagreement as irreproducible peaks.
 
-To test the peaks, choose a second replicate of the same experiment under **replicate**. It starts on *None — no IDR* rather than on the next track along, because a second track in a session is as often another experiment, and IDR between two experiments reports their disagreement as if it were the peaks' irreproducibility. Tick the **sequences** to call on.
-
-The call reads every base of the ticked sequences at the file's own resolution, a scan the line beside **run** prices; the map stays live while it runs, and it can be stopped.
-
-When it has run, the peaks are a track on the **Tracks** card, directly under the coverage they were called on, named `Peaks · ATAC · no IDR` with one track, or `Peaks · rep1 + rep2 · IDR ≤ 0.05` with two. Each peak's summit — its most concave base — is drawn as its thick part, and the peaks are numbered `peak_1`, `peak_2` and so on along the genome. The drawer shows the curvature of every candidate, a table per sequence, the peaks at each of yapc's six IDR thresholds when a replicate was tested, and a row per peak with **list every peak**.
+The peaks open on the **Tracks** card under the coverage, as `Peaks · ATAC · no IDR` or `Peaks · rep1 + rep2 · IDR ≤ 0.05`, each summit (its most concave base) drawn thick. The figure and the tables below are in the drawer.
 
 ![The yeast ATAC-seq coverage in the 1D browser at IV:1,246,215-1,295,987 with its new lane, Peaks · Yeast_ATAC · no IDR, directly under it, beside the drawer's curvature of every candidate, where the 5,000 strongest kept as peaks sit well above those below the cut on a log axis.](../../../assets/screens/analyses/peaks-atac.webp)
 
@@ -32,7 +26,7 @@ The same run from a shell:
 
 ## Parameters
 
-The defaults are yapc's own and suit narrow peaks: a 150 bp smoothing window, three passes, nothing narrower than 75 bp, and the 100,000 strongest candidates by each track's curvature kept before IDR. **smoothing window** is the one to change for the assay: 75 to 200 bp suits most narrow peaks, and a wider window finds broader shapes. **fixed half-width** gives every peak the same width about its summit instead of its own concave bounds. With one track, **keep the strongest** is the only cut there is.
+The defaults are yapc's and suit narrow peaks. Change **smoothing window** for the assay: 75 to 200 bp suits most narrow peaks, and a wider window finds broader shapes. **fixed half-width** gives every peak one width about its summit. With one track, **keep the strongest** is the only cut.
 
 <TaskParameters id="peaks" />
 
@@ -40,32 +34,30 @@ The defaults are yapc's own and suit narrow peaks: a 150 bp smoothing window, th
 
 <TaskOutputs id="peaks" />
 
-The peaks' BED carries, as its score, −log10 of the peak's global IDR where a replicate was tested — as yapc's own BEDs do — and the peak's curvature with one track. The tables print a start and a summit 1-based and save them 0-based, so a table dropped back on a map lands where it should.
+The BED's score is −log10 of the global IDR with a replicate, as in yapc's BEDs, and the curvature with one track. The tables show starts and summits 1-based and save them 0-based.
 
 ## Reading the result
 
-Each candidate is scored by how sharply the signal curves there — its **curvature**, minus the mean second derivative over the region — on each track.
+A candidate's score on each track is its **curvature**: how sharply the signal curves there, less the mean second derivative over the region.
 
 ### With a replicate
 
-The note under the run gives the IDR fit: its four parameters, how many peaks it was fitted over and how many pass. The peaks kept are those whose global IDR is at most the threshold, 0.05 by default, as ENCODE uses. **IDR thresholds** lists how many peaks each of yapc's six thresholds, 0.001 to 0.2, would keep, so you can see how the set grows as the threshold loosens without running again.
-
-A fit that ends at the edge of IDR's parameter box is named in the note, with the parameters that hit it. That is where two tracks that do not rank their peaks like replicates of one experiment put it, and its IDRs are then not a statement about reproducibility. IDR needs at least 20 peaks to fit; with fewer, they are reported untested.
+The note gives the IDR fit: its four parameters, the peaks it was fitted over and how many pass. A peak is kept when its global IDR is at most the threshold, 0.05 by default, as ENCODE uses; **IDR thresholds** shows how many each of yapc's six thresholds, 0.001 to 0.2, would keep. A fit that ends at the edge of IDR's parameter box is named in the note: the tracks do not rank their peaks like replicates, and its IDRs say nothing about reproducibility. IDR needs at least 20 peaks; with fewer, they are reported untested.
 
 ### With one track
 
-There is no test of significance, and the lane's name says so. The candidates are yapc's concave regions ranked by curvature, cut only by **keep the strongest**. The figure is how to choose that cut: the curvature of every candidate on a log axis, split into those kept and those below the cut. On a real ATAC-seq track the scores are plainly bimodal — on the demo track, the 5,000 strongest overlap a MACS2 peak 97 % of the time and recover 89 % of the MACS2 set — so lower **keep the strongest** to the size of the upper population and run again.
-
-A candidate across which the signal is constant for a whole kernel's width — a run of explicit zeros, as in the bigWigs deepTools writes — is left out, as IDR would leave it out of two replicates, and a note says how many.
+There is no test of significance, and the lane's name says so: the candidates are ranked by curvature and cut by **keep the strongest**. Choose the cut from the figure of every candidate's curvature: on a real ATAC-seq track it is plainly bimodal, so lower **keep the strongest** to the size of the upper population and run again.
 
 ### The tables
 
-**Per sequence** gives each sequence's concave regions, those wide enough, the peaks called and peaks per Mb. **Every peak** gives each one's start, end, summit, width and curvature on each track and, with a replicate, its local and global IDR and whether it passes.
+- **Per sequence**: the concave regions, those wide enough, the peaks called and peaks per Mb.
+- **Every peak**, with **list every peak**: start, end, summit, width and curvature on each track, and with a replicate the local and global IDR and whether it passes.
 
-A track that lacks a ticked sequence is read as zeros there, as yapc reads it, which lowers the mean the regions are called on; the run names the sequence. If a track has none of the ticked sequences, check that it and the assembly spell their sequence names alike.
+### What to watch for
+
+- A candidate whose signal is constant for a whole kernel's width, such as a run of the explicit zeros deepTools writes, is left out; a note says how many.
+- A track missing a ticked sequence is read as zeros there, which lowers the mean the regions are called on; the run names it. If it has none of them, check that the track and the assembly spell sequence names alike.
 
 ## Compared with yapc
 
-The task is yapc 0.1 with the IDR 2.0.3 it thresholds by, both ported rather than approximated. In [the validation](https://chromosomix.app/validation/#peak-calling-with-idr-yapc), on two mouse ATAC-seq replicates on chr19, the same regions go to IDR as in yapc, with the same summits and curvatures, and the same peaks come out. yapc breaks ties between scores at random, so it is run there with five seeds and their spread is the yardstick for the IDRs.
-
-Where yapc breaks a tie at random, chromosomix breaks it by position, so a run gives the same peaks twice. Where yapc has no answer — a sequence ending on an open concave stretch, a fixed half-width reaching past a sequence end, which yapc writes as a coordinate past the end — chromosomix gives one and says which. A single track is never cut at a valley of its histogram or at a score that looks about right: yapc's cut is IDR, and with one track the ranking is all there is.
+The task ports yapc 0.1 and the IDR 2.0.3 it thresholds by: in [the validation](https://chromosomix.app/validation/#peak-calling-with-idr-yapc) the same peaks come out. Ties are broken by position, not at random, so a run gives the same peaks twice; where yapc has no answer, such as a sequence ending on an open concave stretch, chromosomix gives one and says which.

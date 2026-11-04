@@ -2,17 +2,24 @@
 /**
  * Starlight's footer — the edit link and the previous and next pages — and a
  * line saying which build of the documentation this is; and, on every page,
- * the script that turns a live picture into the app (`LiveViews.astro`).
+ * the script that turns a live picture into the app (`LiveViews.astro`) and
+ * the one that turns the page with the arrow keys (`PageKeys.astro`).
  */
 import Default from '@astrojs/starlight/components/Footer.astro'
-import { COMMIT, IS_DEV, REPOSITORY, VERSION } from '../lib/site.mjs'
+import { COMMIT, IS_DEV, PREVIEW, PREVIEW_URL, REPOSITORY, VERSION } from '../lib/site.mjs'
 import LiveViews from './LiveViews.astro'
+import PageKeys from './PageKeys.astro'
 ---
 
 <Default />
 <LiveViews />
+<PageKeys />
 <p class="cx-build">
-  {IS_DEV ? 'Documentation of chromosomix, unreleased' : `Documentation of chromosomix ${VERSION}`}
+  {PREVIEW !== null
+    ? `Documentation of chromosomix, a preview of pull request #${PREVIEW}`
+    : IS_DEV
+      ? 'Documentation of chromosomix, unreleased'
+      : `Documentation of chromosomix ${VERSION}`}
   {COMMIT !== '' && (
     <>
       {' · built from '}
@@ -20,5 +27,5 @@ import LiveViews from './LiveViews.astro'
     </>
   )}
   {' · '}
-  <a href={`${REPOSITORY}/tree/main/documentation`}>source</a>
+  <a href={PREVIEW_URL === null ? `${REPOSITORY}/tree/main/documentation` : `${PREVIEW_URL}/files`}>source</a>
 </p>

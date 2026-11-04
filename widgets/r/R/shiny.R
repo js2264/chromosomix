@@ -6,7 +6,8 @@
 #' list, `NULL` on its picker — and changes as the reader pans, zooms and
 #' changes the scale; `input$<id>_rendered` is the report of the last finished
 #' picture (what is drawn, at what resolution); `input$<id>_version` the
-#' viewer's version, once its frame is up.
+#' viewer's version, once its frame is up; and `input$<id>_height` the height
+#' in pixels the reader left the widget at with the grip under its frame.
 #'
 #' `chromosomixProxy()` drives a widget already on screen, without drawing it
 #' again: [chromosomix_goto()], [chromosomix_navigate()] and

@@ -4,7 +4,8 @@
  * `widgets/python/demo.ipynb`, run whole as a reader runs it: the map and its
  * three tracks in the first widget, the cell that follows where the reader is,
  * `goto` and an O/E `navigate` from Python, a 3D model added beside the map, and
- * a 1D browser moved by `goto`. Every widget is shot once its frame has drawn
+ * a 1D browser moved by `goto`, and the first frame dragged taller by the grip
+ * under it, with the height Python then reads. Every widget is shot once its frame has drawn
  * what was asked of it — waited for by the viewer's own `chromosomix:rendered`,
  * whose report carries the view state — and every message each frame sent is
  * printed, so a frame that never spoke is a line in the log rather than a blank
@@ -185,6 +186,47 @@ await page.evaluate(() => {
 await sleep(1000)
 await page.screenshot({ path: `${OUT}/jw03-driven-from-python.png` })
 console.log('shot jw03-driven-from-python')
+
+// The grip under the first frame (§21.5): dragged 200 pixels down, the frame
+// taller with its map, and the height Python then reads from `view.height`, in
+// a cell added under the last for it (the notebook is put back when this ends).
+// A window tall enough for the taller frame, or its shot runs under the lab's own bars.
+await page.setViewportSize({ width: 1500, height: 1500 })
+const firstOutput = frames.nth(0).locator('xpath=ancestor::div[contains(@class,"jp-OutputArea-output")][1]')
+const grip = firstOutput.locator('button.chromosomix-grip')
+await grip.scrollIntoViewIfNeeded()
+await sleep(1000)
+const frameHeight = () => frames.nth(0).evaluate((frame) => Math.round(frame.getBoundingClientRect().height))
+const before = await frameHeight()
+const at = await grip.boundingBox()
+await page.mouse.move(at.x + at.width / 2, at.y + at.height / 2)
+await page.mouse.down()
+await page.mouse.move(at.x + at.width / 2, at.y + at.height / 2 + 200, { steps: 12 })
+await page.mouse.up()
+await sleep(2500)
+console.log(`the grip: the first frame ${before} → ${await frameHeight()} px`)
+await shotFrame(0, 'jw05-map-dragged-taller')
+await page.locator('.jp-CodeCell').last().click()
+await page.keyboard.press('Escape')
+await page.keyboard.press('b')
+await sleep(500)
+// The new cell is selected in command mode, where every letter is a shortcut.
+await page.keyboard.press('Enter')
+await page.keyboard.type('view.height')
+await page.keyboard.press('Shift+Enter')
+await page
+  .waitForFunction(
+    () =>
+      [...document.querySelectorAll('.jp-CodeCell')].some(
+        (cell) =>
+          (cell.querySelector('.jp-InputArea-editor')?.textContent ?? '').trim() === 'view.height' &&
+          (cell.querySelector('.jp-OutputArea')?.textContent ?? '').trim() !== '',
+      ),
+    null,
+    { timeout: 30000 },
+  )
+  .catch(() => {})
+console.log('Python reads view.height:', await cellText('view.height'))
 
 console.log(`--- what the frames said\n${(await page.evaluate(() => window.__heard)).join('\n')}`)
 

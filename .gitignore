@@ -69,6 +69,8 @@ gallery-figures/
 gallery-bacteria/
 gallery-peaks/
 gallery-csp/
+# …and the furniture tour's (`scripts/ui-tour.mjs tour`), which the skill writes beside them.
+tour/
 
 # What notebooks/dbz-chromosome-figures.qmd fetches and makes: the store's maps
 # and references, every output of the chromosomix command, the figures, and
