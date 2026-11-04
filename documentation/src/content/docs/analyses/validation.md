@@ -13,8 +13,8 @@ commands, hold the app to its own command line, and measure what a run costs on 
 | Notebook | What it holds chromosomix to | Published at |
 | --- | --- | --- |
 | Validation | the package each task reproduces, on public data | <https://chromosomix.app/validation/> |
-| Timings | the same packages, in time and memory, and two other viewers in time to a picture | <https://chromosomix.app/timings/> |
-| Parity | its own command line: the same run in the app and in a shell, file for file | <https://chromosomix.app/parity/> |
+| Timings | the same packages, in time and memory, two other viewers in time to a picture, and a script of four analyses over a whole human map | <https://chromosomix.app/timings/> |
+| Parity | its own command line: the same run in the app, in three browsers, and in a shell, file for file | <https://chromosomix.app/parity/> |
 | Laptop | what a genome-wide run costs on a laptop, on the command line and in three browsers | <https://chromosomix.app/laptop/> |
 
 In the app, **About this viewer**, from the header or the command palette, lists the four under
@@ -88,17 +88,26 @@ core unless told otherwise, and a reference that takes a number of processes is 
 most four. A few analyses are compared and not timed: cis and trans per sequence, the saddle, the
 fraction of signal in features and signal by group.
 
-Beside the page: **`timings.tsv`**, every timed run, and **`viewers.tsv`**, every picture timed in a
-viewer, each with the machine and every version.
+The last part times **four analyses one after the other over a deep map**: the whole genome of 4DN's
+in situ Hi-C of IMR-90, 1.08 billion contacts — loop calling and diamond insulation at 10 kb,
+compartments at 250 kb phased by GC content, and aggregate peak analysis over every loop called, raw.
+chromosomix runs them as four commands, as a shell script would; the reference is one Python script
+running cooltools and coolpuppy in one process. Each side's start-up, each step and the whole are
+timed, and what the two wrote is compared step by step.
+
+Beside the page: **`timings.tsv`**, every timed run, **`viewers.tsv`**, every picture timed in a
+viewer, and **`pipeline.tsv`**, every step of the four analyses over the deep map, each with the
+machine and every version.
 
 ## The parity
 
 The Analysis panel and the `chromosomix` command are one implementation, and the parity holds them to
-it. Ten tasks are run in the app, built from the same commit as the command line and driven in a
-headless Chromium as a reader drives it: the files dropped on the landing page, the task opened from
-the Analysis panel, its form set, **run** pressed, and every file the app offers saved through the
-buttons a reader presses. Then the line the console wrote for that run is run in a shell as written,
-with only `--out` added, and each pair of files is compared:
+it. Ten tasks are run in the app, built from the same commit as the command line and driven as a
+reader drives it in each of three headless browsers — Chromium, Firefox and WebKit, Safari's engine:
+the files dropped on the landing page, the task opened from the Analysis panel, its form set, **run**
+pressed, and every file the app offers saved through the buttons a reader presses. Then the line the
+console wrote for that run is run in a shell as written, with only `--out` added, once for each
+browser, and each pair of files is compared, browser by browser:
 
 - **identical**: a bigWig byte for byte, a text file line for line once the `#` lines that say when,
   by which build and from which file it was made are set aside;
@@ -108,7 +117,7 @@ with only `--out` added, and each pair of files is compared:
 The ten are insulation, compartments phased by GC content, P(s), coverage, virtual 4C, loop calling and a
 motif search on a yeast Micro-C map; aggregate peak analysis over the loops the app called there; and
 peak calling and a metaplot on yeast ATAC-seq, opened with no map. Beside the page: **`summary.tsv`**,
-every file compared and its verdict.
+every file compared in each browser and its verdict.
 
 ## The laptop
 
