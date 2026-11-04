@@ -58,6 +58,24 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   After every green full suite on `main`, the report is published at
   <https://chromosomix.app/coverage/>, and the README's **Coverage** badge shows its line coverage
   (docs/deploy.md).
+- **The timings end on a deep human map, start to finish (§18.10).** `notebooks/timing.qmd` now
+  times four analyses one after the other over the whole genome of 4DN's IMR-90 in situ Hi-C
+  (4DNFIJTOIGOI, 1.08 billion contacts): loop calling and diamond insulation (10 bins) at 10 kb,
+  compartments at 250 kb phased by GC content, and APA over every loop called, raw.
+  `chromosomix` runs them as four commands; the reference is one Python script running cooltools and
+  coolpuppy in one process (`notebooks/scripts/cooltools_pipeline.py`). Each side's start-up, each
+  step and the whole are timed — CPU, wall clock and peak memory — and what the two wrote is compared
+  step by step. Every step is a line of `pipeline.tsv`, and every weighing of each side's memory,
+  four a second, a line of `pipeline-memory.tsv`, both published beside the page and kept by a
+  release; the page and `notebooks/scripts/timing.plot.R`'s panel c draw the memory against the wall
+  clock, each phase shaded, its peak and the end of each side marked.
+- **The parity runs in Firefox and WebKit too (§18.10).** `notebooks/parity.qmd` drives its ten
+  tasks in each of the three engines Playwright drives headless — Chromium, Firefox and WebKit — and
+  runs the line each browser's console wrote on the files that browser's sessions read, so the
+  pileup is over the loops that browser called. Every file is compared browser by browser:
+  `summary.tsv` has a `browser` column, each case lists its verdict in each browser and says whether
+  the three wrote the same line, and `PARITY_BROWSERS` names fewer. The Notebooks workflow installs
+  the two for the parity's job.
 
 ### Fixed
 

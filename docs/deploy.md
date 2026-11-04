@@ -625,7 +625,7 @@ That workflow runs when a release is published — `release.yml` makes the relea
 person publishes it, which is the event that reaches it — and from **Actions → Notebooks → Run
 workflow** on any branch or tag, with the number of timed runs (four by default) and whether to
 publish. Each notebook renders in a job of its own, on a fresh runner, through the setup in
-`.github/actions/notebooks-setup`: the parity first, in about ten minutes, then the validation and
+`.github/actions/notebooks-setup`: the parity first, in about twenty minutes in its three browsers, then the validation and
 the timings in one job (about three hours, the timings running the validation's commands on its
 inputs) beside the laptop (about an hour on the command line and about as long again in each of
 the app's three browsers). A last job publishes only if the three pages rendered: it

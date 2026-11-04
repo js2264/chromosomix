@@ -56,14 +56,15 @@ export const NOTEBOOKS: readonly Notebook[] = [
     title: 'Timings',
     what:
       'The time to a picture beside juicebox.js and HiGlass, on the same files, then every command of ' +
-      'the validation run again and timed against its reference.',
+      'the validation run again and timed against its reference, and four analyses over a whole human ' +
+      'map, start to finish.',
   },
   {
     path: 'parity',
     title: 'Parity',
     what:
-      'Ten tasks run in the app, in a headless browser, then again from the line its console wrote, ' +
-      'and every file the two wrote compared.',
+      'Ten tasks run in the app, in headless Chromium, Firefox and WebKit, then again from the line its ' +
+      'console wrote in each, and every file the two wrote compared.',
   },
   {
     path: 'laptop',
