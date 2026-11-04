@@ -1,6 +1,13 @@
 {
-  "latest": "b02be45",
+  "latest": "9290dbe",
   "versions": [
+    {
+      "commit": "9290dbe",
+      "version": "0.19.0",
+      "date": "2026-11-04T08:35:13+01:00",
+      "subject": "Timings: a deep human map, start to finish (§18.10) (#161)",
+      "tag": ""
+    },
     {
       "commit": "b02be45",
       "version": "0.19.0",
@@ -132,13 +139,6 @@
       "version": "0.18.0",
       "date": "2026-10-30T22:41:19+01:00",
       "subject": "Measure analyses in the app as well as on the command line (#145)",
-      "tag": ""
-    },
-    {
-      "commit": "d64d8fe",
-      "version": "0.18.0",
-      "date": "2026-10-30T21:21:15+01:00",
-      "subject": "Add example sessions to landing page (#144)",
       "tag": ""
     },
     {
