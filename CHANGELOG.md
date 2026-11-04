@@ -14,6 +14,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **An embed opens its side panels when its page asks (§21.2).** `?embed=1&panels=open` opens the
+  Annotations and Aesthetics panels, `panels=annotations` or `panels=aesthetics` one of them; without
+  it they arrive folded, as before. Written nowhere, like any fold in a frame.
+- **The documentation turns the page with the arrow keys, and a live view can be resized (§32.4).**
+  Left and right go to the previous and the next page, except in a field, the search or a block that
+  scrolls. Pressed, a live view opens with the app's two panels unfolded in a frame wide enough for
+  them, and the grip under its corner resizes it, by dragging or with the arrow keys. The page on
+  embedding shows a frame any page can make resizable, with a few lines of script.
 - **A pull request's preview carries its documentation (§32.5).** Beside the preview's app at
   `chromosomix.app/pr/<number>/`, the documentation of the same head is published at
   `chromosomix.app/pr/<number>/docs/`, replaced on every push and removed when the pull request
@@ -79,6 +87,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **An embedded map takes the frame's height (§21.3).** Every picture sized against the window counted
+  out a header, a tab strip, a breadcrumb row and a status bar that a frame does not have, so in an
+  850-pixel frame the map stopped 120 pixels short of the foot, over a band of empty page. It now
+  grows into it.
+- **The documentation looks like the app (§32.4).** Its header is the app's header, measure for
+  measure: the bar's height and padding, the mark, the search well and the app's buttons. The home
+  page's rows follow the sidebar's order, and *Open the browser* sits beside *What chromosomix is*.
+  And a live view's right side, under the contents list, takes the pointer again: the list's column,
+  folded away or not, was still catching every click there.
 - **An embed's bar fits a narrower frame (§21.3).** The bar was one row that scrolled, so in a frame
   of 1,040 pixels the contacts box's example was cut, at 910, the width of an R Markdown page, the row
   ended at `con`, at 720 the resolution and the box were out of sight, and at 480 the frame scrolled

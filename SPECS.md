@@ -11284,6 +11284,13 @@ embed — which has no drawer — ignores it.
   embed of a published figure came up in a 1,200-pixel frame behind five open columns, with
   **thirty-two pixels of map** between them. An embed is a picture first.
 
+  **Unless the page asks for them open**: `?panels=open` in the query opens both, and
+  `panels=annotations` or `panels=aesthetics` one (`readPanels`, `embed.ts`); a name the build does not
+  know is passed over and the rest kept. It is the host's choice, not the reader's memory, so it is in
+  the query beside `embed` and is still written nowhere. A page that frames the app to *teach* it
+  wants the controls in sight beside the picture they change — the documentation's live views ask
+  for it in a frame wide enough for both columns (§32.4).
+
   An embed's columns also neither read nor write the stored fold and width. Reading would open a
   column inside somebody's figure because the reader once left it open on the app's own site;
   writing would rearrange the application for a reader who opened a panel in a page they were only
@@ -11355,6 +11362,16 @@ with, and the full viewer the mark opens has both. There the resolution's slider
 stops wrap: a file of five resolutions ran past the frame at the fourth, and each stop is the same
 choice as the slider, a button that says its bin size. The brand and the three buttons keep to the first
 line throughout (`test/unit/embed-bar-css.test.ts` holds the order).
+
+**The picture takes the frame's height, not a window's.** Every picture sized against the window — the
+map's side (`--map-budget`), a deck cell's, a lone model's or stack of tracks', the tables' ceiling —
+counts out the window's furniture: the header, the tab strip, the breadcrumb row and the status bar.
+A frame has this one bar instead, and the budgets still took all four out: in an 850-pixel frame the
+map stopped 120 pixels short of the frame's foot, over a band of empty page, however much room it had
+to grow. So the frame's root is marked (`is-embed`), the tab strip's allowance is nothing there, and
+every budget gives back `--embed-room`: the header, the breadcrumb row and the status bar, less this
+bar — measured, 53, 36 and 34 pixels against 38, a little less on a phone, where the bar is a line
+taller (`test/unit/embed-room-css.test.ts`).
 
 **The two panel toggles and About**, right. The toggles are the panels' *own* buttons — the same
 objects the header holds in a window, so there is one fold path and not a second written for frames —
@@ -15987,11 +16004,24 @@ greys with one blue, and colour for meaning only (§26.5) — an aside is the ac
 Rapide's purple, and green is kept for a task the validation found identical or equivalent, the
 Analysis panel's `?` written out as a badge; the landing page's grain, a sub-pixel dot every 10 px,
 behind the page and never behind the header or the sidebar, which are solid as the app's furniture
-is; the header on the raised surface with a hairline under it, the mark and the name on one line, and
-the search box drawn as *Search commands…*; a group's heading in small accented capitals, as *NEW
-HERE?*; the home page laid out as the landing page, its tiles drawn as the store tiles; the app's
-6 px corners and its two shadows. Rapide keeps all of its rules in one cascade layer, and the site's
-stylesheet is outside it, so the app's look wins without a fight over specificity.
+is; a group's heading in small accented capitals, as *GET STARTED*; the home page laid out as the
+landing page, its tiles drawn as the store tiles; the app's 6 px corners and its two shadows. Rapide
+keeps all of its rules in one cascade layer, and the site's stylesheet is outside it, so the app's
+look wins without a fight over specificity.
+
+**The header is the app's header**, measure for measure (`.app-head`): 53 pixels, padded 0.6rem by
+1rem, solid on the raised surface with a hairline under it, the 26-pixel mark and the name; the
+search box is the app's *Search commands…* well — its words, *Search the docs…*, on the left in the
+dim grey and one key, `Ctrl+K`, on the right, with no magnifying glass, since the app's has none; and
+the buttons on the right, *Open chromosomix*, GitHub and the theme, are the app's `.btn`, 0.4rem
+apart with no rule between them, one height whether they hold a word or a mark, with its one gesture
+on hover. **The home page's rows follow the sidebar's groups in its order** — *Get started*, *Your
+files*, *Using the browser*, *Going further* — so a newcomer meets the pages there in the order the
+sidebar lists them; above them, *What chromosomix is* and **Open the browser**, which opens this
+copy's app (`APP_URL`). **The left and right arrows turn the page**, to the previous and the next as
+the links at its foot go (`components/PageKeys.astro`), except where the arrows already mean
+something — a field, the search, a block of code or a table that scrolls, a live frame and its grip
+— and never with a modifier, which is the browser's.
 
 **Every picture of the app is the app**, shot by a script per page under
 `documentation/scripts/screens/`: Playwright on the dev server, 1440 × 900 at twice the density, in
@@ -16013,9 +16043,17 @@ its corner; a press swaps it for the app, embedded (§21), on that view, with a 
 that opens the same view in a tab of its own or puts the picture back. **Live, the frame takes the
 page's width** — from the sidebar's edge to the window's, measured, since where the column sits
 between the two sidebars is Starlight's arithmetic — and as much of the window's height: a map in a
-column of text is a stamp, and the reader who pressed asked for the app. The contents list on the
-right is a fixed panel over that width, so it steps aside while a frame is under it and comes back
-once the frame is scrolled past (`components/LiveViews.astro`). Nothing of the app is loaded
+column of text is a stamp, and the reader who pressed asked for the app. A frame 1,000 pixels wide or
+more opens with the app's two side panels unfolded (`?panels=open`, §21.2), the controls beside the
+picture they change; a narrower one leaves them folded, since two open columns would leave the map no
+room. **The reader can resize the frame**: the grip under its corner drags the width and the height,
+its arrow keys step them, and a double-click puts the frame back; while it is dragged the frame lets
+the pointer through, or the drag would stall as it shrank the frame under the hand. The contents
+list on the right is a fixed panel over that width, so it steps aside while a frame is under it and
+comes back once the frame is scrolled past or narrowed clear of it; its sidebar is a box the page's
+whole height, so only the list itself takes the pointer, and not while it is away — the frame under
+the sidebar's empty rest was a picture that could be seen and not clicked
+(`components/LiveViews.astro`). Nothing of the app is loaded
 before the press: a page with three live views would otherwise load the viewer three times for a
 reader who came for one paragraph, and the picture stays what a printed page, a search engine and a
 reader without scripts have. **Each copy embeds its own app** (`APP_URL`, §32.2): a release's copy

@@ -323,6 +323,11 @@ export function linksPage(): string {
             '`hub.txt` by its address. `q=<text>` searches it, `<column>=<value>` ticks a facet, and ' +
             '`view=matrix&axes=<a>,<b>` shows it as a matrix of two columns.',
         ],
+        [
+          '`panels=open`',
+          'With `embed=1`: the frame opens with its Annotations and Aesthetics panels unfolded rather than ' +
+            'folded. `panels=annotations` or `panels=aesthetics` opens one.',
+        ],
       ],
     ),
     'Examples:',

@@ -39,3 +39,16 @@ export function embedAddress(app, link) {
 export function viewerAddress(app, link) {
   return `${app}${link}`
 }
+
+/**
+ * The width of a frame, in CSS pixels, from which a live view opens with its
+ * two side panels unfolded: the controls beside the picture they change. Under
+ * it — a phone, a narrow window — two open columns would leave the map no room,
+ * and the panels stay folded, a press away on either edge.
+ */
+export const PANELS_FROM = 1000
+
+/** The same embed with its side panels open (`?panels=open`, SPECS §21.3). */
+export function withPanels(address) {
+  return address.replace('?embed=1', '?embed=1&panels=open')
+}

@@ -1,0 +1,41 @@
+---
+/**
+ * The left and right arrows turn the page: the previous page and the next, in
+ * the order of the sidebar, as the two links at the foot of every page go.
+ *
+ * Never while the arrows mean something else where the reader is: a field or a
+ * menu being typed in, the search, a block of code or a table that scrolls
+ * sideways, the grip of a live frame, and a live frame itself, whose keys stay
+ * in the frame. Never with a modifier, which is the browser's: Alt and the
+ * arrows are Back and Forward.
+ */
+---
+
+<script>
+  /** Where the arrows already have a meaning of their own. */
+  const OWN_KEYS =
+    'input, textarea, select, [contenteditable]:not([contenteditable="false"]), dialog, pre, .expressive-code, .cx-table-wrap, [role="slider"], [role="listbox"], [role="menu"], .cx-live-grip'
+
+  const LINKS = { ArrowLeft: 'prev', ArrowRight: 'next' } as const
+
+  // Named on the links themselves, so the keys are found where the pages are.
+  for (const [key, rel] of Object.entries(LINKS)) {
+    const link = document.querySelector<HTMLAnchorElement>(`.pagination-links a[rel="${rel}"]`)
+    if (link === null) continue
+    link.setAttribute('aria-keyshortcuts', key)
+    link.title = `${rel === 'prev' ? 'Previous' : 'Next'} page (${key === 'ArrowLeft' ? '←' : '→'})`
+  }
+
+  document.addEventListener('keydown', (event) => {
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+    const rel = LINKS[event.key as keyof typeof LINKS]
+    if (rel === undefined) return
+    const target = event.target
+    if (target instanceof Element && target.closest(OWN_KEYS) !== null) return
+    if (document.querySelector('dialog[open]') !== null) return
+    const link = document.querySelector<HTMLAnchorElement>(`.pagination-links a[rel="${rel}"]`)
+    if (link === null) return
+    event.preventDefault()
+    window.location.assign(link.href)
+  })
+</script>

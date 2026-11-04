@@ -48,7 +48,10 @@ export function embedPage(): string {
         'tracks, colours and marks.',
       '- The frame is the view alone: no header, no tab strip, no status bar. The Annotations and Aesthetics ' +
         'panels are there, folded, because they are controls over the picture; the Files, General and ' +
-        'Analysis panels are not. A reader can still drop a file of their own on it.',
+        'Analysis panels are not. Add `&panels=open` to the query to open them both (`panels=annotations` or ' +
+        '`panels=aesthetics` for one). A reader can still drop a file of their own on it.',
+      '- The view fills the frame and follows its size, so a frame the reader can resize is a box away: ' +
+        'see *A frame the reader can resize*, below.',
       `- For a figure that must not change, pin a release: \`${SITE}v/<tag>/?embed=1#…\`. The root is ` +
         'the newest build, and changes with it.',
       '- Nothing is needed of the page around it — no `Cross-Origin-Opener-Policy`, no ' +
@@ -58,6 +61,33 @@ export function embedPage(): string {
       '- An embed writes nothing to the reader’s storage and adds nothing to their back button: it shows ' +
         'what its `src` says, every time it loads.',
     ].join('\n'),
+    '## A frame the reader can resize',
+    'Put the frame in a box the browser lets the reader resize by its corner. The padding keeps the ' +
+      'corner’s grip clear of the frame, which would cover it, and the script lets the pointer through the ' +
+      'frame while the box is dragged, without which the drag stalls as soon as it shrinks the box under ' +
+      'the hand:',
+    block(
+      [
+        '<div class="chromosomix-frame"',
+        '  style="resize: both; overflow: hidden; width: 100%; height: 640px; padding-bottom: 14px; box-sizing: border-box">',
+        '  <iframe',
+        `    src="${EMBED_EXAMPLE}"`,
+        '    style="display: block; width: 100%; height: 100%; border: 0" loading="lazy"',
+        '    title="Micro-C of yeast chromosome IV"></iframe>',
+        '</div>',
+        '<script>',
+        "  for (const box of document.querySelectorAll('.chromosomix-frame')) {",
+        "    box.addEventListener('pointerdown', (event) => {",
+        "      if (event.target === box) box.querySelector('iframe').style.pointerEvents = 'none'",
+        '    })',
+        '  }',
+        "  addEventListener('pointerup', () => {",
+        "    for (const frame of document.querySelectorAll('.chromosomix-frame iframe')) frame.style.pointerEvents = ''",
+        '  })',
+        '</script>',
+      ].join('\n'),
+      'html',
+    ),
     '## The channel',
     `Six messages, each an object with a \`type\`. Protocol version ${EMBED_PROTOCOL}; a message is added ` +
       'without changing the number, so a host reads which messages a frame takes from its `ready`.',

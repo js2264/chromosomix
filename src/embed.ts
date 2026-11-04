@@ -12,7 +12,8 @@
  *
  * So an embed says so, and this module is the one place that reads it:
  * `?embed=1` for the chrome-less mount, `?config=<url>` for the session to open
- * on arrival, `?store=<url>` for the catalogue to land on (§24.2). Everything
+ * on arrival, `?store=<url>` for the catalogue to land on (§24.2), and
+ * `?panels=` for the side columns a frame opens with (§21.3). Everything
  * downstream asks {@link mounting} rather than parsing the URL a second time.
  *
  * ## Why the query string and not the hash
@@ -100,10 +101,43 @@ export interface Mounting {
    * when no store was named.
    */
   readonly storeView: StoreView
+  /**
+   * The side columns a frame opens with, from `?panels=` (§21.3).
+   *
+   * An embed's two columns arrive folded, because a published figure is a
+   * picture first (`app/App.ts`). A page that frames the app to *teach* it —
+   * the documentation's live views — wants the controls in sight instead, and
+   * says so: `panels=open` for both, or the columns by name,
+   * `panels=annotations`, `panels=aesthetics`, or both with a comma. Read in a
+   * frame only: a window's columns are the reader's own (`ui/SidePanel.ts`).
+   */
+  readonly panels: readonly EmbedPanel[]
 }
 
+/** A side column an embed mounts, by the name `?panels=` gives it. */
+export type EmbedPanel = 'annotations' | 'aesthetics'
+
 /** The mount of a page that was not asked for anything in particular. */
-const PLAIN: Mounting = { embed: false, config: null, store: null, storeView: EMPTY_VIEW }
+const PLAIN: Mounting = { embed: false, config: null, store: null, storeView: EMPTY_VIEW, panels: [] }
+
+/**
+ * The columns `?panels=` names, in the order an embed mounts them, each once.
+ *
+ * `open` is both, and so is `all`. A name it does not know is passed over
+ * rather than refusing the rest: a page written for a later build, naming a
+ * column this one does not have, still opens the ones it does.
+ */
+export function readPanels(value: string | null): readonly EmbedPanel[] {
+  if (value === null) return []
+  const asked = new Set(
+    value
+      .toLowerCase()
+      .split(',')
+      .map((part) => part.trim()),
+  )
+  const both = asked.has('open') || asked.has('all')
+  return (['annotations', 'aesthetics'] as const).filter((name) => both || asked.has(name))
+}
 
 /**
  * A shipped store's id, or a remembered one's: a short name, not an address.
@@ -152,6 +186,7 @@ export function readMounting(search: string, base: string): Mounting {
     config: fetchable(params.get('config'), base),
     store,
     storeView: store === null ? EMPTY_VIEW : readStoreView(params),
+    panels: readPanels(params.get('panels')),
   }
 }
 

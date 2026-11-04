@@ -128,6 +128,21 @@
   --tabstrip-h: 2.4rem;
 
   /*
+   * How much more of the window a frame gives the picture than a window does.
+   *
+   * Every picture sized against the window's height (the `calc(100vh - …)`
+   * budgets below) counts out the furniture around it: the header, the tab
+   * strip, the breadcrumb row and the status bar. An embed has none of the
+   * four, only its one bar (`.embed-bar`), and the budgets still took all four
+   * out: a map in an 850-pixel frame stopped 120 pixels short of the frame's
+   * foot, over a band of empty page, however much room there was for it to
+   * grow. Nothing in a window; in a frame, the header, the breadcrumb row and
+   * the status bar less the embed's bar, the tab strip being `--tabstrip-h`,
+   * which a frame sets to nothing (`.is-embed`, below).
+   */
+  --embed-room: 0rem;
+
+  /*
    * How much of the window the status bar takes: one line of `--step--1` inside
    * `.app-foot`'s padding and its top border.
    *
@@ -1679,6 +1694,16 @@ p {
  * and the About button are the two things an embed shows before it shows
  * anything at all.
  */
+/* The frame's share of the window (`--embed-room` at the top of this sheet):
+   no tab strip, and the header, the breadcrumb row and the status bar, less
+   this bar, given back to the picture. Measured, as `--tabstrip-h` is: 53, 36
+   and 34 pixels against the bar's 38; a phone's frame draws the bar taller
+   (below). */
+.is-embed {
+  --tabstrip-h: 0rem;
+  --embed-room: 5.25rem;
+}
+
 .embed-bar {
   display: flex;
   align-items: center;
@@ -1803,6 +1828,12 @@ p {
 @media (max-width: 34rem) {
   .embed-bar .breadcrumb > .crumb-contacts {
     display: none;
+  }
+
+  /* Eight pixels taller here, where the resolution's stops wrap: that much
+     less of the window to give back (`.is-embed`, above). */
+  .is-embed {
+    --embed-room: 4.75rem;
   }
 
   /* A file of several resolutions draws a slider and a stop for each, and the
@@ -3450,7 +3481,7 @@ p {
   border-radius: var(--radius);
   overflow: hidden;
   background: var(--bg-raised);
-  max-height: calc(100vh - 15rem - var(--tabstrip-h));
+  max-height: calc(100vh - 15rem - var(--tabstrip-h) + var(--embed-room));
   min-height: 22rem;
 }
 
@@ -3756,8 +3787,8 @@ p {
   --map-budget: clamp(
     20rem,
     calc(
-      100vh - 14rem - var(--tabstrip-h) - var(--lane-bottom, 0px) - var(--lane-top, 0px) -
-        var(--deck-edge, 0px)
+      100vh - 14rem - var(--tabstrip-h) + var(--embed-room) - var(--lane-bottom, 0px) -
+        var(--lane-top, 0px) - var(--deck-edge, 0px)
     ),
     60rem
   );
@@ -9504,7 +9535,7 @@ body.is-carrying-card * {
   }
 
   .table {
-    max-height: calc(100vh - 12rem - var(--tabstrip-h));
+    max-height: calc(100vh - 12rem - var(--tabstrip-h) + var(--embed-room));
   }
 }
 
@@ -11173,7 +11204,7 @@ body.is-carrying-card * {
 .deck .heatmap-wrap {
   width: min(
     var(--map-size, 20rem),
-    max(20rem, calc(100vh - 16rem - var(--tabstrip-h) - var(--lane-bottom, 0px) - var(--lane-top, 0px)))
+    max(20rem, calc(100vh - 16rem - var(--tabstrip-h) + var(--embed-room) - var(--lane-bottom, 0px) - var(--lane-top, 0px)))
   );
 }
 
@@ -11871,7 +11902,11 @@ span.deck-name {
 .deck-grid.is-alone > .deck-panel:not(.has-height) > .structure-body > .structure-wrap,
 .deck-grid.is-alone > .deck-panel:not(.has-height) > .tracks-body > .tracks-wrap {
   flex: 0 0 auto;
-  height: clamp(20rem, calc(100vh - 18.5rem - var(--tabstrip-h) - var(--deck-edge, 0px)), 60rem);
+  height: clamp(
+    20rem,
+    calc(100vh - 18.5rem - var(--tabstrip-h) + var(--embed-room) - var(--deck-edge, 0px)),
+    60rem
+  );
 }
 
 /* The bar under the picture that sets that height — a model's and a stack of
