@@ -71,6 +71,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the three wrote the same line, and `PARITY_BROWSERS` names fewer. The Notebooks workflow installs
   the two for the parity's job.
 
+### Changed
+
+- **The laptop notebook's memory table gives a browser's whole peak (§18.10).** Its column for a
+  browser was what a run added to what the page held when **run** was pressed, beside the command
+  line's whole peak, so the app read as lighter than the command line in 49 of its 69 runs, though
+  its page held 160 MB to 1.4 GB before the run began. The table now gives the whole peak in every venue,
+  the page's in each browser, the app itself included, and beside it, for each browser, what the run
+  added; the sentence under the tables gives the median of each.
+
 ### Fixed
 
 - **An embed's bar fits a narrower frame (§21.3).** The bar was one row that scrolled, so in a frame

@@ -549,13 +549,13 @@ unbroken = lambda seconds: duration(seconds).replace(' ', '\N{NO-BREAK SPACE}')
 
 def measure(heading, column, shown, added=False):
     """A table of one measure: each analysis, and a column for each venue under the measure's heading —
-    but, for the memory, the command line's alone, and what the run added to the page in each browser."""
+    and, for the memory, beside the whole peak, what the run added to the page in each browser."""
     table = pd.DataFrame({('', key): TASK[key].values for key in ['data', 'analysis', 'resolution']})
-    for venue, values in wide(column, VENUES[:1] if added else VENUES).items():
+    for venue, values in wide(column).items():
         table[(heading, venue)] = values.map(shown).values
     if added:
         for venue, values in wide('added_mb', APPS).items():
-            table[('added by the run', venue)] = values.map(shown).values
+            table[('added by the run (MB)', venue)] = values.map(shown).values
     table.columns = pd.MultiIndex.from_tuples(table.columns)
     return table.style.hide(axis='index')
 ```
@@ -675,12 +675,15 @@ than the command line and more CPU.
 #| output: asis
 rest = wide('rest_mb', APPS).median()
 added = wide('added_mb', APPS).median()
-print(f"In a browser, the table gives what a run added to the page's memory — at the median, "
-      f"{listing(f'{added[venue]:,.0f} MB in {venue}' for venue in APPS)}: its peak less what it held when "
-      f"**run** was pressed, the app itself, the files it had opened and the picture of them — at the median, "
-      f"{listing(f'{rest[venue]:,.0f} MB in {venue}' for venue in APPS)}. The average above, the table "
-      f"below and the figure count the whole peak (`peak_mb`, `rest_mb` and `added_mb` in the table under "
-      f"the results). The app's time leaves out the opening of the files, which on the command line is part "
+print(f"In a browser, the memory table gives two figures. The peak is the page's whole, the app itself "
+      f"included: what the page held when **run** was pressed — the app, the files it had opened and the "
+      f"picture of them, at the median {listing(f'{rest[venue]:,.0f} MB in {venue}' for venue in APPS)} — "
+      f"and what the run added to that, which the table gives beside it — at the median, "
+      f"{listing(f'{added[venue]:,.0f} MB in {venue}' for venue in APPS)}. The command line's peak is its "
+      f"process's whole too, Node's own included, with nothing held before the run to set apart: it opens "
+      f"its files as part of the run. The average above, the table below and the figure count the whole "
+      f"peak (`peak_mb`, `rest_mb` and `added_mb` in the table under the results). The app's time leaves "
+      f"out the opening of the files, which on the command line is part "
       f"of the run: reading a GTF of every RefSeq transcript, say, is done in the app when the file is "
       f"dropped (`open_s` there too).")
 ```
