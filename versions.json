@@ -1,6 +1,13 @@
 {
-  "latest": "06be6f0",
+  "latest": "dccd0ec",
   "versions": [
+    {
+      "commit": "dccd0ec",
+      "version": "0.19.0",
+      "date": "2026-11-04T22:45:42+01:00",
+      "subject": "Move viewer timings to a separate notebook (#162)",
+      "tag": ""
+    },
     {
       "commit": "06be6f0",
       "version": "0.19.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "836288f",
-      "version": "0.18.0",
-      "date": "2026-10-31T16:09:07+01:00",
-      "subject": "Describe the site to AI agents in full: llms.txt and five reference pages (§11, §23) (#150)",
-      "tag": ""
-    },
-    {
       "commit": "b1f1a7a",
       "version": "0.18.0",
       "date": "2026-10-30T09:42:34+01:00",
@@ -248,13 +248,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 162,
-      "commit": "c66c474",
-      "title": "Move viewer timings to a separate notebook",
-      "branch": "js/gracious-cerf-eut8v7",
-      "date": "2026-11-04T20:52:58Z"
-    },
     {
       "number": 122,
       "commit": "e818753",
