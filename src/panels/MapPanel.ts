@@ -26,6 +26,7 @@ import { ViewerError } from '../errors'
 import { devFeature } from '../state/devFeatures'
 import { describeTier, type NameContext, type NameMatch } from '../genome/naming'
 import { DECK_DRAG_TYPE, mapStarTitle, type DeckLook } from './deck'
+import { deckTools } from './deckHead'
 import { matrixLevel, selectionOf } from '../state/ViewState'
 import type { ViewState } from '../types'
 import { ReaderClient } from '../worker/client'
@@ -764,15 +765,17 @@ export class MapPanel {
         { class: 'deck-head' },
         this.grip(),
         this.nameEl,
-        this.entryPicker,
-        this.sequencePicker,
-        this.placeEl,
-        this.starButton,
-        this.lockButton,
-        iconButton('x', `Hide ${fileLabel(props.uri)} — it stays on the Contact maps card, whose eye brings it back`, () => props.onClose(), {
-          class: 'btn-close',
-          size: 14,
-        }),
+        deckTools(
+          this.entryPicker,
+          this.sequencePicker,
+          this.placeEl,
+          this.starButton,
+          this.lockButton,
+          iconButton('x', `Hide ${fileLabel(props.uri)} — it stays on the Contact maps card, whose eye brings it back`, () => props.onClose(), {
+            class: 'btn-close',
+            size: 14,
+          }),
+        ),
       ),
       this.note,
       this.lockNoteEl,
@@ -2387,10 +2390,12 @@ export class VacantPanel {
         el('span', { class: 'deck-name deck-name-vacant', text: 'empty' }),
         // No grip: an empty cell is a *place*, and dragging a place is not a
         // gesture. It is where the maps are dragged **to**.
-        iconButton('x', 'Close this cell — the deck loses a place', () => props.onClose(), {
-          class: 'btn-close',
-          size: 14,
-        }),
+        deckTools(
+          iconButton('x', 'Close this cell — the deck loses a place', () => props.onClose(), {
+            class: 'btn-close',
+            size: 14,
+          }),
+        ),
       ),
       zone,
     )

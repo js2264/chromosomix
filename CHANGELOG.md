@@ -14,6 +14,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The Contact maps card opens a map in a cell of its own (§16.9).** Under the lower triangle's
+  rectangle a second one, *Load a map into a cell of its own*, takes a cooler — or several, or a
+  row of the Files column — and opens each in the deck beside the map, the first empty cell or a new
+  one at the end. It is there whenever a map is open, and stays once a second file fills the lower
+  triangle and that rectangle goes; its hint says what the triangle's cannot, *a cooler at any bin
+  size*. The card's only drop with a map open used to be the triangle's, so a new file reached the
+  deck from the card by no road at all.
+
 - **Live examples in the documentation (§32.4).** Ten pictures — the introduction's, moving around,
   a contact map and its O/E, two maps compared, a ratio, one map read two ways, the 45° view, the
   genome browser and an embed in a page — carry **Try it live**, which swaps the picture for the
@@ -100,6 +108,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   point for it.
 
 ### Fixed
+
+- **A deck cell's heading no longer runs into the next cell (§16.9).** Four maps across a column
+  with two side panels open are cells of 154 pixels, and a heading — a grip, the name, the sequence,
+  the star, the chain and the × — could not be less than 196: the name was cut to one letter and the
+  controls ran on past the cell's edge, the chain drawn over the next cell's grip and name. Where the
+  name cannot keep 6rem beside them, the controls now go together to a line under it, at the cell's
+  right, and the name takes the whole first line; in a narrower cell still they wrap again inside
+  it. Every kind of cell does this — the first map's, a structure's, a tracks cell's, an empty one.
+  The star and the chain in a heading are square, where `.btn`'s padding had made them 36 pixels
+  wide round a 13-pixel mark, and a collection's rung picker is as wide as the rung it shows, as the
+  sequence picker beside it already was — so a narrow cell's controls fit under its name on one line.
 
 - **An embed's bar fits a narrower frame (§21.3).** The bar was one row that scrolled, so in a frame
   of 1,040 pixels the contacts box's example was cut, at 910, the width of an R Markdown page, the row

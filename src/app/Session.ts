@@ -4578,6 +4578,19 @@ export class Session {
           })
         })
       },
+      // The rectangle that opens a map in a cell of its own (§16.9): the road
+      // a cooler dropped on the window takes, every file of the drop — so a
+      // map goes beside the one open, several make a deck of them, and a
+      // saved workspace or a track let go here is still what it is.
+      onOpenInCell: (files) => void this.dropFiles(files),
+      // A Files row the same way, with the source and the name its folder
+      // gave it, as a row let go on the content area is.
+      onPickDroppedInCell: (event) => {
+        void readFileDrag(event).then((picked) => {
+          if (picked !== null && !this.destroyed) void this.addPicked(picked)
+        })
+      },
+      cellOffered: () => this.deck.takesMaps,
       // With one map open the × is the way out of the matrix altogether — the
       // door `closeMap` opens, which the File card used to carry. With two it
       // means what it has always meant: put this one down and keep the other.

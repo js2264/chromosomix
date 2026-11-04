@@ -1374,7 +1374,9 @@ Three refusals, each because the merged picture would otherwise be a lie rather 
 **The card asks for it only once there is a first map.** The zone is labelled *Load a map into the
 lower triangle* — not *a second map*, which is what §16's companion cell is called — and it is
 absent until a map is open, because a triangle of nothing is a promise with nothing to keep it
-(§8.5). A session with no map has one drop zone on that card, asking for a contact map.
+(§8.5). A session with no map has one drop zone on that card, asking for a contact map. Under it,
+once a map is open, stands *Load a map into a cell of its own*, the deck's door on the same card
+(§16.9), which stays when this one goes.
 
 The zone takes a file from the desktop and a **row out of the Files column** (§20.5) alike — the
 file behind the row read at the drop, through the folder it names, with the credential that folder
@@ -7029,6 +7031,24 @@ hidden, which have no cell to be in the order of. The card used to list the firs
 deck of four maps showed a card of one and the other three were named nowhere in the column; and
 then it listed the first map first wherever its cell had been moved to.
 
+**The card's last rectangle opens a map in a cell of its own**: *Load a map into a cell of its own*,
+under every row and under the lower triangle's rectangle (§5.7), the two being the two ways a second
+map is drawn — in this square, or beside it. It is there whenever a map is open and the deck may take
+one more map, and **it does not go when the square is full**: the triangle's rectangle is gone once
+a second file fills it, and this one has nothing to wait for. A deck past its last cell says so in
+its own bar, as it does for every other road in. What lands on it takes the road a file dropped on
+the window takes (`Session.dropFiles`) — **every file of the drop**, so several coolers are a deck
+of them, each in the first empty cell or a new one at the end of the grid, a saved workspace is
+still a workspace and a track still joins the tracks — and its chooser takes several files. A row
+out of the Files column (§20.5) goes the same way, with its folder's source and name. Its hint says
+the one thing the triangle's cannot: *a cooler at any bin size*, since two cells may be two
+resolutions (§16.4). It is absent on a file with a genome layer, which holds no deck (§16.8), and
+beside the 1D browser, where a deck holds tracks and models but no map (§25.3); on a view a deck
+cannot frame, a table, the map joins the deck all the same and waits, drawn, for a view that can.
+The card used to have no such door: a reader with one map and a second in hand had the lower
+triangle's rectangle as the only drop on the card, and the deck only by the `+` on the map's edge or
+a drop on the picture.
+
 Each companion's row has an **eye** and an **×**, and they are two acts, as on a track's row. The
 eye is the Structures card's (§25.3): lit, the map is in a cell, and pressing it takes the map out
 and keeps it on the card, dimmed, with its eye dark; pressed again, the map opens in the first
@@ -7052,6 +7072,18 @@ keeps its meaning, the lower triangle taken away (§5.7), and so does the first 
 no deck: the 1D browser. **In a deck the first map's eye is its cell's**, as every other map's is —
 it used to put the map down for the browser there too, which re-read the state with no map to lead,
 and a deck of maps cannot stand beside a browser (§25.3): the companions went with it.
+
+**A cell's heading stays in its cell.** It is one line — a grip, the name, and then the cell's
+controls: its sequence, its rung, its own window, its star, its chain and its × — while the name can
+keep 6rem beside them. Where it cannot, the controls go **together** to a line of their own under
+the name, at the cell's right, and the name takes the whole first line; a cell too narrow even for
+the controls alone wraps them again, to the right, inside the cell. Every kind of cell does this, the
+first map's, a structure's, a tracks cell's and an empty one's among them. It used to be one line at
+any width: four maps across a column with two side panels open are cells of 154 pixels, under a
+heading that could not be less than 196, so the name went to a floor that showed one letter and the
+controls ran on past the cell's edge — the chain of one cell drawn over the grip and the name of the
+next. Wrapped one by one, the controls would leave a star above and a chain and a × below, which
+reads as two headings.
 
 **The first cell closes like any other.** Its × is on its heading, after its star and chain, while
 another cell is beside it — a × on the one cell of a deck would leave nothing on screen. What it does
@@ -11102,7 +11134,8 @@ stack (§8.9), onto the rectangle in the middle of a map for that map alone — 
 (§8.1) — onto a companion, anywhere on its cell, for a track on that map, and onto a tracks cell for
 a track drawn in it (§16.9), onto the Tracks card, onto a deck's edge or an empty cell for a cell of
 its own (§16.9), onto a 3D cell for the model it draws (§25.3), onto the Contact maps card's *Load a
-map into the lower triangle* for the second file in the square (§5.7), onto an analysis form's file
+map into the lower triangle* for the second file in the square (§5.7) or its *Load a map into a cell
+of its own* for a cell of the deck (§16.9), onto an analysis form's file
 box as the run's input rather than as anything opened (§18.8), onto the content area, onto the
 landing page's drop zone — which replaces, because that is what the landing page has always meant.
 **A store's row is dragged the same way, to the same places** (§24.2): every row that is a file,

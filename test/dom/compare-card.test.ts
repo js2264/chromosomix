@@ -362,3 +362,133 @@ describe('a Files row dropped on a slot', () => {
     expect(over.defaultPrevented).toBe(false)
   })
 })
+
+/**
+ * The rectangle that opens a map in a cell of its own (§16.9).
+ *
+ * The card's only drop for a cooler, once a map was open, was the lower
+ * triangle's — so a reader with a second map in hand and a deck in mind had to
+ * find the `+` on the map's edge, or drop on the picture and trust it. The deck
+ * now has its own rectangle on the card, and unlike the triangle's it does not
+ * go when the square is full: a deck takes one more map until it is full.
+ */
+describe('a map into a cell of its own', () => {
+  function dragOf(kind: 'dragover' | 'drop', types: string[], files: File[] = []): DragEvent {
+    const event = new window.Event(kind, { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperty(event, 'dataTransfer', {
+      value: { types, effectAllowed: 'copy', dropEffect: 'none', files, getData: () => '' },
+    })
+    return event
+  }
+
+  function withCell(
+    options: {
+      primary?: boolean
+      offered?: boolean
+      maps?: Array<{ id: string; label: string; uri: string; shown?: boolean }>
+    } = {},
+  ) {
+    const inCell: File[][] = []
+    const rows: DragEvent[] = []
+    const opened: unknown[] = []
+    const card = new CompareCard({
+      onOpen: (source) => opened.push(source),
+      onToggleShown: () => undefined,
+      isShown: () => true,
+      onClose: () => undefined,
+      onSwap: () => undefined,
+      primaryLabel: () => 'rep1.mcool::1000',
+      secondLabel: () => 'rep2.mcool::1000',
+      hasPrimary: () => options.primary ?? true,
+      deckMaps: () => options.maps ?? [],
+      onOpenInCell: (files) => inCell.push([...files]),
+      onPickDroppedInCell: (event) => rows.push(event),
+      cellOffered: () => options.offered ?? true,
+    })
+    document.body.append(card.el)
+    const zone = (): HTMLElement | null => card.el.querySelector<HTMLElement>('.compare-drop-cell')
+    return { card, zone, inCell, rows, opened }
+  }
+
+  const info = {
+    uri: 'https://example.org/rep2.mcool::/resolutions/1000',
+    nContigs: 16,
+    binsize: 1000,
+    sourceBytes: 1024,
+    contacts: null,
+  } as never
+
+  it('stands after the triangle’s rectangle, named for where the map goes', () => {
+    const { card, zone } = withCell()
+    const zones = [...card.el.querySelectorAll<HTMLElement>('.ann-drop')]
+    expect(zones.map((node) => node.querySelector('.ann-drop-label')?.textContent)).toEqual([
+      'Load a map into the lower triangle',
+      'Load a map into a cell of its own',
+    ])
+    expect(card.el.querySelector('.compare-body')?.lastElementChild).toBe(zone())
+    // The one fact the triangle's hint cannot say, and the zones' last sentence.
+    expect(zone()?.querySelector('.ann-drop-hint')?.textContent).toBe(
+      'A cooler at any bin size, beside the map. Drop one or several here, or click to choose.',
+    )
+  })
+
+  it('stays once the lower triangle is filled, where the triangle’s rectangle goes', () => {
+    const { card, zone } = withCell()
+    card.set({ kind: 'open', label: 'rep2.mcool::1000', info })
+    const zones = [...card.el.querySelectorAll<HTMLElement>('.ann-drop')]
+    expect(zones).toEqual([zone()])
+    expect(card.el.textContent).not.toContain('Load a map into the lower triangle')
+    // Under the square's two rows, which are still the first thing on the card.
+    expect(card.el.querySelectorAll('.compare-row')).toHaveLength(2)
+    expect(card.el.querySelector('.compare-body')?.lastElementChild).toBe(zone())
+  })
+
+  it('says *maps* once the deck has others, and stays after every row', () => {
+    const { card, zone } = withCell({
+      maps: [
+        { id: 'p1', label: 'rep3.cool', uri: 'rep3.cool' },
+        { id: 'hidden-1', label: 'rep4.cool', uri: 'rep4.cool', shown: false },
+      ],
+    })
+    expect(zone()?.querySelector('.ann-drop-hint')?.textContent).toContain('beside the maps.')
+    expect(card.el.querySelector('.compare-body')?.lastElementChild).toBe(zone())
+  })
+
+  it('is absent with no map open, and where the deck can take no map', () => {
+    expect(withCell({ primary: false }).zone()).toBeNull()
+    expect(withCell({ offered: false }).zone()).toBeNull()
+  })
+
+  it('hands on every file of a drop, and not to the square', () => {
+    const { zone, inCell, opened } = withCell()
+    const target = zone()
+    if (target === null) throw new Error('no cell zone')
+    const over = dragOf('dragover', ['Files'])
+    target.dispatchEvent(over)
+    expect(over.defaultPrevented).toBe(true)
+    expect(target.classList.contains('over')).toBe(true)
+    const files = [new File(['a'], 'rep3.cool'), new File(['b'], 'rep4.cool')]
+    target.dispatchEvent(dragOf('drop', ['Files'], files))
+    expect(inCell).toEqual([files])
+    expect(opened).toEqual([])
+    expect(target.classList.contains('over')).toBe(false)
+  })
+
+  it('takes a Files row, and lets its chooser take several files', () => {
+    const { zone, rows, inCell } = withCell()
+    const target = zone()
+    if (target === null) throw new Error('no cell zone')
+    const drop = dragOf('drop', ['application/x-chromosomix-file'])
+    target.dispatchEvent(drop)
+    expect(rows).toEqual([drop])
+    expect(inCell).toEqual([])
+    expect(target.querySelector<HTMLInputElement>('input[type=file]')?.multiple).toBe(true)
+  })
+
+  it('does not take a map row’s grip', () => {
+    const { zone } = withCell()
+    const over = dragOf('dragover', ['application/x-chromosomix-map'])
+    zone()?.dispatchEvent(over)
+    expect(over.defaultPrevented).toBe(false)
+  })
+})
