@@ -131,6 +131,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A notebook's download asks again after a 404 (§18.10).** NCBI's server for GEO answered 404 Not
+  Found for the validation's yeast map, a file it had served to the parity's and the laptop's runners
+  minutes before and served to every request after, and the validation stopped on its first cell.
+  `notebooks/scripts/download.py` now asks a 404 again three times, after 2, 4 and 8 seconds, as it
+  asks a 500 or a 403 again, and still names a file that is truly not there within a quarter of a
+  minute; any other 4xx is raised at once, as before.
+
 - **A deck cell's heading no longer runs into the next cell (§16.9).** Four maps across a column
   with two side panels open are cells of 154 pixels, and a heading — a grip, the name, the sequence,
   the star, the chain and the × — could not be less than 196: the name was cut to one letter and the

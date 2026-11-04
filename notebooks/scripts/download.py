@@ -5,7 +5,9 @@ published, on every render. One server's failure was enough to fail a render, an
 on 1 November 2026, NCBI's ftp.ncbi.nlm.nih.gov, where GEO's files are, answered one request in two,
 and at times three in four, with 500 Internal Server Error, now and then with 403 Forbidden — a HEAD,
 a range and a whole file alike, the same request answered in full a second later — and the parity's
-first download stopped both of that day's runs of .github/workflows/notebooks.yml a minute in.
+first download stopped both of that day's runs of .github/workflows/notebooks.yml a minute in. On 4
+November it answered 404 Not Found for the validation's yeast map, a file it served in full to the
+parity's and the laptop's runners minutes before and to every request after.
 
 `download()` writes a URL to a file whole. A response that is a server's error (500, 502, 503, 504,
 408, 425, 429, and 403, which NCBI's answers at random), a connection refused, reset or timed out, or a body that
@@ -13,8 +15,9 @@ ends before the length it was announced at is asked again, after a wait that dou
 to half a minute, and from the byte it reached where the server takes a range. It gives up after
 ATTEMPTS failures in a row with no byte between them, so a download of many gigabytes that the
 network cuts now and then is resumed as many times as it takes, and a server that is down fails it in
-about eight minutes. A local fault — a full disk —, any other 4xx, which names the request, or a
-certificate that is not the host's is raised at once. `urlopen()` is the same, for a request answered
+about eight minutes. A 404 is asked again too, but NOT_FOUND_ATTEMPTS times in all, so that a file
+that is truly not there is named within a quarter of a minute. A local fault — a full disk —, any
+other 4xx, which names the request, or a certificate that is not the host's is raised at once. `urlopen()` is the same, for a request answered
 in one read: a HEAD or a range.
 
 usage: python download.py URL OUT
@@ -38,6 +41,10 @@ TIMEOUT = 120
 #: Answers that are the server's fault, or its load, and that asking again may mend; 403 among them,
 #: since NCBI's answers it to a request it answers in full a second later.
 RETRIED = frozenset({403, 408, 425, 429, 500, 502, 503, 504})
+#: Attempts, all told, at a URL its server answers 404: NCBI's answers it now and then for a file it serves a
+#: moment later, so it is asked again, but only after waits of 2, 4 and 8 s, so that a file truly not there
+#: is named within a quarter of a minute rather than the eight a server that is down is given.
+NOT_FOUND_ATTEMPTS = 4
 
 
 class ShortBody(http.client.HTTPException):
@@ -48,18 +55,20 @@ class ShortBody(http.client.HTTPException):
 NETWORK = (urllib.error.URLError, http.client.HTTPException, ConnectionError, TimeoutError, ssl.SSLError)
 
 
-def _retried(error):
-    """Whether asking again may mend this failure: a server's error or the network's, not a request
-    the server refused or a certificate that is not the host's."""
+def _retried(error, failures):
+    """Whether asking again may mend this failure, the `failures`-th in a row: a server's error or the
+    network's, or one of a URL's first 404s, not a request the server refused or a certificate that is
+    not the host's."""
     if isinstance(error, urllib.error.HTTPError):
         error.close()
-        return error.code in RETRIED
+        return error.code in RETRIED or (error.code == 404 and failures < NOT_FOUND_ATTEMPTS)
     return not isinstance(getattr(error, 'reason', error), ssl.SSLCertVerificationError)
 
 
 def _wait(url, error, failures):
     seconds = min(LONGEST_WAIT, 2 ** failures)
-    print(f'{url}: {error}; asking again in {seconds} s ({failures} of {ATTEMPTS})', flush=True)
+    limit = NOT_FOUND_ATTEMPTS if getattr(error, 'code', None) == 404 else ATTEMPTS
+    print(f'{url}: {error}; asking again in {seconds} s ({failures} of {limit})', flush=True)
     time.sleep(seconds)
 
 
@@ -73,7 +82,7 @@ def urlopen(request):
             return urllib.request.urlopen(request, timeout=TIMEOUT)
         except NETWORK as error:
             failures += 1
-            if not _retried(error) or failures >= ATTEMPTS:
+            if not _retried(error, failures) or failures >= ATTEMPTS:
                 raise
             _wait(url, error, failures)
 
@@ -115,7 +124,7 @@ def download(url, path):
             if isinstance(error, urllib.error.HTTPError) and error.code == 416 and start:
                 error.close()
                 part.unlink()  # a range past what the server holds now: the file again, from the start
-            elif not _retried(error):
+            elif not _retried(error, failures + 1):
                 raise
             reached = part.stat().st_size if part.exists() else 0
             failures = 1 if reached > start else failures + 1

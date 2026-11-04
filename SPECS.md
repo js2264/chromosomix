@@ -10364,7 +10364,10 @@ runs them. Each file is fetched from where it was published, on every render, th
 answers in full a second later; a connection refused, reset or timed out; a body shorter than it was
 announced — after a wait that doubles from two seconds to half a minute, from the byte it reached
 where the server takes a range, and gives up only after twenty failures in a row with no byte between
-them, about eight minutes; any other 4xx is raised at once. One failed request was enough to stop a
+them, about eight minutes; **a 404 is asked again three times**, after 2, 4 and 8 s, since on 4
+November GEO answered one for a file it had served to two runners minutes before and served to every
+request after, and a file truly not there is still named within a quarter of a minute; any other 4xx
+is raised at once. One failed request was enough to stop a
 run, and on 1 November 2026 GEO failed one request in two.
 
 **They are published with every release, a job a notebook, all at once.** `.github/workflows/notebooks.yml`
