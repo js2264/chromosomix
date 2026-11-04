@@ -59,8 +59,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   `chromosomix` runs them as four commands; the reference is one Python script running cooltools and
   coolpuppy in one process (`notebooks/scripts/cooltools_pipeline.py`). Each side's start-up, each
   step and the whole are timed — CPU, wall clock and peak memory — and what the two wrote is compared
-  step by step. Every step is a line of `pipeline.tsv`, published beside the page and kept by a
-  release, and `notebooks/scripts/timing.plot.R` draws it as panel c of the timing figure.
+  step by step. Every step is a line of `pipeline.tsv`, and every weighing of each side's memory,
+  four a second, a line of `pipeline-memory.tsv`, both published beside the page and kept by a
+  release; the page and `notebooks/scripts/timing.plot.R`'s panel c draw the memory against the wall
+  clock, each phase shaded, its peak and the end of each side marked.
 - **The parity runs in Firefox and WebKit too (§18.10).** `notebooks/parity.qmd` drives its ten
   tasks in each of the three engines Playwright drives headless — Chromium, Firefox and WebKit — and
   runs the line each browser's console wrote on the files that browser's sessions read, so the

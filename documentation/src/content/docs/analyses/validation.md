@@ -96,8 +96,9 @@ running cooltools and coolpuppy in one process. Each side's start-up, each step 
 timed, and what the two wrote is compared step by step.
 
 Beside the page: **`timings.tsv`**, every timed run, **`viewers.tsv`**, every picture timed in a
-viewer, and **`pipeline.tsv`**, every step of the four analyses over the deep map, each with the
-machine and every version.
+viewer, **`pipeline.tsv`**, every step of the four analyses over the deep map, each with the machine
+and every version, and **`pipeline-memory.tsv`**, the memory each side held through them, weighed four
+times a second.
 
 ## The parity
 

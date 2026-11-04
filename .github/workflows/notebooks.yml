@@ -130,12 +130,13 @@ name: Notebooks
 # and every number its figures draw, one row a mark (33 MB, most of it
 # Boost-HiC's two maps of chr19 and the metaplot over two tracks);
 # `timings.tsv` beside the timings, every timed run, one row each,
-# `viewers.tsv`, every picture timed in a viewer, and `pipeline.tsv`, every
-# step of the four analyses over the IMR-90 map; `summary.tsv` beside the
+# `viewers.tsv`, every picture timed in a viewer, `pipeline.tsv`, every
+# step of the four analyses over the IMR-90 map, and `pipeline-memory.tsv`,
+# their memory weighed four times a second; `summary.tsv` beside the
 # parity, every file the app and the command line wrote, and its verdict. A
-# release also gets the three pages and the six tables as assets of its own —
+# release also gets the three pages and the seven tables as assets of its own —
 # `validation-<tag>.tsv` and `.txt`, `timings-<tag>.tsv`, `viewers-<tag>.tsv`,
-# `pipeline-<tag>.tsv` and `parity-<tag>.tsv` — so a release's numbers outlive
+# `pipeline-<tag>.tsv`, `pipeline-memory-<tag>.tsv` and `parity-<tag>.tsv` — so a release's numbers outlive
 # the next release's pages; its laptop page is the one committed in its source.
 
 on:

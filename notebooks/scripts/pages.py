@@ -63,7 +63,7 @@ PAGES = {
                         'validation.txt': 'validation-{tag}.txt'}),
     'timing': Page('timings', 'Timings', 'validation', 'validation',
                    {'timings.tsv': 'timings-{tag}.tsv', 'viewers.tsv': 'viewers-{tag}.tsv',
-                    'pipeline.tsv': 'pipeline-{tag}.tsv'}),
+                    'pipeline.tsv': 'pipeline-{tag}.tsv', 'pipeline-memory.tsv': 'pipeline-memory-{tag}.tsv'}),
     'parity': Page('parity', 'Parity', 'parity', 'parity', {'summary.tsv': 'parity-{tag}.tsv'}),
     'laptop': Page('laptop', 'Laptop', 'laptop', 'laptop', {'timings.tsv': None}, local=True),
 }

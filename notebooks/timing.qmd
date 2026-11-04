@@ -29,7 +29,8 @@ R = Render('timing')
 print(R.head(also=f"The commands are {R.anchor('validation', 'the validation')}’s, as it ran them. "
                   f"Beside this page: {R.download('viewers.tsv')}, every picture timed in a viewer, "
                   f"{R.download('timings.tsv')}, every timed command, one row each, and "
-                  f"{R.download('pipeline.tsv')}, every step of the pipeline on a deep human map."))
+                  f"{R.download('pipeline.tsv')}, every step of the pipeline on a deep human map, and "
+                  f"{R.download('pipeline-memory.tsv')}, its memory weighed through it."))
 ```
 
 The page is in three parts. The first, **[Time to a picture](#time-to-a-picture)**, times three viewers
@@ -1054,7 +1055,9 @@ the page cache emptied before it where the machine lets the benchmark do so; whe
 is read through once before each side instead, so that both find it in memory (the `page_cache`
 column). Over several runs the two take turns to go first. Every step of every run, its start-up and the
 whole among them, is one line of **`notebooks/work/validation/pipeline.tsv`**, published beside
-`timings.tsv`.
+`timings.tsv`, with when in its side's run it began and ended; and every weighing of each side's
+processes, with when it was taken and the step it fell in, is one line of **`pipeline-memory.tsv`**
+beside it, which the figure at the end draws against the time.
 
 ```{python}
 import cooler
@@ -1202,43 +1205,63 @@ def settle():
     return 'read through'
 
 
-#: The columns of pipeline.tsv, in order: the side and the step, the run, what it cost, where.
+#: The columns of pipeline.tsv, in order: the side and the step, the run, what it cost, when in the side's
+#: run it began and ended (`from_s`, `to_s`, seconds since the side's first launch), where.
 PIPELINE_COLUMNS = ['side', 'tool', 'version', 'step', 'task', 'reads', 'run', 'went_first', 'page_cache',
-                    'threads', 'cpu_s', 'wall_s', 'peak_mb', 'started', *MACHINE, 'chromosomix', 'script', 'map',
-                    'command_line']
+                    'threads', 'cpu_s', 'wall_s', 'peak_mb', 'from_s', 'to_s', 'started', *MACHINE, 'chromosomix',
+                    'script', 'map', 'command_line']
+#: Every weighing of a side's processes, by the step it fell in: seconds since the side's first launch, and
+#: the memory they held together, in MB. What the figure draws against the time.
+PIPELINE_TRACE = WORK / 'pipeline-memory.tsv'
+TRACE_COLUMNS = ['side', 'tool', 'run', 'step', 'seconds', 'mb']
 
 
-def p_row(side, step, run, first, cache, cost, line, started):
+def p_row(side, step, run, first, cache, cost, line, started, span=(np.nan, np.nan)):
     return {'side': side, 'tool': 'chromosomix' if side == 'chromosomix' else 'cooltools, coolpuppy',
             'version': LISTED['chromosomix'] if side == 'chromosomix' else P_SIDES[side], 'step': step,
             'task': PIPELINE_TASKS[step][0], 'reads': PIPELINE_TASKS[step][1], 'run': run,
             'went_first': first == side, 'page_cache': cache,
             'threads': 1 if side == 'chromosomix' else P_THREADS, 'cpu_s': cost['cpu_s'], 'wall_s': cost['wall_s'],
-            'peak_mb': cost['peak_mb'], 'started': started, **MACHINE, 'chromosomix': LISTED['chromosomix'],
-            'script': P_SCRIPT, 'map': IMR90.name, 'command_line': line}
+            'peak_mb': cost['peak_mb'], 'from_s': span[0], 'to_s': span[1], 'started': started, **MACHINE,
+            'chromosomix': LISTED['chromosomix'], 'script': P_SCRIPT, 'map': IMR90.name, 'command_line': line}
+
+
+def p_trace(side, run, step, at, kb):
+    return {'side': side, 'tool': 'chromosomix' if side == 'chromosomix' else 'cooltools, coolpuppy', 'run': run,
+            'step': step, 'seconds': at, 'mb': kb / 1024}
 
 
 def app_side(run, first):
-    """chromosomix's side of one run: its start-up, its four commands and their whole."""
+    """chromosomix's side of one run: its start-up, its four commands and their whole, and every weighing of the
+    four, its time counted from the launch of the first. The start-up, `--version`, is timed before them and
+    is no part of that time: each command pays its own, inside its step."""
     out = P_OUT['chromosomix']
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True)
-    cache, rows = settle(), []
+    cache, rows, trace, first_launch = settle(), [], [], None
     for step in ['start-up', *PIPELINE_STEPS]:
         argv = app_argv(step, out)
         started = time.strftime('%Y-%m-%dT%H:%M:%S')
-        rows.append(p_row('chromosomix', step, run, first, cache, timed(argv, None, cwd=PWORK), typed_line(argv),
-                          started))
+        samples = None if step == 'start-up' else []
+        launched = time.time()
+        cost = timed(argv, None, cwd=PWORK, samples=samples)
+        span = (np.nan, np.nan)
+        if step != 'start-up':
+            first_launch = launched if first_launch is None else first_launch
+            span = (launched - first_launch, launched + cost['wall_s'] - first_launch)
+            trace += [p_trace('chromosomix', run, step, at - first_launch, kb) for at, kb in samples]
+        rows.append(p_row('chromosomix', step, run, first, cache, cost, typed_line(argv), started, span))
     steps = rows[1:]
     whole = {'cpu_s': sum(r['cpu_s'] for r in steps), 'wall_s': sum(r['wall_s'] for r in steps),
              'peak_mb': max(r['peak_mb'] for r in steps)}
     rows.append(p_row('chromosomix', 'total', run, first, cache, whole,
-                      '; '.join(r['command_line'] for r in steps), steps[0]['started']))
-    return rows
+                      '; '.join(r['command_line'] for r in steps), steps[0]['started'], (0.0, steps[-1]['to_s'])))
+    return rows, trace
 
 
 def script_side(run, first):
-    """The script's side of one run: its start-up and four steps as it marked them, and its whole."""
+    """The script's side of one run: its start-up and four steps as it marked them, and its whole, and every
+    weighing of its processes, its time counted from the script's launch."""
     out = P_OUT['reference']
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True)
@@ -1248,32 +1271,43 @@ def script_side(run, first):
     launched = time.time()
     whole = timed(argv, None, cwd=PWORK, samples=samples)
     marks = {mark['step']: mark for mark in json.loads((out / 'marks.json').read_text())['marks']}
-    rows, before = [], {'time': launched, 'cpu_s': 0.0}
-    for step, mark in [('start-up', marks['imported']), *((step, marks[step]) for step in PIPELINE_STEPS)]:
+    rows, trace, before = [], [], {'time': launched, 'cpu_s': 0.0}
+    ends = [('start-up', marks['imported']), *((step, marks[step]) for step in PIPELINE_STEPS)]
+    for step, mark in ends:
         held = [kb for at, kb in samples if before['time'] <= at <= mark['time']]
         cost = {'cpu_s': mark['cpu_s'] - before['cpu_s'], 'wall_s': mark['time'] - before['time'],
                 'peak_mb': max(held) / 1024 if held else np.nan}
-        rows.append(p_row('reference', step, run, first, cache, cost, typed_line(argv), started))
+        rows.append(p_row('reference', step, run, first, cache, cost, typed_line(argv), started,
+                          (before['time'] - launched, mark['time'] - launched)))
         before = mark
-    rows.append(p_row('reference', 'total', run, first, cache, whole, typed_line(argv), started))
-    return rows
+    rows.append(p_row('reference', 'total', run, first, cache, whole, typed_line(argv), started, (0.0, whole['wall_s'])))
+    # A weighing in the step whose end is the first after it; one after the last mark, as the process exits, in
+    # the last step.
+    for at, kb in samples:
+        step = next((step for step, mark in ends if at <= mark['time']), ends[-1][0])
+        trace.append(p_trace('reference', run, step, at - launched, kb))
+    return rows, trace
 
 
 def pipeline():
-    rows = []
+    rows, trace = [], []
     PIPELINE_TABLE.parent.mkdir(parents=True, exist_ok=True)
     for run in range(1, PIPELINE_RUNS + 1):
         # chromosomix first on odd runs, the script on even ones.
         order = ['chromosomix', 'reference'] if run % 2 == 1 else ['reference', 'chromosomix']
         for side in order:
-            rows += app_side(run, order[0]) if side == 'chromosomix' else script_side(run, order[0])
+            got, weighed = app_side(run, order[0]) if side == 'chromosomix' else script_side(run, order[0])
+            rows += got
+            trace += weighed
         # Written after every run, so a long benchmark that is stopped keeps the runs it finished.
         pd.DataFrame(rows, columns=PIPELINE_COLUMNS).to_csv(PIPELINE_TABLE, sep='\t', index=False)
+        pd.DataFrame(trace, columns=TRACE_COLUMNS).to_csv(PIPELINE_TRACE, sep='\t', index=False, float_format='%.6g')
 
 
 def pipeline_current():
-    """Whether pipeline.tsv holds every step of PIPELINE_RUNS runs, by this chromosomix and this script."""
-    if REDO_PIPELINE or not PIPELINE_TABLE.exists():
+    """Whether pipeline.tsv holds every step of PIPELINE_RUNS runs, by this chromosomix and this script, and
+    pipeline-memory.tsv their weighings."""
+    if REDO_PIPELINE or not PIPELINE_TABLE.exists() or not PIPELINE_TRACE.exists():
         return False
     held = pd.read_csv(PIPELINE_TABLE, sep='\t', keep_default_na=False)
     return (list(held.columns) == PIPELINE_COLUMNS and set(held['run']) == set(range(1, PIPELINE_RUNS + 1))
@@ -1285,6 +1319,7 @@ def pipeline_current():
 if not pipeline_current():
     pipeline()
 steps = pd.read_csv(PIPELINE_TABLE, sep='\t', keep_default_na=False, na_values=[''])
+weighed = pd.read_csv(PIPELINE_TRACE, sep='\t')
 for side, rows in steps.groupby('side', sort=False):
     print(f'# {rows["tool"].iloc[0]}')
     lines = rows.loc[(rows['run'] == 1) & ~rows['step'].isin(['total']), 'command_line']
@@ -1292,7 +1327,8 @@ for side, rows in steps.groupby('side', sort=False):
 measures({'runs': PIPELINE_RUNS, 'lines in the table': len(steps),
           'measured': f"{steps['started'].min()} to {steps['started'].max()}",
           'page cache before each side': ', '.join(sorted(set(steps['page_cache']))),
-          'reference': P_SIDES['reference'], 'table': os.path.relpath(PIPELINE_TABLE, REPO)})
+          'reference': P_SIDES['reference'], 'table': os.path.relpath(PIPELINE_TABLE, REPO),
+          'weighings': f"{len(weighed):,}, every {EVERY} s, to {os.path.relpath(PIPELINE_TRACE, REPO)}"})
 ```
 
 CPU and wall-clock seconds and peak memory, mean over the runs, for each side's start-up, each step
@@ -1373,46 +1409,56 @@ show(pd.DataFrame(p_agree))
 
 ```{python}
 #| label: fig-pipeline
-#| fig-cap: "The four analyses over the whole IMR-90 map, one after the other: chromosomix's four commands and the one Python script, each run a dot and the mean a bar, on logarithmic axes. chromosomix's start-up is `chromosomix --version`, which each of its four commands pays again; the script's, Python and its imports, paid once. A step of chromosomix's is its command, start-up included."
-P_ROWS = list(PIPELINE_TASKS)
-fig, axes = plt.subplots(1, 3, figsize=(11, 0.42 * len(P_ROWS) + 1.4), sharey=True, layout='constrained')
-y = {step: k for k, step in enumerate(P_ROWS[::-1])}
-for ax, (column, label) in zip(axes, (('cpu_s', 'CPU time (s)'), ('wall_s', 'wall-clock time (s)'),
-                                      ('peak_mb', 'peak memory (MB)'))):
-    for k, step in enumerate(P_ROWS):
-        if k % 2:
-            ax.axhspan(y[step] - 0.5, y[step] + 0.5, color=MISSING, lw=0, zorder=0)
-    for side, offset in (('chromosomix', 0.15), ('reference', -0.15)):
-        colour = APP_COLOUR if side == 'chromosomix' else REF
-        rows = steps[steps['side'] == side]
-        for step in P_ROWS:
-            values = rows.loc[rows['step'] == step, column].dropna().to_numpy(float)
-            if values.size == 0:
-                continue
-            at = y[step] + offset
-            ax.scatter(values, np.full(values.size, at), s=16, color=colour, alpha=0.6, lw=0, zorder=3)
-            ax.plot([values.mean()] * 2, [at - 0.12, at + 0.12], color=colour, lw=2.5, zorder=4)
-    ax.set_xscale('log')
-    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f'{v:g}'))
-    ax.set(xlabel=label, ylim=(-0.5, len(P_ROWS) - 0.5))
-    ax.grid(axis='y', visible=False)
-axes[0].set_yticks([y[s] for s in P_ROWS], [f'{PIPELINE_TASKS[s][0]}' + (f'\n{PIPELINE_TASKS[s][1]}'
-                                                                           if PIPELINE_TASKS[s][1] else '')
-                                             for s in P_ROWS], fontsize=8)
-axes[-1].scatter([], [], s=24, color=APP_COLOUR, label='chromosomix')
-axes[-1].scatter([], [], s=24, color=REF, label='cooltools, coolpuppy')
-# Above the panels: inside one, it lands on the whole's points.
-fig.legend(*axes[-1].get_legend_handles_labels(), loc='outside upper right', ncols=2)
+#| fig-cap: "The four analyses over the whole IMR-90 map, one after the other, against the wall clock: the memory each side's processes held together, weighed every quarter of a second, the first run's, each phase shaded behind it and its peak marked. chromosomix is its four commands, back to back, each paying its own start-up inside its phase (`chromosomix --version`, a quarter of a second); the script's start-up, Python and its imports, is paid once, before loop calling."
+def minutes(seconds):
+    return f'{seconds / 60:.1f} min' if seconds >= 90 else f'{seconds:.0f} s'
+
+
+#: Each phase's shade, as the R figure shades them (notebooks/scripts/timing.plot.R).
+PHASE_COLOURS = {'start-up': '#d9d9d9', 'loops': '#cfe3c1', 'insulation': '#f5e2ad', 'compartments': '#dcd2ec',
+                 'apa': '#c6e2ea'}
+P_SIDE_LABELS = {'chromosomix': 'chromosomix, 1 thread',
+                 'reference': f'cooltools and coolpuppy, {P_THREADS} processes'}
+first_run = steps[steps['run'] == 1]
+traced_run = weighed[weighed['run'] == 1]
+ENDS = {side: first_run.loc[(first_run['side'] == side) & (first_run['step'] == 'total'), 'to_s'].iloc[0] / 60
+        for side in P_SIDES}
+TOP = traced_run['mb'].max() / 1024 * 1.25
+fig, axes = plt.subplots(len(P_SIDES), 1, figsize=(10, 4.8), sharex=True, sharey=True, layout='constrained')
+for ax, side in zip(axes, P_SIDES):
+    colour = APP_COLOUR if side == 'chromosomix' else REF
+    phases = first_run[(first_run['side'] == side) & first_run['step'].isin(PHASE_COLOURS)].dropna(subset=['from_s'])
+    for one in phases.itertuples():
+        ax.axvspan(one.from_s / 60, one.to_s / 60, color=PHASE_COLOURS[one.step], alpha=0.6, lw=0, zorder=0)
+    points = traced_run[traced_run['side'] == side].sort_values('seconds')
+    x, gb = points['seconds'].to_numpy() / 60, points['mb'].to_numpy() / 1024
+    ax.fill_between(x, gb, color=colour, alpha=0.3, lw=0, zorder=2)
+    ax.plot(x, gb, color=colour, lw=1, zorder=3)
+    # Where the weighings peak, and the peak as the table gives it: never less than the largest resident set
+    # any one process reached, which a weighing can miss.
+    peak = points.loc[points['mb'].idxmax()]
+    most = first_run.loc[(first_run['side'] == side) & (first_run['step'] == 'total'), 'peak_mb'].iloc[0]
+    name = PIPELINE_TASKS[peak['step']][0]
+    ax.scatter([peak['seconds'] / 60], [peak['mb'] / 1024], s=18, color=colour, zorder=4)
+    ax.annotate(f"peak {most / 1024:.1f} GB, {name if name[:3].isupper() else name.lower()}",
+                (peak['seconds'] / 60, peak['mb'] / 1024), xytext=(-6, 4), textcoords='offset points', fontsize=8,
+                ha='right')  # over its own phase, not across the line where the side finished
+    ax.axvline(ENDS[side], color=INK2, lw=0.8, ls=(0, (3, 2)), zorder=4)
+    ax.annotate(f'done, {minutes(ENDS[side] * 60)}', (ENDS[side], TOP * 0.92), xytext=(4, 0),
+                textcoords='offset points', fontsize=8, va='top')
+    ax.set_title(P_SIDE_LABELS[side], fontsize=9)
+    ax.set(ylabel='memory (GB)', ylim=(0, TOP), xlim=(0, max(ENDS.values()) * 1.12))
+    ax.grid(False)
+axes[-1].set_xlabel('wall-clock time (min)')
+handles = [plt.Rectangle((0, 0), 1, 1, color=c, alpha=0.6) for c in PHASE_COLOURS.values()]
+fig.legend(handles, [PIPELINE_TASKS[step][0] for step in PHASE_COLOURS], loc='outside upper right',
+           ncols=len(PHASE_COLOURS), fontsize=8)
 plt.show()
 ```
 
 ```{python}
 def p_value(step, side, column):
     return float(steps.loc[(steps['step'] == step) & (steps['side'] == side), column].mean())
-
-
-def minutes(seconds):
-    return f'{seconds / 60:.1f} min' if seconds >= 90 else f'{seconds:.0f} s'
 
 
 P_TEXT = {'app': minutes(p_value('total', 'chromosomix', 'wall_s')),

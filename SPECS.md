@@ -10185,8 +10185,10 @@ of the marks the script writes, its CPU time from the usage of the process and o
 waited for at either end, its memory from the weighings between them — and **the whole**. One run of
 each side, unless `PIPELINE_RUNS` says otherwise, the sides taking turns to go first over several, and
 before each the page cache emptied where the runner allows and the map read through once where it does
-not; every step of every run is one line of `notebooks/work/validation/pipeline.tsv`, and what the two
-wrote in the last run is compared step by step — the loops by bin pair, the insulation bin by bin and
+not; every step of every run is one line of `notebooks/work/validation/pipeline.tsv`, with when in its
+side's run it began and ended, every weighing of each side's processes, with its time and its step, one
+line of `pipeline-memory.tsv` beside it — the page draws the first run's memory against the wall clock,
+each phase shaded — and what the two wrote in the last run is compared step by step — the loops by bin pair, the insulation bin by bin and
 its boundaries, E1 chromosome by chromosome, the pileup cell by cell.
 **And a third holds the app to its own command line.** `notebooks/parity.qmd` runs ten tasks in the
 app — this checkout's build, of the commit the command line is built from or nothing runs, served
@@ -10314,8 +10316,8 @@ A last job publishes the validation, the timings and the parity only if the thre
 `pages.py published` names them — at `<site>/validation/`, `<site>/timings/` and `<site>/parity/`,
 each a self-contained page with its tables beside it (`commands.json`, `summary.tsv` and
 `validation.txt`, every command, every verdict and every number its figures draw; `timings.tsv`,
-`viewers.tsv` and `pipeline.tsv`; the parity's `summary.tsv`, every file compared); a release keeps its
-own copies of the three pages and of the six tables as assets. **The runner's laptop is published nowhere**: not to the
+`viewers.tsv`, `pipeline.tsv` and `pipeline-memory.tsv`; the parity's `summary.tsv`, every file compared);
+a release keeps its own copies of the three pages and of the seven tables as assets. **The runner's laptop is published nowhere**: not to the
 site, whose `laptop/` is the committed page, nor to a release, whose laptop is the one committed in its
 source; it is the run's artifact, and its section of the run's summary, and whether it rendered decides
 nothing about publishing the others. It runs when a release is published and on demand. Each page opens on a
