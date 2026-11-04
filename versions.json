@@ -257,10 +257,10 @@
     },
     {
       "number": 160,
-      "commit": "d852c55",
-      "title": "docs: a pull request's preview carries its documentation",
+      "commit": "890f5d2",
+      "title": "Docs in PR previews; docs look like the app and a third shorter; embeds fill and resize their frame",
       "branch": "js/docs-pr-previews",
-      "date": "2026-11-04T07:36:26Z"
+      "date": "2026-11-04T18:36:37Z"
     },
     {
       "number": 122,
