@@ -1,4 +1,4 @@
-# The HiGlass timing.qmd times chromosomix against: higlass-python's own tile server, at the last
+# The HiGlass viewers.qmd times chromosomix against: higlass-python's own tile server, at the last
 # release that still runs one outside Jupyter (1.2.1; from 1.3 tiles go through Jupyter comms), and
 # clodius, which reads the files for it — every package pinned, as `pip freeze` lists the environment
 # `pip install higlass-python==1.2.1 clodius==0.22.2 fusepy simple-httpfs` made, on Python 3.13.

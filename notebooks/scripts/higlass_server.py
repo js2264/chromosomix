@@ -1,4 +1,4 @@
-"""The HiGlass that timing.qmd times: higlass-python's own tile server, serving one map and one track.
+"""The HiGlass that viewers.qmd times: higlass-python's own tile server, serving one map and one track.
 
 Run in the HiGlass environment (`notebooks/requirements-higlass.txt`), one process a timed run, so
 that every run meets a server that has read nothing yet:

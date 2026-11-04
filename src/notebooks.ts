@@ -1,11 +1,12 @@
 /**
  * The notebooks published beside the app, as *About* names them (SPECS §18.10).
  *
- * Four Quarto notebooks, each published at `<site>/<path>/` with a
+ * Five Quarto notebooks, each published at `<site>/<path>/` with a
  * `rendered.json` beside it: when it was rendered, from which build, by which
  * run, on what machine, and the one line of what it found
  * (`notebooks/scripts/rendered.py`). `.github/workflows/notebooks.yml` renders
- * and publishes the validation, the timings and the parity with every release.
+ * and publishes the validation, the timings, the viewers and the parity with
+ * every release, each on a runner of its own.
  * The laptop is rendered by hand, on a laptop, and committed as
  * `notebooks/laptop.html`, which is what the site publishes; the workflow's
  * own render of it is a run's artifact and nothing more. This module is what
@@ -14,7 +15,7 @@
  *
  * Where each page is published is `notebooks/scripts/pages.py`'s table, and
  * `test/unit/notebooks.test.ts` holds this list to it and to
- * `NOTEBOOK_SEGMENTS`, so a fifth notebook cannot be published without *About*
+ * `NOTEBOOK_SEGMENTS`, so a sixth notebook cannot be published without *About*
  * naming it.
  *
  * The stamp is read on demand, when the reader opens the tab that shows it,
@@ -55,8 +56,15 @@ export const NOTEBOOKS: readonly Notebook[] = [
     path: 'timings',
     title: 'Timings',
     what:
-      'The time to a picture beside juicebox.js and HiGlass, on the same files, then every command of ' +
-      'the validation run again and timed against its reference.',
+      'Every command of the validation run again, as a fresh process, four times round robin, and its ' +
+      'CPU time, wall-clock time and peak memory set beside its reference’s.',
+  },
+  {
+    path: 'viewers',
+    title: 'Viewers',
+    what:
+      'The time to a picture beside juicebox.js and HiGlass: one map and one track, the same files in ' +
+      'each viewer, from disk and from the bucket they are published in.',
   },
   {
     path: 'parity',
@@ -151,7 +159,7 @@ export interface NotebookStamp {
   summary: string
 }
 
-/** Longer than any line the four notebooks write, and short enough for a dialog. */
+/** Longer than any line the five notebooks write, and short enough for a dialog. */
 const SUMMARY_LIMIT = 600
 
 const VERSION = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]{1,40})?$/

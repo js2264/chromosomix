@@ -82,8 +82,8 @@ describe('a navigation', () => {
   })
 
   it('to a rendered notebook is left to the network, with or without its slash', () => {
-    for (const path of ['/validation/', '/validation', '/validation/index.html', '/timings/', '/timings', '/parity/', '/parity',
-      '/laptop/', '/laptop']) {
+    for (const path of ['/validation/', '/validation', '/validation/index.html', '/timings/', '/timings', '/viewers/',
+      '/viewers', '/parity/', '/parity', '/laptop/', '/laptop']) {
       expect(answers(path), path).toBe(false)
     }
   })
@@ -97,6 +97,7 @@ describe('a navigation', () => {
     expect(below('/chromosomix/llms.txt')).toBe(false)
     expect(below('/chromosomix/validation/')).toBe(false)
     expect(below('/chromosomix/timings')).toBe(false)
+    expect(below('/chromosomix/viewers/')).toBe(false)
     expect(below('/chromosomix/parity/')).toBe(false)
     expect(below('/chromosomix/laptop')).toBe(false)
     expect(below('/')).toBe(false)

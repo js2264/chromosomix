@@ -14,6 +14,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The viewers have a page of their own (§18.10).** The time to a picture — one map and one track
+  in chromosomix, juicebox.js and HiGlass, from disk and from the bucket — moves out of the timings
+  into `notebooks/viewers.qmd`, published at <https://chromosomix.app/viewers/> with `viewers.tsv`
+  beside it, and a release keeps `viewers-<tag>.html` beside its tables. The timings are the
+  validation's commands alone. *About → Notebooks* lists five notebooks, the viewers among them, and
+  the pages link to each other as before.
+- **An environment for the laptop (§18.10).** `notebooks/environment-laptop.yml` makes one, named
+  `open2c`, for micromamba, mamba or conda — Quarto, Jupyter, the packages the page imports and the
+  four its deep human map runs, at the reference environment's versions — and
+  `micromamba run -n open2c quarto render notebooks/laptop.qmd` renders the page in it. The page now
+  looks for every package it needs, and for Node.js, before it downloads or runs anything, rather than
+  stopping hours in at the deep map, and names under *The machine* the Python it ran in and the version
+  of each reference package, with the pin where it differs.
+
 - **The Contact maps card opens a map in a cell of its own (§16.9).** Under the lower triangle's
   rectangle a second one, *Load a map into a cell of its own*, takes a cooler — or several, or a
   row of the Files column — and opens each in the deck beside the map, the first empty cell or a new
@@ -83,6 +97,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the two for the parity's job.
 
 ### Changed
+
+- **The notebooks render all at once (§18.10).** `.github/workflows/notebooks.yml` starts the parity,
+  the validation with the timings after it, the viewers and the laptop together, each on a runner of
+  its own, so a run takes as long as its longest job, where the validation and the timings, the
+  viewers' pictures among them, had come to four hours after the parity's quarter of an hour, and
+  outran the six hours a job may take once the deep human map joined them. No
+  job waits for the parity to pass any more; the four published pages still go up together or not at
+  all. The timings stay on the validation's runner, since they run its commands on its files.
 
 - **A scaled metaplot's x axis says where the features start and end (§18.8).** It was labelled
   with column numbers — `0`, `100`, `200`, `300` — which told a reader nothing about the plot. It is

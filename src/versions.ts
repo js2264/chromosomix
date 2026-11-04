@@ -50,7 +50,7 @@ export const PULL_SEGMENT = 'pr'
 
 /**
  * The path segments the rendered notebooks are published under, beside `v/`
- * and `pr/`: the validation, the timings and the parity, which
+ * and `pr/`: the validation, the timings, the viewers and the parity, which
  * `.github/workflows/notebooks.yml` renders, and the laptop, rendered by hand
  * and committed (SPECS §18.10). Pages of their own rather than builds — named here so that a
  * service worker that answered one with this app's shell can be undone
@@ -58,7 +58,7 @@ export const PULL_SEGMENT = 'pr'
  * the list: it answers only the app's own address and leaves every other one,
  * these included, to the network.
  */
-export const NOTEBOOK_SEGMENTS = ['validation', 'timings', 'parity', 'laptop'] as const
+export const NOTEBOOK_SEGMENTS = ['validation', 'timings', 'viewers', 'parity', 'laptop'] as const
 
 /** The manifest's file name, at the site root. */
 export const MANIFEST_FILE = 'versions.json'

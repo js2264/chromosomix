@@ -2,9 +2,9 @@ name: Notebooks setup
 description: >
   What a job of notebooks.yml renders a notebook with: room on the runner, chromosomix built (the app and
   its command line), and the reference environment, which brings Quarto, Jupyter and every package the
-  notebooks import. Each job asks for the rest it needs: the viewers and their Chromium (the parity, the
-  timings and the laptop), Firefox and WebKit beside it (the parity and the laptop), the references' own programs (the
-  validation), HiGlass's tile server (the timings).
+  notebooks import. Each job asks for the rest it needs: the viewers and their Chromium (the viewers, the
+  parity and the laptop), Firefox and WebKit beside it (the parity and the laptop), the references' own
+  programs (the validation and the timings), HiGlass's tile server (the viewers).
 
 inputs:
   viewers:
@@ -23,9 +23,10 @@ inputs:
 runs:
   using: composite
   steps:
-    # The validation's and the timings' data, their outputs and three Python environments need about
-    # 42 GB, and the laptop's data 14 GB; a fresh runner has about half of that free. Toolchains and
-    # browsers no notebook uses make the room — the viewers run in Playwright's own Chromium.
+    # Each job's data, on its own runner: the validation's and the timings', their outputs and three
+    # Python environments, about 27 GB; the viewers' 15 GB; the laptop's 17 GB. A fresh runner has less
+    # than the largest of these free. Toolchains and browsers no notebook uses make the room — the
+    # viewers run in Playwright's own Chromium.
     - name: Make room
       shell: bash
       run: |
@@ -42,7 +43,7 @@ runs:
         cache: npm
 
     # The command-line form of the app's Analysis panel, typechecked first, and the app itself, which
-    # the parity drives and the viewers' timings serve from dist/.
+    # the parity and the laptop drive and the viewers serve from dist/.
     - name: Build chromosomix
       shell: bash
       run: |

@@ -4,7 +4,7 @@
  *
  * The Notebooks tab reads each page's `rendered.json` from the deployed site
  * (`src/notebooks.ts`). The browser is not sent there: this script reads the
- * four stamps itself, from Node, and hands them to the page as the site's
+ * five stamps itself, from Node, and hands them to the page as the site's
  * answers — so the pictures show what the published pages say today, and a
  * machine whose browser cannot reach the site still draws them. It then shoots
  * the tab mid-read, one page whose stamp is missing, the dark theme, a laptop's
@@ -53,7 +53,7 @@ const errors = []
 
 /** The published stamps, by page; a page whose stamp could not be read is missing. */
 const STAMPS = {}
-for (const path of ['validation', 'timings', 'parity', 'laptop']) {
+for (const path of ['validation', 'timings', 'viewers', 'parity', 'laptop']) {
   try {
     const response = await fetch(new URL(`${path}/rendered.json`, SITE))
     if (response.ok) STAMPS[path] = await response.text()

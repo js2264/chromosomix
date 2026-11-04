@@ -7,17 +7,19 @@ A task is only worth running here if its numbers are the numbers the field's own
 an insulation score a few per cent away from cooltools' is worse than none: somebody will put it in a
 figure. So the tasks that re-implement a published method are run on public data both by chromosomix
 and by the package each reproduces, and the two are lined up number for number, in a notebook published
-with every release; the three that are not compared yet say so. Three more notebooks time the same
-commands, hold the app to its own command line, and measure what a run costs on a laptop.
+with every release; the three that are not compared yet say so. Four more notebooks time the same
+commands, time a picture beside two other viewers, hold the app to its own command line, and measure
+what a run costs on a laptop.
 
 | Notebook | What it holds chromosomix to | Published at |
 | --- | --- | --- |
 | Validation | the package each task reproduces, on public data | <https://chromosomix.app/validation/> |
-| Timings | the same packages, in time and memory, and two other viewers in time to a picture | <https://chromosomix.app/timings/> |
+| Timings | the same packages, in time and memory | <https://chromosomix.app/timings/> |
+| Viewers | juicebox.js and HiGlass, in the time to a picture, on the same files | <https://chromosomix.app/viewers/> |
 | Parity | its own command line: the same run in the app, in three browsers, and in a shell, file for file | <https://chromosomix.app/parity/> |
 | Laptop | what a genome-wide run costs on a laptop, on the command line and in three browsers, and six analyses over a deep human map against cooltools and coolpuppy | <https://chromosomix.app/laptop/> |
 
-In the app, **About this viewer**, from the header or the command palette, lists the four under
+In the app, **About this viewer**, from the header or the command palette, lists the five under
 **Notebooks**, each with the one line of what it found and when it was rendered.
 
 ## The validation
@@ -78,18 +80,31 @@ the files the field works with.
 
 ## The timings
 
-The first part of the timings measures **the time to a picture**: chromosomix, juicebox.js and HiGlass
-each drawing the same contact map with one track beside it, at the same resolution, from files on the
-machine and from the bucket they are published in. The second part runs **every command of the
-validation again**, each as a fresh process, four times round robin, with the two sides of each pair
-taking turns to go first, and measures for each its CPU time, its wall-clock time and its peak memory.
-Each chromosomix command's time is set beside its reference's. The command line runs a task on one
-core unless told otherwise, and a reference that takes a number of processes is given one per core, at
-most four. A few analyses are compared and not timed: cis and trans per sequence, the saddle, the
-fraction of signal in features, signal by group and Pairs QC.
+The timings run **every command of the validation again**, on the machine that has just run the
+validation and on its files, each as a fresh process, four times round robin, with the two sides of
+each pair taking turns to go first, and measure for each its CPU time, its wall-clock time and its peak
+memory. Each chromosomix command's time is set beside its reference's. The command line runs a task on
+one core unless told otherwise, and a reference that takes a number of processes is given one per
+core, at most four. A few analyses are compared and not timed: cis and trans per sequence, the saddle,
+the fraction of signal in features, signal by group and Pairs QC.
 
-Beside the page: **`timings.tsv`**, every timed run, and **`viewers.tsv`**, every picture timed in a
-viewer, each with the machine and every version.
+Beside the page: **`timings.tsv`**, every timed run, with the machine and every version.
+
+## The viewers
+
+The viewers notebook measures **the time to a picture**: chromosomix, juicebox.js and HiGlass each
+drawing the same contact map with one track beside it, at the same resolution, from files on the
+machine and from the bucket they are published in. chromosomix is timed on the `.mcool` and on the
+`.hic`, juicebox.js on the `.hic` and HiGlass on the `.mcool`, through the tile server higlass-python
+starts, so that each viewer is set beside chromosomix on a file both read. Three genomes — yeast, chicken
+and mouse — are each seen whole, one chromosome, a region and a locus; no viewer chooses the
+resolution, and a picture drawn at another resolution, or of part of the window, is kept as what it was
+rather than as a time. Each picture is drawn four times, the viewers taking turns to go first, in a
+fresh browser with nothing carried over, and timed from the moment the viewer is handed its files to the
+moment it says the picture is finished.
+
+Beside the page: **`viewers.tsv`**, every picture timed in a viewer, with the requests and bytes it
+asked for, the machine and every version.
 
 ## The parity
 
@@ -113,7 +128,7 @@ every file compared in each browser and its verdict.
 
 ## The laptop
 
-The laptop notebook answers what the other three do not: how long a genome-wide analysis takes, and how
+The laptop notebook answers what the other four do not: how long a genome-wide analysis takes, and how
 much memory it needs, on a machine like yours. It runs 23 analyses on public data — Hi-C maps from 69
 million to 1.08 billion contacts, a yeast Micro-C map down to 50 bp, and ATAC-seq tracks and sequence
 over the whole mouse genome — on the command line and then in the app, in Chromium, Firefox and WebKit,
@@ -132,24 +147,28 @@ The page carries both tables, **`pipeline.tsv`** and **`pipeline-memory.tsv`**.
 The page at <https://chromosomix.app/laptop/> is rendered by hand, on a laptop, which its opening block
 names. To measure your own, render it from the root of a clone of
 [the repository](https://github.com/js2264/chromosomix), on a laptop that is plugged in and otherwise
-idle. It needs Quarto, Python with pandas, matplotlib and pyfaidx, Node, and Playwright's browsers, and
-for its last part cooler, cooltools, coolpuppy and bioframe. It downloads about 16.9 GB of data, and
-takes about twenty minutes on the command line and about as long again in Chromium; Firefox and WebKit
-take their own time, which the results give, and the deep map's six analyses about a quarter of an hour
-more.
+idle. It needs Node 22.12 or later and Playwright's browsers, which the repository installs, and an
+environment with Quarto, Jupyter, pandas, matplotlib, numpy and pyfaidx, and for its last part cooler,
+cooltools, coolpuppy and bioframe: `notebooks/environment-laptop.yml` makes one, named `open2c`, for
+micromamba, mamba or conda. The page checks the environment before it downloads anything, and names the
+versions it found. It downloads about 16.9 GB of data, and takes about twenty minutes on the command
+line and about as long again in Chromium; Firefox and WebKit take their own time, which the results
+give, and the deep map's six analyses come after.
 
 ```sh
 npm ci && npm run build && npm run build:cli
 npm ci --prefix notebooks/viewers && npx --prefix notebooks/viewers playwright install chromium firefox webkit
-pip install jupyter pandas matplotlib pyfaidx bioframe==0.8.0 cooler==0.10.4 cooltools==0.7.1 coolpuppy==1.1.0
-quarto render notebooks/laptop.qmd
+micromamba create -f notebooks/environment-laptop.yml
+micromamba run -n open2c quarto render notebooks/laptop.qmd
 ```
 
 ## When they are published
 
-The validation, the timings and the parity are rendered on a fresh GitHub runner whenever a release is
-published, and on demand, and the three are published together only if all three rendered. Each
-release also keeps its own copies of the three pages and their tables among its files. Every page opens
+The validation, the timings, the viewers and the parity are rendered whenever a release is published,
+and on demand, each on a fresh GitHub runner of its own and all at once — the timings after the
+validation, on its runner, since they run its commands on its files — and the four are published
+together only if all four rendered. Each release also keeps its own copies of the four pages and their
+tables among its files. Every page opens
 on a block saying when it was rendered, from which version and commit, by which run or by hand, and on
 what machine, and closes on how long it took.
 

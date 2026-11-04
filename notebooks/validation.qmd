@@ -27,7 +27,8 @@ from rendered import Render
 
 R = Render('validation')
 print(R.head(also=f"Every command of §§ 1–19 and 24–27 below, run again and timed: "
-                  f"{R.anchor('timing', 'the timings')}. "
+                  f"{R.anchor('timing', 'the timings')}. The app held to the command line these commands "
+                  f"run, file for file: {R.anchor('parity', 'the parity')}. "
                   f"Beside this page: {R.download('commands.json')}, every command as it ran; "
                   f"{R.download('summary.tsv')}, every verdict; and {R.download('validation.txt')}, every "
                   "number its figures draw."))

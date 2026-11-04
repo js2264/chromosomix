@@ -57,8 +57,8 @@ A file only one side names its own way is matched to the other's by the task's w
 and the table says so.
 
 **To render.** Build the app and the command line, from one commit, since a page whose two builds
-name two is refused before anything runs, and have the three browsers of the Playwright the timings
-pin (`notebooks/viewers`) — on Linux, `playwright install --with-deps`, for the system libraries
+name two is refused before anything runs, and have the three browsers of the Playwright
+`notebooks/viewers` pins — on Linux, `playwright install --with-deps`, for the system libraries
 Firefox and WebKit need. A Chromium already installed can stand in for Playwright's, named in
 `PARITY_CHROMIUM` or found under `PLAYWRIGHT_BROWSERS_PATH`; Firefox and WebKit are Playwright's own
 builds. `PARITY_BROWSERS` names the browsers the app is run in, of `chromium,firefox,webkit`, all three

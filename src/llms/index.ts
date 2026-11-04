@@ -157,6 +157,7 @@ export function indexPage(): string {
     links('Evidence', [
       ['Validation', `${SITE}validation/`, 'each analysis compared with its reference implementation'],
       ['Timings', `${SITE}timings/`, 'how long each command takes beside its reference'],
+      ['Viewers', `${SITE}viewers/`, 'the time to a picture beside juicebox.js and HiGlass, on the same files'],
       [
         'Parity',
         `${SITE}parity/`,

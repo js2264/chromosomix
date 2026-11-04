@@ -1,6 +1,6 @@
 """Every file the notebooks fetch over HTTP(S), asked again when the server or the network fails.
 
-validation.qmd, timing.qmd, parity.qmd and laptop.qmd fetch their data from where each file was
+validation.qmd, viewers.qmd, parity.qmd and laptop.qmd fetch their data from where each file was
 published, on every render. One server's failure was enough to fail a render, and the run with it:
 on 1 November 2026, NCBI's ftp.ncbi.nlm.nih.gov, where GEO's files are, answered one request in two,
 and at times three in four, with 500 Internal Server Error, now and then with 403 Forbidden — a HEAD,

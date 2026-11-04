@@ -55,20 +55,29 @@ The block above says which machine this page was rendered on. The page published
 <https://chromosomix.app/laptop/> is rendered by hand, on a laptop, and committed as
 `notebooks/laptop.html`; `.github/workflows/notebooks.yml` renders it on a GitHub runner with every
 release too, but keeps that render as the run's artifact and never publishes it. To measure your own,
-render it from the root of a clone, on a laptop that is plugged in and otherwise idle, with the app and
-the command line built from one commit and the three browsers of the Playwright the timings pin
-(`notebooks/viewers`) — on Linux, `playwright install --with-deps`, for the system libraries Firefox
-and WebKit need. A Chromium already installed can stand in for Playwright's, named in
-`LAPTOP_CHROMIUM` or found under `PLAYWRIGHT_BROWSERS_PATH`; Firefox and WebKit are Playwright's own
-builds. `LAPTOP_BROWSERS` names the browsers the app is run in, of `chromium,firefox,webkit`, all three
-unless it says, and the page is of those it names.
+render it from the root of a clone, on a laptop that is plugged in and otherwise idle, with Node.js
+22.12 or later, the app and the command line built from one commit, the three browsers of the
+Playwright `notebooks/viewers` pins — on Linux, `playwright install --with-deps`, for the system
+libraries Firefox and WebKit need — and an environment holding Quarto, Jupyter and the packages the
+page imports, which `notebooks/environment-laptop.yml` makes, named `open2c`:
 
 ```bash
 npm ci && npm run build && npm run build:cli
 npm ci --prefix notebooks/viewers && npx --prefix notebooks/viewers playwright install chromium firefox webkit
-pip install jupyter pandas matplotlib pyfaidx bioframe==0.8.0 cooler==0.10.4 cooltools==0.7.1 coolpuppy==1.1.0
-quarto render notebooks/laptop.qmd
+micromamba create -f notebooks/environment-laptop.yml
+micromamba run -n open2c quarto render notebooks/laptop.qmd
 ```
+
+`conda env create` and `mamba env create` read the same file, and `conda run -n open2c` renders as
+`micromamba run` does. The file holds pandas, matplotlib, numpy and pyfaidx, and for the last part
+alone the four packages its reference script runs — cooler, cooltools, coolpuppy and bioframe — at the
+versions `notebooks/requirements.txt` pins, the ones `{python} R.link('validation')` holds chromosomix
+to. Any environment holding them will do: the page checks, before it downloads or runs anything, that
+the Python it runs in has every one, and says which it lacks; it names the versions it found under *The
+machine*. A Chromium already installed can stand in for Playwright's, named in `LAPTOP_CHROMIUM` or
+found under `PLAYWRIGHT_BROWSERS_PATH`; Firefox and WebKit are Playwright's own builds.
+`LAPTOP_BROWSERS` names the browsers the app is run in, of `chromium,firefox,webkit`, all three unless
+it says, and the page is of those it names.
 
 The page is one file and carries its table and its stamp inside it, so committing
 `notebooks/laptop.html` is all it takes to publish a render: the site's build unpacks the two beside it.
@@ -95,8 +104,29 @@ import subprocess
 import sys
 import tempfile
 import time
+from importlib.metadata import PackageNotFoundError, version as installed_version
 from pathlib import Path
 from statistics import geometric_mean
+
+#: What the page imports, and what its last part's reference script (notebooks/scripts/cooltools_pipeline.py)
+#: runs in this same Python: each looked for before anything is downloaded or run, so that one missing from
+#: the environment stops the page now rather than hours in, at the deep map.
+NEEDED = ['pandas', 'matplotlib', 'numpy', 'pyfaidx', 'cooler', 'cooltools', 'coolpuppy', 'bioframe']
+_missing = []
+for _name in NEEDED:
+    try:
+        installed_version(_name)
+    except PackageNotFoundError:
+        _missing.append(_name)
+if _missing:
+    raise ModuleNotFoundError(
+        f"{', '.join(_missing)} {'is' if len(_missing) == 1 else 'are'} not in the environment of {sys.executable}, "
+        'which renders this page. Make one with `micromamba create -f notebooks/environment-laptop.yml` and render '
+        'with `micromamba run -n open2c quarto render notebooks/laptop.qmd`. If that Python is not the '
+        "environment's, a kernel named python3 installed outside it is answering for it: `jupyter kernelspec list`.")
+if shutil.which('node') is None:
+    raise FileNotFoundError('No `node` on the PATH: the page runs the command line and drives the browsers with '
+                            'Node.js, 22.12 or later.')
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
@@ -155,6 +185,17 @@ for _browser in BROWSERS:
 ## The machine
 
 ```{python}
+#: The versions notebooks/requirements.txt pins, the reference environment the validation runs in.
+PINNED = dict(line.strip().split('==', 1) for line in (REPO / 'notebooks' / 'requirements.txt').read_text().splitlines()
+              if '==' in line and not line.startswith('#'))
+
+
+def found(name):
+    """A package's version here, and the pin where it is not the one the reference environment holds."""
+    here, pinned = installed_version(name), PINNED.get(name)
+    return here if pinned in (None, here) else f'{here} (notebooks/requirements.txt pins {pinned})'
+
+
 MACHINE = {
     'processor': R.machine['processor'],
     'cores': os.cpu_count(),
@@ -162,6 +203,8 @@ MACHINE = {
     'system': platform.platform(),
     'node': subprocess.run(['node', '--version'], capture_output=True, text=True).stdout.strip(),
     'chromosomix': VERSION.removeprefix('chromosomix '),
+    'python': f'{platform.python_version()}, {sys.executable}',
+    **{name: found(name) for name in ('cooler', 'cooltools', 'coolpuppy', 'bioframe')},
 }
 pd.DataFrame([*MACHINE.items(), *((NAMES[one].lower(), VERSIONS[one]) for one in BROWSERS)],
              columns=['', 'this machine']).style.hide(axis='index')

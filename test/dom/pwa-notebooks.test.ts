@@ -2,7 +2,7 @@
 /**
  * The app running at a rendered notebook's address, and getting out of it.
  *
- * `validation/`, `timings/`, `parity/` and `laptop/` hold the four rendered notebooks
+ * `validation/`, `timings/`, `viewers/`, `parity/` and `laptop/` hold the five rendered notebooks
  * (`.github/workflows/notebooks.yml`), and a service worker from before they
  * existed answers a navigation there with this app's shell. The worker is
  * fixed (`src/sw.js`), but it updates only when a page it controls loads, and
@@ -55,8 +55,8 @@ beforeEach(() => {
 
 describe('the app at a notebook’s address', () => {
   it('drops the worker and reloads, with or without the slash', async () => {
-    const paths = ['/validation/', '/validation', '/timings/', '/timings/index.html', '/parity/', '/parity',
-      '/laptop/', '/laptop']
+    const paths = ['/validation/', '/validation', '/timings/', '/timings/index.html', '/viewers/', '/viewers',
+      '/parity/', '/parity', '/laptop/', '/laptop']
     for (const path of paths) {
       window.sessionStorage.clear()
       const before = reloads

@@ -25,7 +25,7 @@ file on your own disk cannot travel: describe the file instead.
 | `CHANGELOG.md` | what changed in each release |
 | `GLOSSARY.md` | the words the code uses in a sense of its own |
 | `test/` | the test suite, with the oracle files the analyses are compared against |
-| `notebooks/` | the validation, timing, parity and laptop notebooks ([How the results are checked](/analyses/validation/)) |
+| `notebooks/` | the validation, timing, viewers, parity and laptop notebooks ([How the results are checked](/analyses/validation/)) |
 | `widgets/` | the Jupyter and R packages |
 | `electron/` | the desktop app's shell |
 | `documentation/` | these pages |

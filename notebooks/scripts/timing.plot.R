@@ -3,10 +3,10 @@ library(tidyverse)
 library(patchwork)
 setwd("~/Documents/Koszul/__Bioinfo/repos/chromosomix/notebooks/")
 
-# The timing notebook's two tables, as chromosomix.app/timings publishes them, and the laptop's two of
+# The timings' table and the viewers', as chromosomix.app/timings and /viewers publish them, and the laptop's two of
 # its deep human map, as chromosomix.app/laptop unpacks them from the committed page
 download.file("https://chromosomix.app/timings/timings.tsv", "timing_results.tsv")
-download.file("https://chromosomix.app/timings/viewers.tsv", "viewers_results.tsv")
+download.file("https://chromosomix.app/viewers/viewers.tsv", "viewers_results.tsv")
 download.file("https://chromosomix.app/laptop/pipeline.tsv", "pipeline_results.tsv")
 download.file("https://chromosomix.app/laptop/pipeline-memory.tsv", "pipeline_memory_results.tsv")
 

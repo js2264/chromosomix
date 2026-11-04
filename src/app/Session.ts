@@ -1660,7 +1660,7 @@ export class Session {
    * restored tab's, whose map is on this machine — and it used to be passed
    * over: the file a workspace named was dropped on a page with no reader, and
    * waited for one. From disk, a chromosome or a locus of the three maps
-   * `notebooks/timing.qmd` times took 1.18 s to draw from such a page, and
+   * `notebooks/viewers.qmd` times took 1.18 s to draw from such a page, and
    * takes 0.96 s now, medians of eleven pictures.
    *
    * @internal SessionRouter starts the reader under the picker.
