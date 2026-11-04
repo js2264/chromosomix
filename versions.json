@@ -1,6 +1,13 @@
 {
-  "latest": "dccd0ec",
+  "latest": "40ec1ec",
   "versions": [
+    {
+      "commit": "40ec1ec",
+      "version": "0.20.0",
+      "date": "2026-11-04T23:19:15+01:00",
+      "subject": "0.20.0",
+      "tag": "v0.20.0"
+    },
     {
       "commit": "dccd0ec",
       "version": "0.19.0",
@@ -132,13 +139,6 @@
       "version": "0.18.0",
       "date": "2026-11-01T16:54:58+01:00",
       "subject": "Notebooks: R scripts to draw the timing and validation figures",
-      "tag": ""
-    },
-    {
-      "commit": "e428aa3",
-      "version": "0.18.0",
-      "date": "2026-11-01T08:28:52+01:00",
-      "subject": "Laptop notebook: run each analysis in the app in Chromium, Firefox and WebKit (§18.10) (#152)",
       "tag": ""
     },
     {
