@@ -264,10 +264,10 @@
     },
     {
       "number": 155,
-      "commit": "eeee127",
+      "commit": "8e19b67",
       "title": "Label scaled metaplot axes by feature position, not column",
       "branch": "js/ecstatic-davinci-a357jc",
-      "date": "2026-11-02T14:13:06Z"
+      "date": "2026-11-04T12:32:51Z"
     },
     {
       "number": 122,
