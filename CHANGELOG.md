@@ -14,6 +14,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A pull request's preview carries its documentation (§32.5).** Beside the preview's app at
+  `chromosomix.app/pr/<number>/`, the documentation of the same head is published at
+  `chromosomix.app/pr/<number>/docs/`, replaced on every push and removed when the pull request
+  closes. Its live views open the preview's own app, its banner names the pull request, and the
+  pull request's comment gives both addresses. Documentation that does not build leaves the app's
+  preview published, and the comment says so.
 - **Live examples in the documentation (§32.4).** Ten pictures — the introduction's, moving around,
   a contact map and its O/E, two maps compared, a ratio, one map read two ways, the 45° view, the
   genome browser and an embed in a page — carry **Try it live**, which swaps the picture for the

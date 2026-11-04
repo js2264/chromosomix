@@ -51,15 +51,21 @@ continuous integration runs every part a runner can build.
 
 ## Improving these pages
 
-Every page has an **Edit page** link at its foot, which opens its source on GitHub. The guides are
-written by hand in `documentation/src/content/docs/`; each task's parameters, the reference pages and
-the release notes are written from the app's own code each time the site is built, so a change to
-those is a change to the app. `documentation/README.md` says how the site is built, how its versions
-work, and how a page is written: who it is for, how it is checked, and the few rules of its format.
-The site needs Node 22.23.4 or later.
+Every published page has an **Edit page** link at its foot, which opens its source on GitHub. The
+guides are written by hand in `documentation/src/content/docs/`; each task's parameters, the
+reference pages and the release notes are written from the app's own code each time the site is
+built, so a change to those is a change to the app. `documentation/README.md` says how the site is
+built, how its versions work, and how a page is written: who it is for, how it is checked, and the
+few rules of its format. The site needs Node 22.23.4 or later.
 
 ```sh
 npm ci --prefix documentation
 npm run docs:dev       # the site at http://localhost:4321
 npm run docs:build     # every internal link checked
 ```
+
+A pull request opened from a branch of the repository itself, not from a fork, gets a preview of
+these pages beside the preview of its app: `chromosomix.app/pr/<number>/docs/` and
+`chromosomix.app/pr/<number>/`, both named in a comment on the pull request and replaced on every
+push. The preview's live views open that pull request's app, so a change to the app and to the page
+that describes it can be checked together.

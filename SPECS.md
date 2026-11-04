@@ -16013,3 +16013,18 @@ release's copy again, or main's. The branch is written with a **deploy key**, si
 token cannot push to another repository: the public half on js2264/chromosomix-docs with write
 access, the private half in this repository's `DOCS_DEPLOY_KEY` secret. **Without the key every copy
 is still built**, kept as the run's artifact, and the run says that it published nothing.
+
+**A pull request's preview carries its documentation** (`.github/workflows/preview.yml`): the same
+head built once more, at `chromosomix.app/pr/<number>/docs/`, inside the preview's own directory, so
+the archive, the deploy and the removal when the pull request closes carry it with the app (§11) and
+need no step of their own. A change to the app and the change to the page that tells a reader about
+it are then reviewed together, and **its live views open that preview's app** rather than the
+published one (`DOCS_APP_URL`). It is main's copy in every other respect — unreleased, kept from
+search engines — with four differences, because it is a pull request's and is served on the app's
+site, whose `/versions.json` is the app's manifest: no version menu, its pull request's number where
+the menu would be; a banner of its own, naming the pull request, in place of the offer of the latest
+release; no **Edit page** link, since a page of it changes in the pull request, which its footer links
+in place of main's tree; and **no commit in its footer**, so a page a push did not change is the same
+bytes as the push before and the archive branch stores it once. Its links are the pull-request
+suite's to check, at the root. **Documentation that does not build does not stop the preview**: the
+app is published without it, and the pull request's comment says so and links the run.

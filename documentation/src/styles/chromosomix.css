@@ -138,6 +138,17 @@ header.header {
   border-color: var(--cx-border-strong);
   color: var(--cx-text);
 }
+/* A preview's copy: its pull request's number where the menu would be, in the
+   accent, since it is a copy nobody should mistake for a published one. */
+.cx-version-preview {
+  font: 600 0.75rem var(--cx-mono);
+  color: var(--cx-accent);
+  background: var(--cx-accent-soft);
+  border: 1px solid var(--cx-accent);
+  border-radius: var(--cx-radius);
+  padding: 0.22rem 0.45rem;
+  white-space: nowrap;
+}
 .cx-open-app,
 .cx-icon-button,
 .cx-button {

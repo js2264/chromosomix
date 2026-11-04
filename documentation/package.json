@@ -10,7 +10,7 @@
   "scripts": {
     "data": "node ../scripts/docs-data.mjs",
     "dev": "npm run data && astro dev",
-    "build": "npm run data && astro build",
+    "build": "npm run data && astro build --force",
     "preview": "astro preview"
   },
   "dependencies": {

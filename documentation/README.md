@@ -24,6 +24,9 @@ npm run docs:build           # documentation/dist, every internal link checked
 ```
 
 Both run `scripts/docs-data.mjs` first, which writes what the site reads from the app (below).
+The build also clears Astro's cache of rendered pages (`astro build --force`): a page is rendered
+with its copy's app address (`DOCS_APP_URL`, below), which that cache does not know to key on, so
+a second build with another address would otherwise keep the first one's live views.
 
 ## What is written by hand, and what is not
 
@@ -47,6 +50,15 @@ from the site's `versions.json`. `.github/workflows/docs.yml` builds and publish
 `gh-pages` branch of [js2264/chromosomix-docs](https://github.com/js2264/chromosomix-docs), which
 GitHub Pages serves. Pages are written as if the site were at the root; the build puts every
 root-relative link under the copy's path.
+
+**A pull request's preview carries its documentation**, at `chromosomix.app/pr/<number>/docs/` beside
+the preview's app at `chromosomix.app/pr/<number>/`, built by `.github/workflows/preview.yml` with
+`DOCS_PREVIEW=<number>`: its live views open that preview's app, its banner names the pull request,
+and it has no version menu. The pull request's comment gives both addresses. To build one locally:
+
+```sh
+DOCS_PREVIEW=158 DOCS_BASE=/pr/158/docs/ DOCS_APP_URL=https://chromosomix.app/pr/158/ npm run docs:build
+```
 
 ## Writing a page
 
