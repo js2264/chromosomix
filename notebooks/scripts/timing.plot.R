@@ -3,9 +3,11 @@ library(tidyverse)
 library(patchwork)
 setwd("~/Documents/Koszul/__Bioinfo/repos/chromosomix/notebooks/")
 
-# The timing notebook's two tables, as chromosomix.app/timings publishes them
+# The timing notebook's four tables, as chromosomix.app/timings publishes them
 download.file("https://chromosomix.app/timings/timings.tsv", "timing_results.tsv")
 download.file("https://chromosomix.app/timings/viewers.tsv", "viewers_results.tsv")
+download.file("https://chromosomix.app/timings/pipeline.tsv", "pipeline_results.tsv")
+download.file("https://chromosomix.app/timings/pipeline-memory.tsv", "pipeline_memory_results.tsv")
 
 APP <- "#2b6fd6"
 REF <- "#e8622c"
@@ -119,10 +121,25 @@ meta <- meta |>
 jobs <- left_join(jobs, rows, by = c("section", "analysis", "pair"))
 folds <- left_join(folds, rows, by = c("section", "analysis", "pair"))
 
+# The pipeline on a deep human map: each phase of each side, when it began and ended, and the whole,
+# against the memory weighed while it ran
+pipeline <- read_tsv("pipeline_results.tsv")
+# Each side's mean over the runs, for the caption
+whole <- pipeline |>
+    filter(step == "total") |>
+    summarise(wall = mean(wall_s), cpu = mean(cpu_s), .by = side)
+minutes <- \(s) if_else(s >= 90, sprintf("%.1f min", s / 60), sprintf("%.0f s", s))
+
 # Folds are ratios, so their mean is geometric
 caption <- with(folds, sprintf(
     "On average, chromosomix runs %.1f× faster than the reference tools (CPU time), %.1f× faster on the wall clock, and uses %.1f× less peak memory (geometric means over the %d comparisons in b).",
     exp(mean(log(CPU))), exp(mean(log(wall))), exp(mean(log(memory))), nrow(folds)
+))
+caption <- str_c(caption, sprintf(
+    " Loop calling, insulation, compartments and APA over the whole IMR-90 map (c) take %s in chromosomix, on one thread, and %s in one Python script running cooltools and coolpuppy on %d processes (%.1f× on the wall clock, %.1f× in CPU time).",
+    minutes(whole$wall[whole$side == "chromosomix"]), minutes(whole$wall[whole$side == "reference"]),
+    max(pipeline$threads), whole$wall[whole$side == "reference"] / whole$wall[whole$side == "chromosomix"],
+    whole$cpu[whole$side == "reference"] / whole$cpu[whole$side == "chromosomix"]
 ))
 message(caption)
 
@@ -266,7 +283,67 @@ b <- names + grid + cpu + wall + memory +
     plot_layout(widths = c(3.2, 3.3, 1.8, 1.8, 1.8), guides = "collect") &
     theme(legend.position = "top", legend.box.spacing = unit(0, "pt"), axis.text.y = element_blank(), axis.ticks.y = element_blank())
 
-# c and d: CPU time, then wall-clock time, against memory, one point a pair: top right is faster and
+# c: the pipeline against the wall clock, its first run: the memory each side's processes held
+# together, weighed every quarter of a second, each phase shaded behind it, its peak marked and where it
+# finished. chromosomix's phases are its four commands back to back, each paying its own start-up
+PHASES <- c(`start-up` = "#d9d9d9", loops = "#cfe3c1", insulation = "#f5e2ad", compartments = "#dcd2ec", apa = "#c6e2ea")
+phase_names <- pipeline |>
+    distinct(step, task) |>
+    deframe()
+sided <- c(
+    chromosomix = "chromosomix, 1 thread",
+    reference = sprintf("cooltools and coolpuppy, %d processes", max(pipeline$threads))
+)
+first <- filter(pipeline, run == 1)
+phases <- filter(first, step %in% names(PHASES), !is.na(from_s))
+ends <- first |>
+    filter(step == "total") |>
+    transmute(side, end = to_s / 60)
+weighed <- read_tsv("pipeline_memory_results.tsv") |>
+    filter(run == 1) |>
+    arrange(side, seconds)
+# Where the weighings peak, labelled with the peak as the table gives it: never less than the largest
+# resident set any one process reached, which a weighing can miss
+peaks <- weighed |>
+    slice_max(mb, n = 1, by = side, with_ties = FALSE) |>
+    left_join(transmute(filter(first, step == "total"), side, most = peak_mb), by = "side") |>
+    mutate(task = phase_names[step], task = if_else(step == "apa", task, str_to_lower(task)))
+top <- max(weighed$mb) / 1024 * 1.3
+c <- ggplot(weighed, aes(seconds / 60, mb / 1024)) +
+    geom_rect(
+        aes(xmin = from_s / 60, xmax = to_s / 60, ymin = -Inf, ymax = Inf, fill = step),
+        data = phases, inherit.aes = FALSE, alpha = 0.6
+    ) +
+    geom_area(aes(colour = side, fill = after_scale(alpha(colour, 0.3))), linewidth = 0.3, outline.type = "upper") +
+    geom_point(aes(colour = side), data = peaks, size = 1) +
+    geom_text(
+        aes(label = sprintf("peak %.1f GB, %s", most / 1024, task)),
+        # Ending at the point, over its own phase, rather than across the line where the side finished
+        data = peaks, hjust = 1, vjust = 0, nudge_x = -0.06, nudge_y = 0.25, size = 2, colour = "grey20"
+    ) +
+    geom_vline(aes(xintercept = end), data = ends, linetype = "22", linewidth = 0.3, colour = "grey30") +
+    geom_text(
+        aes(end, top * 0.94, label = str_c("done, ", minutes(end * 60))),
+        data = ends, hjust = 0, vjust = 1, nudge_x = 0.08, size = 2, colour = "grey20", inherit.aes = FALSE
+    ) +
+    facet_wrap(~side, ncol = 1, labeller = as_labeller(sided)) +
+    scale_fill_manual(values = PHASES, breaks = names(PHASES), labels = phase_names[names(PHASES)], name = NULL) +
+    scale_colour_manual(values = c(chromosomix = APP, reference = REF), guide = "none") +
+    scale_x_continuous(breaks = 0:60, limits = c(0, max(ends$end) * 1.16), expand = c(0, 0)) +
+    scale_y_continuous(limits = c(0, top), expand = c(0, 0)) +
+    labs(
+        x = "Wall-clock time (min)", y = "Memory (GB)",
+        title = "Human IMR-90 Hi-C (4DNFIJTOIGOI), 1.08 billion contacts, whole genome"
+    ) +
+    theme_bw(base_size = 7) +
+    bare +
+    theme(
+        panel.grid.minor = element_blank(), panel.grid.major.y = element_blank(), legend.position = "top",
+        legend.key.size = unit(8, "pt"), legend.box.spacing = unit(0, "pt"), strip.background = element_blank(),
+        strip.text = element_text(face = "bold", hjust = 0), plot.title = element_text(size = 6, colour = "grey20")
+    )
+
+# d and e: CPU time, then wall-clock time, against memory, one point a pair: top right is faster and
 # lighter than the reference
 # Each label on two lines, the task above its reference, for the room 26 of them need
 against_memory <- function(time, clock, left = 0.12, nudge_x = 0, nudge_y = 0) {
@@ -288,24 +365,25 @@ against_memory <- function(time, clock, left = 0.12, nudge_x = 0, nudge_y = 0) {
         bare +
         theme(panel.grid.minor = element_blank())
 }
-# P(s) on yeast sits in c's crowd: left alone, its label lands on the Pairs QC point
+# P(s) on yeast sits in d's crowd: left alone, its label lands on the Pairs QC point
 yeast <- str_detect(folds$label, "yeast")
-c <- against_memory(CPU, "CPU time", nudge_x = if_else(yeast, -0.08, 0), nudge_y = if_else(yeast, 0.27, 0))
-# In d, Coverage, slower than cooltools on the wall clock, wants more room on the left for its label,
+d <- against_memory(CPU, "CPU time", nudge_x = if_else(yeast, -0.08, 0), nudge_y = if_else(yeast, 0.27, 0))
+# In e, Coverage, slower than cooltools on the wall clock, wants more room on the left for its label,
 # and lifted; the label of the metaplot goes below the crowd at 1×, P(s) on yeast's above its own
 metaplot <- str_detect(folds$label, "^Metaplot \\(")
 coverage <- str_detect(folds$label, "^Coverage")
-d <- against_memory(wall, "wall-clock time",
+e <- against_memory(wall, "wall-clock time",
     left = 0.2,
     nudge_x = case_when(metaplot ~ 0.12, yeast ~ 0.1, .default = 0),
     nudge_y = case_when(metaplot ~ -0.2, yeast ~ 0.3, coverage ~ 0.25, .default = 0)
 )
 
-# Each panel in inches, as tall as it was when a, b and c shared an A4 page (595 × 841 pt, the device
-# rounding it down to whole points): the page grows to hold d. To the last digit, as ggrepel lays c's
-# labels out anew on any change to its size
-fig <- wrap_elements(full = a) / wrap_elements(full = b) / wrap_elements(full = c) / wrap_elements(full = d) +
-    plot_layout(heights = unit(2.534447638912377 * c(1, 1.6, 1.45, 1.45), "in")) +
+# Each panel in inches, as tall as it was when a, b and the first scatter shared an A4 page (595 × 841
+# pt, the device rounding it down to whole points): the page grows to hold c and e. To the last digit,
+# as ggrepel lays d's and e's labels out anew on any change to their size
+fig <- wrap_elements(full = a) / wrap_elements(full = b) / wrap_elements(full = c) / wrap_elements(full = d) /
+    wrap_elements(full = e) +
+    plot_layout(heights = unit(2.534447638912377 * c(1, 1.6, 1.1, 1.45, 1.45), "in")) +
     plot_annotation(
         tag_levels = "a", caption = str_wrap(caption, 150),
         theme = theme(plot.background = element_blank(), plot.caption = element_text(size = 8, hjust = 0))
@@ -338,4 +416,4 @@ grid::grid.draw(page)
 dev.off()
 
 # The tables are only read here, and downloaded again at every run
-unlink(c("timing_results.tsv", "viewers_results.tsv"))
+unlink(c("timing_results.tsv", "viewers_results.tsv", "pipeline_results.tsv", "pipeline_memory_results.tsv"))

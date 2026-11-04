@@ -51,7 +51,7 @@ What a shell cannot be told is said in `#` lines above the command, and kept wit
 - the cells of an `.scool` the map was summed from, where they are not named: add `--cell <name>` for each;
 - a map drawn balanced and read raw, or the reverse, which the one `--no-balance` cannot say: the line follows what the task read, so the numbers match.
 
-The two agree: a notebook rendered with every release runs ten tasks in the app, in a headless browser, then from the line its console wrote for each, and compares every file the two wrote: [the parity notebook](https://chromosomix.app/parity/). See [How the results are checked](/analyses/validation/) for the rest.
+The two agree: a notebook rendered with every release runs ten tasks in the app, in headless Chromium, Firefox and WebKit, then from the line its console wrote for each, and compares every file the two wrote: [the parity notebook](https://chromosomix.app/parity/). See [How the results are checked](/analyses/validation/) for the rest.
 
 ## A saved workspace, over other files
 

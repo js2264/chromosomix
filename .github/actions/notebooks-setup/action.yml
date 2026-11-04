@@ -3,7 +3,7 @@ description: >
   What a job of notebooks.yml renders a notebook with: room on the runner, chromosomix built (the app and
   its command line), and the reference environment, which brings Quarto, Jupyter and every package the
   notebooks import. Each job asks for the rest it needs: the viewers and their Chromium (the parity, the
-  timings and the laptop), Firefox and WebKit beside it (the laptop), the references' own programs (the
+  timings and the laptop), Firefox and WebKit beside it (the parity and the laptop), the references' own programs (the
   validation), HiGlass's tile server (the timings).
 
 inputs:
@@ -24,7 +24,7 @@ runs:
   using: composite
   steps:
     # The validation's and the timings' data, their outputs and three Python environments need about
-    # 30 GB, and the laptop's data 14 GB; a fresh runner has about half of that free. Toolchains and
+    # 42 GB, and the laptop's data 14 GB; a fresh runner has about half of that free. Toolchains and
     # browsers no notebook uses make the room — the viewers run in Playwright's own Chromium.
     - name: Make room
       shell: bash
