@@ -1,14 +1,14 @@
 """The notebooks .github/workflows/notebooks.yml renders, and the site publishes, in one table.
 
-Each page is rendered by a job of its own — the validation and the timings by one, since the timings
-run the validation's commands again on the validation's inputs — and a last job gathers the pages,
-publishes them and writes the run's summary. **The laptop is the exception**: it is rendered by hand, on
+Each page is rendered by a job of its own, on a runner of its own, all of them at once — the validation
+and the timings by one, since the timings run the validation's commands again on the validation's inputs
+— and a last job gathers the pages, publishes them and writes the run's summary. **The laptop is the exception**: it is rendered by hand, on
 a laptop, and committed as notebooks/laptop.html, which is what the site publishes at laptop/; the
 workflow still renders it on a runner with every release, for the run's artifact and its summary, and
 never publishes that. Every one of those steps asks the same things of a page:
 where it is published, which folder of work/ its outputs are in, which files go beside it, and which
 of them a release keeps. They are answered here, once, and `rendered.py` reads the same table, so a
-fifth notebook is one more entry — and one more in `src/notebooks.ts`, the list the app's About names
+sixth notebook is one more entry — and one more in `src/notebooks.ts`, the list the app's About names
 under *Notebooks*, which test/unit/notebooks.test.ts holds to this one. Nothing beyond Python itself
 is needed.
 
@@ -65,8 +65,8 @@ PAGES = {
     'validation': Page('validation', 'Validation', 'validation', 'validation',
                        {'commands.json': None, 'summary.tsv': 'validation-{tag}.tsv',
                         'validation.txt': 'validation-{tag}.txt'}),
-    'timing': Page('timings', 'Timings', 'validation', 'validation',
-                   {'timings.tsv': 'timings-{tag}.tsv', 'viewers.tsv': 'viewers-{tag}.tsv'}),
+    'timing': Page('timings', 'Timings', 'validation', 'validation', {'timings.tsv': 'timings-{tag}.tsv'}),
+    'viewers': Page('viewers', 'Viewers', 'viewers', 'viewers', {'viewers.tsv': 'viewers-{tag}.tsv'}),
     'parity': Page('parity', 'Parity', 'parity', 'parity', {'summary.tsv': 'parity-{tag}.tsv'}),
     'laptop': Page('laptop', 'Laptop', 'laptop', 'laptop', LAPTOP_FILES, local=True),
 }

@@ -619,24 +619,27 @@ once, hence the test in the assembly step.
 
 ### So are the rendered notebooks
 
-`/validation/`, `/timings/` and `/parity/` are `notebooks/validation.qmd`, `notebooks/timing.qmd`
-and `notebooks/parity.qmd` as `.github/workflows/notebooks.yml` last rendered them (SPECS §18.10).
-That workflow runs when a release is published — `release.yml` makes the release a draft and a
-person publishes it, which is the event that reaches it — and from **Actions → Notebooks → Run
-workflow** on any branch or tag, with the number of timed runs (four by default) and whether to
-publish. Each notebook renders in a job of its own, on a fresh runner, through the setup in
-`.github/actions/notebooks-setup`: the parity first, in about twenty minutes in its three browsers, then the validation and
-the timings in one job (about three hours, the timings running the validation's commands on its
-inputs) beside the laptop (about an hour on the command line and about as long again in each of
-the app's three browsers). A last job publishes only if the three pages rendered: it
-force-pushes them and the files beside them to the `notebooks` branch as one commit, attaches them
-to the release with the tables beside them — among them `validation.txt`, every number the
-validation's figures draw — and dispatches this deploy, which copies `validation/`, `timings/` and
-`parity/` from that branch on every run after — the stores' arrangement exactly. Every job also
-keeps what it rendered as an artifact for 90 days, even when it fails — the validation alone, with
-the timing rounds it finished, when the timings fail — and the run's summary has a section a
-notebook: where it is, from what, in how long, the line of findings it wrote, and its table. Which
-page is published where, with which files beside it, is one table, `notebooks/scripts/pages.py`.
+`/validation/`, `/timings/`, `/viewers/` and `/parity/` are `notebooks/validation.qmd`,
+`notebooks/timing.qmd`, `notebooks/viewers.qmd` and `notebooks/parity.qmd` as
+`.github/workflows/notebooks.yml` last rendered them (SPECS §18.10). That workflow runs when a release
+is published — `release.yml` makes the release a draft and a person publishes it, which is the event
+that reaches it — and from **Actions → Notebooks → Run workflow** on any branch or tag, with the
+number of timed runs (four by default) and whether to publish. Each notebook renders in a job of its
+own, on a fresh runner, through the setup in `.github/actions/notebooks-setup`, and the four jobs start
+together: the parity, in about a quarter of an hour in its three browsers; the validation and the
+timings in one job, the timings after the validation, since they run the validation's commands on the
+inputs it fetched and made (an hour to an hour and a half, then about twenty minutes a timed run); the
+viewers, with their own 15 GB, in about twenty minutes a round of pictures; and the laptop, the 23
+analyses on the command line and in the app's three browsers and then the deep human map. The run
+takes as long as the longest. A last job publishes only if the four pages rendered: it force-pushes
+them and the files beside them to the `notebooks` branch as one commit, attaches them to the release
+with the tables beside them — among them `validation.txt`, every number the validation's figures draw
+— and dispatches this deploy, which copies `validation/`, `timings/`, `viewers/` and `parity/` from
+that branch on every run after — the stores' arrangement exactly. Every job also keeps what it
+rendered as an artifact for 90 days, even when it fails — the validation alone, with the timing rounds
+it finished, when the timings fail — and the run's summary has a section a notebook: where it is,
+from what, in how long, the line of findings it wrote, and its table. Which page is published where,
+with which files beside it, is one table, `notebooks/scripts/pages.py`.
 
 **`/laptop/` is not the workflow's.** `notebooks/laptop.qmd` measures a genome-wide analysis on a
 laptop, so the page the site publishes is rendered by hand on one and committed as
@@ -647,9 +650,15 @@ one, render it from the root of a clone and commit the file:
 ```bash
 npm ci && npm run build && npm run build:cli
 npm ci --prefix notebooks/viewers && npx --prefix notebooks/viewers playwright install chromium firefox webkit
-quarto render notebooks/laptop.qmd
+micromamba create -f notebooks/environment-laptop.yml
+micromamba run -n open2c quarto render notebooks/laptop.qmd
 git add notebooks/laptop.html
 ```
+
+`notebooks/environment-laptop.yml` makes the environment, named `open2c`: Quarto, Jupyter, the packages
+the page imports, and the four its deep human map's reference script runs, at the versions
+`notebooks/requirements.txt` pins. Any environment that holds them renders it; the page checks before it
+downloads anything and names the versions it found.
 
 The page carries its table and its `rendered.json` inside it, as links that download them, so the one
 file is the whole of it; this deploy writes it as `laptop/index.html` and unpacks the two beside it
@@ -659,7 +668,7 @@ branch, not to a release. No `/laptop/` until a render is committed.
 
 Each page says, in a block under its title, when it was rendered, from which version, commit and
 release, by which run, and on what machine; `rendered.json` beside it says the same for a script.
-The service worker leaves the four addresses to the network (`src/sw.js`), as it does `v/`, `pr/`
+The service worker leaves the five addresses to the network (`src/sw.js`), as it does `v/`, `pr/`
 and every address but the app's own: they are pages of their own, and the app's shell answered there would be the app wearing
 their address. A reader whose worker predates this sees the app at those addresses until they take
 the update the app offers. Absent until the workflow has published once; the first run is by

@@ -4,17 +4,18 @@ description: "How each analysis is held to the package it reproduces, how its sp
 ---
 
 The tasks that re-implement a published method are run on public data by chromosomix and by the package
-each reproduces, and compared number for number; the three not compared yet say so. Four notebooks hold
+each reproduces, and compared number for number; the three not compared yet say so. Five notebooks hold
 chromosomix to:
 
 | Notebook | What it holds chromosomix to | Published at |
 | --- | --- | --- |
 | Validation | the package each task reproduces, on public data | <https://chromosomix.app/validation/> |
-| Timings | the same packages, in time and memory, and two other viewers in time to a picture | <https://chromosomix.app/timings/> |
+| Timings | the same packages, in time and memory | <https://chromosomix.app/timings/> |
+| Viewers | juicebox.js and HiGlass, in the time to a picture, on the same files | <https://chromosomix.app/viewers/> |
 | Parity | its own command line: the same run in the app, in three browsers, and in a shell, file for file | <https://chromosomix.app/parity/> |
 | Laptop | a genome-wide run on a laptop, on the command line and in three browsers, and six analyses over a deep human map against cooltools and coolpuppy | <https://chromosomix.app/laptop/> |
 
-In the app, **About this viewer**, in the header or the command palette, lists the four under
+In the app, **About this viewer**, in the header or the command palette, lists the five under
 **Notebooks**, with what each found and when it was rendered.
 
 ## The validation
@@ -69,12 +70,21 @@ built, so they describe the version these pages document.
 
 ## The timings
 
-The timings measure **the time to a picture**, against juicebox.js and HiGlass, and run **every command of
-the validation again**, setting each chromosomix command's CPU time, wall-clock time and peak memory
+The timings run **every command of the validation again**, on the machine that has just run the
+validation and on its files, setting each chromosomix command's CPU time, wall-clock time and peak memory
 beside its reference's. The command line uses one core unless told otherwise; a reference that takes a
 number of processes gets one per core, at most four. Cis and trans per sequence, the saddle, the fraction
-of signal in features, signal by group and Pairs QC are not timed. Beside the page: **`timings.tsv`** and
-**`viewers.tsv`**.
+of signal in features, signal by group and Pairs QC are not timed. Beside the page: **`timings.tsv`**.
+
+## The viewers
+
+The viewers notebook measures **the time to a picture**: chromosomix, juicebox.js and HiGlass each drawing
+the same contact map with one track beside it, at the same resolution, from disk and from the bucket the
+files are published in. chromosomix is timed on the `.mcool` and the `.hic`, juicebox.js on the `.hic`
+and HiGlass on the `.mcool`, so each is set beside chromosomix on a file both read. Yeast, chicken and
+mouse maps are each seen whole, one chromosome, a region and a locus, four times, the viewers taking turns
+to go first; no viewer chooses the resolution, and a picture drawn at another one, or in part, is kept as
+what it was. Beside the page: **`viewers.tsv`**.
 
 ## The parity
 
@@ -107,23 +117,26 @@ their outputs compared. The page carries **`pipeline.tsv`** and **`pipeline-memo
 The page at <https://chromosomix.app/laptop/> is rendered by hand, on the laptop its opening block names.
 To measure your own, render it from the root of a clone of
 [the repository](https://github.com/js2264/chromosomix), on a laptop that is plugged in and otherwise idle.
-It needs Quarto, Python with pandas, matplotlib and pyfaidx, Node and Playwright's browsers, and for its
-last part cooler, cooltools, coolpuppy and bioframe. It downloads about 16.9 GB and takes about twenty
-minutes on the command line, as long again in Chromium (Firefox and WebKit as the results give), and a
-quarter of an hour more for the deep map.
+It needs Node 22.12 or later and Playwright's browsers, which the repository installs, and an environment
+with Quarto, Jupyter, pandas, matplotlib, numpy and pyfaidx, and for its last part cooler, cooltools,
+coolpuppy and bioframe: `notebooks/environment-laptop.yml` makes one, named `open2c`, for micromamba,
+mamba or conda. The page checks the environment before it downloads anything, and names the versions it
+found. It downloads about 16.9 GB and takes about twenty minutes on the command line, as long again in
+Chromium (Firefox and WebKit as the results give), and a quarter of an hour more for the deep map.
 
 ```sh
 npm ci && npm run build && npm run build:cli
 npm ci --prefix notebooks/viewers && npx --prefix notebooks/viewers playwright install chromium firefox webkit
-pip install jupyter pandas matplotlib pyfaidx bioframe==0.8.0 cooler==0.10.4 cooltools==0.7.1 coolpuppy==1.1.0
-quarto render notebooks/laptop.qmd
+micromamba create -f notebooks/environment-laptop.yml
+micromamba run -n open2c quarto render notebooks/laptop.qmd
 ```
 
 ## When they are published
 
-The validation, the timings and the parity are rendered on a fresh GitHub runner for every release, and on
-demand, and published together only if all three rendered; each release keeps its own copies among its
-files. Every page opens on when, from which version and on what machine it was rendered.
+The validation, the timings, the viewers and the parity are rendered for every release, and on demand,
+each on a fresh GitHub runner of its own and all at once — the timings after the validation, on its
+runner, since they run its commands on its files — and published together only if all four rendered;
+each release keeps its own copies among its files. Every page opens on when, from which version and on what machine it was rendered.
 
 ## Checking a result yourself
 

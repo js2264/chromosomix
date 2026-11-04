@@ -498,7 +498,7 @@ function overview(repoUrl: string, tutorial: AboutTutorial | null | undefined, c
   )
 }
 
-/** *the validation, the timings and the parity*: notebooks named in a sentence. */
+/** *the validation, the timings, the viewers and the parity*: notebooks named in a sentence. */
 function phrase(notebooks: readonly Notebook[]): string {
   const names = notebooks.map((notebook) => `the ${notebook.title.toLowerCase()}`)
   return names.length < 2 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
@@ -530,9 +530,10 @@ export function notebooksPanel(notebooks: AboutNotebooks): HTMLElement {
     { class: 'about-notebooks', attrs: { 'aria-label': 'Notebooks' } },
     el('p', {
       text:
-        `${count} notebooks hold chromosomix to the packages it reproduces, to its own command line ` +
-        `and to a machine like yours. GitHub Actions renders ${phrase(byWorkflow)} on a fresh runner ` +
-        `with every release${laptop}. Each is published beside the app, with its tables.`,
+        `${count} notebooks hold chromosomix to the packages it reproduces, to the viewers most used ` +
+        `beside it, to its own command line and to a machine like yours. GitHub Actions renders ` +
+        `${phrase(byWorkflow)} with every release, each on a fresh runner of its own${laptop}. Each is ` +
+        `published beside the app, with its tables.`,
     }),
     el(
       'ul',

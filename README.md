@@ -569,13 +569,17 @@ Each analysis is held to the package it reproduces — cooltools, coolpuppy, chr
 bedtools and a dozen others — on public data, command for command, in a notebook rendered with every
 release: <https://chromosomix.app/validation/>, with every number its figures draw in one table beside
 it, <https://chromosomix.app/validation/validation.txt>; and how long each command takes beside its
-reference, <https://chromosomix.app/timings/>. A third notebook holds the app to this command: ten
+reference, <https://chromosomix.app/timings/>; and how long a map and a track take to draw beside
+juicebox.js and HiGlass, on the same files, <https://chromosomix.app/viewers/>. A fourth notebook holds
+the app to this command: ten
 tasks run in the app, in headless Chromium, Firefox and WebKit, then from the line its console wrote
 for each, and every file the two wrote compared, <https://chromosomix.app/parity/>. And what the commands cost on a machine
 like yours — the time and the peak memory of 23 analyses run genome-wide, up to a 1.08-billion-contact
 human map — is <https://chromosomix.app/laptop/>, rendered on a laptop and committed as
-`notebooks/laptop.html`; render `notebooks/laptop.qmd` with Quarto from a clone to measure your own: it
-downloads the data, runs each analysis once and tabulates them. The app lists all four in
+`notebooks/laptop.html`; render `notebooks/laptop.qmd` from a clone to measure your own —
+`micromamba run -n open2c quarto render notebooks/laptop.qmd`, in the environment
+`notebooks/environment-laptop.yml` makes — and it downloads the data, runs each analysis once and
+tabulates them. The app lists all five in
 **About → Notebooks**, each with the one line of what it found.
 
 Every task writes its results where `--out` points, each named after the file it came from up to

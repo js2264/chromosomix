@@ -46,7 +46,7 @@ import { dirname, extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-// The Playwright the timings pin (notebooks/viewers), or one installed globally.
+// The Playwright notebooks/viewers pins, or one installed globally.
 function playwright() {
   try {
     return createRequire(join(HERE, '..', 'viewers', 'package.json'))('playwright')

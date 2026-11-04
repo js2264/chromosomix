@@ -14,6 +14,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The viewers have a page of their own (§18.10).** The time to a picture — one map and one track
+  in chromosomix, juicebox.js and HiGlass, from disk and from the bucket — moves out of the timings
+  into `notebooks/viewers.qmd`, published at <https://chromosomix.app/viewers/> with `viewers.tsv`
+  beside it, and a release keeps `viewers-<tag>.html` beside its tables. The timings are the
+  validation's commands alone. *About → Notebooks* lists five notebooks, the viewers among them, and
+  the pages link to each other as before.
+- **An environment for the laptop (§18.10).** `notebooks/environment-laptop.yml` makes one, named
+  `open2c`, for micromamba, mamba or conda — Quarto, Jupyter, the packages the page imports and the
+  four its deep human map runs, at the reference environment's versions — and
+  `micromamba run -n open2c quarto render notebooks/laptop.qmd` renders the page in it. The page now
+  looks for every package it needs, and for Node.js, before it downloads or runs anything, rather than
+  stopping hours in at the deep map, and names under *The machine* the Python it ran in and the version
+  of each reference package, with the pin where it differs.
+
 - **An embed opens its side panels when its page asks (§21.2).** `?embed=1&panels=open` opens the
   Annotations and Aesthetics panels, `panels=annotations` or `panels=aesthetics` one of them; without
   it they arrive folded, as before. Written nowhere, like any fold in a frame.
@@ -101,6 +115,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The notebooks render all at once (§18.10).** `.github/workflows/notebooks.yml` starts the parity,
+  the validation with the timings after it, the viewers and the laptop together, each on a runner of
+  its own, so a run takes as long as its longest job, where the validation and the timings, the
+  viewers' pictures among them, had come to four hours after the parity's quarter of an hour, and
+  outran the six hours a job may take once the deep human map joined them. No
+  job waits for the parity to pass any more; the four published pages still go up together or not at
+  all. The timings stay on the validation's runner, since they run its commands on its files.
+
 - **A scaled metaplot's x axis says where the features start and end (§18.8).** It was labelled
   with column numbers — `0`, `100`, `200`, `300` — which told a reader nothing about the plot. It is
   now ticked at `Start` and `End`, the edges of the rescaled body, with round steps that fit the
@@ -125,6 +147,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   point for it.
 
 ### Fixed
+
+- **A notebook's download asks again after a 404 (§18.10).** NCBI's server for GEO answered 404 Not
+  Found for the validation's yeast map, a file it had served to the parity's and the laptop's runners
+  minutes before and served to every request after, and the validation stopped on its first cell.
+  `notebooks/scripts/download.py` now asks a 404 again three times, after 2, 4 and 8 seconds, as it
+  asks a 500 or a 403 again, and still names a file that is truly not there within a quarter of a
+  minute; any other 4xx is raised at once, as before.
 
 - **An embedded map takes the frame's height (§21.3).** Every picture sized against the window counted
   out a header, a tab strip, a breadcrumb row and a status bar that a frame does not have, so in an

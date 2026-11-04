@@ -190,7 +190,7 @@ describe('the notebooks', () => {
     tab('notebooks').click()
     expect(document.querySelectorAll('.about-notebook')).toHaveLength(NOTEBOOKS.length)
     expect(document.querySelector('.about-notebook-stamp')).toBeNull()
-    expect(document.querySelector('.about-notebooks')?.textContent).toMatch(/^Four notebooks hold chromosomix/)
+    expect(document.querySelector('.about-notebooks')?.textContent).toMatch(/^Five notebooks hold chromosomix/)
   })
 
   it('says which pages the workflow renders and which is rendered by hand', async () => {
@@ -204,10 +204,10 @@ describe('the notebooks', () => {
     openAbout('https://example.org/repo', null, undefined, null, notebooks)
     tab('notebooks').click()
     expect(document.querySelector('.about-notebooks > p')?.textContent).toBe(
-      'Four notebooks hold chromosomix to the packages it reproduces, to its own command line and to a ' +
-        'machine like yours. GitHub Actions renders the validation, the timings and the parity on a fresh ' +
-        'runner with every release; the laptop is rendered by hand, on a laptop. Each is published beside ' +
-        'the app, with its tables.',
+      'Five notebooks hold chromosomix to the packages it reproduces, to the viewers most used beside it, ' +
+        'to its own command line and to a machine like yours. GitHub Actions renders the validation, the ' +
+        'timings, the viewers and the parity with every release, each on a fresh runner of its own; the ' +
+        'laptop is rendered by hand, on a laptop. Each is published beside the app, with its tables.',
     )
     await settle()
     const line = (path: string): string =>

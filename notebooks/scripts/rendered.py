@@ -1,5 +1,5 @@
-"""When, from what, by what and on what a notebook was rendered (validation.qmd, timing.qmd, parity.qmd,
-laptop.qmd).
+"""When, from what, by what and on what a notebook was rendered (validation.qmd, timing.qmd, viewers.qmd,
+parity.qmd, laptop.qmd).
 
 `Render.head()` is the block under each notebook's title and `Render.foot()` the line at its end,
 both Markdown for a cell with `output: asis`; `foot()` also writes the same facts as JSON beside the
@@ -12,8 +12,9 @@ hand says so rather than borrowing a run's link.
 The notebooks link to each other through `Render.link()`. Where NOTEBOOKS_SITE names the site
 they are published on, a link goes to the other's page there, and a download to the file published
 beside the page; rendered by hand, to the other's HTML file and to the file in the page's own
-folder of work/ — work/validation/ for the validation and the timings, which share it, work/parity/
-for the parity and work/laptop/ for the laptop. Which page is where is `pages.py`'s table.
+folder of work/ — work/validation/ for the validation and the timings, which share it, work/viewers/
+for the viewers, work/parity/ for the parity and work/laptop/ for the laptop. Which page is where is
+`pages.py`'s table.
 
 **A page published as rendered by hand** — the laptop, committed as notebooks/laptop.html — is read
 in two places, from the disk it was rendered on and at its address on the site, so nothing it links

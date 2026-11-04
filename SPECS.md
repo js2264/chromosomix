@@ -1947,7 +1947,7 @@ the runtime between the click and the first byte: 2.6 of the 3.2 seconds a 1 GB 
 fresh tab took to land. It is made when the picker is on screen and the page is idle, and the same
 drop lands in 0.3 s — the picker a workspace or a restored tab puts up to ask for a map on this
 machine included, where a file dropped used to wait for a reader: a chromosome or a locus of the
-timings' three maps (§18.10) took 1.18 s to draw from it, and takes 0.96 s.
+viewers' three maps (§18.10) took 1.18 s to draw from it, and takes 0.96 s.
 
 ### 6.2 Decoding requirements
 
@@ -5899,7 +5899,7 @@ did not ask for, and on a map or a lane left without its data.
 `public/` puts two at the root. `robots.txt` lets every crawler in, those of language models
 included, points them at `llms.txt` and `llms-full.txt`, keeps the archived pins and the pull-request
 previews (`/v/`, `/pr/`) out of search — each is a copy of the app at the root, kept for links that
-must not change — and names `sitemap.xml`, which lists the app and its four notebooks.
+must not change — and names `sitemap.xml`, which lists the app and its five notebooks.
 
 **The files for language models are written by the site build, from the source it builds**
 (`scripts/llms.mjs`, `src/llms/`): `llms.txt` at the root, five reference pages under `llms/`, and
@@ -10201,8 +10201,8 @@ speed is a fold over the reference commands it is
 paired with, a side's commands summed where there are several (deepTools' `computeMatrix` and then
 `plotProfile` against one metaplot, and `plotHeatmap` as well against one over two tracks).
 
-**The timings open on the time to a picture.** Before the analyses, `notebooks/timing.qmd` times
-chromosomix against the two viewers most used for the same thing — juicebox.js on a `.hic`, and
+**The time to a picture is a page of its own.** `notebooks/viewers.qmd` times chromosomix against
+the two viewers most used for the same thing — juicebox.js on a `.hic`, and
 HiGlass on an `.mcool`, served by higlass-python's own tile server, at the versions
 `notebooks/viewers/package.json` and `notebooks/requirements-higlass.txt` pin — and chromosomix on both
 formats. Every picture is one map and one track: yeast, chicken and mouse (4DN's 7 GB mouse map), each
@@ -10219,9 +10219,11 @@ loaded first and kept apart, then left two seconds as a reader's is while they f
 the moment the viewer is handed the files to the moment it says the picture is finished: chromosomix by its own report (§12, *A picture says when it is finished*),
 juicebox.js by its last repaint covering the state asked for and its track's tiles, HiGlass by every
 tile in view fetched and drawn. Four rounds, the viewers taking turns to go first; every run, and
-every cell refused, is one line of `notebooks/work/validation/viewers.tsv`, with the requests and
-bytes the page asked for, the machine and every version.
-**And a third holds the app to its own command line.** `notebooks/parity.qmd` runs ten tasks in the
+every cell refused, is one line of `notebooks/work/viewers/viewers.tsv`, with the requests and
+bytes the page asked for, the machine and every version. It reads nothing the validation writes and
+fetches its own files, so it renders on a machine of its own, and the timings, which run the
+validation's commands on the validation's files, are the analyses alone.
+**And a fourth holds the app to its own command line.** `notebooks/parity.qmd` runs ten tasks in the
 app — this checkout's build, of the commit the command line is built from or nothing runs, served
 from loopback and driven by `notebooks/scripts/parity.mjs` **in each of the three browser engines
 Playwright drives headless**, Chromium, Firefox and WebKit, in turn, each launched once before any is
@@ -10244,11 +10246,18 @@ differs**, or one side alone wrote it. Every file and its verdict, in each brows
 `notebooks/work/parity/summary.tsv`, and the page says where the three browsers wrote one line for a
 run and where they did not.
 
-**And one for the reader's own machine.** `notebooks/laptop.qmd` answers what the other three do not
+**And one for the reader's own machine.** `notebooks/laptop.qmd` answers what the other four do not
 — what a genome-wide analysis costs on a machine like the reader's, on the command line and in the app,
 in each of three browsers — with Quarto, pandas, matplotlib and pyfaidx, the built app and command line
 and Playwright's Chromium, Firefox and WebKit, and for its last part alone four reference packages, so
-that a reader can render it on their own laptop. It downloads the
+that a reader can render it on their own laptop: `notebooks/environment-laptop.yml` is that
+environment for micromamba, mamba or conda, named `open2c`, every package at the version
+`notebooks/requirements.txt` pins, and `micromamba run -n open2c quarto render notebooks/laptop.qmd`
+renders the page in it. Any environment holding those packages will do: before it downloads or runs
+anything, the page looks for each in the Python that renders it — the one its reference script runs in
+— and for Node.js on the PATH, and stops on the first cell naming what is missing, rather than hours
+in at the deep map; and it names, under *The machine*, that Python and the version of each reference
+package it found, with the pin where it is not the one the reference environment holds. It downloads the
 validation's mouse map, yeast Micro-C, ATAC-seq replicates, mm10 and its RefSeq genes, 4DN's IMR-90
 in situ Hi-C (Rao et al. 2014, 4DNFIJTOIGOI, 1.08 billion contacts) and hg38: about 16.9 GB into
 `notebooks/work/laptop/data/`, each file held to its MD5, a file `validation.qmd` already holds linked
@@ -10355,20 +10364,33 @@ runs them. Each file is fetched from where it was published, on every render, th
 answers in full a second later; a connection refused, reset or timed out; a body shorter than it was
 announced — after a wait that doubles from two seconds to half a minute, from the byte it reached
 where the server takes a range, and gives up only after twenty failures in a row with no byte between
-them, about eight minutes; any other 4xx is raised at once. One failed request was enough to stop a
+them, about eight minutes; **a 404 is asked again three times**, after 2, 4 and 8 s, since on 4
+November GEO answered one for a file it had served to two runners minutes before and served to every
+request after, and a file truly not there is still named within a quarter of a minute; any other 4xx
+is raised at once. One failed request was enough to stop a
 run, and on 1 November 2026 GEO failed one request in two.
 
-**They are published with every release, a job a notebook.** `.github/workflows/notebooks.yml`
-renders each on a fresh runner, with what `.github/actions/notebooks-setup` installs for it: the
-app's build, and the reference environment pinned package by package in `notebooks/requirements.txt`,
-which brings Quarto and every package the notebooks import; for the validation, yapc's environment
-(`requirements-yapc.txt`, IDR and yapc built at the commits the notebook cites), Boost-HiC's checkout,
-and Ubuntu's bedtools and seqkit; for the parity, the timings and the laptop, the two viewers with
-Playwright's Chromium, and for the parity and the laptop its Firefox and WebKit too; for the timings, higlass-python's environment with libfuse. The parity renders
-first, alone, so that a page that cannot render stops the run before the hours of the others; then
-the validation and the timings in one job — the timings run the validation's commands on the inputs it
-fetched and made, which no other runner holds — beside the laptop in another, which sets the
-committed page aside first so that what it gathers is its own render or nothing. Each render runs through
+**They are published with every release, a job a notebook, all at once.** `.github/workflows/notebooks.yml`
+renders each on a fresh runner of its own, with what `.github/actions/notebooks-setup` installs for it:
+the app's build, and the reference environment pinned package by package in
+`notebooks/requirements.txt`, which brings Quarto and every package the notebooks import; for the
+validation, yapc's environment (`requirements-yapc.txt`, IDR and yapc built at the commits the notebook
+cites), Boost-HiC's checkout, and Ubuntu's bedtools and seqkit; for the viewers, the parity and the
+laptop, the two viewers with Playwright's Chromium, and for the parity and the laptop its Firefox and
+WebKit too; for the viewers, higlass-python's environment with libfuse. **The parity, the validation,
+the viewers and the laptop start together**, once the site the pages link to is worked out, so the run
+takes as long as its longest job rather than the sum of them, and none waits for another to pass —
+the parity once went first, alone, so that a page that cannot render stopped the run before the hours
+of the others, and cost every run its quarter of an hour; a render that fails now fails on its own
+runner, and the others finish. Each runner fetches its own data, a file two jobs read fetched by each,
+and **nothing one runner measures is set beside what another measured**: each comparison a page makes —
+chromosomix and a reference, the three viewers, the command line and the three browsers — is made on
+the runner that renders it, which the page names. The validation and the timings are the one pair in
+one job, the timings after the validation: they run the validation's commands on the inputs it
+fetched and made, which no other runner holds, and handing those 8 GB to another as an artifact would
+cost the storage and save no time, since the timings would still wait for the validation. The laptop's
+job sets the committed page aside first, so that what it gathers is its own render or nothing.
+Each render runs through
 `notebooks/scripts/memory.sh`, which writes into the job's log, every ten seconds, the memory in use
 and available and the three programs holding the most: a runner whose memory runs out is shut down
 in the middle of a step, with no error from the command and no step after it, and the log streamed
@@ -10377,12 +10399,13 @@ Each job gathers its pages with
 `notebooks/scripts/pages.py`, the one table of where each page is published and which files go beside
 it, which `rendered.py` reads too, and every job keeps what it rendered as an artifact for 90 days,
 even when it fails: the validation alone, with the timing rounds it finished, when the timings fail.
-A last job publishes the validation, the timings and the parity only if the three rendered —
-`pages.py published` names them — at `<site>/validation/`, `<site>/timings/` and `<site>/parity/`,
+A last job, once all four are done, publishes the validation, the timings, the viewers and the parity
+only if the four rendered — `pages.py published` names them — so that the pages on the site are never
+of two runs, at `<site>/validation/`, `<site>/timings/`, `<site>/viewers/` and `<site>/parity/`,
 each a self-contained page with its tables beside it (`commands.json`, `summary.tsv` and
-`validation.txt`, every command, every verdict and every number its figures draw; `timings.tsv` and
+`validation.txt`, every command, every verdict and every number its figures draw; `timings.tsv`;
 `viewers.tsv`; the parity's `summary.tsv`, every file compared);
-a release keeps its own copies of the three pages and of the five tables as assets. **The runner's laptop is published nowhere**: not to the
+a release keeps its own copies of the four pages and of the five tables as assets. **The runner's laptop is published nowhere**: not to the
 site, whose `laptop/` is the committed page, nor to a release, whose laptop is the one committed in its
 source; it is the run's artifact, and its section of the run's summary, and whether it rendered decides
 nothing about publishing the others. It runs when a release is published and on demand. Each page opens on a
@@ -10395,7 +10418,7 @@ command line and in the app. The run's
 summary is a section a notebook: where it is, from what and in how long, that line, and its table,
 folded. The pages link to each other there and on a reader's disk alike, but for the laptop, which
 links the site's from either. They are no build of the app,
-so the service worker leaves those four addresses to the network, as it does `v/`, `pr/` and every
+so the service worker leaves those five addresses to the network, as it does `v/`, `pr/` and every
 address but the app's own (§11), and the
 app, from this version on, finding itself at any of them unregisters its worker and reloads once
 (`recoverPinnedNavigation`), as at `v/`; a worker from before answers there with its own app until its
@@ -10415,11 +10438,11 @@ commit, in how long, on how many cores and how much memory, and by which run of 
 or *by hand*, which is how the laptop's is rendered, and the tab's sentence says which pages GitHub
 Actions renders and which one is rendered by hand, on a laptop. The list is `src/notebooks.ts`, held
 by `test/unit/notebooks.test.ts` to `pages.py`'s table — its pages, their titles, and which is rendered
-by hand — and to the segments the app recovers from (`recoverPinnedNavigation`), so a fifth notebook cannot be published
+by hand — and to the segments the app recovers from (`recoverPinnedNavigation`), so a sixth notebook cannot be published
 without the tab naming it. The pages are this site's, when the app is served from one — an archived pin and a preview
 reach up to its root — and the deployed site's, by `package.json`'s `homepage`, from the desktop, the
 single file, the package's copy and a dev server; a build that can name neither has no Notebooks tab.
-**The stamps are read when the tab is first chosen, never when *About* opens**, all four at once; until
+**The stamps are read when the tab is first chosen, never when *About* opens**, all five at once; until
 one answers its block says it is being read, and one that cannot be read — offline, a page not
 published yet, a file that does not parse — takes its two lines away and leaves the link. A stamp is
 untrusted input that ends up on screen: a field that fails its check is dropped rather than repaired, a

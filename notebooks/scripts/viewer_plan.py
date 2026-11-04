@@ -1,4 +1,4 @@
-"""What timing.qmd's first section asks of each viewer, worked out from the files themselves.
+"""What viewers.qmd asks of each viewer, worked out from the files themselves.
 
 Every run is one map and one track, at one resolution, in one viewer. The resolution is the
 plan's, never the viewer's: each viewer is asked for it in the one way it offers, and a viewer

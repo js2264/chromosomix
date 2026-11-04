@@ -1,5 +1,5 @@
 /**
- * The time to a picture, in three viewers: what timing.qmd's first section runs.
+ * The time to a picture, in three viewers: what viewers.qmd runs.
  *
  *   node viewers.mjs PLAN.json RESULTS.jsonl
  *
