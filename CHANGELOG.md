@@ -22,6 +22,91 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   size*. The card's only drop with a map open used to be the triangle's, so a new file reached the
   deck from the card by no road at all.
 
+- **Live examples in the documentation (§32.4).** Ten pictures — the introduction's, moving around,
+  a contact map and its O/E, two maps compared, a ratio, one map read two ways, the 45° view, the
+  genome browser and an embed in a page — carry **Try it live**, which swaps the picture for the
+  app itself, embedded, on the same view of the demo data, across the page's width from the sidebar
+  to the window's edge, with a line to open it in a tab of its own or go back to the picture. The
+  contents list on the right steps aside while the frame is under it. Nothing of the app is loaded
+  until it is pressed, and each copy of the site embeds its own release's build.
+- **A documentation site, one copy per release (§32).** <https://doc.chromosomix.app> is written for
+  the people who use chromosomix: getting started, the files it opens and from where, using the
+  browser, every analysis, the command line, the notebook widgets, hosting data and publishing a
+  store of your own, privacy, and a glossary. *Ways to use chromosomix* draws the nine places it
+  runs — the web app, installed or not, the desktop app, one HTML file, a fixed release, your own
+  server, a web page, a notebook and a shell — and says how to start each. Its 75 pictures are the
+  real app, shot by a script per page on the demo data and shown at the size the app drew them.
+  Each task has a page whose method, validation result, command and every parameter are read from
+  the app's registry as the site is built, so they are that release's; the reference pages for
+  links, the command line, embedding and formats are the ones the app writes for language models,
+  and the release notes are this file, one page a release.
+  Every release gets its own copy, built from its tag, at `/v<version>/`; the latest is also at the
+  root and `main` at `/dev/`, and a menu in every copy's header lists them all. It is Starlight with
+  the Rapide theme in the app's own colours, grain and type. The source is `documentation/`
+  (`npm run docs:dev`); `.github/workflows/docs.yml` publishes it to the `gh-pages` branch of
+  js2264/chromosomix-docs with a deploy key, and builds without publishing until that key is set;
+  the pull-request suite builds it and checks every internal link.
+- **The app opens its documentation (§5.5, §32).** An open book in the header, between the shortcuts
+  and the source, opens <https://doc.chromosomix.app> in a tab of its own; so do *Documentation* in
+  the palette's Help, a line in *About* before the source, and the last lines of
+  `chromosomix --help`. Each opens the site's root — the latest release's copy — since the live
+  site, built from `main`, cannot name a copy of its own. The README carries a badge for it.
+- **Test coverage, over the whole app.** `npm run test:coverage` runs the full suite with V8
+  coverage over every file under `src/` and `electron/` — a file no test loads counts at zero, so
+  the figure is the app's and not the suite's — and prints it one row per area of the source, with
+  the files each leaves unloaded; `coverage/index.html` is the file-by-file view. The Tests workflow
+  reports the fixture-free suite's coverage on every push, and the full suite's where metacooler's
+  fixtures let it run, in each job's summary, with the report kept as an artifact for two weeks.
+  After every green full suite on `main`, the report is published at
+  <https://chromosomix.app/coverage/>, and the README's **Coverage** badge shows its line coverage
+  (docs/deploy.md).
+- **The laptop ends on a deep human map, start to finish, against the packages it reproduces
+  (§18.10).** `notebooks/laptop.qmd` now times six analyses one after the other over 4DN's IMR-90 in
+  situ Hi-C (4DNFIJTOIGOI, 1.08 billion contacts): loop calling and diamond insulation (10 bins) at
+  10 kb, compartments at 250 kb phased by GC content, APA over every loop called, raw, P(s) at 10 kb
+  over every diagonal, and a virtual 4C at 10 kb from the bin of *MYC*'s promoter, in cis — the first
+  five over the whole genome. `chromosomix` runs them as six commands; the reference is one Python
+  script running cooltools and coolpuppy in one process (`notebooks/scripts/cooltools_pipeline.py`).
+  Each side's start-up, each step and the whole are timed — CPU, wall clock and peak memory, the
+  memory weighed four times a second on a Mac as on Linux — and what the two wrote is compared step
+  by step. Every step is a line of `pipeline.tsv`, and every weighing of each side's memory a line of
+  `pipeline-memory.tsv`, both carried in the page and unpacked beside it at `laptop/`; the page and
+  `notebooks/scripts/timing.plot.R`'s panel c draw the memory against the wall clock, each phase
+  shaded, its peak and the end of each side marked. The laptop needs cooler, cooltools, coolpuppy and
+  bioframe for this part, and hg38 (3.2 GB) for its GC content.
+- **The parity runs in Firefox and WebKit too (§18.10).** `notebooks/parity.qmd` drives its ten
+  tasks in each of the three engines Playwright drives headless — Chromium, Firefox and WebKit — and
+  runs the line each browser's console wrote on the files that browser's sessions read, so the
+  pileup is over the loops that browser called. Every file is compared browser by browser:
+  `summary.tsv` has a `browser` column, each case lists its verdict in each browser and says whether
+  the three wrote the same line, and `PARITY_BROWSERS` names fewer. The Notebooks workflow installs
+  the two for the parity's job.
+
+### Changed
+
+- **A scaled metaplot's x axis says where the features start and end (§18.8).** It was labelled
+  with column numbers — `0`, `100`, `200`, `300` — which told a reader nothing about the plot. It is
+  now ticked at `Start` and `End`, the edges of the rescaled body, with round steps that fit the
+  plot's width between and outside them: `25%`, `50%`, `75%` (or tenths) through the body, and
+  `-5 kb` … `-1 kb` before the start and `+1 kb` … `+5 kb` after the end along the flanks. A wider
+  figure and a window wheeled into one part of the axis take finer steps, and a PNG or PDF carries
+  the ticks on screen; the axis now reaches the flanks' far ends; and the crosshair and the tooltip
+  spell the position the same way (`37.4%`, `-150 bp`). The per-feature heatmap under it, which had
+  five blank ticks, names `-5 kb`, `Start`, `50%`, `End` and `+5 kb` where they fall. The numbers
+  the curve's TSV and the command line write are unchanged.
+- **The laptop notebook's memory table gives a browser's whole peak (§18.10).** Its column for a
+  browser was what a run added to what the page held when **run** was pressed, beside the command
+  line's whole peak, so the app read as lighter than the command line in 49 of its 69 runs, though
+  its page held 160 MB to 1.4 GB before the run began. The table now gives the whole peak in every venue,
+  the page's in each browser, the app itself included, and beside it, for each browser, what the run
+  added; the sentence under the tables gives the median of each.
+- **The timings no longer time Pairs QC (§18.10).** Its seven commands — `chromosomix pairsqc`, and
+  `cooler cload`, `pairtools restrict` on each strand, the counts drawn from them, the coverage
+  against the cuts and `pairtools stats` as its reference — are written to `commands.json` and not
+  run by `notebooks/timing.qmd`, as §§ 20–23's are not: Pairs QC is still held to them in
+  `notebooks/validation.qmd` § 27, and timed nowhere. `notebooks/scripts/timing.plot.R` draws no
+  point for it.
+
 ### Fixed
 
 - **A deck cell's heading no longer runs into the next cell (§16.9).** Four maps across a column
@@ -35,6 +120,51 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   wide round a 13-pixel mark, and a collection's rung picker is as wide as the rung it shows, as the
   sequence picker beside it already was — so a narrow cell's controls fit under its name on one line.
 
+- **An embed's bar fits a narrower frame (§21.3).** The bar was one row that scrolled, so in a frame
+  of 1,040 pixels the contacts box's example was cut, at 910, the width of an R Markdown page, the row
+  ended at `con`, at 720 the resolution and the box were out of sight, and at 480 the frame scrolled
+  sideways. The two now take a line of their own under the file and the place, together and with
+  their labels, and the file is named in full where it fits; narrower, the brand keeps its mark
+  alone; and at a phone's width the contacts box is put away and the resolution kept, its stops
+  wrapping and its slider gone, so a file of five resolutions keeps all five on the frame.
+- **The pointer gives a derived cell's reading and the count behind it (§7.5).** On one map drawn as
+  O/E, the line under the map read `O/E 1.95× · balanced 1.95`, the count being the ratio drawn
+  again, over a cell whose balanced count was 0.000537; and the card beside the pointer gave
+  `balanced 1.95` alone. Both now give the derived value, the card on a line of its own, and under
+  it the cell's own count; the expected map and the O/E along the arms read the same way.
+- **A sequence's name opens the sequence, and a gene typed whole is listed first (§5.4).** With a
+  gene model loaded, `IV` and Enter in a locus box opened the gene IVY1 rather than chromosome IV,
+  since Enter takes the first gene listed and IVY1 begins with `IV`; and `RAD5` was listed fifth,
+  after RAD59, RAD57, RAD55 and RAD54, so Enter opened RAD59. The sequence a name means now heads
+  the list wherever genes begin with it, read through every spelling the box accepts (`chrIV`,
+  `iv`), and a name or accession typed whole comes before the names it begins. The map's box, the
+  whole genome's and the 1D browser's all follow it.
+- **A host's error status is headed as the refusal it is (§10, §24.6).** A `404` or a `403` to the
+  `HEAD` a remote file is opened with was headed *That URI does not parse*, and its message sent a
+  reader with a private bucket to *Open a file → Private buckets*, which no longer exists. A
+  presigned link that had expired, which skips the `HEAD`, failed the range probe under *That host
+  does not serve byte ranges*. Both are now headed *The host would not give this file*, with advice
+  for a public file, a private bucket (*connect a bucket…*) and a presigned link, and an expired
+  presigned link says that it is one; a host that answers a range with the whole file is still told
+  it serves no ranges. The Google sign-in offer and the command line's whole download, which read
+  the same codes, are unchanged.
+- **The HiC-Pro conversion hint names `--one-based` (§3.9).** HiC-Pro numbers its bins from 1, and
+  `cooler load -f coo` reads a COO file's bin ids from 0 unless it is told otherwise.
+- **A store from a newer build is called a store (§24.1)**, in its own format's numbers: the refusal
+  said *workspace format 2* and the workspace version this build reads.
+- **The note for a hub on UCSC's servers says what works (§24.10)**: a copy of the hub and its files
+  on a host that sends the header, or the tracks dropped one by one. It sent the reader to a
+  connected folder, which lists a `hub.txt` dimmed and opens no hub.
+- **The directionality index's price refuses what its runner cannot score (§18.8).** A bin needs a
+  whole window each side, so a sequence must be longer than twice the window; the price refused
+  only one no longer than the window, and a sequence in between was priced, read and then dropped
+  without a score.
+- **The drawer says where a new 3D model goes (§25.3)**: a structure cell of its own, beside what the
+  deck shows, rather than *add one from the deck's bar if none is open*.
+- **SPECS, the notes under `docs/` and the glossary say what the code does** where they had drifted:
+  the tutorial's 58 steps (§30), which builds keep a connected folder (§24.2), the two 3D tasks'
+  ρ (§25.6), the desktop notes on compressed hosts, writing and what quitting leaves, the store
+  generator's anonymous listing, where the stored-data screen is, and the console's key.
 - **The notebooks no longer fail on one failed download (§18.10).** Both runs of the Notebooks
   workflow for 0.19.0 stopped a minute into the parity, on its first file: NCBI's server for GEO
   answered `500 Internal Server Error`, as it did that day to about one request in two, and now and

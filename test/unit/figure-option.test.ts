@@ -82,6 +82,76 @@ describe('seriesColour', () => {
   })
 })
 
+describe('optionOf, over a scaled region', () => {
+  /** A scaled metaplot of 400 columns: 5 kb flanks of 50 bp about a 200-column body. */
+  const scaledCurve = (): CurveOutput =>
+    curve({
+      xLabel: 'Position (upstream · body · downstream)',
+      series: [
+        {
+          name: 'ATAC',
+          x: Float64Array.from({ length: 400 }, (_, i) => i),
+          y: Float64Array.from({ length: 400 }, (_, i) => Math.sin(i / 20)),
+        },
+      ],
+      xScaled: { from: -0.5, start: 99.5, end: 299.5, to: 399.5, flankStep: 50 },
+    })
+  const xAxisOf = (option: Record<string, unknown>): Record<string, unknown> =>
+    option['xAxis'] as Record<string, unknown>
+
+  it('ticks Start and End and round steps either side, as many as fit the width', () => {
+    const spec = specOf(scaledCurve()) as XyFigureSpec
+    const style = defaultStyle(spec)
+    const at = (width: number): number[] =>
+      ((xAxisOf(optionOf(spec, style, THEME, { width, height: 400 }))['axisLabel'] as Record<string, unknown>)[
+        'customValues'
+      ] as number[])
+    const wide = at(2000)
+    const narrow = at(700)
+    for (const ticks of [wide, narrow]) {
+      expect(ticks).toContain(99.5)
+      expect(ticks).toContain(299.5)
+      // The flanks' far ends, which are the axis's ends.
+      expect(ticks[0]).toBe(-0.5)
+      expect(ticks[ticks.length - 1]).toBe(399.5)
+    }
+    expect(wide.length).toBeGreaterThan(narrow.length)
+    // The ticks, the grid and the labels are one set.
+    const axis = xAxisOf(optionOf(spec, style, THEME, { width: 700, height: 400 }))
+    expect((axis['axisTick'] as Record<string, unknown>)['customValues']).toEqual(narrow)
+  })
+
+  it('spells the column as the place along the feature it is', () => {
+    const { option } = build(scaledCurve())
+    const label = xAxisOf(option)['axisLabel'] as { formatter: (value: number) => string; showMinLabel?: boolean }
+    expect(label.formatter(99.5)).toBe('Start')
+    expect(label.formatter(299.5)).toBe('End')
+    expect(label.formatter(199.5)).toBe('50%')
+    expect(label.formatter(-0.5)).toBe('-5 kb')
+    expect(label.formatter(319.5)).toBe('+1 kb')
+    // Every tick is a landmark, the axis's two ends included.
+    expect(label.showMinLabel).toBe(true)
+  })
+
+  it('runs from the outer edge of the first column to that of the last', () => {
+    // The samples are the columns' centres; the flanks end half a column out.
+    const { spec, style, option } = build(scaledCurve())
+    expect(figureFit(spec, style, 'x')).toEqual([-0.5, 399.5])
+    expect(xAxisOf(option)['min']).toBe(-0.5)
+    expect(xAxisOf(option)['max']).toBe(399.5)
+  })
+
+  it('leaves a log abscissa to its own ticks', () => {
+    // A column index on a log axis is a picture of nothing in particular, and
+    // the landmarks with it; the reader asked for it, so it is the library's.
+    const { option } = build(scaledCurve(), (style) => {
+      style.x.scale = 'log'
+    })
+    const label = xAxisOf(option)['axisLabel'] as Record<string, unknown>
+    expect(label['customValues'] === undefined || !(label['customValues'] as number[]).includes(99.5)).toBe(true)
+  })
+})
+
 describe('optionOf', () => {
   it('keeps a hidden series on the picture and off in the legend', () => {
     const { option } = build(curve(), (style) => {

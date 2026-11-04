@@ -237,7 +237,10 @@ describe('the metaplot runner, standardising', () => {
     // with the centres would read −75 at one end and +75 at the other — half a
     // bin in from the window the picture is of, with no zero under the anchor.
     expect(matrix.xTicks).toEqual(['-100', '-50', '0', '50', '100'])
+    expect(matrix.xTickAt).toBeUndefined()
     expect(matrix.xLabel).toBe('Distance from the anchor (bp)')
+    // A reference point's abscissa is base pairs already, and spelled as such.
+    expect(curveOf(await runMetaplot(job(PARAMS(false)))).xScaled).toBeUndefined()
   })
 
   it('reads a session stored before the option existed as one with it off', async () => {

@@ -1,0 +1,61 @@
+---
+title: "Metaplot over a feature set"
+description: "Average one or more tracks around every feature of a set, with a confidence band and a heatmap of the features one by one."
+---
+
+import TaskCommand from '@components/TaskCommand.astro'
+import TaskOutputs from '@components/TaskOutputs.astro'
+import TaskParameters from '@components/TaskParameters.astro'
+import TaskSummary from '@components/TaskSummary.astro'
+
+<TaskSummary id="metaplot" />
+
+What does ATAC-seq look like around every transcription start site, or insulation around every CTCF peak? **Metaplot over a feature set** reads one or more tracks in a window about each feature of a set and averages them, column by column, into a profile, with a band round it and a heatmap of every feature under it — the heatmap being what tells you whether the line describes the set or is the average of two populations that describes neither. It is deepTools' `computeMatrix` and `plotProfile`, in the browser.
+
+## Running it
+
+Load one or more tracks — a bigWig, bedGraph or wig, or a track another task made — and a set of features: a BED, narrowPeak, GTF or any other interval file (see [Tracks and features](/files/tracks/)). Open **Metaplot over a feature set** on the **1D tasks** card of the **Analysis** panel, tick the **tracks** and choose the **features**. No contact map is needed: it runs in [the genome browser](/browse/genome-browser/) as it does beside a map, and it reads nothing from a map.
+
+The drawer shows the profile, a line per track — and per group, when you rank the set into groups — with its band, and under it a heatmap for every line, one row per feature.
+
+![The drawer of the metaplot of yeast ATAC-seq about the start of each of the 7,071 transcripts of the demo's GTF, 2 kb either side: the profile, peaking just upstream of the start, above the per-feature heatmap of every transcript, strongest first.](../../../assets/screens/analyses/metaplot-atac-tss.webp)
+
+The same run from a shell:
+
+<TaskCommand id="metaplot" />
+
+## Parameters
+
+**mode** chooses the window. A **reference point** window is a fixed **flank** either side of one point of each feature — its **start**, **centre** or **end**, under **anchor on** — read as one column per **resolution** base pairs; the defaults, 2 kb either side of the start in 50 bp columns, are the usual profile about a TSS. A **scaled region** window resamples every feature's body to **body columns** columns between its two flanks, so features of every length share one axis. **respect strand** reads a minus-strand feature right to left, which is what a start means on a gene; leave it on for anything stranded, or an asymmetric signal cancels itself out.
+
+**rank by** sorts the features by a numeric column of the set — its score, or another number its features carry — and **then** says what to draw from the ranking: **one line**, the **top N**, the **bottom N**, or **K groups** of equal size, each its own line. This is the check that the strongest features look like something and the weakest like nothing. **z-score tracks first** puts tracks in different units on one axis; without it, beside a track that runs over tens, one that runs over ±2 is a flat line along the bottom.
+
+<TaskParameters id="metaplot" />
+
+## What it writes
+
+<TaskOutputs id="metaplot" />
+
+## Reading the result
+
+### The profile
+
+Each column is the average, over the features that reach it, of the track's mean over the bases the column covers. A feature with no value in a column is left out of that column, never counted as zero. The x axis is the distance from the anchor in base pairs. In a scaled window it is marked **Start** and **End** where every feature's body begins and ends; between them, the share of the way through the body (`25%`, `50%`, `75%`, or tenths); outside them, the distance from the nearer of the two, `-1 kb` before the start and `+1 kb` after the end, as deepTools labels the same plot. A wider figure, or a window wheeled into one part of the axis, takes finer steps, and the pointer reads its position the same way (`37.4%`, `-150 bp`). The heatmap under it marks the flanks' ends, **Start**, `50%` and **End** where they fall.
+
+The band is a 95 % bootstrap interval by default, drawn by resampling the features, so it says how sure the average is for this set; a narrow band is a well-determined line. **SD** draws the spread of the features instead, which says how alike they are. A **median** or a **trimmed** mean — the mean of the middle 80 % — keeps a few extreme features from carrying the line.
+
+### The heatmap
+
+One row per feature, strongest first by its mean over every column of every track, and in the same order in every heatmap of the run, so one row is one feature in every track — the order deepTools' `plotHeatmap` gives several samples. Colours run from zero to the 99th percentile — symmetrically about zero for a track that goes negative, such as a z-score — so one extreme feature does not wash out the rest; a feature no track covers sits at the bottom.
+
+Read it before the line. A line that is the average of a strong block of rows and an empty one describes neither block, and ranking the set into groups is then the way to show both.
+
+### Things to watch for
+
+- In a scaled window, a feature shorter in bases than the number of body columns is dropped rather than stretched, and so is one whose window is clipped away at a sequence end; a note says how many.
+- Near the end of a sequence a reference-point window is clipped: the columns past the end are empty, never squeezed into the rest.
+- Every feature of the set is a row. A GTF's transcripts are features, so a gene whose transcripts share a start counts once per transcript.
+
+## Compared with deepTools
+
+The columns are `computeMatrix`'s. A reference point's centre is half the feature's length, rounded down, from its start; a window clipped by a sequence end keeps its columns **resolution** wide, counted from the anchor, and the column the sequence ends in is the mean over the bases it has; and each track is read at its own resolution, never from a zoom level. In [the validation](https://chromosomix.app/validation/#metaplot-deeptools), mouse ATAC-seq about every RefSeq TSS, 2 kb either side in 50 bp columns, gives deepTools' profile to the digits written and every heatmap row deepTools' row within the two tools' rounding; over two tracks the rows come in `plotHeatmap`'s order. The one difference is where the rows no track covers go: last here, first in deepTools.

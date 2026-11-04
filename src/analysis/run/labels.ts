@@ -17,7 +17,8 @@
  * uses, and not `ui/labels.ts`, which is main-thread and names the DOM.
  */
 
-import { resolutionLabel } from '../../units'
+import type { ScaledAxis } from '../types'
+import { fmt, resolutionLabel } from '../../units'
 
 /** `2 Mb`, `10 kb`, `500 bp` — a distance, as a lane is labelled with one. */
 export function formatBp(bp: number): string {
@@ -59,3 +60,28 @@ export function offsetTicks(cells: number, binsize: number): string[] {
   return [0, 0.25, 0.5, 0.75, 1].map((fraction) => formatOffset(-half + fraction * 2 * half))
 }
 
+
+/**
+ * A position along a scaled-region abscissa, as its ticks and its pointer
+ * spell it: `Start` and `End` at the body's edges, the share of the way
+ * through the body between them — `50%` — and outside them a signed distance
+ * **from the nearer of the two**, `-1 kb` before the start and `+1 kb` after
+ * the end, as deepTools labels the same plot.
+ *
+ * From the edge rather than from the window's end because that is the question
+ * a reader asks of a flank — *how far upstream of the gene is that dip* — and
+ * the start and the end are the only two points every feature in the set has.
+ * A whole share is printed without places and any other with one, so the ticks
+ * read `25%` and the pointer `37.4%`.
+ */
+export function scaledLabel(axis: ScaledAxis, x: number): string {
+  if (!Number.isFinite(x)) return ''
+  const near = 1e-9 * Math.max(1, Math.abs(axis.to - axis.from))
+  if (Math.abs(x - axis.start) <= near) return 'Start'
+  if (Math.abs(x - axis.end) <= near) return 'End'
+  if (x < axis.start) return formatOffset((x - axis.start) * axis.flankStep)
+  if (x > axis.end) return formatOffset((x - axis.end) * axis.flankStep)
+  const share = (x - axis.start) / (axis.end - axis.start)
+  const per = share * 100
+  return fmt.pct(share, Math.abs(per - Math.round(per)) < 1e-6 ? 0 : 1)
+}

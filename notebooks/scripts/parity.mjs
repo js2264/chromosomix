@@ -1,11 +1,13 @@
 /**
- * The browser's half of parity.qmd: every task of the plan run in the app, in headless Chromium,
+ * The browser's half of parity.qmd: every task of the plan run in the app, in one of the three
+ * browser engines Playwright drives headless — Chromium, Firefox or WebKit, as the plan names it —
  * and every file it offers for each run saved.
  *
  *   node parity.mjs PLAN.json RESULTS.json
+ *   node parity.mjs --version BROWSER [EXECUTABLE]
  *
- * PLAN.json is written by the notebook: where the app's build is, the folder the data are in, the
- * folder to save into, and the sessions, in order. A session is a workspace and the files it
+ * PLAN.json is written by the notebook, once a browser: the browser, where the app's build is, the
+ * folder the data are in, the folder to save into, and the sessions, in order. A session is a workspace and the files it
  * names, or the files alone, dropped on the landing page as a reader drops them — so every path
  * the app writes, in a file's provenance or on the console's line, is the file's own name — and
  * then its cases, one
@@ -13,7 +15,7 @@
  * run, and every output saved through the buttons a reader presses: the drawer's TSV, BED and
  * BEDPE under each result, and the bigWig and the bedGraph of each track a run adds, from its row
  * on the Tracks card, where the app offers them. A file is saved as `<output>.<format>`, the
- * output's id and the format, under `<out>/<case>/browser/`, which is how the command line names
+ * output's id and the format, under `<out>/<case>/<browser>/`, which is how the command line names
  * the same file after its stem and the task.
  *
  * What the run's line on the console says (§23) is read from the record the console is drawn
@@ -21,9 +23,12 @@
  *
  * A case may take its input from an earlier case: `inputs` copies a file the browser saved for it
  * into the data folder under a name of its own, before the session that names it is opened — the
- * loops called in one session are the loops aggregated in the next.
+ * loops called in one session are the loops aggregated in the next. `{browser}` in its path is the
+ * browser's folder, so that each browser aggregates the loops it called itself.
  *
- * RESULTS.json is written once, at the end: one entry a case, failed ones included.
+ * RESULTS.json is written once, at the end: the browser, its version, and one entry a case, failed
+ * ones included. `--version` launches the browser named, prints its version and closes it, which is how
+ * the notebook learns, before it runs anything, that each browser it names is there.
  */
 
 import { copyFileSync, createReadStream, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -41,14 +46,57 @@ function playwright() {
     return createRequire(join(process.execPath, '..', '..', 'lib', 'node_modules', 'x'))('playwright')
   }
 }
-const { chromium } = playwright()
+/** The browsers a plan can name, as Playwright names them, and as a reader does. */
+const BROWSERS = { chromium: 'Chromium', firefox: 'Firefox', webkit: 'WebKit' }
 
-const [planPath, resultsPath] = process.argv.slice(2)
-if (planPath === undefined || resultsPath === undefined) {
-  console.error('usage: node parity.mjs PLAN.json RESULTS.json')
+const [planPath, resultsPath, executable] = process.argv.slice(2)
+if (planPath === undefined || (planPath === '--version' ? !(resultsPath in BROWSERS) : resultsPath === undefined)) {
+  console.error('usage: node parity.mjs PLAN.json RESULTS.json\n       node parity.mjs --version BROWSER [EXECUTABLE]\n' +
+    `BROWSER is one of ${Object.keys(BROWSERS).join(', ')}`)
   process.exit(2)
 }
-const PLAN = JSON.parse(readFileSync(planPath, 'utf8'))
+const PLAN = planPath === '--version'
+  ? { browser: resultsPath, executablePath: executable }
+  : { browser: 'chromium', ...JSON.parse(readFileSync(planPath, 'utf8')) }
+if (!(PLAN.browser in BROWSERS)) {
+  console.error(`${planPath} names a browser Playwright does not drive: ${PLAN.browser}`)
+  process.exit(2)
+}
+
+/**
+ * Each engine as the laptop's driver launches it (`laptop.mjs`): **Chromium** itself in its headless
+ * mode, drawing WebGL in SwiftShader on a machine with no GPU; **Firefox** allowed WebGL whatever its
+ * blocklist says of the machine's graphics; **WebKit** as Playwright launches it. A plan's
+ * `executablePath` stands in for Playwright's own build of the engine it names.
+ */
+const LAUNCH = {
+  chromium: {
+    channel: 'chromium',
+    args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader',
+      '--ignore-gpu-blocklist'],
+  },
+  firefox: { firefoxUserPrefs: { 'webgl.force-enabled': true } },
+  webkit: {},
+}
+
+function launch() {
+  const { channel, ...options } = LAUNCH[PLAN.browser]
+  const which = PLAN.executablePath ? { executablePath: PLAN.executablePath } : channel ? { channel } : {}
+  return playwright()[PLAN.browser].launch({ ...which, ...options })
+}
+
+if (planPath === '--version') {
+  try {
+    const browser = await launch()
+    console.log(browser.version())
+    await browser.close()
+    process.exit(0)
+  } catch (error) {
+    // Playwright's first line says what is missing and where; the box under it is for its own tests.
+    console.error(String(error.message ?? error).split('\n')[0])
+    process.exit(1)
+  }
+}
 /** How long a page, a run or a save may take before it is given up. */
 const LIMIT_MS = PLAN.limitMs ?? 600_000
 /** The buttons that save an output as a file, as they read. */
@@ -178,7 +226,7 @@ function outputOf(task, suggested) {
 
 /** One case: the task opened, set, run and every output saved. */
 async function runCase(page, session, spec) {
-  const folder = join(PLAN.out, spec.id, 'browser')
+  const folder = join(PLAN.out, spec.id, PLAN.browser)
   rmSync(folder, { recursive: true, force: true })
   mkdirSync(folder, { recursive: true })
   const result = { id: spec.id, session: session.id, title: spec.title, status: 'failed', files: [] }
@@ -204,7 +252,7 @@ async function runCase(page, session, spec) {
     await sleep(250)
   }
   await sleep(1000)
-  await page.screenshot({ path: join(PLAN.out, spec.id, 'browser.png') })
+  await page.screenshot({ path: join(PLAN.out, spec.id, `${PLAN.browser}.png`) })
   if (entry === undefined) {
     result.error = 'the run did not finish'
     return result
@@ -303,9 +351,10 @@ async function open(page, session) {
 /** One session: opened, then each of its cases. */
 async function runSession(browser, session, results) {
   for (const input of session.inputs ?? []) {
-    const from = join(PLAN.out, input.from)
+    const named = input.from.replaceAll('{browser}', PLAN.browser)
+    const from = join(PLAN.out, named)
     if (!existsSync(from)) {
-      failAll(session, results, `${input.from} was not saved, and this session opens it`)
+      failAll(session, results, `${named} was not saved, and this session opens it`)
       return
     }
     copyFileSync(from, join(PLAN.data, input.as))
@@ -322,7 +371,7 @@ async function runSession(browser, session, results) {
     try {
       await open(page, session)
     } catch (error) {
-      await page.screenshot({ path: join(PLAN.out, `${session.id}.png`) }).catch(() => {})
+      await page.screenshot({ path: join(PLAN.out, `${session.id}-${PLAN.browser}.png`) }).catch(() => {})
       failAll(session, results, `the session did not open: ${error}`)
       return
     }
@@ -344,16 +393,13 @@ async function runSession(browser, session, results) {
 
 const server = await serve()
 PLAN.base = `http://127.0.0.1:${server.address().port}`
-const browser = await chromium.launch({
-  // Chromium itself in its headless mode, as the timings run it, or the one the plan names.
-  ...(PLAN.executablePath ? { executablePath: PLAN.executablePath } : { channel: 'chromium' }),
-  args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
-})
+const browser = await launch()
 const results = []
 try {
   for (const session of PLAN.sessions) await runSession(browser, session, results)
 } finally {
-  writeFileSync(resultsPath, JSON.stringify({ chromium: browser.version(), cases: results }, null, 1))
+  writeFileSync(resultsPath, JSON.stringify({ browser: PLAN.browser, version: browser.version(), cases: results },
+    null, 1))
   await browser.close()
   server.close()
 }

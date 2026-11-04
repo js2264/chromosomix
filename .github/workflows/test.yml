@@ -63,8 +63,21 @@ jobs:
       # ever leave the repository.
       - name: Put the demo maps in place
         run: npm run fixtures:demo
+      # Measured over the whole app, not over the files the suite loads
+      # (vitest.config.ts): this half's figure, on every push. The full suite's
+      # is the goldens job's, where metacooler's fixtures let it run.
       - name: Tests that need no fixtures
-        run: npm run test:nofixtures
+        run: npm run test:nofixtures -- --coverage
+      - name: Coverage of the fixture-free suite
+        if: always() && hashFiles('coverage/coverage-summary.json') != ''
+        run: node scripts/coverage-summary.mjs --title 'fixture-free suite'
+      - name: Keep the coverage report
+        if: always() && hashFiles('coverage/coverage-summary.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-fixture-free
+          path: coverage/
+          retention-days: 14
       - name: Build
         run: npm run build
 
@@ -86,6 +99,11 @@ jobs:
     env:
       # `secrets` cannot be read in an `if:`, so its presence travels in env.
       HAS_METACOOLER_TOKEN: ${{ secrets.METACOOLER_REPO_TOKEN != '' }}
+    # Whether the full suite ran and passed, which is what `coverage` below
+    # publishes from: a figure from a red suite, or from the public half alone,
+    # is not the app's.
+    outputs:
+      coverage: ${{ steps.full-suite.outcome == 'success' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -178,8 +196,24 @@ jobs:
         run: npm run fixtures
 
       - name: Full suite, against the Python oracles
+        id: full-suite
         if: steps.fixtures.outcome == 'success'
-        run: npm test
+        run: npm test -- --coverage
+
+      # The app-wide figure, which only this run can give: the twelve reader
+      # suites and the request budgets over metacooler's fixtures are what the
+      # check job's figure leaves out. The badge goes in the report's directory,
+      # so the artifact below carries both to the `coverage` job.
+      - name: Coverage of the full suite
+        if: always() && steps.fixtures.outcome == 'success' && hashFiles('coverage/coverage-summary.json') != ''
+        run: node scripts/coverage-summary.mjs --title 'full suite' --badge coverage/badge.json
+      - name: Keep the coverage report
+        if: always() && steps.fixtures.outcome == 'success' && hashFiles('coverage/coverage-summary.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-full
+          path: coverage/
+          retention-days: 14
 
       # Without metacooler the full suite cannot run, but the suites the public
       # fixtures feed can — each of them skips by name in the always-on job.
@@ -226,6 +260,59 @@ jobs:
             echo "::warning title=Demo oracles drifted::rebuilding test/golden/demo with this cooler did not reproduce the committed files; run npm run fixtures:demo-golden and look at the diff."
           fi
 
+  # The full suite's coverage, published at `<site>/coverage/` — the report, and
+  # the `badge.json` the README's badge is drawn from — on the terms the stores
+  # and the notebooks are (docs/deploy.md): Pages replaces the whole site on
+  # every deployment and only deploy.yml deploys it, so this force-pushes the
+  # report to an orphan `coverage` branch as one commit and asks for a deploy,
+  # which copies the branch into `coverage/` then and on every run after.
+  #
+  # A job of its own so that the one holding a token that can write runs none
+  # of the code under test, only what the goldens job left in its artifact.
+  # Only a push to `main` publishes: a pull request's coverage is in its run's
+  # summary and its artifact, and is not the site's.
+  coverage:
+    name: publish the full suite's coverage
+    needs: goldens
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.goldens.outputs.coverage == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      # The `coverage` branch.
+      contents: write
+      # The deploy it asks for at the end.
+      actions: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-full
+          path: report
+
+      # One orphan commit, force-pushed: the branch's only interesting state is
+      # its tip, and the deploy clones it on every push to `main`.
+      - name: Publish to the coverage branch
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -s report/index.html && test -s report/badge.json
+          short=$(echo '${{ github.sha }}' | cut -c1-7)
+          cd report
+          git init --quiet --initial-branch coverage
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit --quiet -m "coverage: full suite at $short, $(jq -r .message badge.json) of lines"
+          git push --quiet --force "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" \
+            HEAD:refs/heads/coverage
+
+      # The publisher of the site, as stores.yml and notebooks.yml ask it. A run
+      # dispatched by the workflow token is one of the two kinds GitHub delivers
+      # for that token.
+      - name: Ask the deploy to publish the site
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy.yml --ref main --repo '${{ github.repository }}'
+
   # The notebook widgets (SPECS §21.5): the Python package under `widgets/python`
   # and the R package under `widgets/r`. Neither needs the app built — each test
   # suite holds what its widget hands the frame and what its file server answers
@@ -256,3 +343,35 @@ jobs:
           working-directory: widgets/r
           args: 'c("--no-manual")'
           error-on: '"warning"'
+
+  # The documentation site (SPECS §32): built as main's copy is, but at the root,
+  # which is the one place its link checker runs — every internal link of every
+  # page, generated or written, to a page or a heading that exists. It reads
+  # the app's source (`scripts/docs-data.mjs`), so a task added to the registry
+  # without a page, a token the theme reads that the stylesheet dropped, or a
+  # validation section a task cites that the notebook lost, fails here.
+  # `.github/workflows/docs.yml` publishes it; nothing here does.
+  docs:
+    name: the documentation site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            documentation/package-lock.json
+      # The site reads the app's source through Vite, and nothing an install
+      # script fetches (Electron's binary) is any part of that.
+      - run: npm ci --ignore-scripts
+      - run: npm ci --prefix documentation
+      - name: Build the site, every internal link checked
+        run: npm run docs:build
+      - name: Every page written
+        run: |
+          if grep -rln 'TODO(docs)' documentation/src/content/docs; then
+            echo "::error title=Unwritten pages::the pages above are still marked TODO(docs)"
+            exit 1
+          fi

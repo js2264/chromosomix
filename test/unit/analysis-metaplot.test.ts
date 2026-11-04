@@ -537,8 +537,15 @@ describe('axisFor', () => {
   it('is the column index for a scaled plot, and says so', () => {
     // There is no single honest unit across a flank in base pairs and a body in
     // proportion, so the axis does not invent one.
-    const { x, label } = axisFor({ slots: 4, bodyFrom: 1, bodyTo: 3, flankStep: 100 })
+    const { x, label, scaled } = axisFor({ slots: 4, bodyFrom: 1, bodyTo: 3, flankStep: 100 })
     expect(Array.from(x)).toEqual([0, 1, 2, 3])
     expect(label).not.toContain('bp')
+    // …and where its parts meet instead, at the columns' edges: the body is
+    // columns 1 and 2, so it runs from half a column before 1 to half after 2.
+    expect(scaled).toEqual({ from: -0.5, start: 0.5, end: 2.5, to: 3.5, flankStep: 100 })
+  })
+
+  it('has no parts to describe for a reference point', () => {
+    expect(axisFor({ slots: 4, bodyFrom: 2, bodyTo: 2, flankStep: 100 }).scaled).toBeUndefined()
   })
 })

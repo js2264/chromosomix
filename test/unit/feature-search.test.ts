@@ -80,12 +80,43 @@ describe('finding a feature by name', () => {
     expect(findFeatures(store, 'chr')).toEqual([])
   })
 
-  it('stops at the limit rather than scanning a whole genome', () => {
+  it('lists at most the limit', () => {
     const build = new FeatureBuilder()
     for (let i = 0; i < 30; i++) build.add('chrI', i * 100, i * 100 + 50, { name: `HIS${i}` })
     const { store } = storeWith(build.finish())
     expect(findFeatures(store, 'his')).toHaveLength(10)
     expect(findFeatures(store, 'his', 3)).toHaveLength(3)
+  })
+
+  // `RAD5` is the gene asked for. In the file's order RAD59, RAD57, RAD55 and
+  // RAD54 came first, and Enter, which takes the first, opened RAD59.
+  it('puts a name typed whole before the names it begins', () => {
+    const build = new FeatureBuilder()
+    for (const name of ['RAD59', 'RAD57', 'RAD55', 'RAD54', 'RAD5', 'RAD50']) build.add('chrXII', 1000, 2000, { name })
+    const { store } = storeWith(build.finish())
+    expect(findFeatures(store, 'rad5').map((hit) => hit.name)).toEqual(['RAD5', 'RAD59', 'RAD57', 'RAD55', 'RAD54', 'RAD50'])
+    expect(findFeatures(store, 'RAD5', 2).map((hit) => hit.name)).toEqual(['RAD5', 'RAD59'])
+  })
+
+  // The one gene named as typed can be the last of thousands that begin with
+  // it, past where a scan for prefixes stops.
+  it('finds a name typed whole however far down the set it is', () => {
+    const build = new FeatureBuilder()
+    for (let i = 0; i < 5000; i++) build.add('chrI', i * 100, i * 100 + 50, { name: `HIS${i}` })
+    build.add('chrII', 10, 90, { name: 'His' })
+    const { store } = storeWith(build.finish())
+    const hits = findFeatures(store, 'HIS')
+    expect(hits).toHaveLength(10)
+    expect(hits[0]).toMatchObject({ name: 'His', contig: 'chrII' })
+    expect(hits.slice(1).map((hit) => hit.name)).toEqual(['HIS0', 'HIS1', 'HIS2', 'HIS3', 'HIS4', 'HIS5', 'HIS6', 'HIS7', 'HIS8'])
+  })
+
+  it('puts an accession typed whole first too, and lists a gene once', () => {
+    const build = new FeatureBuilder()
+    build.add('chrI', 1000, 2000, { name: 'VAR', id: 'PF3D7_1300100' })
+    build.add('chrI', 5000, 6000, { name: 'VAR', id: 'PF3D7_13001' })
+    const { store } = storeWith(build.finish())
+    expect(findFeatures(store, 'pf3d7_13001').map((hit) => hit.id)).toEqual(['PF3D7_13001', 'PF3D7_1300100'])
   })
 
   // Searching every loaded annotation answers "GAL4" with the same gene four

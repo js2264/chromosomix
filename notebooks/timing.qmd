@@ -1,6 +1,6 @@
 ---
 title: "chromosomix against reference implementations: time"
-subtitle: "A map and a track from a file to a picture in three viewers, and every command of the validation, run again and timed"
+subtitle: "A map and a track from a file to a picture in three viewers, and every command of the validation run again and timed"
 format:
   html:
     toc: true
@@ -27,8 +27,9 @@ from rendered import Render
 
 R = Render('timing')
 print(R.head(also=f"The commands are {R.anchor('validation', 'the validation')}’s, as it ran them. "
-                  f"Beside this page: {R.download('viewers.tsv')}, every picture timed in a viewer, and "
-                  f"{R.download('timings.tsv')}, every timed command, one row each."))
+                  f"Beside this page: {R.download('viewers.tsv')}, every picture timed in a viewer, "
+                  f"and {R.download('timings.tsv')}, every timed command, one row each. Six analyses one "
+                  f"after the other over a deep human map, against the same packages: {R.anchor('laptop', 'the laptop')}."))
 ```
 
 The page is in two parts. The first, **[Time to a picture](#time-to-a-picture)**, times three viewers
@@ -49,9 +50,9 @@ system does not list a process's children, as macOS does not, the peak memory is
 set alone.
 
 Every run of a command is one line of **`notebooks/work/validation/timings.tsv`**, a tidy table — one
-row per command and run, one column per variable, the machine and the versions included — and every
-picture a viewer was timed on is one line of **`viewers.tsv`** beside it, in the same form; every table
-and figure below is drawn from those two.
+row per command and run, one column per variable, the machine and the versions included — every
+picture a viewer was timed on is one line of **`viewers.tsv`** beside it, in the same form; every
+table and figure below is drawn from those two.
 
 **To render.** Render `validation.qmd` first: it fetches the data, makes every input and writes the
 command list. The viewers need the app built, the two viewers and a browser for them, and
@@ -69,8 +70,8 @@ QUARTO_PYTHON=refs/bin/python quarto render notebooks/timing.qmd
 The viewers' files (about 15 GB, most of it the mouse map in its two formats) are fetched once into
 `notebooks/work/viewers/data/`.
 
-A second render reads the tables rather than timing again (`REDO`, `REDO_VIEWERS`), unless the
-command list, the pictures, the number of runs or the `chromosomix` build has changed.
+A second render reads the tables rather than timing again (`REDO`, `REDO_VIEWERS`), unless the command
+list, the pictures, the number of runs or the `chromosomix` build has changed.
 `.github/workflows/notebooks.yml` renders both notebooks on every release, on a fresh GitHub runner
 each time, and publishes this page at <https://chromosomix.app/timings/> with the two tables beside
 it; the block under the title says which render, and which machine, this is.
@@ -732,23 +733,28 @@ def pss_kb(pid):
         return 0
 
 
-def weigh(pid, done, peak):
-    """Every EVERY seconds until `done`, the processes under `pid` weighed together, the most into `peak[0]`."""
+def weigh(pid, done, peak, samples=None):
+    """Every EVERY seconds until `done`, the processes under `pid` weighed together, the most into `peak[0]`,
+    and each weighing into `samples`, with when it was taken, where there is a list to keep them."""
     while True:
-        peak[0] = max(peak[0], sum(pss_kb(p) for p in under(pid)))
+        held = sum(pss_kb(p) for p in under(pid))
+        peak[0] = max(peak[0], held)
+        if samples is not None:
+            samples.append((time.time(), held))
         if done.wait(EVERY):
             return
 
 
-def timed(argv, extra):
-    """One run, from work/validation/: CPU seconds of the process and every process it started and waited
-    for, wall seconds, and the most memory they held together, in MB."""
+def timed(argv, extra, cwd=WORK, samples=None):
+    """One run, from `cwd` (work/validation/): CPU seconds of the process and every process it started and
+    waited for, wall seconds, and the most memory they held together, in MB; every weighing of them into
+    `samples`, if it is a list."""
     env = None if extra is None else dict(os.environ, **extra)
     with tempfile.TemporaryFile() as err:
         start = time.perf_counter()
-        process = subprocess.Popen(argv, cwd=WORK, env=env, stdout=subprocess.DEVNULL, stderr=err)
+        process = subprocess.Popen(argv, cwd=cwd, env=env, stdout=subprocess.DEVNULL, stderr=err)
         done, peak = threading.Event(), [0]
-        weigher = threading.Thread(target=weigh, args=(process.pid, done, peak), daemon=True)
+        weigher = threading.Thread(target=weigh, args=(process.pid, done, peak, samples), daemon=True)
         if WEIGHS:
             weigher.start()
         _, status, usage = os.wait4(process.pid, 0)
@@ -961,8 +967,8 @@ labels = [f"{row['section']} · {row['analysis']} · {row['tool']}" + (f" ({row[
           for row in JOB_ROWS]
 ax.set_yticks(y, labels, fontsize=8)
 ax.set_xscale('log')
-EVERY = np.concatenate([row['runs'] for row in JOB_ROWS])
-ax.set_xlim(EVERY.min() / 1.5, EVERY.max() * 1.5)
+ALL_RUNS = np.concatenate([row['runs'] for row in JOB_ROWS])
+ax.set_xlim(ALL_RUNS.min() / 1.5, ALL_RUNS.max() * 1.5)
 ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f'{v:g}'))
 ax.xaxis.set_minor_locator(NullLocator())
 ax.set(xlabel='CPU time (s)', ylim=(-0.5, len(JOB_ROWS) - 0.5))

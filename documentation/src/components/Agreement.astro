@@ -1,0 +1,30 @@
+---
+/**
+ * How a task came out against the package it reproduces, as the Analysis
+ * panel's `?` says it: green where the validation found it identical or
+ * equivalent, and in the text's colour where it is not yet tested. A task
+ * that re-implements no published method has no badge at all.
+ */
+import { agreementOf, task } from '../lib/tasks.mjs'
+
+interface Props {
+  id: string
+  short?: boolean
+}
+const { id, short = false } = Astro.props
+const entry = task(id)
+const agreement = agreementOf(entry)
+const href = entry.reference?.validation ?? null
+const text = agreement === null ? '' : short ? agreement.word : agreement.sentence
+---
+
+{
+  agreement !== null &&
+    (href !== null ? (
+      <a class:list={['cx-agreement', `cx-agreement-${agreement.kind}`]} href={href}>
+        {text}
+      </a>
+    ) : (
+      <span class:list={['cx-agreement', `cx-agreement-${agreement.kind}`]}>{text}</span>
+    ))
+}

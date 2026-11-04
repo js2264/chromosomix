@@ -612,7 +612,7 @@ That workflow runs when a release is published — `release.yml` makes the relea
 person publishes it, which is the event that reaches it — and from **Actions → Notebooks → Run
 workflow** on any branch or tag, with the number of timed runs (four by default) and whether to
 publish. Each notebook renders in a job of its own, on a fresh runner, through the setup in
-`.github/actions/notebooks-setup`: the parity first, in about ten minutes, then the validation and
+`.github/actions/notebooks-setup`: the parity first, in about twenty minutes in its three browsers, then the validation and
 the timings in one job (about three hours, the timings running the validation's commands on its
 inputs) beside the laptop (about an hour on the command line and about as long again in each of
 the app's three browsers). A last job publishes only if the three pages rendered: it
@@ -651,6 +651,28 @@ and every address but the app's own: they are pages of their own, and the app's 
 their address. A reader whose worker predates this sees the app at those addresses until they take
 the update the app offers. Absent until the workflow has published once; the first run is by
 hand, or the next release.
+
+### And the test coverage
+
+`/coverage/` is the full suite's coverage report, file by file, as the last green run of it on
+`main` measured it, and `/coverage/badge.json` is that run's line coverage as a shields.io
+endpoint, which the README's **Coverage** badge is drawn from. The goldens job of
+`.github/workflows/test.yml` is the only run that has the whole suite — metacooler's fixtures need
+the `METACOOLER_REPO_TOKEN` it checks out with — so it writes both, from
+`npm test -- --coverage` and `node scripts/coverage-summary.mjs --badge`, into its `coverage-full`
+artifact; a job of its own, `coverage`, which runs none of the code under test, force-pushes that
+artifact to the `coverage` branch as one commit and dispatches this deploy, which copies the
+branch's tree into `coverage/` then and on every run after — the stores' and the notebooks'
+arrangement once more. Only a push to `main` publishes, and only when the full suite passed: a
+pull request's coverage is in its run's summary and artifact, and a figure from a red suite or
+from the fixture-free half alone is not the app's.
+
+The badge is read from the site rather than from the branch over `raw.githubusercontent.com` for
+the stores' reason, and so that the figure on the badge is always the figure on the page it links
+to. The report is about 43 MB, every source file drawn with its counts, and replaces the last one
+rather than adding to it. The service worker leaves `/coverage/` to the network like the
+notebooks' addresses. Absent until the first green full suite on `main` after this arrangement
+landed, and until then the badge says it could not read the file.
 
 ## Why Pages works at all for this app
 
@@ -827,6 +849,29 @@ from a source tarball, say — reports the version alone rather than failing.
 That stamp is also the *anchor* for the version dropdown directly beneath it: the commit it names is
 how the picker knows which of the published builds is the one currently running. See
 [Every push stays reachable](#every-push-stays-reachable).
+
+## The documentation site, which is deployed elsewhere
+
+<https://doc.chromosomix.app> is not part of this site and nothing above publishes it. Its source is
+`documentation/`, and `.github/workflows/docs.yml` builds it — main's copy on every push, a release's
+on its tag — and writes it into the `gh-pages` branch of **js2264/chromosomix-docs**, which GitHub
+Pages serves under its own domain: a repository has one Pages domain, and this one's is
+`chromosomix.app`. The contract is SPECS §32, and `documentation/README.md` says how to build it.
+
+It needs three things set up once, outside the repository:
+
+1. **The domain verified** for the account that owns the repositories (*Settings → Pages → Add a
+   domain*, `chromosomix.app`), so that no other account's Pages site can claim one of its
+   subdomains while `doc` points at GitHub.
+2. **A deploy key**: an SSH key pair with no passphrase, the public half on js2264/chromosomix-docs
+   (*Settings → Deploy keys*, with **Allow write access**), the private half in this repository's
+   `DOCS_DEPLOY_KEY` secret. Until it is set the workflow builds every copy, keeps them as the run's
+   artifact, and says it published nothing.
+3. **Pages on js2264/chromosomix-docs** from the `gh-pages` branch, its root, with the custom domain
+   `doc.chromosomix.app` (the branch's `CNAME` says the same, and every publish writes it), a `CNAME`
+   record `doc` → `js2264.github.io.` at the DNS host, and **Enforce HTTPS** once the certificate is
+   issued. Every `.app` domain is HTTPS-only in browsers, so until then the address shows a
+   certificate error.
 
 ## What CI does not do
 

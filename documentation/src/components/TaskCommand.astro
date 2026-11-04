@@ -1,0 +1,12 @@
+---
+/** The shape of a task's command line, from the registry. */
+import { Code } from '@astrojs/starlight/components'
+import { task } from '../lib/tasks.mjs'
+
+interface Props {
+  id: string
+}
+const entry = task(Astro.props.id)
+---
+
+<Code code={entry.synopsis} lang="sh" />
