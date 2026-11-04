@@ -249,13 +249,6 @@
   ],
   "pulls": [
     {
-      "number": 161,
-      "commit": "689958f",
-      "title": "Timings: a deep human map, start to finish (§18.10)",
-      "branch": "js/nice-cerf-lyqg9h",
-      "date": "2026-11-04T00:51:40Z"
-    },
-    {
       "number": 160,
       "commit": "375ef2a",
       "title": "docs: a pull request's preview carries its documentation",
