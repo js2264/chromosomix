@@ -1,6 +1,13 @@
 {
-  "latest": "bf1beab",
+  "latest": "14a4afc",
   "versions": [
+    {
+      "commit": "14a4afc",
+      "version": "0.19.0",
+      "date": "2026-11-04T14:23:37+01:00",
+      "subject": "Add cell-of-its-own rectangle to Contact maps card (#156)",
+      "tag": ""
+    },
     {
       "commit": "bf1beab",
       "version": "0.19.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "a2bde1c",
-      "version": "0.18.0",
-      "date": "2026-10-30T23:25:46+01:00",
-      "subject": "Compartments: divide by cooltools' own expectation under its method (#146)",
-      "tag": ""
-    },
-    {
       "commit": "b1f1a7a",
       "version": "0.18.0",
       "date": "2026-10-30T09:42:34+01:00",
@@ -254,13 +254,6 @@
       "title": "docs: a pull request's preview carries its documentation",
       "branch": "js/docs-pr-previews",
       "date": "2026-11-04T07:36:26Z"
-    },
-    {
-      "number": 156,
-      "commit": "9b87fd0",
-      "title": "Add cell-of-its-own rectangle to Contact maps card",
-      "branch": "js/gracious-edison-jt8vg7",
-      "date": "2026-11-04T13:11:42Z"
     },
     {
       "number": 122,
