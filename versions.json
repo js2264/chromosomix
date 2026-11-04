@@ -250,10 +250,10 @@
   "pulls": [
     {
       "number": 160,
-      "commit": "375ef2a",
+      "commit": "d852c55",
       "title": "docs: a pull request's preview carries its documentation",
       "branch": "js/docs-pr-previews",
-      "date": "2026-11-04T00:34:58Z"
+      "date": "2026-11-04T07:36:26Z"
     },
     {
       "number": 156,
