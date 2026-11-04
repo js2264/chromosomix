@@ -1,0 +1,77 @@
+---
+/**
+ * The mark and the name, as the app's header has them, then `docs` and the
+ * version menu. The menu starts as this copy alone and is filled in the
+ * browser from the site's manifest (`/versions.json`), which every copy reads
+ * at its root: a copy built for 0.20 then lists 0.27 when 0.27 is out, and a
+ * choice keeps the page the reader is on where the other copy has it.
+ */
+import Default from '@astrojs/starlight/components/SiteTitle.astro'
+import { BASE, MANIFEST, VERSION, VERSION_LABEL } from '../lib/site.mjs'
+---
+
+<div class="cx-title">
+  <Default />
+  <span class="cx-docs" aria-hidden="true">docs</span>
+  <label class="cx-version">
+    <span class="sr-only">Documentation version</span>
+    <select data-cx-versions data-current={VERSION} data-base={BASE} data-manifest={MANIFEST}>
+      <option value={BASE} selected>{VERSION_LABEL}</option>
+    </select>
+  </label>
+</div>
+
+<script>
+  interface Release {
+    version: string
+    path: string
+  }
+  interface Manifest {
+    latest: string | null
+    releases: Release[]
+    dev: { path: string } | null
+  }
+
+  for (const select of document.querySelectorAll<HTMLSelectElement>('select[data-cx-versions]')) {
+    const current = select.dataset.current ?? 'dev'
+    const base = select.dataset.base ?? '/'
+    const manifestUrl = select.dataset.manifest ?? '/versions.json'
+
+    fetch(manifestUrl, { cache: 'no-cache' })
+      .then((response) => (response.ok ? (response.json() as Promise<Manifest>) : null))
+      .then((manifest) => {
+        if (manifest === null || !Array.isArray(manifest.releases)) return
+        const options: { value: string; label: string; selected: boolean }[] = []
+        for (const release of manifest.releases) {
+          const latest = release.version === manifest.latest
+          options.push({
+            value: latest ? '/' : release.path,
+            label: latest ? `${release.version} · latest` : release.version,
+            selected: release.version === current,
+          })
+        }
+        if (manifest.dev !== null) options.push({ value: manifest.dev.path, label: 'dev · unreleased', selected: current === 'dev' })
+        if (!options.some((option) => option.selected)) return
+        select.replaceChildren(
+          ...options.map((option) => {
+            const element = document.createElement('option')
+            element.value = option.value
+            element.textContent = option.label
+            element.selected = option.selected
+            return element
+          }),
+        )
+      })
+      .catch(() => {})
+
+    select.addEventListener('change', () => {
+      const target = select.value
+      const rest = location.pathname.startsWith(base) ? location.pathname.slice(base.length) : ''
+      const page = `${target}${rest}`
+      // The same page in the other copy where it has one, its home where not.
+      fetch(page, { method: 'HEAD' })
+        .then((response) => location.assign(response.ok ? `${page}${location.hash}` : target))
+        .catch(() => location.assign(target))
+    })
+  }
+</script>

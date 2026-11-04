@@ -86,14 +86,16 @@ both targets.
 
 ### The one thing it does fix: hosts that compress
 
-A host that serves `.metacool` files with `Content-Encoding: gzip` cannot be read by the web app at
-all. The viewer refuses such a file on purpose — byte ranges would address the compressed stream
-rather than the file — and the web app has no way out, because `Accept-Encoding` is a *forbidden
-header name*: no page may set it, with `fetch` or with `XMLHttpRequest`. **GitHub Pages is such a
-host.**
+A host that serves a file with `Content-Encoding: gzip` cannot be read by range in the web app.
+Byte ranges would address the compressed stream rather than the file, and the page has no way to ask
+for anything else, because `Accept-Encoding` is a *forbidden header name*: no page may set it, with
+`fetch` or with `XMLHttpRequest`. So the website downloads such a file whole instead — up to 128 MiB as
+sent, and refuses it above that as too much to download (spec §10, `remote-compressed` and
+`remote-too-large`). **GitHub Pages is such a host.**
 
 The desktop build asks for `Accept-Encoding: identity` from outside the page, where that restriction
-does not apply, so the same file on the same host opens here and is refused on the website.
+does not apply, so the same file on the same host is read by range here, at any size, where the
+website downloads it whole or refuses it.
 
 This is a host-compatibility difference and not a second feature set: the file formats, the views
 and the operations are identical in both targets. It is worth stating precisely, though, because it
@@ -120,7 +122,10 @@ worth being precise about, because the alternative is not believing the error me
 
 Identical to the web app, and identically private. A file you open is read in place, a few kilobytes
 at a time, by code running on your own computer. It is not uploaded, not copied, and not indexed;
-there is no server to send it to. Quit the app and nothing remains.
+there is no server to send it to. Quitting leaves none of your files' contents behind; what the app
+keeps in its own storage — the workspace it reopens with, the console's log, the folders you
+granted — is listed under *What this browser is remembering* (the palette, Help), where *forget
+everything* clears it.
 
 The application never writes to a file you open. Exports — PNG and PDF — are new files, saved where
 you choose.
@@ -143,7 +148,9 @@ Each of these is a decision, with its reason:
 - **No `⌘R` / reload, and no page zoom.** Reload discards the open file, which cannot be re-read
   without you dropping it again, and it sits next to `⌘T`. Page zoom changes the canvas's CSS size,
   so the same "300 dpi" export would produce a different pixel count at 125 %.
-- **No writing of any kind, in either target** (spec §13).
+- **Nothing you opened is ever written to, in either target** (spec §13). Every save — a figure, a
+  BED of marks, a bigWig, a session, a `.cool` binned from a `.pairs` — is a new file, saved where you
+  choose.
 
 ---
 

@@ -1,0 +1,41 @@
+---
+/**
+ * Every task, under the Analysis panel's cards, in its order: what each does
+ * and how it came out against its reference. From the registry, so a task
+ * added there is listed here the next time the site is built.
+ */
+import Agreement from './Agreement.astro'
+import { withBase } from '../lib/site.mjs'
+import { DATA } from '../lib/tasks.mjs'
+
+const byId = new Map(DATA.tasks.map((entry) => [entry.id, entry]))
+---
+
+{
+  DATA.groups.map((group) => (
+    <section class="cx-task-group">
+      <p class="cx-kicker">{group.label}</p>
+      <div class="cx-table-wrap">
+        <table class="cx-task-index">
+          <tbody>
+            {group.tasks.map((id) => {
+              const entry = byId.get(id)
+              return (
+                <tr>
+                  <td>
+                    <a href={withBase(`/analyses/${id}/`)}>{entry.title}</a>
+                    <code class="cx-param-flag">{id}</code>
+                  </td>
+                  <td>{entry.blurb}</td>
+                  <td class="cx-task-agreement">
+                    <Agreement id={id} short />
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  ))
+}

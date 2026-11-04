@@ -26,6 +26,11 @@ import type { AnnotationStore } from '../annotations/store'
 export interface Suggestion {
   label: string
   value: string
+  /**
+   * Handed on as typed rather than as a hit: the sequence the text names, which
+   * the view opens by its name as it would with no list at all.
+   */
+  asTyped?: boolean
 }
 
 export interface SearchBoxOptions {
@@ -63,6 +68,17 @@ export interface SearchBoxOptions {
    * view could already act on.
    */
   suggest?(text: string): Suggestion[]
+  /**
+   * The sequence the text names, as the file names it, or `null`.
+   *
+   * For a box that opens a sequence by its name and offers genes too. A name
+   * the view acts on is not a question for the list — the hit list is for what
+   * the view could not act on as typed — and on the yeast genome `IV` is both
+   * chromosome IV and the first letters of IVY1, so Enter took the gene. Where
+   * the text names a sequence and genes are listed, the sequence is the list's
+   * first row, and so what Enter takes; the genes stay under it, a click away.
+   */
+  sequence?(text: string): string | null
 }
 
 export class SearchBox {
@@ -113,19 +129,27 @@ export class SearchBox {
    * makes coordinates beat names without either being special-cased —
    * `findFeatures` returns nothing for a string with a colon in it, so
    * `chrI:1-2000` is never intercepted by a gene whose name it happens to
-   * prefix. Public because the `go` button beside the box means the same thing
-   * as Enter, and two spellings of that is how the two come to disagree.
+   * prefix. A sequence's name wins too, by heading the list where genes are
+   * offered for it ({@link SearchBoxOptions.sequence}). Public because the `go`
+   * button beside the box means the same thing as Enter, and two spellings of
+   * that is how the two come to disagree.
    */
   submit(): void {
     const first = this.offered[0]
     if (first !== undefined) {
-      this.input.value = first.value
-      this.close()
-      this.options.onSubmit(first.value, first)
+      this.take(first)
       return
     }
     this.close()
     this.options.onSubmit(this.input.value.trim())
+  }
+
+  /** Act on one offered answer: put it in the box, and hand it on as a hit or as typed. */
+  private take(hit: Suggestion): void {
+    this.input.value = hit.value
+    this.close()
+    if (hit.asTyped === true) this.options.onSubmit(hit.value)
+    else this.options.onSubmit(hit.value, hit)
   }
 
   /** What the box is offering right now, in the order it is showing them. */
@@ -134,7 +158,10 @@ export class SearchBox {
   private offer(): void {
     const suggest = this.options.suggest
     if (suggest === undefined) return
-    this.offered = suggest(this.input.value)
+    const hits = suggest(this.input.value)
+    const named = hits.length === 0 ? null : (this.options.sequence?.(this.input.value.trim()) ?? null)
+    this.offered =
+      named === null ? hits : [{ label: `${named} · the whole sequence`, value: named, asTyped: true }, ...hits]
     if (this.offered.length === 0) {
       // Nothing rather than "no match": below two characters and for anything
       // that looks like coordinates the box is not searching at all, and a card
@@ -144,15 +171,9 @@ export class SearchBox {
     }
     this.hits.replaceChildren(
       ...this.offered.map((hit) =>
-        button(
-          hit.label,
-          () => {
-            this.input.value = hit.value
-            this.close()
-            this.options.onSubmit(hit.value, hit)
-          },
-          { class: 'search-hit' },
-        ),
+        button(hit.label, () => this.take(hit), {
+          class: hit.asTyped === true ? 'search-hit search-hit-typed' : 'search-hit',
+        }),
       ),
     )
     this.hits.classList.remove('hidden')

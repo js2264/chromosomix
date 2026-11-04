@@ -27,6 +27,7 @@ import {
 import { devFeature } from '../state/devFeatures'
 import type { TourProgress } from '../state/tour'
 import { tutorialButtons } from './tutorialOffer'
+import { DOCS_URL } from '../documentation/site'
 
 /**
  * The modifier a gesture actually wants, on the machine reading the dialog.
@@ -475,6 +476,19 @@ function overview(repoUrl: string, tutorial: AboutTutorial | null | undefined, c
     // start* — and it is the one way in to the tutorial a newcomer will
     // find without being told where to look (§30).
     ...(tutorial === undefined || tutorial === null ? [] : [tutorialOffer(tutorial, close)]),
+    // How to use it, before how it is made: the documentation (§32), whose
+    // root is the latest release's copy and whose menu holds every other.
+    el(
+      'p',
+      {},
+      'How to use it — the browser, the files it opens, every analysis and the command line: ',
+      el('a', {
+        href: DOCS_URL,
+        text: DOCS_URL.replace(/^https:\/\//, '').replace(/\/$/, ''),
+        class: 'link',
+        attrs: { target: '_blank', rel: 'noopener noreferrer' },
+      }),
+    ),
     el(
       'p',
       {},

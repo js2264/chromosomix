@@ -894,11 +894,13 @@ export const APA_TASK: AnalysisTask = {
   version: 3,
   // **Not** `requires: ['expected']`, though §18.8 describes the O/E path as
   // needing it. `requires` is static and the runner resolves it before every
-  // run, so declaring it would compute a whole-file P(s) on every APA — while
-  // O/E is not the default and most runs never look at it. And the expected an
-  // APA needs is a narrower question than the task's: the diagonals its own
-  // windows reach, on the sequences its own anchors sit on, which the runner
-  // reads as one band per sequence and never deeper than the farthest window.
+  // run, so declaring it would compute a whole-file P(s) on every APA — the
+  // chromosight, distance-matched and raw (`none`) runs included, which never
+  // look at it — for a number that O/E, the default, does not need whole
+  // either. The expected an APA needs is a narrower question than the task's:
+  // the diagonals its own windows reach, on the sequences its own anchors sit
+  // on, which the runner reads as one band per sequence and never deeper than
+  // the farthest window.
   // It is *not* the windows' own cells, which is what it once was: an expected
   // taken from squares about a loop set is the mean of the places the set
   // picked, enriched by construction, and not the sequence's.

@@ -1,0 +1,82 @@
+---
+title: "Scalogram"
+description: "How far each bin’s contacts reach, as nested quantile bands."
+---
+
+import TaskCommand from '@components/TaskCommand.astro'
+import TaskOutputs from '@components/TaskOutputs.astro'
+import TaskParameters from '@components/TaskParameters.astro'
+import TaskSummary from '@components/TaskSummary.astro'
+
+<TaskSummary id="scalogram" />
+
+P(s) averages every bin of a sequence into one curve and answers how a genome folds; the scalogram keeps
+the bins apart and answers where it folds differently from itself. At each bin it takes the distribution
+of the bin's contacts over separation and reports the separation within which a given share of them lies
+— a tenth, a quarter, a half, three quarters, nine tenths — drawn along the genome as nested bands. It is
+Lioy et al. (2018)'s reading, the standard picture of where a bacterial chromosome's fold is tight and
+where it is loose, and the quantity HiContacts' `scalogram()` draws. Reach for it when a decay curve has
+made you wonder which part of the chromosome carries its bump.
+
+## Running it
+
+Open a contact map, then choose **Scalogram** in the **2D tasks** card of the **Analysis** panel. Tick
+the sequences, choose the quantiles, and press **run**. With **look out to** at 0, the default, each
+sequence is read out to its own length, which is the whole square around it and is what the price says:
+quick on a bacterial or a yeast map, and a large read on a mammalian chromosome, where a reach reads a
+band along the diagonal instead.
+
+The bands arrive on the **Tracks** card of the **Annotations** panel, a row each — *Scalogram 10 %*,
+*Scalogram 25 %* and so on — grouped as **Scalogram** in one lane, where each band fills down to the one
+below it. The lane's axis is logarithmic, in base pairs, with a faint rule at each power of ten.
+
+![The scalogram's five bands, Scalogram 10 % to 90 %, as one lane to the left of the E. coli map from 0.7 to 2.5 Mb at 5 kb: the inner bands sit at shorter separations through the large domain from about 1.05 to 2.0 Mb, and step out together to longer ones past its end.](../../../assets/screens/analyses/scalogram-bands.webp)
+
+The same run from a shell:
+
+<TaskCommand id="scalogram" />
+
+## Parameters
+
+**look out to** is the one to think about. It is a number of bins, the depth of the band the run reads,
+and 0 reads each sequence whole: the only setting at which a band is a quantile of all of a bin's
+contacts. Any other reach makes every band a quantile of what lies within it, and a different number
+under the same name; so the run's note says how far the reach is in base pairs, and every band's name
+carries it, as in *Scalogram 50 % · within 500 kb*. **diagonals to ignore** leaves out each bin's contact
+with itself, the largest number in its row and not a contact at a distance, which would pull every band
+towards zero; **minimum coverage of the distribution** leaves a bin without bands where too few of its
+separations have a value.
+
+<TaskParameters id="scalogram" />
+
+## What it writes
+
+<TaskOutputs id="scalogram" />
+
+## Reading the result
+
+Read the lane as one shape. Each band is a separation in base pairs: at the 50 % band, half of everything
+the bin touches lies closer than the band's height. A low, narrow bundle is a stretch whose contacts are
+local; a high one is a stretch whose contacts reach far along the chromosome; and a step in every band at
+the same place is a boundary between two ways of folding.
+
+A quantile rather than a mean, because contact has a heavy tail: the mean separation of a bin's contacts
+moves by a factor of two when the balancer drops one distant cell, and its median does not, which keeps a
+deep map and a shallow one comparable. Each quantile is interpolated between the two separations it falls
+between, so the bands are smooth rather than stepped at multiples of the bin size.
+
+A hole in the bands is a bin with too little of its distribution to measure, beside a stretch the
+balancer dropped for instance; a band exists only where both its own curve and the one below it do.
+
+## Things to know
+
+- **The bands' order is the picture.** Each band fills down to the one below it in the lane, so the order
+  of the rows in the group is the order they nest in: reorder them and the picture changes with them.
+- **Circular sequences.** On a sequence declared circular, a separation is the shorter of the two ways
+  round and reaches at most half the sequence; the run's note counts such sequences.
+- **Short sequences**, of fewer than four bins, have no distribution of separations and are left out,
+  with a note.
+- **The values are base pairs.** The logarithmic axis is only how the lane is drawn: the bigWig, the
+  bedGraph and the TSV hold the separations as computed.
+- **Not yet validated.** The scalogram follows Lioy et al., but the [validation](/analyses/validation/)
+  does not yet compare it with a reference, so its badge is not green.

@@ -1,0 +1,10 @@
+---
+/** A row of ways to use chromosomix (`Way.astro`), headed like the landing page's "NEW HERE?". */
+interface Props {
+  kicker?: string
+}
+const { kicker } = Astro.props
+---
+
+{kicker !== undefined && <p class="cx-kicker cx-ways-kicker">{kicker}</p>}
+<div class="cx-ways not-content"><slot /></div>

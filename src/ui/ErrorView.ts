@@ -176,7 +176,7 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
     advice: [
       'A HiC-Pro matrix is a list of pixels as text with no index, so there is no way to reach a region without reading everything before it.',
       'It is read once and then behaves exactly like a cooler — every region and every zoom afterwards is instant.',
-      'For a fine resolution, convert it instead: cooler load -f coo <bins> <matrix> out.cool.',
+      'For a fine resolution, convert it instead: cooler load -f coo --one-based <bins> <matrix> out.cool — HiC-Pro numbers its bins from 1.',
     ],
   },
   'cell-not-found': {
@@ -353,6 +353,34 @@ const RESAMPLE_GUIDANCE: Guidance = {
   ],
 }
 
+/**
+ * A host that answered with an error status: no file at the address, or a file
+ * this page may not read.
+ *
+ * Not a code of its own, because the codes it arrives under carry decisions
+ * that are not about the heading — the Google sign-in offer reads a `401` or
+ * `403` under either (`googleRefusal`), and the command line downloads a file
+ * whole after a range refusal only where the status was a success
+ * (`cli/remote.ts`). It is the heading and the advice that were wrong: `bad-uri`
+ * said *That URI does not parse* over a `404`, and a presigned link that had
+ * expired failed the range probe under *That host does not serve byte ranges*.
+ */
+const REFUSED_GUIDANCE: Guidance = {
+  title: 'The host would not give this file',
+  advice: [
+    'It answered with an error status, which the message above names: 404 or 410 is no file at that address, 401 or 403 a file this page may not read.',
+    'A public file has to be readable by anyone: on a bucket, a policy or ACL that lets anyone get the object; on Drive or Dropbox, a share link open to anyone with it.',
+    'A private bucket is read with its key: connect it with connect a bucket… on the landing page or in the Files column, then open the file from there.',
+    'A presigned link works until it expires, and only for the address it was signed for: one that fails has expired, so ask for a new one.',
+  ],
+}
+
+/** Whether an error is a host's error status, whichever code carried it (see {@link REFUSED_GUIDANCE}). */
+function refusedByHost(error: ViewerError): boolean {
+  const status = error.detail['status']
+  return (error.code === 'bad-uri' || error.code === 'remote-no-ranges') && typeof status === 'number' && status >= 400
+}
+
 export class ErrorView {
   readonly el: HTMLElement
 
@@ -371,7 +399,9 @@ export class ErrorView {
           }
         : resample
           ? RESAMPLE_GUIDANCE
-          : guidanceFor(viewerError.code)
+          : refusedByHost(viewerError)
+            ? REFUSED_GUIDANCE
+            : guidanceFor(viewerError.code)
 
     const entries = extractEntries(viewerError)
     const actions: HTMLElement[] = []

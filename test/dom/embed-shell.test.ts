@@ -208,6 +208,15 @@ describe('a window mounted as an embed', () => {
     // the theme had just been set — so the row is identified by what the name
     // starts with rather than by the whole of it.
     expect(actions[0]).toMatch(/^Theme: /)
+    // How to use it, then how it is made (§5.5, §32): the documentation's book
+    // just before the source, opening the site's root in a tab of its own.
+    const docs = actions.indexOf('documentation')
+    expect(docs).toBeGreaterThan(0)
+    expect(actions[docs + 1]).toBe('source on GitHub')
+    const book = root.querySelector<HTMLAnchorElement>('.head-actions a[aria-label="documentation"]')
+    expect(book?.href).toBe('https://doc.chromosomix.app/')
+    expect(book?.target).toBe('_blank')
+    expect(book?.rel).toContain('noopener')
   })
 
   it('reads a hand-edited "no" as a plain window', () => {
