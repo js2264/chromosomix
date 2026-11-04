@@ -1,0 +1,702 @@
+<!DOCTYPE html><html lang="en" dir="ltr" data-theme="dark" data-has-toc data-has-sidebar class="astro-g5ptsecz"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Keyboard and command palette | chromosomix</title><link rel="canonical" href="https://doc.chromosomix.app/browse/keyboard/"/><link rel="sitemap" href="/pr/160/docs/sitemap-index.xml"/><link rel="shortcut icon" href="/pr/160/docs/favicon.png" type="image/png"/><meta name="generator" content="Astro v7.4.5"/><meta name="generator" content="Starlight v0.42.8"/><meta property="og:title" content="Keyboard and command palette"/><meta property="og:type" content="article"/><meta property="og:url" content="https://doc.chromosomix.app/browse/keyboard/"/><meta property="og:locale" content="en"/><meta property="og:description" content="The command palette that runs every action in chromosomix by name, and every keyboard shortcut, grouped as the app's own shortcuts dialog lists them."/><meta property="og:site_name" content="chromosomix"/><meta name="twitter:card" content="summary_large_image"/><meta name="description" content="The command palette that runs every action in chromosomix by name, and every keyboard shortcut, grouped as the app's own shortcuts dialog lists them."/><meta name="robots" content="noindex"/><script>
+	window.StarlightThemeProvider = (() => {
+		const storedTheme =
+			typeof localStorage !== 'undefined' && localStorage.getItem('starlight-theme');
+		const theme =
+			storedTheme ||
+			(window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+		document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+		return {
+			updatePickers(theme = storedTheme || 'auto') {
+				document.querySelectorAll('starlight-theme-select').forEach((picker) => {
+					const select = picker.querySelector('select');
+					if (select) select.value = theme;
+					/** @type {HTMLTemplateElement | null} */
+					const tmpl = document.querySelector(`#theme-icons`);
+					const newIcon = tmpl && tmpl.content.querySelector('.' + theme);
+					if (newIcon) {
+						const oldIcon = picker.querySelector('svg.label-icon');
+						if (oldIcon) {
+							oldIcon.replaceChildren(...newIcon.cloneNode(true).childNodes);
+						}
+					}
+				});
+			},
+		};
+	})();
+</script><template id="theme-icons"><svg aria-hidden="true" class="light astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M5 12a1 1 0 0 0-1-1H3a1 1 0 0 0 0 2h1a1 1 0 0 0 1-1Zm.64 5-.71.71a1 1 0 0 0 0 1.41 1 1 0 0 0 1.41 0l.71-.71A1 1 0 0 0 5.64 17ZM12 5a1 1 0 0 0 1-1V3a1 1 0 0 0-2 0v1a1 1 0 0 0 1 1Zm5.66 2.34a1 1 0 0 0 .7-.29l.71-.71a1 1 0 1 0-1.41-1.41l-.66.71a1 1 0 0 0 0 1.41 1 1 0 0 0 .66.29Zm-12-.29a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.71-.71a1.004 1.004 0 1 0-1.43 1.41l.73.71ZM21 11h-1a1 1 0 0 0 0 2h1a1 1 0 0 0 0-2Zm-2.64 6A1 1 0 0 0 17 18.36l.71.71a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.76-.66ZM12 6.5a5.5 5.5 0 1 0 5.5 5.5A5.51 5.51 0 0 0 12 6.5Zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Zm0 3.5a1 1 0 0 0-1 1v1a1 1 0 0 0 2 0v-1a1 1 0 0 0-1-1Z"/></svg><svg aria-hidden="true" class="dark astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.64 13a1 1 0 0 0-1.05-.14 8.049 8.049 0 0 1-3.37.73 8.15 8.15 0 0 1-8.14-8.1 8.59 8.59 0 0 1 .25-2A1 1 0 0 0 8 2.36a10.14 10.14 0 1 0 14 11.69 1 1 0 0 0-.36-1.05Zm-9.5 6.69A8.14 8.14 0 0 1 7.08 5.22v.27a10.15 10.15 0 0 0 10.14 10.14 9.784 9.784 0 0 0 2.1-.22 8.11 8.11 0 0 1-7.18 4.32v-.04Z"/></svg><svg aria-hidden="true" class="auto astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg></template><link rel="stylesheet" href="/pr/160/docs/_astro/print.ehPL0gv-.css" media="print"><link rel="stylesheet" href="/pr/160/docs/_astro/common.DbD-ElLz.css"><style>@layer starlight.components{svg:where(.astro-hkc32dio){color:var(--sl-icon-color);font-size:var(--sl-icon-size,1em);width:1em;height:1em;overflow:visible}}
+</style><script type="module" src="/pr/160/docs/_astro/page.cNngjUgL.js"></script></head><body class="astro-g5ptsecz"><a class="sl-skip-link astro-qb7clj6f" href="#_top">Skip to content</a><div class="page sl-flex astro-yntsjkba"><header class="header astro-yntsjkba"><div class="header astro-by6fddyj"><div class="title-wrapper sl-flex astro-by6fddyj"><div class="cx-title"><a href="/pr/160/docs/" class="site-title sl-flex astro-6rvad3va"><img class="astro-6rvad3va" alt src="/pr/160/docs/_astro/mark.DvluVtot.png" width="192" height="192"><span class="astro-6rvad3va" translate="no">chromosomix</span></a><span class="cx-docs" aria-hidden="true">docs</span><span class="cx-version cx-version-preview" title="A preview of pull request #160">#160</span></div><script type="module">for(let e of document.querySelectorAll(`select[data-cx-versions]`)){let t=e.dataset.current??`dev`,n=e.dataset.base??`/`,r=e.dataset.manifest??`/versions.json`;fetch(r,{cache:`no-cache`}).then(e=>e.ok?e.json():null).then(n=>{if(n===null||!Array.isArray(n.releases))return;let r=[];for(let e of n.releases){let i=e.version===n.latest;r.push({value:i?`/`:e.path,label:i?`${e.version} · latest`:e.version,selected:e.version===t})}n.dev!==null&&r.push({value:n.dev.path,label:`dev · unreleased`,selected:t===`dev`}),r.some(e=>e.selected)&&e.replaceChildren(...r.map(e=>{let t=document.createElement(`option`);return t.value=e.value,t.textContent=e.label,t.selected=e.selected,t}))}).catch(()=>{}),e.addEventListener(`change`,()=>{let t=e.value,r=`${t}${location.pathname.startsWith(n)?location.pathname.slice(n.length):``}`;fetch(r,{method:`HEAD`}).then(e=>location.assign(e.ok?`${r}${location.hash}`:t)).catch(()=>location.assign(t))})}</script></div><div class="sl-flex print:hidden astro-by6fddyj"><site-search class="astro-by6fddyj astro-b5kgnn7o" data-translations="{&quot;placeholder&quot;:&quot;Search&quot;}"><button data-open-modal disabled aria-label="Search" aria-keyshortcuts="Control+K" class="astro-b5kgnn7o"><svg aria-hidden="true" class="astro-b5kgnn7o astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.71 20.29 18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.39ZM11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"/></svg><span class="sl-hidden md:sl-block astro-b5kgnn7o" aria-hidden="true">Search</span><kbd class="sl-hidden md:sl-flex astro-b5kgnn7o" style="display: none;"><kbd class="astro-b5kgnn7o">Ctrl</kbd><kbd class="astro-b5kgnn7o">K</kbd></kbd></button><dialog style="padding:0" aria-label="Search" class="astro-b5kgnn7o"><div class="dialog-frame sl-flex astro-b5kgnn7o"><button data-close-modal class="sl-flex md:sl-hidden astro-b5kgnn7o">Cancel</button><div class="search-container astro-b5kgnn7o"><div id="starlight__search" class="astro-b5kgnn7o"></div></div></div></dialog></site-search><script>
+	(() => {
+		const openBtn = document.querySelector('button[data-open-modal]');
+		const shortcut = openBtn?.querySelector('kbd');
+		if (!openBtn || !(shortcut instanceof HTMLElement)) return;
+		const platformKey = shortcut.querySelector('kbd');
+		if (platformKey && /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform)) {
+			platformKey.textContent = '⌘';
+			openBtn.setAttribute('aria-keyshortcuts', 'Meta+K');
+		}
+		shortcut.style.display = '';
+	})();
+</script><script type="module" src="/pr/160/docs/_astro/Search.astro_astro_type_script_index_0_lang.DAi2wN_w.js"></script></div><div class="sl-hidden md:sl-flex print:hidden right-group astro-by6fddyj"><div class="sl-flex social-icons astro-by6fddyj"><a class="cx-open-app" href="https://chromosomix.app/pr/160/">Open chromosomix #160</a><a class="cx-icon-button" href="https://github.com/js2264/chromosomix" aria-label="chromosomix on GitHub"><svg aria-hidden="true" class=" astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"/></svg></a></div><starlight-rapide-theme-select class="astro-xgdtbcdp"><button aria-label="Select theme" aria-live="polite" class="sl-flex astro-xgdtbcdp" title="Select theme"><svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16" class="astro-xgdtbcdp"><mask class="moon astro-xgdtbcdp" id="moon-mask-b4ca0195"><rect x="0" y="0" width="100%" height="100%" fill="white" class="astro-xgdtbcdp"></rect><circle cx="24" cy="10" r="6" fill="black" class="astro-xgdtbcdp"></circle></mask><circle class="sun astro-xgdtbcdp" cx="12" cy="12" r="6" mask="url(#moon-mask-b4ca0195)"></circle><g class="sun-beams astro-xgdtbcdp" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="3" class="astro-xgdtbcdp"></line><line x1="12" y1="21" x2="12" y2="23" class="astro-xgdtbcdp"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" class="astro-xgdtbcdp"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" class="astro-xgdtbcdp"></line><line x1="1" y1="12" x2="3" y2="12" class="astro-xgdtbcdp"></line><line x1="21" y1="12" x2="23" y2="12" class="astro-xgdtbcdp"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" class="astro-xgdtbcdp"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" class="astro-xgdtbcdp"></line></g></svg></button></starlight-rapide-theme-select><script>
+  StarlightThemeProvider.updatePickers()
+</script><script type="module">var e=`starlight-theme`;function t(e){return e===`auto`||e===`dark`||e===`light`?e:`auto`}function n(){return t(typeof localStorage<`u`&&localStorage.getItem(e))}function r(t){typeof localStorage<`u`&&localStorage.setItem(e,t===`light`||t===`dark`?t:``)}function i(){return matchMedia(`(prefers-color-scheme: light)`).matches?`light`:`dark`}function a(e){StarlightThemeProvider.updatePickers(e),document.documentElement.dataset.theme=e===`auto`?i():e,r(e)}matchMedia(`(prefers-color-scheme: light)`).addEventListener(`change`,()=>{n()===`auto`&&a(`auto`)}),customElements.define(`starlight-rapide-theme-select`,class extends HTMLElement{constructor(){super(),a(n());let e=this.querySelector(`button`);e?.addEventListener(`click`,()=>{let n=t(document.documentElement.dataset.theme),r=n===`dark`?`light`:n===`light`?`dark`:`auto`;a(r),e?.setAttribute(`aria-label`,`${r} theme`)})}});</script></div></div></header><nav class="sidebar print:hidden astro-yntsjkba" aria-label="Main"><button popovertarget="starlight__sidebar" class="sl-menu-button sl-flex md:sl-hidden print:hidden astro-r2osgdlg"><svg aria-hidden="true" class="open-menu astro-r2osgdlg astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M3 8h18a1 1 0 1 0 0-2H3a1 1 0 0 0 0 2Zm18 8H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Zm0-5H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Z"/></svg><svg aria-hidden="true" class="close-menu astro-r2osgdlg astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="m13.41 12 6.3-6.29a1.004 1.004 0 1 0-1.42-1.42L12 10.59l-6.29-6.3a1.004 1.004 0 0 0-1.42 1.42l6.3 6.29-6.3 6.29a1 1 0 0 0 0 1.42.998.998 0 0 0 1.42 0l6.29-6.3 6.29 6.3a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.42L13.41 12Z"/></svg><span class="sr-only astro-r2osgdlg">Menu</span></button><script type="module">var e=class extends HTMLElement{constructor(){super();let e=matchMedia(`(min-width: 50em)`),t=()=>{this.popover=e.matches?null:`auto`};t(),e.addEventListener(`change`,()=>t()),this.addEventListener(`toggle`,({newState:e})=>this.trapFocus(e===`open`))}trapFocus(e){document.querySelectorAll(`.main-frame, .sl-skip-link`).forEach(t=>{t.toggleAttribute(`inert`,e)})}};customElements.define(`sl-sidebar-pane`,e);</script><sl-sidebar-pane popover id="starlight__sidebar" class="sidebar-pane astro-yntsjkba"><div class="sidebar-content sl-flex astro-yntsjkba"><sl-sidebar-state-persist data-hash="05itlg1" class="astro-ipdry5cl"><script aria-hidden="true">
+		(() => {
+			try {
+				if (!matchMedia('(min-width: 50em)').matches) return;
+				/** @type {HTMLElement | null} */
+				const target = document.querySelector('sl-sidebar-state-persist');
+				const state = JSON.parse(sessionStorage.getItem('sl-sidebar-state') || '0');
+				if (!target || !state || target.dataset.hash !== state.hash) return;
+				window._starlightScrollRestore = state.scroll;
+				customElements.define(
+					'sl-sidebar-restore',
+					class SidebarRestore extends HTMLElement {
+						connectedCallback() {
+							try {
+								const idx = parseInt(this.dataset.index || '');
+								const details = this.closest('details');
+								if (details && typeof state.open[idx] === 'boolean') details.open = state.open[idx];
+							} catch {}
+						}
+					}
+				);
+			} catch {}
+		})();
+	</script><ul class="top-level astro-rmhv4bp6"><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Get started</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="0"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/160/docs/start/introduction/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">What chromosomix is</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/start/ways/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Ways to use it</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/start/first-map/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Your first map</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/start/window/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">A tour of the window</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/start/tutorial/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">The guided tutorial</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/start/where-to-run/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Web, desktop or one file</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Your files</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="1"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/160/docs/files/opening/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Opening files</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/files/contact-maps/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Contact maps</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/files/tracks/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Tracks and features</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/files/interactions/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Interactions</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/files/sequences/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Reference sequences</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/files/structures/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">3D models</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/files/stores/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Data stores</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/files/problems/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">When a file will not open</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Using the browser</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="2"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/160/docs/browse/navigating/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Moving around</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/browse/contact-maps/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Reading a contact map</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/browse/comparing/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Comparing two maps</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/browse/turn/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">The 45° view</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/browse/genome-browser/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">The genome browser</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/browse/deck/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Maps side by side</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/browse/structures/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">3D models beside the map</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/browse/annotations/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Annotations and bookmarks</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/browse/sessions-and-links/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Sessions, workspaces and links</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/browse/figures/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Figures and export</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/browse/console/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">The console</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/browse/keyboard/" aria-current="page" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Keyboard and command palette</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Analyses</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="3"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">How analyses run</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/validation/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">How the results are checked</span></a></li><li class="astro-rmhv4bp6"><details class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">2D tasks</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="4"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/coverage/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Coverage and marginals</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/cistrans/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Cis and trans per sequence</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/cellqc/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Per-cell contact QC</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/expected/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Contact probability P(s)</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/pairsqc/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Pairs QC</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/mapreport/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Map report</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/scalogram/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Scalogram</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/fourc/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">4C profile from an anchor</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/insulation/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Diamond insulation</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/di/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Directionality index</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/hicscore/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">HiC score</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/arrowhead/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">TAD annotation</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/compartments/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Compartments</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/interarm/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Inter-arm alignment</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/loops/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Loop calling</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/chromosight/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Pattern detection</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/hicrep/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Reproducibility</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/apa/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Aggregate peak analysis</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">3D tasks</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="5"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/reconstruct3d/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Model from the map</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/structuremap/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Model versus map</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/spatialtracks/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Spatial tracks</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">1D tasks</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="6"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/motif/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Find a motif</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/restriction/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Restriction sites</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/peaks/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Peak calling</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/composition/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Base composition</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/oriter/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Origin and terminus</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/metaplot/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Metaplot over a feature set</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/trackcorr/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Track correlation</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/frip/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Fraction of signal in features</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/groupsignal/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Signal by group</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/analyses/overlap/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Interval set overlap</span></a></li></ul></details></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Command line</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="7"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/160/docs/cli/install/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Installing it</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/cli/running/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Running a task</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/cli/from-the-app/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">From the app to a script</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/cli/pipelines/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">In a pipeline</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Notebooks and web pages</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="8"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/160/docs/embed/jupyter/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Jupyter notebooks</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/embed/r/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">R, Quarto and Shiny</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/embed/web-page/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Embedding in a web page</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Advanced</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="9"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/160/docs/advanced/hosting/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Hosting your data</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/advanced/data-store/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Your own data store</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/advanced/track-hubs/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">UCSC track hubs</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/advanced/self-hosting/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Running your own copy</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/advanced/privacy/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Privacy</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Reference</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="10"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/160/docs/reference/files-and-stores/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Files, hosts and stores</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/reference/links/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Link keys</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/reference/command-line/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Command line</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/reference/embedding/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Embedding messages</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/glossary/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Glossary</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Release notes</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="11"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/unreleased/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Unreleased</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/v0.19.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.19.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/v0.18.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.18.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/v0.17.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.17.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/v0.16.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.16.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/v0.15.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.15.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/v0.13.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.13.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/v0.12.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.12.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/v0.11.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.11.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/v0.10.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.10.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/v0.9.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.9.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/v0.8.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.8.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/v0.7.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.7.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/v0.6.1/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.6.1</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/v0.6.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.6.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/v0.5.1/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.5.1</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/v0.5.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.5.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/v0.4.1/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.4.1</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/v0.4.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.4.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/v0.3.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.3.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/v0.2.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.2.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/160/docs/releases/v0.1.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.1.0</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Contributing</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="12"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/160/docs/contributing/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Source code and contributing</span></a></li></ul></details></li></ul><script aria-hidden="true">
+		(() => {
+			const scroller = document.getElementById('starlight__sidebar');
+			if (!window._starlightScrollRestore || !scroller) return;
+			scroller.scrollTop = window._starlightScrollRestore;
+			delete window._starlightScrollRestore;
+		})();
+	</script></sl-sidebar-state-persist><div class="md:sl-hidden"><div class="mobile-preferences sl-flex astro-p4azlveh"><div class="social-icons astro-p4azlveh"><a class="cx-open-app" href="https://chromosomix.app/pr/160/">Open chromosomix #160</a><a class="cx-icon-button" href="https://github.com/js2264/chromosomix" aria-label="chromosomix on GitHub"><svg aria-hidden="true" class=" astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"/></svg></a></div><starlight-rapide-theme-select class="astro-xgdtbcdp"><button aria-label="Select theme" aria-live="polite" class="sl-flex astro-xgdtbcdp" title="Select theme"><svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16" class="astro-xgdtbcdp"><mask class="moon astro-xgdtbcdp" id="moon-mask-5fc915a1"><rect x="0" y="0" width="100%" height="100%" fill="white" class="astro-xgdtbcdp"></rect><circle cx="24" cy="10" r="6" fill="black" class="astro-xgdtbcdp"></circle></mask><circle class="sun astro-xgdtbcdp" cx="12" cy="12" r="6" mask="url(#moon-mask-5fc915a1)"></circle><g class="sun-beams astro-xgdtbcdp" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="3" class="astro-xgdtbcdp"></line><line x1="12" y1="21" x2="12" y2="23" class="astro-xgdtbcdp"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" class="astro-xgdtbcdp"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" class="astro-xgdtbcdp"></line><line x1="1" y1="12" x2="3" y2="12" class="astro-xgdtbcdp"></line><line x1="21" y1="12" x2="23" y2="12" class="astro-xgdtbcdp"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" class="astro-xgdtbcdp"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" class="astro-xgdtbcdp"></line></g></svg></button></starlight-rapide-theme-select><script>
+  StarlightThemeProvider.updatePickers()
+</script></div></div></div></sl-sidebar-pane></nav><div class="main-frame astro-yntsjkba"><script type="module">var e=document.getElementById(`starlight__sidebar`),t=e?.querySelector(`sl-sidebar-state-persist`),n=`sl-sidebar-state`,r=()=>{let r=[],i=t?.dataset.hash||``;try{let e=sessionStorage.getItem(n),t=JSON.parse(e||`{}`);Array.isArray(t.open)&&t.hash===i&&(r=t.open)}catch{}return{hash:i,open:r,scroll:e?.scrollTop||0}},i=e=>{try{sessionStorage.setItem(n,JSON.stringify(e))}catch{}},a=()=>i(r()),o=(e,t)=>{let n=r();n.open[t]=e,i(n)};t?.addEventListener(`click`,e=>{if(!(e.target instanceof Element))return;let t=e.target.closest(`summary`)?.closest(`details`);if(!t)return;let n=t.querySelector(`sl-sidebar-restore`),r=parseInt(n?.dataset.index||``);isNaN(r)||o(!t.open,r)}),addEventListener(`visibilitychange`,()=>{document.visibilityState===`hidden`&&a()});</script><div class="lg:sl-flex astro-lrzkfocr"><aside class="right-sidebar-container print:hidden astro-lrzkfocr"><div class="right-sidebar astro-lrzkfocr"><div class="lg:sl-hidden astro-qok35upx"><mobile-starlight-toc data-min-h="2" data-max-h="3" class="astro-66cqc7ze"><nav aria-labelledby="starlight__on-this-page--mobile" class="astro-66cqc7ze"><details id="starlight__mobile-toc" class="astro-66cqc7ze"><summary id="starlight__on-this-page--mobile" class="sl-flex astro-66cqc7ze"><span class="toggle sl-flex astro-66cqc7ze">On this page<svg aria-hidden="true" class="caret astro-66cqc7ze astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></span><span class="display-current astro-66cqc7ze"></span></summary><div class="dropdown astro-66cqc7ze"><ul class="isMobile astro-jugkfwgx" style="--depth: 0;"><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#_top" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Overview</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#the-command-palette" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">The command palette</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#the-shortcuts-dialog" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">The shortcuts dialog</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#how-keys-are-read" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">How keys are read</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#every-key" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Every key</span></a><ul class="isMobile astro-jugkfwgx" style="--depth: 1;"><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#app" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">App</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#file" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">File</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#go" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">Go</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#view" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">View</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#in-an-enlarged-3d-model" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">In an enlarged 3D model</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#on-a-contact-map" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">On a contact map</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#on-the-genome-browser" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">On the genome browser</span></a></li></ul></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#folding-the-panels" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Folding the panels</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#tab-walks-the-fields-of-one-kind" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Tab walks the fields of one kind</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#other-keys" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Other keys</span></a></li></ul></div></details></nav></mobile-starlight-toc><script type="module" src="/pr/160/docs/_astro/MobileTableOfContents.astro_astro_type_script_index_0_lang.C3fM4Kra.js"></script></div><div class="right-sidebar-panel sl-hidden lg:sl-block astro-qok35upx"><div class="sl-container astro-qok35upx"><starlight-toc data-min-h="2" data-max-h="3"><nav aria-labelledby="starlight__on-this-page"><h2 id="starlight__on-this-page">On this page</h2><ul class="astro-jugkfwgx" style="--depth: 0;"><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#_top" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Overview</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#the-command-palette" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">The command palette</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#the-shortcuts-dialog" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">The shortcuts dialog</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#how-keys-are-read" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">How keys are read</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#every-key" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Every key</span></a><ul class="astro-jugkfwgx" style="--depth: 1;"><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#app" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">App</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#file" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">File</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#go" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">Go</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#view" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">View</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#in-an-enlarged-3d-model" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">In an enlarged 3D model</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#on-a-contact-map" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">On a contact map</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#on-the-genome-browser" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">On the genome browser</span></a></li></ul></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#folding-the-panels" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Folding the panels</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#tab-walks-the-fields-of-one-kind" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Tab walks the fields of one kind</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#other-keys" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Other keys</span></a></li></ul></nav></starlight-toc><script type="module" src="/pr/160/docs/_astro/TableOfContents.astro_astro_type_script_index_0_lang.BpJaGz7G.js"></script></div></div></div></aside><div class="main-pane astro-lrzkfocr"><main data-pagefind-body class="astro-g5ptsecz" lang="en" dir="ltr"><div class="sl-banner cx-version-notice" data-pagefind-ignore>This is a <strong>preview</strong> of <a href="https://github.com/js2264/chromosomix/pull/160">pull request #160</a>, for its review: it is replaced on every push and taken down when the pull request closes. The published documentation is at <a href="https://doc.chromosomix.app/">doc.chromosomix.app</a>.</div><script type="module">for(let e of document.querySelectorAll(`[data-cx-dev]`))fetch(e.dataset.manifest??`/versions.json`,{cache:`no-cache`}).then(e=>e.ok?e.json():null).then(t=>{if(t===null||t.latest===null)return;let n=e.querySelector(`[data-cx-latest-offer]`),r=e.querySelector(`[data-cx-latest-link]`);r!==null&&(r.textContent=`Read ${t.latest}’s`,location.pathname.startsWith(`/dev/`)&&(r.href=`/${location.pathname.slice(5)}`)),n!==null&&(n.hidden=!1)}).catch(()=>{});for(let e of document.querySelectorAll(`[data-cx-older]`)){let t=e.dataset.cxOlder,n=e.dataset.base??`/`;fetch(e.dataset.manifest??`/versions.json`,{cache:`no-cache`}).then(e=>e.ok?e.json():null).then(r=>{if(r===null||r.latest===null||r.latest===t)return;let i=e.querySelector(`[data-cx-latest]`),a=e.querySelector(`[data-cx-latest-link]`);i!==null&&(i.textContent=r.latest),a!==null&&location.pathname.startsWith(n)&&(a.href=`/${location.pathname.slice(n.length)}`),e.hidden=!1}).catch(()=>{})}</script><div class="content-panel astro-a7po4psb"><div class="sl-container astro-a7po4psb"><h1 id="_top" class="astro-bebwqqxs">Keyboard and command palette</h1></div></div><div class="content-panel astro-a7po4psb"><div class="sl-container astro-a7po4psb"><div class="sl-markdown-content"><p>Every action in chromosomix is a command with a name, and most of the ones you reach for often have
+a key. The command palette lists all of them and the shortcuts dialog lists every key. Both are
+printed from the same list inside the app, so this page follows them.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="the-command-palette">The command palette</h2><a class="sl-anchor-link" href="#the-command-palette"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “The command palette”</span></a></div>
+<p>Press <kbd>Ctrl</kbd>+<kbd>P</kbd> (<kbd>⌘</kbd><kbd>P</kbd> on a Mac), or click <strong>Search
+commands…</strong> in the middle of the header. The palette works from a box being typed into as well.</p>
+<p>It lists every command, grouped as <strong>App</strong>, <strong>File</strong>, <strong>Go</strong>, <strong>View</strong> and <strong>Help</strong>, with a 3D model’s
+commands under <strong>Structure</strong>. Each row has the command’s name, a line saying what it does, and its
+key where it has one. A command that cannot act right now is greyed rather than hidden, so the list
+keeps its shape as you move around. A command that switches something on and off is listed once, by
+its name, with <code dir="auto">on</code> or <code dir="auto">off</code> beside it, such as <strong>Crosshair</strong> <code dir="auto">on</code>.</p>
+<ul>
+<li><strong>Type</strong> to narrow the list. A name that starts with what you typed comes first, then one that
+contains it, then one whose letters appear in that order, the closest together first: <code dir="auto">wg</code> finds
+<strong>Whole genome</strong>.</li>
+<li><strong>Start with a group’s name</strong> to search within it: <code dir="auto">view</code> lists the View group’s commands, and
+<code dir="auto">file copy</code> finds <strong>Copy this plot to the clipboard</strong>.</li>
+<li>Use <kbd>↑</kbd> and <kbd>↓</kbd> to choose, <kbd>Enter</kbd> or a click to run, and
+<kbd>Esc</kbd> to close.</li>
+</ul>
+<p>Some commands have no key and are reached only from the palette, or from a button:</p>
+<div class="cx-table-wrap"><table>
+<thead>
+<tr>
+<th>Group</th>
+<th>Commands with no key</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>File</td>
+<td><strong>Add a file to this tab</strong>, <strong>Connect a local or remote folder</strong> (<strong>Connect a folder</strong> in the single-file version), <strong>Open a different file</strong>, <strong>Close this tab</strong>, <strong>Share this tab as a link</strong>, <strong>Add a map beside this one</strong>, and in the 1D browser <strong>Open a contact map on this genome</strong></td>
+</tr>
+<tr>
+<td>View</td>
+<td><strong>Shrink the tracks to the shortest of them</strong>, <strong>Legend</strong>, <strong>Refine on zoom</strong>, <strong>Put every card back in its own panel</strong></td>
+</tr>
+<tr>
+<td>Help</td>
+<td><strong>What this browser is remembering</strong>, <strong>Guided tutorial</strong> (not in the single-file version), <strong>About this viewer</strong>, <strong>Documentation</strong>, <strong>Source on GitHub</strong></td>
+</tr>
+<tr>
+<td>Structure</td>
+<td><strong>Mark a bead</strong>, <strong>Mark a loop</strong>, <strong>Measure</strong></td>
+</tr>
+</tbody>
+</table></div>
+<div class="sl-heading-wrapper level-h2"><h2 id="the-shortcuts-dialog">The shortcuts dialog</h2><a class="sl-anchor-link" href="#the-shortcuts-dialog"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “The shortcuts dialog”</span></a></div>
+<p>Press <kbd>?</kbd>, or the keyboard button at the right of the header, for <strong>Keyboard shortcuts</strong>.
+It lists every command that has a key, in the palette’s groups and order, with the keys written the
+way your computer writes them. A key that cannot act now is greyed, as in the palette. Under the keys
+are two tables of what the mouse and the keys do on the pictures themselves: <strong>On a contact map</strong> and
+<strong>On the genome browser</strong>.</p>
+<p>The dialog is printed from the tab in front. A map’s tab lists the map’s keys and the 1D browser
+lists its own, so a few rows below differ between the two.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="how-keys-are-read">How keys are read</h2><a class="sl-anchor-link" href="#how-keys-are-read"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “How keys are read”</span></a></div>
+<ul>
+<li><strong>Ctrl and ⌘.</strong> The palette, saving and copying use <kbd>Ctrl</kbd> on Windows and Linux and
+<kbd>⌘</kbd> on a Mac. Moving between tabs and opening the console use Control on every computer,
+a Mac included.</li>
+<li><strong>Letters</strong> work whatever their case, and with Caps Lock on.</li>
+<li><strong><code dir="auto">−</code> <code dir="auto">+</code> <code dir="auto">&lt;</code> <code dir="auto">&gt;</code></strong> are read by the character they type, from either half of their key. On an
+English keyboard <code dir="auto">,</code> and <code dir="auto">.</code> step between sequences without Shift, and <code dir="auto">=</code> and <code dir="auto">_</code> change the
+resolution.</li>
+<li><strong>The digits and the key left of 1</strong> are read by where they are. On a French keyboard the bare
+<code dir="auto">&amp;</code> <code dir="auto">é</code> <code dir="auto">"</code> <code dir="auto">'</code> keys are <kbd>1</kbd> to <kbd>4</kbd>, and the keypad’s digits work too.</li>
+<li><strong>A bare key never acts with Ctrl, ⌘ or Alt held</strong>, AltGr included, so nothing is taken from your
+browser or your keyboard’s third level.</li>
+<li><strong>While you type in a box</strong>, keys type. Only the chords with Ctrl or ⌘ still act: the palette,
+saving, moving between tabs and the console.</li>
+<li><strong>Ctrl+C and Space give way.</strong> With text selected or the caret in a box, <kbd>Ctrl</kbd>+<kbd>C</kbd>
+copies the text. Space presses a focused button or tickbox rather than locking the diagonal.</li>
+</ul>
+<p>A key is also printed in the tooltip of the button that does the same thing.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="every-key">Every key</h2><a class="sl-anchor-link" href="#every-key"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Every key”</span></a></div>
+<p>The tables follow the shortcuts dialog: its groups, its order, and each command’s name as the app
+writes it. ⌘ is for a Mac, Ctrl for everything else.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="app">App</h3><a class="sl-anchor-link" href="#app"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “App”</span></a></div>
+<div class="cx-table-wrap"><table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><kbd>Ctrl</kbd>+<kbd>P</kbd> / <kbd>⌘</kbd><kbd>P</kbd></td>
+<td><strong>Search commands</strong></td>
+<td>Opens the command palette</td>
+</tr>
+<tr>
+<td><kbd>?</kbd></td>
+<td><strong>Keyboard shortcuts</strong></td>
+<td>Opens the shortcuts dialog</td>
+</tr>
+</tbody>
+</table></div>
+<div class="sl-heading-wrapper level-h3"><h3 id="file">File</h3><a class="sl-anchor-link" href="#file"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “File”</span></a></div>
+<div class="cx-table-wrap"><table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><kbd>\</kbd></td>
+<td><strong>Stores</strong></td>
+<td>Every data store this viewer ships with, and any you connected, as a drawer down the left. Not in the single-file version</td>
+</tr>
+<tr>
+<td><kbd>O</kbd></td>
+<td><strong>New tab</strong></td>
+<td>Another tab, with its own file, tracks and settings</td>
+</tr>
+<tr>
+<td><kbd>Ctrl</kbd>+<kbd>S</kbd> / <kbd>⌘</kbd><kbd>S</kbd></td>
+<td><strong>Save every tab as a file</strong></td>
+<td>Every tab, its tracks and its settings, as one file you can drop back on the page</td>
+</tr>
+<tr>
+<td><kbd>F2</kbd></td>
+<td><strong>Rename this tab</strong></td>
+<td>Name the tab for its condition or its figure; the name travels with the link</td>
+</tr>
+<tr>
+<td><kbd>S</kbd></td>
+<td><strong>Save this plot as a figure</strong></td>
+<td>The Export card decides the format and the resolution; this is its button</td>
+</tr>
+<tr>
+<td><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>⌘</kbd><kbd>C</kbd></td>
+<td><strong>Copy this plot to the clipboard</strong></td>
+<td>The figure as a PNG, at the Export card’s resolution, ready to paste. With maps side by side it is <strong>Copy the deck to the clipboard</strong>: every panel as one PNG, laid out as on screen</td>
+</tr>
+</tbody>
+</table></div>
+<div class="sl-heading-wrapper level-h3"><h3 id="go">Go</h3><a class="sl-anchor-link" href="#go"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Go”</span></a></div>
+<div class="cx-table-wrap"><table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><kbd>Ctrl</kbd>+<kbd>&gt;</kbd></td>
+<td><strong>Next tab</strong></td>
+<td>The tab after this one</td>
+</tr>
+<tr>
+<td><kbd>Ctrl</kbd>+<kbd>&lt;</kbd></td>
+<td><strong>Previous tab</strong></td>
+<td>The tab before this one</td>
+</tr>
+<tr>
+<td><kbd>/</kbd></td>
+<td><strong>Find</strong></td>
+<td>Puts the caret in the view’s one box: the region box on a map, the filter above a table, the locus box in the 1D browser, which also takes a gene name</td>
+</tr>
+<tr>
+<td><kbd>G</kbd></td>
+<td><strong>Cells table</strong></td>
+<td>An <code dir="auto">.scool</code>’s table of cells. Only for an <code dir="auto">.scool</code></td>
+</tr>
+<tr>
+<td><kbd>C</kbd></td>
+<td><strong>Chromosomes table</strong></td>
+<td>The file’s table of sequences. On a map</td>
+</tr>
+<tr>
+<td><kbd>W</kbd></td>
+<td><strong>Whole genome</strong></td>
+<td>On a map, every sequence against every other: one bounded read, which asks first when the block is large. In the 1D browser, every sequence end to end</td>
+</tr>
+<tr>
+<td><kbd>&lt;</kbd></td>
+<td><strong>Previous sequence</strong></td>
+<td>The sequence before this one, in the file’s order. The palette names it</td>
+</tr>
+<tr>
+<td><kbd>&gt;</kbd></td>
+<td><strong>Next sequence</strong></td>
+<td>The sequence after this one</td>
+</tr>
+<tr>
+<td><kbd>B</kbd></td>
+<td><strong>Bookmark this view</strong></td>
+<td>The place on screen, at this resolution, kept on the Bookmarks card. On a map</td>
+</tr>
+</tbody>
+</table></div>
+<div class="sl-heading-wrapper level-h3"><h3 id="view">View</h3><a class="sl-anchor-link" href="#view"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “View”</span></a></div>
+<div class="cx-table-wrap"><table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><kbd>V</kbd></td>
+<td><strong>Read this genome as tracks</strong></td>
+<td>Takes the matrix out of the picture and lays its chromosomes end to end; the map stays open, and the same key comes back to it. It then reads <strong>The map and its tracks</strong>, and in a 1D browser with a map behind it, <strong>The contact map on its own</strong></td>
+</tr>
+<tr>
+<td><kbd>H</kbd></td>
+<td><strong>Stretch the tracks to fill the height</strong></td>
+<td>One height for every track, the one that fills the space</td>
+</tr>
+<tr>
+<td><kbd>Y</kbd></td>
+<td><strong>Autoscale every track</strong></td>
+<td>Hand every value axis back to what is in view; a group resolves as a group</td>
+</tr>
+<tr>
+<td><kbd>Space</kbd></td>
+<td><strong>Diagonal lock</strong></td>
+<td>The view slid onto the diagonal and held there, every drag, scroll and box running along it, until the same key lets go. On a map</td>
+</tr>
+<tr>
+<td><kbd>0</kbd></td>
+<td><strong>Fit the view</strong></td>
+<td>On a map, every pan and zoom undone, the block back to its canvas, as a double click on the plot does. In the 1D browser, the whole genome across</td>
+</tr>
+<tr>
+<td><kbd>E</kbd></td>
+<td><strong>Observed over expected</strong></td>
+<td>Every cell divided by what its distance from the diagonal predicts: the O/E toggle on the Map card. On a map</td>
+</tr>
+<tr>
+<td><kbd>−</kbd></td>
+<td><strong>Coarser resolution</strong></td>
+<td>One rung coarser on the resolution bar. On a map</td>
+</tr>
+<tr>
+<td><kbd>+</kbd></td>
+<td><strong>Finer resolution</strong></td>
+<td>One rung finer on the resolution bar. On a map</td>
+</tr>
+<tr>
+<td><kbd>A</kbd></td>
+<td><strong>Manual annotations</strong></td>
+<td>Every line, arrowhead and rectangle drawn by hand, on every map, track and model. Off hides them; on brings back the ones it hid</td>
+</tr>
+<tr>
+<td><kbd>N</kbd></td>
+<td><strong>Track text</strong></td>
+<td>Track names, their value ranges and feature names. Off leaves the ink only</td>
+</tr>
+<tr>
+<td><kbd>R</kbd></td>
+<td><strong>Track floor</strong></td>
+<td>A rule along the bottom edge of every track lane</td>
+</tr>
+<tr>
+<td><kbd>F</kbd></td>
+<td><strong>Track fill</strong></td>
+<td>The area under a track’s line, filled. Off leaves the line alone</td>
+</tr>
+<tr>
+<td><kbd>I</kbd></td>
+<td><strong>Track outline</strong></td>
+<td>A dark rule along the top of every track and round every feature’s box</td>
+</tr>
+<tr>
+<td><kbd>U</kbd></td>
+<td><strong>Name column</strong></td>
+<td>Track names beside the tracks rather than over them: in a column before them, or in the map’s corners</td>
+</tr>
+<tr>
+<td><kbd>X</kbd></td>
+<td><strong>Crosshair</strong></td>
+<td>Guide lines through the cell under the pointer</td>
+</tr>
+<tr>
+<td><kbd>P</kbd></td>
+<td><strong>Tooltip</strong></td>
+<td>The card that follows the pointer. Off, the same reading stays in the status line under the window</td>
+</tr>
+<tr>
+<td><kbd>D</kbd></td>
+<td><strong>Dividers</strong></td>
+<td>Sequence boundaries, drawn as lines across the map</td>
+</tr>
+<tr>
+<td><kbd>M</kbd></td>
+<td><strong>Breaks</strong></td>
+<td>The same boundaries as ticks outside the plot, where they cost no data</td>
+</tr>
+<tr>
+<td><kbd>L</kbd></td>
+<td><strong>Labels</strong></td>
+<td>Block names in the gutters. Off gives the gutters back to the plot</td>
+</tr>
+<tr>
+<td><kbd>K</kbd></td>
+<td><strong>Ticks</strong></td>
+<td>Base-pair coordinates along the axes, inside a block that has a single contig</td>
+</tr>
+<tr>
+<td><kbd>1</kbd></td>
+<td><strong>General panel</strong></td>
+<td>A reference card about the open file: what it is, its genome, its metadata</td>
+</tr>
+<tr>
+<td>the key left of <kbd>1</kbd></td>
+<td><strong>Files panel</strong></td>
+<td>The folders you have connected, and what is in them</td>
+</tr>
+<tr>
+<td><kbd>2</kbd></td>
+<td><strong>Annotations panel</strong></td>
+<td>The tracks, structures, marks and bookmarks on this file</td>
+</tr>
+<tr>
+<td><kbd>3</kbd></td>
+<td><strong>Aesthetics panel</strong></td>
+<td>How the picture is drawn: colours, scales, overlays, export</td>
+</tr>
+<tr>
+<td><kbd>4</kbd></td>
+<td><strong>Analysis panel</strong></td>
+<td>What can be computed from this file, as against what is drawn on it</td>
+</tr>
+<tr>
+<td><kbd>Ctrl</kbd>+<kbd>backtick</kbd></td>
+<td><strong>Console</strong></td>
+<td>Every run, open and export this window has made, as commands that repeat them</td>
+</tr>
+<tr>
+<td><kbd>T</kbd></td>
+<td><strong>Cycle the theme</strong></td>
+<td>System follows the machine; every press changes what is on screen</td>
+</tr>
+</tbody>
+</table></div>
+<p>The Help group has no keys.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="in-an-enlarged-3d-model">In an enlarged 3D model</h3><a class="sl-anchor-link" href="#in-an-enlarged-3d-model"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “In an enlarged 3D model”</span></a></div>
+<p>These keys act only while a 3D model is enlarged, where the model fills the window. Beside a map
+the same letters keep their meanings above. The palette lists these commands under <strong>Structure</strong>
+either way, and the buttons that do the same print the key only while it is bound.</p>
+<div class="cx-table-wrap"><table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><kbd>F</kbd></td>
+<td><strong>Frame what the maps are looking at</strong></td>
+</tr>
+<tr>
+<td><kbd>A</kbd></td>
+<td><strong>Show the whole model</strong></td>
+</tr>
+<tr>
+<td><kbd>1</kbd></td>
+<td><strong>Beads</strong></td>
+</tr>
+<tr>
+<td><kbd>2</kbd></td>
+<td><strong>Sticks</strong></td>
+</tr>
+<tr>
+<td><kbd>3</kbd></td>
+<td><strong>Tube</strong></td>
+</tr>
+<tr>
+<td><kbd>L</kbd></td>
+<td><strong>Sequence names</strong></td>
+</tr>
+<tr>
+<td><kbd>R</kbd></td>
+<td><strong>Turntable</strong>: the model turns slowly by itself</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Mark a bead</strong>, <strong>Mark a loop</strong> and <strong>Measure</strong> have no key, so a letter pressed by accident cannot
+arm them.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="on-a-contact-map">On a contact map</h3><a class="sl-anchor-link" href="#on-a-contact-map"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “On a contact map”</span></a></div>
+<div class="cx-table-wrap"><table>
+<thead>
+<tr>
+<th>Gesture</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>drag</td>
+<td>Pan</td>
+</tr>
+<tr>
+<td><kbd>Alt</kbd> + drag (<kbd>⌥</kbd> on a Mac)</td>
+<td>Select a square and open it as a region, on the diagonal while it is locked</td>
+</tr>
+<tr>
+<td><kbd>Shift</kbd> + <kbd>Alt</kbd> + drag</td>
+<td>The same, pinned to the diagonal from the nearest bin on it</td>
+</tr>
+<tr>
+<td><kbd>Shift</kbd> + drag</td>
+<td>Zoom to the stretch it spans, on the diagonal, and copy its locus</td>
+</tr>
+<tr>
+<td>double click</td>
+<td>Fit the block back to the canvas</td>
+</tr>
+<tr>
+<td>wheel</td>
+<td>Zoom about the pointer</td>
+</tr>
+<tr>
+<td>two fingers sideways</td>
+<td>Slide sideways, down the diagonal while it is locked (Space)</td>
+</tr>
+<tr>
+<td><kbd>Win</kbd> + wheel (<kbd>⌘</kbd> on a Mac)</td>
+<td>Slide the map up and down, and sideways with it</td>
+</tr>
+<tr>
+<td>click</td>
+<td>Open what the cell refers to</td>
+</tr>
+<tr>
+<td><kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd></td>
+<td>Pan by a tenth of the view (half a view with Shift)</td>
+</tr>
+<tr>
+<td><kbd>Page Up</kbd> / <kbd>Page Down</kbd></td>
+<td>Zoom in and out about the centre</td>
+</tr>
+<tr>
+<td><kbd>Home</kbd></td>
+<td>Fit the block to the canvas</td>
+</tr>
+<tr>
+<td>drag a lane’s far edge</td>
+<td>Make that track thicker or thinner</td>
+</tr>
+<tr>
+<td>drag across a lane</td>
+<td>Raise or lower that track’s ceiling</td>
+</tr>
+<tr>
+<td>drag a lane’s grip</td>
+<td>Reorder it; drop it on a rectangle round this map or another to move it there, on a + or an empty cell to give it a cell of its own, or on a tracks cell to draw it there</td>
+</tr>
+<tr>
+<td>drag a track’s row from the panel</td>
+<td>Reorder it, or drop it on a rectangle round any map, a + or an empty cell to draw it there</td>
+</tr>
+<tr>
+<td>click a lane</td>
+<td>Open that track’s settings</td>
+</tr>
+<tr>
+<td>click a feature in a lane</td>
+<td>Open its card: names, attributes, exons</td>
+</tr>
+<tr>
+<td>drop a file on an edge of the map</td>
+<td>Load it as a track on that edge</td>
+</tr>
+</tbody>
+</table></div>
+<div class="sl-heading-wrapper level-h3"><h3 id="on-the-genome-browser">On the genome browser</h3><a class="sl-anchor-link" href="#on-the-genome-browser"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “On the genome browser”</span></a></div>
+<div class="cx-table-wrap"><table>
+<thead>
+<tr>
+<th>Gesture</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>drag</td>
+<td>Pan along the genome</td>
+</tr>
+<tr>
+<td>drag on the chromosome bar</td>
+<td>Select a span, with both ends written out to the base</td>
+</tr>
+<tr>
+<td><kbd>Alt</kbd> + drag (<kbd>⌥</kbd> on a Mac)</td>
+<td>The same selection, over the tracks</td>
+</tr>
+<tr>
+<td>drag a track’s lower edge</td>
+<td>Make that track taller or shorter</td>
+</tr>
+<tr>
+<td>drag the bar under the tracks</td>
+<td>Make every track taller or shorter, each in proportion</td>
+</tr>
+<tr>
+<td>drag a track’s grip</td>
+<td>Move it up or down the stack</td>
+</tr>
+<tr>
+<td>double click</td>
+<td>The whole genome</td>
+</tr>
+<tr>
+<td>wheel</td>
+<td>Zoom about the pointer</td>
+</tr>
+<tr>
+<td><kbd>Alt</kbd> + wheel over a track (<kbd>⌘</kbd> on a Mac)</td>
+<td>Raise or lower that track’s ceiling</td>
+</tr>
+<tr>
+<td>click a chromosome’s name</td>
+<td>Go to that chromosome</td>
+</tr>
+<tr>
+<td>click a feature</td>
+<td>Open its card: names, attributes, exons, and a zoom</td>
+</tr>
+<tr>
+<td>click a track’s range</td>
+<td>Type a limit</td>
+</tr>
+<tr>
+<td>drop a file on the tracks</td>
+<td>Load it; a .cool opens the map on this genome</td>
+</tr>
+<tr>
+<td><kbd>←</kbd> <kbd>→</kbd></td>
+<td>Pan by a fifth of the window</td>
+</tr>
+<tr>
+<td><kbd>+</kbd> / <kbd>−</kbd></td>
+<td>Zoom about the centre</td>
+</tr>
+</tbody>
+</table></div>
+<div class="sl-heading-wrapper level-h2"><h2 id="folding-the-panels">Folding the panels</h2><a class="sl-anchor-link" href="#folding-the-panels"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Folding the panels”</span></a></div>
+<p>The digit row folds and opens the side columns, in the order they stand on screen:</p>
+<div class="cx-table-wrap"><table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Column</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>the key left of <kbd>1</kbd></td>
+<td><strong>Files</strong>, outermost on the left</td>
+</tr>
+<tr>
+<td><kbd>1</kbd></td>
+<td><strong>General</strong></td>
+</tr>
+<tr>
+<td><kbd>2</kbd></td>
+<td><strong>Annotations</strong></td>
+</tr>
+<tr>
+<td><kbd>3</kbd></td>
+<td><strong>Aesthetics</strong></td>
+</tr>
+<tr>
+<td><kbd>4</kbd></td>
+<td><strong>Analysis</strong>, outermost on the right</td>
+</tr>
+</tbody>
+</table></div>
+<p>So <kbd>4</kbd> folds the Analysis panel away and brings it back, and <kbd>0</kbd>, at the row’s
+other end, refits the picture. Each column wears its key beside its heading and on its folded tab.</p>
+<p>The key left of <kbd>1</kbd> is a backtick on an English keyboard, <code dir="auto">²</code> on a French PC and <code dir="auto">@</code> on a
+French Mac. Its badge prints what your keyboard has there, and its tooltips say <em>the key left of 1</em>.
+The Files column only exists once you have connected a folder, so its key does nothing until then.
+The Annotations and Analysis columns start folded.</p>
+<p>Cards move too. Drag a card by its heading into any open column, and press Escape during the drag to
+put it back. With the focus on a card’s heading, <kbd>Alt</kbd>+<kbd>↑</kbd> and
+<kbd>Alt</kbd>+<kbd>↓</kbd> (<kbd>⌥</kbd><kbd>↑</kbd> and <kbd>⌥</kbd><kbd>↓</kbd>) move it one place.
+<strong>Put every card back in its own panel</strong>, in the palette, undoes every move.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="tab-walks-the-fields-of-one-kind">Tab walks the fields of one kind</h2><a class="sl-anchor-link" href="#tab-walks-the-fields-of-one-kind"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Tab walks the fields of one kind”</span></a></div>
+<p>Many names and numbers are edited where they are drawn, and they come in runs: the names of four
+replicates, the ceilings of six tracks. In such a field, <kbd>Tab</kbd> keeps what you typed, as
+Enter does, and moves the caret to the next field of the same kind. <kbd>Shift</kbd>+<kbd>Tab</kbd>
+moves to the one before. Past either end of the run the caret is let go.</p>
+<p>The fields that walk this way are:</p>
+<ul>
+<li>a track’s name, and the two ends of its range, beside a map and in the 1D browser;</li>
+<li>the two ends of a map’s colour key, and of a 3D model’s key;</li>
+<li>a tab’s name;</li>
+<li>the heading of a cell of the deck, and a name on the <strong>Tracks</strong>, <strong>Metadata annotations</strong>,
+<strong>Structures</strong> or <strong>Contact maps</strong> card;</li>
+<li>the place of a mark on the <strong>Manual annotations</strong> card.</li>
+</ul>
+<p>A run goes the way your eye does. Beside a map it goes through the tracks under the map first, then
+round the map clockwise: the tracks on its left, those above it, those on its right, each in the
+order they are drawn. In the 1D browser it goes down the tracks. On a deck it goes from cell to cell
+as they stand on the page. A range goes from its bottom to its top, and then on to the next track’s
+bottom.</p>
+<p>A value that is refused keeps the caret. A bound you only tab through, without changing it, stays
+automatic. Only a bare Tab walks: <kbd>Ctrl</kbd>+<kbd>Tab</kbd> is still your browser’s.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="other-keys">Other keys</h2><a class="sl-anchor-link" href="#other-keys"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Other keys”</span></a></div>
+<ul>
+<li><strong>A tab’s name</strong>: <kbd>F2</kbd> or a double-click to rename, <kbd>Enter</kbd> to keep the name,
+<kbd>Esc</kbd> to abandon it.</li>
+<li><strong>Dialogs</strong> close with <kbd>Esc</kbd>, and so do the Analysis drawer, the stores drawer and the
+<a href="/pr/160/docs/browse/console/">console</a>.</li>
+<li><strong>Placing marks</strong>: <kbd>Esc</kbd> stops placing them, as <strong>done</strong> does, and <kbd>Shift</kbd> while
+drawing a rectangle locks it to the diagonal. See <a href="/pr/160/docs/browse/annotations/">Annotations and bookmarks</a>.</li>
+<li><strong>A 3D model</strong>: drag to turn, scroll to zoom, <kbd>Shift</kbd> and drag to move it,
+<kbd>⌘</kbd> or <kbd>Ctrl</kbd> and a click on a bead to turn about it, a tap of <kbd>⌘</kbd> or
+<kbd>Ctrl</kbd> alone to show or hide the centre, <kbd>Space</kbd> and scroll for the fog, the
+arrow keys to turn it once its canvas has the focus, and <kbd>Esc</kbd> to let go of a half-made
+loop or measurement. The cell’s corner lists these. See
+<a href="/pr/160/docs/browse/structures/">3D models beside the map</a>.</li>
+<li><strong>A task’s figure</strong>: the wheel, a drag, <kbd>Shift</kbd> and the wheel, and <kbd>⌘</kbd> or
+<kbd>Ctrl</kbd> with a drag zoom and pan it. See <a href="/pr/160/docs/browse/figures/">Figures and export</a>.</li>
+</ul>
+</div><footer class="sl-flex astro-ddtxxk7k"><div class="meta sl-flex astro-ddtxxk7k"></div><div class="pagination-links print:hidden astro-g3wxxdym" dir="ltr"><a href="/pr/160/docs/browse/console/" rel="prev" class="astro-g3wxxdym"><span class="link-label sl-flex astro-g3wxxdym"><svg aria-hidden="true" class="astro-g3wxxdym astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="M17 11H9.41l3.3-3.29a1.004 1.004 0 1 0-1.42-1.42l-5 5a1 1 0 0 0-.21.33 1 1 0 0 0 0 .76 1 1 0 0 0 .21.33l5 5a1.002 1.002 0 0 0 1.639-.325 1 1 0 0 0-.219-1.095L9.41 13H17a1 1 0 0 0 0-2Z"/></svg>Previous</span><span class="link-title astro-g3wxxdym">The console</span></a><a href="/pr/160/docs/analyses/" rel="next" class="astro-g3wxxdym"><span class="link-label sl-flex astro-g3wxxdym">Next<svg aria-hidden="true" class="astro-g3wxxdym astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="M17.92 11.62a1.001 1.001 0 0 0-.21-.33l-5-5a1.003 1.003 0 1 0-1.42 1.42l3.3 3.29H7a1 1 0 0 0 0 2h7.59l-3.3 3.29a1.002 1.002 0 0 0 .325 1.639 1 1 0 0 0 1.095-.219l5-5a1 1 0 0 0 .21-.33 1 1 0 0 0 0-.76Z"/></svg></span><span class="link-title astro-g3wxxdym">How analyses run</span></a></div></footer><script type="module">var e=()=>window.innerWidth<800?8:24;function t(e){let t=e.dataset.live;if(t===void 0||e.querySelector(`.cx-live-start`)!==null)return;let r=document.createElement(`button`);r.type=`button`,r.className=`cx-live-start`,r.title=`Open this view in the app itself, here on the page`,r.innerHTML=`<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4.5 2.6v10.8L13.2 8z" fill="currentColor"/></svg><span>Try it live</span>`,r.addEventListener(`click`,()=>n(e,t,r)),e.append(r)}function n(e,t,n){let a=e.querySelector(`img`),o=document.createElement(`iframe`);o.className=`cx-live-frame`,o.src=t,o.title=e.dataset.liveTitle??`chromosomix, live`,o.allow=`clipboard-write; fullscreen`;let s=document.createElement(`a`);s.href=e.dataset.liveViewer??t,s.target=`_blank`,s.rel=`noopener`,s.textContent=`open it in a tab of its own`;let c=document.createElement(`button`);c.type=`button`,c.className=`cx-live-back`,c.textContent=`back to the picture`;let l=document.createElement(`span`);l.className=`cx-live-note`,l.append(`The app itself: pan, zoom and change it, and nothing is kept. `,s,` · `,c);let u=e.style.maxWidth;e.style.maxWidth=`none`,e.classList.add(`is-live`),e.replaceChildren(o,l),r(e),i(),c.addEventListener(`click`,()=>{e.style.maxWidth=u,e.style.marginInlineStart=``,e.style.width=``,e.classList.remove(`is-live`),e.replaceChildren(...a===null?[]:[a],n),i(),n.focus()})}function r(t){let n=t.parentElement;if(n===null)return;let r=document.querySelector(`.sidebar-pane`),i=(r!==null&&r.offsetWidth>0&&getComputedStyle(r).position===`fixed`?r.getBoundingClientRect().right:0)+e(),a=document.documentElement.clientWidth-e();t.style.marginInlineStart=`${i-n.getBoundingClientRect().left}px`,t.style.width=`${Math.max(0,a-i)}px`}function i(){let e=document.querySelector(`.right-sidebar-panel`);if(e===null)return;let t=e.getBoundingClientRect(),n=!1;if(t.width>0)for(let e of document.querySelectorAll(`.cx-live.is-live`)){let r=e.getBoundingClientRect();r.right>t.left&&r.left<t.right&&r.bottom>t.top&&r.top<t.bottom&&(n=!0)}document.documentElement.classList.toggle(`cx-contents-away`,n)}var a=0;function o(e){a===0&&(a=requestAnimationFrame(()=>{a=0,e()}))}for(let e of document.querySelectorAll(`.cx-live`))t(e);window.addEventListener(`scroll`,()=>o(i),{passive:!0}),window.addEventListener(`resize`,()=>o(()=>{for(let e of document.querySelectorAll(`.cx-live.is-live`))r(e);i()}));</script><p class="cx-build">Documentation of chromosomix, a preview of pull request #160 · <a href="https://github.com/js2264/chromosomix/pull/160/files">source</a></p></div></div></main></div></div></div></div></body></html>

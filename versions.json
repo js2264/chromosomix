@@ -249,6 +249,13 @@
   ],
   "pulls": [
     {
+      "number": 160,
+      "commit": "375ef2a",
+      "title": "docs: a pull request's preview carries its documentation",
+      "branch": "js/docs-pr-previews",
+      "date": "2026-11-04T00:34:58Z"
+    },
+    {
       "number": 156,
       "commit": "e5d7317",
       "title": "Add cell-of-its-own rectangle to Contact maps card",
