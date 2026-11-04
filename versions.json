@@ -249,6 +249,13 @@
   ],
   "pulls": [
     {
+      "number": 162,
+      "commit": "204a2a8",
+      "title": "Move viewer timings to a separate notebook",
+      "branch": "js/gracious-cerf-eut8v7",
+      "date": "2026-11-04T15:03:31Z"
+    },
+    {
       "number": 160,
       "commit": "d852c55",
       "title": "docs: a pull request's preview carries its documentation",
