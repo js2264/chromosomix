@@ -5899,7 +5899,7 @@ did not ask for, and on a map or a lane left without its data.
 `public/` puts two at the root. `robots.txt` lets every crawler in, those of language models
 included, points them at `llms.txt` and `llms-full.txt`, keeps the archived pins and the pull-request
 previews (`/v/`, `/pr/`) out of search — each is a copy of the app at the root, kept for links that
-must not change — and names `sitemap.xml`, which lists the app and its four notebooks.
+must not change — and names `sitemap.xml`, which lists the app and its five notebooks.
 
 **The files for language models are written by the site build, from the source it builds**
 (`scripts/llms.mjs`, `src/llms/`): `llms.txt` at the root, five reference pages under `llms/`, and
