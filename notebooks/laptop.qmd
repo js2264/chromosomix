@@ -196,6 +196,7 @@ def found(name):
     return here if pinned in (None, here) else f'{here} (notebooks/requirements.txt pins {pinned})'
 
 
+#: The machine, as every row of the tables carries it.
 MACHINE = {
     'processor': R.machine['processor'],
     'cores': os.cpu_count(),
@@ -203,10 +204,13 @@ MACHINE = {
     'system': platform.platform(),
     'node': subprocess.run(['node', '--version'], capture_output=True, text=True).stdout.strip(),
     'chromosomix': VERSION.removeprefix('chromosomix '),
-    'python': f'{platform.python_version()}, {sys.executable}',
-    **{name: found(name) for name in ('cooler', 'cooltools', 'coolpuppy', 'bioframe')},
 }
-pd.DataFrame([*MACHINE.items(), *((NAMES[one].lower(), VERSIONS[one]) for one in BROWSERS)],
+#: What the page ran in, said here and kept out of the tables: the Python and the environment it is in, by
+#: name rather than by its path on this disk — the one the deep map's reference script runs in — and the
+#: version of each package that script runs.
+ENVIRONMENT = {'python': f'{platform.python_version()}, environment {Path(sys.prefix).name}',
+               **{name: found(name) for name in ('cooler', 'cooltools', 'coolpuppy', 'bioframe')}}
+pd.DataFrame([*MACHINE.items(), *ENVIRONMENT.items(), *((NAMES[one].lower(), VERSIONS[one]) for one in BROWSERS)],
              columns=['', 'this machine']).style.hide(axis='index')
 ```
 
