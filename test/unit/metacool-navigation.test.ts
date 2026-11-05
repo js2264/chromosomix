@@ -1,3 +1,4 @@
+// @dev-feature metacool
 /**
  * What a metagenome's whole-file views answer with, and what they refuse.
  *

@@ -1,3 +1,4 @@
+// @fixtures metacooler
 /**
  * Plain cooler files, opened as themselves (spec §9).
  *

@@ -59,11 +59,11 @@ jobs:
       # About dialog with the branch should see the same hash. On `closed` the
       # head still resolves — GitHub keeps `refs/pull/<n>/head` — and only the
       # scripts are needed from it.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
@@ -220,7 +220,7 @@ jobs:
 
       # One comment per pull request, updated rather than repeated, so the
       # thread carries the address once and says when it stopped answering.
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v9
         env:
           PREVIEW_URL: ${{ steps.base.outputs.url }}
           ACTION: ${{ github.event.action }}

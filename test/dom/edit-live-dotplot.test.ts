@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// @dev-feature edit
 /**
  * The stage's corner dot plot, in a DOM (SPECS §27.3): absent without another
  * reference to set the file against; one run of the dot plot task in the

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://doc.chromosomix.app/
+    about: How to open a file, read a map, run an analysis, or embed the viewer.
+  - name: A security problem
+    url: https://github.com/js2264/chromosomix/security/advisories/new
+    about: Report it privately, not in an issue (SECURITY.md).

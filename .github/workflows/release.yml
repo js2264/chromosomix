@@ -84,7 +84,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref_name }}
 
@@ -148,11 +148,11 @@ jobs:
       # `workflow_dispatch` run's is the default branch — so without this a
       # manual re-run would quietly build `main` and attach the result to an
       # older release as if it were that version.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref_name }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
@@ -161,7 +161,7 @@ jobs:
       # platform. Cached here and nowhere else: the Pages and test jobs never
       # touch it, so this must not become a repository-wide cache step.
       - name: Cache the Electron downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/electron
@@ -216,7 +216,7 @@ jobs:
       - name: Verify the packed archive
         run: node scripts/check-package.mjs
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           # v4 refuses duplicate artifact names within one run, so the matrix id
           # is part of the name rather than a suffix someone might drop.
@@ -245,7 +245,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # The tag, for the same reason the matrix does it: `__APP_COMMIT__`
           # and `__APP_VERSION__` are baked into the page, and a manual re-run
@@ -254,7 +254,7 @@ jobs:
           # `vite.standalone.config.ts` shells out to `git rev-parse` and
           # `git log -1`, and a depth-1 checkout has both.
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
@@ -276,7 +276,7 @@ jobs:
           TAG: ${{ inputs.tag || github.ref_name }}
         run: mv dist-standalone/index.html "dist-standalone/chromosomix-${TAG}.html"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: chromosomix-standalone
           path: dist-standalone/*.html
@@ -299,7 +299,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # The tag, for the reason the other two jobs give — `__APP_COMMIT__`
           # and `__APP_VERSION__` are baked into the build — and for one more
@@ -313,7 +313,7 @@ jobs:
       # No `registry-url`: that writes an `.npmrc` that authenticates with
       # NODE_AUTH_TOKEN, and setup-node fills that with a placeholder when it is
       # unset. The default registry is npm's, and the credential is the OIDC one.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
@@ -383,11 +383,11 @@ jobs:
       TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       # For CHANGELOG.md, which is where the release body comes from.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref_name }}
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
@@ -458,7 +458,7 @@ jobs:
           viewer and needs no installation.
           NOTE
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           # Named explicitly so the manual re-run path attaches to the same
           # place, and so nothing here can create a second release by accident.

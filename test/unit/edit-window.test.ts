@@ -1,3 +1,4 @@
+// @dev-feature edit
 /**
  * The stage closer than its picture's cell (SPECS §27.9): each pixel of a side
  * mapped through the lens to the bin of the finer read under it, the read

@@ -1,3 +1,4 @@
+// @dev-feature edit
 /**
  * The edit of one file's reference, as the session keeps it (SPECS §27.2):
  * steps, undo and redo, back to the file and forward again — and a record made

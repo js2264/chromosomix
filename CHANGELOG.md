@@ -14,6 +14,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The files a contributor looks for, and a page on adding a reader or a task.** `CONTRIBUTING.md`,
+  `CODE_OF_CONDUCT.md` (the Contributor Covenant 2.1), `SECURITY.md`, issue forms for a bug and a
+  feature request, and a pull request template whose checks are this repository's rules. The
+  documentation's *Contributing* group gains *Adding a reader or a task*: how a file is read and a
+  task runs, and where a track format, a contact-map format or a task goes, with what each must come
+  with. The README has a *Contributing* section.
+- **The Python widget carries its licence.** A wheel built from `widgets/python/` held no licence
+  text; `widgets/python/LICENSE`, the root's GPL-3.0 word for word, is now in it as its
+  `License-File`, and `test/unit/licences.test.ts` holds the copy to the original.
+- **The notebooks render every week, unpublished (§18.10).** `.github/workflows/notebooks.yml` also runs
+  on Sundays at 02:37 UTC, on `main`'s newest commit with every input at its default, and publishes
+  nothing — no push to the `notebooks` branch, no release assets, no deploy: its artifacts and its
+  summary are what it leaves, and a page it rendered says it was rendered on that schedule. It has a
+  concurrency group of its own, so it can neither cancel a release's run waiting behind another nor
+  hold one back.
 - **The deep human map on five sides (§18.10).** `notebooks/laptop.qmd` times its six analyses over
   the IMR-90 map on the command line as before, and now in Chromium too — the map opened once, each
   task run in turn in the same page, the pileup over the loops the first called there, the map moved to
@@ -30,8 +45,39 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   then the reference's commands, its script on several processes and on one — the panel as wide as the
   page and growing with its rows, each side's end and peak written just past where it finished.
 
+### Changed
+
+- **Every workflow's actions run on Node 24.** GitHub runs Node 20 actions on Node 24 with a
+  deprecation warning, and will stop: `checkout` v7, `upload-artifact` v7, `download-artifact` v8,
+  `setup-node` v7, `setup-python` v7, `setup-java` v6, `github-script` v9, `cache` v6,
+  `upload-pages-artifact` v5, `deploy-pages` v5 and `action-gh-release` v3, each the newest major,
+  every input the workflows pass still one it takes. `r-lib/actions` v2 already ran on Node 24. The
+  Node the app is built and tested with is unchanged.
+- **The notebooks' runners are described as they are (§18.10).** `notebooks.yml` and SPECS said a
+  standard runner has 2 cores and 8 GB, a private repository's; the repository is public, and every
+  page of 0.20.0 ran on 4 cores and 15.6 GB. The memory shutdowns they record happened on the private
+  runner.
+- **`npm test` passes on a fresh clone, and leaves the dev features' tests to `npm run test:dev` (§29.6).**
+  It failed 491 tests in 13 suites there, every one for want of a fixture `npm run fixtures` builds with
+  metacooler, a private repository. Those suites now say `// @fixtures metacooler` in their header and
+  are left out while none of the fixtures is on disk. The 39 files that test a dev feature — the
+  reference editor, the dot plot and the multi-genome format — say `// @dev-feature <name>` and are left
+  out unless the run asks: `npm run test:dev`, `vitest --mode dev` or `CHROMOSOMIX_DEV_TESTS=1`. A run
+  says at its top what it left out and the command that runs it. CI's every vitest run, and
+  `npm version`'s check, ask for the dev features, so nothing goes untested on a push;
+  `test/unit/dev-tests.test.ts` fails the default run on a marker that names a feature the registry no
+  longer has, or that sits where it is not read.
+
 ### Fixed
 
+- **The Python widget's install line names where it is (§21.5).** The README, the widget's README, the
+  documentation's *In a Jupyter notebook* and *Ways to use it*, `llms.txt` and SPECS said
+  `pip install chromosomix`, and the package is not on PyPI. They now say
+  `pip install "git+https://github.com/js2264/chromosomix#subdirectory=widgets/python"`, which installs it
+  from the repository, with `@<tag>` to pin a release and `pip install -e widgets/python` from a clone.
+  The README's R section, which gave only the line for a clone, now gives
+  `remotes::install_github("js2264/chromosomix", subdir = "widgets/r")` first, as the R widget's README
+  and the documentation do.
 - **The laptop's deep human map runs on a Mac (§18.10).** `notebooks/scripts/cooltools_pipeline.py`
   stopped at coolpuppy's pileup on macOS: there Python spawns its workers rather than forking them,
   and coolpuppy's pool logs through `multiprocessing_logging`, which refuses any start method but

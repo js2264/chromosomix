@@ -1,3 +1,4 @@
+// @dev-feature edit metacool
 /**
  * One genome of a metagenome, edited on its own (SPECS §27.10): its contigs
  * the original, checked as part of the file's; a stretch sent to another

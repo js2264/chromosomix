@@ -39,7 +39,15 @@ name: Notebooks
 # Run workflow, on any branch or tag, with the number of timed runs and
 # whether to publish. A run from a branch that publishes replaces the pages a
 # release put up; untick *publish* to look at a branch's pages in the run's
-# artifacts instead.
+# artifacts instead. And every week, early on Sunday, on the default branch's
+# newest commit, with every input at its default and **never published**: not
+# to the branch, not to a release, no deploy asked for. It is there to say,
+# between releases, that the notebooks still render against what `main` has
+# become and against servers that change under them (GEO, 4DN, ENCODE); what
+# it leaves is its artifacts and its summary, and GitHub's mail to whoever
+# last changed the schedule when it fails. GitHub turns a schedule off after
+# 60 days without a commit to a public repository, and runs it late, or not
+# at all, when its runners are busy; it is a check, not a promise.
 #
 # **A job a notebook, all at once.** `site` works out where the pages will be,
 # for the links between them; then `parity`, `validation`, `viewers` and
@@ -52,8 +60,8 @@ name: Notebooks
 # The validation and the timings are the one pair that share a job, because
 # the timings run the validation's own commands again, on the inputs the
 # validation fetched and made: about 8 GB that would otherwise go from one job
-# to the next as an artifact on every run, which a private repository pays
-# for, and the timings would still wait for the validation to finish. The
+# to the next as an artifact on every run, uploaded and downloaded again, and
+# the timings would still wait for the validation to finish. The
 # viewers fetch their own 15 GB and read nothing the validation writes, so
 # they have a job of their own, and the validation's runner holds 15 GB less.
 # `laptop` takes the committed page out of the way first, so that what it
@@ -104,12 +112,13 @@ name: Notebooks
 # through iGenomes for its GC content). A cache that size would evict the
 # repository's npm and Electron caches, and the buckets answer a runner at
 # hundreds of megabytes a second; what a runner fetches costs nothing but its
-# minutes, and every job's minutes are billed, its setup's included — five to
-# seven of them, the app built and the reference environment installed again
-# on each. From nothing, the validation renders in an hour to an hour and a
-# half on a standard runner, every reference run for the first time, and the
-# timings after it in about twenty minutes a run, so four runs leave the job
-# room in the six hours a job may take — four, an even number, so that each
+# minutes. A public repository's standard runners bill none, and each job
+# spends five to seven of its own on setup, the app built and the reference
+# environment installed again on each. From nothing, the validation renders
+# in an hour to an hour and a half on a standard runner, every reference run
+# for the first time, and the timings after it in about twenty minutes a
+# run, so four runs leave the job room in the six hours a job may take —
+# four, an even number, so that each
 # side of a pair goes first in as many rounds as the other (timing.qmd's
 # `round_of`). The viewers' pictures take about twenty minutes a round, four
 # rounds, as many as there are viewers, so that each goes first once a
@@ -120,13 +129,15 @@ name: Notebooks
 # takes as long as the longest of them. Every runner is a different machine,
 # which is why each page says which one it ran on.
 #
-# **What it runs on, and the memory.** A standard runner for a private
-# repository has 2 cores and 8 GB, 7.8 of them the job's — not the 4 cores and
-# 16 GB a public one has. A reference that takes a number of processes is
-# given one a core, at most four (validation.qmd's `THREADS`). Given four on
-# two cores, six renders in nine were shut down, four of them in the cell where
-# cooltools computes the expected over the mouse genome at 10 kb, its largest
-# process alone at 3.6 GB: by every sign the log leaves, the memory ran out.
+# **What it runs on, and the memory.** The repository is public, so a
+# standard runner has 4 cores and 16 GB, 15.6 of them the job's: what every
+# page of 0.20.0 records. A private repository's has 2 cores and 8 GB, which
+# is what this one had while it was private. A reference that takes a number
+# of processes is given one a core, at most four (validation.qmd's
+# `THREADS`), so four here. Given four on the private runner's two cores, six
+# renders in nine were shut down, four of them in the cell where cooltools
+# computes the expected over the mouse genome at 10 kb, its largest process
+# alone at 3.6 GB: by every sign the log leaves, the memory ran out.
 # GitHub shuts down a runner whose memory runs out in the
 # middle of a step, with "The runner has received a shutdown signal": the
 # command reports no error, no step after it runs, `if: always()` or not, and
@@ -160,6 +171,11 @@ name: Notebooks
 on:
   release:
     types: [published]
+  # Sundays at 02:37 UTC, off the hour, when GitHub's schedules crowd. A
+  # scheduled run has no inputs: each `inputs.x || default` below takes its
+  # default, and PUBLISH is false.
+  schedule:
+    - cron: '37 2 * * 0'
   workflow_dispatch:
     inputs:
       runs:
@@ -182,9 +198,13 @@ on:
 permissions: {}
 
 # One writer of the branch, and never a render cancelled three hours in for a
-# newer one: a second run waits for the first.
+# newer one: a second run waits for the first. The weekly run writes nothing
+# and so has a group of its own: GitHub keeps one run waiting a group and
+# cancels the one already waiting when another comes, so in the same group a
+# Sunday's run could cancel a release's that was waiting behind a dispatch,
+# or hold a release's pages back for the three hours of its own.
 concurrency:
-  group: notebooks
+  group: ${{ github.event_name == 'schedule' && 'notebooks-weekly' || 'notebooks' }}
   cancel-in-progress: false
 
 env:
@@ -206,7 +226,7 @@ jobs:
       version: ${{ steps.site.outputs.version }}
     steps:
       # On a release, the release's tag: what is rendered is what was released.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Resolve the site
         id: site
@@ -240,7 +260,7 @@ jobs:
     env:
       NOTEBOOKS_SITE: ${{ needs.site.outputs.url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: ./.github/actions/notebooks-setup
         with:
@@ -255,7 +275,7 @@ jobs:
         if: always()
         run: python3 notebooks/scripts/pages.py gather parity
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: notebooks-parity-${{ needs.site.outputs.version }}-${{ needs.site.outputs.short }}
@@ -280,7 +300,7 @@ jobs:
       NOTEBOOKS_SITE: ${{ needs.site.outputs.url }}
       TIMING_RUNS: ${{ inputs.runs || 4 }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: ./.github/actions/notebooks-setup
         with:
@@ -301,7 +321,7 @@ jobs:
         if: always()
         run: python3 notebooks/scripts/pages.py gather validation timing
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: notebooks-validation-${{ needs.site.outputs.version }}-${{ needs.site.outputs.short }}
@@ -324,7 +344,7 @@ jobs:
       NOTEBOOKS_SITE: ${{ needs.site.outputs.url }}
       VIEWER_RUNS: ${{ inputs.viewer_runs || 4 }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: ./.github/actions/notebooks-setup
         with:
@@ -338,7 +358,7 @@ jobs:
         if: always()
         run: python3 notebooks/scripts/pages.py gather viewers
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: notebooks-viewers-${{ needs.site.outputs.version }}-${{ needs.site.outputs.short }}
@@ -363,7 +383,7 @@ jobs:
       NOTEBOOKS_SITE: ${{ needs.site.outputs.url }}
       PIPELINE_RUNS: ${{ inputs.pipeline_runs || 1 }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: ./.github/actions/notebooks-setup
         with:
@@ -385,7 +405,7 @@ jobs:
         if: always()
         run: python3 notebooks/scripts/pages.py gather laptop
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: notebooks-laptop-${{ needs.site.outputs.version }}-${{ needs.site.outputs.short }}
@@ -410,15 +430,16 @@ jobs:
       # The laptop's render is never published, so whether it rendered decides
       # nothing here; the summary still says.
       RENDERED: ${{ needs.parity.result == 'success' && needs.validation.result == 'success' && needs.viewers.result == 'success' }}
-      PUBLISH: ${{ github.event_name == 'release' || inputs.publish }}
+      # A release always; a dispatch if asked; the weekly run never.
+      PUBLISH: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.publish) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           sparse-checkout: notebooks/scripts
 
       # Nothing to download when every render failed before it gathered a
       # page; the summary still says so.
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           pattern: notebooks-*-${{ needs.site.outputs.version }}-${{ needs.site.outputs.short }}

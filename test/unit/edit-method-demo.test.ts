@@ -1,3 +1,4 @@
+// @dev-feature edit
 /**
  * The method on real contacts (SPECS §27.11): the yeast demo's `.hic` at 16 kb,
  * as it is and scrambled by a known edit through the lens — which is exactly

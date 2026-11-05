@@ -1,3 +1,4 @@
+// @dev-feature edit
 /**
  * A contact map lifted through an edit (SPECS §27.8), written and read back:
  * the demo `.hic` at 16 kb, a stretch of IV turned and a stretch of XI set

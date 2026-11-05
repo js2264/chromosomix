@@ -1,3 +1,4 @@
+// @dev-feature edit
 /**
  * Evidence beyond the map, from the sequence (SPECS §27.5): the telomeres at a
  * sequence's ends and the gaps of `N` inside it, read from the session's FASTA —
