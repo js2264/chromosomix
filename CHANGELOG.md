@@ -32,6 +32,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A remote `.hic`'s whole genome is drawn four times sooner (§3.6).** The walk across its chromosome
+  pairs keeps six reads in flight, and in Chromium they went out one at a time: the browser's HTTP
+  cache lets one request per URL at its entry at once, holds the rest until it has, and every read of a
+  walk is of one URL. Its reads now go past the cache (`cache: 'no-store'`), as nothing kept them
+  anyway. From 4DN's bucket, the chicken map's whole genome at 2.5 Mb is 12–14 s where it was 60 s,
+  the mouse map's at 5 Mb 17 s where it was 75 s, and the yeast map's from the demo store 4 s where
+  it was 15 s, for the same requests and bytes. The census of §6.5 reads through the same call, and
+  goes past the cache too.
 - **The laptop's deep human map runs on a Mac (§18.10).** `notebooks/scripts/cooltools_pipeline.py`
   stopped at coolpuppy's pileup on macOS: there Python spawns its workers rather than forking them,
   and coolpuppy's pool logs through `multiprocessing_logging`, which refuses any start method but

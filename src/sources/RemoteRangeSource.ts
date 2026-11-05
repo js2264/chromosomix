@@ -456,6 +456,20 @@ export class RemoteRangeSource implements ByteSource {
    * Through `fetch`, not the synchronous request every other read makes, so the
    * worker is free while it is in flight and a walk can have several at once.
    * The request is otherwise the same one, refused the same ways.
+   *
+   * **And past the browser's HTTP cache (`no-store`), or the several are one.**
+   * Chromium's cache lets one request per URL write its entry at a time; every
+   * other request for that URL, whatever its range, waits for the entry before
+   * it is sent. A walk's reads are all of one URL, so the six a whole-genome
+   * picture had out went to the network one after another. Measured in
+   * Chromium on the 4DN chicken map: requests made a second before they were
+   * sent, never more than one on the wire, and the picture's 432 reads took 60 s.
+   * Past the cache they go out together and it takes 12–14 s; the mouse map, 75 s
+   * then and 17 s now. Nothing is lost by it: these are bytes read once
+   * and kept nowhere, and a second open of the same file in the same browser
+   * re-read all 30 MB of them through the cache as well. A synchronous read
+   * cannot say the same (`XMLHttpRequest` has no cache mode), and needs not: one
+   * worker has one of those out at a time anyway.
    */
   async readExact(position: number, length: number): Promise<Uint8Array> {
     const n = Math.max(0, Math.min(this.size - position, length))
@@ -472,6 +486,7 @@ export class RemoteRangeSource implements ByteSource {
     const response = await doFetch(this.url, {
       method: 'GET',
       headers: { ...this.authorisation(), Range: `bytes=${from}-${to}` },
+      cache: 'no-store',
     })
     this.requests += 1
     this.refuseStatus(response.status, from, to)

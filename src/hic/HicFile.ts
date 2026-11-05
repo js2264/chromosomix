@@ -59,6 +59,9 @@
  * and a half from a bucket; planned, it is 427, read six at a time. Reads are
  * exact and do not hold the worker; a picture's walk has six out at once, every
  * connection a browser opens to one host, and the census, behind the views, four.
+ * They are six on the wire only because they go past the browser's HTTP cache,
+ * which lets one request per URL out at a time (`RemoteRangeSource.readExact`):
+ * through it, those 427 went one after another, and the picture took a minute.
  */
 
 import { ViewerError } from '../errors'

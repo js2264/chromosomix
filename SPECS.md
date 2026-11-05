@@ -381,7 +381,15 @@ blocks just past its record, coarsest rung first. So the heads of the records ar
 each with the 4 KiB past its record's end, as the stretches of the file they make where they lie
 within 64 KiB of one another; the blocks those bytes brought are decoded from them; and the blocks
 left over are read together after, the same way. A picture's walk keeps six reads in flight, every
-connection a browser opens to one host; the census, behind the views, four. Pair by pair — a record's
+connection a browser opens to one host; the census, behind the views, four. **They are in flight
+together only because they go past the browser's HTTP cache** (`cache: 'no-store'`). Chromium's
+cache lets one request per URL write its entry at a time and holds every other request for that URL,
+whatever its range, until it has; a walk's reads are all of one URL, so the six went out one after
+another, each waiting about a second to be sent. On the 4DN chicken map at 2.5 Mb that was 432 requests
+in 60 s to a whole-genome picture, with never more than one on the wire; past the cache it is the
+same 432 in 12–14 s, and the mouse map's 458 in 17 s where they took 75 (both from 4DN's bucket, in
+Chromium). Nothing is lost by it: a walk's bytes are read once and kept nowhere, and a second open of
+the same file in the same browser had re-read all of them through the cache too. Pair by pair — a record's
 head, then its blocks — the whole genome of the 4DN chicken map 4DNFIRKUYKP4 at 2.5 Mb was 1,258
 requests; planned, it is 427, and a dropped copy of it reads 11 MB of the disk where its 1 MiB slices
 were 222 MiB. The gap read through is a window's on purpose: a wider one saves round trips only on a
