@@ -22,8 +22,12 @@ view
 ## Install
 
 ```bash
-pip install chromosomix          # or, from a clone: pip install -e widgets/python
+pip install "git+https://github.com/js2264/chromosomix#subdirectory=widgets/python"
 ```
+
+It is not on PyPI: pip installs it from the repository, which needs git on the machine. `@v0.20.0`
+after `chromosomix`, before the `#`, installs it as it was at that release; in a notebook, `%pip`
+in place of `pip`. From a clone, `pip install -e widgets/python`.
 
 It works wherever [anywidget](https://anywidget.dev/) does: JupyterLab, Jupyter Notebook 7, VS Code,
 Google Colab and marimo — in marimo, as [below](#in-marimo). Nothing else is installed (behind

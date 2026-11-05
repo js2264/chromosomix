@@ -38,6 +38,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The Python widget's install line names where it is (§21.5).** The README, the widget's README, the
+  documentation's *In a Jupyter notebook* and *Ways to use it*, `llms.txt` and SPECS said
+  `pip install chromosomix`, and the package is not on PyPI. They now say
+  `pip install "git+https://github.com/js2264/chromosomix#subdirectory=widgets/python"`, which installs it
+  from the repository, with `@<tag>` to pin a release and `pip install -e widgets/python` from a clone.
 - **The laptop's deep human map runs on a Mac (§18.10).** `notebooks/scripts/cooltools_pipeline.py`
   stopped at coolpuppy's pileup on macOS: there Python spawns its workers rather than forking them,
   and coolpuppy's pool logs through `multiprocessing_logging`, which refuses any start method but

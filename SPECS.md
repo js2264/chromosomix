@@ -11547,7 +11547,8 @@ is where the view actually **went**, which for a trimmed patch is not always whe
 
 The channel is what a notebook widget is made of, and the repository carries two: one for Python and
 Jupyter, one for R. The Python one first: `widgets/python/`,
-the `chromosomix` package on PyPI, an [anywidget](https://anywidget.dev/) that works wherever
+the `chromosomix` package — not on PyPI: `pip install "git+https://github.com/js2264/chromosomix#subdirectory=widgets/python"` installs it from this
+repository — an [anywidget](https://anywidget.dev/) that works wherever
 anywidget does — JupyterLab, Notebook 7, VS Code, Colab, marimo. It is the embed in an `<iframe>` and
 nothing else: no second renderer, no kernel-side reader, no data through the kernel's comm.
 

@@ -113,8 +113,11 @@ The page holding the frame can drive it too: `postMessage` moves the view, adds 
 The same viewer is a Jupyter widget: the app itself in a cell, driven from Python and telling Python where the reader has taken it. It works in JupyterLab, Notebook 7, VS Code, Colab and marimo.
 
 ```bash
-pip install chromosomix          # from a clone: pip install -e widgets/python
+pip install "git+https://github.com/js2264/chromosomix#subdirectory=widgets/python"
 ```
+
+It is not on PyPI: pip installs it from this repository (git must be on the machine), and from a clone
+`pip install -e widgets/python` does.
 
 ```python
 from chromosomix import Chromosomix
