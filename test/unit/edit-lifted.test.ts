@@ -1,3 +1,4 @@
+// @dev-feature edit
 /**
  * The session lifted through an edit (SPECS §27.8): the edited sequence, a
  * track's features, pairs and signal, each where the edit put it. Checked on

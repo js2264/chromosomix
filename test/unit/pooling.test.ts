@@ -1,3 +1,4 @@
+// @fixtures metacooler
 /**
  * Reading a block at a coarser grid than the file stores.
  *

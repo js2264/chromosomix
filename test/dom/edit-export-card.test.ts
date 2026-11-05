@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// @dev-feature edit
 /**
  * The stage's export card (SPECS §27.8): each file through the save dialog,
  * named after the map; what cannot be written said before any dialog opens; and

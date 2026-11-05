@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// @dev-feature metacool
 /**
  * The landing view, and the two spec rules that are structural in it.
  *

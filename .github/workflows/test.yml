@@ -31,6 +31,10 @@ name: Tests
 # to ignore the badge. That used to mean the job was green while it compared
 # nothing: `pip install metacooler` failed on every run. The test steps
 # themselves are never allowed to fail quietly.
+#
+# Every vitest run here is `--mode dev`: the tests of the dev features (SPECS
+# §29), which a plain `npm test` leaves out (test/support/suites.ts), run on
+# every push like the rest, because a dev feature is tested like any other.
 
 on:
   push:
@@ -67,7 +71,7 @@ jobs:
       # (vitest.config.ts): this half's figure, on every push. The full suite's
       # is the goldens job's, where metacooler's fixtures let it run.
       - name: Tests that need no fixtures
-        run: npm run test:nofixtures -- --coverage
+        run: npm run test:nofixtures -- --coverage --mode dev
       - name: Coverage of the fixture-free suite
         if: always() && hashFiles('coverage/coverage-summary.json') != ''
         run: node scripts/coverage-summary.mjs --title 'fixture-free suite'
@@ -147,7 +151,7 @@ jobs:
 
       - name: The demo maps against their oracles
         if: steps.demo.outcome == 'success'
-        run: npx vitest run test/unit/demo-maps.test.ts
+        run: npx vitest run --mode dev test/unit/demo-maps.test.ts
 
       # `fixtures:reprocessed` is the demo yeast Micro-C as cooler and cooltools
       # reprocess it — `cooltools random-sample --exact`, `cooler balance`,
@@ -198,7 +202,7 @@ jobs:
       - name: Full suite, against the Python oracles
         id: full-suite
         if: steps.fixtures.outcome == 'success'
-        run: npm test -- --coverage
+        run: npm test -- --coverage --mode dev
 
       # The app-wide figure, which only this run can give: the twelve reader
       # suites and the request budgets over metacooler's fixtures are what the
@@ -220,7 +224,7 @@ jobs:
       - name: The suites the public fixtures feed
         if: steps.fixtures.outcome != 'success' && steps.public-fixtures.outcome == 'success'
         run: >-
-          npx vitest run
+          npx vitest run --mode dev
           test/unit/scool.test.ts test/unit/hicpro.test.ts
           test/unit/pairs-cload-oracle.test.ts test/unit/pairs-mcool-roundtrip.test.ts
           test/unit/g3d-binary-oracle.test.ts test/unit/g3d-binary-worker.test.ts

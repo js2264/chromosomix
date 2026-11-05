@@ -15792,6 +15792,25 @@ never the reason a session is lost.
   *(multi-genome) cool files* and the package's keywords *metagenomics* and *metacool*. The name is
   **chromosomix**.
 
+### 29.6 In the tests
+
+**Tested like any other feature, and left out of a plain `npm test`.** A test file of a dev feature says
+so on a line of its own above its imports, `// @dev-feature <name>` with the registry's names, and
+`vitest.config.ts` leaves every such file out unless the run asks for the dev features:
+`npm run test:dev` (`vitest run --mode dev`, since vitest refuses an option it does not know), or
+`CHROMOSOMIX_DEV_TESTS=1` before any vitest command. So `npm test` holds the app a reader sees, and the
+tests of the switch itself — that switched off a dev feature leaves nothing on screen (§29.2) — are in
+it, being what every reader gets. **CI asks, on every run**, and so does `npm version`'s check, so a
+dev feature is held to its tests on every push all the same. A name the registry does not have fails
+the default run by file (`test/unit/dev-tests.test.ts`), so a feature made public by deleting its line
+(§29.1) cannot leave its tests out by a marker nobody reads, and neither can a marker written where it
+is not read. The same header carries `// @fixtures metacooler` on the suites that open what
+`npm run fixtures` builds, which needs metacooler, a private repository: while none of those fixtures
+is on disk the suites are left out rather than failed, so a fresh clone's `npm test` passes or fails on
+the code and never on a file it cannot have, and once any is there they run and fail by name on what is
+missing. What a run leaves out, and the command that runs it, is one line at its top
+(`test/support/suites.ts`).
+
 ## 30. The guided tutorial
 
 A first session, played on the live window one step at a time: the window greyed, the one control the

@@ -1,3 +1,4 @@
+// @fixtures metacooler
 /**
  * Matrix queries against the Python oracle (spec §5.2, §5.3, §6.2; M2).
  *

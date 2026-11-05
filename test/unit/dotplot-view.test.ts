@@ -1,3 +1,4 @@
+// @dev-feature dotplot
 /**
  * The dot plot's view of its own, as arithmetic (SPECS §28.2): both sets at one
  * scale, zoomed about the pointer and kept over the data, moved by the hand,

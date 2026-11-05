@@ -36,6 +36,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   then the reference's commands, its script on several processes and on one — the panel as wide as the
   page and growing with its rows, each side's end and peak written just past where it finished.
 
+### Changed
+
+- **`npm test` passes on a fresh clone, and leaves the dev features' tests to `npm run test:dev` (§29.6).**
+  It failed 491 tests in 13 suites there, every one for want of a fixture `npm run fixtures` builds with
+  metacooler, a private repository. Those suites now say `// @fixtures metacooler` in their header and
+  are left out while none of the fixtures is on disk. The 39 files that test a dev feature — the
+  reference editor, the dot plot and the multi-genome format — say `// @dev-feature <name>` and are left
+  out unless the run asks: `npm run test:dev`, `vitest --mode dev` or `CHROMOSOMIX_DEV_TESTS=1`. A run
+  says at its top what it left out and the command that runs it. CI's every vitest run, and
+  `npm version`'s check, ask for the dev features, so nothing goes untested on a push;
+  `test/unit/dev-tests.test.ts` fails the default run on a marker that names a feature the registry no
+  longer has, or that sits where it is not read.
+
 ### Fixed
 
 - **The Python widget's install line names where it is (§21.5).** The README, the widget's README, the

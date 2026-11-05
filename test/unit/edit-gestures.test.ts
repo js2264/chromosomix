@@ -1,3 +1,4 @@
+// @dev-feature edit
 /**
  * The stage's hand, as arithmetic (SPECS §27.4): snapping, the stretch a drag
  * names, where a dropped stretch lands, the step the drop makes, and the
