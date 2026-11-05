@@ -14,6 +14,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The notebooks render every week, unpublished (§18.10).** `.github/workflows/notebooks.yml` also runs
+  on Sundays at 02:37 UTC, on `main`'s newest commit with every input at its default, and publishes
+  nothing — no push to the `notebooks` branch, no release assets, no deploy: its artifacts and its
+  summary are what it leaves, and a page it rendered says it was rendered on that schedule. It has a
+  concurrency group of its own, so it can neither cancel a release's run waiting behind another nor
+  hold one back.
 - **The deep human map on five sides (§18.10).** `notebooks/laptop.qmd` times its six analyses over
   the IMR-90 map on the command line as before, and now in Chromium too — the map opened once, each
   task run in turn in the same page, the pileup over the loops the first called there, the map moved to

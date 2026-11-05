@@ -10429,7 +10429,7 @@ each a self-contained page with its tables beside it (`commands.json`, `summary.
 a release keeps its own copies of the four pages and of the five tables as assets. **The runner's laptop is published nowhere**: not to the
 site, whose `laptop/` is the committed page, nor to a release, whose laptop is the one committed in its
 source; it is the run's artifact, and its section of the run's summary, and whether it rendered decides
-nothing about publishing the others. It runs when a release is published and on demand. Each page opens on a
+nothing about publishing the others. It runs when a release is published and on demand, and **every week**, early on Sunday, on the default branch's newest commit with every input at its default, **never published** — no push to the branch, no release's assets, no deploy — and in a concurrency group of its own, so that it can neither cancel a release's run waiting behind another nor hold one back: a check, between releases, that the notebooks still render against what `main` has become and against the servers they fetch from, which leaves its artifacts and its summary, and its pages say they were rendered on that schedule. Each page opens on a
 block saying when it was rendered, from which version, commit and release, by which run or by hand,
 and on what machine, and closes on how long it took, writing the same to `rendered.json` beside it with
 **one line of what it found** — how many analyses reproduce their reference, how much less time

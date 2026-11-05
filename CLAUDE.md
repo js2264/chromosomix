@@ -23,4 +23,4 @@
   `bench` and `group`). Check it by running only that task's commands and its reference's, on
   its section's data, comparing them as the section does, and time them the same way. Neither
   notebook is rendered in full locally unless the reader asks: `.github/workflows/notebooks.yml`
-  renders both, on every release and on demand.
+  renders both, on every release and on demand (and weekly, unpublished).

@@ -154,7 +154,8 @@ class Render:
             return '**By** hand, on the machine below, as this page is published'
         if self.run is None:
             return '**By** hand, not by the workflow that publishes these pages'
-        how = {'release': 'for its release', 'workflow_dispatch': f'on demand of {self.run["actor"]}'}.get(
+        how = {'release': 'for its release', 'workflow_dispatch': f'on demand of {self.run["actor"]}',
+               'schedule': 'on its weekly schedule, never published'}.get(
             self.run['event'], f'on {self.run["event"]}')
         attempt = f', attempt {self.run["attempt"]}' if self.run['attempt'] not in (None, '1') else ''
         return f'**By** GitHub Actions, [{self.run["workflow"]} run {self.run["number"]}]({self.run["url"]}){attempt}, {how}'

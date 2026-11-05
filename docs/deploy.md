@@ -624,7 +624,10 @@ once, hence the test in the assembly step.
 `.github/workflows/notebooks.yml` last rendered them (SPECS §18.10). That workflow runs when a release
 is published — `release.yml` makes the release a draft and a person publishes it, which is the event
 that reaches it — and from **Actions → Notebooks → Run workflow** on any branch or tag, with the
-number of timed runs (four by default) and whether to publish. Each notebook renders in a job of its
+number of timed runs (four by default) and whether to publish. It also runs every Sunday at 02:37 UTC on
+the default branch, with the defaults, and that run publishes nothing: no push to the branch, no
+release's assets, no deploy — only its artifacts and its summary, a check between releases that the
+notebooks still render. Each notebook renders in a job of its
 own, on a fresh runner, through the setup in `.github/actions/notebooks-setup`, and the four jobs start
 together: the parity, in about a quarter of an hour in its three browsers; the validation and the
 timings in one job, the timings after the validation, since they run the validation's commands on the

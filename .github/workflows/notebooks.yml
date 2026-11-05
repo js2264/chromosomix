@@ -39,7 +39,15 @@ name: Notebooks
 # Run workflow, on any branch or tag, with the number of timed runs and
 # whether to publish. A run from a branch that publishes replaces the pages a
 # release put up; untick *publish* to look at a branch's pages in the run's
-# artifacts instead.
+# artifacts instead. And every week, early on Sunday, on the default branch's
+# newest commit, with every input at its default and **never published**: not
+# to the branch, not to a release, no deploy asked for. It is there to say,
+# between releases, that the notebooks still render against what `main` has
+# become and against servers that change under them (GEO, 4DN, ENCODE); what
+# it leaves is its artifacts and its summary, and GitHub's mail to whoever
+# last changed the schedule when it fails. GitHub turns a schedule off after
+# 60 days without a commit to a public repository, and runs it late, or not
+# at all, when its runners are busy; it is a check, not a promise.
 #
 # **A job a notebook, all at once.** `site` works out where the pages will be,
 # for the links between them; then `parity`, `validation`, `viewers` and
@@ -160,6 +168,11 @@ name: Notebooks
 on:
   release:
     types: [published]
+  # Sundays at 02:37 UTC, off the hour, when GitHub's schedules crowd. A
+  # scheduled run has no inputs: each `inputs.x || default` below takes its
+  # default, and PUBLISH is false.
+  schedule:
+    - cron: '37 2 * * 0'
   workflow_dispatch:
     inputs:
       runs:
@@ -182,9 +195,13 @@ on:
 permissions: {}
 
 # One writer of the branch, and never a render cancelled three hours in for a
-# newer one: a second run waits for the first.
+# newer one: a second run waits for the first. The weekly run writes nothing
+# and so has a group of its own: GitHub keeps one run waiting a group and
+# cancels the one already waiting when another comes, so in the same group a
+# Sunday's run could cancel a release's that was waiting behind a dispatch,
+# or hold a release's pages back for the three hours of its own.
 concurrency:
-  group: notebooks
+  group: ${{ github.event_name == 'schedule' && 'notebooks-weekly' || 'notebooks' }}
   cancel-in-progress: false
 
 env:
@@ -410,7 +427,8 @@ jobs:
       # The laptop's render is never published, so whether it rendered decides
       # nothing here; the summary still says.
       RENDERED: ${{ needs.parity.result == 'success' && needs.validation.result == 'success' && needs.viewers.result == 'success' }}
-      PUBLISH: ${{ github.event_name == 'release' || inputs.publish }}
+      # A release always; a dispatch if asked; the weekly run never.
+      PUBLISH: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.publish) }}
     steps:
       - uses: actions/checkout@v4
         with:
