@@ -249,6 +249,13 @@
   ],
   "pulls": [
     {
+      "number": 163,
+      "commit": "4685d72",
+      "title": "Weekly notebooks, a green `npm test` with dev tests behind `--mode dev`, and the widgets' GitHub installs",
+      "branch": "js/loving-faraday-6dhg5k",
+      "date": "2026-11-05T17:52:43Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
