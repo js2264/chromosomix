@@ -249,6 +249,13 @@
   ],
   "pulls": [
     {
+      "number": 164,
+      "commit": "da0c79a",
+      "title": "Read a .hic's genome-wide walk past the browser's HTTP cache",
+      "branch": "js/zealous-pasteur-ezys6i",
+      "date": "2026-11-05T20:37:54Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
