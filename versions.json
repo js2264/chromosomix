@@ -1,6 +1,13 @@
 {
-  "latest": "e3ca5f8",
+  "latest": "bd9c344",
   "versions": [
+    {
+      "commit": "bd9c344",
+      "version": "0.20.0",
+      "date": "2026-11-05T22:18:54+01:00",
+      "subject": "Read a .hic's genome-wide walk past the browser's HTTP cache (#164)",
+      "tag": ""
+    },
     {
       "commit": "e3ca5f8",
       "version": "0.20.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "4e69690",
-      "version": "0.18.0",
-      "date": "2026-11-01T19:04:33+01:00",
-      "subject": "Remove telemetry entirely (§1, §11, §13, §18.10; §31 removed) (#153)",
-      "tag": ""
-    },
-    {
       "commit": "b1f1a7a",
       "version": "0.18.0",
       "date": "2026-10-30T09:42:34+01:00",
@@ -248,13 +248,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 164,
-      "commit": "da0c79a",
-      "title": "Read a .hic's genome-wide walk past the browser's HTTP cache",
-      "branch": "js/zealous-pasteur-ezys6i",
-      "date": "2026-11-05T20:37:54Z"
-    },
     {
       "number": 122,
       "commit": "e818753",
