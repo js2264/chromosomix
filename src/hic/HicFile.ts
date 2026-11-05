@@ -56,12 +56,14 @@
  * few stretches of the file, and the blocks they did not bring are fetched
  * together after them. Read pair by pair — a record's head, then its blocks —
  * the whole genome of a 4DN chicken map at 2.5 Mb was 1,258 requests, a minute
- * and a half from a bucket; planned, it is 427, read six at a time. Reads are
+ * and a half from a bucket; planned, and read through the gaps of under a
+ * quarter of a megabyte between its places, it is 268, read six at a time. Reads are
  * exact and do not hold the worker; a picture's walk has six out at once, every
  * connection a browser opens to one host, and the census, behind the views, four.
  * They are six on the wire only because they go past the browser's HTTP cache,
  * which lets one request per URL out at a time (`RemoteRangeSource.readExact`):
- * through it, those 427 went one after another, and the picture took a minute.
+ * through it, the walk's reads went one after another, and the picture took a
+ * minute.
  */
 
 import { ViewerError } from '../errors'
@@ -137,12 +139,19 @@ const WALK_AHEAD_BYTES = 64 << 20
 const BYTES_PER_PIXEL = 28
 
 /**
- * How far apart two blocks may lie and still be fetched in one exact read.
+ * How far apart two places a walk reads may lie and still be fetched in one
+ * exact read.
  *
- * The bytes between them are carried for nothing, and a round trip costs more
- * than 64 KiB does on any connection a reader would open a 5 GB file over.
+ * The bytes between them are carried for nothing, and a quarter of a megabyte
+ * of them costs less than the round trip it saves. Measured in Chromium from
+ * the buckets of `notebooks/viewers.qmd`, a whole genome read through 256 KiB
+ * against 64 KiB: the yeast map 8 requests and 11.9 MB in 1.7 s, where 74
+ * requests and 3.4 MB took 3.6; the 4DN chicken map 273 requests and 52.8 MB in
+ * 8.9 s, where 432 and 29.9 MB took 12.4; the mouse map 374 and 35.9 MB in 14.2 s,
+ * where 458 and 21.1 MB took 17.0. A link slower than about 7 MB/s gives some of
+ * that back on the chicken map, whose walk carries 23 MB more.
  */
-const RUN_GAP_BYTES = 64 << 10
+const RUN_GAP_BYTES = 256 << 10
 
 /** The most one exact read of blocks asks for at once. */
 const RUN_CAP_BYTES = 16 << 20
@@ -158,13 +167,9 @@ const RUN_CAP_BYTES = 16 << 20
  * record after every block) loses only these bytes, and its blocks are read
  * with the rest.
  *
- * Little, and the gap a walk reads through is a window's ({@link
- * RUN_GAP_BYTES}), on purpose. Each byte a walk carries for nothing saves it
- * round trips only on a link whose round trips cost more than its bytes: read
- * through a quarter of a megabyte, the mouse map's whole genome was 17 MB for
- * 369 requests, which a fast link far from the bucket would read sooner than its
- * 453 at 64 KiB, and a home connection at 5 MB/s later than the 460 pair by
- * pair. At these sizes it is faster than pair by pair on every link.
+ * Little, on purpose: a block past these bytes is read with the rest, through
+ * the gap every walk reads through ({@link RUN_GAP_BYTES}), and a tail read for
+ * every pair is paid by every pair, where only a few have blocks past it.
  */
 const RECORD_TAIL_BYTES = 4 << 10
 

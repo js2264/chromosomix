@@ -40,6 +40,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the mouse map's at 5 Mb 17 s where it was 75 s, and the yeast map's from the demo store 4 s where
   it was 15 s, for the same requests and bytes. The census of §6.5 reads through the same call, and
   goes past the cache too.
+- **A `.hic`'s walk across its chromosome pairs reads through gaps of 256 KiB, not 64 (§3.6)** — the
+  whole-genome picture and the census, from a bucket and from disk. Fewer requests for more bytes, now
+  that the walk's requests are in flight together: from the buckets, in Chromium, the yeast map's whole
+  genome is 1.7 s where it was 3.6 (8 requests and 11.9 MB, where 74 and 3.4 MB), the chicken map's
+  8.9 s where it was 12.4 (273 and 52.8 MB, where 432 and 29.9 MB), the mouse map's 14.2 s where it was
+  17.0 (374 and 35.9 MB, where 458 and 21.1 MB); from disk, the yeast map's 208 ms where it was 251 and
+  the chicken map's 438 where it was 497. On a link slower than about 7 MB/s, the chicken map's extra
+  23 MB give back part of the gain.
 - **A `.hic` opens reading its footer's framing, not the whole of it (§3.6).** The footer is nearly
   all expected values the viewer never uses — 9.8 of the 4DN chicken map's 9.9 MB — and it was read
   whole to reach the normalisation index past them. It is now walked: each section's few bytes of
