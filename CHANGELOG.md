@@ -56,6 +56,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   `pip install chromosomix`, and the package is not on PyPI. They now say
   `pip install "git+https://github.com/js2264/chromosomix#subdirectory=widgets/python"`, which installs it
   from the repository, with `@<tag>` to pin a release and `pip install -e widgets/python` from a clone.
+  The README's R section, which gave only the line for a clone, now gives
+  `remotes::install_github("js2264/chromosomix", subdir = "widgets/r")` first, as the R widget's README
+  and the documentation do.
 - **The laptop's deep human map runs on a Mac (§18.10).** `notebooks/scripts/cooltools_pipeline.py`
   stopped at coolpuppy's pileup on macOS: there Python spawns its workers rather than forking them,
   and coolpuppy's pool logs through `multiprocessing_logging`, which refuses any start method but

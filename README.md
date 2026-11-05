@@ -143,7 +143,8 @@ Files on the kernel's disk are served to the viewer by byte range from a server 
 The same viewer is an htmlwidget, in the R package under [`widgets/r`](widgets/r/README.md):
 
 ```r
-install.packages("widgets/r", repos = NULL, type = "source")   # from a clone
+remotes::install_github("js2264/chromosomix", subdir = "widgets/r")
+# or, from a clone: install.packages("widgets/r", repos = NULL, type = "source")
 
 library(chromosomix)
 chromosomix("sample.mcool::/resolutions/5000", region = "chr2:10000000-14000000",
