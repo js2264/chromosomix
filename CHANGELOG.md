@@ -47,6 +47,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **`notebooks/viewers.qmd` draws each viewer the way it draws best without a GPU (§18.10).** All three
+  viewers were timed in a Chromium told to draw WebGL with SwiftShader, for HiGlass's sake, and that
+  browser composites every page on the emulated GPU, which no reader's browser does: chromosomix's
+  pictures of the yeast map from disk took 0.54–0.82 s there, and take 0.21–0.33 s in a Chromium launched
+  without the flags, compositing in software, where chromosomix and juicebox.js are now timed. HiGlass,
+  which draws nothing without WebGL, keeps its browser: one browser for all three that draws WebGL with
+  SwiftShader and composites in software reads its every frame back off the emulated GPU, and its
+  pictures took 1.17–1.32 s there against 0.34–0.37 s. The table's new `graphics` column says which
+  drew each run.
 - **Every workflow's actions run on Node 24.** GitHub runs Node 20 actions on Node 24 with a
   deprecation warning, and will stop: `checkout` v7, `upload-artifact` v7, `download-artifact` v8,
   `setup-node` v7, `setup-python` v7, `setup-java` v6, `github-script` v9, `cache` v6,
@@ -70,6 +79,29 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A remote `.hic`'s whole genome is drawn four times sooner (§3.6).** The walk across its chromosome
+  pairs keeps six reads in flight, and in Chromium they went out one at a time: the browser's HTTP
+  cache lets one request per URL at its entry at once, holds the rest until it has, and every read of a
+  walk is of one URL. Its reads now go past the cache (`cache: 'no-store'`), as nothing kept them
+  anyway. From 4DN's bucket, the chicken map's whole genome at 2.5 Mb is 12–14 s where it was 60 s,
+  the mouse map's at 5 Mb 17 s where it was 75 s, and the yeast map's from the demo store 4 s where
+  it was 15 s, for the same requests and bytes. The census of §6.5 reads through the same call, and
+  goes past the cache too.
+- **A `.hic`'s walk across its chromosome pairs reads through gaps of 256 KiB, not 64 (§3.6)** — the
+  whole-genome picture and the census, from a bucket and from disk. Fewer requests for more bytes, now
+  that the walk's requests are in flight together: from the buckets, in Chromium, the yeast map's whole
+  genome is 1.7 s where it was 3.6 (8 requests and 11.9 MB, where 74 and 3.4 MB), the chicken map's
+  8.9 s where it was 12.4 (273 and 52.8 MB, where 432 and 29.9 MB), the mouse map's 14.2 s where it was
+  17.0 (374 and 35.9 MB, where 458 and 21.1 MB); from disk, the yeast map's 208 ms where it was 251 and
+  the chicken map's 438 where it was 497. On a link slower than about 7 MB/s, the chicken map's extra
+  23 MB give back part of the gain.
+- **A `.hic` opens reading its footer's framing, not the whole of it (§3.6).** The footer is nearly
+  all expected values the viewer never uses — 9.8 of the 4DN chicken map's 9.9 MB — and it was read
+  whole to reach the normalisation index past them. It is now walked: each section's few bytes of
+  framing are read and the values stepped over. On the chicken map from disk, in Chromium, the
+  chromosome, region and locus pictures are 254, 283 and 251 ms where they were 311, 323 and 292;
+  from 4DN's bucket every open reads 13.6 MB where it read 18.9. The two indexes it finds are the
+  ones a whole read found, on the yeast, chicken and mouse maps of `notebooks/viewers.qmd`.
 - **The Python widget's install line names where it is (§21.5).** The README, the widget's README, the
   documentation's *In a Jupyter notebook* and *Ways to use it*, `llms.txt` and SPECS said
   `pip install chromosomix`, and the package is not on PyPI. They now say

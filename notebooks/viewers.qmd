@@ -80,6 +80,18 @@ each round. The requests and bytes counted are those the page asked for between 
 bucket, for chromosomix and juicebox.js; of its server, for HiGlass, whose own reads go through FUSE,
 outside the page, and are not counted.
 
+**Each viewer drawn the way it draws best without a GPU.** The runner has none, and no one way of
+drawing without one is fair to all three. A browser with no GPU composites its pages in software;
+chromosomix and juicebox.js, which draw in a 2D canvas, are timed in Chromium launched as it is. HiGlass
+draws through WebGL, which that browser does not offer, so it is timed in a Chromium told to draw WebGL
+with SwiftShader, a GPU emulated on the CPU — which composites every page on the emulated GPU as well.
+All three used to be timed in that one, where chromosomix's pictures of the yeast map from disk took
+0.54–0.82 s against 0.21–0.33 s composited in software. One browser for all three, drawing WebGL with
+SwiftShader and compositing in software, is no fairer: it reads every WebGL frame back off the emulated
+GPU, and HiGlass's pictures took 1.17–1.32 s there against 0.34–0.37 s in its own. A reader's GPU spares
+every viewer both costs, and on a machine with one no viewer needs telling how to draw. The table's
+`graphics` column says which browser drew each run.
+
 Every run of a picture, and every cell a viewer cannot draw, is one line of
 **`notebooks/work/viewers/viewers.tsv`**, a tidy table — one row per picture, viewer and run, one
 column per variable, the machine and the versions included; every table and figure below is drawn
@@ -356,7 +368,7 @@ measures({'pictures': len({(run['genome'], run['view'], run['location']) for run
 #: The columns of viewers.tsv, in order: the picture, the viewer, the run, what it took, where.
 VIEWER_COLUMNS = ['genome', 'view', 'window', 'resolution', 'bins', 'viewer', 'format', 'location', 'run', 'status',
                   'seconds', 'app_seconds', 'drawn_resolution', 'drawn_bins', 'requests', 'megabytes', 'note',
-                  'page_cache', 'started', 'picture', 'version', *MACHINE, 'chromium', 'map', 'track']
+                  'page_cache', 'started', 'picture', 'version', *MACHINE, 'chromium', 'graphics', 'map', 'track']
 
 
 def viewer_rows(results):
@@ -376,6 +388,7 @@ def viewer_rows(results):
                      'note': got.get('note') or '', 'page_cache': got.get('page_cache', ''),
                      'started': got.get('started', ''), 'picture': run['picture'],
                      'version': VIEWER_VERSION[run['tool']], **MACHINE, 'chromium': got.get('chromium', ''),
+                     'graphics': got.get('graphics', ''),
                      'map': Path(run['map']).name, 'track': Path(run['track']).name})
     for cell in REFUSED:
         rows.append({**{key: cell[key] for key in ('genome', 'view', 'window', 'resolution', 'bins', 'format',

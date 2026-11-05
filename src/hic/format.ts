@@ -108,6 +108,12 @@ export class Truncated extends RangeError {
 }
 
 /**
+ * One decoder for every string a file holds: a footer has thousands of them, and
+ * a decoder made for each was a third of the time spent parsing one.
+ */
+const UTF8 = new TextDecoder()
+
+/**
  * A cursor over a byte range, **little-endian throughout**.
  *
  * This is the single most common way to get `.hic` wrong, and it is worth
@@ -214,7 +220,7 @@ export class Cursor {
     // Its terminator is somewhere past the window, and the window has to reach
     // at least one byte further than the string's start to find it.
     if (end < 0) throw new Truncated(Math.max(start, this.bytes.byteLength) + 1)
-    const text = new TextDecoder().decode(this.bytes.subarray(start, end))
+    const text = UTF8.decode(this.bytes.subarray(start, end))
     this.at = end + 1
     return text
   }
@@ -228,6 +234,125 @@ export class Cursor {
    * cursor backwards over bytes already read, and a loop doing that need never
    * end.
    */
+  skip(width: number): void {
+    if (!(width >= 0)) throw new RangeError(`a cursor cannot skip ${width} bytes`)
+    this.at += width
+  }
+}
+
+/** What a footer walk reads with: a {@link Cursor} over bytes in hand, or a {@link SourceCursor}. */
+export interface FooterCursor {
+  position: number
+  readonly remaining: number
+  int32(): number
+  int64(): number
+  string(): string
+  skip(width: number): void
+}
+
+/** Bytes a {@link SourceCursor} asks its source for at a time. */
+const SOURCE_CURSOR_WINDOW = 4 << 10
+
+/**
+ * A {@link Cursor} over a stretch of a file rather than over bytes in hand: it
+ * reads the source where a field is parsed and nowhere else, so a skip costs
+ * nothing.
+ *
+ * What a footer walk needs is a few bytes at each end of every expected-value
+ * vector — its header, its scale factors — and nothing of the values between,
+ * which are most of the footer: on the 4DN chicken map 9.8 of its 9.9 MB. Read
+ * whole, they were most of what opening the file read (`readFooter`).
+ *
+ * Positions are counted from `origin`, as a {@link Cursor}'s are from its
+ * buffer's start, and `remaining` is what the *file* has left past the cursor,
+ * so the same walk reads either and checks its counts the same way. A read past
+ * the end of the file throws {@link Truncated}, which here means the file ends
+ * where the walk says it should not.
+ */
+export class SourceCursor implements FooterCursor {
+  private buffer: Uint8Array = new Uint8Array(0)
+  private view = new DataView(this.buffer.buffer)
+  /** File offset of `buffer[0]`. */
+  private base = 0
+  /** File offset of the next field. */
+  private at: number
+
+  constructor(
+    private readonly source: ByteSource,
+    private readonly origin: number,
+  ) {
+    this.at = origin
+  }
+
+  get position(): number {
+    return this.at - this.origin
+  }
+
+  set position(to: number) {
+    this.at = this.origin + to
+  }
+
+  get remaining(): number {
+    return this.source.size - this.at
+  }
+
+  /** Have `width` bytes from here in hand, reading the window they start. */
+  private need(width: number): number {
+    const offset = this.at - this.base
+    if (offset >= 0 && offset + width <= this.buffer.byteLength) return offset
+    if (!(this.at >= 0) || this.at + width > this.source.size) throw new Truncated(this.position + width)
+    const length = Math.max(width, Math.min(SOURCE_CURSOR_WINDOW, this.source.size - this.at))
+    // Through the source's chunks, and not exactly: a chunk brings several of a
+    // walk's places at once, which on a remote file is round trips saved, and
+    // on a dropped one is calls saved — fifty-one exact reads of the 4DN chicken
+    // map's footer cost more than the nine 1 MiB slices they fall in.
+    this.buffer = this.source.readBytes(this.at, length)
+    if (this.buffer.byteLength < width) throw new Truncated(this.position + width)
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength)
+    this.base = this.at
+    return 0
+  }
+
+  int32(): number {
+    const offset = this.need(4)
+    this.at += 4
+    return this.view.getInt32(offset, true)
+  }
+
+  int64(): number {
+    const offset = this.need(8)
+    this.at += 8
+    const value = this.view.getBigInt64(offset, true)
+    return value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER)
+      ? Number.NaN
+      : Number(value)
+  }
+
+  /** A NUL-terminated string, read on through as many windows as it takes. */
+  string(): string {
+    const parts: Uint8Array[] = []
+    for (;;) {
+      const offset = this.need(1)
+      const end = this.buffer.indexOf(0, offset)
+      if (end >= 0) {
+        parts.push(this.buffer.subarray(offset, end))
+        this.at += end - offset + 1
+        break
+      }
+      parts.push(this.buffer.subarray(offset))
+      this.at += this.buffer.byteLength - offset
+    }
+    if (parts.length === 1) return UTF8.decode(parts[0])
+    const whole = new Uint8Array(parts.reduce((sum, part) => sum + part.byteLength, 0))
+    let at = 0
+    for (const part of parts) {
+      whole.set(part, at)
+      at += part.byteLength
+    }
+    return UTF8.decode(whole)
+  }
+
+  /** Step over `width` bytes without reading them, as {@link Cursor.skip}. */
   skip(width: number): void {
     if (!(width >= 0)) throw new RangeError(`a cursor cannot skip ${width} bytes`)
     this.at += width
@@ -499,35 +624,36 @@ export function readFooter(source: ByteSource, header: HicHeader): HicFooter {
   // position that leaves less is not where the footer is.
   declaredSpan(footerPosition, lead + 4, { format: HIC, field: 'footer position', size: source.size })
   const remaining = source.size - footerPosition
-  // The leading field is the byte length of the v5-compatible portion, and it
-  // is *not* the length of the whole footer: the normalisation index sits past
-  // it. Read a generous window and grow if the walk runs off the end.
+  // The leading field is the byte length of the v5-compatible portion — the
+  // master index and the expected values — and *not* of the whole footer: the
+  // normalised expected values and the normalisation index sit past it. It is
+  // checked and not used: the walk below finds every section's end itself.
   const first = new Cursor(source.readBytes(footerPosition, lead))
-  const declared = declaredCount(version >= 9 ? first.int64() : first.int32(), {
+  declaredCount(version >= 9 ? first.int64() : first.int32(), {
     format: HIC,
     field: 'footer length',
     // A byte length, which the format bounds by nothing tighter than the file.
     ceiling: Number.MAX_SAFE_INTEGER,
     available: remaining - lead,
   })
-  const place: FooterPlace = { fileSize: source.size, footerPosition }
-  let window = Math.min(remaining, Math.max(declared + lead + (1 << 20), 1 << 16))
-  for (;;) {
-    const bytes = source.readBytes(footerPosition, window)
-    try {
-      return parseFooter(bytes, version, lead, place)
-    } catch (err) {
-      if (!(err instanceof Truncated)) throw err
-      if (window >= remaining) {
-        throw new ViewerError(
-          'format',
-          `This .hic ends inside its footer, which begins ${footerPosition.toLocaleString('en-US')} ` +
-            'bytes in. The file is truncated, or its header does not point at its footer.',
-          { footerPosition, size: source.size },
-        )
-      }
-      window = Math.min(remaining, Math.max(window * 4, err.needed))
-    }
+  // Walked where it lies rather than read whole: the master index and the
+  // normalisation index are kept, and between them are the expected values,
+  // which this reader never uses (§3.6) and which are nearly all of the footer.
+  // A skip over them reads nothing, so what is read is each section's few bytes
+  // of framing — on the 4DN chicken map, 25 places in 9.9 MB.
+  try {
+    return parseFooter(new SourceCursor(source, footerPosition), version, lead, {
+      fileSize: source.size,
+      footerPosition,
+    })
+  } catch (err) {
+    if (!(err instanceof Truncated)) throw err
+    throw new ViewerError(
+      'format',
+      `This .hic ends inside its footer, which begins ${footerPosition.toLocaleString('en-US')} ` +
+        'bytes in. The file is truncated, or its header does not point at its footer.',
+      { footerPosition, size: source.size },
+    )
   }
 }
 
@@ -541,7 +667,8 @@ export interface FooterPlace {
 const MASTER_ENTRY_MIN_BYTES = 1 + 8 + 4
 
 /**
- * Parse a footer out of `bytes`, which begin at its length field.
+ * Parse a footer out of `bytes`, which begin at its length field — or walk it
+ * with a cursor that starts there, which reads only what is parsed.
  *
  * `place` says where the bytes sit in their file, so a count is checked against
  * what the *file* has left rather than against the window in hand: the first
@@ -550,14 +677,14 @@ const MASTER_ENTRY_MIN_BYTES = 1 + 8 + 4
  * master index's offsets, which point outside them, go unchecked.
  */
 export function parseFooter(
-  bytes: Uint8Array,
+  bytes: Uint8Array | FooterCursor,
   version: number,
   lead: number,
   place?: FooterPlace,
 ): HicFooter {
-  const cursor = new Cursor(bytes)
+  const cursor: FooterCursor = bytes instanceof Uint8Array ? new Cursor(bytes) : bytes
   cursor.position = lead
-  const fileSize = place?.fileSize ?? bytes.byteLength
+  const fileSize = place?.fileSize ?? lead + cursor.remaining
   const footerPosition = place?.footerPosition ?? 0
   const fileLeft = (): number => fileSize - (footerPosition + cursor.position)
 
@@ -654,7 +781,7 @@ export function parseFooter(
 
 /** One expected-value section, walked past. `normed` adds the leading type string. */
 function skipExpectedValues(
-  cursor: Cursor,
+  cursor: FooterCursor,
   version: number,
   normed: boolean,
   fileLeft: () => number,

@@ -379,15 +379,28 @@ one's. **And a walk is planned, because round trips are then nearly all it costs
 reads is known before it reads: the master index gives each record's, and Juicer writes each pair's
 blocks just past its record, coarsest rung first. So the heads of the records are read together,
 each with the 4 KiB past its record's end, as the stretches of the file they make where they lie
-within 64 KiB of one another; the blocks those bytes brought are decoded from them; and the blocks
+within 256 KiB of one another; the blocks those bytes brought are decoded from them; and the blocks
 left over are read together after, the same way. A picture's walk keeps six reads in flight, every
-connection a browser opens to one host; the census, behind the views, four. Pair by pair — a record's
+connection a browser opens to one host; the census, behind the views, four. **They are in flight
+together only because they go past the browser's HTTP cache** (`cache: 'no-store'`). Chromium's
+cache lets one request per URL write its entry at a time and holds every other request for that URL,
+whatever its range, until it has; a walk's reads are all of one URL, so the six went out one after
+another, each waiting about a second to be sent. On the 4DN chicken map at 2.5 Mb that was 432 requests
+in 60 s to a whole-genome picture, with never more than one on the wire; past the cache it is the
+same 432 in 12–14 s, and the mouse map's 458 in 17 s where they took 75 (both from 4DN's bucket, in
+Chromium). Nothing is lost by it: a walk's bytes are read once and kept nowhere, and a second open of
+the same file in the same browser had re-read all of them through the cache too. Pair by pair — a record's
 head, then its blocks — the whole genome of the 4DN chicken map 4DNFIRKUYKP4 at 2.5 Mb was 1,258
-requests; planned, it is 427, and a dropped copy of it reads 11 MB of the disk where its 1 MiB slices
-were 222 MiB. The gap read through is a window's on purpose: a wider one saves round trips only on a
-link whose round trips cost more than its bytes, and read through 256 KiB the 4DN mouse map's whole
-genome is 17 MB for 369 requests, which a home connection — 5 MB/s, 50 ms a round trip — would read
-more slowly than the 460 of the walk pair by pair. A plan holds its pairs' pixels until they are handed over, so it ends where its
+requests; planned, it is 427 through gaps of 64 KiB, and a dropped copy of it reads 11 MB of the disk
+where its 1 MiB slices were 222 MiB. **The gap is a quarter of a megabyte**, where it was 64 KiB, the
+gap a window reads through: what a wider one carries for nothing costs less than the round trips it
+saves, once those round trips are in flight together. Measured in Chromium from the buckets, a whole
+genome read through 256 KiB against 64 KiB: the yeast map of the demo store 8 requests and 11.9 MB in
+1.7 s, where 74 requests and 3.4 MB took 3.6; the chicken map 273 requests and 52.8 MB in 8.9 s, where
+432 and 29.9 MB took 12.4; the mouse map 374 and 35.9 MB in 14.2 s, where 458 and 21.1 MB took 17.0.
+From disk it is sooner too, the yeast map's whole genome 208 ms where it was 251 and the chicken map's
+438 where it was 497. What it costs is bytes: on a link slower than about 7 MB/s the chicken map's
+23 MB more give back some of what its 159 fewer round trips save. A plan holds its pairs' pixels until they are handed over, so it ends where its
 pairs could hold more than 24 MiB of them; at a rung where one pair could hold 64 MiB, each pair is a
 plan of its own, read one at a time, since a pair is decoded whole.
 
@@ -417,6 +430,17 @@ matrices (`unit = "FRAG"`), because a fragment grid is variable bins under anoth
 excludes those from the whole application; the file's expected-value vectors, because §18 computes its
 own against a golden and two expectations under one name would be a quantity that changes with the
 code path; and writing, for §13's reason.
+
+**Not used, and not read.** The expected values are nearly all of a footer — 9.8 of the 4DN chicken
+map's 9.9 MB, between a master index and a normalisation index of 50 KB together — and the
+normalisation index lies past them, reached in a v7 or v8 file only by walking them. The walk reads
+where a field is parsed and steps over the values unread, so opening the chicken map reads nine of
+the source's 1 MiB slices of its footer where it read the footer whole, twenty of them: from disk,
+in Chromium, its chromosome, region and locus pictures are 40–60 ms sooner (311, 323 and 292 ms
+then; 254, 283 and 251 now), and from 4DN's bucket every open reads 5 MB less (13.6 MB where it was
+18.9), its chromosome picture 1.8 s where it was 2.3. The walk goes through the source's slices
+rather than reading each field exactly: fifty-one exact reads of a dropped file cost more than the
+nine slices they fall in, and over a network each would be a round trip.
 
 **Correctness.** The reader is checked three ways: against fixtures whose contents are known exactly,
 across every encoding the format allows (v7/v8/v9, short and float values, short and int positions,
@@ -2154,7 +2178,7 @@ chromosome pairs: each pair's matrix record read only as far as the coarsest run
 record's first few dozen bytes, and that rung's blocks, all as exact ranges planned together, four
 reads in flight. On the 5 GB 4DN map of mouse granule neurons (4DNFI916JQ1Y, thirteen rungs, 231
 pairs) that was 456 requests and under 1 MB pair by pair; on the 4DN chicken map 4DNFIRKUYKP4 (630
-pairs) it is 419 requests where pair by pair it was 1,258. Reading each record whole first — the
+pairs) it is 260 requests, 34 MB, where pair by pair it was 1,258 and through 64 KiB gaps 419 and 11 MB. Reading each record whole first — the
 block index of all thirteen rungs, 70 MB, in 1 MiB chunks — was 500 MiB, and held the loading screen
 for a minute and a half.
 And **it stands aside for as long as a view is reading**, not for one turn: between pairs it waits
@@ -10218,7 +10242,13 @@ from the bucket it is published in, and timed in a fresh browser context, the vi
 loaded first and kept apart, then left two seconds as a reader's is while they find their file, from
 the moment the viewer is handed the files to the moment it says the picture is finished: chromosomix by its own report (§12, *A picture says when it is finished*),
 juicebox.js by its last repaint covering the state asked for and its track's tiles, HiGlass by every
-tile in view fetched and drawn. Four rounds, the viewers taking turns to go first; every run, and
+tile in view fetched and drawn. **Each is drawn the way it draws best on a machine with no GPU**, which a runner is, since no one way
+is fair to all three: chromosomix and juicebox.js, which draw in a 2D canvas, in Chromium as it
+launches, its pages composited in software; HiGlass, which draws through WebGL, in a Chromium told to
+draw WebGL with SwiftShader, which composites every page on the emulated GPU too. All three were once
+timed in that one, where chromosomix's pictures of the yeast map from disk took 0.54–0.82 s against
+0.21–0.33 s in software; and one browser drawing WebGL with SwiftShader and compositing in software
+reads HiGlass's every frame back off the emulated GPU, 1.17–1.32 s against 0.34–0.37 in its own. Four rounds, the viewers taking turns to go first; every run, and
 every cell refused, is one line of `notebooks/work/viewers/viewers.tsv`, with the requests and
 bytes the page asked for, the machine and every version. It reads nothing the validation writes and
 fetches its own files, so it renders on a machine of its own, and the timings, which run the
