@@ -697,6 +697,14 @@ You do not have to write those lines from memory. The browser app has a **consol
 
 The log is kept in your own browser for seven days or five hundred lines, whichever comes first. Nothing is uploaded; it is listed under *What this browser is remembering* (in the command palette, `Ctrl+P` → Help) with everything else this app keeps, and *forget everything* drops it.
 
+## Contributing
+
+Bug reports, fixes, file formats and analyses are welcome: [`CONTRIBUTING.md`](CONTRIBUTING.md) says how to
+build and test it and what a pull request carries, and
+[Adding a reader or a task](https://doc.chromosomix.app/contributing/readers-and-tasks/) where a new
+format or analysis goes. Taking part follows the [code of conduct](CODE_OF_CONDUCT.md); a security problem
+is reported privately, as [`SECURITY.md`](SECURITY.md) says.
+
 ## Licence
 
 Copyright © 2026 Jacques Serizay.

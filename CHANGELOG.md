@@ -14,6 +14,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The files a contributor looks for, and a page on adding a reader or a task.** `CONTRIBUTING.md`,
+  `CODE_OF_CONDUCT.md` (the Contributor Covenant 2.1), `SECURITY.md`, issue forms for a bug and a
+  feature request, and a pull request template whose checks are this repository's rules. The
+  documentation's *Contributing* group gains *Adding a reader or a task*: how a file is read and a
+  task runs, and where a track format, a contact-map format or a task goes, with what each must come
+  with. The README has a *Contributing* section.
+- **The Python widget carries its licence.** A wheel built from `widgets/python/` held no licence
+  text; `widgets/python/LICENSE`, the root's GPL-3.0 word for word, is now in it as its
+  `License-File`, and `test/unit/licences.test.ts` holds the copy to the original.
 - **The notebooks render every week, unpublished (§18.10).** `.github/workflows/notebooks.yml` also runs
   on Sundays at 02:37 UTC, on `main`'s newest commit with every input at its default, and publishes
   nothing — no push to the `notebooks` branch, no release assets, no deploy: its artifacts and its
