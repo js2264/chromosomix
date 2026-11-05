@@ -1,6 +1,13 @@
 {
-  "latest": "426edae",
+  "latest": "e3ca5f8",
   "versions": [
+    {
+      "commit": "e3ca5f8",
+      "version": "0.20.0",
+      "date": "2026-11-05T20:02:42+01:00",
+      "subject": "Weekly notebooks, a green `npm test` with dev tests behind `--mode dev`, GitHub installs for the widgets, contributor files, and Node 24 actions (#163)",
+      "tag": ""
+    },
     {
       "commit": "426edae",
       "version": "0.20.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "712e1ea",
-      "version": "0.18.0",
-      "date": "2026-11-01T18:37:51+01:00",
-      "subject": "ci: update laptop notebook",
-      "tag": ""
-    },
-    {
       "commit": "b1f1a7a",
       "version": "0.18.0",
       "date": "2026-10-30T09:42:34+01:00",
@@ -248,13 +248,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 163,
-      "commit": "538d67a",
-      "title": "Weekly notebooks, a green `npm test` with dev tests behind `--mode dev`, GitHub installs for the widgets, and contributor files",
-      "branch": "js/loving-faraday-6dhg5k",
-      "date": "2026-11-05T18:35:15Z"
-    },
     {
       "number": 122,
       "commit": "e818753",
