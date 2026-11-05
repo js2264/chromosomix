@@ -1,6 +1,13 @@
 {
-  "latest": "2767c78",
+  "latest": "f2ac3bb",
   "versions": [
+    {
+      "commit": "f2ac3bb",
+      "version": "0.21.0",
+      "date": "2026-11-05T22:54:58+01:00",
+      "subject": "0.21.0",
+      "tag": "v0.21.0"
+    },
     {
       "commit": "2767c78",
       "version": "0.20.0",
