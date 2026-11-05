@@ -1,6 +1,13 @@
 {
-  "latest": "bd9c344",
+  "latest": "2767c78",
   "versions": [
+    {
+      "commit": "2767c78",
+      "version": "0.20.0",
+      "date": "2026-11-05T22:53:09+01:00",
+      "subject": "refactor: update notebooks workflow to publish independently of laptop render; improve summary handling",
+      "tag": ""
+    },
     {
       "commit": "bd9c344",
       "version": "0.20.0",
@@ -133,13 +140,6 @@
       "date": "2026-11-01T19:24:42+01:00",
       "subject": "0.19.0",
       "tag": "v0.19.0"
-    },
-    {
-      "commit": "9c21388",
-      "version": "0.18.0",
-      "date": "2026-11-01T19:22:39+01:00",
-      "subject": "Service worker: answer only the app's own address, leave every other page load to the network (§11) (#151)",
-      "tag": ""
     },
     {
       "commit": "b1f1a7a",
