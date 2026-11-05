@@ -109,20 +109,25 @@ ATAC-seq over the whole mouse genome, on the command line and in Chromium, Firef
 
 It ends on **six analyses in a row over a deep map**, 4DN's in situ Hi-C of IMR-90 with 1.08 billion
 contacts: over the whole genome, loop calling and diamond insulation at 10 kb, compartments at 250 kb
-phased by GC content, aggregate peak analysis over every loop called and P(s) at 10 kb; on chromosome 8,
-a virtual 4C at 10 kb from *MYC*'s promoter. chromosomix runs them as six commands, the reference as one
-Python script running cooltools and coolpuppy; each step's time and memory are measured on both sides and
-their outputs compared. The page carries **`pipeline.tsv`** and **`pipeline-memory.tsv`**.
+phased by GC content, aggregate peak analysis over every loop called, P(s) at 10 kb and a virtual 4C at
+10 kb from *MYC*'s promoter. chromosomix runs them as six commands on the command line,
+and in Chromium as you would in the app, one after another in one page; the reference runs them as one
+Python script running cooltools and coolpuppy, on one process and on one a core, and as cooltools' and
+coolpuppy's own commands, one after another. Each step's time and memory are measured on all five, and
+the command line's outputs compared with the script's. The page carries
+**`pipeline.tsv`** and **`pipeline-memory.tsv`**.
 
 The page at <https://chromosomix.app/laptop/> is rendered by hand, on the laptop its opening block names.
 To measure your own, render it from the root of a clone of
 [the repository](https://github.com/js2264/chromosomix), on a laptop that is plugged in and otherwise idle.
 It needs Node 22.12 or later and Playwright's browsers, which the repository installs, and an environment
 with Quarto, Jupyter, pandas, matplotlib, numpy and pyfaidx, and for its last part cooler, cooltools,
-coolpuppy and bioframe: `notebooks/environment-laptop.yml` makes one, named `open2c`, for micromamba,
+coolpuppy and bioframe, with PyTables, setuptools 81.0.0 and multiprocessing-logging 0.3.4 for coolpuppy's
+command line: `notebooks/environment-laptop.yml` makes one, named `open2c`, for micromamba,
 mamba or conda. The page checks the environment before it downloads anything, and names the versions it
 found. It downloads about 16.9 GB and takes about twenty minutes on the command line, as long again in
-Chromium (Firefox and WebKit as the results give), and a quarter of an hour more for the deep map.
+Chromium (Firefox and WebKit as the results give), and about forty minutes more for the deep map, most
+of it the script on one process.
 
 ```sh
 npm ci && npm run build && npm run build:cli

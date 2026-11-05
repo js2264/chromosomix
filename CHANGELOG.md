@@ -10,6 +10,33 @@ The deployed site at <https://chromosomix.app/> is built from `main` on every pu
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Added
+
+- **The deep human map on five sides (§18.10).** `notebooks/laptop.qmd` times its six analyses over
+  the IMR-90 map on the command line as before, and now in Chromium too — the map opened once, each
+  task run in turn in the same page, the pileup over the loops the first called there, the map moved to
+  250 kb for the compartments and back — the cooltools and coolpuppy script on one process as well as
+  on one a core, and cooltools' and coolpuppy's own commands one after another, as chromosomix's run,
+  each set to the API's defaults the script uses where the command's differ. The virtual 4C reads the
+  whole genome on every side, as the validation's § 10 does, where it read chr8 alone. coolpup.py needs
+  PyTables, setuptools 81.0.0 (the last with `pkg_resources`) and, on a Mac, multiprocessing-logging
+  0.3.4: `notebooks/environment-laptop.yml` adds them, and the page checks for them first. `notebooks/scripts/laptop.mjs` runs a plan with `steps` in one page, weighing the
+  browser throughout and timing the opening, each move to another rung and each run apart; the page
+  lays the browser's stretches end to end, as the commands are, leaving out what the driver does between
+  them. `pipeline.tsv`, the page's table, its figure and its summary have a side for each, and
+  `notebooks/scripts/timing.plot.R`'s panel c a row for each — chromosomix's command line and Chromium,
+  then the reference's commands, its script on several processes and on one — the panel as wide as the
+  page and growing with its rows, each side's end and peak written just past where it finished.
+
+### Fixed
+
+- **The laptop's deep human map runs on a Mac (§18.10).** `notebooks/scripts/cooltools_pipeline.py`
+  stopped at coolpuppy's pileup on macOS: there Python spawns its workers rather than forking them,
+  and coolpuppy's pool logs through `multiprocessing_logging`, which refuses any start method but
+  `fork`. The script asks for `fork`, as Linux gives it, and `notebooks/laptop.qmd` gets past the map.
+
 ## [0.20.0] - 2026-11-04
 
 ### Added

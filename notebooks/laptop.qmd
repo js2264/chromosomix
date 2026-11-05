@@ -111,13 +111,22 @@ from statistics import geometric_mean
 #: What the page imports, and what its last part's reference script (notebooks/scripts/cooltools_pipeline.py)
 #: runs in this same Python: each looked for before anything is downloaded or run, so that one missing from
 #: the environment stops the page now rather than hours in, at the deep map.
-NEEDED = ['pandas', 'matplotlib', 'numpy', 'pyfaidx', 'cooler', 'cooltools', 'coolpuppy', 'bioframe']
+NEEDED = ['pandas', 'matplotlib', 'numpy', 'pyfaidx', 'cooler', 'cooltools', 'coolpuppy', 'bioframe', 'tables']
 _missing = []
 for _name in NEEDED:
     try:
         installed_version(_name)
     except PackageNotFoundError:
         _missing.append(_name)
+# What coolpuppy's own command line, coolpup.py, needs beyond its package, for the deep map's last side: the
+# h5sparse it imports calls `pkg_resources`, which setuptools shipped until 81.0.0; it writes its pileup with
+# PyTables (`tables`, above); and its pool logs through multiprocessing-logging, whose 0.4.0 refuses to run where
+# processes are spawned rather than forked, as on macOS, and whose 0.3.4 does not.
+import importlib.util
+if importlib.util.find_spec('pkg_resources') is None:
+    _missing.append('setuptools 81.0.0 (or earlier), for its pkg_resources')
+if sys.platform == 'darwin' and installed_version('multiprocessing-logging').startswith('0.4'):
+    _missing.append('multiprocessing-logging 0.3.4, in place of the 0.4 installed')
 if _missing:
     raise ModuleNotFoundError(
         f"{', '.join(_missing)} {'is' if len(_missing) == 1 else 'are'} not in the environment of {sys.executable}, "
@@ -898,8 +907,8 @@ if DIFFERENT:
 Each analysis above is one command, timed alone, and by chromosomix alone. This last part times what a
 reader runs on a deep map, and against the packages chromosomix reproduces: six analyses, one after the
 other, over the human map above — 4DN's in situ Hi-C of IMR-90 (Rao et al. 2014; 4DNFIJTOIGOI, GRCh38,
-1.08 billion contacts, an 8.3 GB `.mcool`) — the first five over the whole genome, the last over one
-chromosome, each with the settings its section of `{python} R.link('validation')` holds it to:
+1.08 billion contacts, an 8.3 GB `.mcool`) — each over the whole genome, with the settings its section
+of `{python} R.link('validation')` holds it to:
 
 1. **Loop calling** at 10 kb: HiCCUPS as `cooltools.dots` computes it, at its Python API's defaults,
    over the expected with the first two diagonals left out (§ 19);
@@ -913,23 +922,34 @@ chromosome, each with the settings its section of `{python} R.link('validation')
 5. **P(s)** at 10 kb: the mean balanced contact at each separation, over every chromosome, every
    diagonal kept, cooltools' `expected_cis` unsmoothed and pooled over the bands chromosomix writes
    (§ 4) — its own, not the one step 1 read, which left two diagonals out;
-6. **Virtual 4C** at 10 kb, in cis: what one bin, the one holding *MYC*'s transcription start on
-   chr8, touches on its own chromosome, balanced (§ 10, which reads the whole genome).
-   `cooltools.virtual4c` has no cis of its own, so the script hands it a map over the viewpoint's
-   chromosome alone (its `map_functor`), on which it runs the same profile it runs on each chromosome
-   of the genome — through the function undecorated, since cooltools 0.7.1's decorator passes a
-   `map_functor` it is given on twice.
+6. **Virtual 4C** at 10 kb: what one bin, the one holding *MYC*'s transcription start on chr8,
+   touches over the whole genome, balanced, as § 10 reads it — chromosomix's `fourc` with `--no-cis`
+   (in the app, *cis only* off), `cooltools.virtual4c` as it is.
 
-**chromosomix** runs them as a shell script would: six commands, one after the other, the pileup
-reading the loops the first wrote. **The reference** is one Python script,
-`notebooks/scripts/cooltools_pipeline.py`, which runs the six through cooltools and coolpuppy in one
-process, its pileup over the loops `cooltools.dots` called. Neither side's pileup reads an expected,
-so neither is spared one the other pays for, and each side's P(s) is a step of its own, as the loop
-calling's expected is inside its own; chromosomix's compartments draw the saddle too, at the task's
-default, which `cooltools.eigs_cis` does not. `chromosomix` computes on one thread; the script gives
-every call that takes them `P_THREADS` processes — one a core, at most four, as the validation gives
-its references — but for the 4C, one chromosome in one process. This part alone needs the reference
-packages, at the versions `notebooks/requirements.txt` pins: cooler, cooltools, coolpuppy and bioframe.
+Five sides run them. **chromosomix on the command line** runs them as a shell script would: six
+commands, one after the other, the pileup reading the loops the first wrote. **chromosomix in
+Chromium** runs them as a reader does in the app, in one page: the map opened once, at 10 kb, balanced,
+its whole genome on screen, with the GC content beside it as a track; then each task opened from the
+Analysis panel, its form set as the command's flags set it, and run, one after the other, the pileup
+over the loops the first called in the same page, and the map moved to 250 kb for the compartments
+and back, in the crumb row's resolution. It is left out where `LAPTOP_BROWSERS` leaves Chromium out.
+**The reference** is one Python script, `notebooks/scripts/cooltools_pipeline.py`, which runs the six
+through cooltools and coolpuppy in one process, its pileup over the loops `cooltools.dots` called —
+twice: on **one process**, as chromosomix computes, and on **`P_THREADS` processes**, which it gives
+every call that takes them — one a core, at most four, as the validation gives its references; the
+compartments' `eigs_cis` takes none, and runs on one either way. Its pools fork, on a Mac as on Linux:
+coolpuppy's works no other way. And **the reference's own commands** run them as chromosomix's do, one after another on
+`P_THREADS` processes: `cooltools expected-cis` and `dots`, `insulation`, `eigs-cis`, coolpuppy's
+`coolpup.py` over the loops `dots` wrote, `expected-cis` again and `virtual4c` (`reference_argv` below),
+each set to what the script asks of the Python API where the command's default is another, and each
+paying its own start-up and reading the map again. coolpup.py needs three things its package does not bring, which the environment adds:
+PyTables, which it writes its pileup with; setuptools 81.0.0, the last to ship the `pkg_resources` its
+h5sparse calls; and, on a Mac, multiprocessing-logging 0.3.4, as 0.4.0 refuses to log from the workers
+macOS spawns. No side's pileup reads an expected, so none is spared one another pays for, and each side's
+P(s) is a step of its own, as the loop calling's expected is inside its own; chromosomix's
+compartments draw the saddle too, at the task's default, which `cooltools.eigs_cis` does not. This
+part alone needs the reference packages, at the versions `notebooks/requirements.txt` pins: cooler,
+cooltools, coolpuppy and bioframe.
 
 **Start-up, each step and the whole.** A command's start-up is the program loaded and nothing done,
 `chromosomix --version`, timed as a command of its own, which each of the six pays again before its
@@ -947,15 +967,27 @@ reads as more than it holds. A command's peak, and the script's whole, is never 
 resident set any one of its processes reached, which a weighing can miss; a step of the script's, the
 most its processes held together in the weighings taken between its ends.
 
+**In Chromium** (`laptop.mjs`), the browser is launched as for the analyses above and its processes
+weighed every fifth of a second, from the drop of the files to the last run's end; what the page holds
+and spends is its processes', the renderers whose threads its workers are, as above. Three kinds of
+stretch are measured: the **opening**, from the drop of the map and its track to the map drawn, which
+is this side's start-up, paid once; a **move** to another rung, from the pick to the map drawn at it,
+inside the step that needed it; and each **run**, from the press to the console's record of its end,
+its time the console's own. What lies between them — a form being set, the wait for the browser to be
+idle before a press, as before each analysis above — is the script's and not the app's, and is left
+out: the stretches are laid end to end, as the commands are, and the weighings within each with them.
+
 **One run of each side, unless `PIPELINE_RUNS` says otherwise.** Each side reads the map from the disk,
 the page cache emptied before it where the machine lets the benchmark do so; where it does not, as on a
-Mac, the map is read through once before each side instead, so that both find it in memory (the
-`page_cache` column). Over several runs the two take turns to go first. Every step of every run, its
+Mac, the map is read through once before each side instead, so that each finds it in memory (the
+`page_cache` column). Over several runs each begins one side further along, so that over as many runs as
+there are sides each has gone first once. Every step of every run, its
 start-up and the whole among them, is one line of **`notebooks/work/laptop/pipeline.tsv`**, with when
 in its side's run it began and ended; and every weighing of each side's processes, with when it was
 taken and the step it fell in, is one line of **`pipeline-memory.tsv`** beside it, which the figure at
 the end draws against the time. The page carries both, as it carries the table above. A second render
-reads them back (`REDO_PIPELINE`), unless the build, the script or the number of runs has changed.
+reads them back (`REDO_PIPELINE`), unless the build, the script, the browser, the sides or the number
+of runs has changed.
 
 ```{python}
 from importlib.metadata import version as installed_version
@@ -1085,7 +1117,7 @@ PIPELINE_SCRIPT = REPO / 'notebooks' / 'scripts' / 'cooltools_pipeline.py'
 PIPELINE_STEPS = {'loops': ('Loop calling', '10 kb'), 'insulation': ('Diamond insulation', '10 kb, 10 bins'),
                   'compartments': ('Compartments', '250 kb, GC-phased'),
                   'apa': ('APA over every loop', '10 kb, ±5 bins, raw'),
-                  'ps': ('P(s)', '10 kb, every diagonal'), 'fourc': ('Virtual 4C', '10 kb, one bin, cis')}
+                  'ps': ('P(s)', '10 kb, every diagonal'), 'fourc': ('Virtual 4C', '10 kb, one bin, genome-wide')}
 #: The 4C's viewpoint: the 10-kb bin holding MYC's transcription start, chr8:127,735,434 in GRCh38 (+ strand), as
 #: cooltools reads a region (0-based, half-open) and as chromosomix does (1-based, inclusive).
 FOURC_BIN = ('chr8', 127_730_000, 127_740_000)
@@ -1100,10 +1132,29 @@ def in_a_sentence(name):
     (APA, P(s))."""
     return name[0].lower() + name[1:] if name[1:2].islower() else name
 
-#: The script's processes: one a core, at most four, as validation.qmd's THREADS gives its references.
+#: The script's processes on its last side: one a core, at most four, as validation.qmd's THREADS gives its
+#: references.
 P_THREADS = min(4, os.cpu_count() or 1)
-P_SIDES = {'chromosomix': 'chromosomix',
-           'reference': ', '.join(f'{name} {installed_version(name)}' for name in ('cooltools', 'coolpuppy', 'cooler'))}
+_REFERENCE = ', '.join(f'{name} {installed_version(name)}' for name in ('cooltools', 'coolpuppy', 'cooler'))
+#: The sides, in the order the tables and the figure give them, each with the tool the tables name, its
+#: version, and the processes it computes on: chromosomix on the command line, and in Chromium where
+#: LAPTOP_BROWSERS has it; then the reference's own commands on P_THREADS processes, its script on as many,
+#: and its script on one, where the machine has more than one core.
+P_SIDES = {'chromosomix': {'tool': 'chromosomix', 'version': MACHINE['chromosomix'], 'threads': 1}}
+if 'chromium' in BROWSERS:
+    P_SIDES['chromium'] = {'tool': 'chromosomix', 'threads': 1,
+                           'version': f"{MACHINE['chromosomix']}, Chromium {VERSIONS['chromium']}"}
+P_SIDES['reference-cli'] = {'tool': 'cooltools, coolpup.py', 'version': _REFERENCE, 'threads': P_THREADS}
+P_SIDES['reference'] = {'tool': 'cooltools, coolpuppy', 'version': _REFERENCE, 'threads': P_THREADS}
+if P_THREADS > 1:
+    P_SIDES['reference-1'] = {'tool': 'cooltools, coolpuppy', 'version': _REFERENCE, 'threads': 1}
+#: How the tables and the figures name each side.
+_PROCESSES = f"{P_THREADS} process{'es' if P_THREADS > 1 else ''}"
+P_SIDE_LABELS = {'chromosomix': 'chromosomix, command line', 'chromium': 'chromosomix, Chromium',
+                 'reference-1': 'cooltools, coolpuppy, 1 process', 'reference': f'cooltools, coolpuppy, {_PROCESSES}',
+                 'reference-cli': f'cooltools, coolpup.py commands, {_PROCESSES}'}
+#: The reference packages' own command lines, from the environment's: cooltools, and coolpuppy's coolpup.py.
+COOLTOOLS, COOLPUP = Path(sys.executable).parent / 'cooltools', Path(sys.executable).parent / 'coolpup.py'
 P_SCRIPT = hashlib.sha256(PIPELINE_SCRIPT.read_bytes()).hexdigest()[:10]
 P_OUT = {side: PWORK / 'runs' / side for side in P_SIDES}
 
@@ -1116,8 +1167,9 @@ def p_map(bp):
     return f'{p_rel(IMR90)}::/resolutions/{bp}'
 
 
-def app_argv(step, out):
-    """chromosomix's command for one step, writing into `out`: the pileup reads the loops the first wrote there."""
+def app_argv(step, out, pairs=None):
+    """chromosomix's command for one step, writing into `out`: the pileup reads the loops the first wrote there,
+    or the `pairs` named."""
     program = ['node', p_rel(CLI)]
     if step == 'start-up':
         return [*program, '--version']
@@ -1125,17 +1177,95 @@ def app_argv(step, out):
             'insulation': ['insulation', p_map(10_000), '--window', '10'],
             'compartments': ['compartments', p_map(250_000), '--components', '3', '--phaseTrack', p_rel(GC_BEDGRAPH)],
             'ps': ['expected', p_map(10_000), '--quantity', 'expected', '--scope', 'file'],
-            'fourc': ['fourc', p_map(10_000), '--anchor', FOURC_ANCHOR]}
+            'fourc': ['fourc', p_map(10_000), '--anchor', FOURC_ANCHOR, '--no-cis']}
     if step == 'apa':
-        argv['apa'] = ['apa', p_map(10_000), '--pairs', p_rel(one_file(out / 'loops', '*.loops-calls.bedpe')),
+        pairs = pairs if pairs is not None else p_rel(one_file(out / 'loops', '*.loops-calls.bedpe'))
+        argv['apa'] = ['apa', p_map(10_000), '--pairs', pairs,
                        '--mode', 'fixed', '--window', '5', '--minDiag', '2', '--minDist', '0', '--norm', 'none']
     return [*program, *argv[step], '--out', p_rel(out / step)]
 
 
-def script_argv(out):
-    """The script's one command, writing beside `out/cooltools` and its marks to `out/marks.json`."""
+def reference_argv(step, out):
+    """The reference's own commands for one step, writing into `out`, each set to what the script asks of the
+    Python API where the command's default is another: `dots` defaults to 2 Mb, 45 λ-bins, an FDR of 0.02
+    and a 39-kb radius where the API has 10 Mb, 40, 0.1 and 20 kb, and to tiles of 6 Mb where it has 5;
+    `expected-cis` smooths only when asked, which the API does unasked, and the expected `dots` reads is
+    this one; `insulation` thresholds at 0 unless told; coolpup.py takes ten shifted controls per window and
+    divides by an expected unless told not to, which the API's `pileup` does not. The start-up is
+    `cooltools --version`; coolpup.py's own is paid inside its step."""
+    threads, at = str(P_THREADS), lambda name: p_rel(out / name)
+    if step == 'start-up':
+        return [[str(COOLTOOLS), '--version']]
+    commands = {
+        'loops': [[str(COOLTOOLS), 'expected-cis', p_map(10_000), '--ignore-diags', '2', '--smooth', '--aggregate-smoothed',
+                   '-p', threads, '-o', at('expected-loops.tsv')],
+                  [str(COOLTOOLS), 'dots', p_map(10_000), f"{at('expected-loops.tsv')}::balanced.avg",
+                   '--max-loci-separation', '10000000', '--max-nans-tolerated', '1', '--tile-size', '5000000',
+                   '--num-lambda-bins', '40', '--fdr', '0.1', '--clustering-radius', '20000', '-p', threads,
+                   '-o', at('loops.tsv')]],
+        'insulation': [[str(COOLTOOLS), 'insulation', p_map(10_000), '100000', '--ignore-diags', '2',
+                        '--min-frac-valid-pixels', '0.5', '--threshold', '0.2', '-p', threads, '-o', at('insulation.tsv')]],
+        'compartments': [[str(COOLTOOLS), 'eigs-cis', p_map(250_000), '--phasing-track', f'{p_rel(GC_TSV)}::GC',
+                          '--n-eigs', '3', '--ignore-diags', '2', '-o', at('compartments')]],
+        'apa': [[str(COOLPUP), p_map(10_000), at('loops.tsv'), '--features_format', 'bedpe', '--flank', '50000',
+                 '--nshifts', '0', '--not_ooe', '--mindist', '0', '--ignore_diags', '2', '-p', threads,
+                 '-o', at('apa.clpy')]],
+        'ps': [[str(COOLTOOLS), 'expected-cis', p_map(10_000), '--ignore-diags', '0', '-p', threads, '-o', at('ps.tsv')]],
+        'fourc': [[str(COOLTOOLS), 'virtual4c', p_map(10_000), FOURC_COOLTOOLS, '-p', threads, '-o', at('fourc')]],
+    }
+    return commands[step]
+
+
+def script_argv(out, threads):
+    """The script's one command on `threads` processes, writing beside `out/cooltools` and its marks to
+    `out/marks.json`."""
     return [sys.executable, p_rel(PIPELINE_SCRIPT), p_rel(IMR90), p_rel(GC_TSV), FOURC_COOLTOOLS,
-            p_rel(out / 'cooltools'), str(P_THREADS), p_rel(out / 'marks.json')]
+            p_rel(out / 'cooltools'), str(threads), p_rel(out / 'marks.json')]
+
+
+#: The pileup's pairs in the app: the loops the first step called in the same page, which the app keeps as a
+#: row of the Tracks card and the form lists among the sets of pairs, by this name.
+APP_LOOPS = 'loops'
+
+
+def app_step(step):
+    """A step as the app runs it: its task's title in the Analysis panel, the rung its map is read at, and its
+    form as its command's flags set it — the GC content's bedGraph chosen by its name among the tracks open,
+    the pileup's pairs the loops the first step called — and no track ticked that the command does not name:
+    the pileup's form ticks every track open for an aggregate of its own, which the command does not ask for."""
+    _, _, task, the_map, *words = app_argv(step, P_OUT['chromosomix'], pairs='')[:-2]
+    form, flags = [], list(words)
+    while flags:
+        key = flags.pop(0)[2:]
+        # A switch turned off, `--no-cis`: the form's switch, off.
+        if key.startswith('no-'):
+            form.append({'key': key[3:], 'on': False})
+            continue
+        value = flags.pop(0)
+        if key == 'pairs':
+            form.append({'key': key, 'option': APP_LOOPS})
+        elif key == 'phaseTrack':
+            form.append({'key': key, 'option': stem(value)})
+        else:
+            form.append({'key': key, 'value': value})
+    if 'tracks' in PARAMETERS[task] and '--tracks' not in words:
+        form.append({'key': 'tracks', 'ticks': []})
+    return {'step': step, 'task': TITLES[task], 'binsize': int(the_map.rsplit('/', 1)[1]), 'set': form}
+
+
+def browser_plan(out):
+    """What laptop.mjs is handed for the six in Chromium: the map opened at the first step's rung, balanced,
+    its whole genome on screen, with the GC content beside it as a track, and the steps in turn."""
+    steps = [app_step(step) for step in PIPELINE_STEPS]
+    gc = {'id': 'gc', 'card': 'linear', 'kind': 'track', 'label': stem(GC_BEDGRAPH),
+          'source': {'kind': 'local', 'name': GC_BEDGRAPH.name}, 'visible': True,
+          'placement': {'bottom': True, 'right': False}}
+    return {'name': 'pipeline', 'browser': 'chromium', 'app': str(APP), 'data': str(PWORK), 'out': str(out),
+            'executablePath': EXECUTABLES.get('chromium'), 'files': [p_rel(IMR90), p_rel(GC_BEDGRAPH)],
+            'workspace': {'kind': 'chromosomix.workspace', 'version': 1, 'active': 0, 'tabs': [{'version': 1, 'state': {
+                'uri': f"{IMR90.name}::/resolutions/{steps[0]['binsize']}", 'view': 'whole', 'balance': True},
+                'tracks': [gc]}]},
+            'steps': steps}
 
 
 def one_file(folder, pattern):
@@ -1149,6 +1279,8 @@ def typed_line(argv):
     """A command as a reader would type it."""
     if argv[:2] == ['node', p_rel(CLI)]:
         argv = ['chromosomix', *argv[2:]]
+    elif argv[0] in (str(COOLTOOLS), str(COOLPUP)):
+        argv = [Path(argv[0]).name, *argv[1:]]
     return shlex.join(['python' if a == sys.executable else a for a in argv])
 
 
@@ -1181,56 +1313,60 @@ TRACE_COLUMNS = ['side', 'tool', 'run', 'step', 'seconds', 'mb']
 
 
 def p_row(side, step, run, first, cache, cost, line, started, span=(np.nan, np.nan)):
-    return {'side': side, 'tool': 'chromosomix' if side == 'chromosomix' else 'cooltools, coolpuppy',
-            'version': MACHINE['chromosomix'] if side == 'chromosomix' else P_SIDES[side], 'step': step,
+    return {'side': side, 'tool': P_SIDES[side]['tool'], 'version': P_SIDES[side]['version'], 'step': step,
             'task': PIPELINE_TASKS[step][0], 'reads': PIPELINE_TASKS[step][1], 'run': run,
-            'went_first': first == side, 'page_cache': cache,
-            'threads': 1 if side == 'chromosomix' else P_THREADS, 'cpu_s': cost['cpu_s'], 'wall_s': cost['wall_s'],
-            'peak_mb': cost['peak_mb'], 'from_s': span[0], 'to_s': span[1], 'started': started, **MACHINE,
-            'python': platform.python_version(), 'script': P_SCRIPT, 'map': IMR90.name, 'command_line': line}
+            'went_first': first == side, 'page_cache': cache, 'threads': P_SIDES[side]['threads'],
+            'cpu_s': cost['cpu_s'], 'wall_s': cost['wall_s'], 'peak_mb': cost['peak_mb'], 'from_s': span[0],
+            'to_s': span[1], 'started': started, **MACHINE, 'python': platform.python_version(), 'script': P_SCRIPT,
+            'map': IMR90.name, 'command_line': line}
 
 
 def p_trace(side, run, step, at, kb):
-    return {'side': side, 'tool': 'chromosomix' if side == 'chromosomix' else 'cooltools, coolpuppy', 'run': run,
-            'step': step, 'seconds': at, 'mb': kb / 1024}
+    return {'side': side, 'tool': P_SIDES[side]['tool'], 'run': run, 'step': step, 'seconds': at, 'mb': kb / 1024}
 
 
-def app_side(run, first):
-    """chromosomix's side of one run: its start-up, its six commands and their whole, and every weighing of the
-    six, its time counted from the launch of the first. The start-up, `--version`, is timed before them and
-    is no part of that time: each command pays its own, inside its step."""
-    out = P_OUT['chromosomix']
+def commands_side(side, run, first):
+    """A side of commands, one run: its start-up, the commands of its six steps and their whole, and every
+    weighing of them, its time counted from the launch of the first. The start-up, `--version`, is timed before
+    them and is no part of that time: each command pays its own, inside its step. A step of several commands
+    — cooltools' loop calling, its expected and then `dots` — is the stretch from the first's launch to the
+    last's exit, its CPU time theirs together and its peak the largest of theirs."""
+    out = P_OUT[side]
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True)
     cache, rows, trace, first_launch = settle(), [], [], None
     for step in ['start-up', *PIPELINE_STEPS]:
-        argv = app_argv(step, out)
         started = time.strftime('%Y-%m-%dT%H:%M:%S')
-        samples = None if step == 'start-up' else []
-        launched = time.time()
-        cost = timed(argv, PWORK, samples)
-        span = (np.nan, np.nan)
-        if step != 'start-up':
-            first_launch = launched if first_launch is None else first_launch
-            span = (launched - first_launch, launched + cost['wall_s'] - first_launch)
-            trace += [p_trace('chromosomix', run, step, at - first_launch, kb) for at, kb in samples]
-        rows.append(p_row('chromosomix', step, run, first, cache, cost, typed_line(argv), started, span))
+        cost, lines, begun = {'cpu_s': 0.0, 'wall_s': 0.0, 'peak_mb': 0.0}, [], None
+        for argv in P_COMMANDS[side](step, out):
+            samples = None if step == 'start-up' else []
+            launched = time.time()
+            one = timed(argv, PWORK, samples)
+            cost = {'cpu_s': cost['cpu_s'] + one['cpu_s'], 'wall_s': cost['wall_s'] + one['wall_s'],
+                    'peak_mb': max(cost['peak_mb'], one['peak_mb'])}
+            lines.append(typed_line(argv))
+            begun = launched if begun is None else begun
+            if step != 'start-up':
+                first_launch = launched if first_launch is None else first_launch
+                trace += [p_trace(side, run, step, at - first_launch, kb) for at, kb in samples]
+        span = (np.nan, np.nan) if step == 'start-up' else (begun - first_launch, begun + cost['wall_s'] - first_launch)
+        rows.append(p_row(side, step, run, first, cache, cost, '; '.join(lines), started, span))
     steps = rows[1:]
     whole = {'cpu_s': sum(r['cpu_s'] for r in steps), 'wall_s': sum(r['wall_s'] for r in steps),
              'peak_mb': max(r['peak_mb'] for r in steps)}
-    rows.append(p_row('chromosomix', 'total', run, first, cache, whole,
+    rows.append(p_row(side, 'total', run, first, cache, whole,
                       '; '.join(r['command_line'] for r in steps), steps[0]['started'], (0.0, steps[-1]['to_s'])))
     return rows, trace
 
 
-def script_side(run, first):
-    """The script's side of one run: its start-up and six steps as it marked them, and its whole, and every
-    weighing of its processes, its time counted from the script's launch."""
-    out = P_OUT['reference']
+def script_side(run, first, side):
+    """The script's side of one run, on the processes `side` gives it: its start-up and six steps as it marked
+    them, and its whole, and every weighing of its processes, its time counted from the script's launch."""
+    out = P_OUT[side]
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True)
     cache, samples = settle(), []
-    argv = script_argv(out)
+    argv = script_argv(out, P_SIDES[side]['threads'])
     started = time.strftime('%Y-%m-%dT%H:%M:%S')
     launched = time.time()
     whole = timed(argv, PWORK, samples)
@@ -1241,26 +1377,73 @@ def script_side(run, first):
         held = [kb for at, kb in samples if before['time'] <= at <= mark['time']]
         cost = {'cpu_s': mark['cpu_s'] - before['cpu_s'], 'wall_s': mark['time'] - before['time'],
                 'peak_mb': max(held) / 1024 if held else np.nan}
-        rows.append(p_row('reference', step, run, first, cache, cost, typed_line(argv), started,
+        rows.append(p_row(side, step, run, first, cache, cost, typed_line(argv), started,
                           (before['time'] - launched, mark['time'] - launched)))
         before = mark
-    rows.append(p_row('reference', 'total', run, first, cache, whole, typed_line(argv), started, (0.0, whole['wall_s'])))
+    rows.append(p_row(side, 'total', run, first, cache, whole, typed_line(argv), started, (0.0, whole['wall_s'])))
     # A weighing in the step whose end is the first after it; one after the last mark, as the process exits, in
     # the last step.
     for at, kb in samples:
         step = next((step for step, mark in ends if at <= mark['time']), ends[-1][0])
-        trace.append(p_trace('reference', run, step, at - launched, kb))
+        trace.append(p_trace(side, run, step, at - launched, kb))
     return rows, trace
+
+
+def browser_side(run, first):
+    """chromosomix's side in Chromium, one run: the map's opening, which is its start-up, and the six steps, a
+    step's move to another rung inside it, laid end to end — what the page did between them, its form being
+    set and the wait for the browser to be idle, left out — and every weighing of the page's processes within
+    them, its time counted along the same line."""
+    out = P_OUT['chromium']
+    shutil.rmtree(out, ignore_errors=True)
+    out.mkdir(parents=True)
+    cache = settle()
+    started = time.strftime('%Y-%m-%dT%H:%M:%S')
+    (out / 'plan.json').write_text(json.dumps(browser_plan(out), indent=1))
+    driven = subprocess.run(['node', str(DRIVER), str(out / 'plan.json'), str(out / 'result.json')],
+                            capture_output=True, text=True)
+    if not (out / 'result.json').exists():
+        raise RuntimeError(f'{DRIVER.name} wrote no result for the deep map in Chromium:\n{driven.stderr[-3000:]}')
+    result = json.loads((out / 'result.json').read_text())
+    if result['status'] != 'ok':
+        raise RuntimeError(f"The deep map did not finish in Chromium: {result.get('error', 'failed')} "
+                           f"({out / 'browser.png'} is the page at its end).")
+    rows, trace, at = [], [], 0.0
+    for done in result['steps']:
+        begun = at
+        for stretch in done['stretches']:
+            # A run's time is the console's, as in the analyses above; a move's and the opening's, the script's.
+            wall = stretch.get('wall_s', (stretch['t1'] - stretch['t0']) / 1000)
+            trace += [p_trace('chromium', run, done['step'], at + (one['t'] - stretch['t0']) / 1000, one['page_mb'] * 1024)
+                      for one in result['trace'] if stretch['t0'] <= one['t'] <= stretch['t0'] + wall * 1000]
+            at += wall
+        cost = {'cpu_s': sum(one['cpu_s'] for one in done['stretches']), 'wall_s': at - begun,
+                'peak_mb': max(one['peak_mb'] for one in done['stretches'])}
+        line = done.get('line') or f'{IMR90.name} and {GC_BEDGRAPH.name} dropped on the page'
+        rows.append(p_row('chromium', done['step'], run, first, cache, cost, line, started, (begun, at)))
+    whole = {'cpu_s': sum(row['cpu_s'] for row in rows), 'wall_s': at, 'peak_mb': max(row['peak_mb'] for row in rows)}
+    rows.append(p_row('chromium', 'total', run, first, cache, whole, '; '.join(row['command_line'] for row in rows[1:]),
+                      started, (0.0, at)))
+    return rows, trace
+
+
+#: The commands of each side of commands, a step's list of them.
+P_COMMANDS = {'chromosomix': lambda step, out: [app_argv(step, out)], 'reference-cli': reference_argv}
+#: How each side runs.
+P_RUN = {'chromium': browser_side,
+         **{side: (lambda run, first, side=side: commands_side(side, run, first)) for side in P_COMMANDS},
+         **{side: (lambda run, first, side=side: script_side(run, first, side)) for side in ('reference-1', 'reference')}}
 
 
 def pipeline():
     rows, trace = [], []
     PIPELINE_TABLE.parent.mkdir(parents=True, exist_ok=True)
+    sides = list(P_SIDES)
     for run in range(1, PIPELINE_RUNS + 1):
-        # chromosomix first on odd runs, the script on even ones.
-        order = ['chromosomix', 'reference'] if run % 2 == 1 else ['reference', 'chromosomix']
+        # Each run begins one side further along, so that over as many runs as there are sides each goes first once.
+        order = sides[(run - 1) % len(sides):] + sides[:(run - 1) % len(sides)]
         for side in order:
-            got, weighed = app_side(run, order[0]) if side == 'chromosomix' else script_side(run, order[0])
+            got, weighed = P_RUN[side](run, order[0])
             rows += got
             trace += weighed
         # Written after every run, so a long benchmark that is stopped keeps the runs it finished.
@@ -1269,13 +1452,14 @@ def pipeline():
 
 
 def pipeline_current():
-    """Whether pipeline.tsv holds every step of PIPELINE_RUNS runs, by this chromosomix and this script, and
-    pipeline-memory.tsv their weighings."""
+    """Whether pipeline.tsv holds every step of PIPELINE_RUNS runs of every side, by this chromosomix, this
+    Chromium and this script, and pipeline-memory.tsv their weighings."""
     if REDO_PIPELINE or not PIPELINE_TABLE.exists() or not PIPELINE_TRACE.exists():
         return False
-    held = pd.read_csv(PIPELINE_TABLE, sep='\t', keep_default_na=False)
+    held = pd.read_csv(PIPELINE_TABLE, sep='\t', keep_default_na=False, dtype={'version': str})
     return (list(held.columns) == PIPELINE_COLUMNS and set(held['run']) == set(range(1, PIPELINE_RUNS + 1))
-            and len(held) == PIPELINE_RUNS * 2 * len(PIPELINE_TASKS)
+            and set(held['side']) == set(P_SIDES) and len(held) == PIPELINE_RUNS * len(P_SIDES) * len(PIPELINE_TASKS)
+            and all(set(held.loc[held['side'] == side, 'version']) == {spec['version']} for side, spec in P_SIDES.items())
             and set(held['chromosomix']) == {MACHINE['chromosomix']} and set(held['script']) == {P_SCRIPT}
             and all(P_OUT[side].exists() for side in P_SIDES))
 
@@ -1285,14 +1469,16 @@ if not pipeline_current():
 steps = pd.read_csv(PIPELINE_TABLE, sep='\t', keep_default_na=False, na_values=[''])
 weighed = pd.read_csv(PIPELINE_TRACE, sep='\t')
 for side, rows in steps.groupby('side', sort=False):
-    print(f'# {rows["tool"].iloc[0]}')
+    print(f'# {P_SIDE_LABELS[side]}')
     lines = rows.loc[(rows['run'] == 1) & ~rows['step'].isin(['total']), 'command_line']
     print('\n'.join(f'$ {line}' for line in dict.fromkeys(lines)), end='\n\n')
 measures({'runs': PIPELINE_RUNS, 'lines in the table': len(steps),
           'measured': f"{steps['started'].min()} to {steps['started'].max()}",
           'page cache before each side': ', '.join(sorted(set(steps['page_cache']))),
-          'reference': P_SIDES['reference'], 'table': os.path.relpath(PIPELINE_TABLE, REPO),
-          'weighings': f"{len(weighed):,}, every {EVERY} s, to {os.path.relpath(PIPELINE_TRACE, REPO)}"})
+          'reference': _REFERENCE, **({'browser': f"Chromium {VERSIONS['chromium']}"} if 'chromium' in P_SIDES else {}),
+          'table': os.path.relpath(PIPELINE_TABLE, REPO),
+          'weighings': f"{len(weighed):,}, every {EVERY} s{', every 0.2 s in Chromium' if 'chromium' in P_SIDES else ''}, "
+                       f"to {os.path.relpath(PIPELINE_TRACE, REPO)}"})
 ```
 
 ```{python}
@@ -1309,7 +1495,6 @@ and the whole:
 
 ```{python}
 #| column: page
-P_SIDE_NAMES = {'chromosomix': 'chromosomix', 'reference': 'cooltools, coolpuppy'}
 p_mean = (steps.groupby(['step', 'side'], sort=False)
           .agg(cpu=('cpu_s', 'mean'), wall=('wall_s', 'mean'), peak=('peak_mb', 'max')).reset_index())
 p_table = p_mean.pivot(index='step', columns='side', values=['cpu', 'wall', 'peak']).reindex(list(PIPELINE_TASKS))
@@ -1317,13 +1502,17 @@ p_shown = pd.DataFrame({'step': [PIPELINE_TASKS[s][0] for s in p_table.index],
                         'reads': [PIPELINE_TASKS[s][1] for s in p_table.index]})
 for measure, unit in (('cpu', 'CPU s'), ('wall', 'wall s'), ('peak', 'peak MB')):
     for side in P_SIDES:
-        p_shown[f'{P_SIDE_NAMES[side]}, {unit}'] = p_table[(measure, side)].to_numpy()
+        p_shown[f'{P_SIDE_LABELS[side]}, {unit}'] = p_table[(measure, side)].to_numpy()
+# The command line against the script on its P_THREADS processes.
 p_shown['× faster, wall'] = p_table[('wall', 'reference')].to_numpy() / p_table[('wall', 'chromosomix')].to_numpy()
 show(p_shown, **{column: '{:,.0f}' for column in p_shown.columns if column.endswith('MB')},
      **{'× faster, wall': '{:.1f}×'})
 ```
 
-Both sides did the same work: what each wrote in the last run, step by step, against the other's.
+The command line and the script on `{python} str(P_THREADS)` processes did the same work: what each wrote in
+the last run, step by step, against the other's. The app's agreement with the command line is the parity's
+(`{python} R.link('parity')`), and the script's on one process with itself on several, cooltools' and
+coolpuppy's own.
 
 ```{python}
 APP_P, REF_P = P_OUT['chromosomix'], P_OUT['reference']
@@ -1392,8 +1581,8 @@ _pooled = np.array([_sum[a:b].sum() / _n[a:b].sum() for a, b in bands(_n, _x, _c
 p_agree.append({'step': 'P(s)', 'chromosomix': f'{len(_x)} points', 'cooltools, coolpuppy': f'{len(_n):,} diagonals',
                 'agreement': f'each point within {np.abs(_y / _pooled - 1).max():.1e} of the diagonals it pools, '
                              f'relative'})
-# Virtual 4C: bin by bin. cooltools reports a bin the viewpoint has a stored contact with; chromosomix every bin of the
-# viewpoint's chromosome, 0 where the map stores none.
+# Virtual 4C: bin by bin, over the genome. cooltools reports a bin the viewpoint has a stored contact with; chromosomix
+# every bin, 0 where the map stores none.
 _app_4c = app_table(APP_P / 'fourc', '*.fourc-*.tsv')['value'].to_numpy(float)
 _ref_4c = pd.read_csv(REF_P / 'cooltools-fourc.tsv', sep='\t')['balanced'].to_numpy(float)
 _kept = np.isfinite(_c10.bins()['weight'][:].to_numpy(float))
@@ -1417,24 +1606,25 @@ show(pd.DataFrame(p_agree))
 
 ```{python}
 #| label: fig-pipeline
-#| fig-cap: "The six analyses over the IMR-90 map, one after the other, against the wall clock: the memory each side's processes held together, weighed every quarter of a second, the first run's, each phase shaded behind it and its peak marked. chromosomix is its six commands, back to back, each paying its own start-up inside its phase (`chromosomix --version`, a quarter of a second); the script's start-up, Python and its imports, is paid once, before loop calling."
+#| fig-cap: "The six analyses over the IMR-90 map, one after the other, against the wall clock: the memory each side's processes held together, weighed every quarter of a second (a fifth in Chromium), the first run's, each phase shaded behind it and its peak marked. On the command line chromosomix is its six commands, back to back, each paying its own start-up inside its phase (`chromosomix --version`, a quarter of a second); in Chromium, its opening of the map, the start-up, then its six runs laid end to end, the page's processes weighed, what the page did between them left out; the script's start-up, Python and its imports, is paid once, before loop calling, on one process as on several."
 def minutes(seconds):
     return f'{seconds / 60:.1f} min' if seconds >= 90 else f'{seconds:.0f} s'
 
 
-#: Each phase's shade, as the R figure shades them (notebooks/scripts/timing.plot.R).
+#: Each phase's shade, and each side's colour, as the R figure has them (notebooks/scripts/timing.plot.R).
 PHASE_COLOURS = {'start-up': '#d9d9d9', 'loops': '#cfe3c1', 'insulation': '#f5e2ad', 'compartments': '#dcd2ec',
                  'apa': '#c6e2ea', 'ps': '#f4cfc7', 'fourc': '#e4d6c3'}
-P_SIDE_LABELS = {'chromosomix': 'chromosomix, 1 thread',
-                 'reference': f'cooltools and coolpuppy, {P_THREADS} processes'}
+SIDE_COLOURS = {'chromosomix': APP_COLOUR, 'chromium': '#7fb0ea', 'reference-1': '#f3a57f', 'reference': REF,
+                'reference-cli': '#a8461f'}
 first_run = steps[steps['run'] == 1]
 traced_run = weighed[weighed['run'] == 1]
 ENDS = {side: first_run.loc[(first_run['side'] == side) & (first_run['step'] == 'total'), 'to_s'].iloc[0] / 60
         for side in P_SIDES}
 TOP = traced_run['mb'].max() / 1024 * 1.25
-fig, axes = plt.subplots(len(P_SIDES), 1, figsize=(10, 4.8), sharex=True, sharey=True, layout='constrained')
+fig, axes = plt.subplots(len(P_SIDES), 1, figsize=(10, 1.2 + 1.8 * len(P_SIDES)), sharex=True, sharey=True,
+                         layout='constrained')
 for ax, side in zip(axes, P_SIDES):
-    colour = APP_COLOUR if side == 'chromosomix' else REF
+    colour = SIDE_COLOURS[side]
     phases = first_run[(first_run['side'] == side) & first_run['step'].isin(PHASE_COLOURS)].dropna(subset=['from_s'])
     for one in phases.itertuples():
         ax.axvspan(one.from_s / 60, one.to_s / 60, color=PHASE_COLOURS[one.step], alpha=0.6, lw=0, zorder=0)
@@ -1448,14 +1638,13 @@ for ax, side in zip(axes, P_SIDES):
     most = first_run.loc[(first_run['side'] == side) & (first_run['step'] == 'total'), 'peak_mb'].iloc[0]
     name = PIPELINE_TASKS[peak['step']][0]
     ax.scatter([peak['seconds'] / 60], [peak['mb'] / 1024], s=18, color=colour, zorder=4)
-    ax.annotate(f"peak {most / 1024:.1f} GB, {in_a_sentence(name)}",
-                (peak['seconds'] / 60, peak['mb'] / 1024), xytext=(-6, 4), textcoords='offset points', fontsize=8,
-                ha='right')  # over its own phase, not across the line where the side finished
+    # Where it finished and the most it held, on two lines just past its end, where nothing is drawn: on a side
+    # of two minutes, its own phases have no room for them.
     ax.axvline(ENDS[side], color=INK2, lw=0.8, ls=(0, (3, 2)), zorder=4)
-    ax.annotate(f'done, {minutes(ENDS[side] * 60)}', (ENDS[side], TOP * 0.92), xytext=(4, 0),
-                textcoords='offset points', fontsize=8, va='top')
+    ax.annotate(f"done, {minutes(ENDS[side] * 60)}\npeak {most / 1024:.1f} GB, {in_a_sentence(name)}",
+                (ENDS[side], TOP * 0.92), xytext=(4, 0), textcoords='offset points', fontsize=8, va='top')
     ax.set_title(P_SIDE_LABELS[side], fontsize=9)
-    ax.set(ylabel='memory (GB)', ylim=(0, TOP), xlim=(0, max(ENDS.values()) * 1.12))
+    ax.set(ylabel='memory (GB)', ylim=(0, TOP), xlim=(0, max(ENDS.values()) * 1.2))
     ax.grid(False)
 axes[-1].set_xlabel('wall-clock time (min)')
 handles = [plt.Rectangle((0, 0), 1, 1, color=c, alpha=0.6) for c in PHASE_COLOURS.values()]
@@ -1492,6 +1681,24 @@ P_SLOWER = [step for step in PIPELINE_STEPS if p_value(step, 'chromosomix', 'wal
 P_TEXT['slower'] = ('In none of the six is chromosomix slower on the wall clock.' if not P_SLOWER else
                     'On one thread against the script\'s processes, chromosomix is slower on the wall clock at '
                     + '; '.join(against(step) for step in P_SLOWER) + '.')
+# The two other sides, where they ran: the app in Chromium, and the script on one process.
+P_TEXT['browser'] = '' if 'chromium' not in P_SIDES else (
+    f"In Chromium the app takes {minutes(p_value('total', 'chromium', 'wall_s'))}, its opening of the map "
+    f"({minutes(p_value('start-up', 'chromium', 'wall_s'))}) among it, and its page's processes hold at most "
+    f"{steps.loc[steps['side'] == 'chromium', 'peak_mb'].max() / 1024:.1f} GB.")
+P_TEXT['one'] = '' if 'reference-1' not in P_SIDES else (
+    f"On one process, as chromosomix computes, the script takes {minutes(p_value('total', 'reference-1', 'wall_s'))}: "
+    f"{p_value('total', 'reference-1', 'wall_s') / p_value('total', 'chromosomix', 'wall_s'):.1f} times "
+    f"chromosomix's time on the command line, and "
+    f"{p_value('total', 'reference-1', 'wall_s') / p_value('total', 'reference', 'wall_s'):.1f} times its own on "
+    f"{P_THREADS}.")
+# And the reference's own command lines, on as many processes as the script.
+P_TEXT['cli'] = (
+    f"Run as their own commands, one after another as chromosomix's are, cooltools and coolpup.py take "
+    f"{minutes(p_value('total', 'reference-cli', 'wall_s'))}: "
+    f"{p_value('total', 'reference-cli', 'wall_s') / p_value('total', 'chromosomix', 'wall_s'):.1f} times "
+    f"chromosomix's time, each command paying its own start-up and reading the map again, and the loops handed "
+    f"to the pileup through a file.")
 ```
 
 Over the IMR-90 map, the six analyses take **`{python} P_TEXT['app']`** in `chromosomix` and
@@ -1500,7 +1707,8 @@ on one thread against the script's `{python} str(P_THREADS)` processes, and `{py
 time; at most `{python} P_TEXT['app_peak']` of memory against `{python} P_TEXT['ref_peak']`. Loop
 calling is most of either side, and `{python} P_TEXT['loops']` times faster on the wall clock in
 `chromosomix`. `{python} P_TEXT['slower']` Starting takes `chromosomix` `{python} P_TEXT['app_start']`
-a command, six times, and the script `{python} P_TEXT['ref_start']`, once.
+a command, six times, and the script `{python} P_TEXT['ref_start']`, once. `{python} P_TEXT['browser']`
+`{python} P_TEXT['one']` `{python} P_TEXT['cli']`
 
 ```{python}
 #| echo: false
@@ -1521,6 +1729,10 @@ print(R.foot(summary=f"{len(ORDER)} analyses run genome-wide on {MACHINE['proces
                      f"command line and {slowest_times} {in_them}; the most memory, {largest['peak_mb']:,.0f} MB on "
                      f"the command line ({largest['analysis'].split(',')[0]}, {largest['data']}){held}. Loops, "
                      f"insulation, compartments, APA, P(s) and a virtual 4C over the human map, one after the "
-                     f"other: {P_TEXT['app']} in chromosomix, {P_TEXT['ref']} in cooltools and coolpuppy "
-                     f"({P_TEXT['wall']}× on the wall clock)."))
+                     f"other: {P_TEXT['app']} in chromosomix on the command line"
+                     + (f" and {minutes(p_value('total', 'chromium', 'wall_s'))} in Chromium" if 'chromium' in P_SIDES else '')
+                     + f", {P_TEXT['ref']} in cooltools and coolpuppy on {P_THREADS} processes"
+                     + (f" and {minutes(p_value('total', 'reference-1', 'wall_s'))} on one" if 'reference-1' in P_SIDES else '')
+                     + f" ({P_TEXT['wall']}× the command line's on the wall clock, against {P_THREADS}), and "
+                     f"{minutes(p_value('total', 'reference-cli', 'wall_s'))} as their own commands."))
 ```

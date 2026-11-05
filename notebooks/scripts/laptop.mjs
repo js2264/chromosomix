@@ -34,6 +34,16 @@
  * own time, is timed apart, from the drop to the console's record of the last.
  *
  * RESULT.json is written once, at the end, whether the run finished, failed or did not start.
+ *
+ * **A plan with `steps` is the deep map's** (laptop.qmd, *A deep human map, start to finish*): its map
+ * opened once, then each step's task run in turn in the same page, as a reader runs one after another,
+ * the map moved to the rung a step names first where it is not on it already (the crumb row's
+ * resolution, which reads the map again at that rung). Every process of the browser is weighed every
+ * {@link EVERY_MS} from the drop to the last step's end, and three kinds of stretch are measured apart,
+ * each with its own account of the page's CPU and memory: the **opening**, from the drop of the files
+ * to the map drawn; a **move** to another rung, from the pick to the map drawn at it; and a **run**,
+ * from the press to the console's record of its end, its time the console's. What lies between them —
+ * the form being set, the wait for the browser to be idle — is the script's, and in no stretch.
  */
 
 import { execFile, execFileSync } from 'node:child_process'
@@ -549,6 +559,212 @@ async function measure(page, scope, result) {
 }
 
 // ---------------------------------------------------------------------------
+// The deep map: one session, several tasks
+// ---------------------------------------------------------------------------
+
+/**
+ * The browser's processes weighed every {@link EVERY_MS} for as long as it runs — what the page's held
+ * and what all of them did, with when — and every stretch open at the time given the same weighing.
+ */
+class Weigher {
+  constructor(scope) {
+    this.scope = scope
+    this.trace = []
+    this.open = new Set()
+    this.running = false
+  }
+
+  async weigh() {
+    const processes = await snapshot(this.scope)
+    const held = { page: 0, all: 0 }
+    for (const one of processes) {
+      held.all += one.mb
+      if (one.kind === 'page') held.page += one.mb
+    }
+    this.trace.push({ t: Date.now(), page_mb: held.page, all_mb: held.all })
+    for (const account of this.open) account.sample(processes)
+  }
+
+  start() {
+    this.running = true
+    this.loop = (async () => {
+      while (this.running) {
+        const tick = Date.now()
+        await this.weigh()
+        await sleep(Math.max(0, EVERY_MS - (Date.now() - tick)))
+      }
+    })()
+  }
+
+  async stop() {
+    this.running = false
+    await this.loop
+  }
+
+  /** A stretch begun: weighed now, then with every weighing until it ends. Its clock starts once it is. */
+  async begin() {
+    const account = new Account()
+    account.sample(await snapshot(this.scope))
+    this.open.add(account)
+    return { account, t0: Date.now() }
+  }
+
+  /** A stretch ended: weighed once more, and what its processes spent and held. */
+  async end({ account, t0 }) {
+    const t1 = Date.now()
+    account.sample(await snapshot(this.scope))
+    this.open.delete(account)
+    const cpu = account.cpu
+    return { t0, t1, cpu_s: cpu.page, peak_mb: account.peak.page, all_cpu_s: cpu.all, all_peak_mb: account.peak.all }
+  }
+}
+
+/** The number of the app's last report of a picture (`perf/rendered.ts`), 0 before its first. */
+function lastDrawn(page) {
+  return page.evaluate(() => Math.max(0, ...performance.getEntriesByName('chromosomix:rendered', 'mark')
+    .map((mark) => mark.detail?.seq ?? 0)))
+}
+
+/**
+ * Until the crumb row's resolution stands at the rung of `binsize` and the app has reported a map drawn
+ * since its `after`th report. Not the report's own bin size: a whole genome is drawn from a coarser rung
+ * than the one a task reads (500 kb, for a human map at 10 kb), and the report names the one drawn.
+ */
+async function drawnAt(page, binsize, after) {
+  await unrefused(page, page.waitForFunction(
+    ({ binsize, after }) => {
+      const size = (text) => {
+        const found = (text ?? '').trim().match(/^([\d.]+)\s*(bp|kb|Mb)\b/)
+        return found === null ? NaN : Math.round(Number(found[1]) * { bp: 1, kb: 1e3, Mb: 1e6 }[found[2]])
+      }
+      const select = document.querySelector('.crumb-res select.res-pick')
+      const standing = select !== null ? select.selectedOptions[0]?.text
+        : document.querySelector('.crumb-res label.res-stop.current')?.innerText
+      return size(standing) === binsize && performance.getEntriesByName('chromosomix:rendered', 'mark').some((mark) =>
+        (mark.detail?.seq ?? 0) > after && mark.detail.status === 'drawn' && mark.detail.maps.length > 0)
+    },
+    { binsize, after }, { timeout: Math.min(LIMIT_MS, DRAWN_MS), polling: 250 },
+  )).catch((error) => {
+    throw new Error(`the map was not drawn at ${binsize} bp within ${DRAWN_MS / 60_000} minutes: ${String(error).split('\n')[0]}`)
+  })
+}
+
+/**
+ * The rung of `binsize` picked in the crumb row's resolution, as a reader picks it: from its dropdown
+ * where the file has more rungs than the row lists as stops, as a 4DN `.mcool` has, else its stop.
+ */
+async function pickRung(page, binsize) {
+  const picked = await page.evaluate((binsize) => {
+    const size = (text) => {
+      const found = text.trim().match(/^([\d.]+)\s*(bp|kb|Mb)\b/)
+      return found === null ? NaN : Math.round(Number(found[1]) * { bp: 1, kb: 1e3, Mb: 1e6 }[found[2]])
+    }
+    const select = document.querySelector('.crumb-res select.res-pick')
+    if (select !== null) {
+      const option = [...select.options].find((one) => size(one.text) === binsize)
+      if (option === undefined) return null
+      select.value = option.value
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+      return option.text
+    }
+    const stop = [...document.querySelectorAll('.crumb-res label.res-stop')].find((one) => size(one.innerText) === binsize)
+    if (stop === undefined) return null
+    stop.querySelector('input').click()
+    return stop.innerText.trim()
+  }, binsize)
+  if (picked === null) throw new Error(`the resolution offers no rung of ${binsize} bp`)
+}
+
+/** The drawer the last task left open closed, as parity.mjs closes it between its tasks. */
+async function closeDrawer(page) {
+  const close = page.locator('.analysis-drawer-head button').last()
+  if (await close.isVisible().catch(() => false)) {
+    await close.click()
+    await sleep(600)
+  }
+}
+
+/**
+ * The map opened once and each step run in turn: a stretch for the opening, and for each step a move to
+ * its rung where it needs one and its run. Each stretch is what the result's `steps` keeps, with what
+ * the console wrote of the run; `trace` is every weighing, the page's processes and all of them.
+ */
+async function pipeline(page, scope, result) {
+  const weigher = new Weigher(scope)
+  result.steps = []
+  weigher.start()
+  try {
+    await page.goto(`${PLAN.base}/`, { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('.dropzone', { timeout: LIMIT_MS })
+    const workspace = join(PLAN.out, `${PLAN.name}.chromosomix.json`)
+    writeFileSync(workspace, JSON.stringify(PLAN.workspace, null, 1))
+    await drop(page, [workspace])
+    await sleep(2000)
+
+    let rung = PLAN.steps[0].binsize
+    const opening = await weigher.begin()
+    const seen = await lastDrawn(page)
+    await drop(page, PLAN.files.map((name) => join(PLAN.data, name)))
+    const opened = PLAN.files.filter((name) => !INDEX.test(name)).length
+    await unrefused(page, page.waitForFunction(
+      (count) => JSON.parse(localStorage.getItem('chromosomix:actions') ?? '{"entries":[]}').entries
+        .filter((one) => (one.kind === 'open' || one.kind === 'track') && one.status !== 'running').length >= count,
+      opened, { timeout: LIMIT_MS, polling: 250 },
+    ))
+    await drawnAt(page, rung, seen)
+    result.steps.push({ step: 'start-up', stretches: [{ kind: 'opening', ...await weigher.end(opening) }] })
+    // The app's measure of which sequences are circles, waited for as `prepare` waits for it.
+    await page.waitForFunction(
+      () => Object.keys(sessionStorage).some((key) => key.startsWith('chromosomix:ui:') && key.endsWith(':map:circular-evidence')),
+      null, { timeout: CIRCULARITY_MS, polling: 500 }).catch(() => {})
+
+    for (const step of PLAN.steps) {
+      const done = { step: step.step, stretches: [] }
+      result.steps.push(done)
+      if (step.binsize !== rung) {
+        await settle(scope)
+        const moving = await weigher.begin()
+        const before = await lastDrawn(page)
+        await pickRung(page, step.binsize)
+        await drawnAt(page, step.binsize, before)
+        done.stretches.push({ kind: 'move', ...await weigher.end(moving) })
+        rung = step.binsize
+      }
+      await closeDrawer(page)
+      await show(page, 'Analysis', '.analysis-row-title')
+      const row = page.locator('.analysis-row-title', { hasText: step.task }).first()
+      await row.scrollIntoViewIfNeeded()
+      await row.click()
+      await page.waitForSelector('.analysis-drawer', { state: 'visible' })
+      await sleep(1000)
+      for (const setting of step.set ?? []) await set(page, setting)
+      await page.evaluate(() => document.activeElement?.blur())
+      await page.mouse.move(1, 999)
+      await settle(scope)
+
+      const before = (await actions(page)).length
+      const running = await weigher.begin()
+      await page.locator('.analysis-drawer button', { hasText: /^run( on ★)?$/ }).first().click()
+      let entry
+      for (;;) {
+        entry = (await actions(page)).slice(before).find((one) => one.kind === 'run' && one.status !== 'running')
+        if (entry !== undefined || Date.now() - running.t0 > LIMIT_MS) break
+        await sleep(100)
+      }
+      const ran = await weigher.end(running)
+      if (entry === undefined) throw new Error(`${step.step}: the run did not finish`)
+      done.stretches.push({ kind: 'run', ...ran, wall_s: entry.ms / 1000 })
+      Object.assign(done, { line: entry.line, notes: entry.notes })
+      if (entry.status !== 'ok') throw new Error(`${step.step}: ${entry.error ?? entry.status}`)
+    }
+    result.status = 'ok'
+  } finally {
+    await weigher.stop()
+    result.trace = weigher.trace
+  }
+}
+
+// ---------------------------------------------------------------------------
 // The run
 // ---------------------------------------------------------------------------
 
@@ -626,12 +842,16 @@ try {
   const errors = []
   page.on('pageerror', (error) => errors.push(String(error)))
   try {
-    await open(page, result)
-    await prepare(page, result)
-    const settled = await settle(scope)
-    result.settle_s = settled.ms / 1000
-    if (!settled.quiet) result.busy = settled.spent
-    await measure(page, scope, result)
+    if (PLAN.steps !== undefined) {
+      await pipeline(page, scope, result)
+    } else {
+      await open(page, result)
+      await prepare(page, result)
+      const settled = await settle(scope)
+      result.settle_s = settled.ms / 1000
+      if (!settled.quiet) result.busy = settled.spent
+      await measure(page, scope, result)
+    }
   } catch (error) {
     result.error = String(error).split('\n')[0]
   }

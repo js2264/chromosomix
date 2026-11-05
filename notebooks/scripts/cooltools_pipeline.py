@@ -12,8 +12,7 @@ Each step is called as the validation calls it on its own, on the map's rungs at
    loop step 1 called (`mindist=0`), over no expected (`ooe=False`);
 5. **ps**, as § 4: `cooltools.expected_cis` over every diagonal, unsmoothed, its own and not step 1's,
    which left two diagonals out;
-6. **fourc**, as § 10 but in cis: `cooltools.virtual4c` from VIEWPOINT, one bin, its map over the
-   viewpoint's own chromosome alone rather than every chromosome of the map.
+6. **fourc**, as § 10: `cooltools.virtual4c` from VIEWPOINT, one bin, over every chromosome of the map.
 
 The outputs are written beside OUT_PREFIX: `-loops.tsv`, `-insulation.tsv`, `-eigenvalues.tsv` and
 `-eigenvectors.tsv`, `-apa.tsv`, the pileup one line per row of the window, `-ps.tsv` and
@@ -30,6 +29,7 @@ import time
 _STARTED = time.time()
 
 import json  # noqa: E402
+import multiprocessing  # noqa: E402
 import resource  # noqa: E402
 import sys  # noqa: E402
 
@@ -57,6 +57,10 @@ mark('imported')
 
 mcool, gc, viewpoint, out, nproc, times = sys.argv[1:7]
 nproc = int(nproc)
+# coolpuppy's pool is the standard library's, and on more than one process it logs through
+# multiprocessing_logging, which works with the 'fork' start method alone: Linux's default, but not macOS's,
+# where the pileup would stop at once. cooltools' pools, multiprocess's, fork on both.
+multiprocessing.set_start_method('fork')
 
 # 1. Loops: the expected first, which dots reads.
 clr = cooler.Cooler(f'{mcool}::/resolutions/10000')
@@ -94,12 +98,8 @@ ps = cooltools.expected_cis(clr, view_df=view, ignore_diags=0, smooth=False, agg
 ps.to_csv(f'{out}-ps.tsv', sep='\t', index=False)
 mark('ps')
 
-# 6. Virtual 4C in cis: virtual4c maps its profile over the chromosomes its map_functor is handed — here the
-# viewpoint's own, alone, in this process. Called undecorated (`__wrapped__`, functools.wraps' own): the
-# decorator in cooltools 0.7.1 passes a map_functor it is given twice, and raises a TypeError.
-cis = viewpoint.split(':')[0]
-fourc = cooltools.virtual4c.__wrapped__(clr, viewpoint, clr_weight_name='weight',
-                                        map_functor=lambda profile, _: map(profile, [cis]))
+# 6. Virtual 4C: what the viewpoint touches over the whole genome, chromosome by chromosome.
+fourc = cooltools.virtual4c(clr, viewpoint, clr_weight_name='weight', nproc=nproc)
 fourc.to_csv(f'{out}-fourc.tsv', sep='\t', index=False)
 mark('fourc')
 

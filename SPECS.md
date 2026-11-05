@@ -10314,27 +10314,48 @@ at 10 kb, a window of 10 bins; compartments at 250 kb, three eigenvectors phased
 (`bioframe.frac_gc` over hg38 as Illumina iGenomes distributes it, worked out once and given to both);
 APA over every loop the first called, ±5 bins, raw: no expected on either side; P(s) at 10 kb, every
 diagonal, as § 4 runs it; and a virtual 4C at 10 kb from one bin, the one holding *MYC*'s
-transcription start (chr8:127,730,001-127,740,000), in cis only — the task's default, where § 10 reads
-the whole genome. `chromosomix` runs them as a shell script does, six commands, the pileup reading the
-loops the first wrote; the reference is **one Python script**, `notebooks/scripts/cooltools_pipeline.py`,
-running `cooltools.expected_cis` and `dots`, `insulation`, `eigs_cis`, coolpuppy's pileup over `dots`'
-loops, `expected_cis` again over every diagonal for the P(s), and `virtual4c`, mapped over the
-viewpoint's chromosome alone, in one process, with one process a core, at most four, as the
-validation gives its references, but for the 4C, one chromosome in one. Each side's **start-up** is
-timed apart — `chromosomix --version`, the program loaded and nothing done, which each command pays
-again, and the script's launch to the end of its imports — then **each step** — a command; or the
-stretch between two of the marks the script writes, its CPU time from the usage of the process and of
-the children it has waited for at either end, its memory from the weighings between them — and **the
-whole**. The memory is weighed four times a second, the process and every process under it found by
-their parents as `ps` lists them, on Linux and on a Mac alike: their proportional set sizes where the
-system gives them, their resident sets elsewhere, and never less than `ru_maxrss`. One run of each
+transcription start (chr8:127,730,001-127,740,000), over the whole genome as § 10 reads it — `fourc
+--no-cis`, *cis only* off in the app's form, `virtual4c` as it is. **Five sides** run them. `chromosomix` **on the command line** runs them as a shell
+script does, six commands, the pileup reading the loops the first wrote. chromosomix **in Chromium**
+runs them as a reader does, in one page (`notebooks/scripts/laptop.mjs`, given `steps`): the map opened
+once at 10 kb, balanced, whole genome, with the GC content beside it as a track, each task opened from
+the Analysis panel, its form set as the command's flags set it, and run in turn, the pileup over the
+loops the first called in the same page, the map moved to 250 kb in the crumb row's resolution for the
+compartments and back; it is left out where `LAPTOP_BROWSERS` leaves Chromium out. The reference is
+**one Python script**, `notebooks/scripts/cooltools_pipeline.py`, running `cooltools.expected_cis` and
+`dots`, `insulation`, `eigs_cis`, coolpuppy's pileup over `dots`' loops, `expected_cis` again over every
+diagonal for the P(s), and `virtual4c`, in one process — run twice, **on one process**, as chromosomix
+computes, where the machine has more than one core, and **on one process a core, at most four**, as
+the validation gives its references, to every call that takes them (`eigs_cis` takes none). Its pools fork, on a Mac as on Linux, since coolpuppy's pool works no other way.
+And the reference's **own commands** run them as chromosomix's do, one after another on as many
+processes: `cooltools expected-cis` and `dots`, `insulation`, `eigs-cis`, `coolpup.py` over the loops
+`dots` wrote, `expected-cis` again and `virtual4c`, each set to what the script asks of the API where the
+command's default is another (`dots`' separation, λ-bins, FDR, clustering radius and tile; the
+expected's smoothing; insulation's threshold; coolpup.py's shifted controls and observed-over-expected).
+coolpup.py needs PyTables, setuptools
+81.0.0 for the `pkg_resources` its h5sparse calls, and, on a Mac, multiprocessing-logging 0.3.4, as 0.4.0
+refuses spawned workers: `notebooks/environment-laptop.yml` adds the three, and the page checks for them
+before it downloads anything.
+Each side's **start-up** is timed apart — `chromosomix --version` or `cooltools --version`, the program
+loaded and nothing done, which each command pays again; the script's launch to the end of its imports; in Chromium, the drop of
+the map and its track to the map drawn — then **each step** — a command; or the stretch between two of
+the marks the script writes, its CPU time from the usage of the process and of the children it has
+waited for at either end, its memory from the weighings between them; or in Chromium, a move to
+another rung, from the pick to the map drawn at it, with the run, from the press to the console's
+record of its end, its time the console's, its CPU and memory the page's processes' as the analyses'
+are — and **the whole**. In Chromium what the page does between those stretches, its form set and the
+browser waited on to be idle, is the driver's and is left out: the stretches, and the weighings within
+them, are laid end to end, as the commands are. The memory is weighed four times a second (in Chromium
+five, as `laptop.mjs` weighs the analyses), the process and every process under it found by their
+parents as `ps` lists them, on Linux and on a Mac alike: their proportional set sizes where the system
+gives them, their resident sets elsewhere, and never less than `ru_maxrss`. One run of each
 side, unless `PIPELINE_RUNS` says otherwise, the sides taking turns to go first over several, and
 before each the page cache emptied where the machine allows and the map read through once where it
 does not; every step of every run is one line of `notebooks/work/laptop/pipeline.tsv`, with when in
 its side's run it began and ended, every weighing of each side's processes, with its time and its
 step, one line of `pipeline-memory.tsv` beside it — both carried in the page, as its table is; the page
-draws the first run's memory against the wall clock, each phase shaded — and what the two wrote in the
-last run is compared step by step — the loops by bin pair, the insulation bin by bin and its
+draws the first run's memory against the wall clock, a row a side, each phase shaded — and what the
+command line and the script on several processes wrote in the last run is compared step by step — the loops by bin pair, the insulation bin by bin and its
 boundaries, E1 chromosome by chromosome, the pileup cell by cell, P(s) point by point over the
 diagonals each point pools, the 4C bin by bin. This part alone needs the reference packages, cooler,
 cooltools, coolpuppy and bioframe, at the versions `notebooks/requirements.txt` pins.

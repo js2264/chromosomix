@@ -123,25 +123,58 @@ jobs <- left_join(jobs, rows, by = c("section", "analysis", "pair"))
 folds <- left_join(folds, rows, by = c("section", "analysis", "pair"))
 
 # The pipeline on a deep human map: each phase of each side, when it began and ended, and the whole,
-# against the memory weighed while it ran
-pipeline <- read_tsv("pipeline_results.tsv")
+# against the memory weighed while it ran. Its sides, in the order c stacks them, each its colour:
+# chromosomix on the command line and in Chromium; the reference's own commands, cooltools and
+# coolpup.py, on several processes; and its Python script on as many, then on one
+PIPELINE_SIDES <- c(
+    chromosomix = APP, chromium = "#7fb0ea", `reference-cli` = "#a8461f", reference = REF, `reference-1` = "#f3a57f"
+)
+pipeline <- read_tsv("pipeline_results.tsv") |>
+    mutate(side = factor(side, levels = names(PIPELINE_SIDES)))
+threads <- max(pipeline$threads[pipeline$side == "reference"])
 # Each side's mean over the runs, for the caption
 whole <- pipeline |>
     filter(step == "total") |>
     summarise(wall = mean(wall_s), cpu = mean(cpu_s), .by = side)
 minutes <- \(s) if_else(s >= 90, sprintf("%.1f min", s / 60), sprintf("%.0f s", s))
+took <- \(side) minutes(whole$wall[whole$side == side])
+ran <- \(side) side %in% whole$side
 
 # Folds are ratios, so their mean is geometric
 caption <- with(folds, sprintf(
     "On average, chromosomix runs %.1f× faster than the reference tools (CPU time), %.1f× faster on the wall clock, and uses %.1f× less peak memory (geometric means over the %d comparisons in b).",
     exp(mean(log(CPU))), exp(mean(log(wall))), exp(mean(log(memory))), nrow(folds)
 ))
-caption <- str_c(caption, sprintf(
-    " Loop calling, insulation, compartments, APA, P(s) and a virtual 4C over the IMR-90 map (c, on the laptop) take %s in chromosomix, on one thread, and %s in one Python script running cooltools and coolpuppy on %d processes (%.1f× on the wall clock, %.1f× in CPU time).",
-    minutes(whole$wall[whole$side == "chromosomix"]), minutes(whole$wall[whole$side == "reference"]),
-    max(pipeline$threads), whole$wall[whole$side == "reference"] / whole$wall[whole$side == "chromosomix"],
-    whole$cpu[whole$side == "reference"] / whole$cpu[whole$side == "chromosomix"]
-))
+caption <- str_c(
+    caption,
+    sprintf(
+        " Loop calling, insulation, compartments, APA, P(s) and a virtual 4C over the IMR-90 map (c, on the laptop) take %s in chromosomix on the command line, on one thread",
+        took("chromosomix")
+    ),
+    if (ran("chromium")) sprintf(", and %s in Chromium", took("chromium")) else "",
+    sprintf(
+        "; %s in one Python script running cooltools and coolpuppy on %d processes (%.1f× on the wall clock, %.1f× in CPU time)",
+        took("reference"), threads, whole$wall[whole$side == "reference"] / whole$wall[whole$side == "chromosomix"],
+        whole$cpu[whole$side == "reference"] / whole$cpu[whole$side == "chromosomix"]
+    ),
+    if (ran("reference-1")) {
+        sprintf(
+            ", and %s on one (%.1f×)", took("reference-1"),
+            whole$wall[whole$side == "reference-1"] / whole$wall[whole$side == "chromosomix"]
+        )
+    } else {
+        ""
+    },
+    if (ran("reference-cli")) {
+        sprintf(
+            "; and %s as cooltools' and coolpup.py's own commands, on %d processes (%.1f×)", took("reference-cli"),
+            threads, whole$wall[whole$side == "reference-cli"] / whole$wall[whole$side == "chromosomix"]
+        )
+    } else {
+        ""
+    },
+    "."
+)
 message(caption)
 
 # Viewers: seconds from handing a viewer a map and a track to its picture being finished
@@ -285,8 +318,10 @@ b <- names + grid + cpu + wall + memory +
     theme(legend.position = "top", legend.box.spacing = unit(0, "pt"), axis.text.y = element_blank(), axis.ticks.y = element_blank())
 
 # c: the pipeline against the wall clock, its first run: the memory each side's processes held
-# together, weighed every quarter of a second, each phase shaded behind it, its peak marked and where it
-# finished. chromosomix's phases are its six commands back to back, each paying its own start-up
+# together, weighed every quarter of a second (a fifth in Chromium), each phase shaded behind it, its
+# peak marked and where it finished. chromosomix's phases on the command line are its six commands back
+# to back, each paying its own start-up; in Chromium, its opening of the map, then its six runs laid
+# end to end, what the page did between them left out
 PHASES <- c(
     `start-up` = "#d9d9d9", loops = "#cfe3c1", insulation = "#f5e2ad", compartments = "#dcd2ec", apa = "#c6e2ea",
     ps = "#f4cfc7", fourc = "#e4d6c3"
@@ -295,8 +330,11 @@ phase_names <- pipeline |>
     distinct(step, task) |>
     deframe()
 sided <- c(
-    chromosomix = "chromosomix, 1 thread",
-    reference = sprintf("cooltools and coolpuppy, %d processes", max(pipeline$threads))
+    chromosomix = "chromosomix, command line, 1 thread",
+    chromium = "chromosomix in Chromium",
+    `reference-1` = "cooltools and coolpuppy, 1 process",
+    reference = sprintf("cooltools and coolpuppy, %d processes", threads),
+    `reference-cli` = sprintf("cooltools and coolpup.py commands, %d processes", threads)
 )
 first <- filter(pipeline, run == 1)
 phases <- filter(first, step %in% names(PHASES), !is.na(from_s))
@@ -305,6 +343,7 @@ ends <- first |>
     transmute(side, end = to_s / 60)
 weighed <- read_tsv("pipeline_memory_results.tsv") |>
     filter(run == 1) |>
+    mutate(side = factor(side, levels = names(PIPELINE_SIDES))) |>
     arrange(side, seconds)
 # Where the weighings peak, labelled with the peak as the table gives it: never less than the largest
 # resident set any one process reached, which a weighing can miss
@@ -316,6 +355,13 @@ peaks <- weighed |>
         str_detect(task, "^.[a-z]"), str_c(str_to_lower(str_sub(task, 1, 1)), str_sub(task, 2)), task
     ))
 top <- max(weighed$mb) / 1024 * 1.3
+# The axis runs past the later side's end, for the words that say each side finished
+right <- max(ends$end) * 1.2
+# Where each side finished and the most it held, on two lines just past its end, where nothing is drawn:
+# on a side of two minutes, its own phases have no room for them
+notes <- ends |>
+    left_join(select(peaks, side, most, task), by = "side") |>
+    mutate(text = sprintf("done, %s\npeak %.1f GB, %s", minutes(end * 60), most / 1024, task))
 c <- ggplot(weighed, aes(seconds / 60, mb / 1024)) +
     geom_rect(
         aes(xmin = from_s / 60, xmax = to_s / 60, ymin = -Inf, ymax = Inf, fill = step),
@@ -323,21 +369,17 @@ c <- ggplot(weighed, aes(seconds / 60, mb / 1024)) +
     ) +
     geom_area(aes(colour = side, fill = after_scale(alpha(colour, 0.3))), linewidth = 0.3, outline.type = "upper") +
     geom_point(aes(colour = side), data = peaks, size = 1) +
-    geom_text(
-        aes(label = sprintf("peak %.1f GB, %s", most / 1024, task)),
-        # Ending at the point, over its own phase, rather than across the line where the side finished
-        data = peaks, hjust = 1, vjust = 0, nudge_x = -0.06, nudge_y = 0.25, size = 2, colour = "grey20"
-    ) +
     geom_vline(aes(xintercept = end), data = ends, linetype = "22", linewidth = 0.3, colour = "grey30") +
     geom_text(
-        aes(end, top * 0.94, label = str_c("done, ", minutes(end * 60))),
-        data = ends, hjust = 0, vjust = 1, nudge_x = 0.08, size = 2, colour = "grey20", inherit.aes = FALSE
+        aes(end, top * 0.94, label = text),
+        data = notes, hjust = 0, vjust = 1, nudge_x = 0.08, size = 2, lineheight = 0.9, colour = "grey20",
+        inherit.aes = FALSE
     ) +
     facet_wrap(~side, ncol = 1, labeller = as_labeller(sided)) +
     scale_fill_manual(values = PHASES, breaks = names(PHASES), labels = phase_names[names(PHASES)], name = NULL) +
-    scale_colour_manual(values = c(chromosomix = APP, reference = REF), guide = "none") +
-    scale_x_continuous(breaks = 0:60, limits = c(0, max(ends$end) * 1.16), expand = c(0, 0)) +
-    scale_y_continuous(limits = c(0, top), expand = c(0, 0)) +
+    scale_colour_manual(values = PIPELINE_SIDES, guide = "none") +
+    scale_x_continuous(breaks = 0:60, limits = c(0, right), expand = c(0, 0)) +
+    scale_y_continuous(limits = c(0, top), breaks = seq(0, 64, 4), expand = c(0, 0)) +
     labs(
         x = "Wall-clock time (min)", y = "Memory (GB)",
         title = "Human IMR-90 Hi-C (4DNFIJTOIGOI), 1.08 billion contacts, on the laptop"
@@ -387,10 +429,14 @@ e <- against_memory(wall, "wall-clock time",
 
 # Each panel in inches, as tall as it was when a, b and the first scatter shared an A4 page (595 × 841
 # pt, the device rounding it down to whole points): the page grows to hold c and e. To the last digit,
-# as ggrepel lays d's and e's labels out anew on any change to their size
+# as ggrepel lays d's and e's labels out anew on any change to their size. c, the timeline, spans the
+# page, and is as tall as its title, legend and axis and some 0.45 in a side
+A4 <- 8.27
+panel <- 2.534447638912377
+timeline <- 0.85 + 0.45 * n_distinct(ends$side)
 fig <- wrap_elements(full = a) / wrap_elements(full = b) / wrap_elements(full = c) / wrap_elements(full = d) /
     wrap_elements(full = e) +
-    plot_layout(heights = unit(2.534447638912377 * c(1, 1.6, 1.1, 1.45, 1.45), "in")) +
+    plot_layout(heights = unit(c(panel * c(1, 1.6), timeline, panel * c(1.45, 1.45)), "in")) +
     plot_annotation(
         tag_levels = "a", caption = str_wrap(caption, 150),
         theme = theme(plot.background = element_blank(), plot.caption = element_text(size = 8, hjust = 0))
@@ -411,13 +457,13 @@ unclip <- function(g) {
 }
 # The page A4 wide, and as tall as the panels and what lies between and under them, the caption
 # among it, measured on the device that draws it
-cairo_pdf(tempfile(), width = 8.27, height = 11.69)
+cairo_pdf(tempfile(), width = A4, height = 11.69)
 page <- unclip(patchworkGrob(fig))
 height <- grid::convertHeight(sum(page$heights), "in", valueOnly = TRUE)
 dev.off()
 # The device rounds a page down to whole points, so up here; the figure laid from the page's top,
 # what that adds is blank under the caption
-cairo_pdf("timing_results.pdf", width = 8.27, height = ceiling(height * 72) / 72)
+cairo_pdf("timing_results.pdf", width = A4, height = ceiling(height * 72) / 72)
 grid::pushViewport(grid::viewport(y = 1, height = unit(height, "in"), just = "top"))
 grid::grid.draw(page)
 dev.off()

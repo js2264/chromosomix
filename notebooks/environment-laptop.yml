@@ -31,3 +31,11 @@ dependencies:
       - cooler==0.10.4
       - cooltools==0.7.1
       - coolpuppy==1.1.0
+      # What coolpuppy's own command line, coolpup.py, needs beyond the package, for the deep map's side of
+      # the reference's commands: PyTables, which it writes its pileup with; setuptools 81.0.0, the last to
+      # ship pkg_resources, which the h5sparse it imports calls (notebooks/requirements.txt's 84.0.0 does not
+      # ship it, and the validation never runs coolpup.py); and multiprocessing-logging 0.3.4, as 0.4.0 refuses
+      # to log from workers spawned rather than forked, as macOS starts them.
+      - tables==3.11.1
+      - setuptools==81.0.0
+      - multiprocessing-logging==0.3.4
