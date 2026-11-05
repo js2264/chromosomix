@@ -70,14 +70,16 @@ name: Notebooks
 # notebooks/scripts/pages.py — the one table of where each page is published
 # and which files go beside it — and keeps them as an artifact for 90 days,
 # even when it fails: the validation alone, and the timing rounds it finished,
-# when the timings are what failed. `publish` waits for all four, publishes the
-# four pages it publishes only if every one of them rendered — the laptop's
-# render, published or not, is not one — and writes the run's summary either
-# way: each notebook's address, version and time, the one line of findings it
-# wrote, and its table. No job waits for another to pass, as they once waited
-# for the parity: a render that fails, fails on its own runner, and the others
-# finish and keep their artifacts; what the pages on the site cannot be is
-# from two different runs.
+# when the timings are what failed. `publish` waits for the parity, the
+# validation and the viewers — not the laptop, whose render is published
+# nowhere — publishes the four pages it publishes only if every one of them
+# rendered, and writes their sections of the run's summary either way: each
+# notebook's address, version and time, the one line of findings it wrote, and
+# its table. The laptop writes its own section, and is never the run's failure:
+# a render that fails or runs past 330 minutes is a notice. No job waits for
+# another to pass, as they once waited for the parity: a render that fails,
+# fails on its own runner, and the others finish and keep their artifacts; what
+# the pages on the site cannot be is from two different runs.
 #
 # **What it installs**, and why pinned. The references are the versions the
 # notebooks' prose names: `notebooks/requirements.txt` is the reference
@@ -372,11 +374,15 @@ jobs:
   # cooltools and coolpuppy from the reference environment. A render that
   # outruns the job keeps the runs it measured: each is written to the table as
   # it is, and gathered whatever happened.
+  # Never the run's failure, and waited for by nothing: its render is published
+  # nowhere, the site's being the committed page, so a render that fails or runs
+  # long says so in a notice and in its own section of the run's summary.
   laptop:
     name: laptop
     needs: site
     runs-on: ubuntu-24.04
     timeout-minutes: 350
+    continue-on-error: true
     permissions:
       contents: read
     env:
@@ -396,8 +402,13 @@ jobs:
       - name: Set the committed page aside
         run: rm -f notebooks/laptop.html
 
+      # Stopped short of the job's own limit, so that it ends here rather than
+      # being cancelled, and a render that did not finish is a notice, not an error.
       - name: Render the laptop, and ${{ env.PIPELINE_RUNS }} run of each side over the IMR-90 map
-        run: bash notebooks/scripts/memory.sh quarto render notebooks/laptop.qmd
+        run: |
+          if ! timeout --kill-after=2m 330m bash notebooks/scripts/memory.sh quarto render notebooks/laptop.qmd; then
+            echo "::notice title=Laptop::The runner's render of the laptop did not finish. It is published nowhere — the site's page is the committed one — and its artifact keeps what it measured."
+          fi
 
       # Each analysis is written to its table as it is measured, so a render
       # that failed part of the way keeps the ones it finished.
@@ -412,12 +423,21 @@ jobs:
           path: pages/
           retention-days: 90
           overwrite: true
+          if-no-files-found: ignore
 
-  # Every page the workflow publishes, together or not at all, and the run's
-  # summary in any case.
+      # Its own section of the run's summary, as `publish` writes the others'.
+      - name: Summary
+        if: always()
+        env:
+          SITE: ${{ needs.site.outputs.url }}
+        run: python3 notebooks/scripts/pages.py summary laptop >> "$GITHUB_STEP_SUMMARY" || true
+
+  # Every page the workflow publishes, together or not at all, and their
+  # sections of the run's summary in any case. Not the laptop's: its render is
+  # published nowhere, so this does not wait for it.
   publish:
     name: publish
-    needs: [site, parity, validation, viewers, laptop]
+    needs: [site, parity, validation, viewers]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -427,8 +447,6 @@ jobs:
       # The deploy it asks for at the end.
       actions: write
     env:
-      # The laptop's render is never published, so whether it rendered decides
-      # nothing here; the summary still says.
       RENDERED: ${{ needs.parity.result == 'success' && needs.validation.result == 'success' && needs.viewers.result == 'success' }}
       # A release always; a dispatch if asked; the weekly run never.
       PUBLISH: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.publish) }}

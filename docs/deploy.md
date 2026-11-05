@@ -634,7 +634,9 @@ timings in one job, the timings after the validation, since they run the validat
 inputs it fetched and made (an hour to an hour and a half, then about twenty minutes a timed run); the
 viewers, with their own 15 GB, in about twenty minutes a round of pictures; and the laptop, the 23
 analyses on the command line and in the app's three browsers and then the deep human map. The run
-takes as long as the longest. A last job publishes only if the four pages rendered: it force-pushes
+takes as long as the longest. A last job, which waits for every job but the laptop's — whose render is
+published nowhere, writes its own section of the run's summary, and is never the run's failure, a
+render that fails or overruns being a notice — publishes only if the four pages rendered: it force-pushes
 them and the files beside them to the `notebooks` branch as one commit, attaches them to the release
 with the tables beside them — among them `validation.txt`, every number the validation's figures draw
 — and dispatches this deploy, which copies `validation/`, `timings/`, `viewers/` and `parity/` from

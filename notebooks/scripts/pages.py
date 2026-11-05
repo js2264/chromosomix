@@ -16,6 +16,7 @@ is needed.
     python notebooks/scripts/pages.py published                    # the folders the workflow publishes
     python notebooks/scripts/pages.py assets v0.17.0 assets/       # a release's copies, from pages/
     python notebooks/scripts/pages.py summary                      # Markdown for the run's summary
+    python notebooks/scripts/pages.py summary laptop               # the laptop's, which its own job writes
     python notebooks/scripts/pages.py committed dist/              # the committed pages, into the site
 
 A page rendered by hand carries the files published beside it — its tables and its `rendered.json` —
@@ -24,8 +25,10 @@ whole of it and its table cannot disagree with its picture. `committed` writes e
 site as `<path>/index.html` and unpacks those files beside it.
 
 `summary` reads the published copies in pages/: each page's `rendered.json` (when, from what, and the
-one-line summary the notebook wrote with `Render.foot()`) and the tables beside it. NEEDS is the
-workflow's `toJSON(needs)`, for a page whose job failed; SITE and PUBLISHED say where the pages went.
+one-line summary the notebook wrote with `Render.foot()`) and the tables beside it — of the pages named,
+else of every page the workflow publishes, as the last job writes them; the laptop's job writes its own,
+since nothing waits for it. NEEDS is the workflow's `toJSON(needs)`, for a page whose job failed; SITE and
+PUBLISHED say where the pages went.
 """
 import base64
 import csv
@@ -169,18 +172,28 @@ def _tables(name, folder):
     return []
 
 
-def summary(pages=Path('pages')):
-    """One section per page: where it is and from what, its own one-line summary, and its table."""
+def summary(names=None, pages=Path('pages')):
+    """One section per page — those named, else every page the workflow publishes, as `publish` writes them;
+    the laptop writes its own, in its own job — where it is and from what, its own one-line summary, and its
+    table."""
     site = os.environ.get('SITE', '')
     published = os.environ.get('PUBLISHED') == 'true'
     needs = json.loads(os.environ.get('NEEDS') or '{}')
     run = f"{os.environ.get('GITHUB_SERVER_URL')}/{os.environ.get('GITHUB_REPOSITORY')}/actions/runs/" \
           f"{os.environ.get('GITHUB_RUN_ID')}#artifacts"
     lines = ['## Notebooks']
-    for name, page in PAGES.items():
+    for name in names or [name for name, page in PAGES.items() if not page.local]:
+        page = PAGES[name]
         folder = pages / page.path
         lines += ['', f'### {page.title}', '']
         stamp = folder / 'rendered.json'
+        if not stamp.exists() and page.local:
+            # A page rendered by hand is never this run's to publish: one the runner did not finish is a fact,
+            # not a failure.
+            lines.append(f"Not rendered on this runner, which publishes nothing of it: the site's page is the "
+                         f"render committed as `notebooks/{name}.html`.")
+            lines += _tables(name, folder)
+            continue
         if not stamp.exists():
             result = needs.get(page.job, {}).get('result')
             said = {'failure': 'failed', 'cancelled': 'was cancelled', 'skipped': 'was skipped',
@@ -255,7 +268,7 @@ if __name__ == '__main__':
     elif command == 'assets':
         assets(args[0], Path(args[1]))
     elif command == 'summary':
-        summary()
+        summary(args)
     elif command == 'committed':
         committed(Path(args[0]), *(Path(arg) for arg in args[1:2]))
     else:

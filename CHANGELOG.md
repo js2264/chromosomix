@@ -43,10 +43,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   them. `pipeline.tsv`, the page's table, its figure and its summary have a side for each, and
   `notebooks/scripts/timing.plot.R`'s panel c a row for each — chromosomix's command line and Chromium,
   then the reference's commands, its script on several processes and on one — the panel as wide as the
-  page and growing with its rows, each side's end and peak written just past where it finished.
+  page and growing with its rows, each side's end and peak written just past where it finished. Its
+  caption is three bullets — b's comparisons, every comparison the timings notebook makes, and the
+  deep map whole, the command line against cooltools' and coolpup.py's commands and Chromium against
+  the script — each in CPU time, wall clock and peak memory.
 
 ### Changed
 
+- **The Notebooks workflow publishes without waiting for the laptop (§18.10).** Its `publish` job
+  needs the parity, the validation and the viewers alone, since the runner's render of the laptop is
+  published nowhere; a laptop render that stalled had held the pages back for hours. The laptop job
+  writes its own section of the run's summary (`pages.py summary laptop`), and is never the run's
+  failure: its render stops at 330 minutes, short of the job's limit, a render that fails or overruns
+  is a notice, and the job continues on error.
 - **`notebooks/viewers.qmd` draws each viewer the way it draws best without a GPU (§18.10).** All three
   viewers were timed in a Chromium told to draw WebGL with SwiftShader, for HiGlass's sake, and that
   browser composites every page on the emulated GPU, which no reader's browser does: chromosomix's

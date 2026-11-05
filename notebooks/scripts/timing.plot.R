@@ -132,48 +132,74 @@ PIPELINE_SIDES <- c(
 pipeline <- read_tsv("pipeline_results.tsv") |>
     mutate(side = factor(side, levels = names(PIPELINE_SIDES)))
 threads <- max(pipeline$threads[pipeline$side == "reference"])
-# Each side's mean over the runs, for the caption
-whole <- pipeline |>
-    filter(step == "total") |>
-    summarise(wall = mean(wall_s), cpu = mean(cpu_s), .by = side)
 minutes <- \(s) if_else(s >= 90, sprintf("%.1f min", s / 60), sprintf("%.0f s", s))
-took <- \(side) minutes(whole$wall[whole$side == side])
-ran <- \(side) side %in% whole$side
+ran <- \(side) side %in% pipeline$side
 
-# Folds are ratios, so their mean is geometric
-caption <- with(folds, sprintf(
-    "On average, chromosomix runs %.1f× faster than the reference tools (CPU time), %.1f× faster on the wall clock, and uses %.1f× less peak memory (geometric means over the %d comparisons in b).",
-    exp(mean(log(CPU))), exp(mean(log(wall))), exp(mean(log(memory))), nrow(folds)
-))
+# The caption: three lists of ratios, chromosomix's against its reference's. Folds are ratios, so their
+# mean is geometric
+mean_fold <- \(x) exp(mean(log(x[is.finite(x) & x > 0])))
+three <- \(f, than) sprintf(
+    "%.1f× faster in CPU time and %.1f× on the wall clock than %s, with %.1f× less peak memory",
+    mean_fold(f$CPU), mean_fold(f$wall), than, mean_fold(f$memory)
+)
+# Every pair the timings notebook timed, b's and the rest, each as b's: a side's runs, its mean time and its
+# largest peak; a pair of which one side never ran is none
+timed <- everything |>
+    group_by(section, analysis, pair, side, run) |>
+    summarise(cpu = sum(cpu_s), wall = sum(wall_s), mem = max(peak_mb), .groups = "drop") |>
+    group_by(section, analysis, pair) |>
+    filter(n_distinct(side) == 2) |>
+    summarise(
+        CPU = mean(cpu[side == "reference"]) / mean(cpu[side == "chromosomix"]),
+        wall = mean(wall[side == "reference"]) / mean(wall[side == "chromosomix"]),
+        memory = max(mem[side == "reference"]) / max(mem[side == "chromosomix"]),
+        .groups = "drop"
+    )
+# The six analyses over the IMR-90 map, one side's against another's as c draws them, whole: each side's
+# mean over the runs and its largest peak. Not a mean over the six, which would weigh a step of seconds
+# as much as loop calling's minutes
+human <- pipeline |>
+    filter(step == "total") |>
+    summarise(cpu = mean(cpu_s), wall = mean(wall_s), mem = max(peak_mb), .by = side)
+against <- function(app, ref) {
+    a <- filter(human, side == app)
+    r <- filter(human, side == ref)
+    tibble(CPU = r$cpu / a$cpu, wall = r$wall / a$wall, memory = r$mem / a$mem)
+}
+bullets <- c(
+    sprintf("The %d comparisons in b: chromosomix is %s.", nrow(folds), three(folds, "the reference tools")),
+    sprintf(
+        "Every comparison the timings notebook makes (%d): chromosomix is %s.", nrow(timed),
+        three(timed, "the reference tools")
+    ),
+    str_c(
+        "The six analyses over the IMR-90 map in c, start to finish: ",
+        if (ran("reference-cli")) {
+            sprintf(
+                "on the command line, chromosomix is %s", three(
+                    against("chromosomix", "reference-cli"),
+                    sprintf("cooltools' and coolpup.py's own commands on %d processes", threads)
+                )
+            )
+        } else {
+            ""
+        },
+        if (ran("chromium")) {
+            sprintf(
+                "; in Chromium, %s", three(
+                    against("chromium", "reference"),
+                    sprintf("the Python script running cooltools and coolpuppy on %d processes", threads)
+                )
+            )
+        } else {
+            ""
+        },
+        "."
+    )
+)
 caption <- str_c(
-    caption,
-    sprintf(
-        " Loop calling, insulation, compartments, APA, P(s) and a virtual 4C over the IMR-90 map (c, on the laptop) take %s in chromosomix on the command line, on one thread",
-        took("chromosomix")
-    ),
-    if (ran("chromium")) sprintf(", and %s in Chromium", took("chromium")) else "",
-    sprintf(
-        "; %s in one Python script running cooltools and coolpuppy on %d processes (%.1f× on the wall clock, %.1f× in CPU time)",
-        took("reference"), threads, whole$wall[whole$side == "reference"] / whole$wall[whole$side == "chromosomix"],
-        whole$cpu[whole$side == "reference"] / whole$cpu[whole$side == "chromosomix"]
-    ),
-    if (ran("reference-1")) {
-        sprintf(
-            ", and %s on one (%.1f×)", took("reference-1"),
-            whole$wall[whole$side == "reference-1"] / whole$wall[whole$side == "chromosomix"]
-        )
-    } else {
-        ""
-    },
-    if (ran("reference-cli")) {
-        sprintf(
-            "; and %s as cooltools' and coolpup.py's own commands, on %d processes (%.1f×)", took("reference-cli"),
-            threads, whole$wall[whole$side == "reference-cli"] / whole$wall[whole$side == "chromosomix"]
-        )
-    } else {
-        ""
-    },
-    "."
+    str_c("• ", str_wrap(bullets, 150, exdent = 2), collapse = "\n"),
+    "\nGeometric means of the ratios over the comparisons; for the IMR-90 map, the ratios of the whole runs."
 )
 message(caption)
 
@@ -438,7 +464,8 @@ fig <- wrap_elements(full = a) / wrap_elements(full = b) / wrap_elements(full = 
     wrap_elements(full = e) +
     plot_layout(heights = unit(c(panel * c(1, 1.6), timeline, panel * c(1.45, 1.45)), "in")) +
     plot_annotation(
-        tag_levels = "a", caption = str_wrap(caption, 150),
+        # Wrapped already, a bullet at a time
+        tag_levels = "a", caption = caption,
         theme = theme(plot.background = element_blank(), plot.caption = element_text(size = 8, hjust = 0))
     ) &
     theme(plot.tag = element_text(face = "bold", size = 12), plot.background = element_blank())
