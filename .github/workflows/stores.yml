@@ -98,12 +98,12 @@ jobs:
       # For the deploy it asks for at the end.
       actions: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Pinned to a minor, not '3.x'. The generator needs 3.9 or newer and
       # nothing else — no pip install, by design, so that the week this breaks
       # is never the week a dependency resolver changed its mind.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
@@ -253,7 +253,7 @@ jobs:
       # viewer reads and can be force-pushed or rewritten; this is the copy that
       # can be downloaded from a run page when somebody asks what the shelf
       # looked like on a particular Monday.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: stores-${{ steps.stamp.outputs.day }}
           path: out/

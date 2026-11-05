@@ -92,7 +92,7 @@ jobs:
             echo "kind=none" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: steps.which.outputs.kind != 'none'
         with:
           ref: ${{ steps.which.outputs.ref }}
@@ -123,7 +123,7 @@ jobs:
           echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           echo "date=$(git log -1 --format=%cI)" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: steps.which.outputs.kind != 'none'
         with:
           node-version: '24'
@@ -168,7 +168,7 @@ jobs:
 
       - name: Keep the built copies with the run
         if: steps.which.outputs.kind != 'none'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: documentation-${{ steps.which.outputs.version }}
           path: ${{ runner.temp }}/docs-*
@@ -192,7 +192,7 @@ jobs:
       # for the pushes below; GitHub's host keys come with it.
       - name: Check out the published site
         if: steps.key.outputs.present == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ env.DOCS_REPOSITORY }}
           ref: ${{ env.DOCS_BRANCH }}

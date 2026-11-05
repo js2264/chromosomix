@@ -10415,7 +10415,9 @@ Each render runs through
 `notebooks/scripts/memory.sh`, which writes into the job's log, every ten seconds, the memory in use
 and available and the three programs holding the most: a runner whose memory runs out is shut down
 in the middle of a step, with no error from the command and no step after it, and the log streamed
-until then is all that is left — a standard runner for a private repository has two cores and 8 GB.
+until then is all that is left. The repository is public, so a standard runner has four cores and
+16 GB (15.6 the job's, as 0.20.0's pages record); while it was private it had two and 8 GB, which is
+where the shutdowns were.
 Each job gathers its pages with
 `notebooks/scripts/pages.py`, the one table of where each page is published and which files go beside
 it, which `rendered.py` reads too, and every job keeps what it rendered as an artifact for 90 days,

@@ -47,6 +47,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **Every workflow's actions run on Node 24.** GitHub runs Node 20 actions on Node 24 with a
+  deprecation warning, and will stop: `checkout` v7, `upload-artifact` v7, `download-artifact` v8,
+  `setup-node` v7, `setup-python` v7, `setup-java` v6, `github-script` v9, `cache` v6,
+  `upload-pages-artifact` v5, `deploy-pages` v5 and `action-gh-release` v3, each the newest major,
+  every input the workflows pass still one it takes. `r-lib/actions` v2 already ran on Node 24. The
+  Node the app is built and tested with is unchanged.
+- **The notebooks' runners are described as they are (§18.10).** `notebooks.yml` and SPECS said a
+  standard runner has 2 cores and 8 GB, a private repository's; the repository is public, and every
+  page of 0.20.0 ran on 4 cores and 15.6 GB. The memory shutdowns they record happened on the private
+  runner.
 - **`npm test` passes on a fresh clone, and leaves the dev features' tests to `npm run test:dev` (§29.6).**
   It failed 491 tests in 13 suites there, every one for want of a fixture `npm run fixtures` builds with
   metacooler, a private repository. Those suites now say `// @fixtures metacooler` in their header and

@@ -6,6 +6,10 @@
   (`node scripts/ui-gallery.mjs gallery` against `npm run dev`), look at every picture, fix what
   they show, and send them to the reader as files with a line on what each shows. Tests passing
   is not the deliverable for UI work; the pictures are.
+- **A test of a dev feature says so.** A test file that exercises a dev feature (SPECS §29) has
+  `// @dev-feature <name>` on a line of its own above its imports, and one that opens metacooler's
+  fixtures has `// @fixtures metacooler`; `npm test` leaves both out (`test/support/suites.ts`). A
+  change that touches a dev feature is checked with `npm run test:dev`, not `npm test` alone.
 - SPECS.md is the contract; a change that alters behaviour changes the section that governs
   it, and CHANGELOG.md's Unreleased list, in the same commit.
 - **A change a user can see changes its page on the documentation site in the same pull request.**
