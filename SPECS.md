@@ -10242,7 +10242,13 @@ from the bucket it is published in, and timed in a fresh browser context, the vi
 loaded first and kept apart, then left two seconds as a reader's is while they find their file, from
 the moment the viewer is handed the files to the moment it says the picture is finished: chromosomix by its own report (§12, *A picture says when it is finished*),
 juicebox.js by its last repaint covering the state asked for and its track's tiles, HiGlass by every
-tile in view fetched and drawn. Four rounds, the viewers taking turns to go first; every run, and
+tile in view fetched and drawn. **Each is drawn the way it draws best on a machine with no GPU**, which a runner is, since no one way
+is fair to all three: chromosomix and juicebox.js, which draw in a 2D canvas, in Chromium as it
+launches, its pages composited in software; HiGlass, which draws through WebGL, in a Chromium told to
+draw WebGL with SwiftShader, which composites every page on the emulated GPU too. All three were once
+timed in that one, where chromosomix's pictures of the yeast map from disk took 0.54–0.82 s against
+0.21–0.33 s in software; and one browser drawing WebGL with SwiftShader and compositing in software
+reads HiGlass's every frame back off the emulated GPU, 1.17–1.32 s against 0.34–0.37 in its own. Four rounds, the viewers taking turns to go first; every run, and
 every cell refused, is one line of `notebooks/work/viewers/viewers.tsv`, with the requests and
 bytes the page asked for, the machine and every version. It reads nothing the validation writes and
 fetches its own files, so it renders on a machine of its own, and the timings, which run the

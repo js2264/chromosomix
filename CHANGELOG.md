@@ -30,6 +30,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   then the reference's commands, its script on several processes and on one — the panel as wide as the
   page and growing with its rows, each side's end and peak written just past where it finished.
 
+### Changed
+
+- **`notebooks/viewers.qmd` draws each viewer the way it draws best without a GPU (§18.10).** All three
+  viewers were timed in a Chromium told to draw WebGL with SwiftShader, for HiGlass's sake, and that
+  browser composites every page on the emulated GPU, which no reader's browser does: chromosomix's
+  pictures of the yeast map from disk took 0.54–0.82 s there, and take 0.21–0.33 s in a Chromium launched
+  without the flags, compositing in software, where chromosomix and juicebox.js are now timed. HiGlass,
+  which draws nothing without WebGL, keeps its browser: one browser for all three that draws WebGL with
+  SwiftShader and composites in software reads its every frame back off the emulated GPU, and its
+  pictures took 1.17–1.32 s there against 0.34–0.37 s. The table's new `graphics` column says which
+  drew each run.
+
 ### Fixed
 
 - **A remote `.hic`'s whole genome is drawn four times sooner (§3.6).** The walk across its chromosome
