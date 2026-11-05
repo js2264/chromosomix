@@ -40,6 +40,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the mouse map's at 5 Mb 17 s where it was 75 s, and the yeast map's from the demo store 4 s where
   it was 15 s, for the same requests and bytes. The census of §6.5 reads through the same call, and
   goes past the cache too.
+- **A `.hic` opens reading its footer's framing, not the whole of it (§3.6).** The footer is nearly
+  all expected values the viewer never uses — 9.8 of the 4DN chicken map's 9.9 MB — and it was read
+  whole to reach the normalisation index past them. It is now walked: each section's few bytes of
+  framing are read and the values stepped over. On the chicken map from disk, in Chromium, the
+  chromosome, region and locus pictures are 254, 283 and 251 ms where they were 311, 323 and 292;
+  from 4DN's bucket every open reads 13.6 MB where it read 18.9. The two indexes it finds are the
+  ones a whole read found, on the yeast, chicken and mouse maps of `notebooks/viewers.qmd`.
 - **The laptop's deep human map runs on a Mac (§18.10).** `notebooks/scripts/cooltools_pipeline.py`
   stopped at coolpuppy's pileup on macOS: there Python spawns its workers rather than forking them,
   and coolpuppy's pool logs through `multiprocessing_logging`, which refuses any start method but

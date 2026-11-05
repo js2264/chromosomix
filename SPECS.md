@@ -426,6 +426,17 @@ excludes those from the whole application; the file's expected-value vectors, be
 own against a golden and two expectations under one name would be a quantity that changes with the
 code path; and writing, for §13's reason.
 
+**Not used, and not read.** The expected values are nearly all of a footer — 9.8 of the 4DN chicken
+map's 9.9 MB, between a master index and a normalisation index of 50 KB together — and the
+normalisation index lies past them, reached in a v7 or v8 file only by walking them. The walk reads
+where a field is parsed and steps over the values unread, so opening the chicken map reads nine of
+the source's 1 MiB slices of its footer where it read the footer whole, twenty of them: from disk,
+in Chromium, its chromosome, region and locus pictures are 40–60 ms sooner (311, 323 and 292 ms
+then; 254, 283 and 251 now), and from 4DN's bucket every open reads 5 MB less (13.6 MB where it was
+18.9), its chromosome picture 1.8 s where it was 2.3. The walk goes through the source's slices
+rather than reading each field exactly: fifty-one exact reads of a dropped file cost more than the
+nine slices they fall in, and over a network each would be a round trip.
+
 **Correctness.** The reader is checked three ways: against fixtures whose contents are known exactly,
 across every encoding the format allows (v7/v8/v9, short and float values, short and int positions,
 list-of-rows and dense blocks, grid and diagonal block numbering); against **`hic-straw`**, the
