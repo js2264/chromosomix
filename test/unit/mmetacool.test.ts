@@ -1,3 +1,4 @@
+// @dev-feature metacool
 /**
  * `.mmetacool` collections and the §3.4 inference.
  *

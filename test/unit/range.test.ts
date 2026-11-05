@@ -1,3 +1,4 @@
+// @fixtures metacooler
 /**
  * Range resolution against the Python oracle (spec §5.4).
  *

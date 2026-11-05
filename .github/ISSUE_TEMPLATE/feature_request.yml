@@ -1,0 +1,37 @@
+name: Feature request
+description: A file format to read, an analysis to run, or something to change.
+labels: [enhancement]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind
+      options:
+        - A file format to read
+        - An analysis
+        - A view or a control
+        - The command line
+        - The notebook widgets
+        - The documentation
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What you want to do
+      description: The question you are trying to answer, rather than the control you picture.
+    validations:
+      required: true
+  - type: textarea
+    id: now
+    attributes:
+      label: How you do it now
+      description: Another tool, a script, or not at all.
+  - type: textarea
+    id: reference
+    attributes:
+      label: Reference
+      description: >-
+        For a format: its specification, and a public file in it. For an analysis: the package or
+        paper it should agree with, and public data to check it on.

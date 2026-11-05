@@ -1,3 +1,4 @@
+// @fixtures metacooler
 /**
  * Decoding: names, genome 0, and counts (spec §6.2; corrections #2 and #4).
  *

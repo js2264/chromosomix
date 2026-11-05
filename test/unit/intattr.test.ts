@@ -1,3 +1,4 @@
+// @fixtures metacooler
 /**
  * `intAttr` — the mirror of `metacooler.schema._int_attr` (spec §3.2,
  * correction #3).

@@ -1,3 +1,4 @@
+// @dev-feature metacool
 /**
  * The metagenome accumulators, and the one rule that makes them diagnostics.
  *

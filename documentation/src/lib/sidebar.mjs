@@ -92,7 +92,10 @@ export const GUIDES = [
   { label: 'Release notes', releases: true },
   {
     label: 'Contributing',
-    items: [['contributing', 'Source code and contributing']],
+    items: [
+      ['contributing', 'Source code and contributing'],
+      ['contributing/readers-and-tasks', 'Adding a reader or a task'],
+    ],
   },
 ]
 

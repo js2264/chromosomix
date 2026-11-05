@@ -113,8 +113,11 @@ The page holding the frame can drive it too: `postMessage` moves the view, adds 
 The same viewer is a Jupyter widget: the app itself in a cell, driven from Python and telling Python where the reader has taken it. It works in JupyterLab, Notebook 7, VS Code, Colab and marimo.
 
 ```bash
-pip install chromosomix          # from a clone: pip install -e widgets/python
+pip install "git+https://github.com/js2264/chromosomix#subdirectory=widgets/python"
 ```
+
+It is not on PyPI: pip installs it from this repository (git must be on the machine), and from a clone
+`pip install -e widgets/python` does.
 
 ```python
 from chromosomix import Chromosomix
@@ -140,7 +143,8 @@ Files on the kernel's disk are served to the viewer by byte range from a server 
 The same viewer is an htmlwidget, in the R package under [`widgets/r`](widgets/r/README.md):
 
 ```r
-install.packages("widgets/r", repos = NULL, type = "source")   # from a clone
+remotes::install_github("js2264/chromosomix", subdir = "widgets/r")
+# or, from a clone: install.packages("widgets/r", repos = NULL, type = "source")
 
 library(chromosomix)
 chromosomix("sample.mcool::/resolutions/5000", region = "chr2:10000000-14000000",
@@ -692,6 +696,14 @@ chromosomix stats sample.pairs.gz --out qc/
 You do not have to write those lines from memory. The browser app has a **console** and every analysis run lands in it as the `chromosomix` command that repeats it, written the moment the run happens rather than when you look at the result. 
 
 The log is kept in your own browser for seven days or five hundred lines, whichever comes first. Nothing is uploaded; it is listed under *What this browser is remembering* (in the command palette, `Ctrl+P` → Help) with everything else this app keeps, and *forget everything* drops it.
+
+## Contributing
+
+Bug reports, fixes, file formats and analyses are welcome: [`CONTRIBUTING.md`](CONTRIBUTING.md) says how to
+build and test it and what a pull request carries, and
+[Adding a reader or a task](https://doc.chromosomix.app/contributing/readers-and-tasks/) where a new
+format or analysis goes. Taking part follows the [code of conduct](CODE_OF_CONDUCT.md); a security problem
+is reported privately, as [`SECURITY.md`](SECURITY.md) says.
 
 ## Licence
 

@@ -1,3 +1,4 @@
+// @dev-feature edit
 /**
  * A suggestion's points placed finer than the picture's cell (SPECS §27.5):
  * the rungs a point steps through, the cut a square of one rung least

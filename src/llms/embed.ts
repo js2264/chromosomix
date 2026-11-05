@@ -183,7 +183,7 @@ export function embedPage(): string {
       '`127.0.0.1`, sidecars and all; nothing is uploaded.',
     block(
       [
-        '# pip install chromosomix',
+        '# pip install "git+https://github.com/js2264/chromosomix#subdirectory=widgets/python"   (not on PyPI)',
         'from chromosomix import Chromosomix',
         'view = Chromosomix("sample.mcool::/resolutions/5000", region="chr2:10000000-14000000",',
         '                   tracks=["ATAC.bw", "genes.gtf.gz"], transform="log10")',

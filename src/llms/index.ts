@@ -184,7 +184,7 @@ export function indexPage(): string {
       [
         'Python widget',
         `${REPOSITORY}/blob/main/widgets/python/README.md`,
-        '`pip install chromosomix`, for Jupyter, VS Code, Colab and marimo',
+        '`pip install "git+https://github.com/js2264/chromosomix#subdirectory=widgets/python"` (not on PyPI), for Jupyter, VS Code, Colab and marimo',
       ],
       [
         'R widget',

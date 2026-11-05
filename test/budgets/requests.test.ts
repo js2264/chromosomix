@@ -1,3 +1,4 @@
+// @fixtures metacooler
 /**
  * The spec §12 request budgets, as hard assertions (M2 harness, M4 criterion).
  *

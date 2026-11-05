@@ -8,10 +8,10 @@ The `chromosomix` Python package puts the app in a notebook cell, moved from Pyt
 ## Install
 
 ```sh
-pip install chromosomix
+pip install "git+https://github.com/js2264/chromosomix#subdirectory=widgets/python"
 ```
 
-From a clone, `pip install -e widgets/python`. It needs Python 3.10 or later. Behind JupyterHub, see [below](#jupyterhub-colab-and-other-proxies).
+It is not on PyPI: pip installs it straight from the repository, and needs git on the machine. `@v0.20.0` after `chromosomix`, before the `#`, installs it as it was at that release; in a notebook cell, `%pip` in place of `pip`. From a clone, `pip install -e widgets/python`. It needs Python 3.10 or later. Behind JupyterHub, see [below](#jupyterhub-colab-and-other-proxies).
 
 ## A map and its tracks
 

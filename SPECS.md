@@ -10445,7 +10445,9 @@ Each render runs through
 `notebooks/scripts/memory.sh`, which writes into the job's log, every ten seconds, the memory in use
 and available and the three programs holding the most: a runner whose memory runs out is shut down
 in the middle of a step, with no error from the command and no step after it, and the log streamed
-until then is all that is left — a standard runner for a private repository has two cores and 8 GB.
+until then is all that is left. The repository is public, so a standard runner has four cores and
+16 GB (15.6 the job's, as 0.20.0's pages record); while it was private it had two and 8 GB, which is
+where the shutdowns were.
 Each job gathers its pages with
 `notebooks/scripts/pages.py`, the one table of where each page is published and which files go beside
 it, which `rendered.py` reads too, and every job keeps what it rendered as an artifact for 90 days,
@@ -10459,7 +10461,7 @@ each a self-contained page with its tables beside it (`commands.json`, `summary.
 a release keeps its own copies of the four pages and of the five tables as assets. **The runner's laptop is published nowhere**: not to the
 site, whose `laptop/` is the committed page, nor to a release, whose laptop is the one committed in its
 source; it is the run's artifact, and its section of the run's summary, and whether it rendered decides
-nothing about publishing the others. It runs when a release is published and on demand. Each page opens on a
+nothing about publishing the others. It runs when a release is published and on demand, and **every week**, early on Sunday, on the default branch's newest commit with every input at its default, **never published** — no push to the branch, no release's assets, no deploy — and in a concurrency group of its own, so that it can neither cancel a release's run waiting behind another nor hold one back: a check, between releases, that the notebooks still render against what `main` has become and against the servers they fetch from, which leaves its artifacts and its summary, and its pages say they were rendered on that schedule. Each page opens on a
 block saying when it was rendered, from which version, commit and release, by which run or by hand,
 and on what machine, and closes on how long it took, writing the same to `rendered.json` beside it with
 **one line of what it found** — how many analyses reproduce their reference, how much less time
@@ -11577,7 +11579,8 @@ is where the view actually **went**, which for a trimmed patch is not always whe
 
 The channel is what a notebook widget is made of, and the repository carries two: one for Python and
 Jupyter, one for R. The Python one first: `widgets/python/`,
-the `chromosomix` package on PyPI, an [anywidget](https://anywidget.dev/) that works wherever
+the `chromosomix` package — not on PyPI: `pip install "git+https://github.com/js2264/chromosomix#subdirectory=widgets/python"` installs it from this
+repository — an [anywidget](https://anywidget.dev/) that works wherever
 anywidget does — JupyterLab, Notebook 7, VS Code, Colab, marimo. It is the embed in an `<iframe>` and
 nothing else: no second renderer, no kernel-side reader, no data through the kernel's comm.
 
@@ -15820,6 +15823,25 @@ never the reason a session is lost.
   included: *chromosomix – genome browser for Hi-C, tracks and 3D models*, where both titles once said
   *(multi-genome) cool files* and the package's keywords *metagenomics* and *metacool*. The name is
   **chromosomix**.
+
+### 29.6 In the tests
+
+**Tested like any other feature, and left out of a plain `npm test`.** A test file of a dev feature says
+so on a line of its own above its imports, `// @dev-feature <name>` with the registry's names, and
+`vitest.config.ts` leaves every such file out unless the run asks for the dev features:
+`npm run test:dev` (`vitest run --mode dev`, since vitest refuses an option it does not know), or
+`CHROMOSOMIX_DEV_TESTS=1` before any vitest command. So `npm test` holds the app a reader sees, and the
+tests of the switch itself — that switched off a dev feature leaves nothing on screen (§29.2) — are in
+it, being what every reader gets. **CI asks, on every run**, and so does `npm version`'s check, so a
+dev feature is held to its tests on every push all the same. A name the registry does not have fails
+the default run by file (`test/unit/dev-tests.test.ts`), so a feature made public by deleting its line
+(§29.1) cannot leave its tests out by a marker nobody reads, and neither can a marker written where it
+is not read. The same header carries `// @fixtures metacooler` on the suites that open what
+`npm run fixtures` builds, which needs metacooler, a private repository: while none of those fixtures
+is on disk the suites are left out rather than failed, so a fresh clone's `npm test` passes or fails on
+the code and never on a file it cannot have, and once any is there they run and fail by name on what is
+missing. What a run leaves out, and the command that runs it, is one line at its top
+(`test/support/suites.ts`).
 
 ## 30. The guided tutorial
 

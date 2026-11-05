@@ -1,3 +1,4 @@
+// @dev-feature metacool
 /**
  * Where a click in the whole-metagenome overview leads (§5.5, §7.3).
  *
