@@ -1,6 +1,13 @@
 {
-  "latest": "40ec1ec",
+  "latest": "426edae",
   "versions": [
+    {
+      "commit": "426edae",
+      "version": "0.20.0",
+      "date": "2026-11-05T10:39:55+01:00",
+      "subject": "ci: modify laptop and timing.plot.R",
+      "tag": ""
+    },
     {
       "commit": "40ec1ec",
       "version": "0.20.0",
@@ -132,13 +139,6 @@
       "version": "0.18.0",
       "date": "2026-11-01T18:37:51+01:00",
       "subject": "ci: update laptop notebook",
-      "tag": ""
-    },
-    {
-      "commit": "a51d315",
-      "version": "0.18.0",
-      "date": "2026-11-01T16:54:58+01:00",
-      "subject": "Notebooks: R scripts to draw the timing and validation figures",
       "tag": ""
     },
     {
