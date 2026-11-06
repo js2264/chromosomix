@@ -12,12 +12,28 @@
  * scale, or a new colormap. Never on pan, never on zoom, never on resize. A
  * matrix the reader came back to is new to its view but not to the page, and
  * keeps the pooling made of it before ({@link pooledOf}).
+ *
+ * A block of 2,048² cells or more is the exception to the image at matrix
+ * resolution, not to the rule: it is coloured on the same three events, but
+ * painted a level at a time straight from its values (`render/levels.ts`) — the
+ * level its first frame draws, then a finer one between frames when a zoom first
+ * needs it — so its first picture costs one pass over the values rather than an
+ * image a hundred times the size of the screen and its halvings.
  */
 
+import { yieldToEventLoop } from '../async'
 import { MAX_CATEGORICAL_TICKS } from '../constants'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import { applyColormap, colormapIndex } from './colormaps'
 import { diagonalSplit, foldSplit } from './compare'
+import {
+  LEVEL_MIN_CELLS,
+  LevelPainter,
+  MAX_RASTER_LEVELS,
+  MIN_RASTER_LEVEL,
+  autoRangeOfValues,
+  levelFor,
+} from './levels'
 import {
   anchorRays,
   cellAt as squareOf,
@@ -632,18 +648,42 @@ export function separatorBlocks(seps: readonly Separator[], n: number): LabelBlo
 
 type RasterCanvas = HTMLCanvasElement | OffscreenCanvas
 
-/**
- * How many halvings of the raster the view will keep; see
- * {@link HeatmapView.rasterFor}.
- *
- * Four is a sixteen-fold reduction, which is a whole yeast genome at 500 bp in a
- * thumbnail. Past it the level is smaller than the plot's own margins and there
- * is nothing left to filter.
- */
-const MAX_RASTER_LEVELS = 4
+// How many halvings a view keeps, and how small one may be, are
+// `render/levels.ts`'s `MAX_RASTER_LEVELS` and `MIN_RASTER_LEVEL`: the halvings
+// below and the levels a large block is painted at are the same pyramid.
 
-/** Below this many pixels on an axis, a level is not halved again. */
-const MIN_RASTER_LEVEL = 8
+/**
+ * A block's colour range, read from its raw values (`levels.ts`), kept by the
+ * values it was read from and the colour state it was read under — the same
+ * keeping {@link pooledOf} gives the whole-image path, so a block come back to,
+ * or recoloured, is not measured again.
+ */
+const rangeByValues = new WeakMap<Float32Array, Map<string, ValueRange>>()
+
+function rangeOfValues(values: Float32Array, transform: Transform, balanced: boolean): ValueRange {
+  const key = `${transform}:${balanced}`
+  let held = rangeByValues.get(values)
+  if (held === undefined) {
+    held = new Map()
+    rangeByValues.set(values, held)
+  }
+  let range = held.get(key)
+  if (range === undefined) {
+    range = autoRangeOfValues(values, transform, balanced)
+    held.set(key, range)
+  }
+  return range
+}
+
+/**
+ * How long a level being made between frames works before it gives the frame
+ * back, and how many cells it paints between looks at the clock.
+ */
+const LEVEL_SLICE_MS = 12
+const LEVEL_SLICE_CELLS = 1 << 20
+
+/** The bytes of a raster drawn level by level, which keeps no image of its own. */
+const NO_BYTES = new Uint8ClampedArray(0)
 
 /**
  * One level of the pyramid: `from`, averaged down by two on both axes.
@@ -1836,6 +1876,25 @@ export class HeatmapView {
    * previous *block* — drawn under this one's ticks. See {@link rasterFor}.
    */
   private mips: RasterCanvas[] = []
+  /**
+   * What paints a large block level by level (`render/levels.ts`), or `null`
+   * for a block drawn the whole-image way through {@link offscreen} and
+   * {@link mips}. One per colouring: a new block, scale or colormap makes another.
+   */
+  private painter: LevelPainter | null = null
+  /** The levels {@link painter} has made, by level; each made once per colouring. */
+  private levels: Array<RasterCanvas | undefined> = []
+  /** A level being made between frames, and how to call it off. */
+  private making: { level: number; cancel(): void } | null = null
+  /** Levels that failed to be made between frames this colouring, not asked for again. */
+  private unmade = new Set<number>()
+  /**
+   * Set while {@link renderTo} draws: an export waits for the level it needs
+   * rather than drawing the nearest one in its place.
+   */
+  private exporting = false
+  /** How many levels {@link painter} has made — see {@link levelsMade}. */
+  private levelCount = 0
   /** Handle of a frame this view scheduled for itself; see {@link changed}. */
   private selfFrame = 0
   /** Cached canvas origin; see {@link clientRect}. `null` means "re-measure". */
@@ -3850,8 +3909,8 @@ export class HeatmapView {
     if (this.matrix === null) return
 
     if (this.dirtyRaster || this.raster === null) this.rasterizeNow()
-    const offscreen = this.offscreen
-    if (offscreen === null) return
+    const raster = this.raster
+    if (raster === null) return
 
     const plot = this.plotRect
     ctx.save()
@@ -3869,8 +3928,8 @@ export class HeatmapView {
     // covers that many matrix cells per axis, so the image is drawn that much
     // larger. Everything else — hit testing, separators, labels — stays in
     // matrix space and is unaffected.
-    const sx = this.raster?.strideX ?? 1
-    const sy = this.raster?.strideY ?? 1
+    const sx = raster.strideX
+    const sy = raster.strideY
     // Measured in the pixels the image is actually resampled into, which are
     // device pixels: the transform below carries `dpr` and this test did not, so
     // on a 2× display everything between one and two raster pixels per device
@@ -3891,7 +3950,17 @@ export class HeatmapView {
     // diagonal stripes across the band. The pyramid is what makes the filter
     // true: every level is a real average of the one above it, so the level this
     // picks is at most a halving away from the pixels it is drawn into.
-    const source = this.rasterFor(this.zoom * Math.max(sx, sy) * this.dpr) ?? offscreen
+    //
+    // A large block has no level 0 to halve (`render/levels.ts`): the level is
+    // painted from its values, and a level not made yet is drawn from the
+    // nearest one that is until it has been.
+    const reduction = this.zoom * Math.max(sx, sy) * this.dpr
+    const source =
+      this.painter !== null ? this.levelSource(reduction) : (this.rasterFor(reduction) ?? this.offscreen)
+    if (source === null) {
+      ctx.restore()
+      return
+    }
 
     ctx.setTransform(
       this.zoom * sx * this.dpr,
@@ -3907,7 +3976,18 @@ export class HeatmapView {
     // rounding of its own last row. That keeps every level registered to the
     // same pixels as level 0, which is what the ticks, the separators and the
     // overlays are placed against.
-    ctx.drawImage(source, 0, 0, source.width, source.height, 0, 0, offscreen.width, offscreen.height)
+    //
+    // A level painted from the values is one exact average per square of cells,
+    // the last pixel of a row or column covering only the cells that are left, so
+    // its pixel `i` belongs over cells `[i·2^k, (i+1)·2^k)` — stretched over the
+    // whole block like a halving, which is laid out by that stretch, it would
+    // drift by up to half a pixel towards the far edge. So it is drawn from the
+    // part of the level the block covers, fractional pixel and all.
+    const level = this.painter === null ? -1 : this.levels.indexOf(source)
+    const factor = level > 0 ? 2 ** level : 1
+    const sw = level >= 0 ? raster.width / factor : source.width
+    const sh = level >= 0 ? raster.height / factor : source.height
+    ctx.drawImage(source, 0, 0, sw, sh, 0, 0, raster.width, raster.height)
     ctx.restore()
     if (this.bare) return
 
@@ -3963,6 +4043,156 @@ export class HeatmapView {
       this.mips.push(next)
     }
     return this.mips[Math.min(wanted, this.mips.length) - 1] ?? base
+  }
+
+  /**
+   * {@link rasterFor} for a block drawn level by level: the level this draw
+   * wants, made from the values rather than halved from an image of them.
+   *
+   * **The first frame of a colouring makes its level there and then**, which is
+   * the whole of what the first picture of a large block costs: one pass over
+   * its values, not five over an image of them (`render/levels.ts`). So does an
+   * export, which is a figure and must be the exact picture rather than a
+   * stand-in for it ({@link renderTo}).
+   *
+   * **Every later level is made between frames.** A zoom that wants a finer
+   * level than the frame has — the step from fit zoom towards single cells — is
+   * drawn from the nearest level already made while the one it wants is painted
+   * in slices that hand the frame back ({@link makeLevelLater}); the picture
+   * sharpens when it lands rather than the map stopping until it has. So a
+   * gesture never re-colours the block, as §7.2 promises, and never waits on a
+   * level either.
+   */
+  private levelSource(scale: number): RasterCanvas | null {
+    const painter = this.painter
+    // A plot with no area yet asks for no level: `levelFor` would answer 0 for
+    // it, and level 0 of a large block is the one level nobody should make for a
+    // frame that cannot show it.
+    if (painter === null || !(scale > 0)) return null
+    const wanted = levelFor(scale, painter.width, painter.height)
+    const held = this.levels[wanted]
+    if (held !== undefined) return held
+    const nearest = this.nearestLevel(wanted)
+    if (nearest === null || this.exporting) return this.makeLevelNow(wanted)
+    if (!this.unmade.has(wanted)) this.makeLevelLater(wanted)
+    return nearest
+  }
+
+  /** The level made nearest `wanted`: the coarser first, which is only softer, then the finer. */
+  private nearestLevel(wanted: number): RasterCanvas | null {
+    for (let level = wanted + 1; level <= MAX_RASTER_LEVELS; level++) {
+      const held = this.levels[level]
+      if (held !== undefined) return held
+    }
+    for (let level = wanted - 1; level >= 0; level--) {
+      const held = this.levels[level]
+      if (held !== undefined) return held
+    }
+    return null
+  }
+
+  /** Paint `level` whole, put it on a canvas of its own, and keep it. */
+  private makeLevelNow(level: number): RasterCanvas | null {
+    const painter = this.painter
+    if (painter === null) return null
+    if (this.making?.level === level) this.cancelMaking()
+    const { width, height } = painter.size(level)
+    const canvas = createRasterCanvas(width, height)
+    const ctx = (canvas as HTMLCanvasElement).getContext('2d')
+    if (ctx === null) return null
+    const bytes = new Uint8ClampedArray(width * height * 4)
+    painter.paintRows(level, 0, height, bytes)
+    ctx.putImageData(new ImageData(bytes, width, height), 0, 0)
+    this.levels[level] = canvas
+    this.levelCount += 1
+    return canvas
+  }
+
+  /**
+   * Paint `level` in slices between frames, and draw again once it is whole.
+   *
+   * One level at a time, the last one asked for: a zoom that has moved on to
+   * another level before this one landed has no use for it, and finishing it
+   * would only delay the one it does want. The slices are put on the canvas as
+   * they are painted, so no image of the whole level is ever held beside it —
+   * level 0 of a large block is several hundred megabytes, and the canvas is
+   * already one copy of it.
+   */
+  private makeLevelLater(level: number): void {
+    const painter = this.painter
+    if (painter === null || this.making?.level === level) return
+    this.cancelMaking()
+    const { width, height } = painter.size(level)
+    const canvas = createRasterCanvas(width, height)
+    const ctx = (canvas as HTMLCanvasElement).getContext('2d')
+    if (ctx === null) return
+    let cancelled = false
+    const making = {
+      level,
+      cancel: () => {
+        cancelled = true
+      },
+    }
+    this.making = making
+    // Rows of this level per call to the painter: about a million cells read.
+    const cellsPerRow = Math.max(1, painter.width * 2 ** level)
+    const rows = Math.max(1, Math.floor(LEVEL_SLICE_CELLS / cellsPerRow))
+    let bytes = new Uint8ClampedArray(width * Math.min(rows, height) * 4)
+    const run = async (): Promise<void> => {
+      let from = 0
+      while (from < height) {
+        const began = now()
+        do {
+          const to = Math.min(height, from + rows)
+          const need = width * (to - from) * 4
+          if (bytes.length !== need) bytes = new Uint8ClampedArray(need)
+          painter.paintRows(level, from, to, bytes)
+          ctx.putImageData(new ImageData(bytes, width, to - from), 0, from)
+          from = to
+        } while (from < height && now() - began < LEVEL_SLICE_MS)
+        if (from < height) {
+          await yieldToEventLoop()
+          if (cancelled) return
+        }
+      }
+      if (cancelled) return
+      if (this.making === making) this.making = null
+      this.levels[level] = canvas
+      this.levelCount += 1
+      this.changed()
+    }
+    run().catch(() => {
+      // A level the platform will not hold — a canvas or an allocation refused
+      // between frames — is left to the level standing in for it, and not asked
+      // for again this colouring: the picture stays the one already on screen
+      // rather than the frames turning into a loop of attempts.
+      if (this.making === making) this.making = null
+      if (!cancelled) this.unmade.add(level)
+    })
+  }
+
+  /** Stop making a level between frames, if one is being made. */
+  private cancelMaking(): void {
+    this.making?.cancel()
+    this.making = null
+  }
+
+  /**
+   * Whether a level is being made between frames, so the picture is about to
+   * sharpen — what the panel tells the page's report of a finished picture
+   * (`perf/rendered.ts`).
+   */
+  get sharpening(): boolean {
+    return this.making !== null
+  }
+
+  /**
+   * How many levels of a large block this view has made — see
+   * {@link rasterisations}, which counts colourings. A zoom may make a level
+   * once per colouring, and only one the frame it is drawn into asked for.
+   */
+  get levelsMade(): number {
+    return this.levelCount
   }
 
   /**
@@ -4026,15 +4256,20 @@ export class HeatmapView {
     const previousCtx = this.ctx
     const previousDpr = this.dpr
     const previousOrigin = this.pageOrigin
+    const previousExporting = this.exporting
     this.ctx = ctx
     this.dpr = scale
     this.pageOrigin = origin
+    // A figure is the exact picture: a level a large block has not made yet is
+    // made now rather than stood in for (`levelSource`).
+    this.exporting = true
     try {
       this.draw()
     } finally {
       this.ctx = previousCtx
       this.dpr = previousDpr
       this.pageOrigin = previousOrigin
+      this.exporting = previousExporting
     }
   }
 
@@ -4490,6 +4725,66 @@ export class HeatmapView {
     }
   }
 
+  /**
+   * Whether `matrix` is drawn level by level (`render/levels.ts`): a block of
+   * at least {@link LEVEL_MIN_CELLS} drawn a cell to a pixel, on one scale, read
+   * against a floor. A block wider than the raster, two readings either side of
+   * the diagonal and a field read about a middle each pool by a rule of their
+   * own (`poolDisplay`), and keep the whole-image path that has it.
+   */
+  private paintsByLevel(matrix: DenseMatrix, split: Int32Array | null, centre: number | null): boolean {
+    return (
+      split === null &&
+      centre === null &&
+      matrix.nrows <= RASTER_MAX_DIM &&
+      matrix.ncols <= RASTER_MAX_DIM &&
+      matrix.nrows * matrix.ncols >= LEVEL_MIN_CELLS
+    )
+  }
+
+  /**
+   * {@link rasterizeNow} for a block drawn level by level: the bounds resolved
+   * and a painter made for them, and nothing painted — the first frame paints
+   * the level it needs ({@link levelSource}), and only that one.
+   */
+  private paintByLevel(matrix: DenseMatrix): void {
+    this.cancelMaking()
+    this.levels = []
+    this.unmade.clear()
+    this.offscreen = null
+    this.mips = []
+    this.pooled = null
+    this.lowerRaster = null
+    const scale = this.levelScale(matrix)
+    this.painter = new LevelPainter(matrix.values, matrix.nrows, matrix.ncols, scale)
+    this.raster = { width: matrix.ncols, height: matrix.nrows, data: NO_BYTES, scale, strideX: 1, strideY: 1 }
+    this.dirtyRaster = false
+  }
+
+  /**
+   * {@link resolvedScale} for a block drawn level by level. The range is the
+   * same number — measured from the gauge where there is one, and over every
+   * cell of it — read from the raw values rather than from a pooled copy of the
+   * block (`autoRangeOfValues`), which a block this size cannot afford to make
+   * just to read two percentiles off it.
+   */
+  private levelScale(matrix: DenseMatrix): ColorScale {
+    const scale = this.colorScale
+    // A copy, as `colorize` hands back: the raster's scale is the key's to read.
+    if (Number.isFinite(scale.vmin) && Number.isFinite(scale.vmax)) return { ...scale }
+    const measured = this.gauge ?? matrix
+    // A gauge wider than the raster is measured as the pooled raster measures it.
+    const auto =
+      measured.nrows <= RASTER_MAX_DIM && measured.ncols <= RASTER_MAX_DIM
+        ? rangeOfValues(measured.values, scale.transform, scale.balanced === true)
+        : autoRangeOfPooled(pooledOf(measured, scale, false))
+    return {
+      ...scale,
+      vmin: Number.isFinite(scale.vmin) ? scale.vmin : auto.vmin,
+      vmax: Number.isFinite(scale.vmax) ? scale.vmax : auto.vmax,
+    }
+  }
+
   private rasterizeNow(): void {
     if (this.matrix === null) return
     this.rasterCount += 1
@@ -4514,6 +4809,16 @@ export class HeatmapView {
     // is not the one the cache shares between views of it.
     const split = this.sideSplit()
     const sided = split !== null
+    if (this.paintsByLevel(this.matrix, split, centre)) {
+      this.paintByLevel(this.matrix)
+      return
+    }
+    // Drawn whole: whatever a colouring before this one painted level by level
+    // goes with it.
+    this.cancelMaking()
+    this.painter = null
+    this.levels = []
+    this.unmade.clear()
     if (
       this.pooled === null ||
       this.pooled.transform !== this.colorScale.transform ||
@@ -6213,6 +6518,8 @@ export class HeatmapView {
     this.onCancelFreeze = null
     this.canvas.classList.remove('is-frozen')
     this.stopSpin()
+    // And a level being painted between frames for a view nobody will draw.
+    this.cancelMaking()
 
     for (const fn of this.detachFns) fn()
     this.detachFns = []

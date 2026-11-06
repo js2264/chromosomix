@@ -98,9 +98,11 @@ export interface SurfaceAccount {
 
 /**
  * Waits that keep a picture unfinished but cannot, alone, make a new one: a
- * repaint asked for and not yet made. See the header.
+ * repaint asked for and not yet made, and a large block's finer level being
+ * painted between frames after a zoom (`render/levels.ts`) — a zoom is not a new
+ * picture, but a report already due waits for the sharp one. See the header.
  */
-const QUIET_WAITS: ReadonlySet<string> = new Set(['paint'])
+const QUIET_WAITS: ReadonlySet<string> = new Set(['paint', 'level'])
 
 /**
  * How often a picture still waiting is looked at again, for a surface that left

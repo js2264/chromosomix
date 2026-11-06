@@ -5740,6 +5740,9 @@ export class MatrixPanel {
       // the lanes asked for their windows in the draw above, so their reads are
       // counted before the paint is said to have been made.
       this.surface?.wait('lanes', this.lanes.waiting())
+      // A large block's finer level still being painted between frames
+      // (`render/levels.ts`): the picture on screen is about to sharpen.
+      this.surface?.wait('level', this.heatmap.sharpening)
       this.surface?.wait('paint', false)
     })
   }

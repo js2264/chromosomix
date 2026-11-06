@@ -2293,7 +2293,9 @@ sits above the whole picture. `metacooler show` never balances, so neither depar
 ### 7.2 Technique
 
 `ImageData` + `putImageData` to an offscreen canvas at matrix resolution, then `drawImage`-scaled to
-the display canvas. Pan and zoom are canvas transforms over the in-memory matrix. A colour-vision-safe
+the display canvas — or, for a block of 2,048² cells or more, the level of it the frame draws, painted
+straight from the values (*a large block is drawn at the size it is looked at*, below). Pan and zoom
+are canvas transforms over the in-memory matrix. A colour-vision-safe
 colormap is selectable; keyboard pan and zoom are supported — on the focused map the arrows pan,
 Page Up and Page Down zoom about the centre a wheel notch at a time, and Home refits — and from
 anywhere in the window `0` refits (*Fit the view*, by its place, so AZERTY's bare `à` does) and
@@ -2379,6 +2381,42 @@ as the block is held anywhere (`pooledOf`), and a view built over a block the re
 §12) goes straight to the colouring. The colouring writes each pixel as one 32-bit word out of a 32-bit
 view of the table — the same four bytes the four byte writes it replaced put down — which took a
 3,910-cell chromosome's from 410 ms to 280 ms on the machine it was measured on.
+
+**A large block is drawn at the size it is looked at** (`render/levels.ts`). A block wider than the
+plot is drawn from a *level* — the raster averaged down by two, once and up to four times, so that a
+level pixel lands between a half and one device pixel — and the levels used to be made in one order
+for every block: every cell transformed, measured, coloured into an image at matrix resolution, that
+image put on a canvas, and the canvas halved down to the level. Everything but the last level was
+work for a picture nobody had asked for yet, all of it on the main thread before the first frame. On
+the blocks a whole chromosome is read as (above) it was most of the wait: mouse chr1 at 20 kb, 9,774
+cells a side, spent 10 s of a 14 s first picture there, making a 382 MB image and three halvings of it
+to draw about seven hundred pixels; yeast chrIV at 100 bp spent 23 s of 27. So a block of 2,048² cells
+or more — drawn a cell to a pixel, on one scale, read against a floor — is drawn the other way round:
+
+- **its first frame paints the level it draws, and only that one**, straight from the values: every
+  cell coloured exactly as the image would have coloured it and averaged into the level's pixel it
+  falls in, the colour over the cells that have one and an alpha that is the share of them that do —
+  the average the halvings meant to make. Meant to: a canvas halves an odd-sized level by a scale a
+  shade off one half, so its bilinear tap drifts from the mean of two cells to a sample of one across
+  the picture, and a map whose side is odd came out speckled at fit zoom where a level painted from
+  the values is the mean throughout. Where every halving was exact the two agree to within a level or
+  two of 255;
+- **its colour range is the same number**, to the bit — the 99th percentile §7.1 ties to numpy — read
+  as order statistics of the raw values, whose order every transform keeps, rather than of a
+  transformed copy of the block (`autoRangeOfValues`);
+- **a finer level is painted when a zoom first needs it, between frames**, in slices that hand the
+  frame back, while the nearest level made stands in for it: the picture sharpens a moment after the
+  zoom rather than the map stopping until it has. A level is made once per colouring, and a gesture
+  still never re-colours the block. An export never draws a stand-in: it paints the level it needs
+  there and then, and a figure is the exact picture.
+
+Measured in headless Chromium against a server answering as S3 does, at 40 ms a round trip and
+25 MiB/s, from a chromosome clicked in its table to its picture: mouse chr1 at 20 kb on screen in
+4.3 s where it took 14.2, its main-thread task 1.3 s where it was 10.2;
+yeast chrIV at 100 bp in 4.2 s where it took 26.6; chicken chr1 at the 25 kb a `.hic` opens at in
+2.9 s where it took 6.3. A block under 2,048² cells, two readings either side of the diagonal (§5.10)
+and a field read about a middle keep the whole-image path, whose reductions they each have a rule of
+their own in.
 
 **What is accepted, and stated rather than fixed:** the raster is at most 16,384 px
 per axis and a plot is commonly 800–1,600 device pixels, so `drawImage` still
@@ -6021,6 +6059,8 @@ requests and bytes in total and for the last view; these are also paper figures.
 | Open + render genomes table (remote) | ≤ 20 range requests |
 | Load one MAG's matrix (remote) | ≤ 5 range requests |
 | Pan/zoom within the block in hand | 0 requests, 60 fps |
+| First frame of a block of 2,048² cells or more | one pass over its values on the main thread — the level the frame draws and the colour range — and no image at matrix resolution (§7.2) |
+| A zoom past the levels a large block has made | 0 requests and no re-colouring: the level it wants painted between frames, the nearest made drawn meanwhile |
 | Refine, on crossing the block's grid (§2) | ≤ 5 range requests, one bounded read |
 | Pan to the edge of the block in hand | one read, **at the same resolution** |
 | Zoom out to a block already read | 0 requests |
@@ -6176,7 +6216,8 @@ read behind a view (§6.5, §8.15), and a screenshot taken on the first paint ha
 *fetching…*. So everything that can still change the picture says so while it can — a navigation
 being routed, a file, a workspace or a shared link being opened, a map's veil (a read, a smoothing,
 a correlation), a paint asked for and not yet made, a lane's window, residues or pile in flight, a
-track on screen still opening, a finer block being read for a frozen map — and once the last of it
+track on screen still opening, a finer block being read for a frozen map, a finer level of a large
+block being painted between frames (§7.2) — and once the last of it
 has ended and a frame has passed with nothing new begun, the window says so, once:
 
 | Where | What |
@@ -6197,7 +6238,8 @@ time a different picture.
 
 **A repaint alone is not a new picture.** Pointing at the map repaints it once a frame, and a report
 per frame would bury the one a script is waiting for: a paint keeps a picture unfinished but never
-starts one. A report follows every navigation — a colour change is one — and every read a picture
+starts one, and so does a level a zoom has a large block paint between frames — a zoom is not a new
+picture, but a report already due waits for the sharp one. A report follows every navigation — a colour change is one — and every read a picture
 waits on, a pan past the lanes' padding included. **What it does not wait for**: the side columns,
 the status bar and the console, which describe the picture rather than being it; an analysis task,
 whose result is waited for when it arrives as a track; the census and the circularity check, which

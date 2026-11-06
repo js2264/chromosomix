@@ -10,6 +10,25 @@ The deployed site at <https://chromosomix.app/> is built from `main` on every pu
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Changed
+
+- **A large block's first picture is drawn at the size it is looked at (§7.2, §12).** A block of
+  2,048² cells or more used to be transformed, measured, coloured into an image at matrix resolution,
+  put on a canvas and halved down to the level the plot draws — all on the main thread, before the
+  first frame. Its first frame now paints only the level it draws, straight from the values
+  (`render/levels.ts`): each cell coloured exactly as before and averaged into the pixel it falls in,
+  with the colour range the same number to the bit, read as order statistics of the raw values. A
+  finer level is painted when a zoom first needs it, between frames, while the nearest level made
+  stands in; an export paints the level it needs at once. Measured from a chromosome clicked in its
+  table, against a server answering as S3 does: mouse chr1 at 20 kb on screen in 4.3 s where it took
+  14.2, yeast chrIV at 100 bp in 4.2 s where it took 26.6, chicken chr1 at the 25 kb a `.hic` opens at
+  in 2.9 s where it took 6.3. A level painted from the values is the mean of its cells throughout,
+  where a canvas halving an odd-sized level drifted into sampling one cell in two: such a map is
+  smoother at fit zoom than it was, and no brighter or darker. The page's report of a finished picture
+  waits for a level still being painted when a report is due, and a zoom alone still makes none.
+
 ## [0.21.0] - 2026-11-05
 
 ### Added
