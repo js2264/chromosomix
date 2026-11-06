@@ -1,0 +1,1528 @@
+<!DOCTYPE html><html lang="en" dir="ltr" data-theme="dark" data-has-toc data-has-sidebar class="astro-g5ptsecz"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>chromosomix 0.12.0 | chromosomix</title><link rel="canonical" href="https://doc.chromosomix.app/releases/v0.12.0/"/><link rel="sitemap" href="/pr/166/docs/sitemap-index.xml"/><link rel="shortcut icon" href="/pr/166/docs/favicon.png" type="image/png"/><meta name="generator" content="Astro v7.4.5"/><meta name="generator" content="Starlight v0.42.8"/><meta property="og:title" content="chromosomix 0.12.0"/><meta property="og:type" content="article"/><meta property="og:url" content="https://doc.chromosomix.app/releases/v0.12.0/"/><meta property="og:locale" content="en"/><meta property="og:description" content="What changed in chromosomix 0.12.0, released on 10 September 2026."/><meta property="og:site_name" content="chromosomix"/><meta name="twitter:card" content="summary_large_image"/><meta name="description" content="What changed in chromosomix 0.12.0, released on 10 September 2026."/><meta name="robots" content="noindex"/><script>
+	window.StarlightThemeProvider = (() => {
+		const storedTheme =
+			typeof localStorage !== 'undefined' && localStorage.getItem('starlight-theme');
+		const theme =
+			storedTheme ||
+			(window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+		document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+		return {
+			updatePickers(theme = storedTheme || 'auto') {
+				document.querySelectorAll('starlight-theme-select').forEach((picker) => {
+					const select = picker.querySelector('select');
+					if (select) select.value = theme;
+					/** @type {HTMLTemplateElement | null} */
+					const tmpl = document.querySelector(`#theme-icons`);
+					const newIcon = tmpl && tmpl.content.querySelector('.' + theme);
+					if (newIcon) {
+						const oldIcon = picker.querySelector('svg.label-icon');
+						if (oldIcon) {
+							oldIcon.replaceChildren(...newIcon.cloneNode(true).childNodes);
+						}
+					}
+				});
+			},
+		};
+	})();
+</script><template id="theme-icons"><svg aria-hidden="true" class="light astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M5 12a1 1 0 0 0-1-1H3a1 1 0 0 0 0 2h1a1 1 0 0 0 1-1Zm.64 5-.71.71a1 1 0 0 0 0 1.41 1 1 0 0 0 1.41 0l.71-.71A1 1 0 0 0 5.64 17ZM12 5a1 1 0 0 0 1-1V3a1 1 0 0 0-2 0v1a1 1 0 0 0 1 1Zm5.66 2.34a1 1 0 0 0 .7-.29l.71-.71a1 1 0 1 0-1.41-1.41l-.66.71a1 1 0 0 0 0 1.41 1 1 0 0 0 .66.29Zm-12-.29a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.71-.71a1.004 1.004 0 1 0-1.43 1.41l.73.71ZM21 11h-1a1 1 0 0 0 0 2h1a1 1 0 0 0 0-2Zm-2.64 6A1 1 0 0 0 17 18.36l.71.71a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.76-.66ZM12 6.5a5.5 5.5 0 1 0 5.5 5.5A5.51 5.51 0 0 0 12 6.5Zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Zm0 3.5a1 1 0 0 0-1 1v1a1 1 0 0 0 2 0v-1a1 1 0 0 0-1-1Z"/></svg><svg aria-hidden="true" class="dark astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.64 13a1 1 0 0 0-1.05-.14 8.049 8.049 0 0 1-3.37.73 8.15 8.15 0 0 1-8.14-8.1 8.59 8.59 0 0 1 .25-2A1 1 0 0 0 8 2.36a10.14 10.14 0 1 0 14 11.69 1 1 0 0 0-.36-1.05Zm-9.5 6.69A8.14 8.14 0 0 1 7.08 5.22v.27a10.15 10.15 0 0 0 10.14 10.14 9.784 9.784 0 0 0 2.1-.22 8.11 8.11 0 0 1-7.18 4.32v-.04Z"/></svg><svg aria-hidden="true" class="auto astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg></template><link rel="stylesheet" href="/pr/166/docs/_astro/print.ehPL0gv-.css" media="print"><link rel="stylesheet" href="/pr/166/docs/_astro/common.Uvfwwubp.css"><style>@layer starlight.components{svg:where(.astro-hkc32dio){color:var(--sl-icon-color);font-size:var(--sl-icon-size,1em);width:1em;height:1em;overflow:visible}}
+</style><script type="module" src="/pr/166/docs/_astro/page.cNngjUgL.js"></script></head><body class="astro-g5ptsecz"><a class="sl-skip-link astro-qb7clj6f" href="#_top">Skip to content</a><div class="page sl-flex astro-yntsjkba"><header class="header astro-yntsjkba"><div class="header astro-by6fddyj"><div class="title-wrapper sl-flex astro-by6fddyj"><div class="cx-title"><a href="/pr/166/docs/" class="site-title sl-flex astro-6rvad3va"><img class="astro-6rvad3va" alt src="/pr/166/docs/_astro/mark.DvluVtot.png" width="192" height="192"><span class="astro-6rvad3va" translate="no">chromosomix</span></a><span class="cx-docs" aria-hidden="true">docs</span><span class="cx-version cx-version-preview" title="A preview of pull request #166">#166</span></div><script type="module">for(let e of document.querySelectorAll(`select[data-cx-versions]`)){let t=e.dataset.current??`dev`,n=e.dataset.base??`/`,r=e.dataset.manifest??`/versions.json`;fetch(r,{cache:`no-cache`}).then(e=>e.ok?e.json():null).then(n=>{if(n===null||!Array.isArray(n.releases))return;let r=[];for(let e of n.releases){let i=e.version===n.latest;r.push({value:i?`/`:e.path,label:i?`${e.version} · latest`:e.version,selected:e.version===t})}n.dev!==null&&r.push({value:n.dev.path,label:`dev · unreleased`,selected:t===`dev`}),r.some(e=>e.selected)&&e.replaceChildren(...r.map(e=>{let t=document.createElement(`option`);return t.value=e.value,t.textContent=e.label,t.selected=e.selected,t}))}).catch(()=>{}),e.addEventListener(`change`,()=>{let t=e.value,r=`${t}${location.pathname.startsWith(n)?location.pathname.slice(n.length):``}`;fetch(r,{method:`HEAD`}).then(e=>location.assign(e.ok?`${r}${location.hash}`:t)).catch(()=>location.assign(t))})}</script></div><div class="sl-flex print:hidden astro-by6fddyj"><site-search class="astro-by6fddyj astro-b5kgnn7o" data-translations="{&quot;placeholder&quot;:&quot;Search the docs…&quot;}"><button data-open-modal disabled aria-label="Search the docs…" aria-keyshortcuts="Control+K" class="astro-b5kgnn7o"><svg aria-hidden="true" class="astro-b5kgnn7o astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.71 20.29 18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.39ZM11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"/></svg><span class="sl-hidden md:sl-block astro-b5kgnn7o" aria-hidden="true">Search the docs…</span><kbd class="sl-hidden md:sl-flex astro-b5kgnn7o" style="display: none;"><kbd class="astro-b5kgnn7o">Ctrl</kbd><kbd class="astro-b5kgnn7o">K</kbd></kbd></button><dialog style="padding:0" aria-label="Search the docs…" class="astro-b5kgnn7o"><div class="dialog-frame sl-flex astro-b5kgnn7o"><button data-close-modal class="sl-flex md:sl-hidden astro-b5kgnn7o">Cancel</button><div class="search-container astro-b5kgnn7o"><div id="starlight__search" class="astro-b5kgnn7o"></div></div></div></dialog></site-search><script>
+	(() => {
+		const openBtn = document.querySelector('button[data-open-modal]');
+		const shortcut = openBtn?.querySelector('kbd');
+		if (!openBtn || !(shortcut instanceof HTMLElement)) return;
+		const platformKey = shortcut.querySelector('kbd');
+		if (platformKey && /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform)) {
+			platformKey.textContent = '⌘';
+			openBtn.setAttribute('aria-keyshortcuts', 'Meta+K');
+		}
+		shortcut.style.display = '';
+	})();
+</script><script type="module" src="/pr/166/docs/_astro/Search.astro_astro_type_script_index_0_lang.DMh2CGlq.js"></script></div><div class="sl-hidden md:sl-flex print:hidden right-group astro-by6fddyj"><div class="sl-flex social-icons astro-by6fddyj"><a class="cx-open-app" href="https://chromosomix.app/pr/166/">Open chromosomix #166</a><a class="cx-icon-button" href="https://github.com/js2264/chromosomix" aria-label="chromosomix on GitHub"><svg aria-hidden="true" class=" astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"/></svg></a></div><starlight-rapide-theme-select class="astro-xgdtbcdp"><button aria-label="Select theme" aria-live="polite" class="sl-flex astro-xgdtbcdp" title="Select theme"><svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16" class="astro-xgdtbcdp"><mask class="moon astro-xgdtbcdp" id="moon-mask-f380056f"><rect x="0" y="0" width="100%" height="100%" fill="white" class="astro-xgdtbcdp"></rect><circle cx="24" cy="10" r="6" fill="black" class="astro-xgdtbcdp"></circle></mask><circle class="sun astro-xgdtbcdp" cx="12" cy="12" r="6" mask="url(#moon-mask-f380056f)"></circle><g class="sun-beams astro-xgdtbcdp" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="3" class="astro-xgdtbcdp"></line><line x1="12" y1="21" x2="12" y2="23" class="astro-xgdtbcdp"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" class="astro-xgdtbcdp"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" class="astro-xgdtbcdp"></line><line x1="1" y1="12" x2="3" y2="12" class="astro-xgdtbcdp"></line><line x1="21" y1="12" x2="23" y2="12" class="astro-xgdtbcdp"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" class="astro-xgdtbcdp"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" class="astro-xgdtbcdp"></line></g></svg></button></starlight-rapide-theme-select><script>
+  StarlightThemeProvider.updatePickers()
+</script><script type="module">var e=`starlight-theme`;function t(e){return e===`auto`||e===`dark`||e===`light`?e:`auto`}function n(){return t(typeof localStorage<`u`&&localStorage.getItem(e))}function r(t){typeof localStorage<`u`&&localStorage.setItem(e,t===`light`||t===`dark`?t:``)}function i(){return matchMedia(`(prefers-color-scheme: light)`).matches?`light`:`dark`}function a(e){StarlightThemeProvider.updatePickers(e),document.documentElement.dataset.theme=e===`auto`?i():e,r(e)}matchMedia(`(prefers-color-scheme: light)`).addEventListener(`change`,()=>{n()===`auto`&&a(`auto`)}),customElements.define(`starlight-rapide-theme-select`,class extends HTMLElement{constructor(){super(),a(n());let e=this.querySelector(`button`);e?.addEventListener(`click`,()=>{let n=t(document.documentElement.dataset.theme),r=n===`dark`?`light`:n===`light`?`dark`:`auto`;a(r),e?.setAttribute(`aria-label`,`${r} theme`)})}});</script></div></div></header><nav class="sidebar print:hidden astro-yntsjkba" aria-label="Main"><button popovertarget="starlight__sidebar" class="sl-menu-button sl-flex md:sl-hidden print:hidden astro-r2osgdlg"><svg aria-hidden="true" class="open-menu astro-r2osgdlg astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M3 8h18a1 1 0 1 0 0-2H3a1 1 0 0 0 0 2Zm18 8H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Zm0-5H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Z"/></svg><svg aria-hidden="true" class="close-menu astro-r2osgdlg astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="m13.41 12 6.3-6.29a1.004 1.004 0 1 0-1.42-1.42L12 10.59l-6.29-6.3a1.004 1.004 0 0 0-1.42 1.42l6.3 6.29-6.3 6.29a1 1 0 0 0 0 1.42.998.998 0 0 0 1.42 0l6.29-6.3 6.29 6.3a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.42L13.41 12Z"/></svg><span class="sr-only astro-r2osgdlg">Menu</span></button><script type="module">var e=class extends HTMLElement{constructor(){super();let e=matchMedia(`(min-width: 50em)`),t=()=>{this.popover=e.matches?null:`auto`};t(),e.addEventListener(`change`,()=>t()),this.addEventListener(`toggle`,({newState:e})=>this.trapFocus(e===`open`))}trapFocus(e){document.querySelectorAll(`.main-frame, .sl-skip-link`).forEach(t=>{t.toggleAttribute(`inert`,e)})}};customElements.define(`sl-sidebar-pane`,e);</script><sl-sidebar-pane popover id="starlight__sidebar" class="sidebar-pane astro-yntsjkba"><div class="sidebar-content sl-flex astro-yntsjkba"><sl-sidebar-state-persist data-hash="0xhrg68" class="astro-ipdry5cl"><script aria-hidden="true">
+		(() => {
+			try {
+				if (!matchMedia('(min-width: 50em)').matches) return;
+				/** @type {HTMLElement | null} */
+				const target = document.querySelector('sl-sidebar-state-persist');
+				const state = JSON.parse(sessionStorage.getItem('sl-sidebar-state') || '0');
+				if (!target || !state || target.dataset.hash !== state.hash) return;
+				window._starlightScrollRestore = state.scroll;
+				customElements.define(
+					'sl-sidebar-restore',
+					class SidebarRestore extends HTMLElement {
+						connectedCallback() {
+							try {
+								const idx = parseInt(this.dataset.index || '');
+								const details = this.closest('details');
+								if (details && typeof state.open[idx] === 'boolean') details.open = state.open[idx];
+							} catch {}
+						}
+					}
+				);
+			} catch {}
+		})();
+	</script><ul class="top-level astro-rmhv4bp6"><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Get started</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="0"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/166/docs/start/introduction/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">What chromosomix is</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/start/ways/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Ways to use it</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/start/first-map/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Your first map</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/start/window/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">A tour of the window</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/start/tutorial/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">The guided tutorial</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/start/where-to-run/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Web, desktop or one file</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Your files</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="1"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/166/docs/files/opening/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Opening files</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/files/contact-maps/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Contact maps</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/files/tracks/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Tracks and features</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/files/interactions/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Interactions</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/files/sequences/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Reference sequences</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/files/structures/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">3D models</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/files/stores/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Data stores</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/files/problems/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">When a file will not open</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Using the browser</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="2"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/166/docs/browse/navigating/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Moving around</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/browse/contact-maps/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Reading a contact map</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/browse/comparing/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Comparing two maps</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/browse/turn/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">The 45° view</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/browse/genome-browser/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">The genome browser</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/browse/deck/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Maps side by side</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/browse/structures/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">3D models beside the map</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/browse/annotations/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Annotations and bookmarks</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/browse/sessions-and-links/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Sessions, workspaces and links</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/browse/figures/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Figures and export</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/browse/console/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">The console</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/browse/keyboard/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Keyboard and command palette</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Analyses</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="3"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">How analyses run</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/validation/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">How the results are checked</span></a></li><li class="astro-rmhv4bp6"><details class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">2D tasks</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="4"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/coverage/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Coverage and marginals</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/cistrans/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Cis and trans per sequence</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/cellqc/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Per-cell contact QC</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/expected/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Contact probability P(s)</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/pairsqc/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Pairs QC</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/mapreport/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Map report</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/scalogram/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Scalogram</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/fourc/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">4C profile from an anchor</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/insulation/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Diamond insulation</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/di/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Directionality index</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/hicscore/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">HiC score</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/arrowhead/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">TAD annotation</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/compartments/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Compartments</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/interarm/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Inter-arm alignment</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/loops/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Loop calling</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/chromosight/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Pattern detection</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/hicrep/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Reproducibility</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/apa/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Aggregate peak analysis</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">3D tasks</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="5"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/reconstruct3d/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Model from the map</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/structuremap/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Model versus map</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/spatialtracks/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Spatial tracks</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">1D tasks</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="6"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/motif/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Find a motif</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/restriction/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Restriction sites</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/peaks/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Peak calling</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/composition/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Base composition</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/oriter/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Origin and terminus</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/metaplot/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Metaplot over a feature set</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/trackcorr/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Track correlation</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/frip/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Fraction of signal in features</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/groupsignal/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Signal by group</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/analyses/overlap/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Interval set overlap</span></a></li></ul></details></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Command line</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="7"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/166/docs/cli/install/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Installing it</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/cli/running/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Running a task</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/cli/from-the-app/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">From the app to a script</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/cli/pipelines/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">In a pipeline</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Notebooks and web pages</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="8"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/166/docs/embed/jupyter/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Jupyter notebooks</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/embed/r/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">R, Quarto and Shiny</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/embed/web-page/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Embedding in a web page</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Advanced</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="9"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/166/docs/advanced/hosting/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Hosting your data</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/advanced/data-store/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Your own data store</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/advanced/track-hubs/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">UCSC track hubs</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/advanced/self-hosting/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Running your own copy</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/advanced/privacy/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Privacy</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Reference</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="10"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/166/docs/reference/files-and-stores/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Files, hosts and stores</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/reference/links/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Link keys</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/reference/command-line/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Command line</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/reference/embedding/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Embedding messages</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/glossary/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Glossary</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Release notes</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="11"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/unreleased/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Unreleased</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.21.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.21.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.20.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.20.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.19.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.19.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.18.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.18.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.17.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.17.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.16.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.16.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.15.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.15.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.13.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.13.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.12.0/" aria-current="page" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.12.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.11.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.11.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.10.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.10.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.9.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.9.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.8.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.8.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.7.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.7.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.6.1/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.6.1</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.6.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.6.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.5.1/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.5.1</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.5.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.5.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.4.1/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.4.1</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.4.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.4.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.3.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.3.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.2.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.2.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/releases/v0.1.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.1.0</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Contributing</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="12"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/166/docs/contributing/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Source code and contributing</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/166/docs/contributing/readers-and-tasks/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Adding a reader or a task</span></a></li></ul></details></li></ul><script aria-hidden="true">
+		(() => {
+			const scroller = document.getElementById('starlight__sidebar');
+			if (!window._starlightScrollRestore || !scroller) return;
+			scroller.scrollTop = window._starlightScrollRestore;
+			delete window._starlightScrollRestore;
+		})();
+	</script></sl-sidebar-state-persist><div class="md:sl-hidden"><div class="mobile-preferences sl-flex astro-p4azlveh"><div class="social-icons astro-p4azlveh"><a class="cx-open-app" href="https://chromosomix.app/pr/166/">Open chromosomix #166</a><a class="cx-icon-button" href="https://github.com/js2264/chromosomix" aria-label="chromosomix on GitHub"><svg aria-hidden="true" class=" astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"/></svg></a></div><starlight-rapide-theme-select class="astro-xgdtbcdp"><button aria-label="Select theme" aria-live="polite" class="sl-flex astro-xgdtbcdp" title="Select theme"><svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16" class="astro-xgdtbcdp"><mask class="moon astro-xgdtbcdp" id="moon-mask-0dc38a2e"><rect x="0" y="0" width="100%" height="100%" fill="white" class="astro-xgdtbcdp"></rect><circle cx="24" cy="10" r="6" fill="black" class="astro-xgdtbcdp"></circle></mask><circle class="sun astro-xgdtbcdp" cx="12" cy="12" r="6" mask="url(#moon-mask-0dc38a2e)"></circle><g class="sun-beams astro-xgdtbcdp" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="3" class="astro-xgdtbcdp"></line><line x1="12" y1="21" x2="12" y2="23" class="astro-xgdtbcdp"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" class="astro-xgdtbcdp"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" class="astro-xgdtbcdp"></line><line x1="1" y1="12" x2="3" y2="12" class="astro-xgdtbcdp"></line><line x1="21" y1="12" x2="23" y2="12" class="astro-xgdtbcdp"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" class="astro-xgdtbcdp"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" class="astro-xgdtbcdp"></line></g></svg></button></starlight-rapide-theme-select><script>
+  StarlightThemeProvider.updatePickers()
+</script></div></div></div></sl-sidebar-pane></nav><div class="main-frame astro-yntsjkba"><script type="module">var e=document.getElementById(`starlight__sidebar`),t=e?.querySelector(`sl-sidebar-state-persist`),n=`sl-sidebar-state`,r=()=>{let r=[],i=t?.dataset.hash||``;try{let e=sessionStorage.getItem(n),t=JSON.parse(e||`{}`);Array.isArray(t.open)&&t.hash===i&&(r=t.open)}catch{}return{hash:i,open:r,scroll:e?.scrollTop||0}},i=e=>{try{sessionStorage.setItem(n,JSON.stringify(e))}catch{}},a=()=>i(r()),o=(e,t)=>{let n=r();n.open[t]=e,i(n)};t?.addEventListener(`click`,e=>{if(!(e.target instanceof Element))return;let t=e.target.closest(`summary`)?.closest(`details`);if(!t)return;let n=t.querySelector(`sl-sidebar-restore`),r=parseInt(n?.dataset.index||``);isNaN(r)||o(!t.open,r)}),addEventListener(`visibilitychange`,()=>{document.visibilityState===`hidden`&&a()});</script><div class="lg:sl-flex astro-lrzkfocr"><aside class="right-sidebar-container print:hidden astro-lrzkfocr"><div class="right-sidebar astro-lrzkfocr"><div class="lg:sl-hidden astro-qok35upx"><mobile-starlight-toc data-min-h="2" data-max-h="3" class="astro-66cqc7ze"><nav aria-labelledby="starlight__on-this-page--mobile" class="astro-66cqc7ze"><details id="starlight__mobile-toc" class="astro-66cqc7ze"><summary id="starlight__on-this-page--mobile" class="sl-flex astro-66cqc7ze"><span class="toggle sl-flex astro-66cqc7ze">On this page<svg aria-hidden="true" class="caret astro-66cqc7ze astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></span><span class="display-current astro-66cqc7ze"></span></summary><div class="dropdown astro-66cqc7ze"><ul class="isMobile astro-jugkfwgx" style="--depth: 0;"><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#_top" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Overview</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#added" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Added</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#fixed" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Fixed</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#changed" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Changed</span></a></li></ul></div></details></nav></mobile-starlight-toc><script type="module" src="/pr/166/docs/_astro/MobileTableOfContents.astro_astro_type_script_index_0_lang.C3fM4Kra.js"></script></div><div class="right-sidebar-panel sl-hidden lg:sl-block astro-qok35upx"><div class="sl-container astro-qok35upx"><starlight-toc data-min-h="2" data-max-h="3"><nav aria-labelledby="starlight__on-this-page"><h2 id="starlight__on-this-page">On this page</h2><ul class="astro-jugkfwgx" style="--depth: 0;"><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#_top" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Overview</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#added" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Added</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#fixed" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Fixed</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#changed" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Changed</span></a></li></ul></nav></starlight-toc><script type="module" src="/pr/166/docs/_astro/TableOfContents.astro_astro_type_script_index_0_lang.BpJaGz7G.js"></script></div></div></div></aside><div class="main-pane astro-lrzkfocr"><main class="astro-g5ptsecz" lang="en" dir="ltr"><div class="sl-banner cx-version-notice" data-pagefind-ignore>This is a <strong>preview</strong> of <a href="https://github.com/js2264/chromosomix/pull/166">pull request #166</a>, for its review: it is replaced on every push and taken down when the pull request closes. The published documentation is at <a href="https://doc.chromosomix.app/">doc.chromosomix.app</a>.</div><script type="module">for(let e of document.querySelectorAll(`[data-cx-dev]`))fetch(e.dataset.manifest??`/versions.json`,{cache:`no-cache`}).then(e=>e.ok?e.json():null).then(t=>{if(t===null||t.latest===null)return;let n=e.querySelector(`[data-cx-latest-offer]`),r=e.querySelector(`[data-cx-latest-link]`);r!==null&&(r.textContent=`Read ${t.latest}’s`,location.pathname.startsWith(`/dev/`)&&(r.href=`/${location.pathname.slice(5)}`)),n!==null&&(n.hidden=!1)}).catch(()=>{});for(let e of document.querySelectorAll(`[data-cx-older]`)){let t=e.dataset.cxOlder,n=e.dataset.base??`/`;fetch(e.dataset.manifest??`/versions.json`,{cache:`no-cache`}).then(e=>e.ok?e.json():null).then(r=>{if(r===null||r.latest===null||r.latest===t)return;let i=e.querySelector(`[data-cx-latest]`),a=e.querySelector(`[data-cx-latest-link]`);i!==null&&(i.textContent=r.latest),a!==null&&location.pathname.startsWith(n)&&(a.href=`/${location.pathname.slice(n.length)}`),e.hidden=!1}).catch(()=>{})}</script><div class="content-panel astro-a7po4psb"><div class="sl-container astro-a7po4psb"><h1 id="_top" class="astro-bebwqqxs">chromosomix 0.12.0</h1></div></div><div class="content-panel astro-a7po4psb"><div class="sl-container astro-a7po4psb"><div class="sl-markdown-content"><p>What changed in chromosomix 0.12.0, released on 10 September 2026.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="added">Added</h2><a class="sl-anchor-link" href="#added"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Added”</span></a></div>
+<ul>
+<li>
+<p><strong>Find a sequence</strong> — a new analysis task. Choose a loaded reference, type a
+motif, and every place it occurs comes back as two lanes. The pattern is
+IUPAC — <code dir="auto">GGTCANNNTGACC</code>, <code dir="auto">GATC</code>, <code dir="auto">TTAGGG</code> — spaces are ignored, and both
+strands are searched unless you say otherwise; a palindrome is reported once
+rather than twice, because searching both strands of <code dir="auto">GAATTC</code> would otherwise
+count every site again and a reader totting up a lane would get double the
+answer with nothing on screen to explain it.</p>
+<p><strong>Two lanes, not one, and that is the point.</strong> A set of sites answers two
+questions and no single picture answers both: <em>where exactly is it</em>, which is
+an interval per site — clickable, strand-carrying, exportable as BED, and an
+eligible input to overlap, the metaplot and APA like any other interval set
+(§18.3) — and <em>how dense is it here</em>, which is sites per bin and is the only
+one of the two that means anything at chromosome scale. The first is a picket
+fence when you zoom out; the second is a bar chart of ones when you zoom in.</p>
+<p>Two decisions inside it are worth stating because they are the ones that
+would be wrong by default. An <code dir="auto">N</code> in the <em>reference</em> does not satisfy a
+pattern that names a base: an assembly gap is a base nobody knows, not a base
+that is any of four, and matching it would turn every gap into a solid bar of
+fictional hits — most of what you would see on a draft genome. And an empty
+bin in the density lane is a <strong>zero</strong>, never a gap: <code dir="auto">NaN</code> in a per-bin vector
+draws as a hole, and “there is no site here” is the answer, not missing data.</p>
+<p>It is a registered task rather than a card of its own, which is what earns it
+the parameter form, a recipe that travels in the session, provenance on both
+outputs, a place in the deck’s all-maps overlay, and <strong>Recompute</strong> on a
+reload — none of which a bespoke card would have had, and all of which every
+other task already has. <code dir="auto">venue: 'annotations'</code>, because the residues are in
+that worker and nowhere else: a genome is parsed into it and deliberately
+never shipped out whole, so searching anywhere else would mean hauling
+megabytes across the boundary or stitching thirty windowed reads together at
+the seams. A run declines a pattern that is not IUPAC before it starts, with
+the character it could not read named.</p>
+<p>It works in a <strong>genome-browser session</strong> as well as over a map, which is the
+session a reader who came in through a FASTA is actually in. That took
+fixing something older: a session with no contact map reported its bin size
+as <code dir="auto">0</code>, a placeholder that was safe only while nothing producing a per-bin
+result could be run without a matrix. A task answering from the sequence
+broke that assumption, and a zero bin size gives every contig zero bins — a
+lane that is permanently <em>empty</em> rather than one that is visibly wrong,
+which is the failure nothing reports. A mapless session is now given a
+browsing grid chosen from the assembly’s own length; it is a resolution to
+draw at and never a claim that anything was measured at it, so the tasks
+that genuinely need a matrix go on saying they are waiting for one.</p>
+</li>
+<li>
+<p><strong>A fold button on every panel header.</strong> Each of the five columns now carries a
+chevron beside its shortcut chip, pointing the way that column travels — left
+for the three on the left, right for the two on the right. The affordance
+existed when a panel was <em>folded</em> (the rotated spine tab, which points the
+other way because it offers to open) and was missing when it was open, so the
+only way to close a column was a button in the header bar that does not look
+like it belongs to it. It goes through the same <code dir="auto">fold</code> every other entry point
+does, so the remembered state, the relayout and the settle all happen once.</p>
+</li>
+<li>
+<p><strong>Shift-click ticks a range in the Tracks card.</strong> Ticking the first ten of
+thirty tracks was ten clicks on an eleven-pixel box, which is the arithmetic
+that makes a batch action cost more than doing the ten by hand. Click one box,
+shift-click another, and every row between the two takes the state the clicked
+box is moving to — the gesture every file list has. The anchor is remembered as
+a row’s <strong>id</strong> and resolved to a position at click time, because the rows are
+drag-reorderable and the card’s list is not the store’s: an index cached at the
+first click is a lie the moment anything moves.</p>
+</li>
+<li>
+<p><strong>Z-score the tracks first, on the metaplot.</strong> A new option under <em>Summary</em>,
+off by default. Two tracks in different units — a CPM bigWig and a log2 ratio —
+plotted on one axis compare nothing; standardising each by its own mean and SD
+before the metric puts them on one scale. The statistics are taken per <strong>track</strong>
+and shared across that track’s ranking groups, which is the part that is easy
+to get wrong: standardising each group separately would re-centre every one of
+them on zero and erase the ranking the reader split them by. A constant track
+is centred and not divided, so nothing comes back as ±∞, and gaps stay gaps.
+The heatmap shows the standardised values too, so the two halves of one figure
+cannot disagree, and the y axis is relabelled rather than left claiming a unit
+the numbers no longer have.</p>
+</li>
+<li>
+<p><strong>The viewer is published to npm</strong>, as a built directory rather than as
+something to import — so a page can embed a copy that depends on nobody’s
+hosting, including ours:</p>
+<div class="expressive-code"><link rel="stylesheet" href="/pr/166/docs/_astro/ec.zh6mu.css"><script type="module" src="/pr/166/docs/_astro/ec.0vx5m.js"></script><figure class="frame not-content"><figcaption class="header"></figcaption><pre data-language="html" class="wrap" style="--ecMaxLine:110ch"><code><div class="ec-line"><div class="code"><span style="--0:#8B8B8B;--1:#686868">&lt;</span><span style="--0:#55987B;--1:#1E754F">iframe</span><span style="--0:#DBD7CAEE;--1:#393A34"> </span><span style="--0:#BD976A;--1:#876037">src</span><span style="--0:#8B8B8B;--1:#686868">=</span><span style="--0:#C98A7DE4;--1:#96574AFD">"</span><span style="--0:#C98A7D;--1:#96574A">https://cdn.jsdelivr.net/npm/metacooler-viewer@0.11.0/dist/index.html?embed=1&amp;config=…</span><span style="--0:#C98A7DE4;--1:#96574AFD">"</span><span style="--0:#8B8B8B;--1:#686868">&gt;&lt;/</span><span style="--0:#55987B;--1:#1E754F">iframe</span><span style="--0:#8B8B8B;--1:#686868">&gt;</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="Copy to clipboard" data-copied="Copied!" data-code="<iframe src=&quot;https://cdn.jsdelivr.net/npm/metacooler-viewer@0.11.0/dist/index.html?embed=1&amp;config=…&quot;></iframe>"><div></div></button></div></figure></div>
+<div class="expressive-code"><figure class="frame is-terminal not-content"><figcaption class="header"><span class="title"></span><span class="sr-only">Terminal window</span></figcaption><pre data-language="bash" class="wrap" style="--ecMaxLine:99ch"><code><div class="ec-line"><div class="code"><span style="--0:#80A665;--1:#4B7231">npm</span><span style="--0:#DBD7CAEE;--1:#393A34"> </span><span style="--0:#C98A7D;--1:#96574A">pack</span><span style="--0:#DBD7CAEE;--1:#393A34"> </span><span style="--0:#C98A7D;--1:#96574A">metacooler-viewer</span><span style="--0:#DBD7CAEE;--1:#393A34"> </span><span style="--0:#8B8B8B;--1:#686868">&amp;&amp;</span><span style="--0:#DBD7CAEE;--1:#393A34"> </span><span style="--0:#80A665;--1:#4B7231">tar</span><span style="--0:#DBD7CAEE;--1:#393A34"> </span><span style="--0:#C98A7D;--1:#96574A">xf</span><span style="--0:#DBD7CAEE;--1:#393A34"> </span><span style="--0:#C98A7D;--1:#96574A">metacooler-viewer-</span><span style="--0:#C99076;--1:#995728">*</span><span style="--0:#C98A7D;--1:#96574A">.tgz</span><span style="--0:#DBD7CAEE;--1:#393A34"> </span><span style="--0:#8B8B8B;--1:#686868">&amp;&amp;</span><span style="--0:#DBD7CAEE;--1:#393A34"> </span><span style="--0:#80A665;--1:#4B7231">cp</span><span style="--0:#DBD7CAEE;--1:#393A34"> </span><span style="--0:#C99076;--1:#995728">-r</span><span style="--0:#DBD7CAEE;--1:#393A34"> </span><span style="--0:#C98A7D;--1:#96574A">package/dist</span><span style="--0:#DBD7CAEE;--1:#393A34"> </span><span style="--0:#C98A7D;--1:#96574A">/var/www/viewer/</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="Copy to clipboard" data-copied="Copied!" data-code="npm pack metacooler-viewer &amp;&amp; tar xf metacooler-viewer-*.tgz &amp;&amp; cp -r package/dist /var/www/viewer/"><div></div></button></div></figure></div>
+<p>A sixth invocation of the same bundler (<code dir="auto">vite.package.config.ts</code>), and the one
+built for a path it does not know. Everything else this repository emits is
+served from somewhere decided in advance — the site root, <code dir="auto">/v/&lt;commit&gt;/</code>, an
+asar, a disk — and bakes absolute asset URLs accordingly. A tarball is
+unpacked wherever somebody puts it, so its base is <code dir="auto">./</code> and one published
+version serves all of them. The rule that comes with that is the mounter’s:
+the URL has to end in a slash, or name <code dir="auto">index.html</code>.</p>
+<p>Two things follow from a copy not knowing where it is, and both are enforced
+rather than assumed (<code dir="auto">IS_PORTABLE</code>): it registers <strong>no service worker</strong>, since
+a copy mounted under a path it does not own must not claim a scope there — on
+a registry CDN that scope covers other people’s packages — and it asks for
+<strong>no version manifest</strong>, since <code dir="auto">versions.json</code> lives at a site root a vendored
+copy has no way to find. Before those guards, every vendored copy would have
+made two doomed requests: a 404 for a <code dir="auto">sw.js</code> this build does not emit, and a
+cross-origin fetch for a manifest belonging to somebody else’s server.</p>
+<p><code dir="auto">files</code> is <code dir="auto">dist/</code> and <code dir="auto">dist-cli/</code>, which is the whole of what stands between
+a publish and 250 MB of demo data, and which makes <code dir="auto">npx metacooler-run</code> work
+against a published version with no clone. <code dir="auto">prepack</code> builds and
+<code dir="auto">check-package-build.mjs</code> then refuses the result if it is wrong — a tarball
+packed over a <em>site</em> build would carry absolute asset URLs that 404 on every
+mount but the site root, and unlike everything else here a published version
+cannot be corrected.</p>
+<p><code dir="auto">private: true</code> is gone with its comment. The argument it made — an
+application, not a library — is still true and is not what publishing changes:
+what a registry is wanted for here is hosting nobody has to trust, not
+dependency resolution. Specified at SPECS §22.</p>
+</li>
+<li>
+<p><strong>A <code dir="auto">LICENSE</code> file</strong>, with the MIT text the manifest has always declared. It
+was missing, which matters most at the moment a package is published: npm
+shows the licence of a package it can find one for, and a tarball that
+declares MIT without carrying it is asking to be taken on trust.</p>
+</li>
+<li>
+<p><strong><code dir="auto">.pairs</code> files open, at a resolution you choose.</strong> A 4DN pairs file — plain,
+gzipped or bgzipped, with a <code dir="auto">.px2</code> beside it or without one — is now an
+accepted input, and it is the first one the app <strong>imports</strong> rather than opens.
+Everything else in §3 is a matrix in a container; a pairs file is a list of
+contacts, and there is no grid in it. So the first open is refused, a dialog
+asks for a base resolution and a number of ladder rungs, and the file is read
+once. After that it is a map like any other: the same views, the same deck,
+the same turn, the same fourteen analysis tasks, none of which learns the
+container exists.</p>
+<p><strong>The grid could not be guessed</strong>, and that is why there is a dialog rather
+than a default. A bin table inferred from the largest coordinate observed
+would differ between two subsamples of the same library — the one way of being
+wrong that survives every check downstream and makes two files silently
+incomparable.</p>
+<p><strong>The ladder is nearly free</strong>, so it is offered rather than rationed: the base
+rung costs a pass over the records, and every rung above it is derived from
+that table, which is smaller than the record stream by the ratio of records to
+stored pixels — thirteen to one on <code dir="auto">demo/yeast/</code>. The rungs are spelled the
+way an <code dir="auto">.mcool</code>’s resolutions are, which wires them into the resolution
+picker, the refine ladder and a deck descending to its lead’s rung with no
+code in any of them.</p>
+<p><strong>The shape of the data is what makes this the right design.</strong> On this
+repository’s own demo files, yeast Micro-C is 179 M records and 13.7 M stored
+pixels at 1 kb; the mock community is 10.9 M records and 7.1 M pixels. The
+input is gigabytes and the output is tens of megabytes — so the file is paid
+for once, at open, and every view afterwards costs no I/O at all.
+<code dir="auto">demo/ecoli/SRR19500734.pairs.gz</code> — 238 MB, 17.7 M records — imports in about
+forty seconds.</p>
+<p><strong>What decides that time is the file’s BGZF framing rather than this code</strong>,
+and it is worth knowing because it can be changed. A deflate block costs about
+the same to start whether it holds 1 KB or 64 KB, so a finely framed file pays
+that fixed cost tens of thousands of times over: measured on the same 1.39 M
+records, <strong>0.69 M records/s</strong> at the 64 KiB blocks <code dir="auto">bgzip</code> writes and
+<strong>0.12 M records/s</strong> at the ~1.4 KB blocks that E. coli file has. Re-blocking
+it (<code dir="auto">bgzip -d &lt; f.pairs.gz | bgzip &gt; g.pairs.gz</code>) is worth about 5×.</p>
+<p>An imported map is a <em>fuller</em> citizen than a <code dir="auto">.hic</code>: because the file was
+read, the per-bin pixel index is a by-product rather than a whole-file scan,
+so <code dir="auto">binOffsets()</code> answers where a <code dir="auto">.hic</code>’s refuses and <code dir="auto">nnz</code> is a real number.</p>
+<p>What it is not is a <code dir="auto">.metacool</code>. <code dir="auto">#chromsize:</code> has no concept of a genome, so
+an imported map is a cooler-class citizen (§9) — chromosomes table, no genomes
+table, the four metagenome tasks absent rather than disabled.</p>
+</li>
+<li>
+<p>Switching resolution on an imported map no longer re-reads the file. The
+rungs are spelled as an <code dir="auto">.mcool</code>’s resolutions — which is what wires them
+into the picker, the hash and the refine ladder for free — so a switch
+arrives as an ordinary open carrying no binning, and the ordinary path
+would drop the ladder and ask for a bin size that had already been given.</p>
+</li>
+<li>
+<p><strong><code dir="auto">metacooler-run</code> takes a <code dir="auto">.pairs</code> too</strong>, with <code dir="auto">--bin-size</code> and <code dir="auto">--rungs</code>
+standing in for the dialog the browser shows. Everything after the open is
+the same code, which is the whole point of the CLI: a number computed in a
+batch and a number computed by clicking come out of one implementation. Note
+the older <code dir="auto">--pairs</code> flag is a BEDPE of <em>features</em> for a pileup — a contact
+list is the positional argument, and the usage now says so.</p>
+</li>
+<li>
+<p><strong>The <code dir="auto">.mcool</code> is written back out, and downloads when it is ready.</strong> Every
+rung, as a real cooler: <code dir="auto">chroms</code>, <code dir="auto">bins</code>, <code dir="auto">pixels</code>, <code dir="auto">indexes</code>, cooler’s own
+format attributes, and the pairs preamble carried verbatim in <code dir="auto">metadata</code>
+beside the record count and whatever the import skipped, clamped or had to
+merge. Raw counts and no weights — <code dir="auto">generated-by</code> says <code dir="auto">unbalanced</code>, and
+<code dir="auto">cooler balance</code> is the answer. It runs beside the open map rather than in
+front of it, because the reader has already waited once and what they are
+waiting for now is a file rather than a picture.</p>
+<p>This required narrowing a stated non-feature, and it is narrowed in the open
+at SPECS §18.9 rather than stepped around. Writing a matrix <em>derived from an
+opened map</em> is still refused, for the reason that clause gave: provenance,
+balancing and the bin table would be choices this app makes on the reader’s
+behalf and then seals into a file that outlives the session. A file binned
+from a <code dir="auto">.pairs</code> answers all three from its input — the bin table from
+<code dir="auto">#chromsize:</code> and a size the reader picked, provenance from the header, and no
+balancing at all — and what is written is <em>what is on screen</em>, off the arrays
+the map is drawn from, so there is no second computation to disagree with the
+first.</p>
+<p>Checked two ways, because a round trip alone would only prove the reader and
+the writer agree — which is exactly what they did about <code dir="auto">.hic</code> endianness: the
+file is read back through this app’s own reader <strong>and</strong> compared cell for cell
+against an independent binning of the same records written the slow obvious
+way. One structural difference from <code dir="auto">cooler cload</code> is stated rather than left
+to be found: <code dir="auto">bins/chrom</code> is int32 codes rather than an HDF5 enum, because
+h5wasm exposes no enum construction. Everything numeric is identical.</p>
+</li>
+<li>
+<p><strong>The viewer, inside somebody else’s page.</strong> <code dir="auto">?embed=1</code> mounts the same web
+build with no window around it — no header, no tab strip, no status bar — so
+it can be the figure in a portal, a lab site, a course page or a paper’s
+supplementary material. It is an <code dir="auto">&lt;iframe&gt;</code> and a URL: no backend, no package
+to install, and no header for the host page to set.</p>
+<p>That last one is why this is possible at all. Cross-origin isolation
+(<code dir="auto">COOP</code>/<code dir="auto">COEP</code>) has to be arranged by the <em>hosting</em> page and almost never is,
+which is the usual reason a wasm application cannot be embedded. This viewer
+has never needed it — h5wasm 0.10.x is single-threaded with the binary inlined
+— so the two prerequisites that <em>are</em> hard were already met: every view state
+is in the hash, and every push is archived at <code dir="auto">…/v/&lt;commit&gt;/</code>, so an embed in a
+2026 paper still renders in 2031.</p>
+<p><strong>Three ways to say what to show</strong>, in the order they override one another:
+<code dir="auto">#s=</code> (a whole session deflated into the link, what <strong>Share</strong> already
+produced), <code dir="auto">#uri=…</code> (one file at one view, what a navigation leaves behind),
+and the new <code dir="auto">?config=&lt;url&gt;</code> — a published <code dir="auto">.metacooler.json</code> named in the
+address, fetched, signed where a bucket entry covers it, and resolved against
+its own URL, through the road <code dir="auto">Session.openConfigUrl</code> already took for the
+picker’s URL box. <code dir="auto">?config=</code> is the pointer form of what <code dir="auto">#s=</code> carries as a
+payload: editable after the embed is published, of no length, and
+self-contained enough that the folder can be copied to another bucket.</p>
+<p><strong>And a <code dir="auto">postMessage</code> channel</strong>, so an embed is not only a picture: <code dir="auto">ready</code>
+and <code dir="auto">state</code> out, <code dir="auto">where</code> and <code dir="auto">navigate</code> in. A <code dir="auto">navigate</code> is a <em>patch</em> over
+what is on screen — <code dir="auto">{ locus: … }</code> moves the browser without the page knowing
+what else is in the state — and it is serialised and parsed back through
+§5.5’s own reader rather than believed, because an object from another origin
+is exactly as untrusted as a hand-edited link. The frame answers only the
+window that framed it, only after that window has spoken, and only at the
+origin it spoke from: a reader can open <em>their own</em> file in an embed, and the
+URL that follows is not the host’s to learn unless it asked to be told.</p>
+<p><strong>One bar, and two of the five columns.</strong> Chrome-less is not featureless: the
+bar carries the mark and the name — a link out to this same view in the full
+application, in a new tab — the file’s own breadcrumb, and on the right the
+Annotations and Aesthetics toggles beside <strong>About</strong>, which is where a figure
+in somebody else’s page says what it is, that nothing is uploaded, and which
+build drew it. Those two columns stay because they are controls over the
+<em>picture</em>; Files, General and Analysis are about the window. They arrive
+folded, standing as named spines on either edge — a column is open until
+somebody folds it, and a frame that honoured that came up with five open
+columns and thirty pixels of map between them — and they neither read nor
+write the fold and width kept for the full app, so a reader who opens a panel
+inside an embedded figure does not find the application rearranged the next
+time they go to it.</p>
+<p>Specified at SPECS §21, with a picture of a real one and the worked example in
+the README.</p>
+</li>
+<li>
+<p><strong>A progress bar on the two opens that are worth watching, with a way out.</strong>
+Almost every read here is bounded and finishes before anyone could want news
+of it. Two are not: a HiC-Pro pair is read whole and parsed at open (§3.9),
+and an <code dir="auto">.scool</code> over the network pays its listing cost up front (§3.8) — and
+a spinner in front of either gives a reader no way to tell a slow connection
+from a hung one, and no way to stop.</p>
+<p>So the loading screen now talks back. It stays a spinner until the worker has
+something to say, and from the first word it is a labelled bar and a
+<strong>cancel</strong>: bytes while a file is coming across, pixels while it is parsed —
+two sweeps with a denominator each, rather than one bar sliding between two
+and appearing to go backwards. Cancelling is not a failure and does not look
+like one: it stops the download mid-stream and goes back to the picker, the
+way dismissing the gate does. A 258 MB pair reads in about four seconds, and
+the bar spends three of them on the download.</p>
+<p>The <code dir="auto">.scool</code> listing is the one wait that cannot be measured <em>while</em> it
+happens — it is a single call into HDF5 that issues a thousand small reads and
+returns when it has them, so the thread is not free to say anything until it
+already has the answer. What it can say is which wait it is, before it starts:
+an indeterminate bar under the name of the phase.</p>
+</li>
+<li>
+<p><strong>A cell sum says how far it has got.</strong> Summing a cell set is the one read in
+this application that is linear in something other than the picture: the same
+window that draws instantly over one cell is four thousand small reads over a
+whole file, and the veil in front of the map said <code dir="auto">loading…</code> for all of it.
+It now counts cells — <code dir="auto">summing 1,204 of 3,882 cells…</code> — in every map view, and
+the whole-file view’s own bar names the unit it is counting rather than
+calling three hundred cells three hundred pixels.</p>
+</li>
+<li>
+<p><strong>HiC-Pro’s <code dir="auto">.matrix</code> + <code dir="auto">_abs.bed</code> pair, as one contact map.</strong> The output of
+the pipeline most published Hi-C was processed with, and it opens as what it
+is: the BED is the coordinate system, the matrix is the pixels, and between
+them they are an ordinary map — the chromosome table, every region, the
+analysis panel, tracks, export, the deck. All four <code dir="auto">MATRIX_FORMAT</code> variants
+read, <code dir="auto">iced/</code> matrices included.</p>
+<p><strong>The bin file is found three ways, because it is not optional.</strong> A <code dir="auto">.tbi</code> is
+an optimisation and a <code dir="auto">.bai</code> is a format’s only bounded read; an <code dir="auto">_abs.bed</code> is
+the matrix’s <em>coordinate system</em>, so without it there is not a slower map but
+no map. So it is paired when both are dropped together, handed over when the
+matrix is picked out of a connected folder, and probed for beside a URL where
+HiC-Pro writes it — <code dir="auto">raw/</code> and <code dir="auto">iced/</code> share one bed per resolution, so the
+<code dir="auto">_iced</code> matrices are tried against the raw directory’s too. A URL whose bin
+file is somewhere unguessable can name it: <code dir="auto">&lt;matrix&gt;#bins=&lt;url&gt;</code>. A matrix
+with none of the three is refused by name, and the refusal lists all three.</p>
+<p><strong>Read whole once, and then it is a cooler.</strong> This is the one format here that
+cannot be indexed: the rows are text of variable width, so byte offset and bin
+id have no relation, and <code dir="auto">asis</code> says outright they need not be sorted. So the
+matrix is parsed at open — byte by byte, never a string per line, at a measured
+6.8 M pixels/s — and a counting sort by <code dir="auto">bin1</code> produces the sorted triplets and
+the cumulative index together. After that every read is bounded and in memory,
+and panning costs nothing.</p>
+<p>The sort behind that is a <strong>radix sort — two stable counting passes, by
+column then by row — and not a sort per row band</strong>, which is what it was
+first. Bands are wide: a row of a 100 kb human matrix has thousands of
+non-zero columns, and sorting each on its own is quadratic in that width. On a
+211 MB file it took 59 seconds where the radix sort takes 3.7, and the parse
+itself runs at 100 MB/s — the sort must not be what decides the wait. The
+second pass’s bucket boundaries <em>are</em> the cumulative <code dir="auto">bin1_offset</code>, so the
+index falls out of the sort rather than being built after it.</p>
+<p><strong>Which is why there is no <code dir="auto">HicProStore</code>.</strong> A <code dir="auto">.hic</code> cannot answer <code dir="auto">pixels/*</code>
+or <code dir="auto">indexes/bin1_offset</code> and needs a pixel store of its own; this container
+was read whole by necessity, so it serves those datasets honestly and
+<code dir="auto">CoolerStore</code> reads them unchanged. The pixel path for a HiC-Pro map is the
+cooler path, byte for byte.</p>
+<p><strong>A mirror and a repeat are not the same duplicate.</strong> Two rows can land on one
+cell and they mean opposite things: <code dir="auto">(a, b)</code> and <code dir="auto">(b, a)</code> is one contact
+stated twice, which <code dir="auto">MATRIX_FORMAT=complete</code> writes and which must be
+<em>dropped</em> — adding it doubles every off-diagonal cell and leaves the diagonal
+alone, giving a picture that still looks entirely like a contact map. Two rows
+on the same side are more evidence, and are <em>summed</em>. Once both have been
+folded onto the upper triangle they are indistinguishable, so the side each
+row was stored on is carried as far as the collapse.</p>
+<p>Not read, and both deliberate: fragment-level maps (<code dir="auto">GENOME_FRAGMENT</code>), since
+a fragment grid is variable bins under another name — refused with the config
+key that produced it; and the <code dir="auto">.biases</code> file, since those biases normalise the
+<em>raw</em> matrix while the <code dir="auto">iced/</code> one is already normalised, and offering them as
+a weight column would let somebody normalise twice.</p>
+</li>
+<li>
+<p><strong>A second load gate, on bytes rather than on the network.</strong> Past 200 MB of
+matrix the reader is told what the read costs — the size, the pixel count it
+works out to, and that it is paid once rather than per view, which is the part
+that turns a bad number into an acceptable one. It shares a module with the
+<code dir="auto">.scool</code> gate below because the two are the same shape; they differ in that an
+<code dir="auto">.scool</code> offers two readings and this offers one, and that an <code dir="auto">.scool</code>’s cost
+is round trips so a local file is never asked, where this one’s is parsing and
+memory and a local file pays in full. The panel also names the way out for a
+map too fine to hold: <code dir="auto">cooler load -f coo</code> turns the same two files into a
+<code dir="auto">.cool</code> that opens in a handful of requests at any size.</p>
+</li>
+<li>
+<p><strong><code dir="auto">.scool</code> — single-cell coolers, per cell and summed.</strong> The container from
+<a href="https://academic.oup.com/bioinformatics/article/37/14/2053/5948994">Wolff <em>et al.</em> 2021</a>:
+one cooler per cell over one shared bin space. It opens as what it is. A
+<strong>Cells</strong> table is the landing view — every cell in the file, with the <code dir="auto">nnz</code>
+and contact total its own attributes record, sortable and filterable like the
+genomes table beside it — a click opens one cell’s map, and ticking any number
+of them <strong>adds them together</strong>. Tick all of them and that is the pseudo-bulk.</p>
+<p><strong>Both layouts, and neither is the special case.</strong> The standard <code dir="auto">/cells</code>
+container <code dir="auto">cooler.create_scool</code> writes, and the flat one HiCMatrix and
+scHiCExplorer produced before the format was standardised in cooler 0.8.11 —
+cells at the file root, no shared tables, and a root that announces nothing.
+The second is the majority of what exists (every published <code dir="auto">.scool</code> predating
+2021 is one), so it is detected by elimination and tested at every step
+alongside the first.</p>
+<p><strong>Summing needs no arithmetic, and that is the whole design.</strong> Every cell
+indexes the same bins, so a bin id means the same thing in all of them; and
+the dense scatter was already additive per pixel, because a bounded rectangle
+may arrive in several chunks. A store that hands one callback each selected
+cell’s chunks in turn therefore <em>is</em> their sum — no summing code, no
+intermediate matrix, a peak footprint of one chunk. The same falls out twice
+more: <code dir="auto">nnz</code> is a total over the set, and a sum of cumulative indexes is the
+cumulative index of the sum, so the density proxy, the band planner and the
+selection read all work over a cell set without knowing one exists.</p>
+<p><strong>The set is a property of the file, not of the view.</strong> Chosen cells stay
+chosen through a chromosome and back out, they show in the breadcrumb in every
+view — a map summed from one cell and one summed from four thousand are
+different experiments and that must not be inferrable only from the picture —
+and they travel in the link as <code dir="auto">cells=</code>, with <code dir="auto">*</code> for all of them, because
+four thousand names is not a URL. Balancing sums the raw counts and applies
+the file’s <em>shared</em> <code dir="auto">/bins/weight</code> once to the result, which is cooler’s own
+definition applied to the pseudo-bulk; it is offered only where such a column
+exists. One cell is addressable on its own as <code dir="auto">file.scool::/cells/&lt;name&gt;</code> and
+is an ordinary cooler there, weights included.</p>
+</li>
+<li>
+<p><strong>A gate before a remote <code dir="auto">.scool</code> is read, with both costs on the buttons.</strong>
+The first and only open in this viewer that asks a question, and the reason is
+worth stating because it is a property of HDF5 rather than of the format: a
+container’s cell <em>names</em> live in the group’s link storage, which the library
+allocates as members are added — immediately after each cell’s pixels, for
+every writer there is. The index of the file is interleaved with its data
+rather than gathered anywhere.</p>
+<p>Measured on the 3,882-cell Nagano 2017 file: listing the cells is <strong>1,015
+reads averaging 512 bytes, spread uniformly across all 327 MB</strong>. Not a quirk
+of that writer — a container written by <code dir="auto">cooler.create_scool</code> behaves
+identically, and a synthetic 800-cell 50 MB one touches all 48 of its megabyte
+blocks. So no chunk size wins: the reads are ~500 bytes about 320 KB apart, so
+anything large enough to coalesce them fetches the whole file and anything
+small enough to avoid that needs a round trip each. Rather than pick one
+silently, the reader is offered both with the numbers on them — one download,
+or ~1,000 small requests for ~5% of the bytes — and told that a local copy
+costs neither. <strong>A local file is never asked</strong>: the question is about round
+trips, and a file on disk seeks for free.</p>
+<p>The consolation is that the listing is the only cost. Every cell’s attributes
+sit in metadata the listing already brought across — measured at <em>zero</em>
+additional chunks on both files — so the cells table’s columns are free once
+the names are paid for.</p>
+</li>
+<li>
+<p><strong>A despeckle whose window sizes itself, in the <code dir="auto">smooth</code> picker.</strong> One new
+setting, <code dir="auto">adaptive</code>, beside the fixed <code dir="auto">3 × 3</code>, <code dir="auto">5 × 5</code> and <code dir="auto">7 × 7</code>. Each cell’s
+window grows until it covers enough evidence to average, so it stays narrow
+where the counts are thick and widens where they thin out. Carried in the link
+as <code dir="auto">smooth=a50</code>, and written into the colourbar caption as
+<code dir="auto">counts · smoothed adaptively</code>.</p>
+<p><strong>Why a fixed window was never going to work away from the diagonal.</strong> The
+precision of a box mean depends on the <em>counts</em> it covers, not on the cells it
+covers. Near the diagonal a <code dir="auto">7 × 7</code> box holds thousands of contacts and its mean
+is steady; at 300 kb separation on the same map those 48 cells are almost all
+zero, so the mean is a handful of counts divided by 48 — still noise — and
+widening the box does not help, because what is in it grows in proportion to
+nearly nothing. On a yeast map at 500 bp the coefficient of variation between
+200 and 800 bins of separation is <strong>6.8 raw, 1.1 at <code dir="auto">7 × 7</code>, and 0.41
+adaptive</strong>.</p>
+<p><strong>This is serpentine’s criterion, not serpentine’s algorithm.</strong>
+<a href="https://doi.org/10.1093/bioinformatics/btaa249">Serpentine</a> (Baudry <em>et al.</em>,
+<em>Bioinformatics</em> 2020) is where the idea of holding the counts constant instead
+of the window comes from. Its own method grows <em>regions</em> and averages each,
+which makes the result a partition — the right shape for a differential
+analysis, and the wrong one for a viewer, because the partition is global and
+stochastic, so panning by one bin redraws every boundary and the map visibly
+reshuffles under the reader. Here the windows overlap and no partition is
+formed, so a cell reads the same wherever it sits in the viewport.</p>
+<p>The width is set by the block’s <strong>as-read</strong> values while the mean is taken over
+whatever the derivation has made of them — serpentine’s own separation, and what
+makes the setting work under the O/E at all, since observed-over-expected is
+near 1 everywhere by construction and a window sized on it would be the same
+size everywhere. The target is a multiple of the block’s mean rather than an
+absolute count, because <code dir="auto">score</code> may have put balanced values in the cells.</p>
+<p><strong>Picking it turns the O/E on</strong>, exactly as clicking the toggle would, and the
+<code dir="auto">log2</code> scale, the symmetric range and the diverging ramp all follow from the
+neutral of 1 that gives the result. That is the picture the setting is for: on
+raw counts all it can denoise is the distance decay that was never in question.
+Turning the O/E off again is left to the reader.</p>
+<p>The window is floored at <code dir="auto">3 × 3</code> and capped at a radius of 192. Blocks are
+capped at <strong>16 M cells</strong> — the 4096² raster cap, so in practice it is available
+on anything the viewer draws. The cumulative tables are built for a <strong>band of
+rows</strong> at a time rather than for the block, so about 128 MB is resident whatever
+the block’s size; without that a 16 M block would allocate over half a gigabyte
+on the thread drawing frames. Time is roughly linear: <strong>173 ms at 841², 328 ms
+at 1,200², 867 ms at 4 M and 3.9 s at 16 M</strong>. That last is a real freeze and the
+honest price of the cap being where it is; if it ever needs fixing the answer is
+the analysis thread rather than a lower cap. Above the cap the fixed <code dir="auto">3 × 3</code> is
+used and the refusal is said <strong>twice</strong> — in the export caption, and in the view
+note under the heading, because a caption nobody reads until they export is no
+use to somebody looking at the screen.</p>
+</li>
+<li>
+<p><strong>VCF opens as a lane of variants.</strong> Drop a <code dir="auto">.vcf</code>, or a <code dir="auto">.vcf.gz</code> with its
+<code dir="auto">.tbi</code>, and the calls draw as boxes over the reference bases each record is
+about — with the symbolic ones at their real size, read out of <code dir="auto">INFO/END</code> and
+<code dir="auto">INFO/SVLEN</code>, because <code dir="auto">&lt;DEL&gt;</code> writes a single <code dir="auto">N</code> in REF whatever the deletion’s
+length and a forty-kilobase event drawn as a one-pixel tick is a wrong answer
+that looks like an answer.</p>
+<p>It was already being read, wrongly. The feature sniffer has no “none of mine”
+answer — its last line is <code dir="auto">return 'bed'</code> — and the row walker strips every <code dir="auto">#</code>
+line, so a VCF reached it as a nameless eight-column table, was parsed as a
+BED, and was refused with <em>“all 7 lines failed the contig, start, end test that
+every BED-like format begins with”</em>: a message naming a format the reader never
+handed over.</p>
+<p><strong>A substitution is drawn in the colour of the base it substitutes to.</strong> Over
+one locus with a FASTA and a BAM open, a heterozygous A&gt;G now reads as one
+column in inks that agree — the sequence row writes a green <code dir="auto">A</code>, the pile puts
+orange <code dir="auto">G</code> marks through half its reads, the depth row’s mark rises to half,
+and the variant row draws an orange box saying somebody called it. A record with
+no single base behind it — an insertion, a deletion, a structural variant,
+several ALTs at once — takes the grey an <code dir="auto">N</code> is already drawn in, which already
+means <em>no single-base answer</em>. What separates an insertion from a deletion is
+extent, which is exact: a forty-kilobase deletion is a forty-kilobase box.</p>
+<p>A single base gets three pixels so it can be seen and clicked, and a lane stops
+resolving individuals the moment they are closer together than that — which is
+the rule that keeps a dense stretch from merging into one solid bar in
+whichever ink was drawn last. Collapsed, it says how many are there instead.</p>
+<p>A VCF also <strong>says what genome it is on, exactly</strong>: its <code dir="auto">##contig</code> lines are a
+<code dir="auto">chrom.sizes</code> written inside the file, so a dropped VCF opens a browser over its
+real chromosomes rather than reporting each one as ending at its last variant.
+Reading part of a bgzipped one costs nothing new — it takes the same tabix road
+a bgzipped GTF does.</p>
+<p>The <strong>genotype columns are not drawn</strong>, and the lane says so: <em>“1,284 variants ·
+2,504 samples not drawn”</em>. A matrix of variants × samples is a second
+application’s worth of picture for a question a contact map is not asking, and
+a reader who brought a thousand-genome file should be told what they are looking
+at rather than left to infer it.</p>
+</li>
+<li>
+<p><strong>Alignment files open as two lanes.</strong> Drop a <code dir="auto">.bam</code> with its <code dir="auto">.bai</code> or <code dir="auto">.csi</code>
+beside it — or point at one by URL — and it lands as <em>two</em> rows over the one
+file: its <strong>depth</strong>, drawn like any other track (on any of the map’s four
+edges, in the 1D browser, with limits, an autoscale group, the ceiling drag,
+the readout and the exported figure, because it goes through the one funnel
+every lane’s values already come out of), and the <strong>reads</strong> themselves, in
+packed rows, once the view is narrow enough for a read to be more than a few
+pixels. A <code dir="auto">.bam</code> can also <em>start</em> a browser session on its own, since its
+<code dir="auto">@SQ</code> table is every sequence and its exact length.</p>
+<p>Two rows rather than two bands of one lane, because they are two pictures with
+nothing in common — a curve against a value axis, and a stack of rectangles.
+Each is resized, reordered, hidden and <strong>closed</strong> on its own, so a reader who
+wants the depth without the pile closes the pile and keeps the link they had.
+Behind them is one open file and one parsed index, and the filters that decide
+<em>which reads count</em> — the mapping-quality floor and the duplicate switch — are
+written through to both, because a floor on the pile and not on the depth
+above it is two pictures of two different files under one name.</p>
+<p>The pile lives only in the 1D browser, and that is geometry rather than
+policy: beside a heatmap the axis is an axis of matrix bins, where the finest
+unit is a bin and not a base, so there is nothing for a read to be drawn <em>on</em>.
+Too far out for a read to be wider than its own ink, or a lane dragged too
+short to hold a row, and it says <em>zoom in</em> rather than drawing a smear — the
+depth over the same reads is the lane beside it, and is drawn at every zoom.</p>
+<p>A read is a rectangle only when nothing happened to it, and the exceptions are
+what anyone is looking at: a deletion is a rule through a gap because the read
+spans it and says it is absent, a spliced gap is a thinner rule because the
+read says nothing about what it skipped, an insertion is a tick between two
+bases with no width of its own, a soft clip is drawn faintly outside the
+aligned extent, and a mismatch is a coloured column — from <code dir="auto">=</code>/<code dir="auto">X</code> where the
+aligner wrote them, from <code dir="auto">MD</code> where it did not, and from a FASTA already open
+in this session where neither is there. The lane says which of the three it
+used, or that it had nothing to compare against, rather than drawing an
+agreement it did not check.</p>
+<p><strong>A variant is coloured on both rows, where a FASTA is open.</strong> In the pile it
+is the mismatch mark it always was, one coloured column per read. On the depth
+row it is the share of each position that disagrees with the reference, drawn
+from the baseline up — so a heterozygous site is a mark half the height of the
+curve over it, and a homozygous one fills it. Above a fifth of the depth only,
+because under that every pileup is speckled with sequencing error; and only
+once a pixel is a handful of bases, because at a kilobase to the pixel the
+mark would be the genome’s background mismatch rate drawn everywhere.</p>
+<p>The mark is drawn in a colour that is deliberately none of the four bases. It
+shipped as the sequence palette’s own T, which put one red in one column under
+two opposite claims — <em>the reads disagree here</em> on the depth, and <em>this read
+has a T here</em> in the pile — so a reader studying a T&gt;C site would have read
+the same ink two ways an inch apart.</p>
+<p>It costs no request: the residues come from a FASTA already open in the same
+worker, and a FASTA dropped <em>after</em> the BAM refreshes both lanes without a pan.
+It is not a variant call — substitutions and short deletions against whatever
+is loaded, with no base-quality filter, no strand-bias test and no score.</p>
+<p><strong>The controls are the pile’s, not a track’s.</strong> Colour by strand, by pair, by
+insert size, by where the mate went, or by mapping quality, with a key under
+the picker naming every category. It colours; it does not <em>group</em> — the rows
+are packed by position, so the categories are interleaved down the pile rather
+than banded, and a band per category is not built. Beside it the pair layout
+and the split-read switch, which are the pile’s alone; and on <strong>both</strong> rows the
+mapping-quality floor and the duplicate switch, which are about which reads
+count. All of it is stored with the session.</p>
+<p>Four of the five reach the worker on the request that needs them; the layout
+is the one the worker never reads, so changing it redraws what is already in
+hand rather than fetching a window again.</p>
+<p><strong>A pair is drawn as a pair.</strong> Both ends of a template on one row, joined by a
+dotted thread across the part that was not sequenced — with <code dir="auto">fragments</code> and
+<code dir="auto">reads</code> beside it in the card for a reader who wants the fragment as one bar,
+or a single-ended library packed record by record. The old switch drew a solid
+thread and packed by position alone, so at any real depth the two ends landed
+on different rows and the thread ran towards a mate that was not there. A change made while the
+previous window is still decoding replaces it — the test is against the
+<em>running request’s</em> controls, never against the drawn window’s, which between
+a change and the first landing is permanently the old one.</p>
+<p><strong>Split reads are drawn and never counted.</strong> A supplementary alignment is a
+further piece of one molecule the aligner had to split across a breakpoint, so
+drawing it is how a reader sees the split and counting it would report one
+fragment as two. The split is what holds that: the depth is its own row on its
+own road, and the switch is not even in the key its samples are cached under,
+so turning it on costs the depth nothing at all. It is outlined rather than
+faded — faded already means “soft clip” here — and it is never joined to its
+primary as though it were a mate.</p>
+<p><strong>A click on a read opens a card and fetches nothing.</strong> The flags in words
+with the raw number beside them, the CIGAR, the clips, where the mate went,
+the insert size, the category it was coloured as. Every field is already in
+the pile the lane drew, which is why it answers at once and why it cannot
+disagree with the rectangle that was clicked — and the fields a BAM uses to
+mean “not recorded” are shown as that rather than as numbers.</p>
+<p><strong>This is the one format allowed to require a companion file, and that took an
+argument rather than a line of code.</strong> SPECS §13 listed required companion
+files among the explicit non-features, and §1 said C1 and C3 together mean the
+app can never require one. The scope of that rule is now written down: it
+protects the <em>contact map’s</em> opening path, which is what makes the
+no-preprocessing claim true, and it was never a claim about every byte the app
+reads. A BAM has no whole-file fallback that respects §12 at all — it is read
+by region and the index is the only thing that makes reading by region bounded
+— so the narrow rule replacing it is stated positively at §8.13: a format whose
+index is its only bounded read may refuse without one, and the refusal names
+the command. Two do: <code dir="auto">samtools index</code> for a file with no index beside it, and
+<code dir="auto">samtools sort</code> for one that is not in coordinate order, because a name-sorted
+file handed to a region query answers with whatever was in those blocks, which
+is worse than refusing because it looks like an answer.</p>
+<p><strong>Above what it can afford, the lane draws nothing and says why.</strong> There is no
+summary layer in a BAM, so depth over a window is a full read of the reads
+under it, and a window can be legitimately unanswerable. The forecast is made
+from the index alone, so a window too deep to draw is refused at zero data
+requests rather than discovered part-way through a fetch. Drawing the BAI
+linear index’s byte density there instead was considered and refused: it is
+compressed bytes per 16 kb rather than depth, wrong wherever read length
+varies, and absent entirely on CSI — it would be the first quantitative lane
+here that means something other than what it says.</p>
+<p>Three decisions inside the depth itself, each a place a viewer can quietly
+disagree with <code dir="auto">samtools</code> and never say so. A CIGAR <code dir="auto">N</code> is <strong>not</strong> covered — it
+is reference the read is aligned across rather than over, and counting it draws
+an RNA-seq gene as a solid block. Secondary and supplementary alignments are
+excluded, since they are one molecule reported twice and they cluster exactly
+where the number is read most carefully. Duplicates are <strong>kept</strong> unless asked
+otherwise, because marking them is a pipeline’s decision and hiding them
+silently would disagree with every other reading of the same file.</p>
+<p>The reader is written here, with no new runtime dependency, for the reason
+<code dir="auto">hic/format.ts</code> and <code dir="auto">annotations/tabix.ts</code> both give at length. <code dir="auto">@gmod/bam</code>
+is a devDependency and reads the fixtures alongside it, exactly as <code dir="auto">hic-straw</code>
+reads the <code dir="auto">.hic</code> ones — and the first thing it caught was a record prefix off
+by four bytes in this repo’s reader <em>and</em> its fixture builder at once, which
+is precisely the mutual misunderstanding a round trip cannot see.</p>
+</li>
+<li>
+<p><strong>Tabs can be called something.</strong> A tab is labelled by its file, which is the
+right default and a poor name for the work: four tabs reading
+<code dir="auto">matrix_1000.mcool</code> off four runs are four identical labels whose only
+distinguishing part is the one they all share. Double-click a tab — or press
+<kbd>F2</kbd>, or find <em>Rename this session</em> in the palette — and type. Enter
+commits, Escape abandons, and an <strong>empty box hands the tab back to its file
+name</strong>, which is what makes a rename undoable.</p>
+<p>The name is part of the <em>session</em> rather than of the window, so it travels in
+the saved workspace, in the durable record and in a share link: a workspace of
+six tabs whose names did not come back is six tabs a reader has to open one at
+a time to tell apart. It is kept against the file, so it survives a change of
+resolution and a redirect into an entry of a collection, and opening a
+<em>different</em> file in the tab hands the label back — replacing the file is
+replacing the work. A tab with nothing open cannot be named, and the strip does
+not offer the gesture there rather than accepting a name it would have nowhere
+to keep.</p>
+<p>The tooltip leads with the URI it has always led with, because a named tab is a
+tab whose file is no longer on screen anywhere else.</p>
+</li>
+<li>
+<p><strong>A saved workspace now carries four things it used to leave behind.</strong> Each was
+invisible in the same way — the file opened, the tabs came back, and one
+decision the reader had made was quietly the importing window’s instead. Every
+one of them is a decision that takes minutes to make and a moment to lose.</p>
+<p><strong>Which columns were folded, and how wide they were.</strong> A fold is a preference
+and lives beside the theme, which is exactly why it has to travel: a window
+that restores twelve tracks into an Annotations column the sender had dragged
+to 520 pixels, and puts it back at the default with Analysis unfolded over it,
+has restored the tracks and not the arrangement. All five columns, the Files
+panel included. A file that says nothing about a column leaves it alone.</p>
+<p><strong>How each companion of a deck was drawn</strong> — its transform, its ramp, its clip,
+the score it reads instead of the deck’s, and whether its chain was open. The
+deck’s own doctrine is that the view is shared and the presentation is not, and
+a deck of four replicates each clipped to its own depth is precisely what a
+deck is <em>arranged</em> for; restoring it onto the lead’s one clip is a legal deck,
+a plausible-looking one, and not the figure that was saved. Keyed by the file
+each map was showing, never by its slot — a slot id is minted per deck and
+names nothing tomorrow — which is the same key the parked lanes already use.
+One consequence worth stating: one file open twice in one deck has one look,
+and comes back on whichever of the two clips was set last.</p>
+<p><strong>What the session’s own map says about a track.</strong> Every other map’s lane was
+written down and the lead’s was not, so the two things a lane can say that a
+track cannot — <em>I am not on this map</em> and <em>my range here is different</em> — were
+sayable about every map in a deck except the one every session has. Both were
+losable in one gesture: taking a track off the lead is one press of its last
+lit edge, and every analysis result computed against a starred companion is
+placed there and taken off the lead. A deck of four then came back with the
+fourth’s tracks stacked on the first as well.</p>
+<p><strong>The overlay toggles, on the road that had never applied them.</strong> See below.</p>
+</li>
+<li>
+<p><strong>Companions’ scales are remembered across a reload, not only across a save.</strong>
+The same record the workspace carries is this session’s own memory, written on
+every change rather than on a save — so a reload, the durable restore after a
+browser restart, and an exported file all describe the same deck. Nudging four
+companions’ clips and closing the window used to lose all four, because a clip
+is not a navigation and nothing on the state road ever fired.</p>
+</li>
+<li>
+<p><strong><code dir="auto">Expected (cooltools)</code> beside the density on P(s).</strong> A <em>Quantity</em> choice on
+the contact-probability task. The default is unchanged — the probability
+density, <code dir="auto">HiContacts::distanceLaw()</code>’s <code dir="auto">norm_p</code> — and the other setting plots
+contacts at a separation over the <strong>bin pairs that could have held one</strong>,
+which is what <code dir="auto">cooltools expected-cis</code> reports and what a scaling exponent is
+compared against −1 or −1.5 as.</p>
+<p>They differ by exactly one denominator: <code dir="auto">density / expected = pairs(s) / constant</code>. The pair count is flat while the separation is short against the
+sequences and falls to zero at the longest one, so on the yeast demo the two
+are within 1 % below 10 kb, 13 % apart at 100 kb and a factor of fifty apart
+at 1.2 Mb — and on a mammalian map they agree over everything anybody fits.</p>
+<p>Verified end to end rather than by construction: pooled genome-wide over the
+yeast demo, <code dir="auto">--quantity expected</code> reproduces <code dir="auto">cooltools.expected_cis</code> to 4e-6,
+which is the printing precision of the TSV. The quantity is cooltools’; the
+bins are the task’s own <code dir="auto">factor</code>, so 1.2589 matches <code dir="auto">logbin_expected</code>’s ten to
+the decade. What O/E and the pileups divide by is untouched — they reach the
+same numbers through <code dir="auto">expectedAt</code>, never through the panel.</p>
+</li>
+<li>
+<p><strong>Four text boxes on every curve, one per axis bound.</strong> <code dir="auto">x</code> from/to and <code dir="auto">y</code>
+from/to, beside the <code dir="auto">log x</code> / <code dir="auto">log y</code> toggles. Empty means “fit the data”, so
+clearing all four is how you get back to the whole curve; a marquee fills them
+in, and typing in them is how two figures are set to the same window for a
+figure panel rather than dragged towards it.</p>
+</li>
+<li>
+<p><strong><code dir="auto">expected</code> in the score picker: the denominator of O/E, drawn.</strong> Every cell
+replaced by the mean of the block at that bin separation, with one scalar
+between each pair of sequences — a banded triangle fading from the diagonal
+and nothing else in it. It is in the picker rather than beside the <code dir="auto">O/E</code>
+toggle because it answers what the numbers <em>are</em>, not what they are compared
+to, and it overrides that toggle rather than composing with it: O/E of the
+baseline is 1 wherever it is anything, so the toggle greys and its tooltip
+says why.</p>
+<p>The reason to look at it is that an O/E is only as trustworthy as its
+denominator. At long separations the curve is a mean over few cells and it
+moves, so a ratio that swings out there is swinging in the model rather than
+in the biology — and until now there was no way to see which.</p>
+<p>Drawn on a sequential ramp with no neutral, because a mean of counts is
+count-like; measured after whichever normalisation is in force, like the ratio
+it comes out of. Its id in a link is <code dir="auto">baseline</code>, not <code dir="auto">expected</code>, so a file
+that carries a <code dir="auto">/pixels/expected</code> column of its own still reaches it — that
+column now reads <code dir="auto">expected (column)</code> in the list, which is the only way two
+entries could have carried one word.</p>
+</li>
+<li>
+<p><strong>Pattern detection, and it is chromosight.</strong> A fifteenth task on the map card:
+loops, borders, hairpins, centromeres and stripes, found by correlating a
+template against a map detrended by its own distance law, with the smears
+suppressed and a Benjamini-Hochberg q-value on every call. It is a port of
+<a href="https://github.com/koszullab/chromosight">chromosight</a> rather than a caller of
+this app’s own invention, and the difference is the whole reason it exists —
+§18.9 refused the second and gave a reason that the first answers: a background
+model and false-discovery control, both of them the published method’s.</p>
+<p><strong>It agrees with that package rather than resembling it.</strong> On
+<code dir="auto">demo/yeast/Yeast_microC_G2M_1kb.cool</code> at the loops preset, <code dir="auto">chromosight detect</code>
+and this task both call <strong>1,100 loops</strong> — the same 1,100, with scores agreeing
+to 5e-7. <code dir="auto">test/golden/analysis/chromosight.json</code> is built by running the package
+itself and compares five stages separately: the undetectable bins, the detrended
+map, the correlation map, every call with its score, p-value and q-value, and
+the pileup. A single end-to-end check would have said “different loops”; these
+say which of five things moved.</p>
+<p>Four outputs, and they are different in kind on purpose. The <strong>loop set</strong> is a
+bedpe — a BED for the patterns that live on the diagonal — offered to the
+Annotations panel, so a call lands on the map it was called from before the
+reader has to decide whether to believe it. The <strong>pileup</strong> is every window it
+found, on chromosight’s own fixed 0–2 seismic scale, which is what lets it be
+laid beside a published figure. The <strong>spectrum</strong> is the distribution of the
+scores behind that pileup: a smooth shoulder running down to the threshold says
+the calling stopped where the threshold was rather than where the pattern did,
+and no list of coordinates ever says that. And a table of the strongest calls.</p>
+<p>The pattern is a parameter rather than five tasks, and every threshold under
+the picker follows the picker — upstream tuned <code dir="auto">pearson</code>, the scan distance and
+the two window-quality percentages <em>per template</em>, so a form that baked one
+preset’s numbers into a box would report borders at twice the threshold
+chromosight uses. <strong>Set them myself</strong> takes them over, and says so in the
+provenance.</p>
+</li>
+<li>
+<p><strong>APA has a fourth normalisation, and it is <code dir="auto">chromosight quantify</code>.</strong> The same
+anchors and the same averaging as the other three, with the control moved: the
+map is detrended by its own distance law <em>before</em> any window is cut, so a cell
+is observed-over-expected at that separation on that sequence — which is what
+chromosight’s pileups are, drawn on the same fixed scale. Three things follow
+and none of them is a detail: the window is the <strong>template’s</strong> size rather than
+the reader’s half-width, because the score under the picture is a correlation
+against those cells; the scan distance is the <strong>loop set’s own reach</strong>, which is
+what <code dir="auto">cmd_quantify</code> sets it to; and <strong>every anchor comes back</strong>, scored or not.
+It reports the per-anchor Pearson correlation, its p-value and its q-value
+beside the pileup, and the same score spectrum the detector draws — which is the
+half of the answer a pileup cannot carry, since two sets with the same mean
+window can be a hundred good loops and four hundred coordinates of which fifty
+are loops.</p>
+<p>Checked the same way: over the demo loop table, this and <code dir="auto">chromosight quantify</code>
+produce the same 1,506 scores and the same pileup, and
+<code dir="auto">test/golden/analysis/chromosight_quantify.json</code> is that package’s output.</p>
+</li>
+<li>
+<p><strong><code dir="auto">seismic</code>, in the colormap picker.</strong> matplotlib’s own five stops, here
+because <code dir="auto">pileup_plot</code> draws with it. A matrix output can now also fix its
+colour range rather than fitting one to the data — used by exactly the two
+pileups above, for the reason a fitted scale cannot serve: a pileup running
+from 0.98 to 1.02 and one running from 0 to 4 would otherwise be the same
+picture in the same colours, and the difference between them is the result.</p>
+</li>
+<li>
+<p><strong>A contact map can be called something.</strong> A map is labelled by its file, which
+is the right default and a poor name for the work: two conditions dropped in to
+be compared are <code dir="auto">mat_G1.mcool::1000</code> and <code dir="auto">mat_G2M.mcool::1000</code>, and every one
+of those characters is on the picture, in the readout under the pointer and in
+the exported figure — where the two words that would tell a reader what they
+are looking at are <code dir="auto">G1</code> and <code dir="auto">G2M</code>. Four replicates in a deck are four labels
+differing in a digit. Click a map’s name on the <strong>Contact maps</strong> card, or on a
+deck cell’s heading, and type. Enter commits, Escape abandons, and an <strong>empty
+box hands the map back to its file name</strong>, which is what makes a rename
+undoable — the Tracks card’s own control in both places, so a reader who has
+learned the gesture on a track has learned it here.</p>
+<p>The name is used everywhere the map is named: the card that lists it, the
+heading over its cell, the two bands of a turned comparison, the readout and
+the tooltip, the derived label on a ratio, and the caption on an exported
+figure. It is kept against the <em>file</em>, so it survives a change of resolution,
+and it travels in the workspace, in the durable record and in a share link
+beside the tab’s own name — a link carrying only the names of maps a recipient
+could open, since the address of a local one is a filename off the sender’s own
+disk. One consequence, which the deck’s saved looks already had: one file open
+twice in a session has one name.</p>
+</li>
+<li>
+<p><strong>The turned view of a comparison shows both files.</strong> A split map is the first
+file above the matrix diagonal and the second below it, and turning it kept
+only the upper triangle — so the second file, the entire reason the picture is
+split, disappeared the moment the reader turned it. It is now drawn as a
+<strong>second band mirrored beneath the first</strong>, the two meeting at one shared
+genomic axis: the same position is the same column in both, so they are read
+against each other at every place without the eye having to reflect one of them
+through a diagonal first. The distance up the side runs outwards from the axis
+in both directions, both bands are named on the picture, and a pointer in the
+lower band reads the lower band’s file. The pair is pinned by its <strong>middle</strong>,
+so a band cut deeper than its box — which is what a zoom in leaves — is clipped
+equally from both and the two files stay the same depth, where an edge would
+take the whole surplus off one of them. A ratio or a difference stays one band,
+its two triangles being the same numbers twice.</p>
+</li>
+<li>
+<p><strong>A map of several chromosomes now carries coordinates.</strong> A whole genome, or a
+selection of chromosomes, had the contig names and nothing else: an axis of
+several sequences has no single coordinate system, so it drew none of the ticks
+that assume one. It is now ruled <strong>one chromosome at a time</strong>, each measured
+from its own first base, with the boundaries the axis already draws saying where
+one ruler stops and the next begins — which is the question a reader is asking
+of a whole-genome map as much as of a single chromosome. The long chromosomes
+carry a position each and the short ones carry their name and nothing more,
+which is the rule the names themselves are already elided by, and a metagenome’s
+thousands of pixel-wide contigs carry none.</p>
+</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="fixed">Fixed</h2><a class="sl-anchor-link" href="#fixed"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Fixed”</span></a></div>
+<ul>
+<li>
+<p><strong>A deep scan of the source, and the thirty-one defects it confirmed.</strong> Ten
+review passes over <code dir="auto">src/</code> — the binary readers, the text parsers, rendering,
+the analysis tasks, session state, the network path, the UI, the deck, the
+workers, and documented-versus-actual behaviour — with every finding handed
+to a second reader whose brief was to <em>refute</em> it. Six claims died there.
+What survived is below, grouped by what it cost rather than by where it
+lived. Every one carries a test that fails without its fix.</p>
+<p><strong>Wrong answers, silently.</strong> A version-9 <code dir="auto">.hic</code> was walked with version 8’s
+footer layout: v9 narrowed each per-chromosome scale factor from float64 to
+float32, and the walk still advanced twelve bytes per chromosome per vector
+instead of eight, overshooting the normalisation index. Depending on what the
+misplaced cursor met, the file either failed to open with a raw
+<code dir="auto">RangeError</code> or opened with its balancing weights silently missing. The
+reason it shipped is the more interesting half: the fixture writer emitted an
+<em>empty</em> expected-value section, so no test ever executed the loop, and the
+<code dir="auto">hic-straw</code> oracle reads v9 through a header pointer rather than by walking —
+so it agreed with us no matter what we did. The fixtures now write those
+sections populated, at each version’s widths, and the oracle fixture zeroes
+that pointer to force both readers down the same path.</p>
+<p>A tabix-indexed <code dir="auto">.gtf.gz</code> or <code dir="auto">.vcf.gz</code> was refused outright. Byte spans from
+the index start at BGZF <em>block</em> boundaries, which are not line boundaries, so
+the first and last lines of every fetched span were record fragments handed
+straight to the parsers — twenty-two lines, none of them parseable, and a
+message blaming the file. The seams are trimmed now, with the two edge cases
+that make the obvious rule wrong handled explicitly: a span starting at byte
+0 begins on a real record, and a file whose last read reached EOF may
+legitimately end without a newline.</p>
+<p>A <code dir="auto">drain()</code> sized its buffer by <code dir="auto">Content-Length</code> while reading a body the
+host had gzipped in transit — so the declared length was the <em>compressed</em>
+size and the file was cut to a fraction of itself and returned as complete.
+A body arriving <em>shorter</em> than promised was likewise accepted in silence. Of
+everything here this is the one that most deserved finding: silent truncation
+of scientific data that nothing downstream can detect.</p>
+<p>A scaled-region metaplot mapped each window’s base pairs uniformly across all
+of its columns, which is only correct when a feature happens to be exactly
+<code dir="auto">body × step</code> long. Every other feature had its flanks compressed and its
+body stretched by a different amount, so an average over features that are
+genuinely aligned came out smeared. The mapping is piecewise now — flank,
+body, flank — and reference-point mode was verified bit-identical across four
+hundred randomised windows before and after.</p>
+<p>A BED domain vanished the moment you zoomed inside it: an <code dir="auto">element</code> overlay
+was culled by its bottom-right corner rather than tested for overlap, so any
+feature larger than the view drew nowhere. A <code dir="auto">border</code> mark was stroked
+<em>along</em> the diagonal, over the pixels it exists to point at. A gappedPeak’s
+signal statistics were read from columns 7-9, which in BED12+3 are
+thickStart, thickEnd and itemRgb. A headed annotation table with twelve or
+more columns had two unrelated columns decoded as BED12 blocks — now settled
+by checking that the blocks actually <em>tile</em> the feature rather than by
+counting columns, which also catches the headerless case a header could not
+have saved. And a per-bin profile carried across a resolution change was
+exported against the grid the session is on <em>now</em> rather than the one its
+values were computed on.</p>
+<p><strong>Privacy.</strong> “Forget everything” cleared the stores and then let the very next
+state change write the durable record straight back. And a share link, which
+carefully strips private local filenames from two of the three places they
+appear, carried the third: a lane’s companion URI rode through untouched, so
+a link still spelled the sender’s filename into the fragment.</p>
+<p><strong>Things that stopped working, or never did.</strong> Closing the share dialog left
+<code dir="auto">App.modal</code> pointing at it forever, and every command guarded by “no dialog is
+open” — the palette, the shortcut sheet, About — was dead for the rest of the
+tab. Clearing a number box set it to the minimum, because the guard tested
+<code dir="auto">Number.isFinite(Number(''))</code> and <code dir="auto">Number('')</code> is <code dir="auto">0</code> — the comment beside it
+said exactly that and the code did it anyway; the same dead guard was in four
+places, including a mapping-quality floor where the wrong answer was quieter
+still, since <code dir="auto">0</code> legally means “keep everything”. A modal set
+<code dir="auto">aria-modal="true"</code> and never trapped Tab, so a keyboard user walked out onto
+controls the backdrop was covering. Two notes shared one fixed corner, so a
+progress note covered the truncation warning that is specified to stay until
+dismissed — both are placed by a column now, which is also why the warning
+can outlive the job. Importing a workspace into a full window imported
+nothing and still overwrote the reader’s overlay preferences and column
+layout. In a deck at chromosome level the lock compared spans in bin sizes
+rather than in sequence lengths, so two panels showing the identical
+chromosome list were told they could not be locked and the deck blamed the
+files; a companion still opening was reported as having one resolution, and
+the false line never cleared; and the deck’s own map list ignored the names
+the reader had given. Every ordinary multi-chromosome <code dir="auto">.pairs</code> import was
+labelled unsorted, because the sortedness test assumed a global ordering the
+declared <code dir="auto">chr1-chr2-pos1-pos2</code> sort does not have — the repair pass it
+triggered was harmless but the label was not, and it is now raised only for
+disorder that ordering cannot explain. A <code dir="auto">metacooler-run</code> that listed sixteen
+tasks could run twelve; <code dir="auto">overlap</code> and <code dir="auto">motif</code> now genuinely run, and
+<code dir="auto">metaplot</code> and <code dir="auto">trackcorr</code> are refused before a file is opened, because they
+need a bigWig reader the repo’s own layering confines to the annotations
+worker.</p>
+<p><strong>Retention and lifecycle.</strong> A <code dir="auto">HeatmapView</code> destroyed while frozen kept
+re-scheduling <code dir="auto">requestAnimationFrame</code> on a detached canvas for the life of the
+tab; the ladder that took the freeze never gave it back on teardown, leaving a
+panel frozen for a read that would never report; and a deck navigating to a
+table went on parenting the previous, already-destroyed map — a canvas with a
+full-resolution backing store behind it. The bin file of a private HiC-Pro
+pair was never signed, so the half carrying every coordinate came back 403
+while the half carrying the counts arrived. A Stop pressed while a task was
+in flight was read only <em>before</em> the step, so a run cancelled mid-step still
+finished, cached and adopted its result.</p>
+<p>Two smaller ones for completeness: an S3 bucket scope whose prefix contained
+an escaped character listed nothing, because the prefix was handed to S3
+still percent-encoded; and a dropped-feature count was reported once per
+ticked track rather than once.</p>
+</li>
+<li>
+<p><strong>Every published demo failed to open.</strong> The picker offered three sessions and
+each one answered a click with <em>not a workspace</em>: <code dir="auto">App.openWorkspaceFile</code> reads
+<code dir="auto">kind: "metacooler.workspace"</code> and refuses anything else, and the copies on the
+bucket are still written in the older single-session shape. The mock-community
+entry was a 404 on top of that — the bucket had moved that dataset under
+<code dir="auto">demo/metagenomics/</code> and <code dir="auto">ui/examples.ts</code> went on naming the old prefix.</p>
+<p>The catalogue is now <strong>four</strong> sessions, ordered as an argument rather than by
+dataset: one map with its tracks, then the same assembly with no map at all,
+then two maps side by side — a <code dir="auto">.cool</code> and a Juicer <code dir="auto">.hic</code>, locked together, at
+the one window the two assemblies agree about to the base — and the metagenome
+last, because it is the file this viewer exists for and the one that needs the
+other three to be legible. <code dir="auto">demo/</code> on disk is laid out the way the bucket is,
+so publishing is a small JSON sync rather than a second copy of 49 MB.</p>
+<p>Note that the fix is only half in this repository: the bucket has to be
+re-synced with <code dir="auto">scripts/publish-demo.sh</code> before the site sees any of it.</p>
+</li>
+<li>
+<p><strong>Sequence lengths inferred from a feature file were inflated by up to 85%.</strong>
+Open a browser on a GTF, a BED or a narrowPeak — a file that carries no
+lengths — and each sequence was rounded up to <em>one significant figure</em>, a step
+equal to the value’s own order of magnitude. Yeast IV (1.53 Mb) and VII
+(1.09 Mb) therefore both came out as exactly 2.00 Mb, 441 kb apart and
+indistinguishable; the genome total read 31% high; every chromosome ended in a
+long blank pannable margin; and the bar chart in the Sequences card was drawn
+to the wrong shape. The step jumped discontinuously at each power of ten, so
+the error was worst just above one.</p>
+<p>The margin the rounding was written for is kept — a browser opened on a peak
+set should not appear to <em>end</em> at the last peak — at two orders of magnitude
+less: three significant figures, always strictly past the last feature, about
+a half-percent instead of a third. Yeast now totals 12.11 Mb against a true
+12.07, where it read 15.99.</p>
+<p>Two things the interface claimed and the code did not do are now true as well.
+The browser’s summary no longer says a sequence ends at its last feature, which
+it never did; and dropping a <strong>bigWig</strong> really does replace inferred lengths
+with real ones, as the Genome card has always offered — along with a bigBed, a
+BAM, a FASTA or a VCF that declares its contigs, any of which knows the answer
+exactly. It is adopted <em>as well as</em> loading the file as a track, never instead
+of it, and it can only ever replace a guess: an assembly that already knows its
+lengths is never overwritten. This works from the Tracks card’s own file button
+as well as from a drop, which is one gesture two inches from the other.</p>
+</li>
+<li>
+<p><strong>Hiding a curve recoloured the others.</strong> The legend filtered the hidden series
+out and the renderer then coloured by position in what was left, so hiding the
+first of three moved the second onto its colour and the third onto the second’s
+— every curve, its confidence band and its legend swatch, all shifting one step
+up the palette at once. Nothing said so, and it went into the PNG and the PDF.
+The most visible face of it was alt-click <em>isolate</em>, which hides all but one
+series and therefore always drew whichever you isolated in the first palette
+colour. Colours are now settled against the full list before anything is
+hidden. Affected P(s), the P(s) slope, the metaplot and the all-maps deck
+overlay — every figure that draws more than one curve.</p>
+</li>
+<li>
+<p><strong>The share dialog was clipped, cramped, and made you press a button.</strong> Its
+body asked for a width 4 rem greater than the panel containing it, and that
+panel is <code dir="auto">overflow: hidden</code> — so the right-hand edge, which is exactly where
+the copy and shorten buttons live, was cut off with no way to scroll to it. It
+also had no padding at all, so the text sat against the border. The link is now
+a box that scrolls by wheel and by drag rather than a field only a caret can
+move through, the copy control is the icon alone, and <strong>the link is put on the
+clipboard the moment it is generated</strong>, with a notification saying so — and
+again when the shortener replaces it, since that is what you will paste. Where
+the browser refuses the clipboard, which is every insecure origin, nothing
+claims success: the link is selected and a sentence says to copy it.</p>
+</li>
+<li>
+<p><strong>The show/hide tooltip control was missing from the 1D browser.</strong> The matrix’s
+Tracks card builds its overlay row from the list of track options; the
+browser’s spelled six of them out by hand and <code dir="auto">tooltip</code> was not among them. The
+flag was honoured — the browser reads it on every hover — but reachable only
+from the <code dir="auto">p</code> shortcut or the command palette, never from the column the rest of
+the switches are in.</p>
+</li>
+<li>
+<p><strong>An incomplete <code dir="auto">.pairs</code> file is now said to be incomplete.</strong> A truncated
+BGZF — a cancelled upload, an interrupted <code dir="auto">bgzip</code>, a partial copy — imported
+without complaint and drew a map of whatever had arrived. Every number in
+that map is true of the records that were there, which is exactly the
+problem: nothing on screen distinguishes <em>this library has no contacts on
+chromosome XIII</em> from <em>this file stops before chromosome XIII</em>.</p>
+<p>A BGZF file marks its own end with an empty member, so the two states are
+distinguishable and now are: a file that ends mid-member or without that
+marker is reported as incomplete, alongside any sequences that have nothing
+on their own diagonal — the visible form of the same fact. Both are carried
+into the written <code dir="auto">.mcool</code> as well, since a cooler binned from an incomplete
+file is itself incomplete and will outlive the window that knew.</p>
+<p>Found on <code dir="auto">demo/yeast/CH128.pairs.gz</code>, which is cut off after chromosome XII
+and silently produced a map with four empty chromosomes.</p>
+</li>
+<li>
+<p><strong>A bgzipped <code dir="auto">.pairs.gz</code> failed to open in the browser</strong> with <code dir="auto">Junk found after end of compressed data.</code> BGZF is a concatenation of gzip members, and
+the specification says a decoder walks them — Node’s does, and that is where
+it was verified. <strong>Chromium’s does not</strong>: <code dir="auto">DecompressionStream('gzip')</code> stops
+after the first member and throws. Because BGZF’s end-of-file marker is
+itself an empty second member, this was true of <em>every</em> bgzipped file, not
+only a large one; the fixtures that passed were plain single-member gzip,
+which is the one shape that works either way.</p>
+<p>Members are now decompressed one at a time, which is what the format is. That
+turned out to cost nothing: taking the writer and reader off the
+<code dir="auto">DecompressionStream</code> directly, rather than through a <code dir="auto">Blob</code> and a <code dir="auto">Response</code>,
+runs at 260 MB/s against the <code dir="auto">Blob</code> form’s 34 MB/s — so
+<code dir="auto">annotations/tabix.ts</code>, which reads <code dir="auto">.tbi</code> and GTF spans the slow way, now
+shares the fast one.</p>
+</li>
+<li>
+<p><strong>A Choose-files button in a framed page no longer does nothing at all.</strong>
+Anybody could already put this site in an <code dir="auto">&lt;iframe&gt;</code>, and in a cross-origin one
+the File System Access pickers are <em>present and rejecting</em>: <code dir="auto">typeof window.showOpenFilePicker</code> answers <code dir="auto">'function'</code> and the call fails with a
+<code dir="auto">SecurityError</code>. Every capability gate here tested the <code dir="auto">typeof</code>, and
+<code dir="auto">chooseFiles</code> swallows a rejection because that is what a cancelled dialog
+looks like — so the button opened nothing and reported nothing, which is the
+one outcome worse than not offering it. <code dir="auto">handlesSupported</code>,
+<code dir="auto">directoriesSupported</code>, <code dir="auto">directoryPickerSupported</code> and <code dir="auto">chooseFiles</code> now ask
+whether this window’s top-level document is on another origin, and a frame that
+is takes the fallbacks Firefox and Safari have always taken: an <code dir="auto">&lt;input type="file"&gt;</code> for files, the snapshot shape for a directory. Dropping was never
+affected. A <strong>same-origin</strong> frame is deliberately not caught, since the pickers
+work there.</p>
+</li>
+<li>
+<p><strong>Every analysis task failed on a HiC-Pro map</strong> with <code dir="auto">error - name not defined!</code> — HDF5’s own words, for a <code dir="auto">.matrix</code> that is not HDF5 at all. The two
+threads that mount a contact map had drifted apart: the reader worker grew the
+HiC-Pro road (two text files, read whole, no HDF5 anywhere) and the analysis
+worker, which mounts the same file a second time so a long task cannot block a
+pan, went on calling <code dir="auto">MetaCooler.open</code> directly. The map was drawn and
+perfectly fine; the task said the file was broken.</p>
+<p>The fix is one road rather than a second branch. <code dir="auto">worker/open.ts</code> now holds the
+knowledge of <em>how many ways there are into a map</em>, and the reader worker, the
+analysis worker and the <code dir="auto">metacooler-run</code> CLI all go through it — so the CLI,
+which had the same defect and no one had hit it yet, is fixed by the same
+change rather than by remembering to.</p>
+</li>
+<li>
+<p><strong>A task on a selection of cells measured every cell in the file.</strong> Because
+the analysis worker mounts the file itself, it never learned that an <code dir="auto">.scool</code>
+had a selection: it opened the pseudo-bulk, so two cells ticked and four
+thousand gave the same answer with nothing on screen to say so — silently
+wrong numbers, which is worse than the error above. The ticked set now travels
+with the target, and the worker’s mount is keyed on it as well as on the file,
+because re-ticking is a new map at the same URI and a cache on the name alone
+would answer the second question with the first one’s cells.</p>
+</li>
+<li>
+<p><strong>A HiC-Pro matrix parsed nineteen times slower than it reads</strong>, and only
+ever in the application: 35 seconds for a 258 MB file where the same code
+measured 1.8. The scan shared its integer reader with the bin-file parser, and
+V8 will not optimise a function whose inline caches are still moving —
+<code dir="auto">--trace-opt-verbose</code> says <code dir="auto">delaying optimization of scanSlice, IC changed</code>,
+once per tick, forever — so having read a bin file first left the scan running
+interpreted from the first byte to the last. It reads its own digits now.</p>
+<p>The reason it was invisible is worth recording: the bins are parsed <em>before</em>
+the matrix in the application and never before it in a test, so every timing
+taken of this file was of the fast path. The fix carries the measurement and
+the reason beside it, because re-sharing the helper would restore the slow
+path silently.</p>
+<p>Two things fell out of inlining the scan, both of which the old scanner had
+wrong and nothing had noticed: an exponent written with its sign (<code dir="auto">1e+2</code>, what
+<code dir="auto">%g</code> and numpy print) stopped at the <code dir="auto">+</code> and quietly kept the mantissa, so the
+pixel was 1 rather than 100; and a negative fractional value (<code dir="auto">-0.5</code>) asked
+its integer part which way it went, got <code dir="auto">-0</code>, and came out positive.</p>
+</li>
+<li>
+<p><strong>A diagonal pixel was counting as both triangles</strong>, so the <code dir="auto">MATRIX_FORMAT</code>
+a HiC-Pro file turned out to be written with was reported as <code dir="auto">mixed</code> for
+every real file — every real file has a diagonal. Caught against HiCExplorer’s
+own HiC-Pro test pair, which is upper-triangular and was labelled <code dir="auto">mixed</code>;
+the comparison is now strict, and a file of nothing but its diagonal reports
+the default it would have been written as.</p>
+</li>
+<li>
+<p><strong>A URL fragment is not part of a file name.</strong> <code dir="auto">&lt;matrix&gt;#bins=&lt;url&gt;</code> ends in
+<code dir="auto">.bed</code>, so the name test sent the <em>matrix</em> through the genome door and drew
+its bin file as a feature track. Both places that take a name off a URL — the
+router and the worker — now drop the query string and the fragment, which the
+first was already half doing for presigned bucket URLs.</p>
+</li>
+<li>
+<p><strong>Answering the <code dir="auto">.scool</code> gate with <em>small pieces</em> asked the same question
+again, forever.</strong> Two causes, both worth naming. The retained remote source
+was keyed on the URL alone, so re-opening with the reader’s answer handed back
+the mount built for the other reading and discarded the answer; and the gate
+itself only knew about the source, which is still remote after that choice —
+choosing <em>download it whole</em> passed only incidentally, because that source
+stops being remote. The reading is now part of a mount’s identity, and the
+agreement is passed explicitly rather than inferred.</p>
+</li>
+<li>
+<p><strong><code dir="auto">2 &lt;&lt; 30</code> is not two gigabytes.</strong> The shift operators coerce to signed
+32-bit, so the whole-object download limit evaluated to −2,147,483,648 and
+refused every file, including a 114 kB one, with “more than a browser tab can
+hold in memory”. Found by driving the built app in a browser rather than by a
+test, which is the kind of arithmetic no unit test was ever going to be
+pointed at.</p>
+</li>
+<li>
+<p><strong>A bgzipped file with no index is read to its end, not to the end of its
+first block.</strong> <code dir="auto">bgzip</code> writes a gzip member per block — roughly one per 64 KiB
+— and the whole-file road handed all of them to a single <code dir="auto">gzip</code> decompressor,
+which is only correct on a platform that carries on past the first member’s
+end. The Compression Streams spec does not promise that; it says trailing data
+after a stream ends is a <code dir="auto">TypeError</code>. So on a runtime that reads it that way,
+every <code dir="auto">.vcf.gz</code>, <code dir="auto">.gtf.gz</code> and <code dir="auto">.fa.gz</code> without a <code dir="auto">.tbi</code> beside it was refused
+outright with <em>“Trailing junk found after the end of the compressed stream”</em> —
+and a runtime that stopped quietly at the first member instead would have been
+worse, drawing the opening blockful and calling it the file.</p>
+<p>It now walks the blocks, which is the road the indexed path and every BAM
+already took, and asks nothing of the platform beyond <code dir="auto">deflate-raw</code>. A plain
+<code dir="auto">.gz</code> is one member and not BGZF, so it still goes the way it did.</p>
+</li>
+<li>
+<p><strong>A file and its index dropped together are now actually paired.</strong> The loader
+has always paired a <code dir="auto">.tbi</code> with the file it indexes, and <code dir="auto">Session.dropped</code> —
+which decides what a single file <em>is</em> — could only ever be asked about one
+file at a time, so every caller looped it over the batch and the loader was
+handed one file at a time. A plain drop of a bgzipped GTF and its <code dir="auto">.tbi</code> onto
+the window therefore read the GTF whole and drew the index as a refused row.
+The pairing rule now lives in one function that both roads go through.</p>
+</li>
+<li>
+<p><strong>A re-opened local track keeps its index.</strong> A grant was remembered for the
+file and not for the sidecar, so a reload re-attached the <code dir="auto">.gz</code> and lost the
+<code dir="auto">.tbi</code>, quietly going back to reading the whole file. Changing resolution did
+the same thing by a different route: <code dir="auto">carry</code> rebuilt the source without it.
+The index now lives on the source rather than beside it, so every road that
+carries a source forward carries the index too.</p>
+</li>
+<li>
+<p><strong>A derived track is no longer restored as a file that never existed.</strong> It is
+computed from two other rows and holds no bytes and no recipe the stored shape
+can carry, so it fell through to <code dir="auto">{ kind: 'local' }</code> and came back as a
+detached local row under the derived track’s label, offering to re-open a file
+that has never been on any disk. It is not persisted now, which is the smaller
+wrong until there is a stored shape that can name an operation and its
+operands.</p>
+</li>
+<li>
+<p><strong>A BAM’s chromosomes are no longer described as guesses.</strong> Its <code dir="auto">@SQ</code> table
+carries a length per reference, so the lengths are exact — but the assembly
+was reported with origin <code dir="auto">features</code>, which is what <code dir="auto">lengthsAreExact</code> reads,
+so the Genome card said they were <em>inferred from the features</em> and that each
+sequence ended at its last read. It has its own origin now, and the card says
+<em>from the BAM’s @SQ header</em>.</p>
+</li>
+<li>
+<p><strong>The three places that list what this app opens now mention BAM.</strong> The
+landing page, the Tracks card and — the one worth spelling out — the landing
+page’s note that a file dropped with its index beside it is one track and not
+two.</p>
+</li>
+<li>
+<p><strong>The README no longer states a rule SPECS overturned.</strong> It said in two
+places that annotations were <em>absent</em> on a <code dir="auto">.metacool</code> — once in prose and
+once in the milestone table, where the Metadata card was still described as
+the only annotation such a file gets. §8.5 replaced that gate with an honest
+overlap report in MAGs some time ago.</p>
+</li>
+<li>
+<p><strong><code dir="auto">metacooler-run apa --window 8</code> set the half-width and then died.</strong> The CLI
+reserves <code dir="auto">--window</code> for the framing locus, and <code dir="auto">apa</code> declares a parameter of
+the same name — a half-width in bins. <code dir="auto">paramsFor</code> already gives a task’s own
+parameters the flag where the two collide, but the framing read it anyway, so
+the run set the half-width correctly and then failed with <em>“Unknown sequence
+label: 8”</em>. One name, one meaning, decided by whether the task claims it.</p>
+</li>
+<li>
+<p><strong>A second map to compare against was lost on a change of resolution</strong>, and
+silently: the first map is a complete picture on its own, so nothing on screen
+said the other one had gone, and the reader had to find and open it again at
+every zoom level. A comparison belongs to the file it is a comparison <em>of</em>, so
+opening another file puts it down — and a change of rung went through the same
+door, though it is not a change of subject. The second file now comes across,
+moved to <strong>its own rung at the new bin size</strong>: it has a ladder of its own, so
+<code dir="auto">rep2.mcool::/resolutions/1000</code> beside a 1 kb map is <code dir="auto">…/5000</code> beside a 5 kb
+one, looked up in that file’s own entries. The reading carries with it — the
+operation, the depth match, and whether the triangle was hidden. A file with no
+rung at the new bin size cannot be compared there, two bin sizes in one square
+being a pixel that means one thing above the diagonal and another below it, and
+it is put down with the reason on the Contact maps card.</p>
+</li>
+<li>
+<p><strong>Opening a saved workspace ignored the overlay toggles it carried.</strong> Every tab
+in the file has always recorded them — the dividers, the breaks, the labels,
+the ticks, the crosshair, the tooltip — and the one road that could not apply
+them was the road a workspace actually arrives on. A dropped single session and
+a pasted share link went through <code dir="auto">Session.openConfig</code>, which applies them; a
+workspace file and the offer after a browser restart go through the shell,
+which did not. So a figure saved with the dividers on and the crosshair off
+came back with whatever the importing window happened to be set to, silently,
+and looking exactly like the toggles had not been saved. The tab that ends up
+in front now decides, which is what a window-level preference carried per tab
+can honestly mean.</p>
+</li>
+<li>
+<p><strong>P(s) is smooth again: the density is divided by the separation a bin covers,
+not by the width of the break.</strong> The curve had developed a sawtooth of a factor
+of two through the 10–30 kb decade, which buried the cohesin shoulder the
+derivative is read for.</p>
+<p>It is an aliasing artefact and <code dir="auto">HiContacts::distanceLaw()</code> has it too. That
+break table is <code dir="auto">unique(round(1.1^n))</code> in base pairs and was built for a <em>pairs</em>
+file, where a distance is continuous and the counts in a break really are
+spread over its whole width. A contact matrix is not like that: its separations
+sit on a lattice of <code dir="auto">binsize</code>, and near 10 kb the breaks are about a kilobase
+wide — so on a 1 kb map one break holds two lattice points and the next holds
+one. Dividing both by their nominal widths makes the first almost twice as
+dense as the second, bin after bin. On the yeast demo the log-log slope of that
+curve moves by <strong>0.83 between neighbouring points</strong> and swings between +1.7 and
+−2.9; the shoulder it hides is a change of about <strong>0.26</strong>, so the artefact was
+an order of magnitude bigger than the feature.</p>
+<p>Dividing by <code dir="auto">offsets × binsize</code> is the same quantity — a share of all cis
+contacts, per base pair — estimated on the lattice the data are actually on. It
+moves the slope by <strong>0.087</strong> between neighbours, and it agrees with the nominal
+width wherever a break is wide enough to hold several offsets, which is
+everywhere past about 50 kb at 1 kb bins. HiContacts says as much itself: its
+matrix branch prints <em>“the P(s) curve will be an approximation”</em> and its pairs
+branch does not.</p>
+<p>The golden now compares the <strong>numerator</strong> — the contacts in each break, break
+for break — against HiContacts exactly, which is where a real disagreement
+would show, and a new test asserts both roughness figures from the golden’s own
+numbers so the sawtooth cannot come back unnoticed.</p>
+</li>
+<li>
+<p><strong>The CLI can use a loop set again.</strong> <code dir="auto">--pairs loops.bedpe</code> parsed the file,
+filed it under its <em>file name</em>, and then set the task’s parameter to a <em>path</em>;
+every task that takes a feature or pair set looked under its own parameter key,
+found nothing, and reported “the set chosen is no longer loaded” about a file it
+had just read. <code dir="auto">TaskInputs</code> is keyed by parameter key — <code dir="auto">analysis/job.ts</code> has a
+whole paragraph about not indexing it any other way — and the CLI was the one
+venue that had no store to allocate ids in, so it invented a second convention
+and lost. Both work now: the name a reader typed still names the input, and the
+parameter key is an alias for it.</p>
+</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="changed">Changed</h2><a class="sl-anchor-link" href="#changed"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Changed”</span></a></div>
+<ul>
+<li>
+<p><strong>The adaptive filter runs on the analysis thread above 1 M cells.</strong> It reads
+the block twice — once to measure every cell against its neighbourhood and once
+to average the capped field — and at the cell cap that is 7.4 s, which on the
+thread drawing frames is a frozen window rather than a hitch. Below the limit it
+is still done inline, which is the better trade there: 78 ms on a 353² view, and
+no flash of an unsmoothed map on the way to a smoothed one.</p>
+<p><code dir="auto">deriveBlock</code> runs the pipeline to the point the smoothing would happen, hands
+the caller the arrays it would have used, and carries on with the <strong>unsmoothed</strong>
+field; the panel starts a job and derives again when the answer lands, at which
+point the step is a lookup. The correlation’s arrangement, for the correlation’s
+reason. While it waits <strong>the caption says <code dir="auto">counts</code>, not <code dir="auto">smoothed</code></strong> — a figure
+exported mid-wait must not claim a filter it does not have — the wait shows on
+the veil, a superseded job is cancelled, and a late answer to a superseded
+question is dropped rather than cached.</p>
+<p>Two callers never defer and compute inline at whatever it costs, because the
+alternative is not doing it at all: a panel with no analysis thread behind it,
+and <strong>either file of a compared pair</strong>, where two blocks would need two jobs and
+a half-finished pair would put a smoothed map over an unsmoothed one and call
+the result a ratio. The fixed radii never defer at any size — one incremental
+pass is not worth a round trip.</p>
+<p>The job is not interruptible partway through, unlike the correlation’s, and that
+is deliberate: the filter’s passes are banded over rows and there is no
+consistent state to stop at inside one. The cancel is checked before the work as
+well as after, so a job cancelled while queued never starts and only the one
+already running is wasted.</p>
+</li>
+<li>
+<p><strong>The adaptive window no longer turns one hot cell into a rectangle.</strong> Reported
+from a yeast microC map at 500 bp: saturated hard-edged blocks, each with an
+isolated bright pixel at its centre and its edges lined up with discarded-bin
+stripes. Two causes, both ours. A mean has no defence against a single extreme
+value — and it had one until the centre went back into the kernel, which fixed
+the hollow squares and removed the only outlier rejection there was. And a box
+kernel’s impulse response <em>is</em> a box, so the cell raised every window that could
+reach it by the same amount and none of the next ones along. Measured: one cell
+at 400× its neighbourhood produced a <strong>20 × 20 bin block peaking at 5.3</strong> in
+<code dir="auto">log2</code> O/E, on a scale clipping at 0.84.</p>
+<p><strong>A cap on leverage, before the averaging.</strong> Not a multiple of the local mean,
+which is the obvious rule and is wrong for this data: away from the diagonal the
+map is Poisson-sparse, so a window’s mean is 0.05 while its occupied cells hold
+1, and every honest count is already twenty times the local mean. No fixed
+multiple both spares those and controls a spike — a tight one biases the
+sparsest part of the map downward, which is the part the filter is for. What the
+artefact is, is leverage: a cell shifts the mean of every window reaching it by
+<code dir="auto">(value − mean) / n</code>. So the cap is written on that — no cell may add more than
+half again to the mean of a window its own size — and it scales itself, tight in
+a 3 × 3 near the diagonal and two hundredfold in a sparse 21 × 21. The mean is
+taken <strong>without the cell itself</strong>, which is the one thing the zero-centre kernel
+had right: excluding the centre is correct for deciding whether a cell is an
+outlier and wrong for estimating what to draw there. The two passes do one each.</p>
+<p><strong>And a shoulder on the kernel.</strong> The mean is now taken over three nested
+windows — <code dir="auto">r/2</code>, <code dir="auto">r</code>, <code dir="auto">3r/2</code> — and averaged, so the weights step down instead of
+falling off a cliff: the outer shell carries about 8% of the weight the centre
+does. The radii are chosen so this costs nothing in noise, an effective sample of
+3.90·r² against the plain box’s 4·r² — the same estimate over half again as much
+ground.</p>
+<p>With both, a synthetic spike of 2000× no longer reaches the clip and the O/E’s
+mean stays at 1.00 in every separation band, so no bias was traded for the
+improvement. The cost is a second read of the block: 78 ms at 353², 300 ms at
+841², 1.5 s at 4 M and 7.4 s at 16 M, about double what it was.</p>
+<p><strong>This reduces the artefact rather than removing it, and on real data it is
+still visible.</strong> The cap bounds a flagged cell’s damage by construction — the
+rule permits it to inflate its window by half, which is <code dir="auto">log2 0.58</code> on a scale
+clipping at 0.84 — and two stricter answers were tried and dropped: trimming the
+flagged cell out of the sum and the divisor, and replacing it with the mean of
+its eight neighbours. Both looked better on synthetic spikes and neither removed
+the artefact reproducibly on a real map, which says the detector rather than the
+response is what still needs work. The synthetic used to develop this evidently
+does not reproduce whatever the real one is.</p>
+</li>
+<li>
+<p><strong>The adaptive window may now grow to radius 192, up from 64.</strong> At 64 it ran
+into the cap beyond about 200 bins of separation on a yeast map at 500 bp, so
+the cap rather than the target was choosing the width for exactly the cells
+with the least data. The search is binary, so this costs one more trial radius
+per cell and nothing else.</p>
+</li>
+<li>
+<p><strong>The despeckle now runs before the O/E division, and divides by a baseline
+averaged over the same windows.</strong> Both halves of this were needed to make the
+<code dir="auto">smooth</code> picker do anything visible on an O/E map, which is the picture most
+readers of a sparse map are looking at.</p>
+<p><code dir="auto">observedOverExpected</code> draws a cell where nothing was observed as paper rather
+than as the strongest depletion on the ramp, and away from the diagonal <em>most</em>
+cells are that cell — <strong>98%</strong> of them at 200 bins out on a yeast map at 500 bp.
+Computing the O/E first therefore handed the filter a field that was almost
+entirely <code dir="auto">NaN</code>, which no despeckle will touch, so every setting from <code dir="auto">3 × 3</code> to
+<code dir="auto">7 × 7</code> drew the same picture: a scatter of the 2% of cells that happened to
+catch a contact, at a mean of <strong>45× expectation</strong>, over a blank field.</p>
+<p>Smoothed first, a zero cell with contacts around it is never blanked. That 98%
+falls to <strong>83% at <code dir="auto">3 × 3</code>, 38% at <code dir="auto">7 × 7</code> and 0% under every adaptive setting</strong>,
+and the mean of the band comes back to <strong>1.00</strong>.</p>
+<p>The baseline is averaged over the same windows because dividing a smoothed map
+by an unsmoothed curve is biased: near the diagonal the decay is steep, so a
+window spanning it averages cells whose baselines differ several-fold and the
+ratio reads <strong>24–32% enriched</strong> at radii 3 to 7 — an artefact of the filter and
+of nothing in the file. Matched, the bias sits in both halves and cancels. The
+curve itself is still estimated from the <em>unsmoothed</em> block, which is the half
+of the old ordering worth keeping: fitting it to pre-averaged cells would let
+each cell’s neighbours count twice toward the baseline it is compared against.</p>
+</li>
+<li>
+<p><strong>The despeckle keeps the cell’s own value.</strong> The kernel was <code dir="auto">terra::focal</code>
+with a zero centre weight, on the argument that a cell disagreeing with all
+eight of its neighbours is evidence about the neighbourhood rather than about
+itself. That is right about rejecting outliers and wrong about a sparse map,
+where a lone contact is not an outlier but the only measurement there is: the
+zero-centre kernel replaced it with the mean of the eight zeros around it while
+spreading it into those eight, so <strong>every isolated count rendered as a hollow
+square with a hole where the contact was</strong>, and away from the diagonal most of
+the picture was made of those.</p>
+<p>It was also the wrong estimator for what the filter now feeds — a local rate
+that the O/E divides — since discarding the one cell being estimated at is both
+biased and needlessly noisy. Despeckling survives the change in all but the
+narrowest window: a wild pixel is diluted to a ninth of its excess at <code dir="auto">3 × 3</code>, a
+twenty-fifth at <code dir="auto">5 × 5</code>, and to a few hundredths at the widths the adaptive
+settings reach. What is lost is the guarantee that a single wild cell is
+annihilated rather than suppressed; what is bought is that a single <em>real</em> cell
+is no longer annihilated either.</p>
+</li>
+<li>
+<p><strong>Zooming a curve is a rectangle now, and it keeps working.</strong> Dragging across a
+P(s), a slope or any other drawer curve selects a window on <strong>both</strong> axes
+rather than only on the abscissa, and the marquee is drawn as the rectangle it
+selects. A drag that is deliberately flat still means what it looks like: an
+axis is only taken when the pointer travelled at least eight pixels along it,
+so a horizontal sweep is still a band and a mis-click is still a click.</p>
+<p><strong>And the marquee comes back.</strong> It lived in the plot body, and the rebuild
+after the first zoom replaced that body’s children — so the first drag worked
+and every drag after it selected an invisible rectangle, which read as the
+gesture having broken. Double-click still resets, now to the window the figure
+opened on rather than to the full extent.</p>
+<p>The zoom is also no longer a clip of the series arrays. The window travels on
+the output as <code dir="auto">xDomain</code>/<code dir="auto">yDomain</code> and the axes are drawn to it, which is what
+makes a window in y expressible at all — a point above the top of the frame is
+part of the line that leaves it, not a gap in the data — and the series are
+clipped to the frame in the PDF exactly as on screen.</p>
+</li>
+<li>
+<p><strong>P(s) and its slope open on 4 kb – 1 Mb.</strong> Past the ligation artefacts at one
+end and inside the shortest chromosome at the other. The full extent was a bad
+picture of a good curve: the first break holds the diagonal and the first
+off-diagonal — two thirds of every cis contact on a 1 kb map — at a separation
+of 1 bp, so a log axis over all of it spent a third of its width on one point
+and squashed the decades anybody reads into the right-hand quarter. It is a
+default and not a limit: the marquee, the boxes and a double-click all move
+it. The ordinate follows, because an automatic y axis now fits what is inside
+the x window rather than the whole series.</p>
+</li>
+<li>
+<p><strong>APA has no Quality settings.</strong> <em>Most anchors to use</em> and <em>Minimum coverage of
+a window</em> are gone, not defaulted: every anchor is piled up and every window is
+summed. Both were quietly a change of subject rather than a budget — a cap
+makes the figure a pileup of whichever anchors sorted first, and a coverage
+floor drops exactly the windows in sparse regions, which are the ones a weak
+pileup is weak because of. Two runs could then differ because they had thrown
+away different windows, with nothing on the figure saying so. The accumulator
+counts per cell, so a half-empty window contributes what it has and no more.</p>
+</li>
+<li>
+<p><strong>APA’s half-width defaults to 12 bins</strong>, down from 25, and the note about the
+classic APA square is off the control.</p>
+</li>
+<li>
+<p><strong>P(s) is now the quantity HiContacts means by it.</strong> The contact-probability
+task plots the <strong>probability density</strong> — contacts at a separation over all cis
+contacts, then over the width of the separation bin in base pairs — which is
+<code dir="auto">HiContacts::distanceLaw()</code>’s <code dir="auto">norm_p</code>. It used to plot the mean contact per
+<em>pair of bins</em>, which is <code dir="auto">cooltools expected-cis</code>. Both are called P(s); they
+agree in shape at short range and part company as the separation approaches
+the length of a chromosome, where the pair count is heading for zero and the
+contact total is not, so an exponent read off the tail of one is not an
+exponent of the other. <strong>This changes the numbers every existing P(s) figure
+was drawn from</strong>, and the ordinate now says <code dir="auto">Contact probability density (per bp)</code> to make that visible.</p>
+<p>The expected curve itself is unchanged and is still what observed/expected,
+the compartment chain and the pileups divide by — it just never was the curve
+on screen, and now it is not pretending to be.</p>
+<p><strong>It reproduces that package rather than resembling it.</strong> The separation is
+HiContacts’ gap distance — two bins <em>k</em> apart are <code dir="auto">(k − 1)·binsize</code> apart
+there, so the diagonal and the first off-diagonal share the first break — and
+the bins are its break table, which turns out to be exactly
+<code dir="auto">unique(round(1.1^n))</code> and is regenerated from the task’s own factor rather
+than tabulated. <code dir="auto">test/golden/analysis/hicontacts_ps.json</code> is built by running
+HiContacts’ own pipeline in R (<code dir="auto">scripts/hicontacts_ps.R</code>, the first golden
+whose dependency is a program rather than a Python module), and every break
+position and density matches to 2e-6 on four chromosomes and on the four
+pooled.</p>
+</li>
+</ul>
+</div><footer class="sl-flex astro-ddtxxk7k"><div class="meta sl-flex astro-ddtxxk7k"></div><div class="pagination-links print:hidden astro-g3wxxdym" dir="ltr"><a href="/pr/166/docs/releases/v0.13.0/" rel="prev" class="astro-g3wxxdym"><span class="link-label sl-flex astro-g3wxxdym"><svg aria-hidden="true" class="astro-g3wxxdym astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="M17 11H9.41l3.3-3.29a1.004 1.004 0 1 0-1.42-1.42l-5 5a1 1 0 0 0-.21.33 1 1 0 0 0 0 .76 1 1 0 0 0 .21.33l5 5a1.002 1.002 0 0 0 1.639-.325 1 1 0 0 0-.219-1.095L9.41 13H17a1 1 0 0 0 0-2Z"/></svg>Previous</span><span class="link-title astro-g3wxxdym">0.13.0</span></a><a href="/pr/166/docs/releases/v0.11.0/" rel="next" class="astro-g3wxxdym"><span class="link-label sl-flex astro-g3wxxdym">Next<svg aria-hidden="true" class="astro-g3wxxdym astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="M17.92 11.62a1.001 1.001 0 0 0-.21-.33l-5-5a1.003 1.003 0 1 0-1.42 1.42l3.3 3.29H7a1 1 0 0 0 0 2h7.59l-3.3 3.29a1.002 1.002 0 0 0 .325 1.639 1 1 0 0 0 1.095-.219l5-5a1 1 0 0 0 .21-.33 1 1 0 0 0 0-.76Z"/></svg></span><span class="link-title astro-g3wxxdym">0.11.0</span></a></div></footer><script type="module" src="/pr/166/docs/_astro/LiveViews.astro_astro_type_script_index_0_lang.IJNGwHXs.js"></script><script type="module">var e={ArrowLeft:`prev`,ArrowRight:`next`};for(let[t,n]of Object.entries(e)){let e=document.querySelector(`.pagination-links a[rel="${n}"]`);e!==null&&(e.setAttribute(`aria-keyshortcuts`,t),e.title=`${n===`prev`?`Previous`:`Next`} page (${t===`ArrowLeft`?`←`:`→`})`)}document.addEventListener(`keydown`,t=>{if(t.defaultPrevented||t.altKey||t.ctrlKey||t.metaKey||t.shiftKey)return;let n=e[t.key];if(n===void 0)return;let r=t.target;if(r instanceof Element&&r.closest(`input, textarea, select, [contenteditable]:not([contenteditable="false"]), dialog, pre, .expressive-code, .cx-table-wrap, [role="slider"], [role="listbox"], [role="menu"], .cx-live-grip`)!==null||document.querySelector(`dialog[open]`)!==null)return;let i=document.querySelector(`.pagination-links a[rel="${n}"]`);i!==null&&(t.preventDefault(),window.location.assign(i.href))});</script><p class="cx-build">Documentation of chromosomix, a preview of pull request #166 · <a href="https://github.com/js2264/chromosomix/pull/166/files">source</a></p></div></div></main></div></div></div></div></body></html>
