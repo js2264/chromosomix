@@ -190,25 +190,27 @@ describe('the test over a whole map', () => {
   })
 
   /**
-   * No circle comes near 20 Mb — the longest bacterial chromosomes are about
-   * 16 — so a human chromosome is not read for an answer known in advance,
-   * while one placed after it is still placed by the bins before it.
+   * The circles people map are under 10 Mb — *Myxococcus xanthus*'s 9.1 Mb is
+   * measured — so a human chromosome is not read for an answer known in
+   * advance, nor a niche bacterium's 16 Mb one, while a sequence placed after
+   * one passed over is still placed by the bins before it.
    */
-  it('passes over a sequence longer than any circle, and still counts its bins', () => {
-    expect(MAX_JUNCTION_SEQUENCE_LENGTH).toBe(20_000_000)
+  it('passes over a sequence longer than the circles people map, and still counts its bins', () => {
+    expect(MAX_JUNCTION_SEQUENCE_LENGTH).toBe(10_000_000)
     const candidates = junctionCandidates(
       [
         ['chr21', 46_709_983],
+        ['Myxococcus', 9_139_763],
+        ['edge', 10_000_000],
+        ['over', 10_000_001],
         ['Minicystis', 16_040_666],
-        ['edge', 20_000_000],
-        ['over', 20_000_001],
         ['chrM', 16_569],
       ],
       100_000,
     )
     expect(candidates).toEqual([
-      { name: 'edge', from: 629, n: 200 },
-      { name: 'Minicystis', from: 468, n: 161 },
+      { name: 'edge', from: 560, n: 100 },
+      { name: 'Myxococcus', from: 468, n: 92 },
     ])
   })
 

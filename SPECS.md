@@ -4620,7 +4620,7 @@ first are **neighbours**, so the cells joining them hold what the diagonal holds
 at the same separation — the most contacts there are — while anything else that
 brightens a corner brightens it by a factor, never to the level of the diagonal
 itself. So the first time a file is opened, each of its fifty longest sequences of
-at least fifty bins and at most 20 Mb is read at its two ends and at its corner — three blocks a
+at least fifty bins and at most 10 Mb is read at its two ends and at its corner — three blocks a
 few bins wide — and scored as the contacts across the junction at a circular
 separation of one, two and three bins over the contacts along the diagonal at the
 same separations, measured at the two ends the junction joins, the median of the
@@ -4645,15 +4645,18 @@ at any rung, and every bacterial chromosome and plasmid of those maps still is a
 landing rung (§9). The floor costs a small circle read coarsely, left undecided for the
 reader to tick: *E. coli* opened at 100 kb (47 bins), *C. necator*'s pBB2 at 16 kb (27),
 and the yeast mitochondrion of the yeast and *M. pneumoniae* demo at its landing rung —
-43 bins at 2 kb; at 1 kb it has 86, but its ends there are two cells. **And 20 Mb is the ceiling.**
-No molecule known to be circular comes near it: the longest bacterial chromosomes assembled are about
-16 Mb (the myxobacteria *Minicystis* and *Sorangium*), a plant's largest mitochondrial circle about
-11 Mb. A longer sequence is a eukaryote's linear chromosome, and measuring it was three reads of a
-large file for an answer known before they were made — on the 7.9 GB 4DN map of K562 the landing page
-opens (§24.11), 28 MB read for its 24 chromosomes behind the first picture and beside every track
-being fetched, where nothing is read now. A sequence over it is left as it was, for the reader to
-tick; one under it — a yeast or a fly chromosome, a chicken microchromosome, a *Streptomyces* line — is
-measured as before. **Each sequence is measured at the coarsest
+43 bins at 2 kb; at 1 kb it has 86, but its ends there are two cells. **And 10 Mb is the ceiling.**
+The circles people map are under it: a bacterial chromosome is about 4 Mb at the median,
+*Pseudomonas aeruginosa*'s 6–7, *Myxococcus xanthus*'s and *Bradyrhizobium japonicum*'s about 9.1, an
+archaeon's under 6, a megaplasmid's a few, an organelle's less. The few circles above it are niche —
+the myxobacteria *Sorangium* (13–15 Mb) and *Minicystis* (16 Mb), a plant mitochondrion of 11 — and
+are left for the reader to tick. Everything else longer is a eukaryote's linear chromosome, and
+measuring it was three reads of a large file for an answer known before they were made — on the
+7.9 GB 4DN map of K562 the landing page opens (§24.11), 28 MB read for its 24 chromosomes behind the
+first picture and beside every track being fetched, where nothing is read now; and a chicken map's
+chromosomes of 10 to 20 Mb, a worm's or a cress's, the same reads for the same answer. A sequence
+over it is left as it was; one under it — a yeast chromosome, a chicken microchromosome,
+*Streptomyces coelicolor*'s 8.7 Mb line — is measured as before. **Each sequence is measured at the coarsest
 rung of the file's ladder that still gives it a hundred bins**, the rung it was opened at where
 none does: the blocks are a few bins wide, so what a read costs is the rung's index and weights,
 and at a large file's finest rung those are megabytes a read — 111 MiB for the three reads on each
@@ -4675,7 +4678,7 @@ only once per file**: the scores are kept with the declarations — the box's ow
 tooltip quotes its sequence's — so a reader who unticks one is not overruled by
 the next open, and a file whose declarations arrived in a workspace is not
 measured at all. A shell asks the same question with `chromosomix circular <map>` — the same
-fifty sequences, the same 20 Mb ceiling, three blocks, two of three separations, threshold and balancing, each read at the
+fifty sequences, the same 10 Mb ceiling, three blocks, two of three separations, threshold and balancing, each read at the
 resolution the map is opened at rather than at a rung of its own — and is answered with a table of every
 sequence's length, score and verdict, whose `yes` rows are the names each later run of a batch is
 handed as `--circular`: a declaration frames every run after it, and a batch over eighty genomes, a

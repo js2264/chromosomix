@@ -22,11 +22,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   16 MiB a fetch: a whole chromosome is about even (chromosome 2 of that map at 50 kb, 47 requests and
   92 MB where it was 35 and 102, on screen in 24 s either way through a 100 ms, 50 Mbit/s link). The
   tracks already read in 256 KiB chunks.
-- **The circularity check passes over a sequence longer than 20 Mb (§8.15).** No molecule known to be
-  circular comes near it — the longest bacterial chromosomes are about 16 Mb — so a eukaryote's
-  chromosome was three reads of a large file for an answer known in advance: 28 MB behind the first
-  picture of the K562 map, beside every track being fetched, where nothing is read now. The app's
-  first-open check and `chromosomix circular` both leave such a sequence as it was. With the smaller
+- **The circularity check passes over a sequence longer than 10 Mb (§8.15).** The circles people map
+  are under it — a bacterial chromosome is about 4 Mb at the median, *Myxococcus xanthus*'s and
+  *Bradyrhizobium japonicum*'s about 9.1 — and the few above are niche (the myxobacteria *Sorangium*
+  and *Minicystis*, 13–16 Mb), left for the reader to tick. A eukaryote's chromosome was three reads
+  of a large file for an answer known in advance: 28 MB behind the first picture of the K562 map,
+  beside every track being fetched, where nothing is read now. The app's first-open check and
+  `chromosomix circular` both leave such a sequence as it was. With the smaller
   chunk, the *Human Hi-C data* map's reads end in about 5 s through that link, where they took 22 s,
   and it moves 9.7 MB where it moved 61.
 
