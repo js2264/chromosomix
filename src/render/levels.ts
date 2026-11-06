@@ -144,8 +144,18 @@ function bitsOf(values: Float32Array): Uint32Array {
  * selected from. Two passes over the block, each a load, two comparisons and an
  * increment per cell.
  */
-export function autoRangeOfValues(values: Float32Array, transform: Transform, balanced = false): ValueRange {
-  const bits = bitsOf(values)
+export function autoRangeOfValues(
+  values: Float32Array,
+  transform: Transform,
+  balanced = false,
+  listed: ListedCells | null = null,
+): ValueRange {
+  // A NaN is kept by neither rule, so the rows and columns of them a list sets
+  // apart change nothing here: the listed cells are all there is to read, and
+  // they are read as a block of their own — their patterns, and the values those
+  // patterns are.
+  const bits = listed === null ? bitsOf(values) : listed.bits
+  if (listed !== null) values = new Float32Array(bits.buffer, bits.byteOffset, bits.length)
   const aboveOne = transform === 'log10' || transform === 'log2'
   if (!balanced) {
     // Positive after the transform; `+Infinity` included, as `x > 0` keeps it.
@@ -167,6 +177,146 @@ export function autoRangeOfValues(values: Float32Array, transform: Transform, ba
   const [vmin, vmax] = both
   return vmax > vmin ? { vmin, vmax } : { vmin, vmax: vmin + 1 }
 }
+
+/**
+ * The cells of a block that carry something, listed — where there are few
+ * enough of them to be worth it — or `null` for a block read whole.
+ *
+ * Both rules of the colour range keep only values above zero, and a level
+ * colours every zero alike: so once the rest of a block is listed, neither reads
+ * its zeros again. At the bin sizes a block is largest at they are most of it —
+ * of mouse chr1's 95 million cells at 20 kb, 8.4 million hold a contact — and
+ * reading past them three times was most of what its first frame cost.
+ *
+ * A balanced block has a second kind of cell that is not zero: NaN, along the
+ * whole row and the whole column of every bin the balancing left out — 3.8% of
+ * those rows, which is 7.4% of the cells, and on yeast chrIV at 100 bp a fifth
+ * of them. Listed one by one they would outnumber the contacts, so whole rows and
+ * columns of NaN are found first and kept as two short lists of their own
+ * (`nanRows`, `nanCols`), and only what is left is listed: every cell that is
+ * not `±0` outside them, a NaN that is not part of one included. A column is
+ * taken for one from the NaNs of the first and last rows that are not NaN
+ * themselves, and confirmed in every other row as the list is made; a block in
+ * which that fails, or that is denser than one listed cell in
+ * {@link LISTED_SHARE}, is read whole.
+ */
+export interface ListedCells {
+  /** Cells that are not `±0` and not in a NaN row or column, by index, ascending. */
+  readonly cells: Uint32Array
+  /**
+   * Their bit patterns, in the same order — so the colour range and a level read
+   * the list from start to end rather than going back into the block by index,
+   * a cache miss a cell on a block of hundreds of megabytes.
+   */
+  readonly bits: Uint32Array
+  /** Rows every cell of which is NaN, ascending. */
+  readonly nanRows: Uint32Array
+  /** Columns every cell of which is NaN, ascending. */
+  readonly nanCols: Uint32Array
+}
+
+export function listCells(values: Float32Array, nrows: number, ncols: number): ListedCells | null {
+  const bits = bitsOf(values)
+  if (nrows * ncols !== bits.length || nrows === 0 || ncols === 0) return null
+  // A first look, from one cell in `SAMPLE_STRIDE`: a block whose cells that are
+  // neither zero nor NaN are past the share already is dense whatever its NaN
+  // rows and columns are, and is read whole without looking for them.
+  let looked = 0
+  let carrying = 0
+  for (let i = 0; i < bits.length; i += SAMPLE_STRIDE) {
+    looked++
+    const a = bits[i] & 0x7fffffff
+    if (a !== 0 && a <= INFINITY_BITS) carrying++
+  }
+  if (carrying * LISTED_SHARE > looked) return null
+  const nan = (p: number): boolean => (p & 0x7fffffff) > INFINITY_BITS
+  // Rows of NaN: a row whose first cell is not NaN cannot be one.
+  const nanRow = new Uint8Array(nrows)
+  for (let r = 0; r < nrows; r++) {
+    const base = r * ncols
+    if (!nan(bits[base])) continue
+    let whole = true
+    for (let c = 1; c < ncols && whole; c++) whole = nan(bits[base + c])
+    if (whole) nanRow[r] = 1
+  }
+  let first = 0
+  while (first < nrows && nanRow[first] === 1) first++
+  let last = nrows - 1
+  while (last >= 0 && nanRow[last] === 1) last--
+  // Columns of NaN, as far as two rows can tell; confirmed below in every row.
+  const nanCol = new Uint8Array(ncols)
+  const odd: number[] = []
+  if (first < nrows) {
+    for (let c = 0; c < ncols; c++) {
+      if (nan(bits[first * ncols + c]) && nan(bits[last * ncols + c])) {
+        nanCol[c] = 1
+        odd.push(c)
+      }
+    }
+  }
+  // The runs of columns between them.
+  const runs: number[] = []
+  let from = 0
+  for (const c of odd) {
+    if (c > from) runs.push(from, c)
+    from = c + 1
+  }
+  if (from < ncols) runs.push(from, ncols)
+  // How many cells will be listed: the first look's count of the ones that carry
+  // something, with room for a quarter more; a NaN that is not part of a row or
+  // a column of them is listed too, and grows the list if there are many.
+  const cap = Math.floor((nrows * ncols) / LISTED_SHARE)
+  const estimate = Math.ceil((carrying / looked) * nrows * ncols * 1.25)
+  let room = Math.min(cap, Math.max(KEPT_START, estimate))
+  let list = new Uint32Array(room)
+  let patterns = new Uint32Array(room)
+  let m = 0
+  for (let r = 0; r < nrows; r++) {
+    if (nanRow[r] === 1) continue
+    const base = r * ncols
+    for (let k = 0; k < runs.length; k += 2) {
+      const end = base + runs[k + 1]
+      for (let i = base + runs[k]; i < end; i++) {
+        const p = bits[i]
+        if ((p & 0x7fffffff) === 0) continue
+        if (m === room) {
+          // Denser than the sample said, and past the share: read whole after all.
+          if (room >= cap) return null
+          room = Math.min(cap, room * 2)
+          const next = new Uint32Array(room)
+          next.set(list)
+          list = next
+          const nextPatterns = new Uint32Array(room)
+          nextPatterns.set(patterns)
+          patterns = nextPatterns
+        }
+        list[m] = i
+        patterns[m++] = p
+      }
+    }
+    // Each NaN column confirmed in this row, now that the row is in the cache:
+    // asked before reading it, each was a miss of its own.
+    for (let k = 0; k < odd.length; k++) {
+      if ((bits[base + odd[k]] & 0x7fffffff) <= INFINITY_BITS) return null
+    }
+  }
+  const nanRows: number[] = []
+  for (let r = 0; r < nrows; r++) if (nanRow[r] === 1) nanRows.push(r)
+  return {
+    cells: list.subarray(0, m),
+    bits: patterns.subarray(0, m),
+    nanRows: Uint32Array.from(nanRows),
+    nanCols: Uint32Array.from(odd),
+  }
+}
+
+/**
+ * One cell in how many may be listed by {@link listCells}. A listed cell is
+ * eight bytes — its index and its value — so a list at the share is half the
+ * block's own four bytes a cell again, and below it everything read from the
+ * list is read in a quarter of the cells or fewer.
+ */
+const LISTED_SHARE = 4
 
 /**
  * `percentileOf` at each of `qs`, over the transformed values of the cells whose
@@ -218,24 +368,38 @@ function percentilesOf(
     }
   }
   if (n === 0) return null
+  const gathered = kept === null ? null : kept.subarray(0, n)
+  if (gathered !== null) return interpolated(n, qs, transform, balanced, (rank) => selectNth(gathered, rank))
   const ranks: number[] = []
   for (const q of qs) {
     const pos = ((n - 1) * q) / 100
     ranks.push(Math.floor(pos), Math.ceil(pos))
   }
-  const gathered = kept === null ? null : kept.subarray(0, n)
-  const raw =
-    gathered !== null
-      ? ranks.map((rank) => selectNth(gathered, rank))
-      : orderStatistics(values, bits, low, high, hist, ranks)
-  return qs.map((q, k) => {
+  const raw = orderStatistics(values, bits, low, high, hist, ranks)
+  const byRank = new Map(ranks.map((rank, k) => [rank, raw[k]]))
+  return interpolated(n, qs, transform, balanced, (rank) => byRank.get(rank) as number)
+}
+
+/**
+ * Each of `qs` as `percentileOf` interpolates it among `n` kept values, given
+ * the raw value at any rank: the two order statistics a percentile straddles are
+ * transformed — rounded to float32, as the pooled raster stored them — and the
+ * interpolation is `percentileOf`'s, character for character.
+ */
+function interpolated(
+  n: number,
+  qs: readonly number[],
+  transform: Transform,
+  balanced: boolean,
+  at: (rank: number) => number,
+): number[] {
+  return qs.map((q) => {
     const pos = ((n - 1) * q) / 100
     const lo = Math.floor(pos)
     const hi = Math.ceil(pos)
-    const a = Math.fround(displayValue(raw[2 * k], transform, balanced))
+    const a = Math.fround(displayValue(at(lo), transform, balanced))
     if (lo === hi) return a
-    const b = Math.fround(displayValue(raw[2 * k + 1], transform, balanced))
-    // `percentileOf`'s interpolation, character for character.
+    const b = Math.fround(displayValue(at(hi), transform, balanced))
     const t = pos - lo
     const diff = b - a
     return t < 0.5 ? a + diff * t : b - diff * (1 - t)
@@ -412,13 +576,33 @@ export class LevelPainter {
   /** The index of a zero cell, and of a NaN one — neither is ever on the fast path. */
   private readonly zeroIndex: number
   private readonly nanIndex: number
+  /** The word a zero cell is drawn as, and a NaN one. */
+  private readonly zeroWord: number
+  private readonly nanWord: number
+  /** The listed cells, where the block lists them ({@link listCells}). */
+  private readonly cells: Uint32Array | null
+  private readonly listed: ListedCells | null
+  /**
+   * NaN rows and columns before each row and column, where the block is listed:
+   * how many cells of a level's pixel they cover, by subtraction.
+   */
+  private readonly nanRowsBefore: Uint32Array | null
+  private readonly nanColsBefore: Uint32Array | null
 
   /**
    * @param scale Resolved: both bounds finite, as `colorize` resolves them.
+   * @param listed The block's listed cells and its NaN rows and columns, where it
+   * is sparse enough to list ({@link listCells}): a level is then painted from
+   * them, the zero colour and the colour of NaN, in time with the cells that
+   * carry something rather than with all of them. `null` reads the block whole.
    */
-  constructor(values: Float32Array, nrows: number, ncols: number, scale: ColorScale) {
+  constructor(values: Float32Array, nrows: number, ncols: number, scale: ColorScale, listed: ListedCells | null = null) {
     this.values = values
     this.bits = bitsOf(values)
+    this.listed = listed
+    this.cells = listed === null ? null : listed.cells
+    this.nanRowsBefore = listed === null ? null : before(listed.nanRows, nrows)
+    this.nanColsBefore = listed === null ? null : before(listed.nanCols, ncols)
     this.width = ncols
     this.height = nrows
     this.transform = scale.transform
@@ -442,6 +626,8 @@ export class LevelPainter {
     this.missingRgb = this.missingOpaque ? [lut[middle * 4], lut[middle * 4 + 1], lut[middle * 4 + 2]] : [0, 0, 0]
     this.zeroIndex = this.exact(0)
     this.nanIndex = this.exact(Number.NaN)
+    this.zeroWord = this.zeroIndex === NO_COLOUR ? this.missingWord : this.words[this.zeroIndex]
+    this.nanWord = this.nanIndex === NO_COLOUR ? this.missingWord : this.words[this.nanIndex]
   }
 
   /** The size of `level`. */
@@ -475,8 +661,46 @@ export class LevelPainter {
    * without level 0.
    */
   paintRows(level: number, from: number, to: number, out: Uint8ClampedArray): void {
-    if (level === 0) this.paintCells(from, to, out)
-    else this.paintAverages(level, from, to, out)
+    if (level !== 0) this.paintAverages(level, from, to, out)
+    else if (this.cells !== null) this.paintListedCells(this.cells, from, to, out)
+    else this.paintCells(from, to, out)
+  }
+
+  /**
+   * {@link paintCells} from the listed cells: the rows filled with the zero
+   * colour, the NaN columns and rows laid over them, and the listed cells set.
+   */
+  private paintListedCells(cells: Uint32Array, from: number, to: number, out: Uint8ClampedArray): void {
+    const { width, words, missingWord, nanWord } = this
+    const listed = this.listed as ListedCells
+    const pixels = new Uint32Array(out.buffer, out.byteOffset, (to - from) * width)
+    pixels.fill(this.zeroWord)
+    for (let y = from; y < to; y++) {
+      const row = (y - from) * width
+      for (let k = 0; k < listed.nanCols.length; k++) pixels[row + listed.nanCols[k]] = nanWord
+    }
+    for (let k = firstAtOrAfter(listed.nanRows, from); k < listed.nanRows.length && listed.nanRows[k] < to; k++) {
+      const row = (listed.nanRows[k] - from) * width
+      pixels.fill(nanWord, row, row + width)
+    }
+    const base = from * width
+    const end = to * width
+    const patterns = listed.bits
+    const { start, steps } = this.steps
+    const last = COLORMAP_SIZE - 1
+    for (let k = firstAtOrAfter(cells, base); k < cells.length; k++) {
+      const i = cells[k]
+      if (i >= end) break
+      const p = patterns[k]
+      let index: number
+      if (p <= INFINITY_BITS) {
+        index = start[p >>> BIN_SHIFT]
+        while (index < last && p >= steps[index + 1]) index++
+      } else {
+        index = this.slowIndex(i)
+      }
+      pixels[i - base] = index === NO_COLOUR ? missingWord : words[index]
+    }
   }
 
   private paintCells(from: number, to: number, out: Uint8ClampedArray): void {
@@ -530,45 +754,75 @@ export class LevelPainter {
     const zeroOpaque = zeroIndex !== NO_COLOUR || missingOpaque
     const zeroRedGreen = zeroIndex === NO_COLOUR ? missingRedGreen : redGreen[zeroIndex]
     const zeroBlue = zeroIndex === NO_COLOUR ? missingBlue : blue[zeroIndex]
+    // The cells of a listed block's NaN rows and columns, coloured as one NaN is.
+    const nanIndex = this.nanIndex
+    const nanOpaque = nanIndex !== NO_COLOUR || missingOpaque
+    const nanRedGreen = nanIndex === NO_COLOUR ? missingRedGreen : redGreen[nanIndex]
+    const nanBlue = nanIndex === NO_COLOUR ? missingBlue : blue[nanIndex]
+    const rowsBefore = this.nanRowsBefore
+    const colsBefore = this.nanColsBefore
+    // What `sumListed` adds to, and how it colours the rare cell that is neither
+    // zero nor positive.
+    const sums: RowSums = { rg, bl, counted, clear, redGreen, blue, missingOpaque, missingRedGreen, missingBlue }
+    const slow = (i: number): number => this.slowIndex(i)
     // A pixel of nothing but zeros is written whole, as the word `colorize`
     // writes for one zero cell.
     const pixels = new Uint32Array(out.buffer, out.byteOffset, out.length / 4)
-    const zeroWord = zeroIndex === NO_COLOUR ? this.missingWord : this.words[zeroIndex]
+    const zeroWord = this.zeroWord
+    const cells = this.cells
+    const patterns = this.listed === null ? bits : this.listed.bits
+    let k = cells === null ? 0 : firstAtOrAfter(cells, from * factor * ncols)
     let o = 0
     for (let ry = from; ry < to; ry++) {
       // The sums start at zero: fresh for the first row, and handed back at zero
       // by the loop that reads them out at the end of every row.
       const y0 = ry * factor
       const y1 = Math.min(y0 + factor, nrows)
-      for (let y = y0; y < y1; y++) {
-        const row = y * ncols
-        for (let x = 0; x < ncols; x++) {
-          const p = bits[row + x]
-          if ((p & 0x7fffffff) === 0) continue
-          const ox = x >> level
-          counted[ox]++
-          let index: number
-          if (p <= INFINITY_BITS) {
-            index = start[p >>> BIN_SHIFT]
-            while (index < last && p >= steps[index + 1]) index++
-          } else {
-            index = this.slowIndex(row + x)
-          }
-          if (index !== NO_COLOUR) {
-            rg[ox] += redGreen[index]
-            bl[ox] += blue[index]
-          } else if (missingOpaque) {
-            rg[ox] += missingRedGreen
-            bl[ox] += missingBlue
-          } else {
-            clear[ox]++
+      if (cells !== null) {
+        // The listed cells of these rows, which are the next ones in the list:
+        // its order is the block's.
+        k = sumListed(cells, patterns, k, y0, y1, ncols, level, start, steps, sums, slow)
+      } else {
+        for (let y = y0; y < y1; y++) {
+          const row = y * ncols
+          for (let x = 0; x < ncols; x++) {
+            const p = bits[row + x]
+            if ((p & 0x7fffffff) === 0) continue
+            const ox = x >> level
+            counted[ox]++
+            let index: number
+            if (p <= INFINITY_BITS) {
+              index = start[p >>> BIN_SHIFT]
+              while (index < last && p >= steps[index + 1]) index++
+            } else {
+              index = this.slowIndex(row + x)
+            }
+            if (index !== NO_COLOUR) {
+              rg[ox] += redGreen[index]
+              bl[ox] += blue[index]
+            } else if (missingOpaque) {
+              rg[ox] += missingRedGreen
+              bl[ox] += missingBlue
+            } else {
+              clear[ox]++
+            }
           }
         }
       }
       const rows = y1 - y0
+      const nanRowsIn = rowsBefore === null ? 0 : rowsBefore[y1] - rowsBefore[y0]
       for (let ox = 0; ox < width; ox++) {
         const c = counted[ox]
-        if (c === 0) {
+        // The NaN cells under this pixel that the list sets apart: its NaN rows'
+        // cells, its NaN columns', and the cells both count once.
+        let masked = 0
+        if (colsBefore !== null) {
+          const x0 = ox * factor
+          const x1 = Math.min(x0 + factor, ncols)
+          const nanColsIn = colsBefore[x1] - colsBefore[x0]
+          masked = nanRowsIn * (x1 - x0) + nanColsIn * rows - nanRowsIn * nanColsIn
+        }
+        if (c === 0 && masked === 0) {
           // Nothing but zeros under this pixel, which is most pixels of a sparse
           // block: the zero colour itself — or nothing, where a zero has none —
           // and no sums to read or hand back.
@@ -578,7 +832,7 @@ export class LevelPainter {
         }
         const cols = Math.min(factor, ncols - ox * factor)
         const covered = rows * cols
-        const zeros = covered - c
+        const zeros = covered - c - masked
         let n = c - clear[ox]
         let sumRedGreen = rg[ox]
         let sumBlue = bl[ox]
@@ -588,6 +842,11 @@ export class LevelPainter {
           sumRedGreen += zeros * zeroRedGreen
           sumBlue += zeros * zeroBlue
           n += zeros
+        }
+        if (nanOpaque && masked > 0) {
+          sumRedGreen += masked * nanRedGreen
+          sumBlue += masked * nanBlue
+          n += masked
         }
         if (n === 0) {
           pixels[o >> 2] = 0
@@ -602,4 +861,92 @@ export class LevelPainter {
       }
     }
   }
+}
+
+/** The first position in ascending `cells` whose index is `value` or more. */
+function firstAtOrAfter(cells: Uint32Array, value: number): number {
+  let lo = 0
+  let hi = cells.length
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1
+    if (cells[mid] < value) lo = mid + 1
+    else hi = mid
+  }
+  return lo
+}
+
+/** For ascending `indices` below `n`: how many come before each of `0 … n`. */
+function before(indices: Uint32Array, n: number): Uint32Array {
+  const out = new Uint32Array(n + 1)
+  let k = 0
+  for (let i = 0; i < n; i++) {
+    out[i] = k
+    while (k < indices.length && indices[k] === i) k++
+  }
+  out[n] = k
+  return out
+}
+
+/** The sums of one output row of a level, and the colours they add. */
+interface RowSums {
+  rg: Float64Array
+  bl: Float64Array
+  counted: Uint32Array
+  clear: Uint32Array
+  redGreen: Float64Array
+  blue: Uint8Array
+  missingOpaque: boolean
+  missingRedGreen: number
+  missingBlue: number
+}
+
+/**
+ * Add the listed cells of input rows `[y0, y1)` to one output row's sums, from
+ * position `k` of the list, and return the position after them. A function of
+ * its own, out of `paintAverages`, because it is the whole of a sparse level's
+ * cost and is compiled best alone.
+ */
+function sumListed(
+  cells: Uint32Array,
+  patterns: Uint32Array,
+  k: number,
+  y0: number,
+  y1: number,
+  ncols: number,
+  level: number,
+  start: Uint8Array,
+  steps: Uint32Array,
+  sums: RowSums,
+  slow: (i: number) => number,
+): number {
+  const { rg, bl, counted, clear, redGreen, blue, missingOpaque, missingRedGreen, missingBlue } = sums
+  const last = COLORMAP_SIZE - 1
+  const end = y1 * ncols
+  let rowStart = y0 * ncols
+  const n = cells.length
+  for (; k < n; k++) {
+    const i = cells[k]
+    if (i >= end) break
+    while (i >= rowStart + ncols) rowStart += ncols
+    const ox = (i - rowStart) >> level
+    counted[ox]++
+    const p = patterns[k]
+    let index: number
+    if (p <= INFINITY_BITS) {
+      index = start[p >>> BIN_SHIFT]
+      while (index < last && p >= steps[index + 1]) index++
+    } else {
+      index = slow(i)
+    }
+    if (index !== NO_COLOUR) {
+      rg[ox] += redGreen[index]
+      bl[ox] += blue[index]
+    } else if (missingOpaque) {
+      rg[ox] += missingRedGreen
+      bl[ox] += missingBlue
+    } else {
+      clear[ox]++
+    }
+  }
+  return k
 }

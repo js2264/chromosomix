@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest'
 
 import { COLORMAP_NAMES } from '@/render/colormaps'
 import { autoRangeOfPooled, colorize, poolDisplay } from '@/render/heatmap'
-import { LevelPainter, autoRangeOfValues, levelFor, levelSize } from '@/render/levels'
+import { LevelPainter, autoRangeOfValues, levelFor, levelSize, listCells } from '@/render/levels'
 import type { ColorScale, DenseMatrix, Transform } from '@/types'
 
 /** Deterministic, so a failure is reproducible. */
@@ -28,12 +28,31 @@ function rng(seed: number): () => number {
 }
 
 /** A block with a share of every awkward value, and counts, and fractions. */
-function field(nrows: number, ncols: number, seed: number, kind: 'mixed' | 'counts' | 'fractions' = 'mixed'): DenseMatrix {
+function field(
+  nrows: number,
+  ncols: number,
+  seed: number,
+  kind: 'mixed' | 'counts' | 'fractions' | 'sparse' = 'mixed',
+): DenseMatrix {
   const random = rng(seed)
   const values = new Float32Array(nrows * ncols)
   for (let i = 0; i < values.length; i++) {
     const u = random()
-    if (kind === 'counts') values[i] = u < 0.6 ? 0 : Math.floor(random() ** 4 * 300) + 1
+    if (kind === 'sparse') {
+      // Nineteen cells in twenty zero, of either sign, and the rest every awkward value.
+      const w = random()
+      values[i] =
+        u < 0.93 ? 0
+        : u < 0.95 ? -0
+        : w < 0.05 ? Number.NaN
+        : w < 0.08 ? Number.POSITIVE_INFINITY
+        : w < 0.1 ? Number.NEGATIVE_INFINITY
+        : w < 0.15 ? -random() * 3
+        : w < 0.2 ? 1e-42 * random()
+        : w < 0.3 ? 1
+        : w < 0.5 ? random()
+        : random() ** 3 * 5000
+    } else if (kind === 'counts') values[i] = u < 0.6 ? 0 : Math.floor(random() ** 4 * 300) + 1
     else if (kind === 'fractions') values[i] = u < 0.05 ? Number.NaN : u < 0.5 ? 0 : random() ** 3 * 0.2
     else
       values[i] =
@@ -243,5 +262,104 @@ describe('which level a draw wants', () => {
     // No deeper than four, and never below eight pixels a side.
     expect(levelFor(0.001, 100000, 100000)).toBe(4)
     expect(levelFor(0.001, 20, 20)).toBe(2)
+  })
+})
+
+/**
+ * `block` with the rows and columns of some bins NaN through and through, as
+ * balancing leaves the bins it dropped — and, where asked, a few NaNs that are
+ * not part of one, and a column NaN in the first and last rows but not between.
+ */
+function unbalanced(block: DenseMatrix, seed: number, options: { strays?: boolean; decoy?: boolean } = {}): DenseMatrix {
+  const random = rng(seed)
+  const values = block.values.slice()
+  const { nrows, ncols } = block
+  for (let r = 0; r < nrows; r++) {
+    if (random() < 0.08) values.fill(Number.NaN, r * ncols, (r + 1) * ncols)
+  }
+  for (let c = 0; c < ncols; c++) {
+    if (random() < 0.08) for (let r = 0; r < nrows; r++) values[r * ncols + c] = Number.NaN
+  }
+  if (options.strays === true) {
+    for (let k = 0; k < 20; k++) values[Math.floor(random() * values.length)] = Number.NaN
+  }
+  if (options.decoy === true) {
+    // Column 3: NaN in the first and last rows only, so it looks like a NaN column to begin with.
+    values[3] = Number.NaN
+    values[(nrows - 1) * ncols + 3] = Number.NaN
+  }
+  return { ...block, values }
+}
+
+describe('a sparse block, read from its listed cells', () => {
+  it('lists the cells that are not ±0 outside its NaN rows and columns, and nothing for a dense block', () => {
+    const block = unbalanced(field(80, 120, 51, 'sparse'), 61, { strays: true })
+    const listed = listCells(block.values, 80, 120)
+    expect(listed).not.toBeNull()
+    const { cells, nanRows, nanCols } = listed as NonNullable<typeof listed>
+    const isNaNRow = (r: number): boolean => block.values.subarray(r * 120, (r + 1) * 120).every((v) => Number.isNaN(v))
+    const isNaNCol = (c: number): boolean => Array.from({ length: 80 }, (_, r) => block.values[r * 120 + c]).every((v) => Number.isNaN(v))
+    expect(Array.from(nanRows)).toEqual(Array.from({ length: 80 }, (_, r) => r).filter(isNaNRow))
+    expect(Array.from(nanCols)).toEqual(Array.from({ length: 120 }, (_, c) => c).filter(isNaNCol))
+    const bits = new Uint32Array(block.values.buffer)
+    const expected: number[] = []
+    for (let i = 0; i < bits.length; i++) {
+      const r = Math.floor(i / 120)
+      if (isNaNRow(r) || isNaNCol(i - r * 120)) continue
+      if ((bits[i] & 0x7fffffff) !== 0) expected.push(i)
+    }
+    expect(Array.from(cells)).toEqual(expected)
+    expect(listCells(field(80, 120, 52, 'mixed').values, 80, 120)).toBeNull()
+  })
+
+  it('reads the colour range the whole block gives, to the bit', () => {
+    for (const seed of [53, 54, 55]) {
+      for (const block of [field(97, 61, seed, 'sparse'), unbalanced(field(97, 61, seed, 'sparse'), seed, { strays: true })]) {
+        const listed = listCells(block.values, block.nrows, block.ncols)
+        expect(listed).not.toBeNull()
+        for (const transform of TRANSFORMS) {
+          for (const balanced of [false, true]) {
+            const whole = classicRange(block, transform, balanced)
+            const read = autoRangeOfValues(block.values, transform, balanced, listed)
+            expect(Object.is(read.vmin, whole.vmin) && Object.is(read.vmax, whole.vmax), `${seed} ${transform} ${balanced}`).toBe(true)
+          }
+        }
+      }
+    }
+  })
+
+  it('paints every level, whole or in slices, as the block read whole paints it', () => {
+    const blocks: DenseMatrix[] = [
+      field(97, 61, 56, 'sparse'),
+      unbalanced(field(97, 61, 57, 'sparse'), 58, { strays: true }),
+      unbalanced(field(64, 300, 59, 'sparse'), 60),
+      unbalanced(field(70, 90, 62, 'sparse'), 63, { decoy: true }),
+    ]
+    for (const block of blocks) {
+      const { nrows, ncols } = block
+      const listed = listCells(block.values, nrows, ncols)
+      for (const missing of ['paper', 'middle'] as const) {
+        for (const transform of TRANSFORMS) {
+          for (const balanced of [false, true]) {
+            const scale: ColorScale = { vmin: Number.NaN, vmax: Number.NaN, transform, colormap: 'default', missing, balanced }
+            const resolved = classicColours(block, scale).scale
+            const whole = new LevelPainter(block.values, nrows, ncols, resolved)
+            const read = new LevelPainter(block.values, nrows, ncols, resolved, listed)
+            for (let level = 0; level <= 5; level++) {
+              const expected = paint(whole, level)
+              const label = `${nrows}x${ncols} ${transform} ${balanced} ${missing} level ${level}`
+              expect(Buffer.from(paint(read, level)).equals(Buffer.from(expected)), label).toBe(true)
+              const { width, height } = read.size(level)
+              const pieces = new Uint8ClampedArray(expected.length)
+              for (let from = 0; from < height; from += 5) {
+                const to = Math.min(height, from + 5)
+                pieces.set(paint(read, level, from, to), from * width * 4)
+              }
+              expect(Buffer.from(pieces).equals(Buffer.from(expected)), `${label} in slices`).toBe(true)
+            }
+          }
+        }
+      }
+    }
   })
 })

@@ -2067,6 +2067,12 @@ filtered row reads as absent rather than as empty. Where there is no weight colu
 offered, a link naming it lands on counts, and a read asking for weights anyway is refused by name.
 No default weighting is invented.
 
+**A zero the weights cannot change is not visited** (`weighBlock`). Under a row and a column weight
+that are both finite and not negative, `0 · w[i] · w[j]` is the same zero, sign and all, so those cells
+are left as they are; every other cell — a contact, or a zero under a weight that is `NaN`, infinite
+or negative — is multiplied as it always was, and the block is the one the cell-by-cell product made,
+bit for bit. At a fine bin size the zeros are most of it: nine cells in ten of mouse chr1 at 20 kb.
+
 This is the **one** read of `/bins` in the reader, and it is bounded: two slices of the weight column
 for the bins actually on screen, never the whole column, never `/bins/chrom`, and never at all unless
 the user asked for balanced counts. §3.3's rule is that *coordinates* never come from `/bins`; they
@@ -2420,6 +2426,15 @@ or more — drawn a cell to a pixel, on one scale, read against a floor — is d
 - **its colour range is the same number**, to the bit — the 99th percentile §7.1 ties to numpy — read
   as order statistics of the raw values, whose order every transform keeps, rather than of a
   transformed copy of the block (`autoRangeOfValues`);
+- **a sparse block is read once, and its contacts after that** (`listCells`). Both rules of the range
+  keep only values above zero, and a level colours every zero alike, so one pass lists the cells that
+  carry something — each with its value, so nothing after it goes back into the block by index —
+  and sets apart the rows and columns a balancing left NaN, which are two short lists of their own:
+  the range and every level of every colouring are then read from the list. Mouse chr1 at 20 kb is
+  95 million cells, 8.4 million of them contacts and 7.4% NaN, and its first frame's main-thread work
+  went from 1.3 s to 0.6 s; yeast chrIV at 100 bp, 1.7% contacts, from 1.7 s to 0.8 s. A block in
+  which more than one cell in four carries something is read whole, as are NaNs that are not whole
+  rows and columns past that share;
 - **a finer level is painted when a zoom first needs it, between frames**, in slices that hand the
   frame back, while the nearest level made stands in for it: the picture sharpens a moment after the
   zoom rather than the map stopping until it has. A level is made once per colouring, and a gesture
@@ -6086,7 +6101,7 @@ requests and bytes in total and for the last view; these are also paper figures.
 | Open + render genomes table (remote) | ≤ 20 range requests |
 | Load one MAG's matrix (remote) | ≤ 5 range requests |
 | Pan/zoom within the block in hand | 0 requests, 60 fps |
-| First frame of a block of 2,048² cells or more | one pass over its values on the main thread — the level the frame draws and the colour range — and no image at matrix resolution (§7.2) |
+| First frame of a block of 2,048² cells or more | one pass over its values on the main thread — listing the cells that carry something where they are no more than one in four — the colour range and the level the frame draws read from that list, and no image at matrix resolution (§7.2) |
 | A zoom past the levels a large block has made | 0 requests and no re-colouring: the level it wants painted between frames, the nearest made drawn meanwhile |
 | Refine, on crossing the block's grid (§2) | ≤ 5 range requests, one bounded read |
 | Pan to the edge of the block in hand | one read, **at the same resolution** |

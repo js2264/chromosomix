@@ -45,6 +45,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   where a canvas halving an odd-sized level drifted into sampling one cell in two: such a map is
   smoother at fit zoom than it was, and no brighter or darker. The page's report of a finished picture
   waits for a level still being painted when a report is due, and a zoom alone still makes none.
+- **A sparse block is read once, and only its contacts after that (§6.4, §7.2).** One pass over a
+  large block lists the cells that carry something, each with its value, and sets apart the rows and
+  columns a balancing left NaN; the colour range and every level are then read from that list
+  (`listCells`), the same numbers and the same pixels to the bit. Balancing leaves a zero its weights
+  cannot change where it is (`weighBlock`), bit for bit the product it was. Medians of three, from a
+  chromosome clicked in its table against a server answering as S3 does: mouse chr1 at 20 kb on
+  screen in 4.4 s where it took 4.9, its main-thread work 0.6 s where it was 1.3; yeast chrIV at
+  100 bp in 3.4 s where it took 4.1; chicken chr1 at 25 kb in 2.1 s where it took 2.5. A block in
+  which more than one cell in four carries something is read whole, as before.
 
 ## [0.21.0] - 2026-11-05
 

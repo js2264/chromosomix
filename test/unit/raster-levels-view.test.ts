@@ -106,12 +106,21 @@ function view(size = 400): { heatmap: HeatmapView; ctx: ReturnType<typeof contex
   return { heatmap: new HeatmapView(canvas, { devicePixelRatio: 1 }), ctx }
 }
 
-/** A sparse block with a bright diagonal, past `LEVEL_MIN_CELLS`. */
-function block(n = 4000): DenseMatrix {
+/**
+ * A block past `LEVEL_MIN_CELLS`, dense enough to be read whole — so a level of
+ * it takes more than one slice to paint and a zoom has a stand-in to draw — or,
+ * `sparse`, a bright diagonal alone, whose levels are painted from its listed
+ * cells (`listCells`).
+ */
+function block(n = 4000, sparse = false): DenseMatrix {
   const values = new Float32Array(n * n)
-  for (let i = 0; i < n; i++) {
-    values[i * n + i] = 50
-    if (i + 1 < n) values[i * n + i + 1] = values[(i + 1) * n + i] = 7
+  if (sparse) {
+    for (let i = 0; i < n; i++) {
+      values[i * n + i] = 50
+      if (i + 1 < n) values[i * n + i + 1] = values[(i + 1) * n + i] = 7
+    }
+  } else {
+    for (let i = 0; i < values.length; i++) values[i] = 1 + (i % 7)
   }
   return { nrows: n, ncols: n, values, rowExtent: [0, n], colExtent: [0, n] }
 }
@@ -182,6 +191,19 @@ describe('a zoom on a large block', () => {
     heatmap.draw()
     expect(heatmap.sharpening).toBe(false)
     expect(heatmap.levelsMade).toBe(2)
+  })
+
+  it('draws a sparse block’s level in the frame that wants it, when one slice paints it', () => {
+    const { heatmap, ctx } = view()
+    heatmap.setMatrix(block(4000, true))
+    heatmap.draw()
+    heatmap.zoomAt(200, 200, 16)
+    heatmap.draw()
+    // Painted from the listed cells, the whole level fits the first slice: no stand-in.
+    expect(ctx.blits[ctx.blits.length - 1].source.width).toBe(4000)
+    expect(heatmap.sharpening).toBe(false)
+    expect(heatmap.levelsMade).toBe(2)
+    expect(heatmap.rasterisations).toBe(1)
   })
 
   it('gives up a level it no longer wants for the one it does', async () => {

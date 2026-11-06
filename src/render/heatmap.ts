@@ -33,6 +33,8 @@ import {
   MIN_RASTER_LEVEL,
   autoRangeOfValues,
   levelFor,
+  listCells,
+  type ListedCells,
 } from './levels'
 import {
   anchorRays,
@@ -660,19 +662,35 @@ type RasterCanvas = HTMLCanvasElement | OffscreenCanvas
  */
 const rangeByValues = new WeakMap<Float32Array, Map<string, ValueRange>>()
 
-function rangeOfValues(values: Float32Array, transform: Transform, balanced: boolean): ValueRange {
-  const key = `${transform}:${balanced}`
-  let held = rangeByValues.get(values)
+function rangeOfValues(matrix: DenseMatrix, transform: Transform, balanced: boolean): ValueRange {
+  const key = `${matrix.nrows}x${matrix.ncols}:${transform}:${balanced}`
+  let held = rangeByValues.get(matrix.values)
   if (held === undefined) {
     held = new Map()
-    rangeByValues.set(values, held)
+    rangeByValues.set(matrix.values, held)
   }
   let range = held.get(key)
   if (range === undefined) {
-    range = autoRangeOfValues(values, transform, balanced)
+    range = autoRangeOfValues(matrix.values, transform, balanced, listedOf(matrix))
     held.set(key, range)
   }
   return range
+}
+
+/**
+ * A block's listed cells and its NaN rows and columns (`levels.ts`'s
+ * `listCells`), made once and kept with its values: the colour range and every
+ * level of every colouring of the block are read from them rather than from the
+ * block, so a sparse block's zeros are read once in all.
+ */
+const listedByValues = new WeakMap<Float32Array, { nrows: number; ncols: number; listed: ListedCells | null }>()
+
+function listedOf(matrix: DenseMatrix): ListedCells | null {
+  const held = listedByValues.get(matrix.values)
+  if (held !== undefined && held.nrows === matrix.nrows && held.ncols === matrix.ncols) return held.listed
+  const listed = listCells(matrix.values, matrix.nrows, matrix.ncols)
+  listedByValues.set(matrix.values, { nrows: matrix.nrows, ncols: matrix.ncols, listed })
+  return listed
 }
 
 /**
@@ -4074,8 +4092,10 @@ export class HeatmapView {
     if (held !== undefined) return held
     const nearest = this.nearestLevel(wanted)
     if (nearest === null || this.exporting) return this.makeLevelNow(wanted)
-    if (!this.unmade.has(wanted)) this.makeLevelLater(wanted)
-    return nearest
+    // A level whose first slice is the whole of it — a sparse block's, painted
+    // from its listed cells — is drawn in this frame rather than after it.
+    const made = this.unmade.has(wanted) ? null : this.makeLevelLater(wanted)
+    return made ?? nearest
   }
 
   /** The level made nearest `wanted`: the coarser first, which is only softer, then the finer. */
@@ -4118,15 +4138,16 @@ export class HeatmapView {
    * level 0 of a large block is several hundred megabytes, and the canvas is
    * already one copy of it.
    */
-  private makeLevelLater(level: number): void {
+  private makeLevelLater(level: number): RasterCanvas | null {
     const painter = this.painter
-    if (painter === null || this.making?.level === level) return
+    if (painter === null || this.making?.level === level) return null
     this.cancelMaking()
     const { width, height } = painter.size(level)
     const canvas = createRasterCanvas(width, height)
     const ctx = (canvas as HTMLCanvasElement).getContext('2d')
-    if (ctx === null) return
+    if (ctx === null) return null
     let cancelled = false
+    let finished = false
     const making = {
       level,
       cancel: () => {
@@ -4159,8 +4180,12 @@ export class HeatmapView {
       if (this.making === making) this.making = null
       this.levels[level] = canvas
       this.levelCount += 1
-      this.changed()
+      finished = true
+      if (!synchronous) this.changed()
     }
+    // The first slice runs here, inside the frame that asked: `run` goes on
+    // past it only at its first `await`.
+    let synchronous = true
     run().catch(() => {
       // A level the platform will not hold — a canvas or an allocation refused
       // between frames — is left to the level standing in for it, and not asked
@@ -4169,6 +4194,8 @@ export class HeatmapView {
       if (this.making === making) this.making = null
       if (!cancelled) this.unmade.add(level)
     })
+    synchronous = false
+    return finished ? canvas : null
   }
 
   /** Stop making a level between frames, if one is being made. */
@@ -4756,7 +4783,7 @@ export class HeatmapView {
     this.pooled = null
     this.lowerRaster = null
     const scale = this.levelScale(matrix)
-    this.painter = new LevelPainter(matrix.values, matrix.nrows, matrix.ncols, scale)
+    this.painter = new LevelPainter(matrix.values, matrix.nrows, matrix.ncols, scale, listedOf(matrix))
     this.raster = { width: matrix.ncols, height: matrix.nrows, data: NO_BYTES, scale, strideX: 1, strideY: 1 }
     this.dirtyRaster = false
   }
@@ -4776,7 +4803,7 @@ export class HeatmapView {
     // A gauge wider than the raster is measured as the pooled raster measures it.
     const auto =
       measured.nrows <= RASTER_MAX_DIM && measured.ncols <= RASTER_MAX_DIM
-        ? rangeOfValues(measured.values, scale.transform, scale.balanced === true)
+        ? rangeOfValues(measured, scale.transform, scale.balanced === true)
         : autoRangeOfPooled(pooledOf(measured, scale, false))
     return {
       ...scale,
