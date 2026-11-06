@@ -79,11 +79,14 @@ or tracks. Its **origin**, beside the tick, is its first base until you type a 1
 let [Origin and terminus](/analyses/oriter/) place it; the task never overwrites a position you
 typed.
 
-On a file's first open, its 50 longest sequences with at least 50 bins are scored on their contacts
-across the two ends against the diagonal's at the same separation: about 1 for a circle, 0 for a
-line. At 0.2 or more a sequence is ticked, with a banner saying where to untick it and its score in
-the tick's tooltip; an untick stays. A small circle at a coarse resolution may be missed: tick it
-yourself.
+On a file's first open, its 50 longest sequences with at least 50 bins and no more than 10 Mb are
+scored on their contacts across the two ends against the diagonal's at the same separation: about 1
+for a circle, 0 for a line. At 0.2 or more a sequence is ticked, with a banner saying where to untick
+it and its score in the tick's tooltip; an untick stays. A small circle at a coarse resolution may be
+missed: tick it yourself. A sequence over 10 Mb is not scored: nearly every circular chromosome is
+shorter (a bacterium's is about 4 Mb at the median, and the large ones of *Myxococcus* and
+*Bradyrhizobium* about 9), so a human or mouse chromosome, or a chicken macrochromosome, is never read
+for it. Tick the rare longer circle, such as a *Sorangium* chromosome, yourself.
 
 Once ticked:
 

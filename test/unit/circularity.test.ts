@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CIRCULAR_SCORE,
   JUNCTION_BINS,
+  MAX_JUNCTION_SEQUENCE_LENGTH,
   MIN_JUNCTION_SEQUENCE_BINS,
   junctionCandidates,
   junctionQuorum,
@@ -186,6 +187,31 @@ describe('the test over a whole map', () => {
       { name: 'plasmid', from: 0, n: 60 },
     ])
     expect(junctionCandidates([['a', 90_000], ['b', 80_000]], 1000, 1).map((one) => one.name)).toEqual(['a'])
+  })
+
+  /**
+   * The circles people map are under 10 Mb — *Myxococcus xanthus*'s 9.1 Mb is
+   * measured — so a human chromosome is not read for an answer known in
+   * advance, nor a niche bacterium's 16 Mb one, while a sequence placed after
+   * one passed over is still placed by the bins before it.
+   */
+  it('passes over a sequence longer than the circles people map, and still counts its bins', () => {
+    expect(MAX_JUNCTION_SEQUENCE_LENGTH).toBe(10_000_000)
+    const candidates = junctionCandidates(
+      [
+        ['chr21', 46_709_983],
+        ['Myxococcus', 9_139_763],
+        ['edge', 10_000_000],
+        ['over', 10_000_001],
+        ['Minicystis', 16_040_666],
+        ['chrM', 16_569],
+      ],
+      100_000,
+    )
+    expect(candidates).toEqual([
+      { name: 'edge', from: 560, n: 100 },
+      { name: 'Myxococcus', from: 468, n: 92 },
+    ])
   })
 
   /**

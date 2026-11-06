@@ -112,6 +112,7 @@ import { gridAt } from '../analysis/context'
 import {
   CIRCULAR_SCORE,
   JUNCTION_BINS,
+  MAX_JUNCTION_SEQUENCE_LENGTH,
   MIN_JUNCTION_SEQUENCE_BINS,
   junctionCandidates,
   junctionQuorum,
@@ -2872,7 +2873,8 @@ async function circularCommand(args: Args, downloads: Downloads): Promise<number
           `# file: ${path}`,
           `# test: contacts across each sequence's ends over the diagonal's at ${JUNCTION_BINS} bins ` +
             `or fewer, at ${junctionQuorum()} of them at least, on sequences of ` +
-            `${MIN_JUNCTION_SEQUENCE_BINS} bins or more; circular at ${CIRCULAR_SCORE} or more (§8.15)`,
+            `${MIN_JUNCTION_SEQUENCE_BINS} bins or more and ${MAX_JUNCTION_SEQUENCE_LENGTH / 1e6} Mb or less; ` +
+            `circular at ${CIRCULAR_SCORE} or more (§8.15)`,
           `# framing: ${mc.binsize} bp${balance ? ', balanced' : ''}`,
           ['sequence', 'length', 'score', 'circular'].join('\t'),
         ]
