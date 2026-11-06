@@ -809,6 +809,60 @@ export function poolingRung(
   return best?.name
 }
 
+/**
+ * The fewest cells a preview may have across its wider axis (§7.2).
+ *
+ * A stand-in has to be recognisably the picture that replaces it: at 256 cells
+ * a whole chromosome on a laptop's map is three pixels a cell — soft, and every
+ * compartment and the larger domains already in place.
+ */
+export const PREVIEW_MIN_CELLS = 256
+
+/**
+ * How many times finer than its preview the asked block must be, along its
+ * wider axis, for the preview to be worth a read of its own.
+ *
+ * Below it the asked block is close enough to the preview's size that it reads
+ * about as fast, and drawing two pictures of one window in a second would be a
+ * flicker rather than a head start — which is what a reader who has already
+ * chosen a coarse rung is owed: the picture they asked for, once.
+ */
+export const PREVIEW_FACTOR = 4
+
+/**
+ * The rung to draw a block from first, while the block itself is read — or
+ * `undefined`, to draw only the block (§7.2).
+ *
+ * The **coarsest** stored rung that still gives {@link PREVIEW_MIN_CELLS}
+ * across the window, so the stand-in is the cheapest read that is still a
+ * picture; and only where the block the reader asked for is at least
+ * {@link PREVIEW_FACTOR} times finer than it. "Finer" is measured against what
+ * will actually be read: a block too large to read a bin to a cell is pooled
+ * to the grid {@link gridFor} gives, and a preview has to beat that grid, not
+ * the file's bins. A file with no coarser rung, a window already as coarse as
+ * a preview would be, and a reader who chose a coarse rung all get none.
+ */
+export function previewRung(
+  rungs: ReadonlyArray<{ name: string; binsize: number }>,
+  rows: Extent,
+  cols: Extent,
+  binsize: number,
+): string | undefined {
+  if (!(binsize > 0)) return undefined
+  const widest = Math.max(rows[1] - rows[0], cols[1] - cols[0])
+  if (!(widest > 0)) return undefined
+  const asked = Math.ceil(widest / gridFor(rows, cols))
+  const spanBp = widest * binsize
+  let best: { name: string; binsize: number } | null = null
+  for (const rung of rungs) {
+    if (!(rung.binsize > binsize)) continue
+    const cells = spanBp / rung.binsize
+    if (cells < PREVIEW_MIN_CELLS || asked < PREVIEW_FACTOR * cells) continue
+    if (best === null || rung.binsize > best.binsize) best = rung
+  }
+  return best?.name
+}
+
 // ---------------------------------------------------------------------------
 // Wiring
 // ---------------------------------------------------------------------------

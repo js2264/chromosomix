@@ -54,6 +54,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   screen in 4.4 s where it took 4.9, its main-thread work 0.6 s where it was 1.3; yeast chrIV at
   100 bp in 3.4 s where it took 4.1; chicken chr1 at 25 kb in 2.1 s where it took 2.5. A block in
   which more than one cell in four carries something is read whole, as before.
+- **A chromosome is shown first from a coarser rung, while its own block reads (§7.2, §12).** Where a
+  stored rung puts at least 256 cells across the window and the block asked for is at least four times
+  finer, that rung is read first and drawn — its own cells, resolution and colour range — and held
+  with the spinner turning until the block replaces it, refitted and measured afresh as before. From
+  the click on the row, against a server answering as S3 does: chicken chr1 at 25 kb shows its 500 kb
+  preview in 0.2 s where the first picture took 2.0, its own block at 2.2 s; mouse chr1 at 80 kb shows
+  640 kb in 0.7 s where it took 2.3, its block at 2.9, the preview read first by the same reader. The
+  preview is not the finer block made smaller: its cells are sums of many, so its compartments show
+  more strongly than the block's. A window already as coarse as a preview, a file with no coarser
+  rung, a grid the reader chose and a map under a second file get none.
+- **The census and the circularity check wait for the first map (§6.5, §8.6, §12).** A `.hic`'s
+  census started beside the open and the circularity check as the Chromosomes table showed, so the
+  reader's first click found a step of one or the other in flight and waited for it: chicken chr1 a
+  moment after its table took 2.1–2.6 s where the same click later took 2.2. Both now wait for the
+  first block of the first map — on a landing table, the map a row opens — or four seconds, as a
+  file's tracks already did; the 1D browser, whose picture is its tracks, still lets them go at once.
 
 ## [0.21.0] - 2026-11-05
 

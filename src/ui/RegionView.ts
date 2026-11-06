@@ -55,7 +55,7 @@ import { blockSummary } from './mapSummary'
 import { icon, iconButton } from './icons'
 import { presentationOf, secondBlock, type CompareRead, type LowerRead } from './compare'
 import type { LowerPresentation } from './LowerReading'
-import { attachRefine, poolingRung, rungsOf, type BlockLadder } from './refine'
+import { attachRefine, poolingRung, previewRung, rungsOf, type BlockLadder } from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox, featureSuggestions, locusPlaceholder } from './SearchBox'
 import { stepper } from './Stepper'
@@ -1007,6 +1007,57 @@ export class RegionView {
   }
 
   /**
+   * Draw the window from a coarser rung while the asked block reads, where
+   * that is worth a read of its own (§7.2, {@link previewRung}): the block of a
+   * whole chromosome at the rung a file lands on is the slowest first picture a
+   * reader is given, and the same window a few rungs up is a fraction of its
+   * reads and of its cells.
+   *
+   * Only for one map read whole: not under a second file or a second reading
+   * below the diagonal, which would each want a stand-in of their own; not on a
+   * grid the reader chose (`binsPerCell`), which is a resolution they have
+   * committed to; and not across a circle's origin, whose read is planned
+   * against the rung it is asked at. A stand-in that fails is a picture that
+   * comes later, never an error: the asked read follows it either way.
+   *
+   * Returns whether one is on screen, for the caller to let go if the asked
+   * read fails in its turn.
+   */
+  private async preview(
+    rows: [number, number],
+    cols: [number, number] | undefined,
+    title: string,
+    wrap: [number, number] | undefined,
+  ): Promise<boolean> {
+    if (
+      wrap !== undefined ||
+      this.props.compare !== undefined ||
+      this.props.lowerRead !== undefined ||
+      (this.props.binsPerCell ?? 1) > 1
+    ) {
+      return false
+    }
+    const rung = previewRung(rungsOf(this.props.rungs ?? []), rows, cols ?? rows, this.props.binsize)
+    if (rung === undefined) return false
+    try {
+      const coarse: MatrixResult = await this.props.client.request<'matrix'>({
+        kind: 'matrix',
+        rows,
+        ...(cols === undefined ? {} : { cols }),
+        rung,
+        balance: this.props.balance,
+        ...(this.props.value === undefined ? {} : { value: this.props.value }),
+      })
+      if (this.disposed) return false
+      this.panel.setResolution((coarse.binsize ?? this.props.binsize) * (coarse.binsPerCell ?? 1))
+      this.panel.setPreview(coarse, title)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /**
    * Open `region` framed, inside a block {@link SEARCH_CONTEXT_BINS} bins wider
    * each side, clipped to its sequence.
    *
@@ -1113,6 +1164,10 @@ export class RegionView {
           balance: this.props.balance,
           ...(this.props.value === undefined ? {} : { value: this.props.value }),
         }
+        if (await this.preview([lo, hi], undefined, regionLabel(this.props.region), wrap)) {
+          this.title.textContent = regionLabel(this.props.region)
+        }
+        if (this.disposed) return
         const result: MatrixResult = await this.props.client.request<'matrix'>(ask)
         const second = await secondBlock(this.props.compare ?? this.props.lowerRead, (client) =>
           client.request<'matrix'>(ask),
@@ -1154,6 +1209,10 @@ export class RegionView {
         balance: this.props.balance,
         ...(this.props.value === undefined ? {} : { value: this.props.value }),
       }
+      if (await this.preview([lo, hi], [lo2, hi2], pairLabel(this.props.region, this.props.region2), undefined)) {
+        this.title.textContent = pairLabel(this.props.region, this.props.region2)
+      }
+      if (this.disposed) return
       const result: MatrixResult = await this.props.client.request<'matrix'>(pair)
       const second = await secondBlock(this.props.compare ?? this.props.lowerRead, (client) =>
         client.request<'matrix'>(pair),
@@ -1176,6 +1235,9 @@ export class RegionView {
       // view's place would replace it with an error screen about a worker
       // nobody is waiting for.
       if (this.disposed) return
+      // A stand-in waiting for this read is not waiting any more: what is on
+      // screen is the picture there is, and it takes gestures again.
+      this.panel.endPreview()
       // A bad range is a normal, recoverable typing mistake: keep the view and
       // its input, and report the reader's own wording inline. Anything else is
       // a real failure and belongs on the error screen.

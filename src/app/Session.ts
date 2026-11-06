@@ -217,6 +217,7 @@ import { accessHeaders } from '../sources/access'
 import { canonicalUrl } from '../sources/rewrite'
 import { accessHeadersFor, credentialFor } from '../s3/credentials'
 import { contigNames, contigPairs } from './contigTable'
+import { PictureGate } from './pictureGate'
 import { inferSource, mayResolve, resolveSource } from './resolve'
 import { SessionAnalysis } from './SessionAnalysis'
 import { SessionCommands } from './SessionCommands'
@@ -2567,8 +2568,9 @@ export class Session {
       // the *state* names: asked before it, the store was the previous file's,
       // so a file opened over one already measured was never measured, and one
       // opened over a measurement still running had its ticks written there.
-      // And after the map's first block: fifty corner reads queued in the same
-      // reader as the picture's first read are fifty reads it waited behind.
+      // And after the map's first block — on a landing table, the first block of
+      // the map a row opens: fifty corner reads queued in the same reader as the
+      // picture's first read are fifty reads it waited behind.
       void this.firstPicture().then(() => this.detectCircular(uri))
       // Last, and deliberately not awaited: the map is on screen and usable,
       // and the export is a second job over arrays that are already in memory.
@@ -7475,16 +7477,22 @@ export class Session {
   countOf(client: ReaderClient, info: OpenResult): void {
     if (info.contacts !== null) return
     const open = this.opens.get(client)
-    client
-      // Followed, and silently: its progress is not what any veil is up for,
-      // and on the veil of a view that is reading it named the wrong wait.
-      .request<'contacts'>({ kind: 'contacts' }, () => undefined)
-      .then(({ total }) => {
-        if (total === null || this.opens.get(client) !== open) return
-        this.counted.set(client, total)
-        this.contactsBox?.sync()
-      })
-      .catch(() => undefined)
+    // Once the map has its first block (§6.5, §12): asked at the open, the walk
+    // was mid-step when the reader's first click came — on the Chromosomes
+    // table, a moment later — and the chromosome waited for that step.
+    void this.firstPicture().then(() => {
+      if (this.destroyed || this.opens.get(client) !== open) return
+      client
+        // Followed, and silently: its progress is not what any veil is up for,
+        // and on the veil of a view that is reading it named the wrong wait.
+        .request<'contacts'>({ kind: 'contacts' }, () => undefined)
+        .then(({ total }) => {
+          if (total === null || this.opens.get(client) !== open) return
+          this.counted.set(client, total)
+          this.contactsBox?.sync()
+        })
+        .catch(() => undefined)
+    })
   }
 
   /**
@@ -7567,7 +7575,9 @@ export class Session {
       // question `parseMetacoolerRange` is about to answer properly.
       onOpenRegion: (region) => this.navigate({ uri: state.uri, view: 'region', region }),
     })
-    this.showContent(view.el, view)
+    // A landing table: what waits behind the first picture waits for the map
+    // a row opens (`app/pictureGate.ts`).
+    this.showContent(view.el, view, { waypoint: true })
   }
 
   /**
@@ -7649,7 +7659,9 @@ export class Session {
       onShowCells: (names) => show(names),
       onShowAll: () => show(null),
     })
-    this.showContent(view.el, view)
+    // A landing table: what waits behind the first picture waits for the map
+    // a row opens (`app/pictureGate.ts`).
+    this.showContent(view.el, view, { waypoint: true })
   }
 
   /**
@@ -7790,7 +7802,9 @@ export class Session {
           }
         : {}),
     })
-    this.showContent(view.el, view)
+    // A landing table: what waits behind the first picture waits for the map
+    // a row opens (`app/pictureGate.ts`).
+    this.showContent(view.el, view, { waypoint: true })
   }
 
   /** @internal SessionRouter mounts the view through it. */
@@ -8419,31 +8433,24 @@ export class Session {
 
   /**
    * What is held behind the next mounted view's first picture: a file's track
-   * reads and its circularity measurement (§8.6, §8.15).
+   * reads, the census of its contacts and its circularity measurement (§6.5,
+   * §8.6, §8.15). See `app/pictureGate.ts`.
    */
-  private pictureWaiters: Array<() => void> = []
+  private readonly pictureGate = new PictureGate(MAP_FIRST_CAP_MS)
 
   /**
-   * Settles once the next view mounted has drawn its first block — at once for
-   * a view with no map to draw — or after {@link MAP_FIRST_CAP_MS}, whichever
-   * comes first.
+   * Settles once the next view that draws a map has drawn its first block — at
+   * once for a view whose picture has no map, never for a table on the way to
+   * one — or after {@link MAP_FIRST_CAP_MS}, whichever comes first.
    *
    * The map is the picture the reader opened, and until it is drawn nothing
    * else a file brings with it should be competing for the connection or the
-   * reader: a session's twelve-megabyte FASTA and ten-megabyte gene model, and
-   * up to fifty corner reads measuring which sequences are circles, all used to
-   * start in the same moment as the map's first read.
+   * reader: a session's twelve-megabyte FASTA and ten-megabyte gene model, a
+   * `.hic`'s census, and up to fifty corner reads measuring which sequences are
+   * circles, all used to start in the same moment as the map's first read.
    */
   private firstPicture(): Promise<void> {
-    return new Promise<void>((resolve) => {
-      let timer = 0
-      const done = (): void => {
-        window.clearTimeout(timer)
-        resolve()
-      }
-      timer = window.setTimeout(done, MAP_FIRST_CAP_MS)
-      this.pictureWaiters.push(done)
-    })
+    return this.pictureGate.wait()
   }
 
   /** @internal SessionRouter puts on screen what it decides through it. */
@@ -8461,16 +8468,25 @@ export class Session {
       /** The box `/` puts the caret in, for a view that has one. */
       focusSearch?(): void
     },
+    options: {
+      /**
+       * A table a reader passes through on the way to a map — a file's landing
+       * view (§5.1). What waits behind the first picture stays held for the map
+       * opened from it, rather than starting under the reader's first click.
+       */
+      waypoint?: boolean
+    } = {},
   ): void {
     this.current?.destroy?.()
     this.current = view ?? null
     // What was held behind the first picture goes once this view has drawn
-    // one, or now for a view with nothing to draw. A screen that is not a view
-    // — a loading line, the picker — releases nothing; the cap does.
-    if (view !== undefined && this.pictureWaiters.length > 0) {
-      const waiting = this.pictureWaiters.splice(0)
-      void (view.panel?.firstData ?? Promise.resolve()).then(() => {
-        for (const done of waiting) done()
+    // one, now for a view whose picture has no map, and not yet for a table on
+    // the way to one. A screen that is not a view — a loading line, the picker
+    // — releases nothing; the cap does.
+    if (view !== undefined) {
+      this.pictureGate.shown({
+        ...(view.panel === undefined ? {} : { firstData: view.panel.firstData }),
+        ...(options.waypoint === true ? { waypoint: true } : {}),
       })
     }
     // Whichever stop of the map/tracks cycle we are at, applied to the panel

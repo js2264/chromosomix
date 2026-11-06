@@ -2193,9 +2193,12 @@ contacts, so that number would have sent the up chevron to a total the file neve
 counts the contacts instead, in the background, on the coarsest rung of the file (the same contacts
 in the fewest pixels), and the box shows them when they land.
 
-**In the background means behind every other read.** The census starts on every open, on the
-thread every view reads through, so it reads nothing before a request already waiting has been
-answered — on an open, the loading screen's — and it walks the file the way §3.6 walks one across
+**In the background means behind every other read.** The census starts once the open's first map
+has its first block — on a file that lands on its Chromosomes table, the first block of the map a row
+opens, or four seconds after the open where none has drawn one (§8.6). Started beside the open, it was
+a step into its walk when the reader's first click came, and the chromosome waited for that step. It
+reads on the thread every view reads through, so it reads nothing before a request already waiting
+has been answered, and it walks the file the way §3.6 walks one across
 chromosome pairs: each pair's matrix record read only as far as the coarsest rung, which is the
 record's first few dozen bytes, and that rung's blocks, all as exact ranges planned together, four
 reads in flight. On the 5 GB 4DN map of mouse granule neurons (4DNFI916JQ1Y, thirteen rungs, 231
@@ -2448,6 +2451,35 @@ yeast chrIV at 100 bp in 4.2 s where it took 26.6; chicken chr1 at the 25 kb a `
 2.9 s where it took 6.3. A block under 2,048² cells, two readings either side of the diagonal (§5.10)
 and a field read about a middle keep the whole-image path, whose reductions they each have a rule of
 their own in.
+
+**A window is drawn first from a coarser rung while its own block reads** (`previewRung`,
+`ui/refine.ts`). A chromosome clicked at the rung a file lands on is the slowest first picture a reader
+is given — the whole block read, decoded and spread a cell at a time before anything is on screen — and
+the same window a few rungs up is a fraction of its reads and of its cells. So a region view's first
+read is preceded by one from the **coarsest stored rung that still puts 256 cells across the window**,
+where the block asked for is **at least four times finer** than that along its wider axis — measured
+against the grid the reader will actually read, so a pooled first read is not "previewed" by a picture
+as coarse as itself. That preview is drawn as the block it is: its own cells, its own resolution in the
+key, its own colour range. It is held still with the spinner turning, as the refine ladder holds a
+picture it is sharpening (`ui/refine.ts`), until the block itself replaces it — refitted, its range
+measured afresh, exactly the picture there was before there were previews. The tracks, the census and
+the circularity check the session holds behind its first picture (§8.6) wait for that block, not for
+its stand-in. None is read for a window already about as coarse as a preview would be, a file with no
+coarser rung, a grid the reader chose (`binsPerCell`), a window across a circle's origin, or a map
+under a second file or a second reading; a preview that fails is a picture that comes later, never an
+error.
+
+It is not the finer block made smaller, and it does not look like it. Each of its cells is the sum of
+many of the block's, so a cell is never empty where the block's mostly are, and its colours fill in
+where the finer block's — whose level averages the colours of sparse cells — fade to the paper: the
+compartments of a chromosome show strongly in the preview and faintly in the block that replaces it.
+It is real data at the resolution it says, and the key says it. Measured from the click on the row, on
+the link above: chicken chr1 at 25 kb (4DNFIRKUYKP4) shows its 500 kb preview in 0.2 s where the first
+picture took 2.0, and its own block at 2.2 s; mouse chr1 at 80 kb (`progenitors.mcool`) shows 640 kb in
+0.7 s where it took 2.3, and its block at 2.9 — the preview's 4.2 MB, every contact chr1 makes with the
+rest of the genome at 640 kb, read before the block's own. One reader reads both, so the block lands
+that much later. The Human Hi-C example's window (chr8 at 10 kb, 340 bins) is already as coarse as a
+preview, and opens as it did.
 
 **What is accepted, and stated rather than fixed:** the raster is at most 16,384 px
 per axis and a plot is commonly 800–1,600 device pixels, so `drawImage` still
@@ -3524,8 +3556,11 @@ metadata row comes back ready (§8.12).
 **The map is drawn first, and its tracks are read after it.** A file opened with tracks — a
 workspace, a `?config=` link, a reload — seats every row at once, and the Tracks card lists them
 reading; the bytes are read once the map's first block is drawn, or four seconds after the rows were
-seated, whichever comes first, and at once for a view with no map. The first-open measurement of
-which sequences are circles (§8.15) waits the same way. They used to start in the same moment as the
+seated, whichever comes first, and at once for a view whose picture has no map — the 1D browser, whose
+tracks are its picture. A landing table (§5.1) is not that: it is a stop on the way to a map, and what
+waits goes on waiting for the map a row opens (`app/pictureGate.ts`). The first-open measurement of
+which sequences are circles (§8.15) and a `.hic`'s census (§6.5) wait the same way, and a coarse
+preview drawn while a block reads (§7.2) is not the block they wait for. They used to start in the same moment as the
 map's first read, from the same host: the demo session's twelve-megabyte FASTA and ten-megabyte gene
 model shared the connection with the picture the reader had asked for, and on a 25 Mbit/s line the map
 came in 6.7 s after its view mounted, where alone it took 3.0 s; held, it takes 2.5 s. Nothing about
@@ -6103,6 +6138,7 @@ requests and bytes in total and for the last view; these are also paper figures.
 | Pan/zoom within the block in hand | 0 requests, 60 fps |
 | First frame of a block of 2,048² cells or more | one pass over its values on the main thread — listing the cells that carry something where they are no more than one in four — the colour range and the level the frame draws read from that list, and no image at matrix resolution (§7.2) |
 | A zoom past the levels a large block has made | 0 requests and no re-colouring: the level it wants painted between frames, the nearest made drawn meanwhile |
+| First picture of a window four times finer than a stored rung with 256 cells across it | one read of that rung, drawn and held while the window's own block reads after it — chicken chr1 at 25 kb on screen in 0.2 s, mouse chr1 at 80 kb in 0.7 s, from a 40 ms, 25 MiB/s link (§7.2) |
 | Refine, on crossing the block's grid (§2) | ≤ 5 range requests, one bounded read |
 | Pan to the edge of the block in hand | one read, **at the same resolution** |
 | Zoom out to a block already read | 0 requests |
@@ -6119,7 +6155,7 @@ whole-genome picture, and the census §6.5 takes on every open:
 | Operation | Budget |
 |---|---|
 | A read across chromosome pairs (remote), at a rung inside a record's first 4 KiB | ≤ 2 exact range requests a pair — its record's head, its blocks — and one for many where they lie within 64 KiB of one another, the blocks just past a record read with its head; no chunk of the cache spent on any; six in flight for a picture, four for the census |
-| The census, started beside an open | **0** reads before a request already queued has been answered |
+| The census and the circularity check, on an open | **0** reads before the first map's first block is drawn — on a landing table, the first block of the map a row opens — or 4 s after they were asked for |
 | The census or the circularity check, while a view is reading | **0** steps started until no view request has run for 250 ms; at most the one step already in flight |
 
 **A view's reads go first.** One worker reads for everything, and over a network each of its reads
@@ -6128,7 +6164,11 @@ makes the view wait for its round trips as well as its own. The census (§6.5) a
 check (§8.15) are that work. Every other request counts itself in while it runs, and they wait until
 none has run for 250 ms, which covers the hop to the main thread between a view's `range` and its
 `matrix`. On a 1 GB `.hic` from S3 (4DNFIYUR29KO), chromosome 1 clicked from the Chromosomes table
-while both ran was on screen in 10 s; it is now under 4, of which the read is 1.3 s.
+while both ran was on screen in 10 s; it is now under 4, of which the read is 1.3 s. The one step
+already in flight was still the reader's to wait for: on the 4DN chicken map, chromosome 1 clicked a
+moment after its table showed took 2.1–2.6 s where the same click after both had finished took 2.2.
+Neither starts now until a map has drawn (§6.5, §8.6), so a reader's first click finds no step of
+either in flight.
 
 **A place already seen is answered from memory.** Every navigation builds its view afresh, and every
 view used to read its block afresh. `scripts/ui-revisit.mjs` walks the lab's 689 MB
