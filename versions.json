@@ -1,6 +1,13 @@
 {
-  "latest": "f2ac3bb",
+  "latest": "b4aa27e",
   "versions": [
+    {
+      "commit": "b4aa27e",
+      "version": "0.21.0",
+      "date": "2026-11-06T11:31:13+01:00",
+      "subject": "ci: update laptop notebook",
+      "tag": ""
+    },
     {
       "commit": "f2ac3bb",
       "version": "0.21.0",
@@ -132,13 +139,6 @@
       "version": "0.19.0",
       "date": "2026-11-03T16:28:08+01:00",
       "subject": "feat: add test coverage reporting and configuration",
-      "tag": ""
-    },
-    {
-      "commit": "997e59c",
-      "version": "0.19.0",
-      "date": "2026-11-01T22:16:30+01:00",
-      "subject": "Notebooks: ask again when a download's server fails (§18.10) (#154)",
       "tag": ""
     },
     {
