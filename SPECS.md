@@ -13047,11 +13047,12 @@ the Stores workflow, which has nothing to do with it.
 
 **Nor is the lab's own store.** *RSG lab data* is inline (`demosStore()`, `ui/examples.ts`), and
 the files its cards open are one folder on the lab's bucket, `demo/store/`, a directory a card or a
-dataset — `yeast/`, `human/`, `gibcus2018/`, `meneu2025/`, `chromosomix_paper/` — with every name inside
-a workspace relative, so the folder opens wherever it is copied. Unlike the rest of `demo/`, it is
+dataset — `yeast/`, `human/`, `gibcus2018/`, `meneu2025/`, `chromosomix_paper/`, and `k562/`, every file
+the landing page's *Human Hi-C data* reads (§24.11) — with every name inside a workspace relative, so the
+folder opens wherever it is copied. Unlike the rest of `demo/`, it is
 not a copy of a directory of this repository: its maps run to seven gigabytes, and they are copied
-into it **on the bucket** — from the lab's own published data and from 4DN's and ENCODE's open-data
-buckets — and never pass through git. What the repository keeps is the folder's workspaces and
+into it **on the bucket** — from the lab's own published data and from 4DN's, ENCODE's, IGV's and
+1000 Genomes' open-data buckets — and never pass through git. What the repository keeps is the folder's workspaces and
 `demo/store/MANIFEST.tsv`, one line a file naming where it comes from: a key on a bucket, a file of
 this repository, or a file `scripts/make_rsg_store.py derive` computes (the RNA-seq counts as a
 barChart, the SNPs bgzipped and indexed, the loops called on the micro-C map by this viewer's own
@@ -13071,7 +13072,8 @@ none of those places and opens with the zoo switched off. The same script
 writes the workspaces and the manifest from one table, so a file a card names and a file the folder
 holds cannot drift apart, and `scripts/publish-store.sh` makes the bucket match the manifest —
 server-side copies, uploads, a skip for what is already there at its size, and an anonymous check of
-every file afterwards. It deletes nothing. `demo-examples.test.ts` reads a name under `store/` on
+every file afterwards — of the whole folder, or of one directory of it (`--only k562/`), which needs no
+derived file of the others. It deletes nothing. `demo-examples.test.ts` reads a name under `store/` on
 disk **or in the manifest**, checks every line whose source is in the repository, and opens only the
 maps it can read, so a card naming a file the publish step would not put there is a red CI run.
 

@@ -119,6 +119,27 @@ chromosomix_paper/P_aeruginosa/GSE76513_PAK_T0_pooled.unstranded.CPM.bw	s3://rsg
 chromosomix_paper/P_aeruginosa/PAO1_v3_MM38_8000.e1-arms.bw	repo:demo/store/chromosomix_paper/P_aeruginosa/PAO1_v3_MM38_8000.e1-arms.bw	E1 along both arms at 8 kb, WT, computed by the app
 chromosomix_paper/P_aeruginosa/PAO1_v3_FG0235_8000.e1-arms.bw	repo:demo/store/chromosomix_paper/P_aeruginosa/PAO1_v3_FG0235_8000.e1-arms.bw	E1 along both arms at 8 kb, SMC-ScpAB–, computed by the app
 chromosomix_paper/P_aeruginosa/PAO1_v3_FG0238_8000.e1-arms.bw	repo:demo/store/chromosomix_paper/P_aeruginosa/PAO1_v3_FG0238_8000.e1-arms.bw	E1 along both arms at 8 kb, MksBEF–, computed by the app
+k562/4DNFI18UHVRO.mcool	s3://4dn-open-data-public/fourfront-webprod/wfoutput/230ad652-0232-47f2-97ef-296c7a040bd9/4DNFI18UHVRO.mcool	In situ Hi-C, K562, its replicates merged (Rao et al. 2014; 4DN 4DNESI7DEJTM)
+k562/4DNFIXU7QLG6.bw	s3://4dn-open-data-public/fourfront-webprod/wfoutput/e6af9802-c6b9-4db7-bb1f-7a8070c931a0/4DNFIXU7QLG6.bw	Insulation score of the map (4DN)
+k562/4DNFI4EFYN3Q.bed.gz	s3://4dn-open-data-public/fourfront-webprod/wfoutput/76dc2907-2bdc-4e78-87aa-dc0fcd0ab993/4DNFI4EFYN3Q.bed.gz	Boundaries called on the map (4DN)
+k562/4DNFIWUAO2QI.bw	s3://4dn-open-data-public/fourfront-webprod/wfoutput/1643fcdf-1258-4684-a835-89eb19ad5654/4DNFIWUAO2QI.bw	Compartments (E1) of the map (4DN)
+k562/ENCFF955KEB.bed.gz	s3://encode-public/2022/10/10/f84d155e-5cce-4ad6-a8cb-990de539a929/ENCFF955KEB.bed.gz	Subcompartments (ENCODE)
+k562/ENCFF118PBQ.bedpe.gz	s3://encode-public/2020/08/16/fd75d5ae-d6d3-459d-a2ef-9b7e14483957/ENCFF118PBQ.bedpe.gz	CTCF ChIA-PET loops, Ruan lab, JAX (ENCODE ENCSR597AKG)
+k562/ENCFF979PWH.bigWig	s3://encode-public/2020/09/26/85161a5a-d6b5-49d2-bc0a-db0b217ff0d5/ENCFF979PWH.bigWig	CTCF ChIP-seq, Bernstein lab, Broad (ENCODE ENCSR000AKO)
+k562/ENCFF320RTQ.bigWig	s3://encode-public/2020/12/12/5dd3b2bc-d063-45a9-a1a2-d72d954abc8d/ENCFF320RTQ.bigWig	RAD21 ChIP-seq, Weissman lab, Yale (ENCODE ENCSR000FAD)
+k562/ENCFF660WUG.bigWig	s3://encode-public/2020/09/30/127536f7-16c3-4f65-b621-134645ea90d3/ENCFF660WUG.bigWig	H3K4me3 ChIP-seq, Bernstein lab, Broad (ENCODE ENCSR000AKU)
+k562/ENCFF381NDD.bigWig	s3://encode-public/2022/06/14/a3a5887a-bfe4-4c51-856e-986d8d40cfe2/ENCFF381NDD.bigWig	H3K27ac ChIP-seq, Bernstein lab, Broad (ENCODE ENCSR000AKP)
+k562/ENCFF937ZPS.bigWig	s3://encode-public/2020/12/27/1d26d5d9-f56e-48d8-9ea8-eb31fae4f2cd/ENCFF937ZPS.bigWig	Pol II ChIP-seq, Snyder lab, Stanford (ENCODE ENCSR000EHL)
+k562/ENCFF317VHO.bigWig	s3://encode-public/2022/06/14/9727529c-4692-4a48-b004-440358d2a5a8/ENCFF317VHO.bigWig	H3K36me3 ChIP-seq, Bernstein lab, Broad (ENCODE ENCSR000AKR)
+k562/ENCFF242ENK.bigWig	s3://encode-public/2022/06/16/c9e15712-7cb9-453e-8b49-80e70709b234/ENCFF242ENK.bigWig	H3K27me3 ChIP-seq, Bernstein lab, Broad (ENCODE ENCSR000AKQ)
+k562/ENCFF601JGK.bigWig	s3://encode-public/2020/10/29/c38d5ac9-2cb8-4d12-b0d9-843fadfafe92/ENCFF601JGK.bigWig	H3K9me3 ChIP-seq, Bernstein lab, Broad (ENCODE ENCSR000APE)
+k562/ENCFF102ARJ.bigWig	s3://encode-public/2021/03/16/b790ea43-824d-4934-840b-cb3612634cfd/ENCFF102ARJ.bigWig	ATAC-seq, Snyder lab, Stanford (ENCODE ENCSR868FGK)
+k562/ENCFF957ZCO.bigWig	s3://encode-public/2025/08/14/a5f81aa9-187f-4c0b-8018-fcf749307768/ENCFF957ZCO.bigWig	DNase-seq, Stamatoyannopoulos lab, UW (ENCODE ENCSR000EOT)
+k562/ncbiRefSeq.txt.gz	s3://igv.org.genomes/hg38/ncbiRefSeq.txt.gz	RefSeq genes, hg38 (IGV's copy of UCSC's ncbiRefSeq)
+k562/ncbiRefSeq.txt.gz.tbi	s3://igv.org.genomes/hg38/ncbiRefSeq.txt.gz.tbi	…and its tabix index
+k562/cytoBandIdeo.txt.gz	s3://igv.org.genomes/hg38/annotations/cytoBandIdeo.txt.gz	Cytogenetic bands, hg38 (IGV)
+k562/GRCh38_full_analysis_set_plus_decoy_hla.fa	s3://1000genomes/technical/reference/GRCh38_reference_genome/GRCh38_full_analysis_set_plus_decoy_hla.fa	GRCh38 with decoys and HLA, the 1000 Genomes analysis set
+k562/GRCh38_full_analysis_set_plus_decoy_hla.fa.fai	s3://1000genomes/technical/reference/GRCh38_reference_genome/GRCh38_full_analysis_set_plus_decoy_hla.fa.fai	…and its index
 yeast/Yeast_microC.chromosomix.json	repo:demo/store/yeast/Yeast_microC.chromosomix.json	Workspace
 yeast/Yeast_landscape.chromosomix.json	repo:demo/store/yeast/Yeast_landscape.chromosomix.json	Workspace
 yeast/Yeast_HiC_microC_PCP.chromosomix.json	repo:demo/store/yeast/Yeast_HiC_microC_PCP.chromosomix.json	Workspace
