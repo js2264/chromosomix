@@ -10,6 +10,26 @@ The deployed site at <https://chromosomix.app/> is built from `main` on every pu
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Changed
+
+- **A remote map reads in quarter-megabyte chunks, not megabyte ones (§6.1, §12).** Opening a cooler
+  walks HDF5 metadata a few hundred bytes at a time, scattered across the file, and each place cost a
+  whole chunk. The 7.9 GB 4DN map of K562 behind the landing page's *Human Hi-C data* (§24.11) read
+  24 MB in 21 requests before its first picture at MYC; it now reads 9.7 MB in 25. Read-ahead is
+  counted in bytes, so a stretch read chunk after chunk still runs a megabyte ahead and doubles to
+  16 MiB a fetch: a whole chromosome is about even (chromosome 2 of that map at 50 kb, 47 requests and
+  92 MB where it was 35 and 102, on screen in 24 s either way through a 100 ms, 50 Mbit/s link). The
+  tracks already read in 256 KiB chunks.
+- **The circularity check passes over a sequence longer than 20 Mb (§8.15).** No molecule known to be
+  circular comes near it — the longest bacterial chromosomes are about 16 Mb — so a eukaryote's
+  chromosome was three reads of a large file for an answer known in advance: 28 MB behind the first
+  picture of the K562 map, beside every track being fetched, where nothing is read now. The app's
+  first-open check and `chromosomix circular` both leave such a sequence as it was. With the smaller
+  chunk, the *Human Hi-C data* map's reads end in about 5 s through that link, where they took 22 s,
+  and it moves 9.7 MB where it moved 61.
+
 ## [0.21.0] - 2026-11-05
 
 ### Added

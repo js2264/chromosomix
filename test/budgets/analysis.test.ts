@@ -11,14 +11,14 @@
  *
  * Same substitution as `requests.test.ts`, for the same reason: §12 measures a
  * *remote* file, and {@link CountingRangeSource} serves a local one through the
- * production `RemoteRangeSource` — its 1 MiB chunks, its coalescing, its LRU and
+ * production `RemoteRangeSource` — its 256 KiB chunks, its coalescing, its LRU and
  * its counter — so the count is the count the real remote path would produce for
  * the same access pattern.
  *
  * The file is different, and deliberately: `demo/yeast/Yeast_microC_G2M_1kb.cool`
  * is **committed**, so unlike the reference metacool this suite actually runs
  * wherever the repository is checked out. 12,118 bins at 1 kb across sixteen
- * chromosomes, 13.7 M non-zero pixels, 19 MB — nineteen chunks, which is enough
+ * chromosomes, 13.7 M non-zero pixels, 19 MB — seventy-odd chunks, which is enough
  * that a task reading badly cannot hide inside one.
  *
  * ## The row that is not here, and where it is instead
@@ -50,7 +50,7 @@ import { leadingEigenpairs } from '@/analysis/linalg'
 import { MetaCooler } from '@/metacooler/MetaCooler'
 import type { DenseMatrix } from '@/types'
 
-import { CountingRangeSource } from '../support/counting'
+import { CountingRangeSource, type CountingOptions } from '../support/counting'
 
 /** SPECS §12, verbatim. */
 const BUDGET = {
@@ -70,8 +70,8 @@ const BIG = 'IV'
 
 const suite = existsSync(COOLER) ? describe : describe.skip
 
-async function open(): Promise<{ mc: MetaCooler; source: CountingRangeSource }> {
-  const source = await CountingRangeSource.open(COOLER)
+async function open(options: CountingOptions = {}): Promise<{ mc: MetaCooler; source: CountingRangeSource }> {
+  const source = await CountingRangeSource.open(COOLER, options)
   const mc = await MetaCooler.open(COOLER, source)
   return { mc, source }
 }
@@ -232,6 +232,17 @@ suite('§12 — analysis over a remote cooler', () => {
    * scanned that is one chunk. Open question 1 is answered, and the `SharedWorker`
    * fallback it named is not warranted.
    *
+   * At the 256 KiB chunk it is 524,288 bytes — two chunks, 6.6 % of the 8.0 MB a
+   * shared cache would move, against a view block of 2.7 MB: smaller chunks
+   * overlap at a finer grain, and the shape of the answer is the same. It is
+   * measured with read-ahead off: a stretch read chunk after
+   * chunk fetches ahead by how the reads before it fell, so one source reading
+   * the view and then the scan fetches ahead differently from two reading each
+   * alone, and the difference stopped being only the duplication — at 256 KiB the
+   * shared source's overshoot outweighed it and the difference went negative.
+   * Without read-ahead every chunk is fetched exactly when asked for, and the
+   * difference is the chunks both sources fetched, which is the question.
+   *
    * The assertion is a ceiling rather than that figure, since the figure depends
    * on which chromosome the reader happened to be looking at. What it pins is the
    * shape of the answer: overlap is bounded by the view's own block, so the
@@ -245,7 +256,8 @@ suite('§12 — analysis over a remote cooler', () => {
       for (const chrom of [CHROM, BIG, 'VI', 'I']) await square(mc, chrom)
     }
 
-    const shared = await open()
+    const exact = { readAhead: false }
+    const shared = await open(exact)
     let sharedBytes = 0
     let viewBytes = 0
     try {
@@ -257,8 +269,8 @@ suite('§12 — analysis over a remote cooler', () => {
       shared.mc.close()
     }
 
-    const reader = await open()
-    const analysis = await open()
+    const reader = await open(exact)
+    const analysis = await open(exact)
     let splitBytes = 0
     try {
       await square(reader.mc, CHROM)

@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CIRCULAR_SCORE,
   JUNCTION_BINS,
+  MAX_JUNCTION_SEQUENCE_LENGTH,
   MIN_JUNCTION_SEQUENCE_BINS,
   junctionCandidates,
   junctionQuorum,
@@ -186,6 +187,29 @@ describe('the test over a whole map', () => {
       { name: 'plasmid', from: 0, n: 60 },
     ])
     expect(junctionCandidates([['a', 90_000], ['b', 80_000]], 1000, 1).map((one) => one.name)).toEqual(['a'])
+  })
+
+  /**
+   * No circle comes near 20 Mb — the longest bacterial chromosomes are about
+   * 16 — so a human chromosome is not read for an answer known in advance,
+   * while one placed after it is still placed by the bins before it.
+   */
+  it('passes over a sequence longer than any circle, and still counts its bins', () => {
+    expect(MAX_JUNCTION_SEQUENCE_LENGTH).toBe(20_000_000)
+    const candidates = junctionCandidates(
+      [
+        ['chr21', 46_709_983],
+        ['Minicystis', 16_040_666],
+        ['edge', 20_000_000],
+        ['over', 20_000_001],
+        ['chrM', 16_569],
+      ],
+      100_000,
+    )
+    expect(candidates).toEqual([
+      { name: 'edge', from: 629, n: 200 },
+      { name: 'Minicystis', from: 468, n: 161 },
+    ])
   })
 
   /**

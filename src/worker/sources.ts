@@ -59,7 +59,7 @@ export async function createSource(spec: SourceSpec, watch?: ReadWatch): Promise
       await RemoteRangeSource.open(spec.url, {
         ...access,
         // `fine` is the other half of the gate's answer: read the scattered
-        // metadata in small pieces rather than dragging a megabyte across for
+        // metadata in small pieces rather than dragging a whole chunk across for
         // every 500-byte record of it.
         ...(spec.reading === 'fine'
           ? {
@@ -469,7 +469,7 @@ function borrowWhole(url: string): ByteSource | null {
  * The road for a container with **no index**, which is HiC-Pro and only
  * HiC-Pro (§3.9): both halves of the pair are read entirely by construction, so
  * neither belongs in the range-request LRU that exists to keep bounded reads
- * bounded. A `RemoteRangeSource` would fetch the same bytes in megabyte chunks,
+ * bounded. A `RemoteRangeSource` would fetch the same bytes chunk by chunk,
  * evict them against its own cache ceiling as it went, and end up having
  * downloaded the file once anyway — with the extra property that a 1 GB matrix
  * would thrash a 64 MB cache the whole way.

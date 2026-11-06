@@ -31,8 +31,18 @@ import type { S3Credential } from '../s3/sigv4'
 import { accessHeaders } from './access'
 import { isSignedUrl } from './rewrite'
 
-/** 1 MiB. Large enough that HDF5's metadata walk lands repeatedly in one chunk. */
-const DEFAULT_CHUNK_SIZE = 1 << 20
+/**
+ * 256 KiB: what one scattered read costs.
+ *
+ * Opening a cooler is a walk of HDF5 metadata — a superblock, group and
+ * dataset headers, B-tree nodes, a few hundred bytes each — that lands far
+ * apart in a large file, so each lands in a chunk of its own and the chunk is
+ * almost all of what the walk moves. At 1 MiB the 7.9 GB 4DN map of K562
+ * (4DNFI18UHVRO) read 24 MB in 21 requests before its first picture at MYC; at
+ * 256 KiB it reads 9.7 MB in 25. A stretch read chunk after chunk does not pay
+ * for the smaller chunk: read-ahead counts in bytes ({@link AHEAD_FIRST_BYTES}).
+ */
+const DEFAULT_CHUNK_SIZE = 1 << 18
 
 /** 64 MiB of chunks retained. Well above one MAG's matrix, far below a file. */
 const DEFAULT_CACHE_BYTES = 64 << 20
@@ -45,6 +55,17 @@ const NEAR_BYTES = 4 << 20
 
 /** The most one miss fetches beyond what it needs. */
 const MAX_AHEAD_BYTES = 16 << 20
+
+/**
+ * What the first fetch ahead adds, doubling with each near miss after it.
+ *
+ * In bytes and not in chunks, so a stretch read chunk after chunk ramps up as
+ * it did at 1 MiB chunks — 1, 2, 4 and 8 MiB ahead, then 16 MiB a fetch —
+ * whatever the chunk is.
+ * Counted in chunks, the 256 KiB chunk would have started at a quarter of that
+ * and spent two more round trips on every stretch reaching full speed.
+ */
+const AHEAD_FIRST_BYTES = 1 << 20
 
 /** Recent fetches remembered, so several streams read side by side are each seen. */
 const RECENT_FETCHES = 8
@@ -450,7 +471,7 @@ export class RemoteRangeSource implements ByteSource {
    * The cache is consulted and never filled: a range whose chunks are all held
    * is copied out of them for nothing, and any other is fetched as asked for
    * and handed over whole. Filling the cache from it would need the chunks
-   * either side, which is the megabyte this exists not to fetch — see
+   * either side, which are the bytes this exists not to fetch — see
    * `ByteSource.readExact`.
    *
    * Through `fetch`, not the synchronous request every other read makes, so the
@@ -511,7 +532,7 @@ export class RemoteRangeSource implements ByteSource {
    *
    * Contiguous missing chunks are fetched in **one** range request. That
    * coalescing is what keeps a bounded pixel slice inside the §12 budget of
-   * five requests: without it, a 4 MB slice at 1 MiB chunks would be four.
+   * five requests: without it, a 4 MB slice at 256 KiB chunks would be sixteen.
    *
    * Bytes are copied straight out of the response and only *then* offered to
    * the cache. Doing it the other way round — fill the cache, read it back —
@@ -565,8 +586,9 @@ export class RemoteRangeSource implements ByteSource {
    *
    * So a miss that lands within {@link NEAR_BYTES} of one of the last few
    * fetches is taken as that region still being read, and from the third such
-   * miss in a row the fetch runs ahead, doubling each time up to
-   * {@link MAX_AHEAD_BYTES}. The count is kept per region, so a read of the
+   * miss in a row the fetch runs ahead — {@link AHEAD_FIRST_BYTES}, then
+   * doubling each time up to {@link MAX_AHEAD_BYTES}, the same bytes whatever
+   * the chunk. The count is kept per region, so a read of the
    * weights or the index between two pixel chunks does not start the pixels'
    * count again. A miss far from anything recent is a new question — an index,
    * a header, another sequence — and fetches what it asks for and nothing more,
@@ -581,7 +603,8 @@ export class RemoteRangeSource implements ByteSource {
     }
     if (streak < 2) return { ahead: 0, streak }
     const most = Math.max(0, Math.floor(MAX_AHEAD_BYTES / this.chunkSize) - (end - index + 1))
-    return { ahead: Math.min(most, 2 ** (streak - 2)), streak }
+    const first = Math.max(1, Math.floor(AHEAD_FIRST_BYTES / this.chunkSize))
+    return { ahead: Math.min(most, first * 2 ** (streak - 2)), streak }
   }
 
   private fetchRange(from: number, to: number): Uint8Array {
