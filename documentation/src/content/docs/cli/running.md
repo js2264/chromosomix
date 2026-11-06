@@ -176,7 +176,7 @@ Progress, notes and failures go to stderr, so stdout stays clean for a pipe. `--
 
 ## Commands that are not tasks
 
-- `chromosomix circular <map>` prints which sequences join their own ends, as the app tests when it opens a map, to pass as `--circular`. A sequence needs 50 bins at the resolution read to be decided.
+- `chromosomix circular <map>` prints which sequences join their own ends, as the app tests when it opens a map, to pass as `--circular`. A sequence needs 50 bins at the resolution read to be decided, and one over 10 Mb is not scored.
 - `chromosomix stats <file.pairs.gz>` writes what `pairtools stats` writes, for MultiQC ([In a pipeline](/cli/pipelines/)).
 - `chromosomix replay <workspace> --over <file> …` reruns a saved workspace's analyses over other files ([From the app to a script](/cli/from-the-app/)).
 - `chromosomix boost <map>` writes the boosted map an oversample draws from, as Boost-HiC writes it: one square TSV per sequence (`--sequences`, `--alpha`).

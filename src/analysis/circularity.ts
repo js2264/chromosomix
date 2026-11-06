@@ -147,6 +147,25 @@ export function junctionScore(
  */
 export const CIRCULAR_DETECTION_LIMIT = 50
 
+/**
+ * The longest sequence the test measures, in bases: 10 Mb.
+ *
+ * The circles people map are under it: a bacterial chromosome is about 4 Mb
+ * at the median, *Pseudomonas aeruginosa*'s 6–7, *Myxococcus xanthus*'s and
+ * *Bradyrhizobium japonicum*'s about 9.1, an archaeon's under 6, a
+ * megaplasmid's a few, an organelle's less. The few above it are niche — the
+ * myxobacteria *Sorangium* (13–15 Mb) and *Minicystis* (16 Mb), a plant
+ * mitochondrion of 11 — and are left for the reader to tick. Everything else
+ * longer is a eukaryote's linear chromosome, and measuring it was three reads
+ * of a large file for an answer known before they were made: on the 7.9 GB
+ * 4DN map of K562 the check's reads of its 24 chromosomes were 28 MB, behind
+ * the first picture and beside every track being fetched, and a chicken map's
+ * chromosomes of 10 to 20 Mb, a worm's or a cress's, were the same reads for
+ * the same answer. What is under it is measured as before: a yeast chromosome,
+ * a chicken microchromosome, *Streptomyces coelicolor*'s 8.7 Mb line.
+ */
+export const MAX_JUNCTION_SEQUENCE_LENGTH = 10_000_000
+
 /** A sequence the test is run on: its first bin on the map, and how many it has. */
 export interface JunctionCandidate {
   name: string
@@ -156,8 +175,9 @@ export interface JunctionCandidate {
 
 /**
  * The sequences worth measuring, from each one's name and length on a grid of
- * `binsize`: long enough for the test to mean anything, the longest first, at
- * most `limit` of them.
+ * `binsize`: long enough for the test to mean anything, no longer than a circle
+ * can be ({@link MAX_JUNCTION_SEQUENCE_LENGTH}), the longest first, at most
+ * `limit` of them.
  *
  * Each one's first bin and count are cooler's convention, `ceil(length /
  * binsize)` a sequence, which not every file's levels keep — see
@@ -172,7 +192,9 @@ export function junctionCandidates(
   let startBin = 0
   for (const [name, length] of pairs) {
     const n = Math.ceil(length / binsize)
-    if (n >= MIN_JUNCTION_SEQUENCE_BINS) candidates.push({ name, from: startBin, n })
+    if (n >= MIN_JUNCTION_SEQUENCE_BINS && length <= MAX_JUNCTION_SEQUENCE_LENGTH) {
+      candidates.push({ name, from: startBin, n })
+    }
     startBin += n
   }
   candidates.sort((a, b) => b.n - a.n)

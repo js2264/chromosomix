@@ -1953,15 +1953,31 @@ interface ByteSource { readonly id: string; readonly size: number; readonly isRe
 
 `LocalFileSource` wraps a `File`. `RemoteRangeSource` wraps a URL. Identical downstream.
 
-**A remote read reads ahead where the reads before it say to.** Each miss of the 1 MiB chunk cache
+**A remote read fetches 256 KiB chunks.** Opening a cooler walks its HDF5 metadata — the
+superblock, group and dataset headers, B-tree nodes, a few hundred bytes each — and in a large file
+those land far apart, each in a chunk of its own, so the chunk is nearly all the open moves. At 1 MiB
+the 7.9 GB 4DN map of K562 (`4DNFI18UHVRO`, the landing page's *Human Hi-C data*, §24.11) read 24 MB
+in 21 requests before its first picture at 10 kb; at 256 KiB it is 9.7 MB in 25, and through a
+link of 100 ms and 50 Mbit/s a request its reads end in 5 s, not 22 — the rest of the difference
+being the circularity check it no longer runs (§8.15). The same quarter megabyte is the tracks'
+chunk (`annotations/worker/cachedFile.ts`). It is a few more round trips where the walk's places lie
+close together — the demo metacool opens and lists its genomes in 9 requests where it took 6 — and
+fewer bytes everywhere. A whole chromosome, which streams, is about even: chromosome 2 of the same
+map at 50 kb is 47 requests and 92 MB where it was 35 and 102, on screen through that link in 24 s
+either way.
+
+**A remote read reads ahead where the reads before it say to.** Each miss of the chunk cache
 is a round trip, and HDF5 reads a cooler's pixels a dataset chunk at a time — `bin2_id` and `count`
 in turn, and `bin1_id` where it is read at all (§6.2), streams through one region of the file — so a
 whole chromosome of a 5 GB `.mcool` was 63 round trips of a megabyte, one after another. A miss
 within 4 MiB of one of the last eight fetches is that region still being read, and from the third in
-a row the fetch runs ahead of it, doubling to at most 16 MiB; the count is kept per region, so a
+a row the fetch runs ahead of it: a megabyte past what it needs, then doubling, to at most 16 MiB a
+fetch. The ramp is **counted in bytes, not chunks**, so a stretch streams as it did at 1 MiB chunks
+whatever the chunk is; counted in chunks, a quarter-megabyte chunk would start at a quarter of it and
+spend two more round trips on every stretch. The count is kept per region, so a
 read of the weights between two pixel chunks does not start it again. A miss far from anything
-recent — an index, a header, another sequence — fetches what it asks for and nothing more, so
-opening a file costs what it did, and a source opened to read in small pieces (§3.8's `fine`) never
+recent — an index, a header, another sequence — fetches its chunk and nothing more, so
+opening a file costs what its places cost, and a source opened to read in small pieces (§3.8's `fine`) never
 reads ahead. The same chromosome is now 34 requests. A walk across a `.hic`'s chromosome pairs reads
 the other way, exactly and not through the chunks at all, planned so its reads are few (§3.6).
 
@@ -4642,7 +4658,7 @@ first are **neighbours**, so the cells joining them hold what the diagonal holds
 at the same separation — the most contacts there are — while anything else that
 brightens a corner brightens it by a factor, never to the level of the diagonal
 itself. So the first time a file is opened, each of its fifty longest sequences of
-at least fifty bins is read at its two ends and at its corner — three blocks a
+at least fifty bins and at most 10 Mb is read at its two ends and at its corner — three blocks a
 few bins wide — and scored as the contacts across the junction at a circular
 separation of one, two and three bins over the contacts along the diagonal at the
 same separations, measured at the two ends the junction joins, the median of the
@@ -4667,7 +4683,18 @@ at any rung, and every bacterial chromosome and plasmid of those maps still is a
 landing rung (§9). The floor costs a small circle read coarsely, left undecided for the
 reader to tick: *E. coli* opened at 100 kb (47 bins), *C. necator*'s pBB2 at 16 kb (27),
 and the yeast mitochondrion of the yeast and *M. pneumoniae* demo at its landing rung —
-43 bins at 2 kb; at 1 kb it has 86, but its ends there are two cells. **Each sequence is measured at the coarsest
+43 bins at 2 kb; at 1 kb it has 86, but its ends there are two cells. **And 10 Mb is the ceiling.**
+The circles people map are under it: a bacterial chromosome is about 4 Mb at the median,
+*Pseudomonas aeruginosa*'s 6–7, *Myxococcus xanthus*'s and *Bradyrhizobium japonicum*'s about 9.1, an
+archaeon's under 6, a megaplasmid's a few, an organelle's less. The few circles above it are niche —
+the myxobacteria *Sorangium* (13–15 Mb) and *Minicystis* (16 Mb), a plant mitochondrion of 11 — and
+are left for the reader to tick. Everything else longer is a eukaryote's linear chromosome, and
+measuring it was three reads of a large file for an answer known before they were made — on the
+7.9 GB 4DN map of K562 the landing page opens (§24.11), 28 MB read for its 24 chromosomes behind the
+first picture and beside every track being fetched, where nothing is read now; and a chicken map's
+chromosomes of 10 to 20 Mb, a worm's or a cress's, the same reads for the same answer. A sequence
+over it is left as it was; one under it — a yeast chromosome, a chicken microchromosome,
+*Streptomyces coelicolor*'s 8.7 Mb line — is measured as before. **Each sequence is measured at the coarsest
 rung of the file's ladder that still gives it a hundred bins**, the rung it was opened at where
 none does: the blocks are a few bins wide, so what a read costs is the rung's index and weights,
 and at a large file's finest rung those are megabytes a read — 111 MiB for the three reads on each
@@ -4689,7 +4716,7 @@ only once per file**: the scores are kept with the declarations — the box's ow
 tooltip quotes its sequence's — so a reader who unticks one is not overruled by
 the next open, and a file whose declarations arrived in a workspace is not
 measured at all. A shell asks the same question with `chromosomix circular <map>` — the same
-fifty sequences, three blocks, two of three separations, threshold and balancing, each read at the
+fifty sequences, the same 10 Mb ceiling, three blocks, two of three separations, threshold and balancing, each read at the
 resolution the map is opened at rather than at a rung of its own — and is answered with a table of every
 sequence's length, score and verdict, whose `yes` rows are the names each later run of a batch is
 handed as `--circular`: a declaration frames every run after it, and a batch over eighty genomes, a
@@ -6068,8 +6095,8 @@ requests and bytes in total and for the last view; these are also paper figures.
 | A place asked for again while its first read is under way | **0** more requests: that read, waited on |
 | Genome-pair block | ≤ 5 range requests |
 | Time to interactive, cold, remote | ≤ 3 s on a typical connection |
-| A region read chunk after chunk (remote) | from the third near miss, one request a stretch growing to 16 MiB — thirty-two sequential chunks in ≤ 8 requests (§6.1) |
-| Reads scattered across a file (remote) | exactly the chunk each asks for — no read-ahead (§6.1) |
+| A region read chunk after chunk (remote) | from the third near miss, one request a stretch, a megabyte past what it needs and doubling to 16 MiB a fetch whatever the chunk — 32 MiB read a megabyte at a time in ≤ 8 requests (§6.1) |
+| Reads scattered across a file (remote) | exactly the 256 KiB chunk each asks for — no read-ahead (§6.1) |
 
 And for a `.hic` (§3.6), whose one expensive shape is a read across every chromosome pair — a
 whole-genome picture, and the census §6.5 takes on every open:
@@ -8013,7 +8040,9 @@ So: **a third worker, with its own mount of the same source.**
   source costs a second range cache, and that cost is now **measured rather than expected**:
   `test/budgets/analysis.test.ts` compares one source doing the view's read and then a four-chromosome
   analysis against two independent sources doing the same two things, and the difference — the bytes
-  genuinely fetched twice — is **one 1 MiB chunk**, 9 % of what a shared cache would have moved. It is
+  genuinely fetched twice — was **one 1 MiB chunk**, 9 % of what a shared cache would have moved, and at
+  the 256 KiB chunk (§6.1) is two, 6.6 % of it, measured with read-ahead off, since read-ahead makes a
+  byte total depend on the order of the reads and the difference stop being the duplication alone. It is
   bounded by where the two access patterns overlap at chunk granularity, not by the length of the scan.
 - **The mount is the map as it is drawn**, so what the view was drawn with travels on every job, a
   plain Run's as well as a batch's: an `.scool`'s ticked cells (§3.8), the total the map is drawn to
