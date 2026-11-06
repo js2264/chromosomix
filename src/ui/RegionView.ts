@@ -1045,6 +1045,7 @@ export class RegionView {
         rows,
         ...(cols === undefined ? {} : { cols }),
         rung,
+        preview: true,
         balance: this.props.balance,
         ...(this.props.value === undefined ? {} : { value: this.props.value }),
       })

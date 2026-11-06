@@ -1966,6 +1966,36 @@ fewer bytes everywhere. A whole chromosome, which streams, is about even: chromo
 map at 50 kb is 47 requests and 92 MB where it was 35 and 102, on screen through that link in 24 s
 either way.
 
+**An open that has been made before is fetched all at once** (`ReadPlan`, `state/readPlans.ts`).
+Opening a map is a walk: each read names the place of the next, every one is a synchronous request
+the next waits for, and h5wasm offers no way to ask for several. The *Human Hi-C data* map was 27
+of them in a row before its first picture — a `HEAD`, a one-byte probe, ten reads through its
+metadata, four more to list `/bins` and eleven for the window at MYC — the line idle for nearly
+all of it, and over the real buckets each cost 0.15–0.35 s. The places do not move while the file
+does not, so the reader writes down the chunks each open touches, and the next open of the same
+map fetches them side by side the moment it starts, beside the `HEAD`; the walk then runs out of the
+cache. A plan has two halves: the open's own walk, kept under the map's address, and the first
+view's, kept under that and the window it read and fetched only for an open going to the same window.
+A session keeps the plans of the forty maps it opened last, four windows each, in `localStorage`,
+and a map reached through a collection's root — an `.mcool` named at its root and opened at its
+landing rung — is kept under both addresses, so the second visit fetches both walks at once: the
+lab's `progenitors.mcool` shows its table in 0.85 s where the first visit took 1.5 (200 ms a
+request). *Human Hi-C data* ships its plan (`HUMAN_PLAN`, §24.11, written by
+`scripts/record-plan.mjs`), so a first visitor's map opens as a second visitor's does. A plan is
+checked by the size of the file it was made on, and a range is kept only where its answer is the
+range asked for — by its `Content-Range` where the page may read it, by its `Content-Length` where
+it may not, which is 4DN's bucket: its CORS exposes `ETag` alone. A plan that is wrong is never an
+error: the walk fetches what it misses, and the plan's surplus is the whole cost. Opening the
+example from the landing page, against the real buckets: **the first picture in 1.5 s, where it
+took 5.4**, the *Opening…* line gone at 1.2 s where it stood for 3.3.
+
+**The probe is the first read.** It used to ask for one byte, after a `HEAD` that had to answer
+first: two round trips before the file's first read was even asked for. It goes out beside the
+`HEAD` now, for the file's first 256 KiB — an HDF5 superblock, a `.hic` header, what the first read
+of every container wants — so where the `HEAD` states ranges and a length, the first read is already
+in hand, and where it does not, the probe's answer settles both. Its body is only read once it is
+the range asked for; a host that answers with the whole object is let go, not downloaded.
+
 **A remote read reads ahead where the reads before it say to.** Each miss of the chunk cache
 is a round trip, and HDF5 reads a cooler's pixels a dataset chunk at a time — `bin2_id` and `count`
 in turn, and `bin1_id` where it is read at all (§6.2), streams through one region of the file — so a
@@ -4150,6 +4180,13 @@ and the annotator joined on — an MGE call, a coverage, a bin id; and every coo
 least the weight it was balanced with. Until this section all of it was readable only as a *table*,
 one row at a time, in a view that is not the picture.
 
+**What `/bins` holds is asked once the map has its first picture.** Its columns are offered from a
+group listing and a dtype each, with no values read (§3.3) — but on a remote cooler that listing is
+four round trips through object headers, and the map used to wait for them before its view was even
+mounted: 0.85 s of the *Human Hi-C data* example's first picture over the real buckets (§6.1). The
+drop-down offers the file's weights once they land, and a row restored on a `/bins` column draws
+from its values meanwhile, which are read through the reader whether or not the list is in.
+
 **A metadata column is an annotation, and it joins the same store every other annotation joins.**
 Adding one from the drop-down produces an ordinary entry with `kind: 'metadata'` (a value profile) or
 `kind: 'classes'` (a set of labels), and from that moment the colour, the rename, the height, the
@@ -5990,13 +6027,13 @@ support. Such files are inputs to publication, never live sources.
 
 **Remote HDF5** reads through an FS node shaped like Emscripten's `FS.createLazyFile`, in a worker
 (`sources/RemoteRangeSource.ts`; h5wasm's `lazyFileLRU` demo is the reference) — not the built-in,
-which probes with a `HEAD` of its own, caches without bound and counts nothing. The open probes
-with a `HEAD` before its `GET` to test range support, and that `HEAD` is skipped for a URL carrying
-its own signature — `X-Amz-Signature`, `X-Goog-Signature`, or `sig=` beside `sv=` — since such a
+which probes with a `HEAD` of its own, caches without bound and counts nothing. The open sends a
+`HEAD` and, beside it, a `GET` of the file's first chunk to test range support (§6.1), and that
+`HEAD` is skipped for a URL carrying its own signature — `X-Amz-Signature`, `X-Goog-Signature`, or `sig=` beside `sv=` — since such a
 URL is signed for a single method. A presigned link therefore opens and goes on working until it
 expires (§24.6); a public bucket URL is still what a citation should point at, because a signature
 has a date on it. A `HEAD` answering `Content-Length: 0` is taken to have stated no length, and the
-one-byte probe follows it as it follows a `HEAD` that says nothing: jupyter-server-proxy, the way
+range probe settles it as it settles a `HEAD` that says nothing: jupyter-server-proxy, the way
 into a notebook kernel's files behind JupyterHub (§21.5), answers every `HEAD` so, and a map read
 through it was mounted as a file of no bytes and refused as "not an HDF5 file".
 
@@ -6134,6 +6171,8 @@ requests and bytes in total and for the last view; these are also paper figures.
 | Operation | Budget |
 |---|---|
 | Open + render genomes table (remote) | ≤ 20 range requests |
+| Open a remote map opened before, or an example's (§6.1, §24.11) | its plan's chunks requested side by side as the open starts, beside the `HEAD` and the probe; no chunk of the plan read again by the walk — *Human Hi-C data* on screen in 1.5 s where it took 5.4, over the real buckets |
+| Open a remote map, first visit | a `HEAD` and the file's first chunk side by side, then the walk; `/bins` listed after the first picture, not before it |
 | Load one MAG's matrix (remote) | ≤ 5 range requests |
 | Pan/zoom within the block in hand | 0 requests, 60 fps |
 | First frame of a block of 2,048² cells or more | one pass over its values on the main thread — listing the cells that carry something where they are no more than one in four — the colour range and the level the frame draws read from that list, and no image at matrix resolution (§7.2) |
@@ -11759,8 +11798,9 @@ nothing else: no second renderer, no kernel-side reader, no data through the ker
   — its owner made it, and a DataLad or git-annex file finds its index beside the link, not beside
   its object. A `Range` it cannot read — several ranges, a reversed one, another unit — is ignored
   and the whole file sent, as RFC 9110 says; 416 is for a range past the end. A `HEAD` that names
-  no range says no `Accept-Ranges`, so the viewer asks for one byte and takes the size from its
-  `Content-Range`. A reader that hangs up mid-read is no traceback in whichever cell ran last.
+  no range says no `Accept-Ranges`, so the viewer takes the size from the `Content-Range` of the
+  first chunk it asks for beside it (§6.1). A reader that hangs up mid-read is no traceback in
+  whichever cell ran last.
   Behind JupyterHub it is reached through jupyter-server-proxy at `<prefix>/proxy/<port>/`, which
   must be installed beside the single-user server, and which answers every `HEAD` with
   `Content-Length: 0` (§11) and holds each answer whole, refusing one over 100 MB — which touches
@@ -11827,8 +11867,9 @@ region =, tracks =, ...)` writes the same fragment in the same order; `chromosom
   index beside the link, not beside its object. A `Range` it cannot read — several ranges, a
   reversed one, another unit — is ignored and the whole file sent, as RFC 9110 says; 416 is for a
   range past the end. A file asked for whole is streamed by httpuv, never read into R; a range is
-  read. A `HEAD` that names no range says no `Accept-Ranges`, so the viewer asks for one byte and
-  takes the size from its `Content-Range` — an authenticating proxy answers `HEAD` with
+  read. A `HEAD` that names no range says no `Accept-Ranges`, so the viewer takes the size from
+  the `Content-Range` of the first chunk it asks for beside it (§6.1) — an authenticating proxy
+  answers `HEAD` with
   `Content-Length: 0` (§11). It answers on R's event loop — while R is idle, at the console, in
   RStudio and under Shiny — because httpuv's static paths, which answer from a thread of their own,
   ignore `Range` and send a file whole. **A rendered page that names local files therefore draws
@@ -13084,7 +13125,7 @@ decides, so `gs://` and `s3://` are shareable and a Dropbox page never is writte
 A presigned S3 URL, a signed GCS URL and an Azure SAS are one URL each, and §11 refused the first
 because the `HEAD` probe is not the method it was signed for. The probe now recognises a signature
 in the query — `X-Amz-Signature`, `X-Goog-Signature`, or `sig=` beside `sv=` — and goes straight to
-the one-byte `Range` `GET` it already had for hosts that say nothing about ranges. Nothing else
+the `Range` `GET` of the first chunk it sends beside every `HEAD` (§6.1). Nothing else
 changes: the link works until it expires, and expiry looks like the `403` it is, named as such. A
 SAS is not method-scoped and always worked; it is listed so the rule reads as one rule.
 
@@ -13430,7 +13471,10 @@ store. Pressed from an empty tab beside another, it fills the empty one and open
 most, with **no deck**, since the point is the three edges of one picture. The map is 4DN's in situ
 Hi-C of K562 (Rao et al. 2014, `4DNESI7DEJTM`, `4DNFI18UHVRO.mcool`), 907 million contacts, opened
 balanced at 10 kb on **chr8:126,800,001-130,200,000**: MYC, PVT1 and the blood enhancer cluster
-downstream of them, a sharp compartment edge and domains with loops at their corners. Around it:
+downstream of them, a sharp compartment edge and domains with loops at their corners. **It ships
+the read plan of that open** (§6.1): the chunks its walk through the map's metadata and its window
+read, written down by `scripts/record-plan.mjs` and fetched side by side as the button is pressed,
+so a first visitor's map is on screen in about 1.5 s where it took 5.4. Around it:
 
 - **Above**, IGV's hg38 (`hg38_1kg`, the IGV store's human genome): RefSeq genes against the map,
   then the sequence, then the bands. The genes and the bands are read from IGV's own bucket and not

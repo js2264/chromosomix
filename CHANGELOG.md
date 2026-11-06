@@ -71,6 +71,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   first block of the first map — on a landing table, the map a row opens — or four seconds, as a
   file's tracks already did; the 1D browser, whose picture is its tracks, still lets them go at once.
 
+- **A remote map opened before opens all at once, and *Human Hi-C data* ships its own (§6.1, §12,
+  §24.11).** Opening a map over the network is a walk — each read names the place of the next — and
+  the example's map was 27 requests in a row before its first picture, at 0.15–0.35 s each over the
+  real buckets. The reader now writes down the chunks an open and its first window touch, and the
+  next open of the same map fetches them side by side as it starts, so the walk runs out of the
+  cache; the example ships its plan, so a first visitor gets the same. Pressing *Human Hi-C data*:
+  the map on screen in 1.5 s where it took 5.4, the *Opening…* line gone at 1.2 s where it stood
+  for 3.3. A map reached through an `.mcool`'s root keeps its plan under both addresses: the lab's
+  `progenitors.mcool` lists its chromosomes in 0.85 s on a second visit where the first took 1.5.
+- **The probe is the first read, and it goes out beside the `HEAD` (§6.1).** It asked for one byte,
+  after the `HEAD` had answered; it now asks for the file's first chunk — what the first read of any
+  container wants — at the same moment as the `HEAD`, and keeps it. A range is kept on the length the
+  page can read where a bucket hides `Content-Range`, as 4DN's does.
+- **`/bins` is listed after the map's first picture (§8.12).** Listing a cooler's bin columns for
+  the Metadata card's drop-down was four round trips the map waited for before its view was mounted.
+
 ## [0.21.0] - 2026-11-05
 
 ### Added

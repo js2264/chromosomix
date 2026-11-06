@@ -30,6 +30,9 @@ import { createSource } from '@/worker/sources'
 import { MetaCooler } from '@/metacooler/MetaCooler'
 import { ViewerError } from '@/errors'
 
+/** The chunk a remote source reads in, which its probe asks for (§6.1). */
+const CHUNK = 256 * 1024
+
 const FILE = new URL('../../demo/metagenomics/mock-community/Mock_microbial_community.metacool', import.meta.url).pathname
 const URL_UNDER_TEST = 'https://example.test/demo/Mock_microbial_community.metacool'
 
@@ -156,7 +159,9 @@ describe('a host that applies transfer compression', () => {
 
   it('asks for the range by HEAD before concluding, and is still refused where that is re-encoded too', async () => {
     // GitHub Pages gzips everything it serves, a ranged HEAD included, and is
-    // the host this refusal exists for: two HEADs, then the same refusal.
+    // the host this refusal exists for: two HEADs, then the same refusal. The
+    // first chunk's probe goes out beside the first HEAD (§6.1) and is let go
+    // as soon as that HEAD says the answers are re-encoded.
     const asked: string[] = []
     const pages = compressingFetch({ exposeEncoding: true })
     const counting = (async (url: string, init?: { method?: string; headers?: Record<string, string> }) => {
@@ -167,7 +172,7 @@ describe('a host that applies transfer compression', () => {
     const err = await RemoteRangeSource.open(URL_UNDER_TEST, { fetchImpl: counting }).catch((e: unknown) => e)
 
     expect((err as ViewerError).code).toBe('remote-compressed')
-    expect(asked).toEqual(['HEAD -', 'HEAD bytes=0-'])
+    expect(asked).toEqual(['HEAD -', `GET bytes=0-${CHUNK - 1}`, 'HEAD bytes=0-'])
   })
 
   it('opens anyway: createSource falls back to one whole-object download', async () => {
@@ -222,8 +227,9 @@ describe('a host that re-encodes only an unranged answer', () => {
 
     expect(source.size).toBe(identity.byteLength)
     // The second HEAD settles both questions — ranges are raw, and this is the
-    // length — so no one-byte probe follows it.
-    expect(asked).toEqual(['HEAD -', 'HEAD bytes=0-'])
+    // length — so nothing follows it; the first chunk's probe went out beside
+    // the first HEAD (§6.1).
+    expect(asked).toEqual(['HEAD -', `GET bytes=0-${CHUNK - 1}`, 'HEAD bytes=0-'])
   })
 
   it('takes the total from Content-Range where a host does expose it', async () => {

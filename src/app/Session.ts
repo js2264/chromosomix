@@ -49,6 +49,8 @@ import type { AnalysisFraming, TableOutput } from '../analysis/types'
 import type { CarriedResult } from '../analysis/workspace'
 import { UNBINNED_NAME } from '../constants'
 import { CircularStore } from '../state/circular'
+import { rememberPlans } from '../state/readPlans'
+import type { ReadPlan } from '../sources/RemoteRangeSource'
 import { OriginStore } from '../state/origins'
 import {
   junctionCandidates,
@@ -218,6 +220,7 @@ import { canonicalUrl } from '../sources/rewrite'
 import { accessHeadersFor, credentialFor } from '../s3/credentials'
 import { contigNames, contigPairs } from './contigTable'
 import { PictureGate } from './pictureGate'
+import { readPlanFor } from './readPlan'
 import { inferSource, mayResolve, resolveSource } from './resolve'
 import { SessionAnalysis } from './SessionAnalysis'
 import { SessionCommands } from './SessionCommands'
@@ -2340,11 +2343,25 @@ export class Session {
       // not stall at 99%; the other two report bytes and then pixels.
       // Through the edit kept for this file, where there is one to draw (§27.7).
       const edit = this.editToOpen(uri)
+      // The window this open is going to, where it says: what the first view
+      // read is kept under it, and a kept plan for it is fetched with the open.
+      const going = carry ?? this.store.state
+      const firstWindow =
+        going !== null && going !== undefined && going.uri === uri && going.view === 'region' && going.region2 === undefined
+          ? going.region
+          : undefined
+      // What this open read the last time — or what an example ships with —
+      // fetched side by side as it starts, and the walk then run out of the
+      // cache (§6.1, §12).
+      const planned: SourceSpec =
+        source.kind === 'remote' && source.plan === undefined
+          ? withPlan(source, readPlanFor(uri, firstWindow))
+          : source
       task = client.cancellable<'open'>(
         {
           kind: 'open',
           uri,
-          source,
+          source: planned,
           ...(binning === undefined ? {} : { binning }),
           ...(edit === undefined ? {} : { edit }),
         },
@@ -2362,6 +2379,9 @@ export class Session {
       this.counted.delete(client)
       this.opens.set(client, (this.opens.get(client) ?? 0) + 1)
       this.countOf(client, info)
+      if (source.kind === 'remote') {
+        this.keepReadPlan(client, this.landedFrom === null ? [uri] : [uri, this.landedFrom], firstWindow)
+      }
       const genomes = await client.request<'genomes'>({ kind: 'genomes' })
       if (this.destroyed) return
       // The console's line for the file (§23). Here rather than at the door,
@@ -2655,7 +2675,14 @@ export class Session {
         const forward =
           requested !== null && requested.uri === uri ? { ...requested, uri: entryUri } : undefined
         this.opening = null
-        await this.open(entryUri, source, forward)
+        // What the entry's open reads is kept under the root's address too, so a
+        // second visit to this link fetches both walks at once (§6.1, §12).
+        this.landedFrom = uri
+        try {
+          await this.open(entryUri, source, forward)
+        } finally {
+          this.landedFrom = null
+        }
         return
       }
       // The name said nothing and the reader could not open it. Ask what it
@@ -4978,15 +5005,13 @@ export class Session {
       ? contigGenomes(contigs, this.file?.genomes.table ?? null)
       : new Map<string, string>()
 
-    // What `/bins` holds, by name and kind. A group listing and one dtype per
-    // column — no values, so §3.3's rule that `/bins` is never read at open
-    // time still holds, and the drop-down can offer the weights a cooler was
-    // balanced with (§8.12).
-    const binColumns = await this.clientOf()
-      .request<'binColumns'>({ kind: 'binColumns' })
-      .then((result) => result.columns)
-      .catch(() => [])
-    if (this.destroyed) return
+    // What `/bins` holds, by name and kind, is asked for *after* the map's
+    // first picture (below): a group listing and one dtype per column — no
+    // values, so §3.3's rule that `/bins` is never read at open time still
+    // holds — but on a remote cooler it is four round trips through object
+    // headers, and they were four the map waited for before its view was even
+    // mounted (§12). The drop-down offers the weights a cooler was balanced
+    // with (§8.12) once they land.
 
     const scope = this.memoryKey(uri)
     const store = new AnnotationStore(scope)
@@ -5038,7 +5063,7 @@ export class Session {
         genomes: info.hasGenomes ? (this.file?.genomes.table ?? null) : null,
         contigs: contigs?.table ?? { columns: [], length: 0, data: {} },
         binsize: info.binsize ?? 1,
-        binColumns,
+        binColumns: [],
         client: this.clientOf(),
         // A `/bins` slice landing is new data for a lane that is already drawn,
         // and the panels are what have to hear about it — the annotation store
@@ -5046,6 +5071,7 @@ export class Session {
         onChange: () => this.repaintMetadata(),
       }),
     }
+    void this.listBinColumns(this.annotations)
 
     this.manualCard = new ManualCard({
       store: manual,
@@ -7496,6 +7522,51 @@ export class Session {
   }
 
   /**
+   * Keep what this open read — its walk, and its first view's — for the next
+   * open of the same map (§6.1, §12; `state/readPlans.ts`). Asked once the map
+   * has its first picture, which is when the reader has written both down.
+   */
+  private keepReadPlan(client: ReaderClient, uris: readonly string[], firstWindow: string | undefined): void {
+    const open = this.opens.get(client)
+    void this.firstPicture().then(async () => {
+      if (this.destroyed || this.opens.get(client) !== open) return
+      const plans = await client.request<'readPlan'>({ kind: 'readPlan' }).catch(() => null)
+      if (plans !== null) for (const uri of uris) rememberPlans(uri, firstWindow, plans)
+    })
+  }
+
+  /**
+   * The address a collection was asked for at, while it is opened again at the
+   * entry it lands on (`firstEntry`): what the entry's open reads is kept for
+   * both (§6.1).
+   */
+  private landedFrom: string | null = null
+
+  /**
+   * What `/bins` holds, told to the metadata index once the map has its first
+   * picture (§8.12, §12): the drop-down then offers the file's weights, and a
+   * row restored on a `/bins` column — which draws from its values whether or
+   * not the list is in — gets the summary it was seated without.
+   */
+  private async listBinColumns(held: FileAnnotations): Promise<void> {
+    await this.firstPicture()
+    if (this.destroyed || this.annotations !== held) return
+    const columns = await this.clientOf()
+      .request<'binColumns'>({ kind: 'binColumns' })
+      .then((result) => result.columns)
+      .catch(() => [])
+    if (this.destroyed || this.annotations !== held) return
+    held.metadata?.addBinColumns(columns)
+    for (const entry of held.store.forCard('metadata')) {
+      const source = entry.source
+      if (source.kind !== 'metadata' || source.table !== 'bins' || entry.summary !== undefined) continue
+      const found = held.metadata?.columnFor('bins', source.column) ?? null
+      if (found !== null) held.store.update(entry.id, { summary: summaryOf(found) })
+    }
+    this.metadataCard?.refresh()
+  }
+
+  /**
    * The total a task on a reader's map is drawn to, with the census it can skip
    * (§6.5).
    *
@@ -9379,4 +9450,9 @@ function sameSteps(a: ReferenceEdit | undefined, b: ReferenceEdit | undefined): 
   if (a.cursor !== b.cursor) return false
   return JSON.stringify(a.history.slice(0, a.cursor).map((entry) => entry.step)) ===
     JSON.stringify(b.history.slice(0, b.cursor).map((entry) => entry.step))
+}
+
+/** A remote source spec carrying `plan`, or the spec as it was where there is none. */
+function withPlan(source: Extract<SourceSpec, { kind: 'remote' }>, plan: ReadPlan | null): SourceSpec {
+  return plan === null ? source : { ...source, plan }
 }

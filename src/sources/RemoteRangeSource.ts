@@ -124,7 +124,37 @@ export interface RemoteRangeOptions {
    * held and merged in front of the signature by `sources/access.ts`.
    */
   headers?: Record<string, string>
+  /**
+   * The chunks this open is known to read — its read plan (§6.1, §12) — fetched
+   * side by side the moment the open starts, beside the `HEAD`, and kept once
+   * the file turns out to be the size the plan was made on.
+   *
+   * Opening a map is a walk: every read names the place of the next, and each
+   * is a synchronous request the next waits for, so a 7.9 GB cooler from S3 was
+   * thirty round trips in a row before its first picture, the line idle for
+   * nearly all of it. The places do not change while the file does not, so a
+   * walk made once can be fetched all at once the next time, and the walk then
+   * runs out of the cache. Where the plan is wrong — a rung read since, a file
+   * replaced by one of the same size — the walk fetches what it misses as it
+   * always did, and the bytes the plan fetched for nothing are the whole cost.
+   */
+  plan?: ReadPlan
 }
+
+/**
+ * The chunks a walk read, as byte ranges — what {@link RemoteRangeOptions.plan}
+ * fetches ahead of the next one, and what {@link RemoteRangeSource.recorded}
+ * hands back.
+ */
+export interface ReadPlan {
+  /** The size of the file the plan was made on: a file of any other size is another file. */
+  size: number
+  /** `[start, end)` byte ranges, ascending and disjoint, each a run of whole chunks. */
+  ranges: Array<[number, number]>
+}
+
+/** The most a plan fetches ahead: far more than any walk reads, well under the cache. */
+const MAX_PLAN_BYTES = 32 << 20
 
 /** What one synchronous range request answered. */
 export interface SyncRangeAnswer {
@@ -184,6 +214,8 @@ export class RemoteRangeSource implements ByteSource {
   private readonly fetchImpl: typeof fetch
   /** What every chunk is fetched through, or `null` for the worker's own `XMLHttpRequest`. */
   private readonly syncFetch: SyncRangeFetch | null
+  /** The chunks reads have touched since {@link beginRecording}, or `null` when not recording. */
+  private recording: Set<number> | null = null
 
   private constructor(
     url: string,
@@ -254,15 +286,85 @@ export class RemoteRangeSource implements ByteSource {
     }
     const host = hostOf(url)
     const cost: SourceStats = { requests: 0, bytes: 0 }
+    const chunkSize = Math.max(1, Math.trunc(options.chunkSize ?? DEFAULT_CHUNK_SIZE))
 
     let head: Response | null = null
+    let asking: Promise<Response> | null = null
     if (!isSignedUrl(url)) {
+      cost.requests += 1
       try {
-        cost.requests += 1
-        head = await doFetch(url, { method: 'HEAD', headers: sign('HEAD') })
+        asking = doFetch(url, { method: 'HEAD', headers: sign('HEAD') })
+      } catch (cause) {
+        asking = Promise.reject(cause)
+      }
+    }
+    // The probe goes out beside the `HEAD` rather than after it. It asks for
+    // the file's **first chunk**, which the first read of every container
+    // wants (an HDF5 superblock, a `.hic` header), so it is a read either way:
+    // where the `HEAD` turns out to be enough, it is the first read already in
+    // hand, and where it is not, it was going to be the next round trip. One
+    // byte, after the `HEAD`, was two round trips spent before the file's first
+    // read was even asked for (§6.1). Past the browser's HTTP cache, as every
+    // read made with `fetch` here is (see {@link readExact}); its body is only
+    // read once it is the range asked for, and a host that answers with the
+    // whole object is aborted, not downloaded.
+    const firstEnd = chunkSize - 1
+    const stop = typeof AbortController === 'undefined' ? null : new AbortController()
+    cost.requests += 1
+    let probing: Promise<Response>
+    try {
+      probing = doFetch(url, {
+        method: 'GET',
+        headers: { ...sign('GET'), Range: `bytes=0-${firstEnd}` },
+        cache: 'no-store',
+        ...(stop === null ? {} : { signal: stop.signal }),
+      })
+    } catch (cause) {
+      probing = Promise.reject(cause)
+    }
+    // Answered or not, nothing is left to fail unheard: every road below reads
+    // it, or lets it go.
+    probing.catch(() => undefined)
+    /** The probe's body, where it is the file's first chunk; `null` where it is not, aborted. */
+    const firstOf = async (probe: Response): Promise<Uint8Array | null> => {
+      if (probe.status === 206 && reEncoding(probe) === null && isRange(probe, 0, firstEnd, true)) {
+        try {
+          const body = new Uint8Array(await probe.arrayBuffer())
+          cost.bytes += body.byteLength
+          if (body.byteLength <= chunkSize) return body
+        } catch {
+          // Lost on the way: the walk reads it.
+        }
+      }
+      stop?.abort()
+      return null
+    }
+    // A plan's chunks go out beside them — after both, so neither is queued
+    // behind the plan — rather than after the walk's first answers: what the
+    // walk would have asked for one after another is in flight at once.
+    const planned =
+      options.plan === undefined
+        ? null
+        : fetchPlan(url, { ...options.plan, ranges: withoutFirstChunk(options.plan.ranges, chunkSize) }, chunkSize, sign, doFetch)
+    if (asking !== null) {
+      try {
+        head = await asking
       } catch (cause) {
         await failCrossOrigin(url, host, cause, doFetch, cost)
       }
+    }
+    /**
+     * The source, with whatever this open already holds of the file put in its
+     * cache: the probe's first chunk, and the plan's chunks once the file is the
+     * size the plan was made on.
+     */
+    const ready = async (size: number, first: Uint8Array | null, firstRange: string | null): Promise<RemoteRangeSource> => {
+      const source = new RemoteRangeSource(url, size, options, cost)
+      if (first !== null) source.adopt(first, 0, Math.min(chunkSize, size) - 1, firstRange)
+      if (planned !== null && options.plan !== undefined && options.plan.size === size) {
+        source.adoptPlan(await planned)
+      }
+      return source
     }
     if (head && !head.ok) {
       // An HTTP error status is neither of spec §10's two remote refusals: the
@@ -315,12 +417,13 @@ export class RemoteRangeSource implements ByteSource {
       // below can use, and the length is the file's, since `bytes=0-` is all
       // of it. A host that re-encodes that too (GitHub Pages) is refused as
       // before, one request later.
+      stop?.abort()
       const ranged = await rangedHead(url, doFetch, sign, cost)
       const rangedLength =
         totalFromContentRange(ranged?.headers.get('content-range') ?? null) ??
         numberHeader(ranged, 'content-length')
       if (ranged !== null && ranged.status === 206 && reEncoding(ranged) === null && rangedLength !== null) {
-        return new RemoteRangeSource(url, rangedLength, options, cost)
+        return ready(rangedLength, null, null)
       }
       throw new ViewerError(
         'remote-compressed',
@@ -342,20 +445,25 @@ export class RemoteRangeSource implements ByteSource {
     const acceptsRanges = (head?.headers.get('accept-ranges') ?? '').toLowerCase().includes('bytes')
 
     if (acceptsRanges && declaredLength !== null) {
-      return new RemoteRangeSource(url, declaredLength, options, cost)
+      // The size is the `HEAD`'s; the probe sent beside it is the first read.
+      const probe = await probing.catch(() => null)
+      const first = probe === null ? null : await firstOf(probe)
+      return ready(declaredLength, first, probe?.headers.get('content-range') ?? null)
     }
 
     // Either the host says nothing about ranges, or CORS hid the headers from
-    // us. One byte settles both questions and yields the size along the way.
+    // us. The probe's range settles both questions and yields the size along
+    // the way.
     let probe: Response
     try {
-      cost.requests += 1
-      probe = await doFetch(url, { method: 'GET', headers: { ...sign('GET'), Range: 'bytes=0-0' } })
+      probe = await probing
     } catch (cause) {
       await failCrossOrigin(url, host, cause, doFetch, cost)
       throw new Error('unreachable')
     }
-    cost.bytes += numberHeader(probe, 'content-length') ?? 1
+    const served = probe.headers.get('content-range')
+    const first = await firstOf(probe)
+    if (first === null) cost.bytes += Math.min(numberHeader(probe, 'content-length') ?? 1, chunkSize)
 
     if (probe.status !== 206) {
       throw new ViewerError(
@@ -378,13 +486,13 @@ export class RemoteRangeSource implements ByteSource {
               (isSignedUrl(url)
                 ? ': this is a presigned link, and a host refuses one once it has expired.'
                 : '.')
-          : `${host} does not serve HTTP range requests: a “Range: bytes=0-0” request for ` +
+          : `${host} does not serve HTTP range requests: a “Range: bytes=0-${firstEnd}” request for ` +
               `${url} returned ${probe.status}, not 206 Partial Content.`,
         { url, host, status: probe.status },
       )
     }
 
-    const total = totalFromContentRange(probe.headers.get('content-range')) ?? declaredLength
+    const total = totalFromContentRange(served) ?? declaredLength
     if (total === null) {
       throw new ViewerError(
         'remote-cors',
@@ -394,7 +502,7 @@ export class RemoteRangeSource implements ByteSource {
         { url, host },
       )
     }
-    return new RemoteRangeSource(url, total, options, cost)
+    return ready(total, first, served)
   }
 
   /**
@@ -540,6 +648,10 @@ export class RemoteRangeSource implements ByteSource {
    * holds evicts its own earlier chunks before it gets to them.
    */
   private copyInto(buffer: Uint8Array, offset: number, position: number, length: number): void {
+    if (this.recording !== null && length > 0) {
+      const last = Math.floor((position + length - 1) / this.chunkSize)
+      for (let index = Math.floor(position / this.chunkSize); index <= last; index++) this.recording.add(index)
+    }
     let done = 0
     while (done < length) {
       const at = position + done
@@ -731,6 +843,115 @@ export class RemoteRangeSource implements ByteSource {
     return body.subarray(skip, Math.min(skip + wanted, body.byteLength))
   }
 
+  /**
+   * Start writing down which chunks reads touch — the walk a {@link ReadPlan}
+   * is made of. Every read counts, a chunk answered from the cache as much as
+   * one fetched, since the plan is what the next walk will *need*; a chunk
+   * fetched ahead and never read is not in it.
+   */
+  beginRecording(): void {
+    this.recording = new Set()
+  }
+
+  /**
+   * Go on writing reads down where that is already being done, or begin to:
+   * for a second open of the same source that is the same walk — an `.mcool`
+   * addressed at its root is refused and opened again at its landing rung, and
+   * the plan for the next visit is both.
+   */
+  keepRecording(): void {
+    if (this.recording === null) this.recording = new Set()
+  }
+
+  /** Stop writing reads down; what was written is gone with it. */
+  stopRecording(): void {
+    this.recording = null
+  }
+
+  /**
+   * The chunks touched since {@link beginRecording}, as a plan: runs of whole
+   * chunks, ascending, a gap of one chunk bridged so that the next walk asks for
+   * a few runs rather than many single chunks. `null` when not recording.
+   */
+  recorded(): ReadPlan | null {
+    if (this.recording === null) return null
+    const chunks = [...this.recording].sort((a, b) => a - b)
+    const ranges: Array<[number, number]> = []
+    for (const index of chunks) {
+      const start = index * this.chunkSize
+      const end = Math.min(start + this.chunkSize, this.size)
+      const held = ranges[ranges.length - 1]
+      if (held !== undefined && start - held[1] <= this.chunkSize) held[1] = end
+      else ranges.push([start, end])
+    }
+    return { size: this.size, ranges }
+  }
+
+  /**
+   * Fetch a plan's chunks into the cache, side by side, for a walk about to
+   * read them (§6.1, §12) — the counterpart of {@link RemoteRangeOptions.plan}
+   * for a source already open. Chunks already held are not asked for again,
+   * and a plan made on a file of another size is not used at all. Never fails:
+   * a range that is refused or lost is read by the walk, as it always was.
+   */
+  async prefetch(plan: ReadPlan): Promise<void> {
+    if (plan.size !== this.size) return
+    const missing: Array<[number, number]> = []
+    for (const [start, end] of plan.ranges) {
+      const first = Math.floor(start / this.chunkSize)
+      const last = Math.ceil(end / this.chunkSize) - 1
+      let run: [number, number] | null = null
+      for (let index = first; index <= last; index++) {
+        if (this.cache.has(index)) {
+          run = null
+          continue
+        }
+        const chunkStart = index * this.chunkSize
+        const chunkEnd = Math.min(chunkStart + this.chunkSize, this.size)
+        if (run === null) {
+          run = [chunkStart, chunkEnd]
+          missing.push(run)
+        } else run[1] = chunkEnd
+      }
+    }
+    if (missing.length === 0) return
+    const sign = (): Record<string, string> => this.authorisation()
+    this.adoptPlan(await fetchPlan(this.url, { size: this.size, ranges: missing }, this.chunkSize, sign, this.fetchImpl))
+  }
+
+  /** What {@link fetchPlan} brought, put in the cache and counted. */
+  private adoptPlan(fetched: PlanAnswers): void {
+    this.requests += fetched.requests
+    for (const answer of fetched.answers) {
+      this.bytesRead += answer.body.byteLength
+      this.adopt(answer.body, answer.start, answer.end - 1, answer.contentRange)
+    }
+    this.onRead?.(this.requests, this.bytesRead)
+  }
+
+  /**
+   * Bytes `[from, to]` of the file, fetched by the open rather than by a read,
+   * put in the cache a chunk at a time — whole chunks only, the file's last
+   * (which may be short) among them. A body that is not the range it claims is
+   * dropped rather than refused: nothing has been read from it yet, and the
+   * read that wants those bytes will fetch them and say what is wrong.
+   */
+  private adopt(body: Uint8Array, from: number, to: number, contentRange: string | null): void {
+    let window: Uint8Array
+    try {
+      window = this.windowOf(body, from, to, contentRange)
+    } catch {
+      return
+    }
+    const end = from + window.byteLength - 1
+    for (let index = Math.ceil(from / this.chunkSize); ; index++) {
+      const chunkStart = index * this.chunkSize
+      const chunkEnd = Math.min(chunkStart + this.chunkSize, this.size) - 1
+      if (chunkStart > end || chunkEnd > end) break
+      if (!this.cache.has(index)) this.store(index, window.subarray(chunkStart - from, chunkEnd - from + 1))
+    }
+  }
+
   private store(index: number, chunk: Uint8Array): void {
     // Copy out of the response buffer so the (much larger) response can be
     // collected once its useful window has been cached.
@@ -845,6 +1066,73 @@ function hostOf(url: string): string {
  * answer one. Only ever sent after an unranged `HEAD` came back re-encoded —
  * see the caller — so a host that never does that never sees it.
  */
+/** A plan's ranges less the file's first chunk, which the probe is already fetching. */
+function withoutFirstChunk(ranges: ReadonlyArray<[number, number]>, chunkSize: number): Array<[number, number]> {
+  const kept: Array<[number, number]> = []
+  for (const [start, end] of ranges) {
+    if (end <= chunkSize) continue
+    kept.push([Math.max(start, start < chunkSize ? chunkSize : start), end])
+  }
+  return kept
+}
+
+/** What {@link fetchPlan} brings back: every range answered as asked, and what it cost. */
+interface PlanAnswers {
+  answers: Array<{ start: number; end: number; body: Uint8Array; contentRange: string | null }>
+  requests: number
+}
+
+/**
+ * A plan's ranges, fetched side by side, each past the browser's HTTP cache as
+ * every `fetch` here is ({@link RemoteRangeSource.readExact}). An answer comes
+ * back only where it is the range asked for — a refusal, a failure or a host
+ * that sends something else is left out, and the walk reads that place itself
+ * — and a body is only read once its `Content-Range` says it is that range.
+ * Never rejects. At most {@link MAX_PLAN_BYTES} are asked for.
+ */
+async function fetchPlan(
+  url: string,
+  plan: ReadPlan,
+  chunkSize: number,
+  sign: (method: string) => Record<string, string>,
+  doFetch: typeof fetch,
+): Promise<PlanAnswers> {
+  let budget = MAX_PLAN_BYTES
+  const asks: Array<Promise<PlanAnswers['answers'][number] | null>> = []
+  for (const [start, end] of plan.ranges) {
+    if (!(start >= 0) || !(end > start) || !(end <= plan.size) || start % chunkSize !== 0) continue
+    if (end - start > budget) break
+    budget -= end - start
+    asks.push(
+      (async () => {
+        const stop = typeof AbortController === 'undefined' ? null : new AbortController()
+        try {
+          const response = await doFetch(url, {
+            method: 'GET',
+            headers: { ...sign('GET'), Range: `bytes=${start}-${end - 1}` },
+            cache: 'no-store',
+            ...(stop === null ? {} : { signal: stop.signal }),
+          })
+          const contentRange = response.headers.get('content-range')
+          if (response.status !== 206 || reEncoding(response) !== null || !isRange(response, start, end - 1)) {
+            stop?.abort()
+            return null
+          }
+          const body = new Uint8Array(await response.arrayBuffer())
+          return body.byteLength === end - start ? { start, end, body, contentRange } : null
+        } catch {
+          return null
+        }
+      })(),
+    )
+  }
+  const settled = await Promise.all(asks)
+  return {
+    answers: settled.filter((answer): answer is PlanAnswers['answers'][number] => answer !== null),
+    requests: asks.length,
+  }
+}
+
 async function rangedHead(
   url: string,
   doFetch: typeof fetch,
@@ -870,6 +1158,23 @@ function numberHeader(response: Response | null, name: string): number | null {
   if (raw === null || raw === undefined || raw.trim() === '') return null
   const value = Number(raw)
   return Number.isFinite(value) ? value : null
+}
+
+/**
+ * Whether `response` is bytes `[from, to]` of the file — or, with `short`, a
+ * prefix of them, as the file's first chunk is when the file is smaller — read
+ * from `Content-Range` where the page may see it and from `Content-Length` where
+ * it may not. A bucket's CORS often exposes neither `Content-Range` nor
+ * `Accept-Ranges` — 4DN's exposes `ETag` alone — while `Content-Length` is
+ * readable on every response, so for a 206 it is the length that says the
+ * range was served. Neither readable is not a range anybody can vouch for.
+ */
+function isRange(response: Response, from: number, to: number, short = false): boolean {
+  const claimed = parseContentRange(response.headers.get('content-range'))
+  if (claimed !== null) return claimed.start === from && (short ? claimed.end <= to : claimed.end === to)
+  const length = numberHeader(response, 'content-length')
+  if (length === null) return false
+  return short ? length > 0 && length <= to - from + 1 : length === to - from + 1
 }
 
 /** `bytes 128-255/26520008` → `128`; `null` when the header is absent or odd. */

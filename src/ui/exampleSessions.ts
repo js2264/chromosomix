@@ -71,6 +71,7 @@ import { FIELD_NAME } from '../annotations/fields'
 import { defaultStyle, placementOn } from '../annotations/types'
 import type { AnnotationCard, AnnotationKind, LaneEdge, StoredEntry } from '../annotations/types'
 import { CONFIG_VERSION, type SessionConfig } from '../state/SessionConfig'
+import type { StoredPlans } from '../state/readPlans'
 import type { ViewState } from '../types'
 import { demoFigure } from './examples'
 import { getPlotOptions } from './plotOptions'
@@ -151,6 +152,51 @@ export const HUMAN_MAP = `${FOURDN}230ad652-0232-47f2-97ef-296c7a040bd9/4DNFI18U
  * the locus K562 is known for.
  */
 export const HUMAN_REGION = 'chr8:126800000-130200000'
+
+/**
+ * What opening Human Hi-C data's map reads, shipped with it (§6.1, §12): the
+ * walk through the cooler's HDF5 metadata at 10 kb and the window at MYC, as
+ * the reader wrote them down (`RemoteRangeSource.recorded`). Fetched side by
+ * side as the example opens, so a first visitor's map comes out of a cache
+ * filled in a couple of round trips rather than thirty in a row. Made on the
+ * file's size, which is its check: a file of any other size is another file and
+ * opens by walking, as it would with no plan. `scripts/record-plan.mjs` writes
+ * it again.
+ */
+const HUMAN_PLAN: StoredPlans | undefined = {
+  size: 7921321989,
+  open: [
+    [0, 262144],
+    [1801191424, 1801453568],
+    [4678746112, 4679008256],
+    [4680843264, 4681105408],
+    [5753012224, 5753274368],
+    [5753798656, 5754060800],
+    [7736131584, 7736393728],
+    [7807959040, 7808221184],
+  ],
+  views: {
+    [HUMAN_REGION]: [
+      [4678746112, 4679008256],
+      [4680843264, 4681105408],
+      [4703911936, 4704174080],
+      [5408292864, 5408555008],
+      [5410652160, 5412749312],
+      [5414846464, 5415108608],
+      [5416157184, 5416943616],
+      [5753012224, 5753798656],
+      [7843348480, 7843610624],
+      [7844397056, 7844659200],
+      [7845445632, 7845707776],
+    ],
+  },
+  at: 0,
+}
+
+/** The read plans the examples ship with, by the map address each opens. */
+export const EXAMPLE_PLANS: Readonly<Record<string, StoredPlans>> = Object.fromEntries(
+  HUMAN_PLAN === undefined ? [] : [[`${HUMAN_MAP}::resolutions/10000`, HUMAN_PLAN]],
+)
 
 /** Comparing data's two maps: DT40 at the G2 block (4DNES9LEZXN7) and 60 min after it (4DNESEQNSXSD). */
 export const CHICKEN_G2 = `${FOURDN}b829095a-28e6-49ec-bd18-2b4bc319d0eb/4DNFIT479GDR.mcool`
