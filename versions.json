@@ -256,6 +256,13 @@
   ],
   "pulls": [
     {
+      "number": 165,
+      "commit": "07f9b31",
+      "title": "Draw large blocks level-by-level from values, not whole",
+      "branch": "js/TTFI",
+      "date": "2026-11-06T18:36:01Z"
+    },
+    {
       "number": 122,
       "commit": "e818753",
       "title": "Add ideogram visualization of chromosomes",
