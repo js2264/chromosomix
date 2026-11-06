@@ -1,6 +1,13 @@
 {
-  "latest": "b4aa27e",
+  "latest": "6f5a354",
   "versions": [
+    {
+      "commit": "6f5a354",
+      "version": "0.21.0",
+      "date": "2026-11-06T19:50:55+01:00",
+      "subject": "Read remote maps in 256 KiB chunks; skip circularity check for sequences >10 Mb (#166)",
+      "tag": ""
+    },
     {
       "commit": "b4aa27e",
       "version": "0.21.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "58460a4",
-      "version": "0.19.0",
-      "date": "2026-11-03T16:28:08+01:00",
-      "subject": "feat: add test coverage reporting and configuration",
-      "tag": ""
-    },
-    {
       "commit": "9731db4",
       "version": "0.19.0",
       "date": "2026-11-01T19:24:42+01:00",
@@ -255,13 +255,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 166,
-      "commit": "9a70deb",
-      "title": "Read remote maps in 256 KiB chunks; skip circularity check for sequences >10 Mb",
-      "branch": "js/clever-bell-47x4n9",
-      "date": "2026-11-06T18:47:04Z"
-    },
     {
       "number": 165,
       "commit": "07f9b31",
