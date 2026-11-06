@@ -1,0 +1,31 @@
+{
+  "page": "timing",
+  "published_at": "https://chromosomix.app/timings/",
+  "started": "2026-11-06T00:06:40+00:00",
+  "finished": "2026-11-06T01:56:43+00:00",
+  "seconds": 6603,
+  "chromosomix": {
+    "version": "0.21.0",
+    "commit": "f2ac3bb1f5b34ee369e543f413398b80a79f3235",
+    "tag": "v0.21.0",
+    "source": "https://github.com/js2264/chromosomix"
+  },
+  "run": {
+    "url": "https://github.com/js2264/chromosomix/actions/runs/42122173452",
+    "number": "22",
+    "attempt": "1",
+    "workflow": "Notebooks",
+    "event": "release",
+    "actor": "js2264"
+  },
+  "machine": {
+    "system": "Linux 7.0.0-1017-azure",
+    "architecture": "x86_64",
+    "processor": "AMD EPYC 7763 64-Core Processor",
+    "cores": 4,
+    "memory_gb": 15.6,
+    "python": "3.13.18",
+    "quarto": "1.10.19"
+  },
+  "summary": "chromosomix takes 4.1\u00d7 less CPU time than the references over 39 pairs (0.9\u00d7 to 103.2\u00d7), and 3.0\u00d7 less wall-clock time."
+}

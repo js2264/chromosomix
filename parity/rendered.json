@@ -1,0 +1,31 @@
+{
+  "page": "parity",
+  "published_at": "https://chromosomix.app/parity/",
+  "started": "2026-11-05T22:37:04+00:00",
+  "finished": "2026-11-05T22:43:55+00:00",
+  "seconds": 411,
+  "chromosomix": {
+    "version": "0.21.0",
+    "commit": "f2ac3bb1f5b34ee369e543f413398b80a79f3235",
+    "tag": "v0.21.0",
+    "source": "https://github.com/js2264/chromosomix"
+  },
+  "run": {
+    "url": "https://github.com/js2264/chromosomix/actions/runs/42122173452",
+    "number": "22",
+    "attempt": "1",
+    "workflow": "Notebooks",
+    "event": "release",
+    "actor": "js2264"
+  },
+  "machine": {
+    "system": "Linux 7.0.0-1017-azure",
+    "architecture": "x86_64",
+    "processor": "AMD EPYC 7763 64-Core Processor",
+    "cores": 4,
+    "memory_gb": 15.6,
+    "python": "3.13.18",
+    "quarto": "1.10.19"
+  },
+  "summary": "Files identical between the app and the command line: in Chromium, 57 of 57; in Firefox, 52 of 57 (5 differing in their data, 0 written by one side alone); in WebKit, 52 of 57 (5 differing in their data, 0 written by one side alone)."
+}

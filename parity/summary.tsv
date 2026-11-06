@@ -1,0 +1,172 @@
+browser	case	task	file	verdict	note	browser bytes	command line bytes
+chromium	insulation	insulation	insulation-boundaries.bed	identical		16243	16252
+chromium	insulation	insulation	insulation-boundaries.tsv	identical		30685	30759
+chromium	insulation	insulation	insulation-domains.bed	identical		14837	14846
+chromium	insulation	insulation	insulation-domains.tsv	identical		30740	30814
+chromium	insulation	insulation	insulation-w10.bedGraph	identical		232673	232747
+chromium	insulation	insulation	insulation-w10.bw	identical		77486	77486
+chromium	insulation	insulation	insulation-w10.tsv	identical		233774	233848
+chromium	compartments	compartments	compartment-ab.bed	identical		42138	42142
+chromium	compartments	compartments	compartment-ab.tsv	identical		73205	73231
+chromium	compartments	compartments	compartment-components.tsv	identical		1262	1288
+chromium	compartments	compartments	compartment-e1.bedGraph	identical		219485	219511
+chromium	compartments	compartments	compartment-e1.bw	identical		75224	75224
+chromium	compartments	compartments	compartment-e1.tsv	identical		227724	227750
+chromium	compartments	compartments	compartment-saddle-chrI.tsv	identical		22048	22074
+chromium	compartments	compartments	compartment-saddle-chrII.tsv	identical		22185	22211
+chromium	compartments	compartments	compartment-saddle-chrIII.tsv	identical		22242	22268
+chromium	compartments	compartments	compartment-saddle-chrIV.tsv	identical		22132	22158
+chromium	compartments	compartments	compartment-saddle-chrIX.tsv	identical		22148	22174
+chromium	compartments	compartments	compartment-saddle-chrM.tsv	identical		19602	19628
+chromium	compartments	compartments	compartment-saddle-chrV.tsv	identical		22092	22118
+chromium	compartments	compartments	compartment-saddle-chrVI.tsv	identical		22193	22219
+chromium	compartments	compartments	compartment-saddle-chrVII.tsv	identical		22156	22182
+chromium	compartments	compartments	compartment-saddle-chrVIII.tsv	identical		22084	22110
+chromium	compartments	compartments	compartment-saddle-chrX.tsv	identical		22102	22128
+chromium	compartments	compartments	compartment-saddle-chrXI.tsv	identical		22135	22161
+chromium	compartments	compartments	compartment-saddle-chrXII.tsv	identical		22103	22129
+chromium	compartments	compartments	compartment-saddle-chrXIII.tsv	identical		22113	22139
+chromium	compartments	compartments	compartment-saddle-chrXIV.tsv	identical		22214	22240
+chromium	compartments	compartments	compartment-saddle-chrXV.tsv	identical		22242	22268
+chromium	compartments	compartments	compartment-saddle-chrXVI.tsv	identical		22126	22152
+chromium	ps	expected	ps-slope.tsv	identical		8543	8593
+chromium	ps	expected	ps.tsv	identical		13011	13061
+chromium	coverage	coverage	coverage-total.bedGraph	identical		196672	196741
+chromium	coverage	coverage	coverage-total.bw	identical		66687	66687
+chromium	coverage	coverage	coverage-total.tsv	identical		202473	202542
+chromium	fourc	fourc	fourc-1663-1665.bedGraph	identical		27603	27672
+chromium	fourc	fourc	fourc-1663-1665.bw	identical		8523	8523
+chromium	fourc	fourc	fourc-1663-1665.tsv	identical		174017	174086
+chromium	loops	loops	loops-calls.bedpe	identical		8560	8564
+chromium	loops	loops	loops-calls.tsv	identical		28044	28113
+chromium	loops	loops	loops-spectrum.tsv	identical		2753	2822
+chromium	loops	loops	loops-table.tsv	identical		16766	16835
+chromium	loops	loops	loops-thresholds.tsv	identical		1165	1234
+chromium	motif	motif	motif-WTTTAYRTTTW-both-density.bedGraph	identical		169846	169917
+chromium	motif	motif	motif-WTTTAYRTTTW-both-density.bw	identical		39756	39756
+chromium	motif	motif	motif-WTTTAYRTTTW-both-density.tsv	identical		175661	175732
+chromium	motif	motif	motif-WTTTAYRTTTW-both.bed	identical		35947	35951
+chromium	motif	motif	motif-WTTTAYRTTTW-both.tsv	identical		36351	36422
+chromium	apa	apa	apa-0.tsv	identical		16954	17009
+chromium	apa	apa	apa-anchors.tsv	identical		3152	3207
+chromium	apa	apa	apa-loop-spectrum.tsv	identical		1156	1211
+chromium	peaks	peaks	peaks-curvature.tsv	identical		267258	267265
+chromium	peaks	peaks	peaks-sequences.tsv	identical		1247	1254
+chromium	peaks	peaks	peaks-a1.bed	identical	named peaks-GSM8640701_ATAC_Mmyco_rep1_CPM_bw.bed on the command line	947128	947128
+chromium	peaks	peaks	peaks-a1.tsv	identical	named peaks-GSM8640701_ATAC_Mmyco_rep1_CPM_bw.tsv on the command line	1733868	1733875
+chromium	metaplot	metaplot	metaplot-heatmap.tsv	identical		1539280	1539345
+chromium	metaplot	metaplot	metaplot.tsv	identical		3095	3160
+firefox	insulation	insulation	insulation-boundaries.bed	identical		16243	16252
+firefox	insulation	insulation	insulation-boundaries.tsv	identical		30685	30759
+firefox	insulation	insulation	insulation-domains.bed	identical		14837	14846
+firefox	insulation	insulation	insulation-domains.tsv	identical		30740	30814
+firefox	insulation	insulation	insulation-w10.bedGraph	identical		232673	232747
+firefox	insulation	insulation	insulation-w10.bw	data differs	77,936 bytes in the browser, 77,486 on the command line	77936	77486
+firefox	insulation	insulation	insulation-w10.tsv	identical		233774	233848
+firefox	compartments	compartments	compartment-ab.bed	identical		42138	42142
+firefox	compartments	compartments	compartment-ab.tsv	identical		73205	73231
+firefox	compartments	compartments	compartment-components.tsv	identical		1262	1288
+firefox	compartments	compartments	compartment-e1.bedGraph	identical		219485	219511
+firefox	compartments	compartments	compartment-e1.bw	data differs	75,847 bytes in the browser, 75,224 on the command line	75847	75224
+firefox	compartments	compartments	compartment-e1.tsv	identical		227724	227750
+firefox	compartments	compartments	compartment-saddle-chrI.tsv	identical		22048	22074
+firefox	compartments	compartments	compartment-saddle-chrII.tsv	identical		22185	22211
+firefox	compartments	compartments	compartment-saddle-chrIII.tsv	identical		22242	22268
+firefox	compartments	compartments	compartment-saddle-chrIV.tsv	identical		22132	22158
+firefox	compartments	compartments	compartment-saddle-chrIX.tsv	identical		22148	22174
+firefox	compartments	compartments	compartment-saddle-chrM.tsv	identical		19602	19628
+firefox	compartments	compartments	compartment-saddle-chrV.tsv	identical		22092	22118
+firefox	compartments	compartments	compartment-saddle-chrVI.tsv	identical		22193	22219
+firefox	compartments	compartments	compartment-saddle-chrVII.tsv	identical		22156	22182
+firefox	compartments	compartments	compartment-saddle-chrVIII.tsv	identical		22084	22110
+firefox	compartments	compartments	compartment-saddle-chrX.tsv	identical		22102	22128
+firefox	compartments	compartments	compartment-saddle-chrXI.tsv	identical		22135	22161
+firefox	compartments	compartments	compartment-saddle-chrXII.tsv	identical		22103	22129
+firefox	compartments	compartments	compartment-saddle-chrXIII.tsv	identical		22113	22139
+firefox	compartments	compartments	compartment-saddle-chrXIV.tsv	identical		22214	22240
+firefox	compartments	compartments	compartment-saddle-chrXV.tsv	identical		22242	22268
+firefox	compartments	compartments	compartment-saddle-chrXVI.tsv	identical		22126	22152
+firefox	ps	expected	ps-slope.tsv	identical		8543	8593
+firefox	ps	expected	ps.tsv	identical		13011	13061
+firefox	coverage	coverage	coverage-total.bedGraph	identical		196672	196741
+firefox	coverage	coverage	coverage-total.bw	data differs	63,926 bytes in the browser, 66,687 on the command line	63926	66687
+firefox	coverage	coverage	coverage-total.tsv	identical		202473	202542
+firefox	fourc	fourc	fourc-1663-1665.bedGraph	identical		27603	27672
+firefox	fourc	fourc	fourc-1663-1665.bw	data differs	8,264 bytes in the browser, 8,523 on the command line	8264	8523
+firefox	fourc	fourc	fourc-1663-1665.tsv	identical		174017	174086
+firefox	loops	loops	loops-calls.bedpe	identical		8560	8564
+firefox	loops	loops	loops-calls.tsv	identical		28044	28113
+firefox	loops	loops	loops-spectrum.tsv	identical		2753	2822
+firefox	loops	loops	loops-table.tsv	identical		16766	16835
+firefox	loops	loops	loops-thresholds.tsv	identical		1165	1234
+firefox	motif	motif	motif-WTTTAYRTTTW-both-density.bedGraph	identical		169846	169917
+firefox	motif	motif	motif-WTTTAYRTTTW-both-density.bw	data differs	33,517 bytes in the browser, 39,756 on the command line	33517	39756
+firefox	motif	motif	motif-WTTTAYRTTTW-both-density.tsv	identical		175661	175732
+firefox	motif	motif	motif-WTTTAYRTTTW-both.bed	identical		35947	35951
+firefox	motif	motif	motif-WTTTAYRTTTW-both.tsv	identical		36351	36422
+firefox	apa	apa	apa-0.tsv	identical		16954	17009
+firefox	apa	apa	apa-anchors.tsv	identical		3152	3207
+firefox	apa	apa	apa-loop-spectrum.tsv	identical		1156	1211
+firefox	peaks	peaks	peaks-curvature.tsv	identical		267258	267265
+firefox	peaks	peaks	peaks-sequences.tsv	identical		1247	1254
+firefox	peaks	peaks	peaks-a1.bed	identical	named peaks-GSM8640701_ATAC_Mmyco_rep1_CPM_bw.bed on the command line	947128	947128
+firefox	peaks	peaks	peaks-a1.tsv	identical	named peaks-GSM8640701_ATAC_Mmyco_rep1_CPM_bw.tsv on the command line	1733868	1733875
+firefox	metaplot	metaplot	metaplot-heatmap.tsv	identical		1539280	1539345
+firefox	metaplot	metaplot	metaplot.tsv	identical		3095	3160
+webkit	insulation	insulation	insulation-boundaries.bed	identical		16243	16252
+webkit	insulation	insulation	insulation-boundaries.tsv	identical		30685	30759
+webkit	insulation	insulation	insulation-domains.bed	identical		14837	14846
+webkit	insulation	insulation	insulation-domains.tsv	identical		30740	30814
+webkit	insulation	insulation	insulation-w10.bedGraph	identical		232673	232747
+webkit	insulation	insulation	insulation-w10.bw	data differs	78,026 bytes in the browser, 77,486 on the command line	78026	77486
+webkit	insulation	insulation	insulation-w10.tsv	identical		233774	233848
+webkit	compartments	compartments	compartment-ab.bed	identical		42138	42142
+webkit	compartments	compartments	compartment-ab.tsv	identical		73205	73231
+webkit	compartments	compartments	compartment-components.tsv	identical		1262	1288
+webkit	compartments	compartments	compartment-e1.bedGraph	identical		219485	219511
+webkit	compartments	compartments	compartment-e1.bw	data differs	75,915 bytes in the browser, 75,224 on the command line	75915	75224
+webkit	compartments	compartments	compartment-e1.tsv	identical		227724	227750
+webkit	compartments	compartments	compartment-saddle-chrI.tsv	identical		22048	22074
+webkit	compartments	compartments	compartment-saddle-chrII.tsv	identical		22185	22211
+webkit	compartments	compartments	compartment-saddle-chrIII.tsv	identical		22242	22268
+webkit	compartments	compartments	compartment-saddle-chrIV.tsv	identical		22132	22158
+webkit	compartments	compartments	compartment-saddle-chrIX.tsv	identical		22148	22174
+webkit	compartments	compartments	compartment-saddle-chrM.tsv	identical		19602	19628
+webkit	compartments	compartments	compartment-saddle-chrV.tsv	identical		22092	22118
+webkit	compartments	compartments	compartment-saddle-chrVI.tsv	identical		22193	22219
+webkit	compartments	compartments	compartment-saddle-chrVII.tsv	identical		22156	22182
+webkit	compartments	compartments	compartment-saddle-chrVIII.tsv	identical		22084	22110
+webkit	compartments	compartments	compartment-saddle-chrX.tsv	identical		22102	22128
+webkit	compartments	compartments	compartment-saddle-chrXI.tsv	identical		22135	22161
+webkit	compartments	compartments	compartment-saddle-chrXII.tsv	identical		22103	22129
+webkit	compartments	compartments	compartment-saddle-chrXIII.tsv	identical		22113	22139
+webkit	compartments	compartments	compartment-saddle-chrXIV.tsv	identical		22214	22240
+webkit	compartments	compartments	compartment-saddle-chrXV.tsv	identical		22242	22268
+webkit	compartments	compartments	compartment-saddle-chrXVI.tsv	identical		22126	22152
+webkit	ps	expected	ps-slope.tsv	identical		8543	8593
+webkit	ps	expected	ps.tsv	identical		13011	13061
+webkit	coverage	coverage	coverage-total.bedGraph	identical		196672	196741
+webkit	coverage	coverage	coverage-total.bw	data differs	63,886 bytes in the browser, 66,687 on the command line	63886	66687
+webkit	coverage	coverage	coverage-total.tsv	identical		202473	202542
+webkit	fourc	fourc	fourc-1663-1665.bedGraph	identical		27603	27672
+webkit	fourc	fourc	fourc-1663-1665.bw	data differs	8,263 bytes in the browser, 8,523 on the command line	8263	8523
+webkit	fourc	fourc	fourc-1663-1665.tsv	identical		174017	174086
+webkit	loops	loops	loops-calls.bedpe	identical		8560	8564
+webkit	loops	loops	loops-calls.tsv	identical		28044	28113
+webkit	loops	loops	loops-spectrum.tsv	identical		2753	2822
+webkit	loops	loops	loops-table.tsv	identical		16766	16835
+webkit	loops	loops	loops-thresholds.tsv	identical		1165	1234
+webkit	motif	motif	motif-WTTTAYRTTTW-both-density.bedGraph	identical		169846	169917
+webkit	motif	motif	motif-WTTTAYRTTTW-both-density.bw	data differs	33,568 bytes in the browser, 39,756 on the command line	33568	39756
+webkit	motif	motif	motif-WTTTAYRTTTW-both-density.tsv	identical		175661	175732
+webkit	motif	motif	motif-WTTTAYRTTTW-both.bed	identical		35947	35951
+webkit	motif	motif	motif-WTTTAYRTTTW-both.tsv	identical		36351	36422
+webkit	apa	apa	apa-0.tsv	identical		16954	17009
+webkit	apa	apa	apa-anchors.tsv	identical		3152	3207
+webkit	apa	apa	apa-loop-spectrum.tsv	identical		1156	1211
+webkit	peaks	peaks	peaks-curvature.tsv	identical		267258	267265
+webkit	peaks	peaks	peaks-sequences.tsv	identical		1247	1254
+webkit	peaks	peaks	peaks-a1.bed	identical	named peaks-GSM8640701_ATAC_Mmyco_rep1_CPM_bw.bed on the command line	947128	947128
+webkit	peaks	peaks	peaks-a1.tsv	identical	named peaks-GSM8640701_ATAC_Mmyco_rep1_CPM_bw.tsv on the command line	1733868	1733875
+webkit	metaplot	metaplot	metaplot-heatmap.tsv	identical		1539280	1539345
+webkit	metaplot	metaplot	metaplot.tsv	identical		3095	3160
