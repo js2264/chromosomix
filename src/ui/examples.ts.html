@@ -1,0 +1,3319 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/ui/examples.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../prettify.css" />
+    <link rel="stylesheet" href="../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">src/ui</a> examples.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">98.27% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>626/637</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">85.93% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>55/64</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">91.66% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>11/12</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">98.27% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>626/637</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line high'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a>
+<a name='L193'></a><a href='#L193'>193</a>
+<a name='L194'></a><a href='#L194'>194</a>
+<a name='L195'></a><a href='#L195'>195</a>
+<a name='L196'></a><a href='#L196'>196</a>
+<a name='L197'></a><a href='#L197'>197</a>
+<a name='L198'></a><a href='#L198'>198</a>
+<a name='L199'></a><a href='#L199'>199</a>
+<a name='L200'></a><a href='#L200'>200</a>
+<a name='L201'></a><a href='#L201'>201</a>
+<a name='L202'></a><a href='#L202'>202</a>
+<a name='L203'></a><a href='#L203'>203</a>
+<a name='L204'></a><a href='#L204'>204</a>
+<a name='L205'></a><a href='#L205'>205</a>
+<a name='L206'></a><a href='#L206'>206</a>
+<a name='L207'></a><a href='#L207'>207</a>
+<a name='L208'></a><a href='#L208'>208</a>
+<a name='L209'></a><a href='#L209'>209</a>
+<a name='L210'></a><a href='#L210'>210</a>
+<a name='L211'></a><a href='#L211'>211</a>
+<a name='L212'></a><a href='#L212'>212</a>
+<a name='L213'></a><a href='#L213'>213</a>
+<a name='L214'></a><a href='#L214'>214</a>
+<a name='L215'></a><a href='#L215'>215</a>
+<a name='L216'></a><a href='#L216'>216</a>
+<a name='L217'></a><a href='#L217'>217</a>
+<a name='L218'></a><a href='#L218'>218</a>
+<a name='L219'></a><a href='#L219'>219</a>
+<a name='L220'></a><a href='#L220'>220</a>
+<a name='L221'></a><a href='#L221'>221</a>
+<a name='L222'></a><a href='#L222'>222</a>
+<a name='L223'></a><a href='#L223'>223</a>
+<a name='L224'></a><a href='#L224'>224</a>
+<a name='L225'></a><a href='#L225'>225</a>
+<a name='L226'></a><a href='#L226'>226</a>
+<a name='L227'></a><a href='#L227'>227</a>
+<a name='L228'></a><a href='#L228'>228</a>
+<a name='L229'></a><a href='#L229'>229</a>
+<a name='L230'></a><a href='#L230'>230</a>
+<a name='L231'></a><a href='#L231'>231</a>
+<a name='L232'></a><a href='#L232'>232</a>
+<a name='L233'></a><a href='#L233'>233</a>
+<a name='L234'></a><a href='#L234'>234</a>
+<a name='L235'></a><a href='#L235'>235</a>
+<a name='L236'></a><a href='#L236'>236</a>
+<a name='L237'></a><a href='#L237'>237</a>
+<a name='L238'></a><a href='#L238'>238</a>
+<a name='L239'></a><a href='#L239'>239</a>
+<a name='L240'></a><a href='#L240'>240</a>
+<a name='L241'></a><a href='#L241'>241</a>
+<a name='L242'></a><a href='#L242'>242</a>
+<a name='L243'></a><a href='#L243'>243</a>
+<a name='L244'></a><a href='#L244'>244</a>
+<a name='L245'></a><a href='#L245'>245</a>
+<a name='L246'></a><a href='#L246'>246</a>
+<a name='L247'></a><a href='#L247'>247</a>
+<a name='L248'></a><a href='#L248'>248</a>
+<a name='L249'></a><a href='#L249'>249</a>
+<a name='L250'></a><a href='#L250'>250</a>
+<a name='L251'></a><a href='#L251'>251</a>
+<a name='L252'></a><a href='#L252'>252</a>
+<a name='L253'></a><a href='#L253'>253</a>
+<a name='L254'></a><a href='#L254'>254</a>
+<a name='L255'></a><a href='#L255'>255</a>
+<a name='L256'></a><a href='#L256'>256</a>
+<a name='L257'></a><a href='#L257'>257</a>
+<a name='L258'></a><a href='#L258'>258</a>
+<a name='L259'></a><a href='#L259'>259</a>
+<a name='L260'></a><a href='#L260'>260</a>
+<a name='L261'></a><a href='#L261'>261</a>
+<a name='L262'></a><a href='#L262'>262</a>
+<a name='L263'></a><a href='#L263'>263</a>
+<a name='L264'></a><a href='#L264'>264</a>
+<a name='L265'></a><a href='#L265'>265</a>
+<a name='L266'></a><a href='#L266'>266</a>
+<a name='L267'></a><a href='#L267'>267</a>
+<a name='L268'></a><a href='#L268'>268</a>
+<a name='L269'></a><a href='#L269'>269</a>
+<a name='L270'></a><a href='#L270'>270</a>
+<a name='L271'></a><a href='#L271'>271</a>
+<a name='L272'></a><a href='#L272'>272</a>
+<a name='L273'></a><a href='#L273'>273</a>
+<a name='L274'></a><a href='#L274'>274</a>
+<a name='L275'></a><a href='#L275'>275</a>
+<a name='L276'></a><a href='#L276'>276</a>
+<a name='L277'></a><a href='#L277'>277</a>
+<a name='L278'></a><a href='#L278'>278</a>
+<a name='L279'></a><a href='#L279'>279</a>
+<a name='L280'></a><a href='#L280'>280</a>
+<a name='L281'></a><a href='#L281'>281</a>
+<a name='L282'></a><a href='#L282'>282</a>
+<a name='L283'></a><a href='#L283'>283</a>
+<a name='L284'></a><a href='#L284'>284</a>
+<a name='L285'></a><a href='#L285'>285</a>
+<a name='L286'></a><a href='#L286'>286</a>
+<a name='L287'></a><a href='#L287'>287</a>
+<a name='L288'></a><a href='#L288'>288</a>
+<a name='L289'></a><a href='#L289'>289</a>
+<a name='L290'></a><a href='#L290'>290</a>
+<a name='L291'></a><a href='#L291'>291</a>
+<a name='L292'></a><a href='#L292'>292</a>
+<a name='L293'></a><a href='#L293'>293</a>
+<a name='L294'></a><a href='#L294'>294</a>
+<a name='L295'></a><a href='#L295'>295</a>
+<a name='L296'></a><a href='#L296'>296</a>
+<a name='L297'></a><a href='#L297'>297</a>
+<a name='L298'></a><a href='#L298'>298</a>
+<a name='L299'></a><a href='#L299'>299</a>
+<a name='L300'></a><a href='#L300'>300</a>
+<a name='L301'></a><a href='#L301'>301</a>
+<a name='L302'></a><a href='#L302'>302</a>
+<a name='L303'></a><a href='#L303'>303</a>
+<a name='L304'></a><a href='#L304'>304</a>
+<a name='L305'></a><a href='#L305'>305</a>
+<a name='L306'></a><a href='#L306'>306</a>
+<a name='L307'></a><a href='#L307'>307</a>
+<a name='L308'></a><a href='#L308'>308</a>
+<a name='L309'></a><a href='#L309'>309</a>
+<a name='L310'></a><a href='#L310'>310</a>
+<a name='L311'></a><a href='#L311'>311</a>
+<a name='L312'></a><a href='#L312'>312</a>
+<a name='L313'></a><a href='#L313'>313</a>
+<a name='L314'></a><a href='#L314'>314</a>
+<a name='L315'></a><a href='#L315'>315</a>
+<a name='L316'></a><a href='#L316'>316</a>
+<a name='L317'></a><a href='#L317'>317</a>
+<a name='L318'></a><a href='#L318'>318</a>
+<a name='L319'></a><a href='#L319'>319</a>
+<a name='L320'></a><a href='#L320'>320</a>
+<a name='L321'></a><a href='#L321'>321</a>
+<a name='L322'></a><a href='#L322'>322</a>
+<a name='L323'></a><a href='#L323'>323</a>
+<a name='L324'></a><a href='#L324'>324</a>
+<a name='L325'></a><a href='#L325'>325</a>
+<a name='L326'></a><a href='#L326'>326</a>
+<a name='L327'></a><a href='#L327'>327</a>
+<a name='L328'></a><a href='#L328'>328</a>
+<a name='L329'></a><a href='#L329'>329</a>
+<a name='L330'></a><a href='#L330'>330</a>
+<a name='L331'></a><a href='#L331'>331</a>
+<a name='L332'></a><a href='#L332'>332</a>
+<a name='L333'></a><a href='#L333'>333</a>
+<a name='L334'></a><a href='#L334'>334</a>
+<a name='L335'></a><a href='#L335'>335</a>
+<a name='L336'></a><a href='#L336'>336</a>
+<a name='L337'></a><a href='#L337'>337</a>
+<a name='L338'></a><a href='#L338'>338</a>
+<a name='L339'></a><a href='#L339'>339</a>
+<a name='L340'></a><a href='#L340'>340</a>
+<a name='L341'></a><a href='#L341'>341</a>
+<a name='L342'></a><a href='#L342'>342</a>
+<a name='L343'></a><a href='#L343'>343</a>
+<a name='L344'></a><a href='#L344'>344</a>
+<a name='L345'></a><a href='#L345'>345</a>
+<a name='L346'></a><a href='#L346'>346</a>
+<a name='L347'></a><a href='#L347'>347</a>
+<a name='L348'></a><a href='#L348'>348</a>
+<a name='L349'></a><a href='#L349'>349</a>
+<a name='L350'></a><a href='#L350'>350</a>
+<a name='L351'></a><a href='#L351'>351</a>
+<a name='L352'></a><a href='#L352'>352</a>
+<a name='L353'></a><a href='#L353'>353</a>
+<a name='L354'></a><a href='#L354'>354</a>
+<a name='L355'></a><a href='#L355'>355</a>
+<a name='L356'></a><a href='#L356'>356</a>
+<a name='L357'></a><a href='#L357'>357</a>
+<a name='L358'></a><a href='#L358'>358</a>
+<a name='L359'></a><a href='#L359'>359</a>
+<a name='L360'></a><a href='#L360'>360</a>
+<a name='L361'></a><a href='#L361'>361</a>
+<a name='L362'></a><a href='#L362'>362</a>
+<a name='L363'></a><a href='#L363'>363</a>
+<a name='L364'></a><a href='#L364'>364</a>
+<a name='L365'></a><a href='#L365'>365</a>
+<a name='L366'></a><a href='#L366'>366</a>
+<a name='L367'></a><a href='#L367'>367</a>
+<a name='L368'></a><a href='#L368'>368</a>
+<a name='L369'></a><a href='#L369'>369</a>
+<a name='L370'></a><a href='#L370'>370</a>
+<a name='L371'></a><a href='#L371'>371</a>
+<a name='L372'></a><a href='#L372'>372</a>
+<a name='L373'></a><a href='#L373'>373</a>
+<a name='L374'></a><a href='#L374'>374</a>
+<a name='L375'></a><a href='#L375'>375</a>
+<a name='L376'></a><a href='#L376'>376</a>
+<a name='L377'></a><a href='#L377'>377</a>
+<a name='L378'></a><a href='#L378'>378</a>
+<a name='L379'></a><a href='#L379'>379</a>
+<a name='L380'></a><a href='#L380'>380</a>
+<a name='L381'></a><a href='#L381'>381</a>
+<a name='L382'></a><a href='#L382'>382</a>
+<a name='L383'></a><a href='#L383'>383</a>
+<a name='L384'></a><a href='#L384'>384</a>
+<a name='L385'></a><a href='#L385'>385</a>
+<a name='L386'></a><a href='#L386'>386</a>
+<a name='L387'></a><a href='#L387'>387</a>
+<a name='L388'></a><a href='#L388'>388</a>
+<a name='L389'></a><a href='#L389'>389</a>
+<a name='L390'></a><a href='#L390'>390</a>
+<a name='L391'></a><a href='#L391'>391</a>
+<a name='L392'></a><a href='#L392'>392</a>
+<a name='L393'></a><a href='#L393'>393</a>
+<a name='L394'></a><a href='#L394'>394</a>
+<a name='L395'></a><a href='#L395'>395</a>
+<a name='L396'></a><a href='#L396'>396</a>
+<a name='L397'></a><a href='#L397'>397</a>
+<a name='L398'></a><a href='#L398'>398</a>
+<a name='L399'></a><a href='#L399'>399</a>
+<a name='L400'></a><a href='#L400'>400</a>
+<a name='L401'></a><a href='#L401'>401</a>
+<a name='L402'></a><a href='#L402'>402</a>
+<a name='L403'></a><a href='#L403'>403</a>
+<a name='L404'></a><a href='#L404'>404</a>
+<a name='L405'></a><a href='#L405'>405</a>
+<a name='L406'></a><a href='#L406'>406</a>
+<a name='L407'></a><a href='#L407'>407</a>
+<a name='L408'></a><a href='#L408'>408</a>
+<a name='L409'></a><a href='#L409'>409</a>
+<a name='L410'></a><a href='#L410'>410</a>
+<a name='L411'></a><a href='#L411'>411</a>
+<a name='L412'></a><a href='#L412'>412</a>
+<a name='L413'></a><a href='#L413'>413</a>
+<a name='L414'></a><a href='#L414'>414</a>
+<a name='L415'></a><a href='#L415'>415</a>
+<a name='L416'></a><a href='#L416'>416</a>
+<a name='L417'></a><a href='#L417'>417</a>
+<a name='L418'></a><a href='#L418'>418</a>
+<a name='L419'></a><a href='#L419'>419</a>
+<a name='L420'></a><a href='#L420'>420</a>
+<a name='L421'></a><a href='#L421'>421</a>
+<a name='L422'></a><a href='#L422'>422</a>
+<a name='L423'></a><a href='#L423'>423</a>
+<a name='L424'></a><a href='#L424'>424</a>
+<a name='L425'></a><a href='#L425'>425</a>
+<a name='L426'></a><a href='#L426'>426</a>
+<a name='L427'></a><a href='#L427'>427</a>
+<a name='L428'></a><a href='#L428'>428</a>
+<a name='L429'></a><a href='#L429'>429</a>
+<a name='L430'></a><a href='#L430'>430</a>
+<a name='L431'></a><a href='#L431'>431</a>
+<a name='L432'></a><a href='#L432'>432</a>
+<a name='L433'></a><a href='#L433'>433</a>
+<a name='L434'></a><a href='#L434'>434</a>
+<a name='L435'></a><a href='#L435'>435</a>
+<a name='L436'></a><a href='#L436'>436</a>
+<a name='L437'></a><a href='#L437'>437</a>
+<a name='L438'></a><a href='#L438'>438</a>
+<a name='L439'></a><a href='#L439'>439</a>
+<a name='L440'></a><a href='#L440'>440</a>
+<a name='L441'></a><a href='#L441'>441</a>
+<a name='L442'></a><a href='#L442'>442</a>
+<a name='L443'></a><a href='#L443'>443</a>
+<a name='L444'></a><a href='#L444'>444</a>
+<a name='L445'></a><a href='#L445'>445</a>
+<a name='L446'></a><a href='#L446'>446</a>
+<a name='L447'></a><a href='#L447'>447</a>
+<a name='L448'></a><a href='#L448'>448</a>
+<a name='L449'></a><a href='#L449'>449</a>
+<a name='L450'></a><a href='#L450'>450</a>
+<a name='L451'></a><a href='#L451'>451</a>
+<a name='L452'></a><a href='#L452'>452</a>
+<a name='L453'></a><a href='#L453'>453</a>
+<a name='L454'></a><a href='#L454'>454</a>
+<a name='L455'></a><a href='#L455'>455</a>
+<a name='L456'></a><a href='#L456'>456</a>
+<a name='L457'></a><a href='#L457'>457</a>
+<a name='L458'></a><a href='#L458'>458</a>
+<a name='L459'></a><a href='#L459'>459</a>
+<a name='L460'></a><a href='#L460'>460</a>
+<a name='L461'></a><a href='#L461'>461</a>
+<a name='L462'></a><a href='#L462'>462</a>
+<a name='L463'></a><a href='#L463'>463</a>
+<a name='L464'></a><a href='#L464'>464</a>
+<a name='L465'></a><a href='#L465'>465</a>
+<a name='L466'></a><a href='#L466'>466</a>
+<a name='L467'></a><a href='#L467'>467</a>
+<a name='L468'></a><a href='#L468'>468</a>
+<a name='L469'></a><a href='#L469'>469</a>
+<a name='L470'></a><a href='#L470'>470</a>
+<a name='L471'></a><a href='#L471'>471</a>
+<a name='L472'></a><a href='#L472'>472</a>
+<a name='L473'></a><a href='#L473'>473</a>
+<a name='L474'></a><a href='#L474'>474</a>
+<a name='L475'></a><a href='#L475'>475</a>
+<a name='L476'></a><a href='#L476'>476</a>
+<a name='L477'></a><a href='#L477'>477</a>
+<a name='L478'></a><a href='#L478'>478</a>
+<a name='L479'></a><a href='#L479'>479</a>
+<a name='L480'></a><a href='#L480'>480</a>
+<a name='L481'></a><a href='#L481'>481</a>
+<a name='L482'></a><a href='#L482'>482</a>
+<a name='L483'></a><a href='#L483'>483</a>
+<a name='L484'></a><a href='#L484'>484</a>
+<a name='L485'></a><a href='#L485'>485</a>
+<a name='L486'></a><a href='#L486'>486</a>
+<a name='L487'></a><a href='#L487'>487</a>
+<a name='L488'></a><a href='#L488'>488</a>
+<a name='L489'></a><a href='#L489'>489</a>
+<a name='L490'></a><a href='#L490'>490</a>
+<a name='L491'></a><a href='#L491'>491</a>
+<a name='L492'></a><a href='#L492'>492</a>
+<a name='L493'></a><a href='#L493'>493</a>
+<a name='L494'></a><a href='#L494'>494</a>
+<a name='L495'></a><a href='#L495'>495</a>
+<a name='L496'></a><a href='#L496'>496</a>
+<a name='L497'></a><a href='#L497'>497</a>
+<a name='L498'></a><a href='#L498'>498</a>
+<a name='L499'></a><a href='#L499'>499</a>
+<a name='L500'></a><a href='#L500'>500</a>
+<a name='L501'></a><a href='#L501'>501</a>
+<a name='L502'></a><a href='#L502'>502</a>
+<a name='L503'></a><a href='#L503'>503</a>
+<a name='L504'></a><a href='#L504'>504</a>
+<a name='L505'></a><a href='#L505'>505</a>
+<a name='L506'></a><a href='#L506'>506</a>
+<a name='L507'></a><a href='#L507'>507</a>
+<a name='L508'></a><a href='#L508'>508</a>
+<a name='L509'></a><a href='#L509'>509</a>
+<a name='L510'></a><a href='#L510'>510</a>
+<a name='L511'></a><a href='#L511'>511</a>
+<a name='L512'></a><a href='#L512'>512</a>
+<a name='L513'></a><a href='#L513'>513</a>
+<a name='L514'></a><a href='#L514'>514</a>
+<a name='L515'></a><a href='#L515'>515</a>
+<a name='L516'></a><a href='#L516'>516</a>
+<a name='L517'></a><a href='#L517'>517</a>
+<a name='L518'></a><a href='#L518'>518</a>
+<a name='L519'></a><a href='#L519'>519</a>
+<a name='L520'></a><a href='#L520'>520</a>
+<a name='L521'></a><a href='#L521'>521</a>
+<a name='L522'></a><a href='#L522'>522</a>
+<a name='L523'></a><a href='#L523'>523</a>
+<a name='L524'></a><a href='#L524'>524</a>
+<a name='L525'></a><a href='#L525'>525</a>
+<a name='L526'></a><a href='#L526'>526</a>
+<a name='L527'></a><a href='#L527'>527</a>
+<a name='L528'></a><a href='#L528'>528</a>
+<a name='L529'></a><a href='#L529'>529</a>
+<a name='L530'></a><a href='#L530'>530</a>
+<a name='L531'></a><a href='#L531'>531</a>
+<a name='L532'></a><a href='#L532'>532</a>
+<a name='L533'></a><a href='#L533'>533</a>
+<a name='L534'></a><a href='#L534'>534</a>
+<a name='L535'></a><a href='#L535'>535</a>
+<a name='L536'></a><a href='#L536'>536</a>
+<a name='L537'></a><a href='#L537'>537</a>
+<a name='L538'></a><a href='#L538'>538</a>
+<a name='L539'></a><a href='#L539'>539</a>
+<a name='L540'></a><a href='#L540'>540</a>
+<a name='L541'></a><a href='#L541'>541</a>
+<a name='L542'></a><a href='#L542'>542</a>
+<a name='L543'></a><a href='#L543'>543</a>
+<a name='L544'></a><a href='#L544'>544</a>
+<a name='L545'></a><a href='#L545'>545</a>
+<a name='L546'></a><a href='#L546'>546</a>
+<a name='L547'></a><a href='#L547'>547</a>
+<a name='L548'></a><a href='#L548'>548</a>
+<a name='L549'></a><a href='#L549'>549</a>
+<a name='L550'></a><a href='#L550'>550</a>
+<a name='L551'></a><a href='#L551'>551</a>
+<a name='L552'></a><a href='#L552'>552</a>
+<a name='L553'></a><a href='#L553'>553</a>
+<a name='L554'></a><a href='#L554'>554</a>
+<a name='L555'></a><a href='#L555'>555</a>
+<a name='L556'></a><a href='#L556'>556</a>
+<a name='L557'></a><a href='#L557'>557</a>
+<a name='L558'></a><a href='#L558'>558</a>
+<a name='L559'></a><a href='#L559'>559</a>
+<a name='L560'></a><a href='#L560'>560</a>
+<a name='L561'></a><a href='#L561'>561</a>
+<a name='L562'></a><a href='#L562'>562</a>
+<a name='L563'></a><a href='#L563'>563</a>
+<a name='L564'></a><a href='#L564'>564</a>
+<a name='L565'></a><a href='#L565'>565</a>
+<a name='L566'></a><a href='#L566'>566</a>
+<a name='L567'></a><a href='#L567'>567</a>
+<a name='L568'></a><a href='#L568'>568</a>
+<a name='L569'></a><a href='#L569'>569</a>
+<a name='L570'></a><a href='#L570'>570</a>
+<a name='L571'></a><a href='#L571'>571</a>
+<a name='L572'></a><a href='#L572'>572</a>
+<a name='L573'></a><a href='#L573'>573</a>
+<a name='L574'></a><a href='#L574'>574</a>
+<a name='L575'></a><a href='#L575'>575</a>
+<a name='L576'></a><a href='#L576'>576</a>
+<a name='L577'></a><a href='#L577'>577</a>
+<a name='L578'></a><a href='#L578'>578</a>
+<a name='L579'></a><a href='#L579'>579</a>
+<a name='L580'></a><a href='#L580'>580</a>
+<a name='L581'></a><a href='#L581'>581</a>
+<a name='L582'></a><a href='#L582'>582</a>
+<a name='L583'></a><a href='#L583'>583</a>
+<a name='L584'></a><a href='#L584'>584</a>
+<a name='L585'></a><a href='#L585'>585</a>
+<a name='L586'></a><a href='#L586'>586</a>
+<a name='L587'></a><a href='#L587'>587</a>
+<a name='L588'></a><a href='#L588'>588</a>
+<a name='L589'></a><a href='#L589'>589</a>
+<a name='L590'></a><a href='#L590'>590</a>
+<a name='L591'></a><a href='#L591'>591</a>
+<a name='L592'></a><a href='#L592'>592</a>
+<a name='L593'></a><a href='#L593'>593</a>
+<a name='L594'></a><a href='#L594'>594</a>
+<a name='L595'></a><a href='#L595'>595</a>
+<a name='L596'></a><a href='#L596'>596</a>
+<a name='L597'></a><a href='#L597'>597</a>
+<a name='L598'></a><a href='#L598'>598</a>
+<a name='L599'></a><a href='#L599'>599</a>
+<a name='L600'></a><a href='#L600'>600</a>
+<a name='L601'></a><a href='#L601'>601</a>
+<a name='L602'></a><a href='#L602'>602</a>
+<a name='L603'></a><a href='#L603'>603</a>
+<a name='L604'></a><a href='#L604'>604</a>
+<a name='L605'></a><a href='#L605'>605</a>
+<a name='L606'></a><a href='#L606'>606</a>
+<a name='L607'></a><a href='#L607'>607</a>
+<a name='L608'></a><a href='#L608'>608</a>
+<a name='L609'></a><a href='#L609'>609</a>
+<a name='L610'></a><a href='#L610'>610</a>
+<a name='L611'></a><a href='#L611'>611</a>
+<a name='L612'></a><a href='#L612'>612</a>
+<a name='L613'></a><a href='#L613'>613</a>
+<a name='L614'></a><a href='#L614'>614</a>
+<a name='L615'></a><a href='#L615'>615</a>
+<a name='L616'></a><a href='#L616'>616</a>
+<a name='L617'></a><a href='#L617'>617</a>
+<a name='L618'></a><a href='#L618'>618</a>
+<a name='L619'></a><a href='#L619'>619</a>
+<a name='L620'></a><a href='#L620'>620</a>
+<a name='L621'></a><a href='#L621'>621</a>
+<a name='L622'></a><a href='#L622'>622</a>
+<a name='L623'></a><a href='#L623'>623</a>
+<a name='L624'></a><a href='#L624'>624</a>
+<a name='L625'></a><a href='#L625'>625</a>
+<a name='L626'></a><a href='#L626'>626</a>
+<a name='L627'></a><a href='#L627'>627</a>
+<a name='L628'></a><a href='#L628'>628</a>
+<a name='L629'></a><a href='#L629'>629</a>
+<a name='L630'></a><a href='#L630'>630</a>
+<a name='L631'></a><a href='#L631'>631</a>
+<a name='L632'></a><a href='#L632'>632</a>
+<a name='L633'></a><a href='#L633'>633</a>
+<a name='L634'></a><a href='#L634'>634</a>
+<a name='L635'></a><a href='#L635'>635</a>
+<a name='L636'></a><a href='#L636'>636</a>
+<a name='L637'></a><a href='#L637'>637</a>
+<a name='L638'></a><a href='#L638'>638</a>
+<a name='L639'></a><a href='#L639'>639</a>
+<a name='L640'></a><a href='#L640'>640</a>
+<a name='L641'></a><a href='#L641'>641</a>
+<a name='L642'></a><a href='#L642'>642</a>
+<a name='L643'></a><a href='#L643'>643</a>
+<a name='L644'></a><a href='#L644'>644</a>
+<a name='L645'></a><a href='#L645'>645</a>
+<a name='L646'></a><a href='#L646'>646</a>
+<a name='L647'></a><a href='#L647'>647</a>
+<a name='L648'></a><a href='#L648'>648</a>
+<a name='L649'></a><a href='#L649'>649</a>
+<a name='L650'></a><a href='#L650'>650</a>
+<a name='L651'></a><a href='#L651'>651</a>
+<a name='L652'></a><a href='#L652'>652</a>
+<a name='L653'></a><a href='#L653'>653</a>
+<a name='L654'></a><a href='#L654'>654</a>
+<a name='L655'></a><a href='#L655'>655</a>
+<a name='L656'></a><a href='#L656'>656</a>
+<a name='L657'></a><a href='#L657'>657</a>
+<a name='L658'></a><a href='#L658'>658</a>
+<a name='L659'></a><a href='#L659'>659</a>
+<a name='L660'></a><a href='#L660'>660</a>
+<a name='L661'></a><a href='#L661'>661</a>
+<a name='L662'></a><a href='#L662'>662</a>
+<a name='L663'></a><a href='#L663'>663</a>
+<a name='L664'></a><a href='#L664'>664</a>
+<a name='L665'></a><a href='#L665'>665</a>
+<a name='L666'></a><a href='#L666'>666</a>
+<a name='L667'></a><a href='#L667'>667</a>
+<a name='L668'></a><a href='#L668'>668</a>
+<a name='L669'></a><a href='#L669'>669</a>
+<a name='L670'></a><a href='#L670'>670</a>
+<a name='L671'></a><a href='#L671'>671</a>
+<a name='L672'></a><a href='#L672'>672</a>
+<a name='L673'></a><a href='#L673'>673</a>
+<a name='L674'></a><a href='#L674'>674</a>
+<a name='L675'></a><a href='#L675'>675</a>
+<a name='L676'></a><a href='#L676'>676</a>
+<a name='L677'></a><a href='#L677'>677</a>
+<a name='L678'></a><a href='#L678'>678</a>
+<a name='L679'></a><a href='#L679'>679</a>
+<a name='L680'></a><a href='#L680'>680</a>
+<a name='L681'></a><a href='#L681'>681</a>
+<a name='L682'></a><a href='#L682'>682</a>
+<a name='L683'></a><a href='#L683'>683</a>
+<a name='L684'></a><a href='#L684'>684</a>
+<a name='L685'></a><a href='#L685'>685</a>
+<a name='L686'></a><a href='#L686'>686</a>
+<a name='L687'></a><a href='#L687'>687</a>
+<a name='L688'></a><a href='#L688'>688</a>
+<a name='L689'></a><a href='#L689'>689</a>
+<a name='L690'></a><a href='#L690'>690</a>
+<a name='L691'></a><a href='#L691'>691</a>
+<a name='L692'></a><a href='#L692'>692</a>
+<a name='L693'></a><a href='#L693'>693</a>
+<a name='L694'></a><a href='#L694'>694</a>
+<a name='L695'></a><a href='#L695'>695</a>
+<a name='L696'></a><a href='#L696'>696</a>
+<a name='L697'></a><a href='#L697'>697</a>
+<a name='L698'></a><a href='#L698'>698</a>
+<a name='L699'></a><a href='#L699'>699</a>
+<a name='L700'></a><a href='#L700'>700</a>
+<a name='L701'></a><a href='#L701'>701</a>
+<a name='L702'></a><a href='#L702'>702</a>
+<a name='L703'></a><a href='#L703'>703</a>
+<a name='L704'></a><a href='#L704'>704</a>
+<a name='L705'></a><a href='#L705'>705</a>
+<a name='L706'></a><a href='#L706'>706</a>
+<a name='L707'></a><a href='#L707'>707</a>
+<a name='L708'></a><a href='#L708'>708</a>
+<a name='L709'></a><a href='#L709'>709</a>
+<a name='L710'></a><a href='#L710'>710</a>
+<a name='L711'></a><a href='#L711'>711</a>
+<a name='L712'></a><a href='#L712'>712</a>
+<a name='L713'></a><a href='#L713'>713</a>
+<a name='L714'></a><a href='#L714'>714</a>
+<a name='L715'></a><a href='#L715'>715</a>
+<a name='L716'></a><a href='#L716'>716</a>
+<a name='L717'></a><a href='#L717'>717</a>
+<a name='L718'></a><a href='#L718'>718</a>
+<a name='L719'></a><a href='#L719'>719</a>
+<a name='L720'></a><a href='#L720'>720</a>
+<a name='L721'></a><a href='#L721'>721</a>
+<a name='L722'></a><a href='#L722'>722</a>
+<a name='L723'></a><a href='#L723'>723</a>
+<a name='L724'></a><a href='#L724'>724</a>
+<a name='L725'></a><a href='#L725'>725</a>
+<a name='L726'></a><a href='#L726'>726</a>
+<a name='L727'></a><a href='#L727'>727</a>
+<a name='L728'></a><a href='#L728'>728</a>
+<a name='L729'></a><a href='#L729'>729</a>
+<a name='L730'></a><a href='#L730'>730</a>
+<a name='L731'></a><a href='#L731'>731</a>
+<a name='L732'></a><a href='#L732'>732</a>
+<a name='L733'></a><a href='#L733'>733</a>
+<a name='L734'></a><a href='#L734'>734</a>
+<a name='L735'></a><a href='#L735'>735</a>
+<a name='L736'></a><a href='#L736'>736</a>
+<a name='L737'></a><a href='#L737'>737</a>
+<a name='L738'></a><a href='#L738'>738</a>
+<a name='L739'></a><a href='#L739'>739</a>
+<a name='L740'></a><a href='#L740'>740</a>
+<a name='L741'></a><a href='#L741'>741</a>
+<a name='L742'></a><a href='#L742'>742</a>
+<a name='L743'></a><a href='#L743'>743</a>
+<a name='L744'></a><a href='#L744'>744</a>
+<a name='L745'></a><a href='#L745'>745</a>
+<a name='L746'></a><a href='#L746'>746</a>
+<a name='L747'></a><a href='#L747'>747</a>
+<a name='L748'></a><a href='#L748'>748</a>
+<a name='L749'></a><a href='#L749'>749</a>
+<a name='L750'></a><a href='#L750'>750</a>
+<a name='L751'></a><a href='#L751'>751</a>
+<a name='L752'></a><a href='#L752'>752</a>
+<a name='L753'></a><a href='#L753'>753</a>
+<a name='L754'></a><a href='#L754'>754</a>
+<a name='L755'></a><a href='#L755'>755</a>
+<a name='L756'></a><a href='#L756'>756</a>
+<a name='L757'></a><a href='#L757'>757</a>
+<a name='L758'></a><a href='#L758'>758</a>
+<a name='L759'></a><a href='#L759'>759</a>
+<a name='L760'></a><a href='#L760'>760</a>
+<a name='L761'></a><a href='#L761'>761</a>
+<a name='L762'></a><a href='#L762'>762</a>
+<a name='L763'></a><a href='#L763'>763</a>
+<a name='L764'></a><a href='#L764'>764</a>
+<a name='L765'></a><a href='#L765'>765</a>
+<a name='L766'></a><a href='#L766'>766</a>
+<a name='L767'></a><a href='#L767'>767</a>
+<a name='L768'></a><a href='#L768'>768</a>
+<a name='L769'></a><a href='#L769'>769</a>
+<a name='L770'></a><a href='#L770'>770</a>
+<a name='L771'></a><a href='#L771'>771</a>
+<a name='L772'></a><a href='#L772'>772</a>
+<a name='L773'></a><a href='#L773'>773</a>
+<a name='L774'></a><a href='#L774'>774</a>
+<a name='L775'></a><a href='#L775'>775</a>
+<a name='L776'></a><a href='#L776'>776</a>
+<a name='L777'></a><a href='#L777'>777</a>
+<a name='L778'></a><a href='#L778'>778</a>
+<a name='L779'></a><a href='#L779'>779</a>
+<a name='L780'></a><a href='#L780'>780</a>
+<a name='L781'></a><a href='#L781'>781</a>
+<a name='L782'></a><a href='#L782'>782</a>
+<a name='L783'></a><a href='#L783'>783</a>
+<a name='L784'></a><a href='#L784'>784</a>
+<a name='L785'></a><a href='#L785'>785</a>
+<a name='L786'></a><a href='#L786'>786</a>
+<a name='L787'></a><a href='#L787'>787</a>
+<a name='L788'></a><a href='#L788'>788</a>
+<a name='L789'></a><a href='#L789'>789</a>
+<a name='L790'></a><a href='#L790'>790</a>
+<a name='L791'></a><a href='#L791'>791</a>
+<a name='L792'></a><a href='#L792'>792</a>
+<a name='L793'></a><a href='#L793'>793</a>
+<a name='L794'></a><a href='#L794'>794</a>
+<a name='L795'></a><a href='#L795'>795</a>
+<a name='L796'></a><a href='#L796'>796</a>
+<a name='L797'></a><a href='#L797'>797</a>
+<a name='L798'></a><a href='#L798'>798</a>
+<a name='L799'></a><a href='#L799'>799</a>
+<a name='L800'></a><a href='#L800'>800</a>
+<a name='L801'></a><a href='#L801'>801</a>
+<a name='L802'></a><a href='#L802'>802</a>
+<a name='L803'></a><a href='#L803'>803</a>
+<a name='L804'></a><a href='#L804'>804</a>
+<a name='L805'></a><a href='#L805'>805</a>
+<a name='L806'></a><a href='#L806'>806</a>
+<a name='L807'></a><a href='#L807'>807</a>
+<a name='L808'></a><a href='#L808'>808</a>
+<a name='L809'></a><a href='#L809'>809</a>
+<a name='L810'></a><a href='#L810'>810</a>
+<a name='L811'></a><a href='#L811'>811</a>
+<a name='L812'></a><a href='#L812'>812</a>
+<a name='L813'></a><a href='#L813'>813</a>
+<a name='L814'></a><a href='#L814'>814</a>
+<a name='L815'></a><a href='#L815'>815</a>
+<a name='L816'></a><a href='#L816'>816</a>
+<a name='L817'></a><a href='#L817'>817</a>
+<a name='L818'></a><a href='#L818'>818</a>
+<a name='L819'></a><a href='#L819'>819</a>
+<a name='L820'></a><a href='#L820'>820</a>
+<a name='L821'></a><a href='#L821'>821</a>
+<a name='L822'></a><a href='#L822'>822</a>
+<a name='L823'></a><a href='#L823'>823</a>
+<a name='L824'></a><a href='#L824'>824</a>
+<a name='L825'></a><a href='#L825'>825</a>
+<a name='L826'></a><a href='#L826'>826</a>
+<a name='L827'></a><a href='#L827'>827</a>
+<a name='L828'></a><a href='#L828'>828</a>
+<a name='L829'></a><a href='#L829'>829</a>
+<a name='L830'></a><a href='#L830'>830</a>
+<a name='L831'></a><a href='#L831'>831</a>
+<a name='L832'></a><a href='#L832'>832</a>
+<a name='L833'></a><a href='#L833'>833</a>
+<a name='L834'></a><a href='#L834'>834</a>
+<a name='L835'></a><a href='#L835'>835</a>
+<a name='L836'></a><a href='#L836'>836</a>
+<a name='L837'></a><a href='#L837'>837</a>
+<a name='L838'></a><a href='#L838'>838</a>
+<a name='L839'></a><a href='#L839'>839</a>
+<a name='L840'></a><a href='#L840'>840</a>
+<a name='L841'></a><a href='#L841'>841</a>
+<a name='L842'></a><a href='#L842'>842</a>
+<a name='L843'></a><a href='#L843'>843</a>
+<a name='L844'></a><a href='#L844'>844</a>
+<a name='L845'></a><a href='#L845'>845</a>
+<a name='L846'></a><a href='#L846'>846</a>
+<a name='L847'></a><a href='#L847'>847</a>
+<a name='L848'></a><a href='#L848'>848</a>
+<a name='L849'></a><a href='#L849'>849</a>
+<a name='L850'></a><a href='#L850'>850</a>
+<a name='L851'></a><a href='#L851'>851</a>
+<a name='L852'></a><a href='#L852'>852</a>
+<a name='L853'></a><a href='#L853'>853</a>
+<a name='L854'></a><a href='#L854'>854</a>
+<a name='L855'></a><a href='#L855'>855</a>
+<a name='L856'></a><a href='#L856'>856</a>
+<a name='L857'></a><a href='#L857'>857</a>
+<a name='L858'></a><a href='#L858'>858</a>
+<a name='L859'></a><a href='#L859'>859</a>
+<a name='L860'></a><a href='#L860'>860</a>
+<a name='L861'></a><a href='#L861'>861</a>
+<a name='L862'></a><a href='#L862'>862</a>
+<a name='L863'></a><a href='#L863'>863</a>
+<a name='L864'></a><a href='#L864'>864</a>
+<a name='L865'></a><a href='#L865'>865</a>
+<a name='L866'></a><a href='#L866'>866</a>
+<a name='L867'></a><a href='#L867'>867</a>
+<a name='L868'></a><a href='#L868'>868</a>
+<a name='L869'></a><a href='#L869'>869</a>
+<a name='L870'></a><a href='#L870'>870</a>
+<a name='L871'></a><a href='#L871'>871</a>
+<a name='L872'></a><a href='#L872'>872</a>
+<a name='L873'></a><a href='#L873'>873</a>
+<a name='L874'></a><a href='#L874'>874</a>
+<a name='L875'></a><a href='#L875'>875</a>
+<a name='L876'></a><a href='#L876'>876</a>
+<a name='L877'></a><a href='#L877'>877</a>
+<a name='L878'></a><a href='#L878'>878</a>
+<a name='L879'></a><a href='#L879'>879</a>
+<a name='L880'></a><a href='#L880'>880</a>
+<a name='L881'></a><a href='#L881'>881</a>
+<a name='L882'></a><a href='#L882'>882</a>
+<a name='L883'></a><a href='#L883'>883</a>
+<a name='L884'></a><a href='#L884'>884</a>
+<a name='L885'></a><a href='#L885'>885</a>
+<a name='L886'></a><a href='#L886'>886</a>
+<a name='L887'></a><a href='#L887'>887</a>
+<a name='L888'></a><a href='#L888'>888</a>
+<a name='L889'></a><a href='#L889'>889</a>
+<a name='L890'></a><a href='#L890'>890</a>
+<a name='L891'></a><a href='#L891'>891</a>
+<a name='L892'></a><a href='#L892'>892</a>
+<a name='L893'></a><a href='#L893'>893</a>
+<a name='L894'></a><a href='#L894'>894</a>
+<a name='L895'></a><a href='#L895'>895</a>
+<a name='L896'></a><a href='#L896'>896</a>
+<a name='L897'></a><a href='#L897'>897</a>
+<a name='L898'></a><a href='#L898'>898</a>
+<a name='L899'></a><a href='#L899'>899</a>
+<a name='L900'></a><a href='#L900'>900</a>
+<a name='L901'></a><a href='#L901'>901</a>
+<a name='L902'></a><a href='#L902'>902</a>
+<a name='L903'></a><a href='#L903'>903</a>
+<a name='L904'></a><a href='#L904'>904</a>
+<a name='L905'></a><a href='#L905'>905</a>
+<a name='L906'></a><a href='#L906'>906</a>
+<a name='L907'></a><a href='#L907'>907</a>
+<a name='L908'></a><a href='#L908'>908</a>
+<a name='L909'></a><a href='#L909'>909</a>
+<a name='L910'></a><a href='#L910'>910</a>
+<a name='L911'></a><a href='#L911'>911</a>
+<a name='L912'></a><a href='#L912'>912</a>
+<a name='L913'></a><a href='#L913'>913</a>
+<a name='L914'></a><a href='#L914'>914</a>
+<a name='L915'></a><a href='#L915'>915</a>
+<a name='L916'></a><a href='#L916'>916</a>
+<a name='L917'></a><a href='#L917'>917</a>
+<a name='L918'></a><a href='#L918'>918</a>
+<a name='L919'></a><a href='#L919'>919</a>
+<a name='L920'></a><a href='#L920'>920</a>
+<a name='L921'></a><a href='#L921'>921</a>
+<a name='L922'></a><a href='#L922'>922</a>
+<a name='L923'></a><a href='#L923'>923</a>
+<a name='L924'></a><a href='#L924'>924</a>
+<a name='L925'></a><a href='#L925'>925</a>
+<a name='L926'></a><a href='#L926'>926</a>
+<a name='L927'></a><a href='#L927'>927</a>
+<a name='L928'></a><a href='#L928'>928</a>
+<a name='L929'></a><a href='#L929'>929</a>
+<a name='L930'></a><a href='#L930'>930</a>
+<a name='L931'></a><a href='#L931'>931</a>
+<a name='L932'></a><a href='#L932'>932</a>
+<a name='L933'></a><a href='#L933'>933</a>
+<a name='L934'></a><a href='#L934'>934</a>
+<a name='L935'></a><a href='#L935'>935</a>
+<a name='L936'></a><a href='#L936'>936</a>
+<a name='L937'></a><a href='#L937'>937</a>
+<a name='L938'></a><a href='#L938'>938</a>
+<a name='L939'></a><a href='#L939'>939</a>
+<a name='L940'></a><a href='#L940'>940</a>
+<a name='L941'></a><a href='#L941'>941</a>
+<a name='L942'></a><a href='#L942'>942</a>
+<a name='L943'></a><a href='#L943'>943</a>
+<a name='L944'></a><a href='#L944'>944</a>
+<a name='L945'></a><a href='#L945'>945</a>
+<a name='L946'></a><a href='#L946'>946</a>
+<a name='L947'></a><a href='#L947'>947</a>
+<a name='L948'></a><a href='#L948'>948</a>
+<a name='L949'></a><a href='#L949'>949</a>
+<a name='L950'></a><a href='#L950'>950</a>
+<a name='L951'></a><a href='#L951'>951</a>
+<a name='L952'></a><a href='#L952'>952</a>
+<a name='L953'></a><a href='#L953'>953</a>
+<a name='L954'></a><a href='#L954'>954</a>
+<a name='L955'></a><a href='#L955'>955</a>
+<a name='L956'></a><a href='#L956'>956</a>
+<a name='L957'></a><a href='#L957'>957</a>
+<a name='L958'></a><a href='#L958'>958</a>
+<a name='L959'></a><a href='#L959'>959</a>
+<a name='L960'></a><a href='#L960'>960</a>
+<a name='L961'></a><a href='#L961'>961</a>
+<a name='L962'></a><a href='#L962'>962</a>
+<a name='L963'></a><a href='#L963'>963</a>
+<a name='L964'></a><a href='#L964'>964</a>
+<a name='L965'></a><a href='#L965'>965</a>
+<a name='L966'></a><a href='#L966'>966</a>
+<a name='L967'></a><a href='#L967'>967</a>
+<a name='L968'></a><a href='#L968'>968</a>
+<a name='L969'></a><a href='#L969'>969</a>
+<a name='L970'></a><a href='#L970'>970</a>
+<a name='L971'></a><a href='#L971'>971</a>
+<a name='L972'></a><a href='#L972'>972</a>
+<a name='L973'></a><a href='#L973'>973</a>
+<a name='L974'></a><a href='#L974'>974</a>
+<a name='L975'></a><a href='#L975'>975</a>
+<a name='L976'></a><a href='#L976'>976</a>
+<a name='L977'></a><a href='#L977'>977</a>
+<a name='L978'></a><a href='#L978'>978</a>
+<a name='L979'></a><a href='#L979'>979</a>
+<a name='L980'></a><a href='#L980'>980</a>
+<a name='L981'></a><a href='#L981'>981</a>
+<a name='L982'></a><a href='#L982'>982</a>
+<a name='L983'></a><a href='#L983'>983</a>
+<a name='L984'></a><a href='#L984'>984</a>
+<a name='L985'></a><a href='#L985'>985</a>
+<a name='L986'></a><a href='#L986'>986</a>
+<a name='L987'></a><a href='#L987'>987</a>
+<a name='L988'></a><a href='#L988'>988</a>
+<a name='L989'></a><a href='#L989'>989</a>
+<a name='L990'></a><a href='#L990'>990</a>
+<a name='L991'></a><a href='#L991'>991</a>
+<a name='L992'></a><a href='#L992'>992</a>
+<a name='L993'></a><a href='#L993'>993</a>
+<a name='L994'></a><a href='#L994'>994</a>
+<a name='L995'></a><a href='#L995'>995</a>
+<a name='L996'></a><a href='#L996'>996</a>
+<a name='L997'></a><a href='#L997'>997</a>
+<a name='L998'></a><a href='#L998'>998</a>
+<a name='L999'></a><a href='#L999'>999</a>
+<a name='L1000'></a><a href='#L1000'>1000</a>
+<a name='L1001'></a><a href='#L1001'>1001</a>
+<a name='L1002'></a><a href='#L1002'>1002</a>
+<a name='L1003'></a><a href='#L1003'>1003</a>
+<a name='L1004'></a><a href='#L1004'>1004</a>
+<a name='L1005'></a><a href='#L1005'>1005</a>
+<a name='L1006'></a><a href='#L1006'>1006</a>
+<a name='L1007'></a><a href='#L1007'>1007</a>
+<a name='L1008'></a><a href='#L1008'>1008</a>
+<a name='L1009'></a><a href='#L1009'>1009</a>
+<a name='L1010'></a><a href='#L1010'>1010</a>
+<a name='L1011'></a><a href='#L1011'>1011</a>
+<a name='L1012'></a><a href='#L1012'>1012</a>
+<a name='L1013'></a><a href='#L1013'>1013</a>
+<a name='L1014'></a><a href='#L1014'>1014</a>
+<a name='L1015'></a><a href='#L1015'>1015</a>
+<a name='L1016'></a><a href='#L1016'>1016</a>
+<a name='L1017'></a><a href='#L1017'>1017</a>
+<a name='L1018'></a><a href='#L1018'>1018</a>
+<a name='L1019'></a><a href='#L1019'>1019</a>
+<a name='L1020'></a><a href='#L1020'>1020</a>
+<a name='L1021'></a><a href='#L1021'>1021</a>
+<a name='L1022'></a><a href='#L1022'>1022</a>
+<a name='L1023'></a><a href='#L1023'>1023</a>
+<a name='L1024'></a><a href='#L1024'>1024</a>
+<a name='L1025'></a><a href='#L1025'>1025</a>
+<a name='L1026'></a><a href='#L1026'>1026</a>
+<a name='L1027'></a><a href='#L1027'>1027</a>
+<a name='L1028'></a><a href='#L1028'>1028</a>
+<a name='L1029'></a><a href='#L1029'>1029</a>
+<a name='L1030'></a><a href='#L1030'>1030</a>
+<a name='L1031'></a><a href='#L1031'>1031</a>
+<a name='L1032'></a><a href='#L1032'>1032</a>
+<a name='L1033'></a><a href='#L1033'>1033</a>
+<a name='L1034'></a><a href='#L1034'>1034</a>
+<a name='L1035'></a><a href='#L1035'>1035</a>
+<a name='L1036'></a><a href='#L1036'>1036</a>
+<a name='L1037'></a><a href='#L1037'>1037</a>
+<a name='L1038'></a><a href='#L1038'>1038</a>
+<a name='L1039'></a><a href='#L1039'>1039</a>
+<a name='L1040'></a><a href='#L1040'>1040</a>
+<a name='L1041'></a><a href='#L1041'>1041</a>
+<a name='L1042'></a><a href='#L1042'>1042</a>
+<a name='L1043'></a><a href='#L1043'>1043</a>
+<a name='L1044'></a><a href='#L1044'>1044</a>
+<a name='L1045'></a><a href='#L1045'>1045</a>
+<a name='L1046'></a><a href='#L1046'>1046</a>
+<a name='L1047'></a><a href='#L1047'>1047</a>
+<a name='L1048'></a><a href='#L1048'>1048</a>
+<a name='L1049'></a><a href='#L1049'>1049</a>
+<a name='L1050'></a><a href='#L1050'>1050</a>
+<a name='L1051'></a><a href='#L1051'>1051</a>
+<a name='L1052'></a><a href='#L1052'>1052</a>
+<a name='L1053'></a><a href='#L1053'>1053</a>
+<a name='L1054'></a><a href='#L1054'>1054</a>
+<a name='L1055'></a><a href='#L1055'>1055</a>
+<a name='L1056'></a><a href='#L1056'>1056</a>
+<a name='L1057'></a><a href='#L1057'>1057</a>
+<a name='L1058'></a><a href='#L1058'>1058</a>
+<a name='L1059'></a><a href='#L1059'>1059</a>
+<a name='L1060'></a><a href='#L1060'>1060</a>
+<a name='L1061'></a><a href='#L1061'>1061</a>
+<a name='L1062'></a><a href='#L1062'>1062</a>
+<a name='L1063'></a><a href='#L1063'>1063</a>
+<a name='L1064'></a><a href='#L1064'>1064</a>
+<a name='L1065'></a><a href='#L1065'>1065</a>
+<a name='L1066'></a><a href='#L1066'>1066</a>
+<a name='L1067'></a><a href='#L1067'>1067</a>
+<a name='L1068'></a><a href='#L1068'>1068</a>
+<a name='L1069'></a><a href='#L1069'>1069</a>
+<a name='L1070'></a><a href='#L1070'>1070</a>
+<a name='L1071'></a><a href='#L1071'>1071</a>
+<a name='L1072'></a><a href='#L1072'>1072</a>
+<a name='L1073'></a><a href='#L1073'>1073</a>
+<a name='L1074'></a><a href='#L1074'>1074</a>
+<a name='L1075'></a><a href='#L1075'>1075</a>
+<a name='L1076'></a><a href='#L1076'>1076</a>
+<a name='L1077'></a><a href='#L1077'>1077</a>
+<a name='L1078'></a><a href='#L1078'>1078</a>
+<a name='L1079'></a><a href='#L1079'>1079</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">264x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">792x</span>
+<span class="cline-any cline-yes">792x</span>
+<span class="cline-any cline-yes">792x</span>
+<span class="cline-any cline-yes">792x</span>
+<span class="cline-any cline-yes">792x</span>
+<span class="cline-any cline-yes">792x</span>
+<span class="cline-any cline-yes">792x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">528x</span>
+<span class="cline-any cline-yes">528x</span>
+<span class="cline-any cline-yes">528x</span>
+<span class="cline-any cline-yes">528x</span>
+<span class="cline-any cline-yes">528x</span>
+<span class="cline-any cline-yes">528x</span>
+<span class="cline-any cline-yes">528x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">396x</span>
+<span class="cline-any cline-yes">396x</span>
+<span class="cline-any cline-yes">396x</span>
+<span class="cline-any cline-yes">198x</span>
+<span class="cline-any cline-yes">198x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1056x</span>
+<span class="cline-any cline-yes">1056x</span>
+<span class="cline-any cline-yes">1056x</span>
+<span class="cline-any cline-yes">1056x</span>
+<span class="cline-any cline-yes">1056x</span>
+<span class="cline-any cline-yes">1056x</span>
+<span class="cline-any cline-yes">1056x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">528x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">198x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">198x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">4158x</span>
+<span class="cline-any cline-yes">4158x</span>
+<span class="cline-any cline-yes">4158x</span>
+<span class="cline-any cline-yes">4158x</span>
+<span class="cline-any cline-yes">4158x</span>
+<span class="cline-any cline-yes">4158x</span>
+<span class="cline-any cline-yes">4158x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">97704x</span>
+<span class="cline-any cline-yes">97704x</span>
+<span class="cline-any cline-yes">97704x</span>
+<span class="cline-any cline-yes">357413x</span>
+<span class="cline-any cline-yes">357046x</span>
+<span class="cline-any cline-yes">357413x</span>
+<span class="cline-any cline-yes">97704x</span>
+<span class="cline-any cline-yes">97704x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">48x</span>
+<span class="cline-any cline-yes">48x</span>
+<span class="cline-any cline-yes">46x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-yes">48x</span>
+<span class="cline-any cline-yes">48x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">39x</span>
+<span class="cline-any cline-yes">39x</span>
+<span class="cline-any cline-yes">39x</span>
+<span class="cline-any cline-yes">39x</span>
+<span class="cline-any cline-yes">39x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">7656x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">677x</span>
+<span class="cline-any cline-yes">677x</span>
+<span class="cline-any cline-yes">677x</span>
+<span class="cline-any cline-yes">660x</span>
+<span class="cline-any cline-yes">660x</span>
+<span class="cline-any cline-yes">660x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">677x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">367x</span>
+<span class="cline-any cline-yes">367x</span>
+<span class="cline-any cline-yes">367x</span>
+<span class="cline-any cline-yes">367x</span>
+<span class="cline-any cline-yes">367x</span>
+<span class="cline-any cline-yes">367x</span>
+<span class="cline-any cline-yes">367x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">367x</span>
+<span class="cline-any cline-yes">367x</span>
+<span class="cline-any cline-yes">367x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">367x</span>
+<span class="cline-any cline-yes">367x</span>
+<span class="cline-any cline-yes">2630x</span>
+<span class="cline-any cline-yes">2630x</span>
+<span class="cline-any cline-yes">2630x</span>
+<span class="cline-any cline-yes">2630x</span>
+<span class="cline-any cline-yes">2630x</span>
+<span class="cline-any cline-yes">2630x</span>
+<span class="cline-any cline-yes">2630x</span>
+<span class="cline-any cline-yes">2630x</span>
+<span class="cline-any cline-yes">2630x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2630x</span>
+<span class="cline-any cline-yes">2630x</span>
+<span class="cline-any cline-yes">2630x</span>
+<span class="cline-any cline-yes">367x</span>
+<span class="cline-any cline-yes">367x</span>
+<span class="cline-any cline-yes">367x</span>
+<span class="cline-any cline-yes">41960x</span>
+<span class="cline-any cline-yes">41960x</span>
+<span class="cline-any cline-yes">41960x</span>
+<span class="cline-any cline-yes">41960x</span>
+<span class="cline-any cline-yes">41960x</span>
+<span class="cline-any cline-yes">367x</span>
+<span class="cline-any cline-yes">367x</span>
+<span class="cline-any cline-yes">367x</span>
+<span class="cline-any cline-yes">367x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">306x</span>
+<span class="cline-any cline-yes">306x</span>
+<span class="cline-any cline-yes">306x</span>
+<span class="cline-any cline-yes">306x</span>
+<span class="cline-any cline-yes">306x</span>
+<span class="cline-any cline-yes">306x</span>
+<span class="cline-any cline-yes">306x</span>
+<span class="cline-any cline-yes">306x</span>
+<span class="cline-any cline-yes">306x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">45508x</span>
+<span class="cline-any cline-yes">45508x</span>
+<span class="cline-any cline-yes">45508x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
+ * The lab's own store: the demo workspaces published on the lab's bucket, and
+ * the data files they are made of.
+ *
+ * They used to ship inside the bundle, in `public/demo/`, which put 250 MB of
+ * Hi-C into every Pages artifact and every desktop checkout — and made the
+ * deployed site read them through the *whole-object fallback*, because Pages
+ * gzips `application/octet-stream` and a gzipped body cannot be range-read
+ * (docs/hosting.md). Moving them to S3 fixes both at once: the app is a few MB
+ * again, and the demos are now read the way §11 says a published dataset is
+ * read — a `HEAD`, then bounded range `GET`s — which means the landing page
+ * exercises the same path a reader's own bucket will.
+ *
+ * The price is the half of the hosting requirements that same-origin hosting
+ * used to waive: the bucket must answer a CORS preflight and expose
+ * `Content-Length` and `Content-Range`. That is bucket configuration, not code,
+ * and `scripts/publish-demo.sh` applies it alongside the upload.
+ *
+ * **Every figure in the store is a workspace file, not a data file.** A `.cool`
+ * in the list could only ever offer what dropping that file offers: a map at
+ * its landing view, with nothing beside it. What a first-time reader should
+ * meet is the application doing its job — a window worth looking at, tracks on
+ * both edges of the map, three maps of one locus side by side — and all of that
+ * is exactly what `state/workspace.ts` writes down. So the figures are
+ * `.chromosomix.json` files that live next to the data they name, and choosing
+ * one is the same gesture as dropping a workspace somebody sent you. The data
+ * files are listed too, under each figure's fold, for the reader who wants the
+ * `.mcool` alone — as rows, with the two verbs every store row has.
+ *
+ * The figures are filed under two headings (§24.2). **Demo** is what the viewer
+ * does, ordered as an argument rather than by dataset: one map with its tracks,
+ * then the same tracks with no map at all and close enough to read the reading
+ * frames, then three maps of one locus side by side, then a human chromosome's
+ * splicing in the 1D browser, then a time course in decks — the simplest
+ * complete thing first. **Papers** is the figures of the lab's papers, each a
+ * session over the data the paper published.
+ *
+ * A note on the format, because it is what made every one of these stop
+ * opening once: `App.openWorkspaceFile` reads `kind: "chromosomix.workspace"`
+ * and refuses anything else, so a published file still written in the older
+ * single-session shape is a card that fails on click with "not a workspace".
+ * The files in `demo/store/` are written by `scripts/make_rsg_store.py`, in the
+ * current shape; the copies on the bucket are only as current as the last run
+ * of `scripts/publish-store.sh`, which is the step that makes the store true.
+ *
+ * Each workspace sits in the bucket folder holding the files it names, and the
+ * names *inside* it stay relative — resolved against the file's own URL on the
+ * way in (`resolveConfig`). That is what keeps a card's folder a self-contained
+ * thing: `demo/store/` can be copied to another bucket, or served off a laptop,
+ * and every one of its workspaces still opens.
+ */
+&nbsp;
+import { splitUri } from './labels'
+import type { StoreEntry, StoreFile } from '../state/store'
+import { STORE_KIND, STORE_VERSION } from '../state/store'
+import { devFeature, type DevFeature } from '../state/devFeatures'
+&nbsp;
+declare const __DEMO_BASE__: string
+&nbsp;
+/**
+ * The published root, with its trailing slash: one folder per dataset under it.
+ *
+ * The repository's own `demo/` directory mirrors this — it is what
+ * `scripts/publish-demo.sh` uploads and what `demo-examples.test.ts` checks —
+ * with one exception: the store's folder, `demo/store/`, holds files of several
+ * gigabytes that are copied into it on the bucket rather than kept in git, so
+ * the repository carries its workspaces and `demo/store/MANIFEST.tsv`, which
+ * names every file in it and where it comes from. The test reads the manifest
+ * where it cannot read the file, so a name a workspace uses that the bucket
+ * will not have is still a red CI run.
+ */
+export const DEMO_BUCKET = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/'
+&nbsp;
+/**
+ * Where to read the demos from, when it is not {@link DEMO_BUCKET}.
+ *
+ * Empty in both shipped builds, which is what makes the web target and the
+ * desktop target read the identical URLs. The override survives as a
+ * build-time escape hatch (`DEMO_BASE=… vite build`) for the two cases that
+ * want it: a fork publishing its own bucket, and `python3 -m http.server` over
+ * a local copy of `demo/` when the network is not available.
+ *
+ * `typeof` because `vitest` applies no `define` block (see `version.ts`).
+ */
+const DEMO_BASE: string = typeof __DEMO_BASE__ === <span class="branch-0 cbranch-no" title="branch not covered" >'string' ? __DEMO_BASE__ : '</span>'
+&nbsp;
+/**
+ * The headings the store's figures are filed under, in the order they stand.
+ *
+ * *Demo* is what the viewer does; *Papers* is the figures of the lab's papers,
+ * each card a session over the data the paper published (§24.2).
+ */
+export type DemoSection = 'Demo' | 'Papers'
+&nbsp;
+/**
+ * The paper's GM12878 files (Figs. 1a and 2): the folder's path, its label, its kind, its format and its
+ * assembly — 4DN's map, ENCODE's ChIA-PET map and tracks, UCSC's sequence and genes, and what the app
+ * computed on them.
+ */
+const PAPER_HUMAN = [
+  ['human/4DNFIXP4QG5B.mcool', 'GM12878 Hi-C, 4.0 billion contacts (Rao et al. 2014, 4DN)', 'map', 'mcool', 'hg38'],
+  ['human/ENCFF379AWZ.hic', 'GM12878 CTCF ChIA-PET, Ruan lab (ENCODE ENCSR184YZV)', 'map', 'hic', 'hg38'],
+  ['human/hg38.2bit', 'Human sequence, UCSC hg38', 'genome', '2bit', 'hg38'],
+  ['human/hg38.refGene.txt.gz', 'RefSeq genes, UCSC hg38', 'genome', 'genepred', 'hg38'],
+  ['human/ENCFF734CUT.bigWig', 'CTCF ChIP-seq, Broad (ENCODE ENCSR000AKB)', 'genome', 'bigwig', 'hg38'],
+  ['human/ENCFF644EEX.bigWig', 'CTCF ChIP-seq, UW (ENCODE ENCSR000DRZ)', 'genome', 'bigwig', 'hg38'],
+  ['human/ENCFF156URE.bigBed', 'CTCF peaks, conservative IDR (ENCODE)', 'genome', 'bigbed', 'hg38'],
+  ['human/ENCFF487LOB.bigWig', 'ATAC-seq (ENCODE ENCSR095QNB)', 'genome', 'bigwig', 'hg38'],
+  ['human/ENCFF928SQL.bigBed', 'ATAC-seq peaks (ENCODE)', 'genome', 'bigbed', 'hg38'],
+  ['human/ENCFF990PUN.bigWig', 'Total RNA-seq, plus strand (ENCODE ENCSR000AEC)', 'genome', 'bigwig', 'hg38'],
+  ['human/ENCFF005BFP.bigWig', 'Total RNA-seq, minus strand (ENCODE ENCSR000AEC)', 'genome', 'bigwig', 'hg38'],
+  ...([5, 10, 20, 40] as const).map(
+    (w) =&gt;
+      [`human/4DNFIXP4QG5B_10000.insulation-w${w}.bw`, `Diamond insulation, 10 kb, ${w * 10}-kb window`, 'genome', 'bigwig', 'hg38'] as const,
+  ),
+  ['human/4DNFIXP4QG5B_10000.borders.bed', 'Borders on the insulation, 10 kb', 'genome', 'bed', 'hg38'],
+  ['human/GM12878_CTCF.peaks.bed', 'CTCF peaks called on both labs’ ChIP-seq, IDR ≤ 0.05', 'genome', 'bed', 'hg38'],
+  ['human/GM12878_CTCF.consecutive.bedpe', 'Consecutive CTCF peaks, paired', 'genome', 'bedpe', 'hg38'],
+  ['human/4DNFIXP4QG5B_2000.chr14.insulation-w50.bw', 'Diamond insulation of chr14, 2 kb', 'genome', 'bigwig', 'hg38'],
+  ['human/4DNFIXP4QG5B_2000.chr14.borders.bed', 'Borders on chr14’s insulation, 2 kb', 'genome', 'bed', 'hg38'],
+  ['human/4DNFIXP4QG5B_250000.compartments-e1.bw', 'Compartments (E1), 250 kb', 'genome', 'bigwig', 'hg38'],
+  ['human/4DNFIXP4QG5B_250000.compartments-ab.bed', 'A and B compartments, 250 kb', 'genome', 'bed', 'hg38'],
+  ['human/4DNFIXP4QG5B_5000.4c-chr14-89150001-89180000.bw', '4C from chr14:89,150,001-89,180,000, O/E', 'genome', 'bigwig', 'hg38'],
+  ['human/4DNFIXP4QG5B_2000.chr14-88.55-90.10Mb.bed3d', '3D model of chr14:88.55–90.10 Mb, 2 kb', 'genome', 'bed3d', 'hg38'],
+  ['human/hg38.CTCF-motifs.bed', 'CTCF motif sites, hg38', 'genome', 'bed', 'hg38'],
+] as const
+&nbsp;
+/** The paper's *B. subtilis* time course, a map a condition: the store's name, and the condition as Fig. S3b says it. */
+const PAPER_SUBTILIS = [
+  ['WT', 'WT'],
+  ['dparAB', 'ΔparAB'],
+  ['induction_0min', '+parB 0 min'],
+  ['induction_15min', '+parB 15 min'],
+  ['induction_20min', '+parB 20 min'],
+  ['induction_30min', '+parB 30 min'],
+  ['induction_35min', '+parB 35 min'],
+  ['induction_45min', '+parB 45 min'],
+] as const
+&nbsp;
+/** The paper's *P. aeruginosa* maps, a strain each: the lab's sample, and the genotype as Fig. S3c says it. */
+const PAPER_AERUGINOSA = [
+  ['PAO1_v3_MM38', 'WT'],
+  ['PAO1_v3_FG0235', 'SMC-ScpAB–'],
+  ['PAO1_v3_FG0238', 'MksBEF–'],
+] as const
+&nbsp;
+/**
+ * The figures, in the order they are offered.
+ *
+ * Each card says enough to choose and no more: a `title`, one `line` on what
+ * is on screen, the `assembly`, and where the data came from (`provenance`,
+ * the accession or the DOI, because a demo with no provenance is a screenshot).
+ * The paragraph that used to be the whole row is `detail`, behind a fold on the
+ * card: it says what the *session* adds on top of the file, which is the part a
+ * reader cannot see from the name.
+ *
+ * `folder` is the card's own directory under {@link DEMO_BUCKET}, and its
+ * `files` are named from there: entries sharing a folder — as the three yeast
+ * figures do — are that many figures over one copy of the data, not that many
+ * copies of it, and a `../` reaches a file another card's folder holds.
+ */
+const DEMO: Array&lt;{
+  section: DemoSection
+  folder: string
+  file: string
+  title: string
+  line: string
+  assembly: string
+  provenance: string
+  detail: string
+  /** The data files the session is made of, from its folder — its card's *N files* fold. */
+  files: string[]
+  /** The dev feature this figure belongs to, if it is one (§29): absent from the store while it is off. */
+  dev?: DevFeature
+}&gt; = [
+  {
+    section: 'Demo',
+    folder: 'store/yeast',
+    file: 'Yeast_microC.chromosomix.json',
+    title: 'Yeast micro-C',
+    line: 'One map at 1.6 kb, with the sequence, genes, RNA-seq, ATAC, MNase, shotgun, SNPs and its loops.',
+    assembly: 'S288C (R64)',
+    provenance: 'GEO GSE151553 · DOI 10.7554/eLife.59889',
+    detail:
+      'Micro-C XL of strain A364A (Costantino et al. 2020), balanced, opened on 400 kb of chromosome XIV ' +
+      'at 1.6 kb — a window with a weight for every bin. The sequence and the gene model run along both ' +
+      'edges; under the map, RNA-seq of a wild type and a mutant, two replicates each, drawn as one chart ' +
+      'per gene; ATAC, MNase and shotgun coverage; and SNPs in sixteen samples of wine, ale, lager, bioethanol ' +
+      'and other strains. The 636 loops drawn on it were called on this map by the app’s own Chromosight.',
+    files: [
+      'GSE151553_A364_merged.mcool',
+      'S288c.fa',
+      'S288c.gtf',
+      'Yeast_RNAseq.barChart',
+      'Yeast_ATAC.bw',
+      'Yeast_MNase.bw',
+      'Yeast_shotgun.bw',
+      'Yeast_snps.vcf.gz',
+      'Yeast_microC_loops.bedpe',
+    ],
+  },
+  {
+    section: 'Demo',
+    folder: 'store/yeast',
+    file: 'Yeast_landscape.chromosomix.json',
+    title: 'Yeast chromatin landscape',
+    line: 'No map, and close: 5.5 kb of chromosome XIV with its six reading frames, the genes, RNA-seq by sample, ATAC, MNase, shotgun and SNPs.',
+    assembly: 'S288C (R64)',
+    provenance: 'Ensembl R64-1-1 · GEO GSE151553 (the map’s tracks)',
+    detail:
+      'The same tracks with no contact map, opened from the FASTA alone at RHO5, RPS3 and MRPL22. Close ' +
+      'enough for the sequence lane to draw the six reading frames under it — starts in green, stops in ' +
+      'red — so an open reading frame reads as a run of grey between two red marks, and lines up with the ' +
+      'gene above it. RNA-seq is one chart per gene, wild type against mutant on a 0–400 CPM axis; ATAC ' +
+      'and MNase share a group and each keep their own axis, so the nucleosome-free promoter and the ' +
+      'array beside it are read together.',
+    files: [
+      'S288c.fa',
+      'S288c.gtf',
+      'Yeast_RNAseq.barChart',
+      'Yeast_ATAC.bw',
+      'Yeast_MNase.bw',
+      'Yeast_shotgun.bw',
+      'Yeast_snps.vcf.gz',
+    ],
+  },
+  {
+    section: 'Demo',
+    folder: 'store/yeast',
+    file: 'Yeast_HiC_microC_PCP.chromosomix.json',
+    title: 'Hi-C, micro-C and PCP',
+    line: 'One locus by three methods, side by side, each map with MNase and the genes under it.',
+    assembly: 'S288C (R64); W303 for the Hi-C',
+    provenance: 'GEO GSE151553 · GSE217022 · GSM8476641',
+    detail:
+      'Three maps of chrXV:200–400 kb in one deck: Hi-C of G1 cells carrying the M. mycoides chromosome at ' +
+      '1 kb (Meneu et al. 2025), micro-C XL of A364A at 1.6 kb (Costantino et al. 2020) and PCP — proximity ' +
+      'copy paste — of G1 cells at 1 kb (Delamarre et al.), drawn as counts since the file carries no ' +
+      'weights. The files share no resolution, so each is read at the one nearest the others. The Hi-C ' +
+      'strain is W303, whose chromosome XV lies within 26 bp of S288C’s here, so one window is one place ' +
+      'in all three; MNase and the S288C genes are under every map.',
+    files: [
+      'GSE151553_A364_merged.mcool',
+      '../meneu2025/HiC/HiC_Mmyco_G1.mcool',
+      'Yeast_PCP_GSM8476641_G1_rep1.mcool',
+      'Yeast_MNase.bw',
+      'S288c.gtf',
+    ],
+  },
+  {
+    section: 'Demo',
+    folder: 'store/human',
+    file: 'Human_chrX_splicing.chromosomix.json',
+    title: 'Splicing on human chrX',
+    line: 'The 1D browser over hg19’s karyotype: a sashimi plot from reads, and two samples’ junctions on one axis.',
+    assembly: 'hg19 (GRCh37)',
+    provenance: 'Geuvadis · DOI 10.1038/nature12531 · nf-core/test-datasets rnasplice',
+    detail:
+      'The browser opened from UCSC’s hg19 cytoBand alone — its bands tile each chromosome, so it ' +
+      'declares the genome — at RPL10 in Xq28. Under the ideogram, the Ensembl gene model; one ' +
+      'lymphoblastoid sample’s reads as depth, with the introns they skip drawn over it as arcs ' +
+      'and counted; and STAR’s junction tables for a GBR and a YRI sample, both read against one ' +
+      'typed axis of 1 to 500 reads so their arcs compare. Pan out to FLNA to see the reverse ' +
+      'strand’s arcs hang below the line, or type a band — Xq13 — in the locus box.',
+    files: [
+      'hg19_cytoBand.txt',
+      'Homo_sapiens.GRCh37.chrX.gtf.gz',
+      'Geuvadis_chrX_GBR_ERR188428.bam',
+      'Geuvadis_chrX_GBR_ERR188428.SJ.out.tab',
+      'Geuvadis_chrX_YRI_ERR188454.SJ.out.tab',
+    ],
+  },
+  {
+    section: 'Demo',
+    folder: 'store/gibcus2018',
+    file: 'Gibcus2018_mitosis.chromosomix.json',
+    title: 'Mitotic chromosome formation',
+    line: 'Chicken DT40 cells from G2 into prometaphase: six Hi-C maps of the time course, in three decks.',
+    assembly: 'galGal5',
+    provenance: '4DN · Gibcus et al. 2018 · DOI 10.1126/science.aao6135',
+    detail:
+      'One synchronous release from a G2 block, at G2, 5, 10, 15, 30 and 60 min (Gibcus et al. 2018, from ' +
+      'the 4DN Data Portal), in three tabs: chromosome 7 whole at 250 kb, where the checkerboard of ' +
+      'compartments is gone by 10 min and a broad mitotic band takes the diagonal; 40 Mb of chromosome 1 ' +
+      'at 100 kb with each time point’s first eigenvector under its map; and 4 Mb of it at 25 kb, at G2, ' +
+      '5 and 60 min, with their insulation on one axis as the domains disappear.',
+    files: [
+      'G2_4DNFIT479GDR.mcool',
+      '5m_4DNFINSJ2GYV.mcool',
+      '10m_4DNFIYOEGHHV.mcool',
+      '15m_4DNFILKIISAU.mcool',
+      '30m_4DNFI165SFJU.mcool',
+      '60m_4DNFIWHQLZTL.mcool',
+      'G2_4DNFILLAMSTE_compartments.bw',
+      '5m_4DNFI9HASBHH_compartments.bw',
+      '10m_4DNFIG48YRMT_compartments.bw',
+      '15m_4DNFIY1KBU1S_compartments.bw',
+      '30m_4DNFIOCFXWMD_compartments.bw',
+      '60m_4DNFIX92O41_compartments.bw',
+      'G2_4DNFI1PRBI5L_diamond.bw',
+      '5m_4DNFIIAPL9WO_insulation.bw',
+      '60m_4DNFI12IF3LX_diamond.bw',
+    ],
+  },
+  {
+    section: 'Demo',
+    folder: 'metagenomics/mock-community',
+    file: 'Mock_microbial_community.chromosomix.json',
+    title: 'Mock microbial community',
+    line: '49 MAGs over 20,566 contigs in one .metacool — the multi-genome file this viewer exists for.',
+    assembly: 'mock community',
+    provenance: 'SRA SRR32680160 · DOI 10.1038/s41564-025-02108-2',
+    detail:
+      'A MetaTOR binning of a mock community profiled by metaHiC: 49 genomes over 20,566 ' +
+      'contigs in one 1 kb .metacool (14 MB). Lands on the genomes table, largest MAG first.',
+    files: ['Mock_microbial_community.metacool', 'Mock_microbial_community.mmetacool'],
+    dev: 'metacool',
+  },
+  {
+    section: 'Papers',
+    folder: 'store/chromosomix_paper',
+    file: 'Chromosomix_paper.chromosomix.json',
+    title: 'The Chromosomix paper',
+    line: 'Seven tabs, a panel each: GM12878 Hi-C with its tracks and model (Fig. 1a) and at CTCF’s sites (Fig. 2), mouse ES-cell Hi-C from the whole genome down to Sox2 (Fig. 1c, d), and three bacteria read along their arms (Fig. S3a–c).',
+    assembly: 'hg38 · mm10 · C. necator N-1 · B. subtilis PY79 · P. aeruginosa',
+    provenance: '4DN 4DNFIXP4QG5B · Rao et al. 2014 · ENCODE · 4DN 4DNFI5QJNFAT · Kubo et al. 2021 · Huang et al. 2021 · GEO GSE76513',
+    detail:
+      'The data of the paper’s figures, a tab a panel. Fig. 1a: in situ Hi-C of GM12878 (Rao et al. 2014, a 27-GB ' +
+      '.mcool of 4.0 billion contacts, from 4DN) at 5 kb over chr14:88.55–90.10 Mb, three cells across: the map, ' +
+      'with ENCODE’s CTCF ChIA-PET of GM12878 (a .hic) in its lower triangle and both as observed over expected, ' +
+      'its insulation and borders above it, its compartments and E1 at its left and the 4C profile from ' +
+      'chr14:89,150,001-89,180,000 under it, and the TAD and its borders marked; a tracks cell with ENCODE’s CTCF, ' +
+      'ATAC-seq and RNA-seq, CTCF’s motif, ATAC peaks, UCSC’s refGene and hg38 sequence; and the model the app ' +
+      'inferred from the map, its TAD borders as beads and every bead coloured by its distance to one pinned in the ' +
+      'central sub-TAD. Fig. 2: the same map ' +
+      'on chr19 at 10 kb with two labs’ CTCF ChIP-seq and ATAC-seq, and nothing computed: the Analysis column opens ' +
+      'each task of the figure’s chain on its recipe — insulation at four scales, the peaks on the two CTCF tracks, ' +
+      'the APA between each peak and the next at 2 kb, and the metaplots. Fig. 1c: in situ Hi-C of F123 mouse embryonic stem ' +
+      'cells (a 7-GB .mcool of 1.07 billion contacts) at five scales side by side — the genome at 2.5 Mb, chromosome 3 ' +
+      'as the correlation of its observed/expected at 250 kb, chr3:27–37 Mb at 10 kb, the Sox2 locus as ' +
+      'observed/expected at 5 kb with its loops, and Sox2 with its control region at 2 kb — each with the tracks the ' +
+      'panel draws under it, and under each the model the app inferred at that scale. Fig. 1d: chr3:32–36 Mb at 10 kb ' +
+      'with its insulation, borders and CTCF, beside chromosome 3’s model coloured by CTCF. Fig. S3a: C. necator’s ' +
+      'first chromosome, its origin in the middle, over the decay along the diagonal and then along both arms. ' +
+      'Fig. S3b: B. subtilis wild type, ΔparAB, and six times after ParB is induced. Fig. S3c: P. aeruginosa wild type, ' +
+      'SMC-ScpAB– and MksBEF–, as the correlation along both arms, with each strain’s E1 under its map and the ' +
+      'wild type’s RNA-seq (PAK, GEO GSE76513) under its own. A deck keeps ' +
+      'one look a map, so a panel reading one map several ways opens on one of them; each map’s score picker has the ' +
+      'others.',
+    files: [
+      ...PAPER_HUMAN.map(([file]) =&gt; file),
+      'mouse/4DNFI5QJNFAT.mcool',
+      'mouse/mm10_genes.gtf.gz',
+      'mouse/4DNFIFFXFV82.bw',
+      'mouse/4DNFIXE23VC7.bw',
+      'mouse/4DNFIQYJLKKH.bw',
+      'mouse/4DNFI5QJNFAT_250000.compartments-e1.bw',
+      'mouse/4DNFI5QJNFAT_250000.compartments-ab.bed',
+      'mouse/4DNFI5QJNFAT_10000.insulation-w10.bw',
+      'mouse/4DNFI5QJNFAT_10000.borders.bed',
+      'mouse/4DNFI5QJNFAT_10000.domains.bed',
+      'mouse/4DNFI5QJNFAT_5000.loops.bedpe',
+      'mouse/4DNFI5QJNFAT_2500000.genome.bed3d',
+      'mouse/4DNFI5QJNFAT_250000.chr3.bed3d',
+      'mouse/4DNFI5QJNFAT_10000.chr3-27-37Mb.bed3d',
+      'mouse/4DNFI5QJNFAT_5000.chr3-34-35Mb.bed3d',
+      'mouse/4DNFI5QJNFAT_2000.Sox2-SCR.bed3d',
+      'C_necator/C_necator_N1_VJ_MM260.mcool',
+      'C_necator/C_necator_N1_VJ.fa',
+      'C_necator/C_necator_N1_VJ_MM260_4000.oriter-loci.bed',
+      'C_necator/C_necator_N1_VJ_MM260_4000.gc-skew-cumulative.bw',
+      ...PAPER_SUBTILIS.map(([name]) =&gt; `B_subtilis/Bsubtilis_${name}.mcool`),
+      'B_subtilis/PY79.fa',
+      'B_subtilis/PY79.gff3',
+      ...PAPER_AERUGINOSA.map(([sample]) =&gt; `P_aeruginosa/${sample}.mcool`),
+      'P_aeruginosa/PAO1_v3.fa',
+      'P_aeruginosa/GSE76513_PAK_T0_pooled.unstranded.CPM.bw',
+      ...PAPER_AERUGINOSA.map(([sample]) =&gt; `P_aeruginosa/${sample}_8000.e1-arms.bw`),
+    ],
+  },
+  {
+    section: 'Papers',
+    folder: 'store/meneu2025',
+    file: 'Meneu2025_bacterial_chromosomes.chromosomix.json',
+    title: 'Bacterial chromosomes in a yeast nucleus',
+    line: 'Yeast carrying an M. mycoides or an M. pneumoniae chromosome: each with its nucleosomes, transcription and cohesin, then both genomes whole.',
+    assembly: 'W303 + M. mycoides; S288C + M. pneumoniae',
+    provenance: 'GEO GSE217022 · DOI 10.1126/science.adm9466',
+    detail:
+      'Meneu et al. 2025, in two tabs. First the two bacterial chromosomes in G2/M, side by side at 4 kb ' +
+      '— M. mycoides’s 1.2 Mb and M. pneumoniae’s 818 kb, each cell on its own chromosome — with the ' +
+      'genes, MNase (130–200 bp fragments), RNA-seq on both strands, and Pol II and Scc1 ChIP over input ' +
+      'under each. Then the two strains in G1, whole genome at 16 kb, each bacterial chromosome beside ' +
+      'the sixteen of yeast.',
+    files: [
+      'HiC/HiC_Mmyco_G2M.mcool',
+      'HiC/HiC_Mpneumo_G2M.mcool',
+      'HiC/HiC_Mmyco_G1.mcool',
+      'HiC/HiC_Mpneumo_G1.mcool',
+      'genome_references/W303_Mmmyco.gff3',
+      'genome_references/S288c_Mpneumo.gtf',
+      'MNase/MNase_Mmyco_rep1.130-200.CPM.bw',
+      'MNase/MNase_Mpneumo_rep1.130-200.CPM.bw',
+      'RNA/RNAseq_Mmyco_rep1.fwd-CPM.bw',
+      'RNA/RNAseq_Mmyco_rep1.rev-CPM.bw',
+      'RNA/RNAseq_Mpneumo_rep1.fwd-CPM.bw',
+      'RNA/RNAseq_Mpneumo_rep1.rev-CPM.bw',
+      'ChIP/PolII_Mmyco_rep1.vs-input.bw',
+      'ChIP/PolII_Mpneumo_rep1.vs-input.bw',
+      'ChIP/Scc1_Mmyco_rep1.vs-input.bw',
+      'ChIP/Scc1_Mpneumo_rep1.vs-input.bw',
+    ],
+  },
+]
+&nbsp;
+/**
+ * The data files under the figures, one row each.
+ *
+ * What the store lists *besides* the figures: every file the figures are made
+ * of, so a reader who wants the micro-C map alone, the MNase bigWig on their
+ * own map, or the metagenome as an `.mmetacool` ladder, has a row to press.
+ * Each figure's card lists its own rows under a fold (`ui/stores/GalleryView.ts`);
+ * a row shared by two figures — the yeast tracks, the Meneu paper's G1 Hi-C —
+ * is one row, under each.
+ */
+const DEMO_DATA: Array&lt;{
+  folder: string
+  file: string
+  label: string
+  kind: 'map' | 'genome'
+  format: string
+  assembly: string
+  dataset: string
+  /** The dev feature this file belongs to, if it is one (§29). */
+  dev?: DevFeature
+}&gt; = [
+  ...(
+    [
+      ['GSE151553_A364_merged.mcool', 'Yeast micro-C, A364A', 'map', 'mcool'],
+      // The same counts as a Juicer .hic, which is the only contact map an
+      // assembly hub can name — the hub example in the paste box points at it.
+      ['GSE151553_A364_merged.hic', 'Yeast micro-C, A364A, as a .hic', 'map', 'hic'],
+      ['Yeast_PCP_GSM8476641_G1_rep1.mcool', 'Yeast PCP, G1', 'map', 'mcool'],
+      ['S288c.fa', 'S288C sequence', 'genome', 'fasta'],
+      // The same sequence packed at two bits a base (§8.21). Beside the FASTA
+      // rather than instead of it, because the two are read by different roads:
+      // a FASTA under the whole-read limit is held whole, a `.2bit` is read by
+      // range and is what an assembly hub names.
+      ['S288c.2bit', 'S288C sequence, as a .2bit', 'genome', '2bit'],
+      ['S288c.gtf', 'Genes', 'genome', 'gtf'],
+      ['Yeast_RNAseq.barChart', 'RNA-seq, wild type and mutant, CPM per gene', 'genome', 'barChart'],
+      ['Yeast_ATAC.bw', 'ATAC-seq', 'genome', 'bigwig'],
+      ['Yeast_MNase.bw', 'MNase-seq', 'genome', 'bigwig'],
+      ['Yeast_shotgun.bw', 'Shotgun coverage', 'genome', 'bigwig'],
+      ['Yeast_snps.vcf.gz', 'SNPs, 16 samples', 'genome', 'vcf'],
+      ['Yeast_microC_loops.bedpe', 'Micro-C loop calls', 'genome', 'bedpe'],
+    ] as const
+  ).map(([file, label, kind, format]) =&gt; ({
+    folder: 'store/yeast',
+    file,
+    label,
+    kind,
+    format,
+    assembly: 'S288C (R64)',
+    dataset: 'Yeast',
+  })),
+  ...(
+    [
+      ['hg19_cytoBand.txt', 'Human karyotype, UCSC’s bands', 'cytoBand'],
+      ['Homo_sapiens.GRCh37.chrX.gtf.gz', 'Genes, chromosome X', 'gtf'],
+      ['Geuvadis_chrX_GBR_ERR188428.bam', 'RNA-seq reads, GBR ERR188428', 'bam'],
+      ['Geuvadis_chrX_GBR_ERR188383.SJ.out.tab', 'Splice junctions, GBR ERR188383', 'SJ.out.tab'],
+      ['Geuvadis_chrX_GBR_ERR188428.SJ.out.tab', 'Splice junctions, GBR ERR188428', 'SJ.out.tab'],
+      ['Geuvadis_chrX_YRI_ERR188454.SJ.out.tab', 'Splice junctions, YRI ERR188454', 'SJ.out.tab'],
+      ['Geuvadis_chrX_YRI_ERR204916.SJ.out.tab', 'Splice junctions, YRI ERR204916', 'SJ.out.tab'],
+      ['Geuvadis_chrX_GBR_ERR188428.junctions.bed', 'Splice junctions as regtools writes them', 'junctions.bed'],
+    ] as const
+  ).map(([file, label, format]) =&gt; ({
+    folder: 'store/human',
+    file,
+    label,
+    kind: 'genome' as const,
+    format,
+    assembly: 'hg19 (GRCh37)',
+    dataset: 'Human, Geuvadis chrX',
+  })),
+  ...(
+    [
+      ['G2', 'G2_4DNFIT479GDR', 'G2_4DNFILLAMSTE', 'G2_4DNFI1PRBI5L_diamond'],
+      ['5 min', '5m_4DNFINSJ2GYV', '5m_4DNFI9HASBHH', '5m_4DNFIIAPL9WO_insulation'],
+      ['10 min', '10m_4DNFIYOEGHHV', '10m_4DNFIG48YRMT', null],
+      ['15 min', '15m_4DNFILKIISAU', '15m_4DNFIY1KBU1S', null],
+      ['30 min', '30m_4DNFI165SFJU', '30m_4DNFIOCFXWMD', null],
+      ['60 min', '60m_4DNFIWHQLZTL', '60m_4DNFIX92O41', '60m_4DNFI12IF3LX_diamond'],
+    ] as const
+  ).flatMap(([when, map, e1, insulation]) =&gt; [
+    { file: `${map}.mcool`, label: `DT40 Hi-C, ${when}`, kind: 'map' as const, format: 'mcool' },
+    { file: `${e1}_compartments.bw`, label: `Compartments (E1), ${when}`, kind: 'genome' as const, format: 'bigwig' },
+    ...(insulation === null
+      ? []
+      : [{ file: `${insulation}.bw`, label: `Insulation, ${when}`, kind: 'genome' as const, format: 'bigwig' }]),
+  ]).map((row) =&gt; ({ ...row, folder: 'store/gibcus2018', assembly: 'galGal5', dataset: 'Gibcus et al. 2018' })),
+  ...(
+    [
+      ['HiC/HiC_Mmyco_G2M.mcool', 'Hi-C, M. mycoides, G2/M', 'map', 'mcool', 'W303 + M. mycoides'],
+      ['HiC/HiC_Mpneumo_G2M.mcool', 'Hi-C, M. pneumoniae, G2/M', 'map', 'mcool', 'S288C + M. pneumoniae'],
+      ['HiC/HiC_Mmyco_G1.mcool', 'Hi-C, M. mycoides, G1', 'map', 'mcool', 'W303 + M. mycoides'],
+      ['HiC/HiC_Mpneumo_G1.mcool', 'Hi-C, M. pneumoniae, G1', 'map', 'mcool', 'S288C + M. pneumoniae'],
+      ['genome_references/W303_Mmmyco.gff3', 'Genes, W303 and M. mycoides', 'genome', 'gff3', 'W303 + M. mycoides'],
+      ['genome_references/S288c_Mpneumo.gtf', 'Genes, S288C and M. pneumoniae', 'genome', 'gtf', 'S288C + M. pneumoniae'],
+      ['MNase/MNase_Mmyco_rep1.130-200.CPM.bw', 'MNase-seq, M. mycoides', 'genome', 'bigwig', 'W303 + M. mycoides'],
+      ['MNase/MNase_Mpneumo_rep1.130-200.CPM.bw', 'MNase-seq, M. pneumoniae', 'genome', 'bigwig', 'S288C + M. pneumoniae'],
+      ['RNA/RNAseq_Mmyco_rep1.fwd-CPM.bw', 'RNA-seq +, M. mycoides', 'genome', 'bigwig', 'W303 + M. mycoides'],
+      ['RNA/RNAseq_Mmyco_rep1.rev-CPM.bw', 'RNA-seq −, M. mycoides', 'genome', 'bigwig', 'W303 + M. mycoides'],
+      ['RNA/RNAseq_Mpneumo_rep1.fwd-CPM.bw', 'RNA-seq +, M. pneumoniae', 'genome', 'bigwig', 'S288C + M. pneumoniae'],
+      ['RNA/RNAseq_Mpneumo_rep1.rev-CPM.bw', 'RNA-seq −, M. pneumoniae', 'genome', 'bigwig', 'S288C + M. pneumoniae'],
+      ['ChIP/PolII_Mmyco_rep1.vs-input.bw', 'Pol II over input, M. mycoides', 'genome', 'bigwig', 'W303 + M. mycoides'],
+      ['ChIP/PolII_Mpneumo_rep1.vs-input.bw', 'Pol II over input, M. pneumoniae', 'genome', 'bigwig', 'S288C + M. pneumoniae'],
+      ['ChIP/Scc1_Mmyco_rep1.vs-input.bw', 'Scc1 over input, M. mycoides', 'genome', 'bigwig', 'W303 + M. mycoides'],
+      ['ChIP/Scc1_Mpneumo_rep1.vs-input.bw', 'Scc1 over input, M. pneumoniae', 'genome', 'bigwig', 'S288C + M. pneumoniae'],
+    ] as const
+  ).map(([file, label, kind, format, assembly]) =&gt; ({
+    folder: 'store/meneu2025',
+    file,
+    label,
+    kind,
+    format,
+    assembly,
+    dataset: 'Meneu et al. 2025',
+  })),
+  ...(
+    [
+      ...PAPER_HUMAN,
+      ['mouse/4DNFI5QJNFAT.mcool', 'Mouse ES-cell Hi-C (4DN)', 'map', 'mcool', 'mm10'],
+      ['mouse/mm10_genes.gtf.gz', 'Genes, UCSC mm10', 'genome', 'gtf', 'mm10'],
+      ['mouse/4DNFIFFXFV82.bw', 'CTCF ChIP-seq', 'genome', 'bigwig', 'mm10'],
+      ['mouse/4DNFIXE23VC7.bw', 'H3K27ac ChIP-seq', 'genome', 'bigwig', 'mm10'],
+      ['mouse/4DNFIQYJLKKH.bw', 'H3K4me3 ChIP-seq', 'genome', 'bigwig', 'mm10'],
+      ['mouse/4DNFI5QJNFAT_250000.compartments-e1.bw', 'Compartments (E1) of chromosome 3, 250 kb', 'genome', 'bigwig', 'mm10'],
+      ['mouse/4DNFI5QJNFAT_250000.compartments-ab.bed', 'A and B compartments of chromosome 3, 250 kb', 'genome', 'bed', 'mm10'],
+      ['mouse/4DNFI5QJNFAT_10000.insulation-w10.bw', 'Diamond insulation, 10 kb', 'genome', 'bigwig', 'mm10'],
+      ['mouse/4DNFI5QJNFAT_10000.borders.bed', 'Borders on the insulation, 10 kb', 'genome', 'bed', 'mm10'],
+      ['mouse/4DNFI5QJNFAT_10000.domains.bed', 'Domains between the borders, 10 kb', 'genome', 'bed', 'mm10'],
+      ['mouse/4DNFI5QJNFAT_5000.loops.bedpe', 'Loops on chromosome 3, 5 kb', 'genome', 'bedpe', 'mm10'],
+      ['mouse/4DNFI5QJNFAT_2500000.genome.bed3d', '3D model of the genome, 2.5 Mb', 'genome', 'bed3d', 'mm10'],
+      ['mouse/4DNFI5QJNFAT_250000.chr3.bed3d', '3D model of chromosome 3, 250 kb', 'genome', 'bed3d', 'mm10'],
+      ['mouse/4DNFI5QJNFAT_10000.chr3-27-37Mb.bed3d', '3D model of chr3:27–37 Mb, 10 kb', 'genome', 'bed3d', 'mm10'],
+      ['mouse/4DNFI5QJNFAT_5000.chr3-34-35Mb.bed3d', '3D model of the Sox2 locus, 5 kb', 'genome', 'bed3d', 'mm10'],
+      ['mouse/4DNFI5QJNFAT_2000.Sox2-SCR.bed3d', '3D model of Sox2 and its control region, 2 kb', 'genome', 'bed3d', 'mm10'],
+      ['C_necator/C_necator_N1_VJ_MM260.mcool', 'C. necator N-1 Hi-C (MM260)', 'map', 'mcool', 'C. necator N-1'],
+      ['C_necator/C_necator_N1_VJ.fa', 'C. necator N-1 sequence', 'genome', 'fasta', 'C. necator N-1'],
+      ['C_necator/C_necator_N1_VJ_MM260_4000.oriter-loci.bed', 'Origins and termini', 'genome', 'bed', 'C. necator N-1'],
+      ['C_necator/C_necator_N1_VJ_MM260_4000.gc-skew-cumulative.bw', 'Cumulative GC skew, 4 kb', 'genome', 'bigwig', 'C. necator N-1'],
+      ...PAPER_SUBTILIS.map(
+        ([name, label]) =&gt;
+          [`B_subtilis/Bsubtilis_${name}.mcool`, `B. subtilis Hi-C, ${label}`, 'map', 'mcool', 'B. subtilis PY79'] as const,
+      ),
+      ['B_subtilis/PY79.fa', 'B. subtilis PY79 sequence', 'genome', 'fasta', 'B. subtilis PY79'],
+      ['B_subtilis/PY79.gff3', 'Genes, B. subtilis PY79', 'genome', 'gff3', 'B. subtilis PY79'],
+      ...PAPER_AERUGINOSA.map(
+        ([sample, label]) =&gt;
+          [`P_aeruginosa/${sample}.mcool`, `P. aeruginosa Hi-C, ${label}`, 'map', 'mcool', 'P. aeruginosa (PAO1_v3)'] as const,
+      ),
+      ['P_aeruginosa/PAO1_v3.fa', 'P. aeruginosa sequence (PAO1_v3)', 'genome', 'fasta', 'P. aeruginosa (PAO1_v3)'],
+      [
+        'P_aeruginosa/GSE76513_PAK_T0_pooled.unstranded.CPM.bw',
+        'RNA-seq, PAK, CPM (GEO GSE76513)',
+        'genome',
+        'bigwig',
+        'P. aeruginosa (PAO1_v3)',
+      ],
+      ...PAPER_AERUGINOSA.map(
+        ([sample, label]) =&gt;
+          [`P_aeruginosa/${sample}_8000.e1-arms.bw`, `E1 along both arms, ${label}, 8 kb`, 'genome', 'bigwig', 'P. aeruginosa (PAO1_v3)'] as const,
+      ),
+    ] as const
+  ).map(([file, label, kind, format, assembly]) =&gt; ({
+    folder: 'store/chromosomix_paper',
+    file,
+    label,
+    kind,
+    format,
+    assembly,
+    dataset: 'The Chromosomix paper',
+  })),
+  {
+    folder: 'metagenomics/mock-community',
+    file: 'Mock_microbial_community.metacool',
+    label: 'Mock community, 49 MAGs, 1 kb',
+    kind: 'map',
+    format: 'metacool',
+    assembly: 'mock community',
+    dataset: 'Mock microbial community',
+    dev: 'metacool',
+  },
+  {
+    folder: 'metagenomics/mock-community',
+    file: 'Mock_microbial_community.mmetacool',
+    label: 'Mock community, resolution ladder',
+    kind: 'map',
+    format: 'mmetacool',
+    assembly: 'mock community',
+    dataset: 'Mock microbial community',
+    dev: 'metacool',
+  },
+]
+&nbsp;
+/**
+ * A file's path under `demo/`, from the folder that names it — `..` stepped up
+ * out of, so a card's `../meneu2025/…` and the row the Meneu card lists are one
+ * path and one row.
+ */
+function under(folder: string, file: string): string {
+  const out: string[] = []
+  for (const part of `${folder}/${file}`.split('/')) {
+    if (part === '..') out.pop()
+    else if (part !== '' &amp;&amp; part !== '.') out.push(part)
+  }
+  return out.join('/')
+}
+&nbsp;
+/**
+ * The annotation files published beside a demo map, and where each belongs.
+ *
+ * Keyed by the map's file name rather than by its URL, because the URL depends
+ * on where the app is served from and the pairing does not. All seven are on the
+ * map's own assembly — Ensembl's R64-1-1, whose `I`…`XVI` the map spells
+ * `chrI`…`chrXVI`, which §8.2 reads as the same names — which is exactly what
+ * makes them worth offering as one click: a reader gets a complete, correct
+ * picture without hunting for seven URLs, and the overlap report has something
+ * to report success about.
+ *
+ * Not the same thing as the figures above, and both are worth having. A figure
+ * is a composed session — the tracks placed, coloured and grouped — and this is
+ * the whole shelf, offered to a reader who opened the map on its own (its row
+ * under the yeast cards, or its URL) and wants the rest of it.
+ */
+interface DemoAnnotation {
+  file: string
+  /** A short name, since the file's own is a sentence about the experiment. */
+  label: string
+}
+&nbsp;
+/**
+ * The shelf beside one map: the dataset folder it lives in, and what is in it.
+ *
+ * The folder is recorded even though {@link demoAnnotationsFor} never reads it
+ * — that function resolves against the *map's own URL*, which is the only thing
+ * that also works for a copy of the folder served from somewhere else. It is
+ * here for the test, which has to find these files on disk or in the manifest.
+ */
+const DEMO_ANNOTATIONS: Record&lt;string, { folder: string; entries: DemoAnnotation[] }&gt; = {
+  'GSE151553_A364_merged.mcool': {
+    folder: 'store/yeast',
+    entries: [
+      { file: 'S288c.gtf', label: 'genes' },
+      { file: 'Yeast_RNAseq.barChart', label: 'RNA-seq' },
+      { file: 'Yeast_ATAC.bw', label: 'ATAC' },
+      { file: 'Yeast_MNase.bw', label: 'MNase' },
+      { file: 'Yeast_shotgun.bw', label: 'shotgun' },
+      { file: 'Yeast_snps.vcf.gz', label: 'SNPs' },
+      { file: 'Yeast_microC_loops.bedpe', label: 'loops' },
+    ],
+  },
+}
+&nbsp;
+/** One loadable annotation, with the URL resolved for wherever this is served. */
+export interface DemoAnnotationLink extends DemoAnnotation {
+  url: string
+}
+&nbsp;
+/**
+ * The annotations published beside the map at `uri`, or `[]`.
+ *
+ * Two sources, asked in this order, and the order is the argument. A store row
+ * that carried `tracks` said so **about this exact file** — the catalogue's
+ * publisher named them beside the URI the reader just clicked — where the table
+ * below matches on a *file name*, which is a guess that happens to be a good
+ * one. A specific answer beats a general one, so a registered shelf wins
+ * outright rather than being concatenated.
+ *
+ * The table itself is matched on the file name at the end of the URI, so it
+ * works for the bucket, for a local copy of `demo/store/yeast/` served from
+ * anywhere else, and for a fork publishing the same folder under its own name — and not
+ * for a *local* file of the same name, which would be someone else's data under
+ * a familiar name.
+ */
+export function demoAnnotationsFor(uri: string): DemoAnnotationLink[] {
+  const registered = shelves.get(splitUri(uri).path)
+  if (registered !== undefined) return registered.map((link) =&gt; ({ ...link }))
+  if (!/^https?:\/\//i.test(uri)) return []
+  // The file half: an `.mcool` is opened at one of its entries, and the name
+  // the table is keyed by is the file's, not `1600`.
+  const file = splitUri(uri).path.split('?')[0].split('#')[0]
+  const name = file.split('/').pop(<span class="branch-0 cbranch-no" title="branch not covered" >) ?? ''</span>
+  const shelf = DEMO_ANNOTATIONS[name]
+  if (shelf === undefined) return []
+  const base = file.slice(0, file.length - name.length)
+  return shelf.entries.map((entry) =&gt; ({ ...entry, url: `${base}${entry.file}` }))
+}
+&nbsp;
+/**
+ * The published tracks to *offer*, which is none once a session has its own.
+ *
+ * A **restored session already names the tracks it wants** and is a moment away
+ * from putting them on screen. Offered anyway, the button appeared under rows
+ * that were already appearing and proposed seven more, most of them the same files
+ * a second time. `restoring` covers an imported workspace, a `?config=` link and
+ * a plain reload alike, because all three arrive the same way.
+ */
+export function demoAnnotationsToOffer(
+  uri: string,
+  options: { restoring: boolean },
+): DemoAnnotationLink[] {
+  return options.restoring ? [] : demoAnnotationsFor(uri)
+}
+&nbsp;
+/**
+ * Every published annotation, as its path under `demo/`, for the test that
+ * checks they are on disk — and so for the sync that puts them on the bucket.
+ */
+export const DEMO_ANNOTATION_FILES: readonly string[] = Object.values(DEMO_ANNOTATIONS).flatMap(
+  (shelf) =&gt; shelf.entries.map((entry) =&gt; under(shelf.folder, entry.file)),
+)
+&nbsp;
+/**
+ * The workspace files this module offers, as their paths under `demo/`, for the
+ * test that reads every one of them off disk and opens what it names.
+ */
+export const DEMO_FILES: readonly string[] = DEMO.map((entry) =&gt; under(entry.folder, entry.file))
+&nbsp;
+/** The data files the store lists, as their paths under `demo/`, for the same test. */
+export const DEMO_DATA_FILES: readonly string[] = DEMO_DATA.map((entry) =&gt;
+  under(entry.folder, entry.file),
+)
+&nbsp;
+/**
+ * Where the demos are read from, absolute, wherever this is running.
+ *
+ * Resolved against the page when there is one, even though both candidates are
+ * already absolute: it costs nothing, and it is what lets the escape hatch be a
+ * *relative* base — `DEMO_BASE=/demo/ npm run build` for a copy served beside
+ * the app. The `typeof` guard is for the node test runtime, which has no
+ * `window` and in which this is still worth calling.
+ */
+function demoBase(): string {
+  const base = DEMO_BASE !== <span class="branch-0 cbranch-no" title="branch not covered" >'' ? DEMO_BASE : D</span>EMO_BUCKET
+  if (typeof window === 'undefined') return base
+  try {
+    return new URL(base, window.location.href).href
+<span class="branch-0 cbranch-no" title="branch not covered" >  } catch {</span>
+<span class="cstat-no" title="statement not covered" >    return base</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+}
+&nbsp;
+/**
+ * The columns the lab's store declares.
+ *
+ * Every card and every file row is drawn from these, so what a column is
+ * called here is what the gallery reads: `section` is the heading a card stands
+ * under, `provenance` and `detail` are the card's chip and its fold, `format`
+ * and `dataset` are the file rows' chip and their grouping. A store somebody
+ * else writes may call its columns anything; this one is read by a front that
+ * knows it.
+ */
+const DEMO_COLUMNS = [
+  { key: 'section', label: 'Section' },
+  { key: 'assembly', label: 'Assembly' },
+  { key: 'dataset', label: 'Dataset' },
+  { key: 'format', label: 'Format' },
+  { key: 'provenance', label: 'Provenance' },
+  { key: 'detail', label: 'What is on screen' },
+]
+&nbsp;
+/**
+ * The lab's store, inline: the figures, under their sections, then the data files.
+ *
+ * Inline rather than fetched because it is the one store that costs no request
+ * and the only one that is certainly there (§24.2). Every URI is absolute
+ * already, so `resolveStore` has nothing left to do to them: an inline store
+ * has no URL of its own to be relative to.
+ */
+export function demosStore(): StoreFile {
+  const base = demoBase()
+  return {
+    kind: STORE_KIND,
+    version: STORE_VERSION,
+    name: 'RSG lab data',
+    description:
+      'Composed figures over the lab’s published data, and the files they are made of. Every ' +
+      'one is read over the network exactly as a file on your own bucket would be.',
+    base,
+    columns: DEMO_COLUMNS,
+    entries: [
+      // A figure or a file that belongs to a dev feature is not listed while
+      // the switch is off (§29): the store is on the landing page, which is
+      // the first place a reader would learn of it.
+      ...DEMO.filter(shown).map(
+        (entry): StoreEntry =&gt; ({
+          label: entry.title,
+          uri: `${base}${under(entry.folder, entry.file)}`,
+          kind: 'workspace',
+          note: entry.line,
+          fields: {
+            section: entry.section,
+            assembly: entry.assembly,
+            provenance: entry.provenance,
+            detail: entry.detail,
+            // The files the figure is made of, as the URIs of the rows below,
+            // so the card lists them under its fold without a second lookup.
+            // `|`-joined because a field is one string; no URI carries a bar.
+            files: entry.files.map((file) =&gt; `${base}${under(entry.folder, file)}`).join('|'),
+          },
+        }),
+      ),
+      ...DEMO_DATA.filter(shown).map(
+        (entry): StoreEntry =&gt; ({
+          label: entry.label,
+          uri: `${base}${under(entry.folder, entry.file)}`,
+          kind: entry.kind,
+          fields: { assembly: entry.assembly, dataset: entry.dataset, format: entry.format },
+        }),
+      ),
+    ],
+  }
+}
+&nbsp;
+/**
+ * One of the store's figures, by its file: what the card calls it, its one line
+ * and its provenance, and the address it is read from — for the landing page's
+ * example sessions (§24.11), which open two of these figures by name rather than
+ * through the drawer. Read from the same list the store's cards are, so a
+ * figure renamed, moved to another folder or served from `DEMO_BASE` is renamed,
+ * moved and served for both.
+ */
+export function demoFigure(file: string): { uri: string; title: string; line: string; provenance: string } {
+  const entry = DEMO.find((figure) =&gt; figure.file === file)
+  if (entry === undefined) <span class="branch-0 cbranch-no" title="branch not covered" >throw new Error(`The lab's store has no figure ${file}.`)</span>
+  return {
+    uri: `${demoBase()}${under(entry.folder, entry.file)}`,
+    title: entry.title,
+    line: entry.line,
+    provenance: entry.provenance,
+  }
+}
+&nbsp;
+/** Whether a figure or a file of the lab's store is listed: always, unless its dev feature is off. */
+function shown(entry: { dev?: DevFeature }): boolean {
+  return entry.dev === undefined || devFeature(entry.dev)
+}
+&nbsp;
+// ---------------------------------------------------------------------------
+// Shelves a store brought with it
+// ---------------------------------------------------------------------------
+&nbsp;
+/**
+ * The tracks a store row named, held until the file it belongs to is opened.
+ *
+ * A store entry may carry `tracks` — the bigWigs the same experiment published
+ * beside the map (§24.1) — and they are the same *offer* the demo map's ten
+ * annotations are: here is a set of tracks to look at, for a reader who has
+ * none. So they are answered through the same question rather than a second
+ * one, and `Session` needs no idea that a store exists.
+ *
+ * In memory and never in storage, deliberately. The offer is about the file
+ * being opened right now; a shelf that outlived the tab would be a promise to
+ * fetch URLs out of a catalogue the reader has since forgotten.
+ */
+const shelves = new Map&lt;string, DemoAnnotationLink[]&gt;()
+&nbsp;
+/**
+ * The shelves that were **asked for** rather than merely brought along.
+ *
+ * *Open with its tracks* says what it does, so it has to do it: a reader who
+ * presses those words and gets a genome and a button has been given the thing
+ * they pressed past. Every other road to the same file — the row's own open
+ * verb, a `?store=` link, a dropped copy — keeps the offer, because opening a
+ * genome is not a request for eight more files.
+ *
+ * A set beside the map rather than a field on the link, because it is a fact
+ * about the *gesture* and not about the tracks: the same shelf is asked for
+ * through one door and offered through another, and a flag on each link would
+ * have to be rewritten on every registration to say so.
+ */
+const asked = new Set&lt;string&gt;()
+&nbsp;
+/**
+ * Remember the tracks published beside `uri`, so the Tracks card can offer them.
+ *
+ * Keyed on the **absolute URI's file half**, so it answers for the same file
+ * opened at an entry (`file.mcool::resolutions/1000`) as for the file itself —
+ * which is the common case rather than the exotic one, since a collection
+ * opened at its root lands on one of its entries and the URI the session ends
+ * up on is not the one the store row carried.
+ *
+ * Last registration wins: two stores naming the same map is not a conflict worth
+ * a policy, and the one the reader has just clicked is the one they mean.
+ */
+export function registerShelf(
+  uri: string,
+  tracks: ReadonlyArray&lt;{ label: string; url: string }&gt;,
+  options: { asked?: boolean } = {},
+): void {
+  const key = splitUri(uri).path
+  if (key === '') <span class="branch-0 cbranch-no" title="branch not covered" >return</span>
+  if (tracks.length === 0) <span class="branch-0 cbranch-no" title="branch not covered" >{</span>
+<span class="cstat-no" title="statement not covered" >    shelves.delete(key)</span>
+<span class="cstat-no" title="statement not covered" >    asked.delete(key)</span>
+<span class="cstat-no" title="statement not covered" >    return</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+  if (options.asked === true) <span class="branch-0 cbranch-no" title="branch not covered" >asked.add(key)</span>
+  else asked.delete(key)
+  shelves.set(
+    key,
+    tracks.map((track) =&gt; ({
+      // The file name is what a track row falls back to when it has no label,
+      // and what `demo-examples.test.ts` checks the published set against;
+      // derived here rather than asked for, since a store carries a label and a
+      // URL and nothing in between.
+      file: track.url.split('?')[0].split('#')[0].split('/').pop(<span class="branch-0 cbranch-no" title="branch not covered" >) ?? track.url,</span>
+      label: track.label,
+      url: track.url,
+    })),
+  )
+}
+&nbsp;
+/**
+ * Whether this file's shelf was asked for, and should be loaded rather than
+ * offered.
+ *
+ * Read once, by the session building its cards, and **cleared as it is read**:
+ * the gesture is spent. Without that, closing the tracks and reopening the same
+ * genome would bring all eight back, which is the one reading of *open with its
+ * tracks* nobody wants — the reader has just said no to them.
+ */
+export <span class="fstat-no" title="function not covered" >function shelfWasAsked(uri: string): boolean {</span>
+<span class="cstat-no" title="statement not covered" >  const key = splitUri(uri).path</span>
+<span class="cstat-no" title="statement not covered" >  if (!asked.has(key)) return false</span>
+<span class="cstat-no" title="statement not covered" >  asked.delete(key)</span>
+<span class="cstat-no" title="statement not covered" >  return true</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+/** Forget every registered shelf. Tests only — the map is otherwise per page. */
+export function clearShelves(): void {
+  shelves.clear()
+  asked.clear()
+}
+&nbsp;
+// ---------------------------------------------------------------------------
+// Worked examples for the paste boxes
+// ---------------------------------------------------------------------------
+&nbsp;
+/**
+ * A hub and a store, ready to paste — and **ready to open**.
+ *
+ * The point of an example beside a paste box is not to show syntax, which the
+ * specification does better. It is to be something a reader can press *open*
+ * on and then edit into their own: the two below name the published demo files,
+ * so each of them draws a shelf on the first press wherever this build is
+ * served from, and the reader's first edit is to a thing that already worked
+ * rather than to a template they cannot tell the state of.
+ *
+ * Which means they are held to the same bar as any other demo: every URL is one
+ * of {@link DEMO_DATA_FILES} or {@link DEMO_ANNOTATION_FILES}, so the test that
+ * checks those covers these too, and neither example can come to name a file
+ * the bucket does not have.
+ *
+ * The hub is an **assembly hub**: it names the store's own `.2bit` through
+ * `twoBitPath`, which is the only way a hub carries its own sequence and the
+ * rung of §24.10's ladder worth demonstrating. It is the text a reader wrote and
+ * checked against the bucket, rather than one composed here and argued about,
+ * moved onto the store's R64 files with the rest of the yeast demo — the same
+ * genome line, the same composite of two, the same map — and the URLs are built from
+ * {@link DEMO_BUCKET} rather than from {@link demoBase} for a reason that only
+ * shows up under `DEMO_BASE`: a local copy of `demo/` has these files, but the
+ * example is a thing to *press*, and a base that pointed it at a directory
+ * somebody is still filling would break the one promise it makes.
+ */
+export function exampleHubText(): string {
+  return [
+    '# A UCSC track hub, in one file: the hub line, its genome, and its tracks.',
+    '# Three separate files (hub.txt, genomes.txt, trackDb.txt) can be pasted',
+    '# one after another in the same text box. ',
+    '',
+    'hub exampleHub',
+    'shortLabel Example hub',
+    'longLabel Yeast demo data from RSG lab',
+    'useOneFile on',
+    '',
+    'genome R64-1-1',
+    'organism Saccharomyces cerevisiae',
+    `    twoBitPath ${DEMO_BUCKET}store/yeast/S288c.2bit`,
+    '',
+    'track signal',
+    'compositeTrack on',
+    'shortLabel Signal',
+    'longLabel Two tracks, grouped as their hub groups them',
+    'type bigWig',
+    '',
+    '    track mnase',
+    '    parent signal on',
+    '    shortLabel MNase',
+    '    longLabel Nucleosome occupancy',
+    `    bigDataUrl ${DEMO_BUCKET}store/yeast/Yeast_MNase.bw`,
+    '    type bigWig',
+    '',
+    '    track atac',
+    '    parent signal on',
+    '    shortLabel ATAC',
+    '    longLabel ATAC-seq accessibility',
+    `    bigDataUrl ${DEMO_BUCKET}store/yeast/Yeast_ATAC.bw`,
+    '    type bigWig',
+    '',
+    'track contacts',
+    'shortLabel Micro-C map',
+    'longLabel A contact map, which opens through the map door',
+    `bigDataUrl ${DEMO_BUCKET}store/yeast/GSE151553_A364_merged.hic`,
+    'type hic',
+    '',
+  ].join('\n')
+}
+&nbsp;
+/**
+ * The store-file counterpart: the same two demo files, as a shelf.
+ *
+ * Deliberately small. A store's whole shape is `kind`, `columns` and `entries`,
+ * and an example with twenty rows would bury that under nineteen copies of the
+ * one line worth reading.
+ */
+export function exampleStoreText(): string {
+  const at = `${demoBase()}store/yeast/`
+  return `${JSON.stringify(
+    {
+      kind: STORE_KIND,
+      version: STORE_VERSION,
+      name: 'Example shelf',
+      description: 'Two of the demo files, as a store you can edit',
+      columns: [
+        { key: 'assay', label: 'Assay' },
+        { key: 'assembly', label: 'Assembly' },
+      ],
+      entries: [
+        {
+          label: 'Yeast micro-C, A364A',
+          uri: `${at}GSE151553_A364_merged.mcool`,
+          kind: 'map',
+          note: 'A contact map, which opens through the map door',
+          fields: { assay: 'Micro-C', assembly: 'R64-1-1' },
+          tracks: [{ label: 'MNase', url: `${at}Yeast_MNase.bw` }],
+        },
+        {
+          label: 'MNase',
+          uri: `${at}Yeast_MNase.bw`,
+          kind: 'genome',
+          note: 'A bigWig, which opens as a browser over its own genome',
+          fields: { assay: 'MNase-seq', assembly: 'R64-1-1' },
+        },
+      ],
+    },
+    null,
+    2,
+  )}\n`
+}
+&nbsp;
+/**
+ * Every URL the two examples name, as their paths under `demo/`.
+ *
+ * For the test that reads the published demo files off disk, or off the store's
+ * manifest: an example that names a file the bucket does not have is an example
+ * that fails on its first press, which is the one thing worse than no example at all.
+ */
+export const EXAMPLE_FILES: readonly string[] = [
+  'store/yeast/S288c.2bit',
+  'store/yeast/Yeast_MNase.bw',
+  'store/yeast/Yeast_ATAC.bw',
+  'store/yeast/GSE151553_A364_merged.hic',
+  'store/yeast/GSE151553_A364_merged.mcool',
+]
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-11-07T08:44:07.819Z
+            </div>
+        <script src="../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../sorter.js"></script>
+        <script src="../../block-navigation.js"></script>
+    </body>
+</html>
+    

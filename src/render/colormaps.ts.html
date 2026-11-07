@@ -1,0 +1,1135 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/render/colormaps.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../prettify.css" />
+    <link rel="stylesheet" href="../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">src/render</a> colormaps.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>105/105</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">90.32% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>28/31</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>7/7</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>105/105</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line high'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a>
+<a name='L193'></a><a href='#L193'>193</a>
+<a name='L194'></a><a href='#L194'>194</a>
+<a name='L195'></a><a href='#L195'>195</a>
+<a name='L196'></a><a href='#L196'>196</a>
+<a name='L197'></a><a href='#L197'>197</a>
+<a name='L198'></a><a href='#L198'>198</a>
+<a name='L199'></a><a href='#L199'>199</a>
+<a name='L200'></a><a href='#L200'>200</a>
+<a name='L201'></a><a href='#L201'>201</a>
+<a name='L202'></a><a href='#L202'>202</a>
+<a name='L203'></a><a href='#L203'>203</a>
+<a name='L204'></a><a href='#L204'>204</a>
+<a name='L205'></a><a href='#L205'>205</a>
+<a name='L206'></a><a href='#L206'>206</a>
+<a name='L207'></a><a href='#L207'>207</a>
+<a name='L208'></a><a href='#L208'>208</a>
+<a name='L209'></a><a href='#L209'>209</a>
+<a name='L210'></a><a href='#L210'>210</a>
+<a name='L211'></a><a href='#L211'>211</a>
+<a name='L212'></a><a href='#L212'>212</a>
+<a name='L213'></a><a href='#L213'>213</a>
+<a name='L214'></a><a href='#L214'>214</a>
+<a name='L215'></a><a href='#L215'>215</a>
+<a name='L216'></a><a href='#L216'>216</a>
+<a name='L217'></a><a href='#L217'>217</a>
+<a name='L218'></a><a href='#L218'>218</a>
+<a name='L219'></a><a href='#L219'>219</a>
+<a name='L220'></a><a href='#L220'>220</a>
+<a name='L221'></a><a href='#L221'>221</a>
+<a name='L222'></a><a href='#L222'>222</a>
+<a name='L223'></a><a href='#L223'>223</a>
+<a name='L224'></a><a href='#L224'>224</a>
+<a name='L225'></a><a href='#L225'>225</a>
+<a name='L226'></a><a href='#L226'>226</a>
+<a name='L227'></a><a href='#L227'>227</a>
+<a name='L228'></a><a href='#L228'>228</a>
+<a name='L229'></a><a href='#L229'>229</a>
+<a name='L230'></a><a href='#L230'>230</a>
+<a name='L231'></a><a href='#L231'>231</a>
+<a name='L232'></a><a href='#L232'>232</a>
+<a name='L233'></a><a href='#L233'>233</a>
+<a name='L234'></a><a href='#L234'>234</a>
+<a name='L235'></a><a href='#L235'>235</a>
+<a name='L236'></a><a href='#L236'>236</a>
+<a name='L237'></a><a href='#L237'>237</a>
+<a name='L238'></a><a href='#L238'>238</a>
+<a name='L239'></a><a href='#L239'>239</a>
+<a name='L240'></a><a href='#L240'>240</a>
+<a name='L241'></a><a href='#L241'>241</a>
+<a name='L242'></a><a href='#L242'>242</a>
+<a name='L243'></a><a href='#L243'>243</a>
+<a name='L244'></a><a href='#L244'>244</a>
+<a name='L245'></a><a href='#L245'>245</a>
+<a name='L246'></a><a href='#L246'>246</a>
+<a name='L247'></a><a href='#L247'>247</a>
+<a name='L248'></a><a href='#L248'>248</a>
+<a name='L249'></a><a href='#L249'>249</a>
+<a name='L250'></a><a href='#L250'>250</a>
+<a name='L251'></a><a href='#L251'>251</a>
+<a name='L252'></a><a href='#L252'>252</a>
+<a name='L253'></a><a href='#L253'>253</a>
+<a name='L254'></a><a href='#L254'>254</a>
+<a name='L255'></a><a href='#L255'>255</a>
+<a name='L256'></a><a href='#L256'>256</a>
+<a name='L257'></a><a href='#L257'>257</a>
+<a name='L258'></a><a href='#L258'>258</a>
+<a name='L259'></a><a href='#L259'>259</a>
+<a name='L260'></a><a href='#L260'>260</a>
+<a name='L261'></a><a href='#L261'>261</a>
+<a name='L262'></a><a href='#L262'>262</a>
+<a name='L263'></a><a href='#L263'>263</a>
+<a name='L264'></a><a href='#L264'>264</a>
+<a name='L265'></a><a href='#L265'>265</a>
+<a name='L266'></a><a href='#L266'>266</a>
+<a name='L267'></a><a href='#L267'>267</a>
+<a name='L268'></a><a href='#L268'>268</a>
+<a name='L269'></a><a href='#L269'>269</a>
+<a name='L270'></a><a href='#L270'>270</a>
+<a name='L271'></a><a href='#L271'>271</a>
+<a name='L272'></a><a href='#L272'>272</a>
+<a name='L273'></a><a href='#L273'>273</a>
+<a name='L274'></a><a href='#L274'>274</a>
+<a name='L275'></a><a href='#L275'>275</a>
+<a name='L276'></a><a href='#L276'>276</a>
+<a name='L277'></a><a href='#L277'>277</a>
+<a name='L278'></a><a href='#L278'>278</a>
+<a name='L279'></a><a href='#L279'>279</a>
+<a name='L280'></a><a href='#L280'>280</a>
+<a name='L281'></a><a href='#L281'>281</a>
+<a name='L282'></a><a href='#L282'>282</a>
+<a name='L283'></a><a href='#L283'>283</a>
+<a name='L284'></a><a href='#L284'>284</a>
+<a name='L285'></a><a href='#L285'>285</a>
+<a name='L286'></a><a href='#L286'>286</a>
+<a name='L287'></a><a href='#L287'>287</a>
+<a name='L288'></a><a href='#L288'>288</a>
+<a name='L289'></a><a href='#L289'>289</a>
+<a name='L290'></a><a href='#L290'>290</a>
+<a name='L291'></a><a href='#L291'>291</a>
+<a name='L292'></a><a href='#L292'>292</a>
+<a name='L293'></a><a href='#L293'>293</a>
+<a name='L294'></a><a href='#L294'>294</a>
+<a name='L295'></a><a href='#L295'>295</a>
+<a name='L296'></a><a href='#L296'>296</a>
+<a name='L297'></a><a href='#L297'>297</a>
+<a name='L298'></a><a href='#L298'>298</a>
+<a name='L299'></a><a href='#L299'>299</a>
+<a name='L300'></a><a href='#L300'>300</a>
+<a name='L301'></a><a href='#L301'>301</a>
+<a name='L302'></a><a href='#L302'>302</a>
+<a name='L303'></a><a href='#L303'>303</a>
+<a name='L304'></a><a href='#L304'>304</a>
+<a name='L305'></a><a href='#L305'>305</a>
+<a name='L306'></a><a href='#L306'>306</a>
+<a name='L307'></a><a href='#L307'>307</a>
+<a name='L308'></a><a href='#L308'>308</a>
+<a name='L309'></a><a href='#L309'>309</a>
+<a name='L310'></a><a href='#L310'>310</a>
+<a name='L311'></a><a href='#L311'>311</a>
+<a name='L312'></a><a href='#L312'>312</a>
+<a name='L313'></a><a href='#L313'>313</a>
+<a name='L314'></a><a href='#L314'>314</a>
+<a name='L315'></a><a href='#L315'>315</a>
+<a name='L316'></a><a href='#L316'>316</a>
+<a name='L317'></a><a href='#L317'>317</a>
+<a name='L318'></a><a href='#L318'>318</a>
+<a name='L319'></a><a href='#L319'>319</a>
+<a name='L320'></a><a href='#L320'>320</a>
+<a name='L321'></a><a href='#L321'>321</a>
+<a name='L322'></a><a href='#L322'>322</a>
+<a name='L323'></a><a href='#L323'>323</a>
+<a name='L324'></a><a href='#L324'>324</a>
+<a name='L325'></a><a href='#L325'>325</a>
+<a name='L326'></a><a href='#L326'>326</a>
+<a name='L327'></a><a href='#L327'>327</a>
+<a name='L328'></a><a href='#L328'>328</a>
+<a name='L329'></a><a href='#L329'>329</a>
+<a name='L330'></a><a href='#L330'>330</a>
+<a name='L331'></a><a href='#L331'>331</a>
+<a name='L332'></a><a href='#L332'>332</a>
+<a name='L333'></a><a href='#L333'>333</a>
+<a name='L334'></a><a href='#L334'>334</a>
+<a name='L335'></a><a href='#L335'>335</a>
+<a name='L336'></a><a href='#L336'>336</a>
+<a name='L337'></a><a href='#L337'>337</a>
+<a name='L338'></a><a href='#L338'>338</a>
+<a name='L339'></a><a href='#L339'>339</a>
+<a name='L340'></a><a href='#L340'>340</a>
+<a name='L341'></a><a href='#L341'>341</a>
+<a name='L342'></a><a href='#L342'>342</a>
+<a name='L343'></a><a href='#L343'>343</a>
+<a name='L344'></a><a href='#L344'>344</a>
+<a name='L345'></a><a href='#L345'>345</a>
+<a name='L346'></a><a href='#L346'>346</a>
+<a name='L347'></a><a href='#L347'>347</a>
+<a name='L348'></a><a href='#L348'>348</a>
+<a name='L349'></a><a href='#L349'>349</a>
+<a name='L350'></a><a href='#L350'>350</a>
+<a name='L351'></a><a href='#L351'>351</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1805x</span>
+<span class="cline-any cline-yes">1805x</span>
+<span class="cline-any cline-yes">1805x</span>
+<span class="cline-any cline-yes">1805x</span>
+<span class="cline-any cline-yes">1805x</span>
+<span class="cline-any cline-yes">1805x</span>
+<span class="cline-any cline-yes">16967x</span>
+<span class="cline-any cline-yes">16967x</span>
+<span class="cline-any cline-yes">16967x</span>
+<span class="cline-any cline-yes">1805x</span>
+<span class="cline-any cline-yes">1805x</span>
+<span class="cline-any cline-yes">1805x</span>
+<span class="cline-any cline-yes">1805x</span>
+<span class="cline-any cline-yes">1805x</span>
+<span class="cline-any cline-yes">462080x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">462080x</span>
+<span class="cline-any cline-yes">462080x</span>
+<span class="cline-any cline-yes">462080x</span>
+<span class="cline-any cline-yes">462080x</span>
+<span class="cline-any cline-yes">462080x</span>
+<span class="cline-any cline-yes">1386240x</span>
+<span class="cline-any cline-yes">1386240x</span>
+<span class="cline-any cline-yes">462080x</span>
+<span class="cline-any cline-yes">1805x</span>
+<span class="cline-any cline-yes">1805x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">45x</span>
+<span class="cline-any cline-yes">45x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">4326x</span>
+<span class="cline-any cline-yes">4326x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">56x</span>
+<span class="cline-any cline-yes">4326x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">55x</span>
+<span class="cline-any cline-yes">4326x</span>
+<span class="cline-any cline-yes">14080x</span>
+<span class="cline-any cline-yes">14080x</span>
+<span class="cline-any cline-yes">14080x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14080x</span>
+<span class="cline-any cline-yes">14080x</span>
+<span class="cline-any cline-yes">55x</span>
+<span class="cline-any cline-yes">55x</span>
+<span class="cline-any cline-yes">55x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">3240779x</span>
+<span class="cline-any cline-yes">3240778x</span>
+<span class="cline-any cline-yes">3240779x</span>
+<span class="cline-any cline-yes">3240779x</span>
+<span class="cline-any cline-yes">2231250x</span>
+<span class="cline-any cline-yes">2231250x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2852x</span>
+<span class="cline-any cline-yes">2852x</span>
+<span class="cline-any cline-yes">2852x</span>
+<span class="cline-any cline-yes">2852x</span>
+<span class="cline-any cline-yes">2852x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2852x</span>
+<span class="cline-any cline-yes">2852x</span>
+<span class="cline-any cline-yes">2852x</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
+ * Colormaps, mirroring matplotlib's lookup semantics exactly.
+ *
+ * Spec §7.1: the same file must produce the same picture in the CLI and the
+ * browser. Two things have to match for that, and both live here:
+ *
+ * 1. the *table* — {@link ./luts} holds matplotlib's own 256-entry RGB arrays,
+ *    dumped rather than approximated;
+ * 2. the *indexing* — `matplotlib.colors.Colormap.__call__` is `floor(t * N)`
+ *    with `t == 1` folded down to `N - 1`, out-of-range values clamped to the
+ *    end colours (`set_under`/`set_over` default to the extremes), and
+ *    non-finite values sent to the "bad" colour, which is transparent by
+ *    default. {@link colormapIndex} reproduces that arithmetic; a naive
+ *    `Math.round(t * 255)` disagrees with matplotlib on roughly half of all
+ *    inputs and shifts the whole image by half a colour step.
+ */
+&nbsp;
+import { AFMHOT_R_RGB, AFMHOT_RGB, CIVIDIS_RGB, MAGMA_RGB, VIRIDIS_RGB } from './luts'
+&nbsp;
+/** Entries in every table. matplotlib's default `N`, and the viewer's own. */
+export const COLORMAP_SIZE = 256
+&nbsp;
+/** The `metacooler show` default (`ops/show.py`, `cmap: str = "afmhot_r"`). */
+export const DEFAULT_COLORMAP = 'afmhot_r'
+&nbsp;
+/**
+ * What the viewer opens with, which is deliberately not the CLI's.
+ *
+ * The same split as `DEFAULT_UI_PLOT_OPTIONS` beside `DEFAULT_PLOT_OPTIONS`:
+ * `afmhot_r` is right for a figure that has to match `metacooler show` byte for
+ * byte and is still one item away in the picker, unchanged; `default` is the
+ * ramp a Hi-C map is usually read in. Nothing about parity moves — the choice
+ * is carried in the hash like any other, and asking for `afmhot_r` produces the
+ * identical image it always did.
+ */
+export const DEFAULT_UI_COLORMAP = 'default'
+&nbsp;
+/**
+ * The viewer's own ramp: near-white through yellow, orange and red to
+ * near-black, from thirteen stops interpolated to 256 entries.
+ *
+ * Not a matplotlib map, so unlike the tables in {@link ./luts} it is built here
+ * rather than dumped — there is nothing upstream to copy. The interpolation is
+ * `LinearSegmentedColormap.from_list`'s: the stops are spaced evenly over
+ * `[0, 1]` and each channel is linear between them, so the same list handed to
+ * matplotlib reproduces this table to within a rounding step.
+ *
+ * Its relative luminance falls monotonically across all thirteen stops (0.99 →
+ * 0.005), which is what makes it read as a sequential ramp rather than as a set
+ * of hues; it is not in {@link COLOR_VISION_SAFE_COLORMAPS} because it was not
+ * designed against a deficiency model, only measured for lightness.
+ */
+const DEFAULT_STOPS = [
+  '#FFFEF9', '#FCF9CE', '#FFF2A9', '#FDE188', '#FFCA67', '#FAAA4B', '#F78E40',
+  '#F15C34', '#ED3024', '#D42027', '#B01F29', '#7A1128', '#1A0A10',
+]
+&nbsp;
+/**
+ * `Reds`: **paper white**, then ColorBrewer's sequential red to a dark maroon.
+ *
+ * The eight stops after the first are ColorBrewer's nine-class red — the
+ * control-point list matplotlib holds for this name — minus its lowest, which is
+ * `#FFF5F0`: a pale pink, not white. On a contact map that is the wrong colour
+ * for the commonest value in the picture. Most of a Hi-C matrix is empty, so a
+ * map drawn on matplotlib's ramp is a sheet of faint pink with the data on it,
+ * and the eye reads the tint as signal until it works out that it is everywhere.
+ * An empty cell should be the paper.
+ *
+ * So the bottom of the ramp is `#FFFFFF` and the rest is the classic one. This
+ * is therefore the viewer's ramp under matplotlib's name, and the difference is
+ * worth stating: `metacooler show --cmap Reds` draws the same map with a
+ * slightly warmer floor. It is a floor rather than a hue — the two agree from a
+ * ninth of the way up — but §7.1's parity claim covers the tables dumped in
+ * {@link ./luts}, and this is not one of them.
+ */
+const REDS_STOPS = [
+  '#FFFFFF', '#FFF5F0', '#FEE0D2', '#FCBBA1', '#FC9272', '#FB6A4A', '#EF3B2C',
+  '#CB181D', '#A50F15', '#67000D',
+]
+&nbsp;
+/**
+ * `RdBu_r`: ColorBrewer's eleven-class red–blue, reversed, for the values that
+ * have a **middle** rather than a floor.
+ *
+ * Every other ramp in this file is sequential, because every value the viewer
+ * could draw until now was a count and a count has a bottom. A ratio does not:
+ * it has a neutral point, and twice and half are the same size of departure in
+ * opposite directions. Drawn on a sequential ramp, "the two files agree" is some
+ * arbitrary mid-tone with no edge to it, and the eye — which finds a hue
+ * boundary instantly and a lightness step slowly — has nothing to find.
+ *
+ * Reversed, so **red is more and blue is less**. That is the direction every
+ * Hi-C tool draws a log ratio in, and getting it backwards would be the kind of
+ * error that never announces itself.
+ *
+ * The centre stop is `#F7F7F7` rather than `#FFFFFF`: unlike `Reds`, the middle
+ * of a diverging map is not the empty background but a real reading — "measured,
+ * and equal" — and it has to be distinguishable from the paper a `NaN` leaves
+ * behind. `render/derive.ts` produces `NaN` for exactly the cells where no
+ * comparison could be made, and those two must not look the same.
+ *
+ * Not in {@link COLOR_VISION_SAFE_COLORMAPS}, and not because it is unsafe: that
+ * list's criterion is monotonic lightness, which a diverging map is built to
+ * violate — its lightness peaks in the middle by design. Red against blue is the
+ * one hue pair that survives the common deficiencies, which is why ColorBrewer
+ * marks this scheme colour-blind safe, and the lightness ramp within each arm
+ * carries the magnitude even where the hue does not.
+ */
+const RDBU_R_STOPS = [
+  '#053061', '#2166AC', '#4393C3', '#92C5DE', '#D1E5F0', '#F7F7F7', '#FDDBC7',
+  '#F4A582', '#D6604D', '#B2182B', '#67001F',
+]
+&nbsp;
+/**
+ * `BuWtRd`: a blue–white–red diverging ramp, from eight stops with the white
+ * pinned to the **middle** of the scale.
+ *
+ * Higher-contrast than `RdBu_r` and with more of its range spent away from the
+ * centre, which is what a sparse ratio map wants: most of a contact map's cells
+ * sit near neutral, so a ramp that stays pale for the first third of each arm
+ * spends most of its colour on the cells that have the least to say.
+ *
+ * Deliberately not one of matplotlib's, and named so it cannot be mistaken for
+ * `bwr`, which is a different ramp under a name a reader might reasonably expect
+ * to match. Nothing about §7.1 parity moves: the CLI has no such option, so
+ * there is nothing for this to disagree with.
+ *
+ * **The white is the centre stop and not the fifth of eight.** Eight stops
+ * spread evenly put the fifth at `4/7` — so a ratio of exactly 1, which the
+ * raster sends to `t = 0.5`, would have been drawn in the pale blue below it,
+ * and a map of two identical files would have come out faintly blue everywhere.
+ * The two arms are therefore spaced separately, four stops below the middle and
+ * three above, which is what {@link ANCHORED} exists for. The arms then carry
+ * unequal gradient density — that is a property of the list, not an error.
+ *
+ * One caveat worth knowing at the pointer: this centre is `#FFFFFF`, the same
+ * colour a transparent cell composites to on a white page. `RdBu_r` uses
+ * `#F7F7F7` precisely so that "measured, and equal" can be told from "no
+ * comparison could be made" (`render/derive.ts` produces `NaN` for the latter).
+ * Chosen anyway, because it is what was asked for and the difference only shows
+ * on cells that are already unreadable at map zoom.
+ */
+const BUWTRD_STOPS = [
+  '#1659b1', '#487BA8', '#819EC8', '#D1E6F1', '#FFFFFF', '#FAC1C1', '#F1606C', '#EE222A',
+]
+&nbsp;
+/**
+ * Where {@link BUWTRD_STOPS} sit on `[0, 1]`: evenly within each arm, with the
+ * white on the centre.
+ */
+const BUWTRD_AT = [0, 0.125, 0.25, 0.375, 0.5, 2 / 3, 5 / 6, 1]
+&nbsp;
+/**
+ * `seismic`: matplotlib's own, and here because chromosight draws with it.
+ *
+ * The five segment ends of `matplotlib.cm.seismic`, which is a
+ * `LinearSegmentedColormap` with breakpoints at exactly 0, ¼, ½, ¾ and 1 — so
+ * the evenly-spaced form of {@link rampFromStops} reproduces it rather than
+ * approximating it. It is in the picker for one reason: `pileup_plot` uses
+ * `cmap="seismic", vmin=0, vmax=2`, and a pileup of the same windows in a
+ * different ramp is a picture a reader cannot lay beside the paper's.
+ *
+ * Not in {@link COLOR_VISION_SAFE_COLORMAPS}, and it is worth saying why it is
+ * offered anyway: red–blue through white is the one thing deuteranopia and
+ * protanopia handle worst, and this map exists for parity with a published
+ * figure rather than because it is the best way to read a ratio. `RdBu_r` is one
+ * item away in the picker and carries lightness as well as hue.
+ */
+const SEISMIC_STOPS = ['#00004D', '#0000FF', '#FFFFFF', '#FF0000', '#800000']
+&nbsp;
+/**
+ * Interpolate hex stops to a flat `size * 3` RGB table, as the tables are.
+ *
+ * `at` places the stops; absent, they are spread evenly, which is
+ * `LinearSegmentedColormap.from_list`'s own default and what the sequential
+ * ramps here want. A diverging ramp usually needs the explicit form, because
+ * its middle stop has a *meaning* — the value the reader is measuring departures
+ * from — and evenly spacing an even number of stops puts that meaning off
+ * centre. Must be ascending, start at 0 and end at 1.
+ */
+function rampFromStops(
+  stops: readonly string[],
+  size: number,
+  at?: readonly number[],
+): number[] {
+  const points = stops.map((hex) =&gt; [
+    Number.parseInt(hex.slice(1, 3), 16),
+    Number.parseInt(hex.slice(3, 5), 16),
+    Number.parseInt(hex.slice(5, 7), 16),
+  ])
+  const last = points.length - 1
+  const stopAt = at ?? points.map((_, i) =&gt; i / last)
+  const out: number[] = new Array&lt;number&gt;(size * 3)
+  for (let i = 0; i &lt; size; i++) {
+    const t = i / (size - 1)
+    // The segment `t` falls in. Linear rather than a search: eight stops, and
+    // this runs once per table rather than once per cell.
+    let lo = 0
+    while (lo &lt; last - 1 &amp;&amp; t &gt;= stopAt[lo + 1]) lo++
+    const span = stopAt[lo + 1] - stopAt[lo]
+    const frac = span &gt; 0 ? (t - stopAt[lo]) / <span class="branch-0 cbranch-no" title="branch not covered" >span : 0</span>
+    for (let c = 0; c &lt; 3; c++) {
+      out[i * 3 + c] = Math.round(points[lo][c] + (points[lo + 1][c] - points[lo][c]) * frac)
+    }
+  }
+  return out
+}
+&nbsp;
+/**
+ * Flat RGB triples, keyed by name. Insertion order is the order the UI offers
+ * them in, so the default comes first and the colour-vision-safe options are
+ * not buried at the bottom.
+ */
+const RGB_TABLES: Record&lt;string, readonly number[]&gt; = {
+  default: rampFromStops(DEFAULT_STOPS, COLORMAP_SIZE),
+  afmhot_r: AFMHOT_R_RGB,
+  afmhot: AFMHOT_RGB,
+  Reds: rampFromStops(REDS_STOPS, COLORMAP_SIZE),
+  cividis: CIVIDIS_RGB,
+  viridis: VIRIDIS_RGB,
+  magma: MAGMA_RGB,
+  RdBu_r: rampFromStops(RDBU_R_STOPS, COLORMAP_SIZE),
+  BuWtRd: rampFromStops(BUWTRD_STOPS, COLORMAP_SIZE, BUWTRD_AT),
+  seismic: rampFromStops(SEISMIC_STOPS, COLORMAP_SIZE),
+}
+&nbsp;
+/** Every colormap the viewer offers, in the order the picker should list them. */
+export const COLORMAP_NAMES: string[] = Object.keys(RGB_TABLES)
+&nbsp;
+/**
+ * The ramps built for a value with a neutral middle, and the one a derived map
+ * opens on.
+ *
+ * A list rather than a single name because the set is what the *picker* needs:
+ * choosing a sequential ramp for a ratio is a legitimate thing to want — it is
+ * how you read the magnitude of a departure without its direction — so nothing
+ * here forbids it. What the panel does with this is pick the opening colormap
+ * when a derivation is switched on, and put it back when it is switched off, so
+ * that a reader who never touches the control is never shown a ratio on a ramp
+ * that cannot express one.
+ */
+export const DIVERGING_COLORMAPS: string[] = ['RdBu_r', 'BuWtRd', 'seismic']
+&nbsp;
+/** What a derived map with a neutral value opens on. */
+export const DEFAULT_DIVERGING_COLORMAP = 'RdBu_r'
+&nbsp;
+/** Whether `name` is one of the ramps built around a middle. */
+export function isDivergingColormap(name: string): boolean {
+  return DIVERGING_COLORMAPS.includes(name)
+}
+&nbsp;
+/**
+ * Colormaps that stay monotonic in perceived lightness for the common forms of
+ * colour-vision deficiency (spec §7.2). `cividis` is the one designed for it;
+ * `viridis` and `magma` are perceptually uniform and survive deuteranopia and
+ * protanopia, so they are listed too. `afmhot`/`afmhot_r` are *not* — they are
+ * offered because they are the CLI default, not because they are safe.
+ */
+export const COLOR_VISION_SAFE_COLORMAPS: string[] = ['cividis', 'viridis', 'magma']
+&nbsp;
+/**
+ * Expanded RGBA tables, built once per name. The expansion is 1 KB per
+ * colormap, but `rasterize` runs it over every cell of the matrix, so the
+ * allocation must not sit inside that loop.
+ */
+const RGBA_CACHE = new Map&lt;string, Uint8ClampedArray&gt;()
+&nbsp;
+/** `true` if `name` is a colormap this build knows about. */
+export function isColormap(name: string): boolean {
+  return Object.hasOwn(RGB_TABLES, name)
+}
+&nbsp;
+/**
+ * The 256-entry RGBA lookup table for `name`, as 1024 `Uint8ClampedArray`
+ * bytes in `r, g, b, a` order — the layout `ImageData` wants, so the raster
+ * loop is four copies with no arithmetic.
+ *
+ * The returned array is cached and shared. Treat it as read-only; mutating it
+ * corrupts every subsequent render.
+ *
+ * @throws RangeError if `name` is not one of {@link COLORMAP_NAMES}.
+ */
+export function applyColormap(name: string): Uint8ClampedArray {
+  const cached = RGBA_CACHE.get(name)
+  if (cached !== undefined) return cached
+&nbsp;
+  const rgb = RGB_TABLES[name]
+  if (rgb === undefined) {
+    throw new RangeError(
+      `Unknown colormap: '${name}'. Available: ${COLORMAP_NAMES.join(', ')}.`
+    )
+  }
+&nbsp;
+  const rgba = new Uint8ClampedArray(COLORMAP_SIZE * 4)
+  for (let i = 0; i &lt; COLORMAP_SIZE; i++) {
+    rgba[i * 4] = rgb[i * 3]
+    rgba[i * 4 + 1] = rgb[i * 3 + 1]
+    rgba[i * 4 + 2] = rgb[i * 3 + 2]
+    // Uniform 255 in every matplotlib table; verified when luts.ts was
+    // generated, which is why the literals carry only RGB. The viewer's own
+    // ramp is opaque for the same reason: transparency here would be read as
+    // "no data", which is what the NaN path already means.
+    rgba[i * 4 + 3] = 255
+  }
+  RGBA_CACHE.set(name, rgba)
+  return rgba
+}
+&nbsp;
+/**
+ * Table index for a value already normalised to `[0, 1]` by
+ * `(v - vmin) / (vmax - vmin)`.
+ *
+ * Verbatim `Colormap.__call__`: multiply by `N`, truncate, fold `N` back to
+ * `N - 1` so an exactly-`vmax` cell lands on the last colour rather than off
+ * the end, and clamp the out-of-range tails onto the end colours (matplotlib's
+ * `_i_under`/`_i_over` default to `lut[0]` and `lut[N - 1]`).
+ *
+ * @returns `-1` for a non-finite value — matplotlib's "bad" colour, which is
+ * fully transparent by default. NaN reaching here is not a bug: it is an
+ * unbalanced row, and rendering it blank is the correct, diagnostic result
+ * (spec §6.4).
+ */
+export function colormapIndex(t: number): number {
+  if (!Number.isFinite(t)) return -1
+  const i = Math.floor(t * COLORMAP_SIZE)
+  if (i &lt; 0) return 0
+  if (i &gt;= COLORMAP_SIZE) return COLORMAP_SIZE - 1
+  return i
+}
+&nbsp;
+/**
+ * The RGBA colour at normalised position `t`, as four 0–255 components.
+ * Convenience for swatches and legends; the raster path indexes the table
+ * directly instead.
+ *
+ * A non-finite `t` yields a fully transparent colour, matching
+ * {@link colormapIndex}.
+ */
+export function colormapColor(name: string, t: number): [number, number, number, number] {
+  const lut = applyColormap(name)
+  const i = colormapIndex(t)
+  if (i &lt; 0) <span class="branch-0 cbranch-no" title="branch not covered" >return [0, 0, 0, 0]</span>
+  return [lut[i * 4], lut[i * 4 + 1], lut[i * 4 + 2], lut[i * 4 + 3]]
+}
+&nbsp;
+/** The colour at normalised position `t` as a CSS `rgb()` string, for DOM swatches. */
+export function colormapCss(name: string, t: number): string {
+  const [r, g, b, a] = colormapColor(name, t)
+  return a === 255 ? `rgb(${r}, ${g}, ${b<span class="branch-0 cbranch-no" title="branch not covered" >})` : `rgba(${r}, ${g}, ${b}, ${a / 255})`</span>
+}
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-11-07T08:44:07.819Z
+            </div>
+        <script src="../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../sorter.js"></script>
+        <script src="../../block-navigation.js"></script>
+    </body>
+</html>
+    

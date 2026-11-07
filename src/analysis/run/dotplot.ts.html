@@ -1,0 +1,676 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/analysis/run/dotplot.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../../prettify.css" />
+    <link rel="stylesheet" href="../../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../../index.html">All files</a> / <a href="index.html">src/analysis/run</a> dotplot.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">3.06% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>5/163</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/0</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>0/3</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">3.06% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>5/163</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a>
+<a name='L193'></a><a href='#L193'>193</a>
+<a name='L194'></a><a href='#L194'>194</a>
+<a name='L195'></a><a href='#L195'>195</a>
+<a name='L196'></a><a href='#L196'>196</a>
+<a name='L197'></a><a href='#L197'>197</a>
+<a name='L198'></a><a href='#L198'>198</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
+ * Two sequences against each other, run — in the annotations worker, beside
+ * the residues of both (SPECS §28; `dotplot/dotplot.ts` for the method).
+ *
+ * Three outputs: the signed density of anchors, square in bases, `RdBu_r`
+ * about nought — a line the same way round red, one the other way blue — with
+ * the two sets' sequences marked along its axes; the streaks as a table; and
+ * the streaks as pairs, which the Annotations panel takes as a row and writes
+ * as BEDPE. The note says what was sampled, because a dot plot's blank is only
+ * as good as its sampling.
+ */
+&nbsp;
+import { PairBuilder } from '../../annotations/featureset'
+import { anchorsOf, densityOf, K, locate, MAX_OCCURRENCES, minimizersOf, oneToOne, sequenceSet, streaksOf, windowFor, type SequenceSet, type Streak } from '../../dotplot/dotplot'
+import { idParam, numParam, strParam, type TrackTaskRunner } from '../job'
+import { DOTPLOT_CELLS } from '../tasks/dotplot'
+import type { DotplotStreaks, MatrixOutput, TaskOutput } from '../types'
+&nbsp;
+/** The streaks kept, as the lines the figure on screen draws (§28.2), with the two axes they are measured along. */
+<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >function linesOf(streaks: readonly Streak[], a: SequenceSet, b: SequenceSet, xLabel: string, yLabel: string): DotplotStreaks {</span></span>
+<span class="cstat-no" title="statement not covered" >  const n = streaks.length</span>
+<span class="cstat-no" title="statement not covered" >  const lines: DotplotStreaks = {</span>
+<span class="cstat-no" title="statement not covered" >    x: { label: xLabel, names: [...a.names], lengths: [...a.lengths] },</span>
+<span class="cstat-no" title="statement not covered" >    y: { label: yLabel, names: [...b.names], lengths: [...b.lengths] },</span>
+<span class="cstat-no" title="statement not covered" >    x0: new Float64Array(n),</span>
+<span class="cstat-no" title="statement not covered" >    x1: new Float64Array(n),</span>
+<span class="cstat-no" title="statement not covered" >    y0: new Float64Array(n),</span>
+<span class="cstat-no" title="statement not covered" >    y1: new Float64Array(n),</span>
+<span class="cstat-no" title="statement not covered" >    strand: new Int8Array(n),</span>
+<span class="cstat-no" title="statement not covered" >    anchors: new Int32Array(n),</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  streaks.forEach((streak, i) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >    lines.x0[i] = streak.x0</span>
+<span class="cstat-no" title="statement not covered" >    lines.x1[i] = streak.x1</span>
+<span class="cstat-no" title="statement not covered" >    lines.y0[i] = streak.y0</span>
+<span class="cstat-no" title="statement not covered" >    lines.y1[i] = streak.y1</span>
+<span class="cstat-no" title="statement not covered" >    lines.strand[i] = streak.strand</span>
+<span class="cstat-no" title="statement not covered" >    lines.anchors[i] = streak.anchors</span>
+<span class="cstat-no" title="statement not covered" >  })</span>
+<span class="cstat-no" title="statement not covered" >  return lines</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+/** A set's sequences as marks along an axis of the figure, in its cells. */
+<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >function segmentsOf(set: SequenceSet, cellSize: number): NonNullable&lt;MatrixOutput['xSegments']&gt; {</span></span>
+<span class="cstat-no" title="statement not covered" >  return set.names.map((name, i) =&gt; ({ label: name, from: set.offsets[i] / cellSize, to: set.offsets[i + 1] / cellSize }))</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+export const runDotplot: TrackTaskRunner = <span class="fstat-no" title="function not covered" >async (job) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >  const xId = idParam(job.params, 'x')</span>
+<span class="cstat-no" title="statement not covered" >  const yId = idParam(job.params, 'y')</span>
+<span class="cstat-no" title="statement not covered" >  if (job.residues === undefined) {</span>
+<span class="cstat-no" title="statement not covered" >    job.note('This session cannot read residues, so there is nothing to set against anything.')</span>
+<span class="cstat-no" title="statement not covered" >    return []</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  if (xId === null || yId === null) {</span>
+<span class="cstat-no" title="statement not covered" >    job.note('Choose the two sequence sets: one along x, one along y.')</span>
+<span class="cstat-no" title="statement not covered" >    return []</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  const readerX = job.residues(xId)</span>
+<span class="cstat-no" title="statement not covered" >  const readerY = job.residues(yId)</span>
+<span class="cstat-no" title="statement not covered" >  if (readerX === undefined || readerY === undefined) {</span>
+<span class="cstat-no" title="statement not covered" >    job.note('A sequence set chosen is no longer loaded. Drop the FASTA again, or pick another.')</span>
+<span class="cstat-no" title="statement not covered" >    return []</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  for (const reader of [readerX, readerY]) {</span>
+<span class="cstat-no" title="statement not covered" >    if (reader.refusal !== undefined) {</span>
+<span class="cstat-no" title="statement not covered" >      job.note(reader.refusal)</span>
+<span class="cstat-no" title="statement not covered" >      return []</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  const a = sequenceSet(readerX.contigs)</span>
+<span class="cstat-no" title="statement not covered" >  const b = sequenceSet(readerY.contigs)</span>
+<span class="cstat-no" title="statement not covered" >  const total = a.offsets[a.offsets.length - 1]</span>
+<span class="cstat-no" title="statement not covered" >  const w = windowFor(total)</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  job.progress(0, 4, 'minimizers along x')</span>
+<span class="cstat-no" title="statement not covered" >  const ma = minimizersOf(a, (name) =&gt; readerX.bases(name), w)</span>
+<span class="cstat-no" title="statement not covered" >  job.throwIfCancelled()</span>
+<span class="cstat-no" title="statement not covered" >  job.progress(1, 4, 'minimizers along y')</span>
+<span class="cstat-no" title="statement not covered" >  const mb = minimizersOf(b, (name) =&gt; readerY.bases(name), w)</span>
+<span class="cstat-no" title="statement not covered" >  job.throwIfCancelled()</span>
+<span class="cstat-no" title="statement not covered" >  job.progress(2, 4, 'anchors')</span>
+<span class="cstat-no" title="statement not covered" >  const anchors = anchorsOf(ma, mb)</span>
+<span class="cstat-no" title="statement not covered" >  job.throwIfCancelled()</span>
+<span class="cstat-no" title="statement not covered" >  job.progress(3, 4, 'streaks')</span>
+  // The figure counts the anchors of streaks alone: a single shared 19-mer is
+  // chance as often as not, and a scatter of them is noise over the lines.
+<span class="cstat-no" title="statement not covered" >  const member = new Int32Array(anchors.count)</span>
+<span class="cstat-no" title="statement not covered" >  const found = streaksOf(anchors, undefined, undefined, undefined, member)</span>
+  // One to one between two sets; a set against itself keeps every streak,
+  // which is what it is drawn for — one to one would leave it a diagonal.
+<span class="cstat-no" title="statement not covered" >  const alone = xId === yId</span>
+<span class="cstat-no" title="statement not covered" >  const filtered = !alone &amp;&amp; strParam(job.params, 'streaks', 'one to one') === 'one to one'</span>
+<span class="cstat-no" title="statement not covered" >  const keep = filtered ? oneToOne(found, a, b) : new Uint8Array(found.length).fill(1)</span>
+<span class="cstat-no" title="statement not covered" >  const streaks = found.filter((_, i) =&gt; keep[i] === 1)</span>
+<span class="cstat-no" title="statement not covered" >  const counted = new Uint8Array(anchors.count)</span>
+<span class="cstat-no" title="statement not covered" >  for (let i = 0; i &lt; anchors.count; i++) if (member[i] &gt;= 0 &amp;&amp; keep[member[i]] === 1) counted[i] = 1</span>
+<span class="cstat-no" title="statement not covered" >  const cells = Math.round(numParam(job.params, 'cells', DOTPLOT_CELLS))</span>
+<span class="cstat-no" title="statement not covered" >  const grid = densityOf(anchors, a, b, cells &gt; 0 ? cells : DOTPLOT_CELLS, counted)</span>
+<span class="cstat-no" title="statement not covered" >  job.progress(4, 4)</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const every = ma.count &gt; 0 ? Math.round(total / ma.count) : 0</span>
+<span class="cstat-no" title="statement not covered" >  const left = found.length - streaks.length</span>
+<span class="cstat-no" title="statement not covered" >  job.note(</span>
+<span class="cstat-no" title="statement not covered" >    `Exact ${K}-mers, one in about ${every.toLocaleString('en-US')} bases; hashes above ${MAX_OCCURRENCES} copies on either side dropped ` +</span>
+<span class="cstat-no" title="statement not covered" >      `(${anchors.dropped.toLocaleString('en-US')} of them). ${anchors.count.toLocaleString('en-US')} anchors, ` +</span>
+<span class="cstat-no" title="statement not covered" >      `${found.length.toLocaleString('en-US')} streaks` +</span>
+<span class="cstat-no" title="statement not covered" >      (filtered ? `, ${streaks.length.toLocaleString('en-US')} of them one to one — ${left.toLocaleString('en-US')} a stronger streak had taken the stretch of` : '') +</span>
+<span class="cstat-no" title="statement not covered" >      (alone ? ', every one drawn, the set against itself' : '') +</span>
+<span class="cstat-no" title="statement not covered" >      `. Not an alignment, and it writes none: a streak is ten or more shared ${K}-mers along one diagonal.`,</span>
+<span class="cstat-no" title="statement not covered" >  )</span>
+&nbsp;
+  // The scale clipped at the middle of the cells a line crosses — three
+  // anchors or more, where chance puts one or two: a collinear stretch holds
+  // thousands of anchors a cell and a short line a few dozen, and at the full
+  // range the short one would be the white it is there to stand out of.
+<span class="cstat-no" title="statement not covered" >  const held: number[] = []</span>
+<span class="cstat-no" title="statement not covered" >  for (const value of grid.values) if (Math.abs(value) &gt;= 3) held.push(Math.abs(value))</span>
+<span class="cstat-no" title="statement not covered" >  held.sort((p, q) =&gt; p - q)</span>
+<span class="cstat-no" title="statement not covered" >  const clip = held.length === 0 ? 3 : Math.max(3, held[Math.floor(0.5 * (held.length - 1))])</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const matrix: MatrixOutput = {</span>
+<span class="cstat-no" title="statement not covered" >    kind: 'matrix',</span>
+<span class="cstat-no" title="statement not covered" >    id: 'dotplot-density',</span>
+<span class="cstat-no" title="statement not covered" >    label: filtered ? 'Streaks one to one, the same way round (red) and the other (blue)' : 'Streaks, the same way round (red) and the other (blue)',</span>
+<span class="cstat-no" title="statement not covered" >    nrows: grid.nrows,</span>
+<span class="cstat-no" title="statement not covered" >    ncols: grid.ncols,</span>
+<span class="cstat-no" title="statement not covered" >    values: grid.values,</span>
+<span class="cstat-no" title="statement not covered" >    xLabel: 'along x',</span>
+<span class="cstat-no" title="statement not covered" >    yLabel: 'along y',</span>
+<span class="cstat-no" title="statement not covered" >    xTicks: [],</span>
+<span class="cstat-no" title="statement not covered" >    yTicks: [],</span>
+<span class="cstat-no" title="statement not covered" >    colormap: 'RdBu_r',</span>
+<span class="cstat-no" title="statement not covered" >    centre: 0,</span>
+<span class="cstat-no" title="statement not covered" >    range: [-clip, clip],</span>
+<span class="cstat-no" title="statement not covered" >    xSegments: segmentsOf(a, grid.cellSize),</span>
+<span class="cstat-no" title="statement not covered" >    ySegments: segmentsOf(b, grid.cellSize),</span>
+<span class="cstat-no" title="statement not covered" >    stats: [</span>
+<span class="cstat-no" title="statement not covered" >      { label: 'anchors', value: anchors.count },</span>
+<span class="cstat-no" title="statement not covered" >      { label: filtered ? 'streaks one to one' : 'streaks', value: streaks.length },</span>
+<span class="cstat-no" title="statement not covered" >      { label: 'bases a cell', value: grid.cellSize },</span>
+<span class="cstat-no" title="statement not covered" >    ],</span>
+<span class="cstat-no" title="statement not covered" >    large: true,</span>
+<span class="cstat-no" title="statement not covered" >    streaks: linesOf(streaks, a, b, job.inputs.labels?.[xId] ?? 'along x', job.inputs.labels?.[yId] ?? 'along y'),</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const rows = streaks.map((streak) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >    const x = locate(a, streak.x0)</span>
+<span class="cstat-no" title="statement not covered" >    const y = locate(b, streak.y0)</span>
+<span class="cstat-no" title="statement not covered" >    return {</span>
+<span class="cstat-no" title="statement not covered" >      xSequence: a.names[x.sequence],</span>
+<span class="cstat-no" title="statement not covered" >      xStart: x.at,</span>
+<span class="cstat-no" title="statement not covered" >      xEnd: x.at + (streak.x1 - streak.x0),</span>
+<span class="cstat-no" title="statement not covered" >      ySequence: b.names[y.sequence],</span>
+<span class="cstat-no" title="statement not covered" >      yStart: y.at,</span>
+<span class="cstat-no" title="statement not covered" >      yEnd: y.at + (streak.y1 - streak.y0),</span>
+<span class="cstat-no" title="statement not covered" >      strand: streak.strand === 1 ? '+' : '-',</span>
+<span class="cstat-no" title="statement not covered" >      anchors: streak.anchors,</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >  })</span>
+<span class="cstat-no" title="statement not covered" >  const table: TaskOutput = {</span>
+<span class="cstat-no" title="statement not covered" >    kind: 'table',</span>
+<span class="cstat-no" title="statement not covered" >    id: 'dotplot-streaks',</span>
+<span class="cstat-no" title="statement not covered" >    label: 'Streaks',</span>
+<span class="cstat-no" title="statement not covered" >    columns: [</span>
+<span class="cstat-no" title="statement not covered" >      { key: 'xSequence', label: 'x sequence', kind: 'text' },</span>
+<span class="cstat-no" title="statement not covered" >      { key: 'xStart', label: 'x start', kind: 'number', coordinate: 'start' },</span>
+<span class="cstat-no" title="statement not covered" >      { key: 'xEnd', label: 'x end', kind: 'number', coordinate: 'end' },</span>
+<span class="cstat-no" title="statement not covered" >      { key: 'ySequence', label: 'y sequence', kind: 'text' },</span>
+<span class="cstat-no" title="statement not covered" >      { key: 'yStart', label: 'y start', kind: 'number', coordinate: 'start' },</span>
+<span class="cstat-no" title="statement not covered" >      { key: 'yEnd', label: 'y end', kind: 'number', coordinate: 'end' },</span>
+<span class="cstat-no" title="statement not covered" >      { key: 'strand', label: 'strand', kind: 'text', hint: '+ the same way round, − the other' },</span>
+<span class="cstat-no" title="statement not covered" >      { key: 'anchors', label: 'anchors', kind: 'number' },</span>
+<span class="cstat-no" title="statement not covered" >    ],</span>
+<span class="cstat-no" title="statement not covered" >    rows,</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const pairs = new PairBuilder()</span>
+<span class="cstat-no" title="statement not covered" >  for (const row of rows) {</span>
+<span class="cstat-no" title="statement not covered" >    pairs.add(row.xSequence, row.xStart, row.xEnd, row.ySequence, row.yStart, row.yEnd, {</span>
+<span class="cstat-no" title="statement not covered" >      score: row.anchors,</span>
+<span class="cstat-no" title="statement not covered" >      name: row.strand === '+' ? 'same way round' : 'the other way round',</span>
+<span class="cstat-no" title="statement not covered" >      detail: `${row.anchors} anchors`,</span>
+<span class="cstat-no" title="statement not covered" >    })</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  const intervals: TaskOutput = {</span>
+<span class="cstat-no" title="statement not covered" >    kind: 'intervals',</span>
+<span class="cstat-no" title="statement not covered" >    id: 'dotplot-pairs',</span>
+<span class="cstat-no" title="statement not covered" >    label: 'Streaks, as pairs',</span>
+<span class="cstat-no" title="statement not covered" >    payload: { kind: 'pairs', data: pairs.finish() },</span>
+<span class="cstat-no" title="statement not covered" >    noun: { one: 'streak', many: 'streaks' },</span>
+    // On the map, as a loop set is: a streak is a stretch of the map, and its
+    // anchors as a 1D track are a reading rather than the picture (§18.7).
+<span class="cstat-no" title="statement not covered" >    display: 'overlay',</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  return [matrix, table, intervals]</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-11-07T08:44:07.819Z
+            </div>
+        <script src="../../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../../sorter.js"></script>
+        <script src="../../../block-navigation.js"></script>
+    </body>
+</html>
+    

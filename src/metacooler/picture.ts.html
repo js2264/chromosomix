@@ -1,0 +1,2290 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/metacooler/picture.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../prettify.css" />
+    <link rel="stylesheet" href="../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">src/metacooler</a> picture.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">93.39% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>396/424</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">84.35% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>151/179</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">96.42% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>27/28</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">93.39% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>396/424</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line high'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a>
+<a name='L193'></a><a href='#L193'>193</a>
+<a name='L194'></a><a href='#L194'>194</a>
+<a name='L195'></a><a href='#L195'>195</a>
+<a name='L196'></a><a href='#L196'>196</a>
+<a name='L197'></a><a href='#L197'>197</a>
+<a name='L198'></a><a href='#L198'>198</a>
+<a name='L199'></a><a href='#L199'>199</a>
+<a name='L200'></a><a href='#L200'>200</a>
+<a name='L201'></a><a href='#L201'>201</a>
+<a name='L202'></a><a href='#L202'>202</a>
+<a name='L203'></a><a href='#L203'>203</a>
+<a name='L204'></a><a href='#L204'>204</a>
+<a name='L205'></a><a href='#L205'>205</a>
+<a name='L206'></a><a href='#L206'>206</a>
+<a name='L207'></a><a href='#L207'>207</a>
+<a name='L208'></a><a href='#L208'>208</a>
+<a name='L209'></a><a href='#L209'>209</a>
+<a name='L210'></a><a href='#L210'>210</a>
+<a name='L211'></a><a href='#L211'>211</a>
+<a name='L212'></a><a href='#L212'>212</a>
+<a name='L213'></a><a href='#L213'>213</a>
+<a name='L214'></a><a href='#L214'>214</a>
+<a name='L215'></a><a href='#L215'>215</a>
+<a name='L216'></a><a href='#L216'>216</a>
+<a name='L217'></a><a href='#L217'>217</a>
+<a name='L218'></a><a href='#L218'>218</a>
+<a name='L219'></a><a href='#L219'>219</a>
+<a name='L220'></a><a href='#L220'>220</a>
+<a name='L221'></a><a href='#L221'>221</a>
+<a name='L222'></a><a href='#L222'>222</a>
+<a name='L223'></a><a href='#L223'>223</a>
+<a name='L224'></a><a href='#L224'>224</a>
+<a name='L225'></a><a href='#L225'>225</a>
+<a name='L226'></a><a href='#L226'>226</a>
+<a name='L227'></a><a href='#L227'>227</a>
+<a name='L228'></a><a href='#L228'>228</a>
+<a name='L229'></a><a href='#L229'>229</a>
+<a name='L230'></a><a href='#L230'>230</a>
+<a name='L231'></a><a href='#L231'>231</a>
+<a name='L232'></a><a href='#L232'>232</a>
+<a name='L233'></a><a href='#L233'>233</a>
+<a name='L234'></a><a href='#L234'>234</a>
+<a name='L235'></a><a href='#L235'>235</a>
+<a name='L236'></a><a href='#L236'>236</a>
+<a name='L237'></a><a href='#L237'>237</a>
+<a name='L238'></a><a href='#L238'>238</a>
+<a name='L239'></a><a href='#L239'>239</a>
+<a name='L240'></a><a href='#L240'>240</a>
+<a name='L241'></a><a href='#L241'>241</a>
+<a name='L242'></a><a href='#L242'>242</a>
+<a name='L243'></a><a href='#L243'>243</a>
+<a name='L244'></a><a href='#L244'>244</a>
+<a name='L245'></a><a href='#L245'>245</a>
+<a name='L246'></a><a href='#L246'>246</a>
+<a name='L247'></a><a href='#L247'>247</a>
+<a name='L248'></a><a href='#L248'>248</a>
+<a name='L249'></a><a href='#L249'>249</a>
+<a name='L250'></a><a href='#L250'>250</a>
+<a name='L251'></a><a href='#L251'>251</a>
+<a name='L252'></a><a href='#L252'>252</a>
+<a name='L253'></a><a href='#L253'>253</a>
+<a name='L254'></a><a href='#L254'>254</a>
+<a name='L255'></a><a href='#L255'>255</a>
+<a name='L256'></a><a href='#L256'>256</a>
+<a name='L257'></a><a href='#L257'>257</a>
+<a name='L258'></a><a href='#L258'>258</a>
+<a name='L259'></a><a href='#L259'>259</a>
+<a name='L260'></a><a href='#L260'>260</a>
+<a name='L261'></a><a href='#L261'>261</a>
+<a name='L262'></a><a href='#L262'>262</a>
+<a name='L263'></a><a href='#L263'>263</a>
+<a name='L264'></a><a href='#L264'>264</a>
+<a name='L265'></a><a href='#L265'>265</a>
+<a name='L266'></a><a href='#L266'>266</a>
+<a name='L267'></a><a href='#L267'>267</a>
+<a name='L268'></a><a href='#L268'>268</a>
+<a name='L269'></a><a href='#L269'>269</a>
+<a name='L270'></a><a href='#L270'>270</a>
+<a name='L271'></a><a href='#L271'>271</a>
+<a name='L272'></a><a href='#L272'>272</a>
+<a name='L273'></a><a href='#L273'>273</a>
+<a name='L274'></a><a href='#L274'>274</a>
+<a name='L275'></a><a href='#L275'>275</a>
+<a name='L276'></a><a href='#L276'>276</a>
+<a name='L277'></a><a href='#L277'>277</a>
+<a name='L278'></a><a href='#L278'>278</a>
+<a name='L279'></a><a href='#L279'>279</a>
+<a name='L280'></a><a href='#L280'>280</a>
+<a name='L281'></a><a href='#L281'>281</a>
+<a name='L282'></a><a href='#L282'>282</a>
+<a name='L283'></a><a href='#L283'>283</a>
+<a name='L284'></a><a href='#L284'>284</a>
+<a name='L285'></a><a href='#L285'>285</a>
+<a name='L286'></a><a href='#L286'>286</a>
+<a name='L287'></a><a href='#L287'>287</a>
+<a name='L288'></a><a href='#L288'>288</a>
+<a name='L289'></a><a href='#L289'>289</a>
+<a name='L290'></a><a href='#L290'>290</a>
+<a name='L291'></a><a href='#L291'>291</a>
+<a name='L292'></a><a href='#L292'>292</a>
+<a name='L293'></a><a href='#L293'>293</a>
+<a name='L294'></a><a href='#L294'>294</a>
+<a name='L295'></a><a href='#L295'>295</a>
+<a name='L296'></a><a href='#L296'>296</a>
+<a name='L297'></a><a href='#L297'>297</a>
+<a name='L298'></a><a href='#L298'>298</a>
+<a name='L299'></a><a href='#L299'>299</a>
+<a name='L300'></a><a href='#L300'>300</a>
+<a name='L301'></a><a href='#L301'>301</a>
+<a name='L302'></a><a href='#L302'>302</a>
+<a name='L303'></a><a href='#L303'>303</a>
+<a name='L304'></a><a href='#L304'>304</a>
+<a name='L305'></a><a href='#L305'>305</a>
+<a name='L306'></a><a href='#L306'>306</a>
+<a name='L307'></a><a href='#L307'>307</a>
+<a name='L308'></a><a href='#L308'>308</a>
+<a name='L309'></a><a href='#L309'>309</a>
+<a name='L310'></a><a href='#L310'>310</a>
+<a name='L311'></a><a href='#L311'>311</a>
+<a name='L312'></a><a href='#L312'>312</a>
+<a name='L313'></a><a href='#L313'>313</a>
+<a name='L314'></a><a href='#L314'>314</a>
+<a name='L315'></a><a href='#L315'>315</a>
+<a name='L316'></a><a href='#L316'>316</a>
+<a name='L317'></a><a href='#L317'>317</a>
+<a name='L318'></a><a href='#L318'>318</a>
+<a name='L319'></a><a href='#L319'>319</a>
+<a name='L320'></a><a href='#L320'>320</a>
+<a name='L321'></a><a href='#L321'>321</a>
+<a name='L322'></a><a href='#L322'>322</a>
+<a name='L323'></a><a href='#L323'>323</a>
+<a name='L324'></a><a href='#L324'>324</a>
+<a name='L325'></a><a href='#L325'>325</a>
+<a name='L326'></a><a href='#L326'>326</a>
+<a name='L327'></a><a href='#L327'>327</a>
+<a name='L328'></a><a href='#L328'>328</a>
+<a name='L329'></a><a href='#L329'>329</a>
+<a name='L330'></a><a href='#L330'>330</a>
+<a name='L331'></a><a href='#L331'>331</a>
+<a name='L332'></a><a href='#L332'>332</a>
+<a name='L333'></a><a href='#L333'>333</a>
+<a name='L334'></a><a href='#L334'>334</a>
+<a name='L335'></a><a href='#L335'>335</a>
+<a name='L336'></a><a href='#L336'>336</a>
+<a name='L337'></a><a href='#L337'>337</a>
+<a name='L338'></a><a href='#L338'>338</a>
+<a name='L339'></a><a href='#L339'>339</a>
+<a name='L340'></a><a href='#L340'>340</a>
+<a name='L341'></a><a href='#L341'>341</a>
+<a name='L342'></a><a href='#L342'>342</a>
+<a name='L343'></a><a href='#L343'>343</a>
+<a name='L344'></a><a href='#L344'>344</a>
+<a name='L345'></a><a href='#L345'>345</a>
+<a name='L346'></a><a href='#L346'>346</a>
+<a name='L347'></a><a href='#L347'>347</a>
+<a name='L348'></a><a href='#L348'>348</a>
+<a name='L349'></a><a href='#L349'>349</a>
+<a name='L350'></a><a href='#L350'>350</a>
+<a name='L351'></a><a href='#L351'>351</a>
+<a name='L352'></a><a href='#L352'>352</a>
+<a name='L353'></a><a href='#L353'>353</a>
+<a name='L354'></a><a href='#L354'>354</a>
+<a name='L355'></a><a href='#L355'>355</a>
+<a name='L356'></a><a href='#L356'>356</a>
+<a name='L357'></a><a href='#L357'>357</a>
+<a name='L358'></a><a href='#L358'>358</a>
+<a name='L359'></a><a href='#L359'>359</a>
+<a name='L360'></a><a href='#L360'>360</a>
+<a name='L361'></a><a href='#L361'>361</a>
+<a name='L362'></a><a href='#L362'>362</a>
+<a name='L363'></a><a href='#L363'>363</a>
+<a name='L364'></a><a href='#L364'>364</a>
+<a name='L365'></a><a href='#L365'>365</a>
+<a name='L366'></a><a href='#L366'>366</a>
+<a name='L367'></a><a href='#L367'>367</a>
+<a name='L368'></a><a href='#L368'>368</a>
+<a name='L369'></a><a href='#L369'>369</a>
+<a name='L370'></a><a href='#L370'>370</a>
+<a name='L371'></a><a href='#L371'>371</a>
+<a name='L372'></a><a href='#L372'>372</a>
+<a name='L373'></a><a href='#L373'>373</a>
+<a name='L374'></a><a href='#L374'>374</a>
+<a name='L375'></a><a href='#L375'>375</a>
+<a name='L376'></a><a href='#L376'>376</a>
+<a name='L377'></a><a href='#L377'>377</a>
+<a name='L378'></a><a href='#L378'>378</a>
+<a name='L379'></a><a href='#L379'>379</a>
+<a name='L380'></a><a href='#L380'>380</a>
+<a name='L381'></a><a href='#L381'>381</a>
+<a name='L382'></a><a href='#L382'>382</a>
+<a name='L383'></a><a href='#L383'>383</a>
+<a name='L384'></a><a href='#L384'>384</a>
+<a name='L385'></a><a href='#L385'>385</a>
+<a name='L386'></a><a href='#L386'>386</a>
+<a name='L387'></a><a href='#L387'>387</a>
+<a name='L388'></a><a href='#L388'>388</a>
+<a name='L389'></a><a href='#L389'>389</a>
+<a name='L390'></a><a href='#L390'>390</a>
+<a name='L391'></a><a href='#L391'>391</a>
+<a name='L392'></a><a href='#L392'>392</a>
+<a name='L393'></a><a href='#L393'>393</a>
+<a name='L394'></a><a href='#L394'>394</a>
+<a name='L395'></a><a href='#L395'>395</a>
+<a name='L396'></a><a href='#L396'>396</a>
+<a name='L397'></a><a href='#L397'>397</a>
+<a name='L398'></a><a href='#L398'>398</a>
+<a name='L399'></a><a href='#L399'>399</a>
+<a name='L400'></a><a href='#L400'>400</a>
+<a name='L401'></a><a href='#L401'>401</a>
+<a name='L402'></a><a href='#L402'>402</a>
+<a name='L403'></a><a href='#L403'>403</a>
+<a name='L404'></a><a href='#L404'>404</a>
+<a name='L405'></a><a href='#L405'>405</a>
+<a name='L406'></a><a href='#L406'>406</a>
+<a name='L407'></a><a href='#L407'>407</a>
+<a name='L408'></a><a href='#L408'>408</a>
+<a name='L409'></a><a href='#L409'>409</a>
+<a name='L410'></a><a href='#L410'>410</a>
+<a name='L411'></a><a href='#L411'>411</a>
+<a name='L412'></a><a href='#L412'>412</a>
+<a name='L413'></a><a href='#L413'>413</a>
+<a name='L414'></a><a href='#L414'>414</a>
+<a name='L415'></a><a href='#L415'>415</a>
+<a name='L416'></a><a href='#L416'>416</a>
+<a name='L417'></a><a href='#L417'>417</a>
+<a name='L418'></a><a href='#L418'>418</a>
+<a name='L419'></a><a href='#L419'>419</a>
+<a name='L420'></a><a href='#L420'>420</a>
+<a name='L421'></a><a href='#L421'>421</a>
+<a name='L422'></a><a href='#L422'>422</a>
+<a name='L423'></a><a href='#L423'>423</a>
+<a name='L424'></a><a href='#L424'>424</a>
+<a name='L425'></a><a href='#L425'>425</a>
+<a name='L426'></a><a href='#L426'>426</a>
+<a name='L427'></a><a href='#L427'>427</a>
+<a name='L428'></a><a href='#L428'>428</a>
+<a name='L429'></a><a href='#L429'>429</a>
+<a name='L430'></a><a href='#L430'>430</a>
+<a name='L431'></a><a href='#L431'>431</a>
+<a name='L432'></a><a href='#L432'>432</a>
+<a name='L433'></a><a href='#L433'>433</a>
+<a name='L434'></a><a href='#L434'>434</a>
+<a name='L435'></a><a href='#L435'>435</a>
+<a name='L436'></a><a href='#L436'>436</a>
+<a name='L437'></a><a href='#L437'>437</a>
+<a name='L438'></a><a href='#L438'>438</a>
+<a name='L439'></a><a href='#L439'>439</a>
+<a name='L440'></a><a href='#L440'>440</a>
+<a name='L441'></a><a href='#L441'>441</a>
+<a name='L442'></a><a href='#L442'>442</a>
+<a name='L443'></a><a href='#L443'>443</a>
+<a name='L444'></a><a href='#L444'>444</a>
+<a name='L445'></a><a href='#L445'>445</a>
+<a name='L446'></a><a href='#L446'>446</a>
+<a name='L447'></a><a href='#L447'>447</a>
+<a name='L448'></a><a href='#L448'>448</a>
+<a name='L449'></a><a href='#L449'>449</a>
+<a name='L450'></a><a href='#L450'>450</a>
+<a name='L451'></a><a href='#L451'>451</a>
+<a name='L452'></a><a href='#L452'>452</a>
+<a name='L453'></a><a href='#L453'>453</a>
+<a name='L454'></a><a href='#L454'>454</a>
+<a name='L455'></a><a href='#L455'>455</a>
+<a name='L456'></a><a href='#L456'>456</a>
+<a name='L457'></a><a href='#L457'>457</a>
+<a name='L458'></a><a href='#L458'>458</a>
+<a name='L459'></a><a href='#L459'>459</a>
+<a name='L460'></a><a href='#L460'>460</a>
+<a name='L461'></a><a href='#L461'>461</a>
+<a name='L462'></a><a href='#L462'>462</a>
+<a name='L463'></a><a href='#L463'>463</a>
+<a name='L464'></a><a href='#L464'>464</a>
+<a name='L465'></a><a href='#L465'>465</a>
+<a name='L466'></a><a href='#L466'>466</a>
+<a name='L467'></a><a href='#L467'>467</a>
+<a name='L468'></a><a href='#L468'>468</a>
+<a name='L469'></a><a href='#L469'>469</a>
+<a name='L470'></a><a href='#L470'>470</a>
+<a name='L471'></a><a href='#L471'>471</a>
+<a name='L472'></a><a href='#L472'>472</a>
+<a name='L473'></a><a href='#L473'>473</a>
+<a name='L474'></a><a href='#L474'>474</a>
+<a name='L475'></a><a href='#L475'>475</a>
+<a name='L476'></a><a href='#L476'>476</a>
+<a name='L477'></a><a href='#L477'>477</a>
+<a name='L478'></a><a href='#L478'>478</a>
+<a name='L479'></a><a href='#L479'>479</a>
+<a name='L480'></a><a href='#L480'>480</a>
+<a name='L481'></a><a href='#L481'>481</a>
+<a name='L482'></a><a href='#L482'>482</a>
+<a name='L483'></a><a href='#L483'>483</a>
+<a name='L484'></a><a href='#L484'>484</a>
+<a name='L485'></a><a href='#L485'>485</a>
+<a name='L486'></a><a href='#L486'>486</a>
+<a name='L487'></a><a href='#L487'>487</a>
+<a name='L488'></a><a href='#L488'>488</a>
+<a name='L489'></a><a href='#L489'>489</a>
+<a name='L490'></a><a href='#L490'>490</a>
+<a name='L491'></a><a href='#L491'>491</a>
+<a name='L492'></a><a href='#L492'>492</a>
+<a name='L493'></a><a href='#L493'>493</a>
+<a name='L494'></a><a href='#L494'>494</a>
+<a name='L495'></a><a href='#L495'>495</a>
+<a name='L496'></a><a href='#L496'>496</a>
+<a name='L497'></a><a href='#L497'>497</a>
+<a name='L498'></a><a href='#L498'>498</a>
+<a name='L499'></a><a href='#L499'>499</a>
+<a name='L500'></a><a href='#L500'>500</a>
+<a name='L501'></a><a href='#L501'>501</a>
+<a name='L502'></a><a href='#L502'>502</a>
+<a name='L503'></a><a href='#L503'>503</a>
+<a name='L504'></a><a href='#L504'>504</a>
+<a name='L505'></a><a href='#L505'>505</a>
+<a name='L506'></a><a href='#L506'>506</a>
+<a name='L507'></a><a href='#L507'>507</a>
+<a name='L508'></a><a href='#L508'>508</a>
+<a name='L509'></a><a href='#L509'>509</a>
+<a name='L510'></a><a href='#L510'>510</a>
+<a name='L511'></a><a href='#L511'>511</a>
+<a name='L512'></a><a href='#L512'>512</a>
+<a name='L513'></a><a href='#L513'>513</a>
+<a name='L514'></a><a href='#L514'>514</a>
+<a name='L515'></a><a href='#L515'>515</a>
+<a name='L516'></a><a href='#L516'>516</a>
+<a name='L517'></a><a href='#L517'>517</a>
+<a name='L518'></a><a href='#L518'>518</a>
+<a name='L519'></a><a href='#L519'>519</a>
+<a name='L520'></a><a href='#L520'>520</a>
+<a name='L521'></a><a href='#L521'>521</a>
+<a name='L522'></a><a href='#L522'>522</a>
+<a name='L523'></a><a href='#L523'>523</a>
+<a name='L524'></a><a href='#L524'>524</a>
+<a name='L525'></a><a href='#L525'>525</a>
+<a name='L526'></a><a href='#L526'>526</a>
+<a name='L527'></a><a href='#L527'>527</a>
+<a name='L528'></a><a href='#L528'>528</a>
+<a name='L529'></a><a href='#L529'>529</a>
+<a name='L530'></a><a href='#L530'>530</a>
+<a name='L531'></a><a href='#L531'>531</a>
+<a name='L532'></a><a href='#L532'>532</a>
+<a name='L533'></a><a href='#L533'>533</a>
+<a name='L534'></a><a href='#L534'>534</a>
+<a name='L535'></a><a href='#L535'>535</a>
+<a name='L536'></a><a href='#L536'>536</a>
+<a name='L537'></a><a href='#L537'>537</a>
+<a name='L538'></a><a href='#L538'>538</a>
+<a name='L539'></a><a href='#L539'>539</a>
+<a name='L540'></a><a href='#L540'>540</a>
+<a name='L541'></a><a href='#L541'>541</a>
+<a name='L542'></a><a href='#L542'>542</a>
+<a name='L543'></a><a href='#L543'>543</a>
+<a name='L544'></a><a href='#L544'>544</a>
+<a name='L545'></a><a href='#L545'>545</a>
+<a name='L546'></a><a href='#L546'>546</a>
+<a name='L547'></a><a href='#L547'>547</a>
+<a name='L548'></a><a href='#L548'>548</a>
+<a name='L549'></a><a href='#L549'>549</a>
+<a name='L550'></a><a href='#L550'>550</a>
+<a name='L551'></a><a href='#L551'>551</a>
+<a name='L552'></a><a href='#L552'>552</a>
+<a name='L553'></a><a href='#L553'>553</a>
+<a name='L554'></a><a href='#L554'>554</a>
+<a name='L555'></a><a href='#L555'>555</a>
+<a name='L556'></a><a href='#L556'>556</a>
+<a name='L557'></a><a href='#L557'>557</a>
+<a name='L558'></a><a href='#L558'>558</a>
+<a name='L559'></a><a href='#L559'>559</a>
+<a name='L560'></a><a href='#L560'>560</a>
+<a name='L561'></a><a href='#L561'>561</a>
+<a name='L562'></a><a href='#L562'>562</a>
+<a name='L563'></a><a href='#L563'>563</a>
+<a name='L564'></a><a href='#L564'>564</a>
+<a name='L565'></a><a href='#L565'>565</a>
+<a name='L566'></a><a href='#L566'>566</a>
+<a name='L567'></a><a href='#L567'>567</a>
+<a name='L568'></a><a href='#L568'>568</a>
+<a name='L569'></a><a href='#L569'>569</a>
+<a name='L570'></a><a href='#L570'>570</a>
+<a name='L571'></a><a href='#L571'>571</a>
+<a name='L572'></a><a href='#L572'>572</a>
+<a name='L573'></a><a href='#L573'>573</a>
+<a name='L574'></a><a href='#L574'>574</a>
+<a name='L575'></a><a href='#L575'>575</a>
+<a name='L576'></a><a href='#L576'>576</a>
+<a name='L577'></a><a href='#L577'>577</a>
+<a name='L578'></a><a href='#L578'>578</a>
+<a name='L579'></a><a href='#L579'>579</a>
+<a name='L580'></a><a href='#L580'>580</a>
+<a name='L581'></a><a href='#L581'>581</a>
+<a name='L582'></a><a href='#L582'>582</a>
+<a name='L583'></a><a href='#L583'>583</a>
+<a name='L584'></a><a href='#L584'>584</a>
+<a name='L585'></a><a href='#L585'>585</a>
+<a name='L586'></a><a href='#L586'>586</a>
+<a name='L587'></a><a href='#L587'>587</a>
+<a name='L588'></a><a href='#L588'>588</a>
+<a name='L589'></a><a href='#L589'>589</a>
+<a name='L590'></a><a href='#L590'>590</a>
+<a name='L591'></a><a href='#L591'>591</a>
+<a name='L592'></a><a href='#L592'>592</a>
+<a name='L593'></a><a href='#L593'>593</a>
+<a name='L594'></a><a href='#L594'>594</a>
+<a name='L595'></a><a href='#L595'>595</a>
+<a name='L596'></a><a href='#L596'>596</a>
+<a name='L597'></a><a href='#L597'>597</a>
+<a name='L598'></a><a href='#L598'>598</a>
+<a name='L599'></a><a href='#L599'>599</a>
+<a name='L600'></a><a href='#L600'>600</a>
+<a name='L601'></a><a href='#L601'>601</a>
+<a name='L602'></a><a href='#L602'>602</a>
+<a name='L603'></a><a href='#L603'>603</a>
+<a name='L604'></a><a href='#L604'>604</a>
+<a name='L605'></a><a href='#L605'>605</a>
+<a name='L606'></a><a href='#L606'>606</a>
+<a name='L607'></a><a href='#L607'>607</a>
+<a name='L608'></a><a href='#L608'>608</a>
+<a name='L609'></a><a href='#L609'>609</a>
+<a name='L610'></a><a href='#L610'>610</a>
+<a name='L611'></a><a href='#L611'>611</a>
+<a name='L612'></a><a href='#L612'>612</a>
+<a name='L613'></a><a href='#L613'>613</a>
+<a name='L614'></a><a href='#L614'>614</a>
+<a name='L615'></a><a href='#L615'>615</a>
+<a name='L616'></a><a href='#L616'>616</a>
+<a name='L617'></a><a href='#L617'>617</a>
+<a name='L618'></a><a href='#L618'>618</a>
+<a name='L619'></a><a href='#L619'>619</a>
+<a name='L620'></a><a href='#L620'>620</a>
+<a name='L621'></a><a href='#L621'>621</a>
+<a name='L622'></a><a href='#L622'>622</a>
+<a name='L623'></a><a href='#L623'>623</a>
+<a name='L624'></a><a href='#L624'>624</a>
+<a name='L625'></a><a href='#L625'>625</a>
+<a name='L626'></a><a href='#L626'>626</a>
+<a name='L627'></a><a href='#L627'>627</a>
+<a name='L628'></a><a href='#L628'>628</a>
+<a name='L629'></a><a href='#L629'>629</a>
+<a name='L630'></a><a href='#L630'>630</a>
+<a name='L631'></a><a href='#L631'>631</a>
+<a name='L632'></a><a href='#L632'>632</a>
+<a name='L633'></a><a href='#L633'>633</a>
+<a name='L634'></a><a href='#L634'>634</a>
+<a name='L635'></a><a href='#L635'>635</a>
+<a name='L636'></a><a href='#L636'>636</a>
+<a name='L637'></a><a href='#L637'>637</a>
+<a name='L638'></a><a href='#L638'>638</a>
+<a name='L639'></a><a href='#L639'>639</a>
+<a name='L640'></a><a href='#L640'>640</a>
+<a name='L641'></a><a href='#L641'>641</a>
+<a name='L642'></a><a href='#L642'>642</a>
+<a name='L643'></a><a href='#L643'>643</a>
+<a name='L644'></a><a href='#L644'>644</a>
+<a name='L645'></a><a href='#L645'>645</a>
+<a name='L646'></a><a href='#L646'>646</a>
+<a name='L647'></a><a href='#L647'>647</a>
+<a name='L648'></a><a href='#L648'>648</a>
+<a name='L649'></a><a href='#L649'>649</a>
+<a name='L650'></a><a href='#L650'>650</a>
+<a name='L651'></a><a href='#L651'>651</a>
+<a name='L652'></a><a href='#L652'>652</a>
+<a name='L653'></a><a href='#L653'>653</a>
+<a name='L654'></a><a href='#L654'>654</a>
+<a name='L655'></a><a href='#L655'>655</a>
+<a name='L656'></a><a href='#L656'>656</a>
+<a name='L657'></a><a href='#L657'>657</a>
+<a name='L658'></a><a href='#L658'>658</a>
+<a name='L659'></a><a href='#L659'>659</a>
+<a name='L660'></a><a href='#L660'>660</a>
+<a name='L661'></a><a href='#L661'>661</a>
+<a name='L662'></a><a href='#L662'>662</a>
+<a name='L663'></a><a href='#L663'>663</a>
+<a name='L664'></a><a href='#L664'>664</a>
+<a name='L665'></a><a href='#L665'>665</a>
+<a name='L666'></a><a href='#L666'>666</a>
+<a name='L667'></a><a href='#L667'>667</a>
+<a name='L668'></a><a href='#L668'>668</a>
+<a name='L669'></a><a href='#L669'>669</a>
+<a name='L670'></a><a href='#L670'>670</a>
+<a name='L671'></a><a href='#L671'>671</a>
+<a name='L672'></a><a href='#L672'>672</a>
+<a name='L673'></a><a href='#L673'>673</a>
+<a name='L674'></a><a href='#L674'>674</a>
+<a name='L675'></a><a href='#L675'>675</a>
+<a name='L676'></a><a href='#L676'>676</a>
+<a name='L677'></a><a href='#L677'>677</a>
+<a name='L678'></a><a href='#L678'>678</a>
+<a name='L679'></a><a href='#L679'>679</a>
+<a name='L680'></a><a href='#L680'>680</a>
+<a name='L681'></a><a href='#L681'>681</a>
+<a name='L682'></a><a href='#L682'>682</a>
+<a name='L683'></a><a href='#L683'>683</a>
+<a name='L684'></a><a href='#L684'>684</a>
+<a name='L685'></a><a href='#L685'>685</a>
+<a name='L686'></a><a href='#L686'>686</a>
+<a name='L687'></a><a href='#L687'>687</a>
+<a name='L688'></a><a href='#L688'>688</a>
+<a name='L689'></a><a href='#L689'>689</a>
+<a name='L690'></a><a href='#L690'>690</a>
+<a name='L691'></a><a href='#L691'>691</a>
+<a name='L692'></a><a href='#L692'>692</a>
+<a name='L693'></a><a href='#L693'>693</a>
+<a name='L694'></a><a href='#L694'>694</a>
+<a name='L695'></a><a href='#L695'>695</a>
+<a name='L696'></a><a href='#L696'>696</a>
+<a name='L697'></a><a href='#L697'>697</a>
+<a name='L698'></a><a href='#L698'>698</a>
+<a name='L699'></a><a href='#L699'>699</a>
+<a name='L700'></a><a href='#L700'>700</a>
+<a name='L701'></a><a href='#L701'>701</a>
+<a name='L702'></a><a href='#L702'>702</a>
+<a name='L703'></a><a href='#L703'>703</a>
+<a name='L704'></a><a href='#L704'>704</a>
+<a name='L705'></a><a href='#L705'>705</a>
+<a name='L706'></a><a href='#L706'>706</a>
+<a name='L707'></a><a href='#L707'>707</a>
+<a name='L708'></a><a href='#L708'>708</a>
+<a name='L709'></a><a href='#L709'>709</a>
+<a name='L710'></a><a href='#L710'>710</a>
+<a name='L711'></a><a href='#L711'>711</a>
+<a name='L712'></a><a href='#L712'>712</a>
+<a name='L713'></a><a href='#L713'>713</a>
+<a name='L714'></a><a href='#L714'>714</a>
+<a name='L715'></a><a href='#L715'>715</a>
+<a name='L716'></a><a href='#L716'>716</a>
+<a name='L717'></a><a href='#L717'>717</a>
+<a name='L718'></a><a href='#L718'>718</a>
+<a name='L719'></a><a href='#L719'>719</a>
+<a name='L720'></a><a href='#L720'>720</a>
+<a name='L721'></a><a href='#L721'>721</a>
+<a name='L722'></a><a href='#L722'>722</a>
+<a name='L723'></a><a href='#L723'>723</a>
+<a name='L724'></a><a href='#L724'>724</a>
+<a name='L725'></a><a href='#L725'>725</a>
+<a name='L726'></a><a href='#L726'>726</a>
+<a name='L727'></a><a href='#L727'>727</a>
+<a name='L728'></a><a href='#L728'>728</a>
+<a name='L729'></a><a href='#L729'>729</a>
+<a name='L730'></a><a href='#L730'>730</a>
+<a name='L731'></a><a href='#L731'>731</a>
+<a name='L732'></a><a href='#L732'>732</a>
+<a name='L733'></a><a href='#L733'>733</a>
+<a name='L734'></a><a href='#L734'>734</a>
+<a name='L735'></a><a href='#L735'>735</a>
+<a name='L736'></a><a href='#L736'>736</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">34x</span>
+<span class="cline-any cline-yes">34x</span>
+<span class="cline-any cline-yes">34x</span>
+<span class="cline-any cline-yes">34x</span>
+<span class="cline-any cline-yes">34x</span>
+<span class="cline-any cline-yes">34x</span>
+<span class="cline-any cline-yes">34x</span>
+<span class="cline-any cline-yes">34x</span>
+<span class="cline-any cline-yes">126x</span>
+<span class="cline-any cline-yes">126x</span>
+<span class="cline-any cline-yes">126x</span>
+<span class="cline-any cline-yes">126x</span>
+<span class="cline-any cline-yes">126x</span>
+<span class="cline-any cline-yes">126x</span>
+<span class="cline-any cline-yes">34x</span>
+<span class="cline-any cline-yes">34x</span>
+<span class="cline-any cline-yes">34x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">80x</span>
+<span class="cline-any cline-yes">80x</span>
+<span class="cline-any cline-yes">80x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">19959274x</span>
+<span class="cline-any cline-yes">19959274x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">97x</span>
+<span class="cline-any cline-yes">97x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">3834591x</span>
+<span class="cline-any cline-yes">2801893x</span>
+<span class="cline-any cline-yes">2801893x</span>
+<span class="cline-any cline-yes">3834591x</span>
+<span class="cline-any cline-yes">3834591x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">8162x</span>
+<span class="cline-any cline-yes">8162x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">6903606x</span>
+<span class="cline-any cline-yes">6903606x</span>
+<span class="cline-any cline-yes">2435269x</span>
+<span class="cline-any cline-yes">6903606x</span>
+<span class="cline-any cline-yes">2435269x</span>
+<span class="cline-any cline-yes">6903606x</span>
+<span class="cline-any cline-yes">6903606x</span>
+<span class="cline-any cline-yes">6903606x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">57973x</span>
+<span class="cline-any cline-yes">57973x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">57973x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">360124x</span>
+<span class="cline-any cline-yes">360124x</span>
+<span class="cline-any cline-yes">360124x</span>
+<span class="cline-any cline-yes">360124x</span>
+<span class="cline-any cline-yes">2490696x</span>
+<span class="cline-any cline-yes">2490696x</span>
+<span class="cline-any cline-yes">2490696x</span>
+<span class="cline-any cline-yes">1231847x</span>
+<span class="cline-any cline-yes">217345x</span>
+<span class="cline-any cline-yes">2490696x</span>
+<span class="cline-any cline-yes">142779x</span>
+<span class="cline-any cline-yes">142779x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">13448x</span>
+<span class="cline-any cline-yes">13448x</span>
+<span class="cline-any cline-yes">13448x</span>
+<span class="cline-any cline-yes">13408x</span>
+<span class="cline-any cline-yes">13408x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">112x</span>
+<span class="cline-any cline-yes">112x</span>
+<span class="cline-any cline-yes">13694x</span>
+<span class="cline-any cline-yes">13694x</span>
+<span class="cline-any cline-yes">13694x</span>
+<span class="cline-any cline-yes">112x</span>
+<span class="cline-any cline-yes">13694x</span>
+<span class="cline-any cline-yes">112x</span>
+<span class="cline-any cline-yes">112x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">85x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">646x</span>
+<span class="cline-any cline-yes">2445847x</span>
+<span class="cline-any cline-yes">2445847x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2445847x</span>
+<span class="cline-any cline-yes">2445847x</span>
+<span class="cline-any cline-yes">2445847x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2445847x</span>
+<span class="cline-any cline-yes">2445847x</span>
+<span class="cline-any cline-yes">2445847x</span>
+<span class="cline-any cline-yes">2445847x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2445847x</span>
+<span class="cline-any cline-yes">2445847x</span>
+<span class="cline-any cline-yes">646x</span>
+<span class="cline-any cline-yes">646x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">544x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">544x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">13376x</span>
+<span class="cline-any cline-yes">13376x</span>
+<span class="cline-any cline-yes">13376x</span>
+<span class="cline-any cline-yes">3462456x</span>
+<span class="cline-any cline-yes">3462456x</span>
+<span class="cline-any cline-yes">3462456x</span>
+<span class="cline-any cline-yes">3462456x</span>
+<span class="cline-any cline-yes">13376x</span>
+<span class="cline-any cline-yes">13376x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">13058x</span>
+<span class="cline-any cline-yes">13058x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">114x</span>
+<span class="cline-any cline-yes">114x</span>
+<span class="cline-any cline-yes">114x</span>
+<span class="cline-any cline-yes">114x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">114x</span>
+<span class="cline-any cline-yes">114x</span>
+<span class="cline-any cline-yes">114x</span>
+<span class="cline-any cline-yes">114x</span>
+<span class="cline-any cline-yes">114x</span>
+<span class="cline-any cline-yes">114x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">1750060x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1750060x</span>
+<span class="cline-any cline-yes">151x</span>
+<span class="cline-any cline-yes">151x</span>
+<span class="cline-any cline-yes">151x</span>
+<span class="cline-any cline-yes">151x</span>
+<span class="cline-any cline-yes">151x</span>
+<span class="cline-any cline-yes">151x</span>
+<span class="cline-any cline-yes">151x</span>
+<span class="cline-any cline-yes">151x</span>
+<span class="cline-any cline-yes">1750060x</span>
+<span class="cline-any cline-yes">1750060x</span>
+<span class="cline-any cline-yes">1750060x</span>
+<span class="cline-any cline-yes">1750060x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">13058x</span>
+<span class="cline-any cline-yes">13058x</span>
+<span class="cline-any cline-yes">13058x</span>
+<span class="cline-any cline-yes">12974x</span>
+<span class="cline-any cline-yes">12974x</span>
+<span class="cline-any cline-yes">12974x</span>
+<span class="cline-any cline-yes">12974x</span>
+<span class="cline-any cline-yes">13058x</span>
+<span class="cline-any cline-yes">3440440x</span>
+<span class="cline-any cline-yes">3440440x</span>
+<span class="cline-any cline-yes">3394412x</span>
+<span class="cline-any cline-yes">3440440x</span>
+<span class="cline-any cline-yes">3440440x</span>
+<span class="cline-any cline-yes">2766442x</span>
+<span class="cline-any cline-yes">3394412x</span>
+<span class="cline-any cline-yes">3394412x</span>
+<span class="cline-any cline-yes">3394412x</span>
+<span class="cline-any cline-yes">3394412x</span>
+<span class="cline-any cline-yes">3440440x</span>
+<span class="cline-any cline-yes">3440440x</span>
+<span class="cline-any cline-yes">13058x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">2317x</span>
+<span class="cline-any cline-yes">2317x</span>
+<span class="cline-any cline-yes">2317x</span>
+<span class="cline-any cline-yes">372113x</span>
+<span class="cline-any cline-yes">372113x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">372113x</span>
+<span class="cline-any cline-yes">372113x</span>
+<span class="cline-any cline-yes">372113x</span>
+<span class="cline-any cline-yes">370566x</span>
+<span class="cline-any cline-yes">370566x</span>
+<span class="cline-any cline-yes">370566x</span>
+<span class="cline-any cline-yes">372113x</span>
+<span class="cline-any cline-yes">372105x</span>
+<span class="cline-any cline-yes">372105x</span>
+<span class="cline-any cline-yes">372105x</span>
+<span class="cline-any cline-yes">370566x</span>
+<span class="cline-any cline-yes">370566x</span>
+<span class="cline-any cline-yes">370566x</span>
+<span class="cline-any cline-yes">372105x</span>
+<span class="cline-any cline-yes">372113x</span>
+<span class="cline-any cline-yes">372113x</span>
+<span class="cline-any cline-yes">2317x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">100x</span>
+<span class="cline-any cline-yes">100x</span>
+<span class="cline-any cline-yes">100x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
+ * The stage's whole-genome picture (SPECS §27.9): every contact of a map, at
+ * up to 16,384 cells a side, one byte a cell.
+ *
+ * It exists for one reason: a reader cannot curate a genome they cannot see,
+ * and the 4,096-cell ceiling a whole-genome map keeps (`POOLED_CELL_CAP`) is a
+ * cell of 760 kb on a human genome — larger than most of the contigs a curator
+ * has come to move. So the stage keeps a picture of its own, four times finer,
+ * and keeps it **in the file's order**: an edit is then a new mapping from the
+ * cells on screen to the cells of the picture, never a new picture, which is
+ * what makes one instant at this scale (`edit/grid.ts` builds the mapping,
+ * `edit/paint.ts` draws through it).
+ *
+ * **One byte a cell, the upper triangle.** 16,384² cells as 32-bit floats are a
+ * gigabyte; as bytes, and half of them, 134 MB. A byte is the base-10 log of the
+ * value over a range fixed from the first band read, 254 steps of it, with `0`
+ * for a cell that holds nothing. It is a picture and nothing else: every number
+ * a reader is shown is read from the file, never from a byte of this.
+ *
+ * **One pass, in bands.** The rows are read a band at a time — the pixels whose
+ * first bin falls in the band, which is one ranged read of a cooler's pixel
+ * table — summed into a band of floats, and quantized before the next band is
+ * read, so the floats never outnumber one band. The range is set from the first
+ * band, with a decade of room below it and half of one above: every band
+ * carries the far contacts of its rows as well as their diagonal, so the first
+ * is a fair sample of the rest, and a value past either end is drawn at that end
+ * rather than lost.
+ *
+ * **A pyramid over it**, each level the mean of four cells of the one below,
+ * because a whole yeast genome on a screen is twelve cells to a pixel, and a
+ * pixel that shows one of the 144 cells under it sparkles where the map is
+ * sparse. The stage samples the level whose cell is about a pixel.
+ */
+&nbsp;
+import { yieldToEventLoop } from '../async'
+import type { Extent } from '../types'
+import type { Coords } from './coords'
+import type { PixelStore } from './store'
+&nbsp;
+/** Cells a side, at most: the stage's picture and nothing else (§27.9). */
+export const PICTURE_CELLS = 16_384
+&nbsp;
+/** How many floats a band may hold while it is being summed — 64 MB of them. */
+const BAND_BYTES = 64 * 1024 * 1024
+&nbsp;
+/** The smallest level the pyramid stops at, in cells a side. */
+const PYRAMID_FLOOR = 256
+&nbsp;
+/** Where the picture's cells fall on the map's bins. */
+export interface PictureLayout {
+  /** Bins of the map summed into one cell a side; `1` is the map's own bins. */
+  stride: number
+  /** Cells a side. */
+  n: number
+  /** The cell each bin of the map falls in; `-1` for a bin of a sequence the picture leaves out. */
+  slot: Int32Array
+  /**
+   * The first cell of each sequence, and one past the last: one more than
+   * the sequences drawn. A cell never holds two sequences — the grid starts
+   * afresh at each — so a piece of one can be moved without carrying the end
+   * of another.
+   */
+  offsets: Int32Array
+  /**
+   * The map's sequences drawn, in its order, where they are not all of them:
+   * one genome of a metagenome and the contigs brought into it (§27.10).
+   */
+  contigs?: Int32Array
+}
+&nbsp;
+/**
+ * The grid `stride` bins a cell makes of a map, anchored to every sequence —
+ * or to those of `contigs`, the map's own indices in its order, the rest left
+ * out: a picture of one genome of a metagenome is a picture of its sequences
+ * alone.
+ */
+export function pictureLayout(coords: Coords, stride: number, contigs?: ArrayLike&lt;number&gt;): PictureLayout {
+  const k = Math.max(1, Math.trunc(stride))
+  const drawn = contigs ?? null
+  const count = drawn === null ? coords.nContigs : drawn.length
+  const offsets = new Int32Array(count + 1)
+  const slot = new Int32Array(coords.nBins)
+  if (drawn !== null) slot.fill(-1)
+  let cell = 0
+  for (let i = 0; i &lt; count; i++) {
+    const c = drawn === null ? i : drawn[i]
+    offsets[i] = cell
+    const [lo, hi] = coords.contigBinExtent(c)
+    for (let bin = lo; bin &lt; hi; bin++) slot[bin] = cell + Math.floor((bin - lo) / k)
+    cell += Math.ceil((hi - lo) / k)
+  }
+  offsets[count] = cell
+  return { stride: k, n: cell, slot, offsets, ...(drawn === null ? {} : { contigs: Int32Array.from(drawn) }) }
+}
+&nbsp;
+/** Cells a side at `stride`, from the sequences' bin counts alone. */
+function cellsAt(coords: Coords, stride: number, contigs?: ArrayLike&lt;number&gt;): number {
+  let total = 0
+  const count = contigs === undefined ? coords.nContigs : contigs.length
+  for (let i = 0; i &lt; count; i++) {
+    const [lo, hi] = coords.contigBinExtent(contigs === undefined ? i : contigs[i])
+    total += Math.ceil((hi - lo) / stride)
+  }
+  return total
+}
+&nbsp;
+/**
+ * The fewest bins a cell that brings the picture within `cap` cells a side, or
+ * `null` where no number does: a cell never holds two sequences, so an assembly
+ * of more sequences than that has no picture of this kind (§27.13). Of the
+ * sequences of `contigs` alone, where it is given.
+ */
+export function pictureStride(coords: Coords, cap = PICTURE_CELLS, contigs?: ArrayLike&lt;number&gt;): number | null {
+  if ((contigs === undefined ? coords.nContigs : contigs.length) &gt; cap) return null
+  const cells = (stride: number): number =&gt; cellsAt(coords, stride, contigs)
+  if (cells(1) &lt;= cap) return 1
+  let high = 2
+  while (cells(high) &gt; cap) high *= 2
+  let low = high &gt;&gt; 1
+  while (low + 1 &lt; high) {
+    const mid = (low + high) &gt;&gt; 1
+    if (cells(mid) &lt;= cap) <span class="branch-0 cbranch-no" title="branch not covered" >high = mid</span>
+    else low = mid
+  }
+  return high
+}
+&nbsp;
+/** Stored pixels a row of the picture's cells should hold, on the mean: below it, a map is too shallow at its bins to see or weigh. */
+export const PICTURE_DEPTH = 64
+&nbsp;
+/**
+ * The fewest bins a cell of a map as shallow as this one takes for its rows to
+ * hold {@link PICTURE_DEPTH} stored pixels each, on the mean — from the store's
+ * row index alone, so nothing is read to know it. A metagenome's genome at a
+ * kilobase holds a few contacts a row, and a picture of it at its own bins is
+ * white, and every window of it a guess; `1` for any map deeper than that.
+ *
+ * @param offsets The store's `bin1_offset`: the stored pixels before each row.
+ */
+export <span class="fstat-no" title="function not covered" >function depthStride(coords: Coords, offsets: ArrayLike&lt;number&gt; | null, contigs?: ArrayLike&lt;number&gt;, least = PICTURE_DEPTH): number {</span>
+<span class="cstat-no" title="statement not covered" >  if (offsets === null) return 1</span>
+<span class="cstat-no" title="statement not covered" >  let pixels = 0</span>
+<span class="cstat-no" title="statement not covered" >  let bins = 0</span>
+<span class="cstat-no" title="statement not covered" >  const count = contigs === undefined ? coords.nContigs : contigs.length</span>
+<span class="cstat-no" title="statement not covered" >  for (let i = 0; i &lt; count; i++) {</span>
+<span class="cstat-no" title="statement not covered" >    const [lo, hi] = coords.contigBinExtent(contigs === undefined ? i : contigs[i])</span>
+<span class="cstat-no" title="statement not covered" >    pixels += offsets[hi] - offsets[lo]</span>
+<span class="cstat-no" title="statement not covered" >    bins += hi - lo</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  if (!(bins &gt; 0) || !(pixels &gt; 0)) return 1</span>
+<span class="cstat-no" title="statement not covered" >  return Math.max(1, Math.ceil(least / (pixels / bins)))</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+/**
+ * The finest bins, in base pairs, a map as deep as this one shows — rows of
+ * {@link PICTURE_DEPTH} stored pixels on the mean — from one rung's row index:
+ * its {@link depthStride} of its bins where it is shallow at them, and finer
+ * than them where it is deep, on the reckoning that a finer rung spreads the
+ * same stored pixels over proportionally more rows. A finer rung holds more
+ * pixels than that, never fewer, so the answer errs coarse. What a window of
+ * the stage is never read finer than (§27.9).
+ */
+export function depthFloor(coords: Coords, offsets: ArrayLike&lt;number&gt; | null, binsize: number, contigs?: ArrayLike&lt;number&gt;, least = PICTURE_DEPTH): number {
+  if (offsets === null) return binsize
+  let pixels = 0
+  let bins = 0
+  const count = contigs === undefined ? coords.<span class="branch-0 cbranch-no" title="branch not covered" >nContigs : contigs.length</span>
+  for (let i = 0; i &lt; count; i++) {
+    const [lo, hi] = coords.contigBinExtent(contigs === undefined ? <span class="branch-0 cbranch-no" title="branch not covered" >i : contigs[i])</span>
+    pixels += offsets[hi] - offsets[lo]
+    bins += hi - lo
+  }
+  if (!(bins &gt; 0) || !(pixels &gt; 0)) <span class="branch-0 cbranch-no" title="branch not covered" >return binsize</span>
+  const perRow = pixels / bins
+  return perRow &lt; least ? binsize * Math.ceil(least / perRow) : binsize / Math.floor(perRow / least)
+}
+&nbsp;
+/** Where cell `(a, b)`, `a ≤ b`, lives in an upper triangle `n` a side. */
+export function triangleIndex(a: number, b: number, n: number): number {
+  return a * n - (a * (a - 1)) / 2 + (b - a)
+}
+&nbsp;
+/** Cells in an upper triangle `n` a side, the diagonal included. */
+export function triangleSize(n: number): number {
+  return (n * (n + 1)) / 2
+}
+&nbsp;
+/**
+ * What a byte stands for: the base-10 logs byte `1` and byte `255` are.
+ * Byte `0` is a cell that holds nothing.
+ */
+export interface Quantizer {
+  low: number
+  high: number
+}
+&nbsp;
+/** A value as a byte. Anything above nothing is at least `1`, so faint is never empty. */
+export function encode(value: number, q: Quantizer): number {
+  if (!(value &gt; 0)) return 0
+  const step = (Math.log10(value) - q.low) * (254 / (q.high - q.low))
+  const byte = 1 + Math.round(step)
+  return byte &lt; <span class="branch-0 cbranch-no" title="branch not covered" >1 ? 1 : b</span>yte &gt; <span class="branch-0 cbranch-no" title="branch not covered" >255 ? 255 : b</span>yte
+}
+&nbsp;
+/** The base-10 log a byte stands for; `-Infinity` for `0`. */
+export function logOf(byte: number, q: Quantizer): number {
+  return byte === <span class="branch-0 cbranch-no" title="branch not covered" >0 ? Number.NEGATIVE_INFINITY : q</span>.low + ((byte - 1) * (q.high - q.low)) / 254
+}
+&nbsp;
+/** Every byte's value, as a table: `0` for byte `0`. */
+export function decodeTable(q: Quantizer): Float64Array {
+  const table = new Float64Array(256)
+  for (let b = 1; b &lt; 256; b++) table[b] = 10 ** logOf(b, q)
+  return table
+}
+&nbsp;
+/**
+ * The range a band's values set: from a decade under their thousandth-lowest
+ * part to half a decade over their highest. `null` where the band holds too
+ * few contacts to say, and the caller falls back to a range wide enough for
+ * any map (`FALLBACK`).
+ */
+function rangeOf(values: Float32Array): Quantizer | null {
+  // A histogram of the logs, a hundredth of a decade a bin — a percentile
+  // without sorting sixteen million floats.
+  const LOW = -20
+  const BINS = 4000
+  const counts = new Uint32Array(BINS)
+  let seen = 0
+  let top = Number.NEGATIVE_INFINITY
+  for (let i = 0; i &lt; values.length; i++) {
+    const v = values[i]
+    if (!(v &gt; 0)) continue
+    const x = Math.log10(v)
+    if (x &gt; top) top = x
+    const bin = Math.floor((x - LOW) * 100)
+    counts[bin &lt; <span class="branch-0 cbranch-no" title="branch not covered" >0 ? 0 : b</span>in &gt;= <span class="branch-0 cbranch-no" title="branch not covered" >BINS ? BINS - 1 : b</span>in]++
+    seen++
+  }
+  if (seen &lt; 1000) return null
+  const floorAt = seen * 0.001
+  let running = 0
+  let floor = LOW
+  for (let bin = 0; bin &lt; BINS; bin++) {
+    running += counts[bin]
+    if (running &gt;= floorAt) {
+      floor = LOW + bin / 100
+      break
+    }
+  }
+  const low = floor - 1
+  const high = Math.max(top + 0.5, low + 1)
+  return { low, high }
+}
+&nbsp;
+/** Twenty decades: balanced values and raw counts alike, drawn coarsely. */
+const FALLBACK: Quantizer = { low: -12, high: 8 }
+&nbsp;
+/**
+ * The contacts the same pass keeps as numbers, for the method that proposes
+ * edits (§27.5): the picture is bytes and nothing else, so what the method
+ * weighs is gathered beside it, from the same floats, before they are
+ * quantized.
+ *
+ * Every value is the **mean over a cell's bin pairs** — the balanced value, or
+ * the raw count, of one pair of bins — so a pooled cell and a single bin speak
+ * one unit, and a cell part of whose bins the balancer dropped is the mean of
+ * the ones it kept.
+ */
+export interface PictureContacts {
+  /** Cells a side, as the picture has them. */
+  n: number
+  /** The original sequence each cell is in, as the file orders them. */
+  sequenceOf: Int32Array
+  /** Cells past the diagonal the band keeps, the diagonal included. */
+  width: number
+  /**
+   * The cells nearest the diagonal, as they are: `band[a * width + k]` is cell
+   * `(a, a + k)`, inside one sequence; `NaN` past its end, and where the
+   * balancer dropped every bin of either cell.
+   */
+  band: Float32Array
+  /**
+   * The whole map on a coarser grid, `factor` cells a coarse cell, anchored to
+   * every sequence as the picture's grid is: each coarse cell the mean of the
+   * cells in it that hold anything the balancer kept, `NaN` where none does.
+   * An upper triangle, {@link triangleIndex} over `n`.
+   */
+  coarse: { n: number; factor: number; of: Int32Array; values: Float32Array }
+  /** Each cell's row sum of those means over the whole map — its coverage. */
+  marginal: Float64Array
+  /** Bins of each cell the balancer kept: every one of them, unbalanced. */
+  kept: Uint16Array
+  /**
+   * The cells as they are between the **ends** of sequences (§27.5): every
+   * cell within `depth` of either end of a sequence is in its end's zone, and
+   * every pair of zone cells the band does not already hold — two sequences'
+   * ends, or a sequence's two ends — is kept here, where it holds anything, so
+   * that whether two ends meet is weighed at the picture's own resolution
+   * rather than on the coarse grid. A pair of kept cells that is not listed
+   * held nothing. `complete` is `false` where the budget ran out first, and the
+   * pairs past it are read from the coarse grid.
+   */
+  ends?: PictureEnds
+}
+&nbsp;
+/** The cells between sequence ends, sparse: see {@link PictureContacts.ends}. */
+export interface PictureEnds {
+  depth: number
+  /** Each cell's zone — `2s` the start of sequence `s`, `2s + 1` its end — or `-1`. */
+  zone: Int32Array
+  /**
+   * The pairs that held anything, by row as a compressed sparse matrix: the
+   * pairs of row `a` are `rowStart[a]` to `rowStart[a + 1]`, each a column above
+   * `a` in `cols`, ascending, and its value in `values` — so a pair is found by
+   * a binary search of its row, and nothing is built to find it.
+   */
+  rowStart: Int32Array
+  cols: Int32Array
+  values: Float32Array
+  complete: boolean
+}
+&nbsp;
+/** The value a {@link PictureEnds} holds for cells `lo ≤ hi`, or `undefined` where it lists none. */
+export function endValue(ends: PictureEnds, lo: number, hi: number): number | undefined {
+  let low = ends.rowStart[lo]
+  let high = ends.rowStart[lo + 1] - 1
+  const cols = ends.cols
+  while (low &lt;= high) {
+    const mid = (low + high) &gt;&gt; 1
+    const c = cols[mid]
+    if (c &lt; hi) low = mid + 1
+    else if (c &gt; hi) high = mid - 1
+    else return ends.values[mid]
+  }
+  return undefined
+}
+&nbsp;
+/** What the gathering keeps: how wide a band, and how coarse a whole. */
+export interface GatherOptions {
+  /** Cells past the diagonal the band keeps. */
+  width: number
+  /** The most coarse cells a side. */
+  coarseCells: number
+  /** Cells from each end of a sequence whose pairs with other ends are kept as they are; none where absent. */
+  endDepth?: number
+  /** The most end pairs kept. */
+  endBudget?: number
+}
+&nbsp;
+/** The most pairs of end cells a pass keeps: 48 MB of them. */
+export const END_BUDGET = 4_000_000
+&nbsp;
+/**
+ * The fewest cells a coarse cell for the coarse grid to fit `cap` a side,
+ * anchored to every sequence — or, where there are more sequences than `cap`,
+ * the fewest that make each one coarse cell: no factor does better, and a
+ * search past it would go on for ever.
+ */
+export function coarseFactor(offsets: Int32Array, cap: number): number {
+  const at = (factor: number): number =&gt; {
+    let total = 0
+    for (let c = 0; c + 1 &lt; offsets.length; c++) total += Math.ceil((offsets[c + 1] - offsets[c]) / factor)
+    return total
+  }
+  let longest = 1
+  for (let c = 0; c + 1 &lt; offsets.length; c++) longest = Math.max(longest, offsets[c + 1] - offsets[c])
+  if (at(1) &lt;= cap) return <span class="branch-0 cbranch-no" title="branch not covered" >1</span>
+<span class="cstat-no" title="statement not covered" >  if (at(longest) &gt; cap) return longest</span>
+  // The count falls as the factor grows: the least factor that fits, by halving.
+<span class="cstat-no" title="statement not covered" >  let low = 1</span>
+<span class="cstat-no" title="statement not covered" >  let high = longest</span>
+<span class="cstat-no" title="statement not covered" >  while (low + 1 &lt; high) {</span>
+<span class="cstat-no" title="statement not covered" >    const mid = (low + high) &gt;&gt; 1</span>
+<span class="cstat-no" title="statement not covered" >    if (at(mid) &lt;= cap) high = mid</span>
+<span class="cstat-no" title="statement not covered" >    else low = mid</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  return high</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+/** What a read of the picture hands back, before the pyramid is built on it. */
+export interface PictureRead {
+  /** The upper triangle, `n` a side: {@link triangleIndex} addresses it. */
+  cells: Uint8Array
+  quantizer: Quantizer
+  /** Cells at each byte, `0` included — what the display range is taken from. */
+  histogram: Float64Array
+  /** Stored pixels walked. */
+  pixels: number
+  /** What the method weighs, where it was asked for. */
+  contacts?: PictureContacts
+}
+&nbsp;
+/**
+ * Read a map into its picture.
+ *
+ * @param weights One per bin of the map, for balanced values; `null` for the
+ *   raw column. A `NaN` weight is a bin the balancer dropped, and its cells stay
+ *   empty — "a blank row is an unbalanced row" (§6.4).
+ * @param upperTriangular Whether the store holds each pair once. A `square`
+ *   store holds both, and only the upper half of each band is taken.
+ * @returns `null` where the caller cancelled.
+ */
+export async function readPicture(options: {
+  store: PixelStore
+  coords: Coords
+  layout: PictureLayout
+  weights: Float64Array | null
+  value?: string
+  bandBytes?: number
+  /** Keep the contacts the method weighs as well (§27.5), and how. */
+  gather?: GatherOptions
+  cancelled?: () =&gt; boolean
+  onProgress?: (done: number, total: number) =&gt; void
+}): Promise&lt;PictureRead | null&gt; {
+  const { store, layout, weights } = options
+  const n = layout.n
+  const slot = layout.slot
+  const nBins = slot.length
+  const cells = new Uint8Array(triangleSize(n))
+  const histogram = new Float64Array(256)
+  const gather = options.gather === undefined ? null : gathering(layout, weights, options.gather)
+&nbsp;
+  // The bins of each cell, so a band of cell rows is the runs of bins its
+  // sequences hold — one run where every sequence is drawn, and never the rows
+  // of a sequence left out between two drawn.
+  const firstBin = new Int32Array(n).fill(-1)
+  const endBin = new Int32Array(n)
+  for (let bin = 0; bin &lt; nBins; bin++) {
+    const cell = slot[bin]
+    if (cell &lt; 0) continue
+    if (firstBin[cell] &lt; 0) firstBin[cell] = bin
+    endBin[cell] = bin + 1
+  }
+  const runsOf = (r0: number, r1: number): Extent[] =&gt; {
+    const runs: Extent[] = []
+    for (let cell = r0; cell &lt; r1; cell++) {
+      if (firstBin[cell] &lt; 0) <span class="branch-0 cbranch-no" title="branch not covered" >continue</span>
+      const last = runs[runs.length - 1]
+      if (last !== undefined &amp;&amp; last[1] === firstBin[cell]) last[1] = endBin[cell]
+      else runs.push([firstBin[cell], endBin[cell]])
+    }
+    return runs
+  }
+&nbsp;
+  const rowsPerBand = Math.max(1, Math.floor((options.bandBytes ?? BAND_BYTES) / (4 * Math.max(1, n))))
+  const band = new Float32Array(Math.min(n, rowsPerBand) * n)
+&nbsp;
+  // Pixels per band where the store can say, for a bar that moves with the
+  // bytes rather than with the rows; the rows otherwise.
+  let offsets: Float64Array | null = null
+  try {
+    offsets = store.binOffsets()
+  } catch {
+    offsets = null
+  }
+  const pixelsIn = (runs: readonly Extent[]): number =&gt;
+    offsets === null ? 0 : runs.reduce((sum, [lo, hi]) =&gt; sum + (offsets[hi] - offsets[lo]), 0)
+  const total = offsets !== null ? pixelsIn(runsOf(0, n)) : n
+  let done = 0
+  let quantizer: Quantizer | null = null
+  let pixels = 0
+&nbsp;
+  for (let r0 = 0; r0 &lt; n; r0 += rowsPerBand) {
+    if (options.<span class="branch-0 cbranch-no" title="branch not covered" >cancelled?.() === t</span>rue) <span class="branch-0 cbranch-no" title="branch not covered" >return null</span>
+    const r1 = Math.min(n, r0 + rowsPerBand)
+    const runs = runsOf(r0, r1)
+    const width = (r1 - r0) * n
+    band.fill(0, 0, width)
+    const before = done
+    const stopped = !(await store.forEachBands(
+      runs,
+      (chunk) =&gt; {
+        for (let i = 0; i &lt; chunk.length; i++) {
+          const b1 = chunk.bin1[i]
+          const b2 = chunk.bin2[i]
+          // The upper half only: a square store holds the lower one as well.
+          if (b2 &lt; b1) <span class="branch-0 cbranch-no" title="branch not covered" >continue</span>
+          const r = slot[b1]
+          const c = slot[b2]
+          // A contact with a sequence the picture leaves out.
+          if (r &lt; 0 || c &lt; 0) <span class="branch-0 cbranch-no" title="branch not covered" >continue</span>
+          let v = chunk.count[i]
+          if (weights !== null) v *= weights[b1] * weights[b2]
+          if (!(v &gt; 0)) continue
+          // A pooled cell on the diagonal is a square of bin pairs of which the
+          // store holds one half: counted twice off its own diagonal, it is the
+          // sum the square holds.
+          band[(r - r0) * n + c] += r === c &amp;&amp; b1 !== b2 ? 2 * v : v
+        }
+        pixels += chunk.length
+      },
+      {
+        ...(options.cancelled === undefined ? {<span class="branch-0 cbranch-no" title="branch not covered" >} : { cancelled: options.cancelled }),</span>
+        ...(options.value === undefined ? {<span class="branch-0 cbranch-no" title="branch not covered" >} : { value: options.value }),</span>
+        onProgress: (bandDone) =&gt; {
+          if (offsets === null) return
+<span class="cstat-no" title="statement not covered" >          options.onProgress?.(before + bandDone, total)</span>
+        },
+      },
+    ))
+    if (stopped) <span class="branch-0 cbranch-no" title="branch not covered" >return null</span>
+&nbsp;
+    quantizer ??= rangeOf(band.subarray(0, width)) ?? FALLBACK
+    for (let r = r0; r &lt; r1; r++) {
+      const row = (r - r0) * n
+      let at = triangleIndex(r, r, n)
+      for (let c = r; c &lt; n; c++, at++) {
+        const byte = encode(band[row + c], quantizer)
+        cells[at] = byte
+        histogram[byte]++
+      }
+      gather?.row(r, band, row)
+    }
+    done = offsets !== null ? before + pixelsIn(runs) : r1
+    options.<span class="branch-0 cbranch-no" title="branch not covered" >onProgress?.(done, total)</span>
+    await yieldToEventLoop()
+  }
+&nbsp;
+  return {
+    cells,
+    quantizer: <span class="branch-0 cbranch-no" title="branch not covered" >quantizer ?? FALLBACK,</span>
+    histogram,
+    pixels,
+    ...(gather === null ? {} : { contacts: gather.finish() }),
+  }
+}
+&nbsp;
+/**
+ * The method's share of the pass (§27.5): a row of the picture's floats at a
+ * time, as each band is quantized, into the band along the diagonal, the coarse
+ * whole and the coverage. The floats are sums over a cell's bin pairs; each is
+ * divided by how many pairs the balancer kept, so every value is one pair's.
+ */
+function gathering(
+  layout: PictureLayout,
+  weights: Float64Array | null,
+  options: GatherOptions,
+): { row(r: number, band: Float32Array, at: number): void; finish(): PictureContacts } {
+  const n = layout.n
+  const width = Math.max(1, Math.trunc(options.width))
+  const kept = new Uint16Array(n)
+  for (let bin = 0; bin &lt; layout.slot.length; bin++) {
+    if (layout.slot[bin] &gt;= 0 &amp;&amp; (weights === null || weights[bin] &gt; 0)) kept[layout.slot[bin]]++
+  }
+  const sequenceOf = new Int32Array(n)
+  for (let c = 0; c + 1 &lt; layout.offsets.length; c++) sequenceOf.fill(c, layout.offsets[c], layout.offsets[c + 1])
+&nbsp;
+  const factor = coarseFactor(layout.offsets, Math.max(1, options.coarseCells))
+  const of = new Int32Array(n)
+  let coarseN = 0
+  for (let c = 0; c + 1 &lt; layout.offsets.length; c++) {
+    const first = layout.offsets[c]
+    for (let cell = first; cell &lt; layout.offsets[c + 1]; cell++) of[cell] = coarseN + Math.floor((cell - first) / factor)
+    coarseN += Math.ceil((layout.offsets[c + 1] - first) / factor)
+  }
+&nbsp;
+  const bandOut = new Float32Array(n * width).fill(Number.NaN)
+  const sums = new Float64Array(triangleSize(coarseN))
+  const counts = new Uint32Array(triangleSize(coarseN))
+  const marginal = new Float64Array(n)
+&nbsp;
+  // The end zones: each sequence's first and last `depth` cells — a short
+  // one's nearer half to each end.
+  const depth = Math.max(0, Math.trunc(options.<span class="branch-0 cbranch-no" title="branch not covered" >endDepth ?? 0)</span>)
+  const zone = new Int32Array(n).fill(-1)
+  if (depth &gt; 0) {
+    for (let s = 0; s + 1 &lt; layout.offsets.length; s++) {
+      const first = layout.offsets[s]
+      const last = layout.offsets[s + 1]
+      const length = last - first
+      zone.fill(2 * s, first, first + Math.min(depth, Math.ceil(length / 2)))
+      zone.fill(2 * s + 1, last - Math.min(depth, Math.floor(length / 2)), last)
+    }
+  }
+  const budget = Math.max(0, Math.trunc(options.endBudget ?? END_BUDGET))
+  // Rows arrive in order and each row's columns ascending, so the pairs are
+  // kept already sorted, and each row's first pair is where it starts.
+  const rowStart = new Int32Array(depth &gt; 0 ? n + <span class="branch-0 cbranch-no" title="branch not covered" >1 : 0)</span>
+  let endCols = new Int32Array(depth &gt; 0 ? <span class="branch-0 cbranch-no" title="branch not covered" >1024 : 0)</span>
+  let endValues = new Float32Array(endCols.length)
+  let ends = 0
+  let complete = true
+  const keep = (c: number, v: number): void =&gt; {
+    if (ends &gt;= budget) <span class="branch-0 cbranch-no" title="branch not covered" >{</span>
+<span class="cstat-no" title="statement not covered" >      complete = false</span>
+<span class="cstat-no" title="statement not covered" >      return</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+    if (ends === endCols.length) {
+      const size = Math.min(budget, endCols.length * 2)
+      const cols = new Int32Array(size)
+      const values = new Float32Array(size)
+      cols.set(endCols)
+      values.set(endValues)
+      endCols = cols
+      endValues = values
+    }
+    endCols[ends] = c
+    endValues[ends] = v
+    ends++
+  }
+&nbsp;
+  return {
+    row(r, band, at) {
+      if (depth &gt; 0) rowStart[r] = ends
+      const kr = kept[r]
+      if (kr === 0) return
+      const sequence = sequenceOf[r]
+      const coarseRow = of[r]
+      const coarseAt = triangleIndex(coarseRow, coarseRow, coarseN) - coarseRow
+      const inZone = zone[r] &gt;= 0
+      for (let c = r; c &lt; n; c++) {
+        const kc = kept[c]
+        if (kc === 0) continue
+        const v = band[at + c] / (kr * kc)
+        const inBand = c - r &lt; width &amp;&amp; sequenceOf[c] === sequence
+        if (inBand) bandOut[r * width + (c - r)] = v
+        else if (inZone &amp;&amp; v &gt; 0 &amp;&amp; zone[c] &gt;= 0) keep(c, v)
+        const index = coarseAt + of[c]
+        sums[index] += v
+        counts[index]++
+        marginal[r] += v
+        if (c !== r) marginal[c] += v
+      }
+    },
+    finish() {
+      const values = new Float32Array(sums.length)
+      for (let i = 0; i &lt; sums.length; i++) values[i] = counts[i] === 0 ? Number.NaN : sums[i] / counts[i]
+      return {
+        n,
+        sequenceOf,
+        width,
+        band: bandOut,
+        coarse: { n: coarseN, factor, of, values },
+        marginal,
+        kept,
+        ...(depth &gt; 0
+          ? {
+              ends: {
+                depth,
+                zone,
+                rowStart: finishRows(rowStart, ends),
+                cols: endCols.slice(0, ends),
+                values: endValues.slice(0, ends),
+                complete,
+              },
+<span class="branch-0 cbranch-no" title="branch not covered" >            }</span>
+<span class="cstat-no" title="statement not covered" >          : {}),</span>
+      }
+    },
+  }
+}
+&nbsp;
+/** Close a row index: every row set its own start as the pass reached it, in order; the last row ends where the pairs do. */
+function finishRows(rowStart: Int32Array, total: number): Int32Array {
+  rowStart[rowStart.length - 1] = total
+  return rowStart
+}
+&nbsp;
+/** One level of the pyramid: an upper triangle `n` a side. */
+export interface PictureLevel {
+  n: number
+  cells: Uint8Array
+}
+&nbsp;
+/**
+ * The levels over a picture, each the mean of the four cells under it, down to
+ * {@link PYRAMID_FLOOR} cells a side. The first is the picture itself.
+ *
+ * A mean, not a sum, so one colour scale serves every level: a cell of a
+ * coarser level says how dense the stretch is, as a cell of the finest does.
+ */
+export function pyramid(level0: PictureLevel, q: Quantizer, floor = PYRAMID_FLOOR): PictureLevel[] {
+  const table = decodeTable(q)
+  const levels: PictureLevel[] = [level0]
+  let below = level0
+  while (below.n &gt; floor) {
+    const pn = below.n
+    const prev = below.cells
+    const m = Math.ceil(pn / 2)
+    const cells = new Uint8Array(triangleSize(m))
+    let at = 0
+    for (let a = 0; a &lt; m; a++) {
+      const i0 = 2 * a
+      const i1 = i0 + 1
+      for (let b = a; b &lt; m; b++, at++) {
+        const j0 = 2 * b
+        const j1 = j0 + 1
+        // The four children, each read from the upper half: on the diagonal
+        // `(i1, j0)` is below it, and is `(j0, i1)`.
+        let sum = table[prev[triangleIndex(i0, j0, pn)]]
+        let count = 1
+        if (j1 &lt; pn) {
+          sum += table[prev[triangleIndex(i0, j1, pn)]]
+          count++
+        }
+        if (i1 &lt; pn) {
+          sum += table[prev[i1 &lt;= j0 ? triangleIndex(i1, j0, pn) : triangleIndex(j0, i1, pn)]]
+          count++
+          if (j1 &lt; pn) {
+            sum += table[prev[triangleIndex(i1, j1, pn)]]
+            count++
+          }
+        }
+        cells[at] = encode(sum / count, q)
+      }
+    }
+    below = { n: m, cells }
+    levels.push(below)
+  }
+  return levels
+}
+&nbsp;
+/**
+ * The display range a picture opens at, in base-10 logs: its cells' first and
+ * ninety-ninth percentiles, the rule every map's automatic range follows
+ * (`render/scale.ts`, `AUTO_VMIN_PERCENTILE`, `AUTO_VMAX_PERCENTILE`).
+ */
+export function displayRange(histogram: Float64Array, q: Quantizer): { vmin: number; vmax: number } {
+  let filled = 0
+  for (let b = 1; b &lt; 256; b++) filled += histogram[b]
+  if (filled === 0) <span class="branch-0 cbranch-no" title="branch not covered" >return { vmin: q.low, vmax: q.high }</span>
+  const at = (fraction: number): number =&gt; {
+    const target = filled * fraction
+    let running = 0
+    for (let b = 1; b &lt; 256; b++) {
+      running += histogram[b]
+      if (running &gt;= target) return logOf(b, q)
+<span class="branch-0 cbranch-no" title="branch not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >    return q.high</span>
+  }
+  const vmin = at(0.01)
+  const vmax = at(0.99)
+  return vmax &gt; vmin ? { vmin, vmax <span class="branch-0 cbranch-no" title="branch not covered" >} : { vmin, vmax: vmin + 1 }</span>
+}
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-11-07T08:44:07.819Z
+            </div>
+        <script src="../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../sorter.js"></script>
+        <script src="../../block-navigation.js"></script>
+    </body>
+</html>
+    
