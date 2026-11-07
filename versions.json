@@ -1,6 +1,13 @@
 {
-  "latest": "6f5a354",
+  "latest": "f4e9cc3",
   "versions": [
+    {
+      "commit": "f4e9cc3",
+      "version": "0.21.0",
+      "date": "2026-11-07T09:36:21+01:00",
+      "subject": "Service worker: keep a page only if it is this build's, and rescue a worker stuck on a blank one (§11) (#167)",
+      "tag": ""
+    },
     {
       "commit": "6f5a354",
       "version": "0.21.0",
@@ -132,13 +139,6 @@
       "version": "0.19.0",
       "date": "2026-11-03T20:03:46+01:00",
       "subject": "ci: update timings R script",
-      "tag": ""
-    },
-    {
-      "commit": "fee7881",
-      "version": "0.19.0",
-      "date": "2026-11-03T16:48:29+01:00",
-      "subject": "ci: add test coverage reporting and publish coverage to GH pages",
       "tag": ""
     },
     {
