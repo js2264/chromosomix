@@ -46,7 +46,7 @@ node scripts/ui-trackcorr.mjs gallery         # Track correlation on the yeast d
 node scripts/ui-deck-cells.mjs gallery       # a tracks cell's axis, both anchors' hairlines, cells renamed, a lane out of a tracks cell, one side of two carried, the Structures eye, a track beside the map in a tracks cell, the height bars: dc1 … dc24
 node scripts/ui-correlation.mjs gallery      # the map's correlation at 4,096, 2,048 and 1,024 bins with its wait printed, the veil, a whole chromosome, the Compartments warning, yeast IV: co1 … co9
 node scripts/ui-compartments.mjs gallery     # the Compartments table under cooltools and under the correlation, each printed: cp1, cp2
-node scripts/ui-interarm.mjs gallery         # Inter-arm alignment's form, and its table, the enrichment after detrend beside the enrichment, on E. coli, on P. aeruginosa PAK (read from the zoo) and on B. subtilis 45 min into ParB induction, printed; on PAK the profile after detrend on the measurement's axis and the decay curves; then the ParB time course as one deck, its all-maps table drawn as the reach against the minutes in each map's name with its least-squares line, over every point and over a box drawn across the points under way: ia1 … ia9
+node scripts/ui-interarm.mjs gallery         # Inter-arm alignment's form, and its table, the enrichment after detrend beside the enrichment, on E. coli, on P. aeruginosa PAK (read from the zoo, with GALLERY_DATA) and on B. subtilis 45 min into ParB induction (the store's copy), printed; on PAK the profile after detrend on the measurement's axis and the decay curves; then the ParB time course as one deck, its all-maps table drawn as the reach against the minutes in each map's name with its least-squares line, over every point and over a box drawn across the points under way: ia1 … ia9
 node scripts/ui-arrowhead-report.mjs gallery  # TAD annotation and the map report (§18.8) on the yeast demo: the column filtered by `TAD`, the Arrowhead form with its price, a run and its table, the domains as corners on the map and close up; the Map report's form, a run, its drawer page by page, and the HTML report it saves (files/), opened alone in light and dark: ar01 … ar12
 node scripts/ui-loop-calling.mjs gallery     # Loop calling on the yeast demo (§18.8): its row before Pattern detection, both under `loop`, the form on 1 kb with the kernel's boxes empty and the run refused saying why, the half-widths typed and the price, a run's notes, the loops as a table, the loop spectrum and the contacts each λ-chunk asked, the loops as rings on IV and close up, then a 5 kb rung after the run — the typed kernel kept, reach and radius following the rung — and the same rung fresh, the kernel for 5 kb bins in its boxes: lo01 … lo15
 node scripts/ui-arm-baseline.mjs gallery    # the score picker's arm decay on PAK: offered once the first open ticks the circle, both diagonals with arms off, the card, ori keeping it, a hover, expected beside it, the link, unticked and ticked, and not on yeast: ab01 … ab10
@@ -225,11 +225,11 @@ into the table first; and last, the DNA Bacterial Zoo as `scripts/dbz-store.sh` 
 E1 along both arms under it and nothing on it, the circle and origin that session declares, `ori`
 on that origin, and the shipped tile with nothing uploaded naming what builds it.
 `GALLERY_ONLY=declarations`, `GALLERY_ONLY=groups` or `GALLERY_ONLY=store` runs one part alone,
-in a minute or two. It reads the lab's bucket; where the browser cannot
-reach it, serve the three files — `PAK_MM142.mcool`, `PAK.fa` and
-`PAK_MM142_500.coverage.coverage-total.bw` — with `python3 scripts/DBZ_store.py serve <folder>` and
-name the folder's address in `GALLERY_DATA`; for the store part, serve a store the script wrote and
-name its `store.json` in `GALLERY_STORE`. Run it after any change to §8.15's declarations, to the
+in a minute or two. The zoo is no longer on the lab's bucket, so serve the three files —
+`PAK_MM142.mcool`, `PAK.fa` and `PAK_MM142_500.coverage.coverage-total.bw` — with
+`python3 scripts/DBZ_store.py serve <folder>` and name the folder's address in `GALLERY_DATA`, which
+every part but the store needs; for the store part, serve a store the script wrote and name its
+`store.chromosomix.json` in `GALLERY_STORE`, or the part is skipped. Run it after any change to §8.15's declarations, to the
 arm reading, to those tasks, or to the store's script.
 
 The twelfth drives the **Tracks card and the lanes** (§5.8, §8.1, §8.6, §8.8, §8.15, §18.5): the
@@ -280,9 +280,9 @@ which must keep the score, a hover's readout, `expected` beside it for the one d
 `ori` pressed again, which must keep that one; then a link naming it, the circle unticked on the
 Chromosomes table (the entry goes and the link lands on counts) and ticked again, and the yeast
 demo's picker without it (`ab10`). It prints the picker's options, the key, the toggles and the hash
-at every step, so a score an `ori` press dropped is a line in the log. Where the browser cannot
-reach the zoo, serve `PAK_MM142.mcool` with `python3 scripts/DBZ_store.py serve <folder>` and name
-the folder in `GALLERY_DATA`. Run it after any change to the score picker, to `render/derive.ts`'s
+at every step, so a score an `ori` press dropped is a line in the log. The zoo is no longer on the
+lab's bucket: serve `PAK_MM142.mcool` with `python3 scripts/DBZ_store.py serve <folder>` and name the
+folder in `GALLERY_DATA`, which it needs. Run it after any change to the score picker, to `render/derive.ts`'s
 baselines, to `analysis/arms.ts`, to `ori`, or to how a circle is offered.
 
 `scripts/ui-peaks.mjs` drives **Peak calling** on the 1D browser demo's ATAC bigWig (§18.8): the task
@@ -500,9 +500,9 @@ again, a window of chr1 and chr1 again, then the same on a 940 MB chicken `.hic`
 from the hash to the picture on screen, its requests to the data's host counted, and the status bar's
 memory figure read; the table it prints is the one §12 quotes, and a revisit must show 0 requests in
 well under a second. On the first revisit it opens the *read* panel, which must say the last view
-cost nothing. It reads the lab's bucket unless `GALLERY_DATA` names a folder served with byte ranges
-and CORS holding both files — a headless browser that cannot trust this machine's proxy needs that,
-and a server that adds round-trip latency keeps the timings honest. Run it after any change to
+cost nothing. Both files were on the lab's bucket and are no longer, so `GALLERY_DATA` names a folder
+served with byte ranges and CORS holding them, which it needs — a server that adds round-trip latency
+keeps the timings honest. Run it after any change to
 `worker/answers.ts`, `worker/client.ts`, a view's reads, or the raster's pooling and colouring.
 `scripts/ui-panel-keys.mjs` drives **the digit row and the resolution keys** (§5.5, §26.6) on two
 keyboards. QWERTY is Playwright's own key presses; AZERTY is a French PC's, with the layout map

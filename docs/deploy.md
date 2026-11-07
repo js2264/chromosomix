@@ -136,8 +136,17 @@ sign-in to work from there; the Dropbox key needs nothing registered per address
 
 ## The demo files
 
-The five published datasets live on the lab bucket, one folder per dataset under
-`https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/`:
+Three folders live on the lab bucket under `https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/`:
+
+| folder | what | put there by |
+| --- | --- | --- |
+| `yeast/` | the yeast demos and the files they open | `scripts/publish-demo.sh`, from this repository's `demo/yeast/` |
+| `store/` | the lab's store, every file its cards and the landing page's built examples open | `scripts/publish-store.sh`, from `demo/store/MANIFEST.tsv` ([below](#the-published-workspaces)) |
+| `reassemblies/` | the *M. mycoides* reassembly `edit-method-reassembly.test.ts` reads | by hand; [data/README.md](../data/README.md) fetches it |
+
+The repository's `demo/` holds four more datasets, which are **not** on the bucket: the tests read
+them from disk, and the gallery and documentation scripts from the dev server, and
+`publish-demo.sh` leaves them out (their copies on the bucket were deleted in November 2026):
 
 | file | data | provenance |
 | --- | --- | --- |
@@ -145,7 +154,11 @@ The five published datasets live on the lab bucket, one folder per dataset under
 | `metagenomics/mock-community/Mock_microbial_community.mmetacool` (35 MB) | the same map zoomified to 1 / 2 / 4 kb | derived from the metacool above |
 | `yeast-mpneumoniae/Yeast_mpneumoniae_G2M.mcool` (17 MB) | 18 contigs (16 yeast chromosomes, the mitochondrion, *M. pneumoniae*), 19.6 M contacts, 1–16 kb | GEO `GSM6703657` |
 | `ecoli/Ecoli.mcool` (46 MB) | one 4.64 Mb chromosome, 111 M contacts, 500 bp – 100 kb | wild type of Bignaud et al., *Nat. Struct. Mol. Biol.* |
-| `yeast/Yeast_microC_G2M_1kb.cool` (19 MB) | 16 chromosomes of synthetic yeast (`XIII-syn40` carries a 40 kb insertion), 12,118 bins of 1 kb, 13.7 M pixels, 179 M contacts, balanced | mitotic micro-C, Dauban et al., *Science* (DOI `10.1126/science.adm9466`) |
+| `human/` (9 MB) | Geuvadis RNA-seq of chrX: one sample's reads, four samples' junctions, the gene model and hg19's bands | what the store's `human/` is copied from |
+
+and on the bucket, `yeast/Yeast_microC_G2M_1kb.cool` (19 MB): 16 chromosomes of synthetic yeast
+(`XIII-syn40` carries a 40 kb insertion), 12,118 bins of 1 kb, 13.7 M pixels, 179 M contacts,
+balanced — mitotic micro-C, Dauban et al., *Science* (DOI `10.1126/science.adm9466`).
 
 `Yeast_microC_G2M_1kb.cool` is the **single-resolution** cooler in the set: every other map here is
 either a metacool or an `.mcool` ladder, so it is what exercises the path where there is no
@@ -184,21 +197,21 @@ Moving the data to S3 fixes both halves of that at once, and costs the CORS conf
   with hosting.md's three `curl` calls.
 
 The `demo/` directory in the repository is the upload source, and `test/unit/demo-examples.test.ts`
-reads it: disk and bucket are one tree, so a renamed file is a red CI run rather than a landing page
-where every choice 404s. The datasets stay in git history either way — deleting them from the tree
+reads it: disk and bucket are one tree — less the four folders above, which the app does not read —
+so a renamed file is a red CI run rather than a landing page where every choice 404s. The datasets stay in git history either way — deleting them from the tree
 would not shrink a clone — so keeping them checked out is what lets CI open a real `.cool` rather
 than trust a URL it cannot reach.
 
 One thing to keep in mind: the three plain coolers carry no genome layer, and that is deliberate.
-They are what exercises the plain-cooler path on the deployed site — the resolution ladder landing on
-its finest level, the single-resolution file with no ladder at all, and a contig-only view with the
-genomes table absent rather than empty.
+They are what exercises the plain-cooler path — the resolution ladder landing on its finest level,
+the single-resolution file with no ladder at all, and a contig-only view with the genomes table absent
+rather than empty — the yeast one on the deployed site, the other two in the tests.
 
 ### Publishing them
 
 ```bash
 ./scripts/publish-demo.sh --dry-run   # what would be uploaded
-./scripts/publish-demo.sh             # sync demo/ -> s3://rsglab-data/demo/, apply CORS, verify
+./scripts/publish-demo.sh             # sync demo/ -> s3://rsglab-data/demo/ (less store/ and the four), CORS, verify
 ```
 
 It needs the AWS CLI and credentials with `s3:PutObject` on the bucket, from any source the CLI's
@@ -206,14 +219,12 @@ usual chain accepts. It is **not** part of `npm run build` and not part of the d
 data changes on the order of once a year and the app deploys on every push, so coupling them would
 mean re-uploading 250 MB to publish a CSS fix.
 
-Each of them is also a row of the lab's store, under the figures, so a reader can open one on its
-own; what the store leads with is the workspaces below, and those name these.
 
 ## The published workspaces
 
 The drawer's **RSG lab data** store (`demosStore()` in `ui/examples.ts`, offered through
 `ui/stores/registry.ts`, SPECS §24.2) leads with **workspace files**, drawn as figures under two
-headings. All but the metagenome's are in one folder, `demo/store/`, a directory a card or a dataset:
+headings. They are in one folder, `demo/store/`, a directory a card or a dataset:
 
 | section | file | opens |
 | --- | --- | --- |
@@ -222,7 +233,6 @@ headings. All but the metagenome's are in one folder, `demo/store/`, a directory
 | Demo | `yeast/Yeast_HiC_microC_PCP.chromosomix.json` | Hi-C (Meneu et al. 2025, G1), micro-C and PCP of chrXV:200–400 kb in a deck of three, MNase and the genes under each |
 | Demo | `human/Human_chrX_splicing.chromosomix.json` | the 1D browser opened from UCSC's hg19 cytoBand alone, at RPL10 in Xq28: the ideogram, the chrX gene model, one Geuvadis sample's reads with their splice arcs, and two samples' STAR junctions on one typed axis (SPECS §8.22, §8.23) |
 | Demo | `gibcus2018/Gibcus2018_mitosis.chromosomix.json` | DT40 Hi-C from G2 into prometaphase (Gibcus et al. 2018, from 4DN), three tabs of decks: chromosome 7 whole, compartments on chromosome 1, domains on 4 Mb of it |
-| Demo | `metagenomics/mock-community/Mock_microbial_community.chromosomix.json` | the `.mmetacool` ladder at its finest level, on the genomes table sorted by length — a dev feature |
 | Papers | `chromosomix_paper/Chromosomix_paper.chromosomix.json` | the Chromosomix paper, five tabs, a panel each: Fig. 1c, 4DN's mouse ES-cell Hi-C at five scales from the genome to *Sox2*, each with its tracks and the model the figure inferred at that scale; Fig. 1d, chr3:32–36 Mb at 10 kb with its insulation, borders and CTCF beside chromosome 3's model; Fig. 2a, *C. necator* over the decay along the diagonal and along both arms; Fig. 2b, the *B. subtilis* ParB time course; Fig. 2c, *P. aeruginosa* WT, SMC-ScpAB– and MksBEF– with each one's E1 |
 | Papers | `meneu2025/Meneu2025_bacterial_chromosomes.chromosomix.json` | Meneu et al. 2025 (GSE217022): the *M. mycoides* and *M. pneumoniae* chromosomes in yeast at G2/M with MNase, RNA-seq, Pol II and Scc1, then both strains whole in G1 |
 
@@ -230,7 +240,9 @@ The store's folder is the one part of `demo/` that is **not** a copy of the repo
 to 7 GB, so they are copied into it on the bucket and never pass through git: the repository keeps
 the workspaces and `demo/store/MANIFEST.tsv`, one line a file saying where it comes from — a key on
 the lab's bucket or on 4DN's open-data one, a file of this repository, or a file
-`scripts/make_rsg_store.py derive` computes. That script writes the workspaces and the manifest from
+`scripts/make_rsg_store.py derive` computes. Where the copy a file came from is gone (`demo/chicken/`,
+`demo/pak/`, `demo/subtilis/` and the zoo's `dbz/` were deleted from the bucket), its line names the
+store's own copy, which the publish step checks and never copies. That script writes the workspaces and the manifest from
 one table; `scripts/publish-store.sh` makes the bucket match the manifest and checks every file
 anonymously afterwards. It copies and uploads and never deletes.
 

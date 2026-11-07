@@ -303,20 +303,6 @@ const DEMO: Array<{
     ],
   },
   {
-    section: 'Demo',
-    folder: 'metagenomics/mock-community',
-    file: 'Mock_microbial_community.chromosomix.json',
-    title: 'Mock microbial community',
-    line: '49 MAGs over 20,566 contigs in one .metacool — the multi-genome file this viewer exists for.',
-    assembly: 'mock community',
-    provenance: 'SRA SRR32680160 · DOI 10.1038/s41564-025-02108-2',
-    detail:
-      'A MetaTOR binning of a mock community profiled by metaHiC: 49 genomes over 20,566 ' +
-      'contigs in one 1 kb .metacool (14 MB). Lands on the genomes table, largest MAG first.',
-    files: ['Mock_microbial_community.metacool', 'Mock_microbial_community.mmetacool'],
-    dev: 'metacool',
-  },
-  {
     section: 'Papers',
     folder: 'store/chromosomix_paper',
     file: 'Chromosomix_paper.chromosomix.json',
@@ -417,8 +403,8 @@ const DEMO: Array<{
  * The data files under the figures, one row each.
  *
  * What the store lists *besides* the figures: every file the figures are made
- * of, so a reader who wants the micro-C map alone, the MNase bigWig on their
- * own map, or the metagenome as an `.mmetacool` ladder, has a row to press.
+ * of, so a reader who wants the micro-C map alone, or the MNase bigWig on their
+ * own map, has a row to press.
  * Each figure's card lists its own rows under a fold (`ui/stores/GalleryView.ts`);
  * a row shared by two figures — the yeast tracks, the Meneu paper's G1 Hi-C —
  * is one row, under each.
@@ -583,26 +569,6 @@ const DEMO_DATA: Array<{
     assembly,
     dataset: 'The Chromosomix paper',
   })),
-  {
-    folder: 'metagenomics/mock-community',
-    file: 'Mock_microbial_community.metacool',
-    label: 'Mock community, 49 MAGs, 1 kb',
-    kind: 'map',
-    format: 'metacool',
-    assembly: 'mock community',
-    dataset: 'Mock microbial community',
-    dev: 'metacool',
-  },
-  {
-    folder: 'metagenomics/mock-community',
-    file: 'Mock_microbial_community.mmetacool',
-    label: 'Mock community, resolution ladder',
-    kind: 'map',
-    format: 'mmetacool',
-    assembly: 'mock community',
-    dataset: 'Mock microbial community',
-    dev: 'metacool',
-  },
 ]
 
 /**

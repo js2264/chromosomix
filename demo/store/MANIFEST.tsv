@@ -24,21 +24,21 @@ human/Geuvadis_chrX_GBR_ERR188383.SJ.out.tab	repo:demo/human/Geuvadis_chrX_GBR_E
 human/Geuvadis_chrX_YRI_ERR188454.SJ.out.tab	repo:demo/human/Geuvadis_chrX_YRI_ERR188454.SJ.out.tab	STAR junctions, YRI ERR188454
 human/Geuvadis_chrX_YRI_ERR204916.SJ.out.tab	repo:demo/human/Geuvadis_chrX_YRI_ERR204916.SJ.out.tab	STAR junctions, YRI ERR204916
 human/Geuvadis_chrX_GBR_ERR188428.junctions.bed	repo:demo/human/Geuvadis_chrX_GBR_ERR188428.junctions.bed	Junctions as regtools writes them
-gibcus2018/G2_4DNFIT479GDR.mcool	s3://rsglab-data/demo/chicken/G2_4DNFIT479GDR.mcool	Hi-C, G2 block (4DNES9LEZXN7)
-gibcus2018/5m_4DNFINSJ2GYV.mcool	s3://rsglab-data/demo/chicken/5m_4DNFINSJ2GYV.mcool	Hi-C, prophase 5 min (4DNESNWWIFZU)
-gibcus2018/10m_4DNFIYOEGHHV.mcool	s3://rsglab-data/demo/chicken/10m_4DNFIYOEGHHV.mcool	Hi-C, prophase 10 min (4DNESGDXKM2I)
-gibcus2018/15m_4DNFILKIISAU.mcool	s3://rsglab-data/demo/chicken/15m_4DNFILKIISAU.mcool	Hi-C, prometaphase 15 min (4DNESIR416OW)
-gibcus2018/30m_4DNFI165SFJU.mcool	s3://rsglab-data/demo/chicken/30m_4DNFI165SFJU.mcool	Hi-C, prometaphase 30 min (4DNESS8PTK6F)
-gibcus2018/60m_4DNFIWHQLZTL.mcool	s3://rsglab-data/demo/chicken/60m_4DNFIWHQLZTL.mcool	Hi-C, prometaphase block 60 min (4DNESEQNSXSD)
-gibcus2018/G2_4DNFILLAMSTE_compartments.bw	s3://rsglab-data/demo/chicken/G2_4DNFILLAMSTE_compartments.bw	Compartments (E1), G2
-gibcus2018/5m_4DNFI9HASBHH_compartments.bw	s3://rsglab-data/demo/chicken/5m_4DNFI9HASBHH_compartments.bw	Compartments (E1), 5 min
-gibcus2018/10m_4DNFIG48YRMT_compartments.bw	s3://rsglab-data/demo/chicken/10m_4DNFIG48YRMT_compartments.bw	Compartments (E1), 10 min
-gibcus2018/15m_4DNFIY1KBU1S_compartments.bw	s3://rsglab-data/demo/chicken/15m_4DNFIY1KBU1S_compartments.bw	Compartments (E1), 15 min
-gibcus2018/30m_4DNFIOCFXWMD_compartments.bw	s3://rsglab-data/demo/chicken/30m_4DNFIOCFXWMD_compartments.bw	Compartments (E1), 30 min
-gibcus2018/60m_4DNFIX92O41_compartments.bw	s3://rsglab-data/demo/chicken/60m_4DNFIX92O41_compartments.bw	Compartments (E1), 60 min
-gibcus2018/G2_4DNFI1PRBI5L_diamond.bw	s3://rsglab-data/demo/chicken/G2_4DNFI1PRBI5L_diamond.bw	Insulation, G2
-gibcus2018/5m_4DNFIIAPL9WO_insulation.bw	s3://rsglab-data/demo/chicken/5m_4DNFIIAPL9WO_insulation.bw	Insulation, 5 min
-gibcus2018/60m_4DNFI12IF3LX_diamond.bw	s3://rsglab-data/demo/chicken/60m_4DNFI12IF3LX_diamond.bw	Insulation, 60 min
+gibcus2018/G2_4DNFIT479GDR.mcool	s3://rsglab-data/demo/store/gibcus2018/G2_4DNFIT479GDR.mcool	Hi-C, G2 block (4DNES9LEZXN7)
+gibcus2018/5m_4DNFINSJ2GYV.mcool	s3://rsglab-data/demo/store/gibcus2018/5m_4DNFINSJ2GYV.mcool	Hi-C, prophase 5 min (4DNESNWWIFZU)
+gibcus2018/10m_4DNFIYOEGHHV.mcool	s3://rsglab-data/demo/store/gibcus2018/10m_4DNFIYOEGHHV.mcool	Hi-C, prophase 10 min (4DNESGDXKM2I)
+gibcus2018/15m_4DNFILKIISAU.mcool	s3://rsglab-data/demo/store/gibcus2018/15m_4DNFILKIISAU.mcool	Hi-C, prometaphase 15 min (4DNESIR416OW)
+gibcus2018/30m_4DNFI165SFJU.mcool	s3://rsglab-data/demo/store/gibcus2018/30m_4DNFI165SFJU.mcool	Hi-C, prometaphase 30 min (4DNESS8PTK6F)
+gibcus2018/60m_4DNFIWHQLZTL.mcool	s3://rsglab-data/demo/store/gibcus2018/60m_4DNFIWHQLZTL.mcool	Hi-C, prometaphase block 60 min (4DNESEQNSXSD)
+gibcus2018/G2_4DNFILLAMSTE_compartments.bw	s3://rsglab-data/demo/store/gibcus2018/G2_4DNFILLAMSTE_compartments.bw	Compartments (E1), G2
+gibcus2018/5m_4DNFI9HASBHH_compartments.bw	s3://rsglab-data/demo/store/gibcus2018/5m_4DNFI9HASBHH_compartments.bw	Compartments (E1), 5 min
+gibcus2018/10m_4DNFIG48YRMT_compartments.bw	s3://rsglab-data/demo/store/gibcus2018/10m_4DNFIG48YRMT_compartments.bw	Compartments (E1), 10 min
+gibcus2018/15m_4DNFIY1KBU1S_compartments.bw	s3://rsglab-data/demo/store/gibcus2018/15m_4DNFIY1KBU1S_compartments.bw	Compartments (E1), 15 min
+gibcus2018/30m_4DNFIOCFXWMD_compartments.bw	s3://rsglab-data/demo/store/gibcus2018/30m_4DNFIOCFXWMD_compartments.bw	Compartments (E1), 30 min
+gibcus2018/60m_4DNFIX92O41_compartments.bw	s3://rsglab-data/demo/store/gibcus2018/60m_4DNFIX92O41_compartments.bw	Compartments (E1), 60 min
+gibcus2018/G2_4DNFI1PRBI5L_diamond.bw	s3://rsglab-data/demo/store/gibcus2018/G2_4DNFI1PRBI5L_diamond.bw	Insulation, G2
+gibcus2018/5m_4DNFIIAPL9WO_insulation.bw	s3://rsglab-data/demo/store/gibcus2018/5m_4DNFIIAPL9WO_insulation.bw	Insulation, 5 min
+gibcus2018/60m_4DNFI12IF3LX_diamond.bw	s3://rsglab-data/demo/store/gibcus2018/60m_4DNFI12IF3LX_diamond.bw	Insulation, 60 min
 meneu2025/HiC/HiC_Mmyco_G1.mcool	s3://rsglab-data/public-data/2025_Meneu_et_al/HiC/HiC_Mmyco_G1.mcool	Hi-C, yeast with M. mycoides, G1
 meneu2025/HiC/HiC_Mmyco_G2M.mcool	s3://rsglab-data/public-data/2025_Meneu_et_al/HiC/HiC_Mmyco_G2M.mcool	Hi-C, yeast with M. mycoides, G2/M
 meneu2025/HiC/HiC_Mpneumo_G1.mcool	s3://rsglab-data/public-data/2025_Meneu_et_al/HiC/HiC_Mpneumo_G1.mcool	Hi-C, yeast with M. pneumoniae, G1
@@ -97,25 +97,25 @@ chromosomix_paper/mouse/4DNFI5QJNFAT_250000.chr3.bed3d	repo:manuscript/figure1/r
 chromosomix_paper/mouse/4DNFI5QJNFAT_10000.chr3-27-37Mb.bed3d	repo:manuscript/figure1/results/model-region/4DNFI5QJNFAT_10000.reconstruct3d.reconstructed-model.bed3d	pastis-NB model of chr3:27–37 Mb at 10 kb (Fig. 1c)
 chromosomix_paper/mouse/4DNFI5QJNFAT_5000.chr3-34-35Mb.bed3d	repo:manuscript/figure1/results/model-locus/4DNFI5QJNFAT_5000.reconstruct3d.reconstructed-model.bed3d	pastis-NB model of chr3:34–35 Mb, the Sox2 locus, at 5 kb (Fig. 1c)
 chromosomix_paper/mouse/4DNFI5QJNFAT_2000.Sox2-SCR.bed3d	repo:manuscript/figure1/results/model-gene/4DNFI5QJNFAT_2000.reconstruct3d.reconstructed-model.bed3d	pastis-NB model of chr3:34.55–34.80 Mb, Sox2 and its control region, at 2 kb (Fig. 1c)
-chromosomix_paper/C_necator/C_necator_N1_VJ_MM260.mcool	s3://rsglab-data/dbz/C_necator_N1_VJ_MM260/C_necator_N1_VJ_MM260.mcool	Hi-C, C. necator N-1 (MM260)
-chromosomix_paper/C_necator/C_necator_N1_VJ.fa	s3://rsglab-data/dbz/C_necator_N1_VJ_MM260/C_necator_N1_VJ.fa	C. necator N-1: two chromosomes and two plasmids
-chromosomix_paper/C_necator/C_necator_N1_VJ_MM260_4000.oriter-loci.bed	s3://rsglab-data/dbz/C_necator_N1_VJ_MM260/oriter/C_necator_N1_VJ_MM260_4000.oriter.oriter-loci.bed	Origins and termini, called by the app
-chromosomix_paper/C_necator/C_necator_N1_VJ_MM260_4000.gc-skew-cumulative.bw	s3://rsglab-data/dbz/C_necator_N1_VJ_MM260/composition/C_necator_N1_VJ_MM260_4000.composition.composition-cumulative.bw	Cumulative GC skew, 4 kb
-chromosomix_paper/B_subtilis/Bsubtilis_WT.mcool	s3://rsglab-data/demo/subtilis/Bsubtilis_WT^mapped_PY79^FKEBR7.mcool	Hi-C, WT
-chromosomix_paper/B_subtilis/Bsubtilis_dparAB.mcool	s3://rsglab-data/demo/subtilis/Bsubtilis_dparAB^mapped_PY79^NT9IOH.mcool	Hi-C, ΔparAB
-chromosomix_paper/B_subtilis/Bsubtilis_induction_0min.mcool	s3://rsglab-data/demo/subtilis/Bsubtilis_induction_0min^mapped_PY79^14WJZP.mcool	Hi-C, +parB 0 min
-chromosomix_paper/B_subtilis/Bsubtilis_induction_15min.mcool	s3://rsglab-data/demo/subtilis/Bsubtilis_induction_15min^mapped_PY79^3JNIKY.mcool	Hi-C, +parB 15 min
-chromosomix_paper/B_subtilis/Bsubtilis_induction_20min.mcool	s3://rsglab-data/demo/subtilis/Bsubtilis_induction_20min^mapped_PY79^4WPQI3.mcool	Hi-C, +parB 20 min
-chromosomix_paper/B_subtilis/Bsubtilis_induction_30min.mcool	s3://rsglab-data/demo/subtilis/Bsubtilis_induction_30min^mapped_PY79^YKZ54M.mcool	Hi-C, +parB 30 min
-chromosomix_paper/B_subtilis/Bsubtilis_induction_35min.mcool	s3://rsglab-data/demo/subtilis/Bsubtilis_induction_35min^mapped_PY79^FSTYHN.mcool	Hi-C, +parB 35 min
-chromosomix_paper/B_subtilis/Bsubtilis_induction_45min.mcool	s3://rsglab-data/demo/subtilis/Bsubtilis_induction_45min^mapped_PY79^LW6QCG.mcool	Hi-C, +parB 45 min
-chromosomix_paper/B_subtilis/PY79.fa	s3://rsglab-data/demo/subtilis/PY79.fa	B. subtilis PY79
-chromosomix_paper/B_subtilis/PY79.gff3	s3://rsglab-data/demo/subtilis/PY79.gff3	Genes, B. subtilis PY79
-chromosomix_paper/P_aeruginosa/PAO1_v3_MM38.mcool	s3://rsglab-data/demo/pak/PAO1_v3_MM38.mcool	Hi-C, WT (MM38)
-chromosomix_paper/P_aeruginosa/PAO1_v3_FG0235.mcool	s3://rsglab-data/demo/pak/PAO1_v3_FG0235.mcool	Hi-C, SMC-ScpAB– (FG0235)
-chromosomix_paper/P_aeruginosa/PAO1_v3_FG0238.mcool	s3://rsglab-data/demo/pak/PAO1_v3_FG0238.mcool	Hi-C, MksBEF– (FG0238)
-chromosomix_paper/P_aeruginosa/PAO1_v3.fa	s3://rsglab-data/demo/pak/PAO1_v3.fa	P. aeruginosa, the maps' reference
-chromosomix_paper/P_aeruginosa/GSE76513_PAK_T0_pooled.unstranded.CPM.bw	s3://rsglab-data/demo/pak/GSE76513_PAK_T0_pooled.unstranded.CPM.bw	RNA-seq, PAK at T0, counts per million (GEO GSE76513)
+chromosomix_paper/C_necator/C_necator_N1_VJ_MM260.mcool	s3://rsglab-data/demo/store/chromosomix_paper/C_necator/C_necator_N1_VJ_MM260.mcool	Hi-C, C. necator N-1 (MM260)
+chromosomix_paper/C_necator/C_necator_N1_VJ.fa	s3://rsglab-data/demo/store/chromosomix_paper/C_necator/C_necator_N1_VJ.fa	C. necator N-1: two chromosomes and two plasmids
+chromosomix_paper/C_necator/C_necator_N1_VJ_MM260_4000.oriter-loci.bed	s3://rsglab-data/demo/store/chromosomix_paper/C_necator/C_necator_N1_VJ_MM260_4000.oriter-loci.bed	Origins and termini, called by the app
+chromosomix_paper/C_necator/C_necator_N1_VJ_MM260_4000.gc-skew-cumulative.bw	s3://rsglab-data/demo/store/chromosomix_paper/C_necator/C_necator_N1_VJ_MM260_4000.gc-skew-cumulative.bw	Cumulative GC skew, 4 kb
+chromosomix_paper/B_subtilis/Bsubtilis_WT.mcool	s3://rsglab-data/demo/store/chromosomix_paper/B_subtilis/Bsubtilis_WT.mcool	Hi-C, WT
+chromosomix_paper/B_subtilis/Bsubtilis_dparAB.mcool	s3://rsglab-data/demo/store/chromosomix_paper/B_subtilis/Bsubtilis_dparAB.mcool	Hi-C, ΔparAB
+chromosomix_paper/B_subtilis/Bsubtilis_induction_0min.mcool	s3://rsglab-data/demo/store/chromosomix_paper/B_subtilis/Bsubtilis_induction_0min.mcool	Hi-C, +parB 0 min
+chromosomix_paper/B_subtilis/Bsubtilis_induction_15min.mcool	s3://rsglab-data/demo/store/chromosomix_paper/B_subtilis/Bsubtilis_induction_15min.mcool	Hi-C, +parB 15 min
+chromosomix_paper/B_subtilis/Bsubtilis_induction_20min.mcool	s3://rsglab-data/demo/store/chromosomix_paper/B_subtilis/Bsubtilis_induction_20min.mcool	Hi-C, +parB 20 min
+chromosomix_paper/B_subtilis/Bsubtilis_induction_30min.mcool	s3://rsglab-data/demo/store/chromosomix_paper/B_subtilis/Bsubtilis_induction_30min.mcool	Hi-C, +parB 30 min
+chromosomix_paper/B_subtilis/Bsubtilis_induction_35min.mcool	s3://rsglab-data/demo/store/chromosomix_paper/B_subtilis/Bsubtilis_induction_35min.mcool	Hi-C, +parB 35 min
+chromosomix_paper/B_subtilis/Bsubtilis_induction_45min.mcool	s3://rsglab-data/demo/store/chromosomix_paper/B_subtilis/Bsubtilis_induction_45min.mcool	Hi-C, +parB 45 min
+chromosomix_paper/B_subtilis/PY79.fa	s3://rsglab-data/demo/store/chromosomix_paper/B_subtilis/PY79.fa	B. subtilis PY79
+chromosomix_paper/B_subtilis/PY79.gff3	s3://rsglab-data/demo/store/chromosomix_paper/B_subtilis/PY79.gff3	Genes, B. subtilis PY79
+chromosomix_paper/P_aeruginosa/PAO1_v3_MM38.mcool	s3://rsglab-data/demo/store/chromosomix_paper/P_aeruginosa/PAO1_v3_MM38.mcool	Hi-C, WT (MM38)
+chromosomix_paper/P_aeruginosa/PAO1_v3_FG0235.mcool	s3://rsglab-data/demo/store/chromosomix_paper/P_aeruginosa/PAO1_v3_FG0235.mcool	Hi-C, SMC-ScpAB– (FG0235)
+chromosomix_paper/P_aeruginosa/PAO1_v3_FG0238.mcool	s3://rsglab-data/demo/store/chromosomix_paper/P_aeruginosa/PAO1_v3_FG0238.mcool	Hi-C, MksBEF– (FG0238)
+chromosomix_paper/P_aeruginosa/PAO1_v3.fa	s3://rsglab-data/demo/store/chromosomix_paper/P_aeruginosa/PAO1_v3.fa	P. aeruginosa, the maps' reference
+chromosomix_paper/P_aeruginosa/GSE76513_PAK_T0_pooled.unstranded.CPM.bw	s3://rsglab-data/demo/store/chromosomix_paper/P_aeruginosa/GSE76513_PAK_T0_pooled.unstranded.CPM.bw	RNA-seq, PAK at T0, counts per million (GEO GSE76513)
 chromosomix_paper/P_aeruginosa/PAO1_v3_MM38_8000.e1-arms.bw	repo:demo/store/chromosomix_paper/P_aeruginosa/PAO1_v3_MM38_8000.e1-arms.bw	E1 along both arms at 8 kb, WT, computed by the app
 chromosomix_paper/P_aeruginosa/PAO1_v3_FG0235_8000.e1-arms.bw	repo:demo/store/chromosomix_paper/P_aeruginosa/PAO1_v3_FG0235_8000.e1-arms.bw	E1 along both arms at 8 kb, SMC-ScpAB–, computed by the app
 chromosomix_paper/P_aeruginosa/PAO1_v3_FG0238_8000.e1-arms.bw	repo:demo/store/chromosomix_paper/P_aeruginosa/PAO1_v3_FG0238_8000.e1-arms.bw	E1 along both arms at 8 kb, MksBEF–, computed by the app
@@ -140,6 +140,8 @@ k562/ncbiRefSeq.txt.gz.tbi	s3://igv.org.genomes/hg38/ncbiRefSeq.txt.gz.tbi	…an
 k562/cytoBandIdeo.txt.gz	s3://igv.org.genomes/hg38/annotations/cytoBandIdeo.txt.gz	Cytogenetic bands, hg38 (IGV)
 k562/GRCh38_full_analysis_set_plus_decoy_hla.fa	s3://1000genomes/technical/reference/GRCh38_reference_genome/GRCh38_full_analysis_set_plus_decoy_hla.fa	GRCh38 with decoys and HLA, the 1000 Genomes analysis set
 k562/GRCh38_full_analysis_set_plus_decoy_hla.fa.fai	s3://1000genomes/technical/reference/GRCh38_reference_genome/GRCh38_full_analysis_set_plus_decoy_hla.fa.fai	…and its index
+ecoli/ecoli_k12_mg1655.fa	s3://rsglab-data/demo/store/ecoli/ecoli_k12_mg1655.fa	E. coli K-12 MG1655 (NC_000913.3)
+ecoli/ecoli_k12_mg1655.gff	s3://rsglab-data/demo/store/ecoli/ecoli_k12_mg1655.gff	Genes, E. coli K-12 MG1655 (NCBI RefSeq, ASM584v2)
 yeast/Yeast_microC.chromosomix.json	repo:demo/store/yeast/Yeast_microC.chromosomix.json	Workspace
 yeast/Yeast_landscape.chromosomix.json	repo:demo/store/yeast/Yeast_landscape.chromosomix.json	Workspace
 yeast/Yeast_HiC_microC_PCP.chromosomix.json	repo:demo/store/yeast/Yeast_HiC_microC_PCP.chromosomix.json	Workspace

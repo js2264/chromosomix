@@ -13,8 +13,8 @@ The store is a folder on the lab's bucket, `s3://rsglab-data/demo/store/`, one d
 dataset, and every workspace in it names its files relatively, as every published workspace does
 (`ui/examples.ts`). `demo/store/MANIFEST.tsv` is the list of what is in that folder and where each
 file comes from — a copy inside the bucket, a copy from 4DN's open-data bucket, a file of this
-repository, or a file `derive` wrote — and `scripts/publish-store.sh` is what makes the bucket match
-it. The test that checks the store (`test/unit/demo-examples.test.ts`) reads the same file: a name a
+repository, a file `derive` wrote, or the store's own copy where the file it was copied from is gone
+(`kept`) — and `scripts/publish-store.sh` is what makes the bucket match it. The test that checks the store (`test/unit/demo-examples.test.ts`) reads the same file: a name a
 workspace uses must be in it.
 
 Nothing here invents data. `derive` reshapes six files, calls loops on one map and compartments on
@@ -359,9 +359,11 @@ def write_e1_arms(work: Path) -> str:
         raise SystemExit("npm run build:cli first: E1 is computed with the chromosomix command")
     out = STORE / PAPER / "P_aeruginosa"
     out.mkdir(parents=True, exist_ok=True)
-    fasta = fetch(BUCKET + PAK + "PAO1_v3.fa", work / "PAO1_v3.fa")
+    # The store's own copies: the lab's folder they were copied from (demo/pak/) is gone.
+    there = f"{BUCKET}demo/store/{PAPER}P_aeruginosa/"
+    fasta = fetch(there + "PAO1_v3.fa", work / "PAO1_v3.fa")
     for sample, _ in PAO1_STRAINS:
-        mcool = fetch(BUCKET + PAK + f"{sample}.mcool", work / f"{sample}.mcool")
+        mcool = fetch(there + f"{sample}.mcool", work / f"{sample}.mcool")
         dest = work / "e1-arms" / sample
         shutil.rmtree(dest, ignore_errors=True)
         subprocess.run(["node", str(cli), "compartments", f"{mcool}::/resolutions/{BACTERIA_RES}",
@@ -552,6 +554,12 @@ def thousand_genomes(key: str) -> str:
     return f"s3://1000genomes/{key}"
 
 
+def kept(path: str) -> str:
+    """The store's own copy, `demo/store/<path>`: the file it was copied from is gone from the bucket,
+    so this copy is the one there is. The publish step finds it already there, and fails if it is not."""
+    return s3(f"demo/store/{path}")
+
+
 def repo(path: str) -> str:
     """A file of this repository."""
     return f"repo:{path}"
@@ -563,15 +571,12 @@ def work(name: str) -> str:
 
 
 MENEU = "public-data/2025_Meneu_et_al/"
-CHICKEN = "demo/chicken/"
 FIG1 = "manuscript/figure1/results/"
-CNECATOR = "dbz/C_necator_N1_VJ_MM260/"
-SUBTILIS = "demo/subtilis/"
-PAK = "demo/pak/"
 #: The paper's folder under demo/store/.
 PAPER = "chromosomix_paper/"
 
-#: B. subtilis PY79, a map a condition: (the store's name, the bucket's, the condition as Fig. S3b says it).
+#: B. subtilis PY79, a map a condition: (the store's name, the lab's sample as the map was first named,
+#: the condition as Fig. S3b says it).
 SUBTILIS_COURSE = [
     ("WT", "WT^mapped_PY79^FKEBR7", "WT"),
     ("dparAB", "dparAB^mapped_PY79^NT9IOH", "ΔparAB"),
@@ -626,8 +631,9 @@ FILES: list[tuple[str, str, str]] = [
         ("Geuvadis_chrX_YRI_ERR204916.SJ.out.tab", "STAR junctions, YRI ERR204916"),
         ("Geuvadis_chrX_GBR_ERR188428.junctions.bed", "Junctions as regtools writes them"),
     ]],
-    # -- Gibcus et al. 2018: DT40 through mitosis, 4DN's files as the lab's bucket holds them
-    *[(f"gibcus2018/{name}", s3(CHICKEN + name), what) for name, what in [
+    # -- Gibcus et al. 2018: DT40 through mitosis, 4DN's files as the lab copied them (the copies they came
+    #    from, demo/chicken/, are gone, so these are the ones kept)
+    *[(f"gibcus2018/{name}", kept(f"gibcus2018/{name}"), what) for name, what in [
         ("G2_4DNFIT479GDR.mcool", "Hi-C, G2 block (4DNES9LEZXN7)"),
         ("5m_4DNFINSJ2GYV.mcool", "Hi-C, prophase 5 min (4DNESNWWIFZU)"),
         ("10m_4DNFIYOEGHHV.mcool", "Hi-C, prophase 10 min (4DNESGDXKM2I)"),
@@ -723,26 +729,26 @@ FILES: list[tuple[str, str, str]] = [
          "pastis-NB model of chr3:34.55–34.80 Mb, Sox2 and its control region, at 2 kb (Fig. 1c)"),
     ]],
     #    C. necator N-1 (Fig. S3a): the lab's map, its reference, and its origin and GC skew as the app
-    #    called them — copied from where the DNA Bacterial Zoo keeps them, which this card does not name.
-    *[(PAPER + f"C_necator/{name}", s3(CNECATOR + source), what) for name, source, what in [
-        ("C_necator_N1_VJ_MM260.mcool", "C_necator_N1_VJ_MM260.mcool", "Hi-C, C. necator N-1 (MM260)"),
-        ("C_necator_N1_VJ.fa", "C_necator_N1_VJ.fa", "C. necator N-1: two chromosomes and two plasmids"),
-        ("C_necator_N1_VJ_MM260_4000.oriter-loci.bed", "oriter/C_necator_N1_VJ_MM260_4000.oriter.oriter-loci.bed",
-         "Origins and termini, called by the app"),
-        ("C_necator_N1_VJ_MM260_4000.gc-skew-cumulative.bw",
-         "composition/C_necator_N1_VJ_MM260_4000.composition.composition-cumulative.bw",
-         "Cumulative GC skew, 4 kb"),
+    #    called them. Copied from the DNA Bacterial Zoo's folder, which is gone: these are the ones kept.
+    *[(PAPER + f"C_necator/{name}", kept(PAPER + f"C_necator/{name}"), what) for name, what in [
+        ("C_necator_N1_VJ_MM260.mcool", "Hi-C, C. necator N-1 (MM260)"),
+        ("C_necator_N1_VJ.fa", "C. necator N-1: two chromosomes and two plasmids"),
+        ("C_necator_N1_VJ_MM260_4000.oriter-loci.bed", "Origins and termini, called by the app"),
+        ("C_necator_N1_VJ_MM260_4000.gc-skew-cumulative.bw", "Cumulative GC skew, 4 kb"),
     ]],
-    #    B. subtilis PY79 (Fig. S3b): wild type, ΔparAB, and the time course after ParB is induced.
-    *[(PAPER + f"B_subtilis/Bsubtilis_{name}.mcool", s3(f"{SUBTILIS}Bsubtilis_{source}.mcool"), f"Hi-C, {label}")
-      for name, source, label in SUBTILIS_COURSE],
-    (PAPER + "B_subtilis/PY79.fa", s3(SUBTILIS + "PY79.fa"), "B. subtilis PY79"),
-    (PAPER + "B_subtilis/PY79.gff3", s3(SUBTILIS + "PY79.gff3"), "Genes, B. subtilis PY79"),
-    #    P. aeruginosa (Fig. S3c): wild type and two condensin mutants, and E1 along both arms of each.
-    *[(PAPER + f"P_aeruginosa/{sample}.mcool", s3(f"{PAK}{sample}.mcool"), f"Hi-C, {label} ({sample.split('_')[-1]})")
-      for sample, label in PAO1_STRAINS],
-    (PAPER + "P_aeruginosa/PAO1_v3.fa", s3(PAK + "PAO1_v3.fa"), "P. aeruginosa, the maps' reference"),
-    (PAPER + f"P_aeruginosa/{PAK_RNA}", s3(PAK + PAK_RNA), "RNA-seq, PAK at T0, counts per million (GEO GSE76513)"),
+    #    B. subtilis PY79 (Fig. S3b): wild type, ΔparAB, and the time course after ParB is induced. The
+    #    lab's copies they came from (demo/subtilis/) are gone: these are the ones kept.
+    *[(PAPER + f"B_subtilis/Bsubtilis_{name}.mcool", kept(PAPER + f"B_subtilis/Bsubtilis_{name}.mcool"), f"Hi-C, {label}")
+      for name, _, label in SUBTILIS_COURSE],
+    (PAPER + "B_subtilis/PY79.fa", kept(PAPER + "B_subtilis/PY79.fa"), "B. subtilis PY79"),
+    (PAPER + "B_subtilis/PY79.gff3", kept(PAPER + "B_subtilis/PY79.gff3"), "Genes, B. subtilis PY79"),
+    #    P. aeruginosa (Fig. S3c): wild type and two condensin mutants, and E1 along both arms of each. The
+    #    lab's copies they came from (demo/pak/) are gone: these are the ones kept.
+    *[(PAPER + f"P_aeruginosa/{sample}.mcool", kept(PAPER + f"P_aeruginosa/{sample}.mcool"),
+       f"Hi-C, {label} ({sample.split('_')[-1]})") for sample, label in PAO1_STRAINS],
+    (PAPER + "P_aeruginosa/PAO1_v3.fa", kept(PAPER + "P_aeruginosa/PAO1_v3.fa"), "P. aeruginosa, the maps' reference"),
+    (PAPER + f"P_aeruginosa/{PAK_RNA}", kept(PAPER + f"P_aeruginosa/{PAK_RNA}"),
+     "RNA-seq, PAK at T0, counts per million (GEO GSE76513)"),
     *[(PAPER + f"P_aeruginosa/{sample}_8000.e1-arms.bw", repo(f"demo/store/{PAPER}P_aeruginosa/{sample}_8000.e1-arms.bw"),
        f"E1 along both arms at 8 kb, {label}, computed by the app") for sample, label in PAO1_STRAINS],
     # -- K562 at MYC: every file the landing page's Human Hi-C data example reads, from the four buckets it
@@ -755,6 +761,10 @@ FILES: list[tuple[str, str, str]] = [
     (f"k562/{K562_FASTA.rsplit('/', 1)[-1]}", thousand_genomes(K562_FASTA),
      "GRCh38 with decoys and HLA, the 1000 Genomes analysis set"),
     (f"k562/{K562_FASTA.rsplit('/', 1)[-1]}.fai", thousand_genomes(f"{K562_FASTA}.fai"), "…and its index"),
+    # -- E. coli K-12 MG1655: the sequence and genes the documentation's screenshots of Composition and
+    #    Origin and terminus open beside demo/ecoli/Ecoli.mcool. No card names them; kept only here.
+    ("ecoli/ecoli_k12_mg1655.fa", kept("ecoli/ecoli_k12_mg1655.fa"), "E. coli K-12 MG1655 (NC_000913.3)"),
+    ("ecoli/ecoli_k12_mg1655.gff", kept("ecoli/ecoli_k12_mg1655.gff"), "Genes, E. coli K-12 MG1655 (NCBI RefSeq, ASM584v2)"),
 ]
 
 

@@ -6236,8 +6236,10 @@ either in flight.
 
 **A place already seen is answered from memory.** Every navigation builds its view afresh, and every
 view used to read its block afresh. `scripts/ui-revisit.mjs` walks the lab's 689 MB
-`demo/mouse/progenitors.mcool` at 10 kb — chr1, chr2, chr1 again, a window of chr1, chr1 again — and
-the same walk on a 940 MB chicken `.hic`, timing each step from the link to the picture. In headless
+`progenitors.mcool` at 10 kb — chr1, chr2, chr1 again, a window of chr1, chr1 again — and
+the same walk on a 940 MB chicken `.hic`, timing each step from the link to the picture (both were on
+the lab's bucket, under `demo/mouse/` and `demo/chicken/`, and are no longer: the script reads them from
+the folder `GALLERY_DATA` names). In headless
 Chromium against a server answering as S3 does, at 40 ms a round trip and 25 MiB/s, the second chr1
 took 3.6 s and the third 3.7 s with every byte already in memory: most of it the worker decompressing
 and pooling the same pixels again, the rest the page pooling, ranging and colouring the same block
@@ -13072,9 +13074,10 @@ the Stores workflow, which has nothing to do with it.
 
 **Nor is the lab's own store.** *RSG lab data* is inline (`demosStore()`, `ui/examples.ts`), and
 the files its cards open are one folder on the lab's bucket, `demo/store/`, a directory a card or a
-dataset — `yeast/`, `human/`, `gibcus2018/`, `meneu2025/`, `chromosomix_paper/`, and `k562/`, every file
-the landing page's *Human Hi-C data* reads (§24.11) — with every name inside a workspace relative, so the
-folder opens wherever it is copied. Unlike the rest of `demo/`, it is
+dataset — `yeast/`, `human/`, `gibcus2018/`, `meneu2025/`, `chromosomix_paper/`, `k562/`, every file
+the landing page's *Human Hi-C data* reads (§24.11), and `ecoli/`, the *E. coli* K-12 sequence and genes
+the documentation's screenshots of *Composition* and *Origin and terminus* open — with every name inside a
+workspace relative, so the folder opens wherever it is copied. Unlike the rest of `demo/`, it is
 not a copy of a directory of this repository: its maps run to seven gigabytes, and they are copied
 into it **on the bucket** — from the lab's own published data and from 4DN's, ENCODE's, IGV's and
 1000 Genomes' open-data buckets — and never pass through git. What the repository keeps is the folder's workspaces and
@@ -13091,9 +13094,13 @@ from 4DN's bucket into a `.cool` with the file's own weights, every contact with
 as the file holds it, so a task that reads contacts within a sequence, as each of these does, reads the
 same numbers there as in the whole file. Those outputs are files of this repository, under
 `demo/store/chromosomix_paper/human/`. The paper's folder holds a subfolder an organism, its
-bacterial maps and the *P. aeruginosa* RNA-seq copied there from where the lab keeps them — the zoo's
+bacterial maps and the *P. aeruginosa* RNA-seq copied there from where the lab kept them — the zoo's
 among them — so that it names
-none of those places and opens with the zoo switched off. The same script
+none of those places and opens with the zoo switched off. Those places are gone from the bucket, as are
+`demo/chicken/`, which `gibcus2018/` was copied from, and the zoo's folder: where the copy a file came
+from is gone, the store's copy is the only one, and its line names that copy itself as its source
+(`kept`), which the publish step finds already there and never copies — and fails on, saying so, if it
+is not. The same script
 writes the workspaces and the manifest from one table, so a file a card names and a file the folder
 holds cannot drift apart, and `scripts/publish-store.sh` makes the bucket match the manifest —
 server-side copies, uploads, a skip for what is already there at its size, and an anonymous check of
@@ -15994,17 +16001,17 @@ on the landing page, no store row, no format in a file picker's list, no clause 
 What is dev, and what switched off means for each:
 
 - **`metacool`** — both containers (§3.2, §3.4), the genomes table (§5.1), the genome and genome-pair
-  views (§5.2, §5.3), the genome × genome overview (§7.3), the metagenome tasks (§18.8), the mock
-  community example, the palette's *Genomes table* and the root crumb's greyed *Genomes* on a plain
+  views (§5.2, §5.3), the genome × genome overview (§7.3), the metagenome tasks (§18.8), the palette's
+  *Genomes table* and the root crumb's greyed *Genomes* on a plain
   file, the File card's `ordering` row, and every sentence that names any of them. **Switched off, a
   `.metacool` or an `.mmetacool` is refused like any file the app does not read**, in that refusal's
   words. A `.metacool` also passes cooler's own test (§3.1), so this is a refusal the detection makes,
   not a branch it skips — or it would open as a cooler of twenty thousand contigs. The refusals a
   *plain* file can meet stop naming it too: an unknown HDF5 file, a gzip, a file with no HDF5
   signature and a variable-bin cooler each say what they said, less the multi-genome container and the
-  command that makes one, and the advice under every refusal a plain file can meet names neither. The
-  lab's store drops the mock community's figure and its two files, and any store's catalogue a row of
-  either container; the rest of what the switch hides — the genomes table, the genome views, the
+  command that makes one, and the advice under every refusal a plain file can meet names neither. Any
+  store's catalogue drops a row of either container — the lab's offers none since its mock community,
+  the one metagenome it had, left the bucket; the rest of what the switch hides — the genomes table, the genome views, the
   metagenome tasks and their options — can only be reached with a multi-genome file open, and so goes
   with it. The **DNA Bacterial Zoo** (§24.3) is published with the format, and switched off it has no
   tile in *Connect to a data store*.

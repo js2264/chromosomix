@@ -2,13 +2,13 @@
  * Dev features (§29), in headless Chromium: what a reader sees without them,
  * and what a page that asked for them brings back.
  *
- * Off, the landing page's store has no mock community, the stores have no DNA
- * Bacterial Zoo tile, *About* says nothing of `.metacool` and has no switch,
- * and a `.metacool` named by a link is refused in the sentence an unknown file
- * gets. The same are then shot on a page that asked for them: the mock
- * community back on the landing page, the zoo's tile beside the lab's, *About*
- * naming the format and still no switch, and the `.metacool` opening on its
- * genomes table. It prints what each step found, so a clause that should have
+ * Off, the stores have no DNA Bacterial Zoo tile, *About* says nothing of
+ * `.metacool` and has no switch, and a `.metacool` named by a link is refused in
+ * the sentence an unknown file gets. The same are then shot on a page that asked
+ * for them: the zoo's tile beside the lab's, *About* naming the format and still
+ * no switch, and the `.metacool` — the repository's copy, from the dev server —
+ * opening on its genomes table. The lab's store names no mock community either
+ * way: its files left the lab's bucket, and its figure with them. It prints what each step found, so a clause that should have
  * gone and did not is a line in the log rather than something to spot in a
  * picture.
  *
@@ -91,7 +91,7 @@ async function openMetacool() {
   await sleep(1000)
 }
 
-/** The lab's store, whose figures are where the mock community would be. */
+/** The lab's store, which names no mock community, on or off. */
 async function labStore() {
   await page.click('text=RSG lab data')
   await sleep(2500)
@@ -133,7 +133,7 @@ console.log('on · a DNA Bacterial Zoo tile:', /DNA Bacterial Zoo/.test(await wo
 await shot('d04-tiles-on')
 await labStore()
 text = await words()
-console.log('on · the lab store names the mock community:', /mock (microbial )?community/i.test(text))
+console.log('on · the lab store names the mock community (it has none now):', /mock (microbial )?community/i.test(text))
 await shot('d05-store-on')
 await landing()
 

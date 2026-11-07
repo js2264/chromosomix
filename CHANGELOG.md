@@ -14,6 +14,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The lab's bucket holds only `demo/yeast/`, `demo/store/` and `demo/reassemblies/`, and everything
+  that read the rest reads the store (§24.3).** The lab deleted the bucket's other demo folders and
+  the DNA Bacterial Zoo's. The store's files copied from them — the Gibcus et al. maps from
+  `demo/chicken/`, the paper's *B. subtilis*, *P. aeruginosa* and *C. necator* data from
+  `demo/subtilis/`, `demo/pak/` and the zoo — are now the only copies, and the store's manifest names
+  each as its own source, which `scripts/publish-store.sh` finds there and never copies (and fails on,
+  saying so, if it is gone). The store gains `ecoli/`, *E. coli* K-12's sequence and genes for the
+  documentation's screenshots. `scripts/publish-demo.sh` no longer uploads `demo/ecoli/`, `demo/human/`,
+  `demo/metagenomics/` or `demo/yeast-mpneumoniae/`, which stay in the repository for the tests and the
+  gallery. The documentation's screenshot scripts and the gallery's read the store's copies, and those
+  whose files are gone everywhere — Nagano et al.'s `.scool`, the E. coli `.pairs.gz`, the chicken
+  genes and `.hic`, `progenitors.mcool` and the zoo's PAK map — ask for a copy by name rather than
+  read a 404.
 - **The landing page's *Human Hi-C data* and *Comparing data* read from the lab's bucket (§24.11).**
   Every file either opens is now a copy in the lab's store in Paris rather than on 4DN's, IGV's and
   1000 Genomes' buckets in Virginia and ENCODE's in Oregon. Opening an example is a chain of round
@@ -109,6 +122,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   page can read where a bucket hides `Content-Range`, as 4DN's does.
 - **`/bins` is listed after the map's first picture (§8.12).** Listing a cooler's bin columns for
   the Metadata card's drop-down was four round trips the map waited for before its view was mounted.
+
+### Removed
+
+- **The mock microbial community from the lab's store (a dev feature, §29).** Its files were deleted
+  from the lab's bucket, so the store's *Mock microbial community* figure and its `.metacool` and
+  `.mmetacool` rows went with them. The files stay in the repository, where the tests read them.
 
 ## [0.21.0] - 2026-11-05
 

@@ -13,7 +13,9 @@
 #
 #   s3://bucket/key   copied on the bucket's side, from the lab's own bucket or
 #                     from 4DN's, ENCODE's, IGV's or 1000 Genomes' open-data ones:
-#                     nothing passes through here
+#                     nothing passes through here. A file whose source is its own
+#                     place in the store is kept only there (the copy it came from
+#                     is gone): it is checked, never copied
 #   repo:<path>       a file of this repository, uploaded
 #   work:<name>       a file `scripts/make_rsg_store.py derive` wrote, uploaded
 #                     from the directory given as --work
@@ -157,6 +159,11 @@ while IFS="$(printf '\t')" read -r path source _; do
     s3://*)
       from="${source#s3://}"; from_bucket="${from%%/*}"; from_key="${from#*/}"
       want="$(size_on_s3 "$(region_of "$from_bucket")" "$from_bucket" "$from_key")"
+      if [ "$source" = "s3://$BUCKET/$key" ] && { [ -z "$want" ] || [ "$want" = None ]; }; then
+        # A file kept only in the store (`kept` in make_rsg_store.py): nothing to copy it from.
+        echo "FAIL: $path is kept only in the store, and is not there; there is no copy to put back" >&2
+        exit 1
+      fi
       [ -n "$want" ] && [ "$want" != None ] ||
         { unreadable "$source" "$(region_of "$from_bucket")" "$from_bucket" "$from_key"; exit 1; } ;;
     repo:*) local_file="$ROOT/${source#repo:}"; want="$(wc -c < "$local_file" | tr -d ' ')" ;;
