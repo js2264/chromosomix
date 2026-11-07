@@ -257,10 +257,10 @@
   "pulls": [
     {
       "number": 165,
-      "commit": "3e3435d",
+      "commit": "2547b8c",
       "title": "Draw large blocks level-by-level from values, not whole",
       "branch": "js/TTFI",
-      "date": "2026-11-06T23:33:38Z"
+      "date": "2026-11-07T00:34:03Z"
     },
     {
       "number": 122,
