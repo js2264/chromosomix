@@ -56,7 +56,7 @@
    "redacted": [
     "commands"
    ],
-   "value": "{\"qc\": {\"binsize\": 1000, \"distance_threshold\": 10000, \"inter_contig\": 34232, \"inter_contig_intra_genome\": 27082, \"inter_contig_intra_genome_fraction\": 0.613284, \"inter_genome\": 7150, \"inter_genome_fraction\": 0.161915, \"intra_contig\": 9927, \"intra_contig_long\": 1337, \"intra_contig_long_fraction\": 0.030277, \"intra_contig_short\": 8590, \"intra_contig_short_fraction\": 0.194524, \"intra_genome\": 37009, \"intra_genome_fraction\": 0.838085, \"n_contacts\": 44159, \"n_pairs_discarded\": 5841, \"n_pairs_read\": 50000, \"source\": \"pairs\", \"trans_contig_ratio\": 0.775199, \"version\": 1}}"
+   "value": "{\"qc\": {\"binsize\": 1000, \"distance_threshold\": 10000, \"inter_contig\": 34232, \"inter_contig_intra_genome\": 27082, \"inter_contig_intra_genome_fraction\": 0.613284, \"inter_genome\": 7150, \"inter_genome_fraction\": 0.161915, \"intra_contig\": 9927, \"intra_contig_long\": 1337, \"intra_contig_long_fraction\": 0.030277, \"intra_contig_short\": 8590, \"intra_contig_short_fraction\": 0.194524, \"intra_genome\": 37009, \"intra_genome_fraction\": 0.838085, \"n_contacts\": 44159, \"n_pairs_discarded\": 5841, \"n_pairs_read\": 50000, \"source\": \"pairs\", \"trans_contig_ratio\": 0.775199, \"version\": 2}}"
   },
   "nbins": {
    "numpy_dtype": "<i8",
@@ -13024,7 +13024,7 @@
    "n_pairs_read": 50000,
    "source": "pairs",
    "trans_contig_ratio": 0.775199,
-   "version": 1
+   "version": 2
   }
  },
  "metadata_volatile_keys": [

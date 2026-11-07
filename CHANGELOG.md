@@ -129,6 +129,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   from the lab's bucket, so the store's *Mock microbial community* figure and its `.metacool` and
   `.mmetacool` rows went with them. The files stay in the repository, where the tests read them.
 
+### Fixed
+
+- **A float-count map's `sum` is its sum, not its floor (§3.2).** The File card read a `.metacool`'s
+  counted attributes through Python's `int()`, as metacooler's `MetaCooler.info` did, and so showed
+  60816 for a map whose counts sum to 60816.5. metacooler now keeps a fractional value (its `c3d91ce`),
+  and so does the reader; the goldens metacooler builds are rebuilt with it.
+
 ## [0.21.0] - 2026-11-05
 
 ### Added

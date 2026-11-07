@@ -46,7 +46,7 @@
     },
     "generated-by": {
      "python_type": "str",
-     "value": "cooler-0.10.4"
+     "value": "cooler-0.12.1"
     },
     "genome-assembly": {
      "python_type": "str",
@@ -968,7 +968,7 @@
     "format": "HDF5::Cooler",
     "format-url": "https://github.com/open2c/cooler",
     "format-version": 3,
-    "generated-by": "cooler-0.10.4",
+    "generated-by": "cooler-0.12.1",
     "genome-assembly": "unknown",
     "metadata": {},
     "nbins": 661,
@@ -6472,8 +6472,8 @@
   "2000": {
    "attrs": {
     "bin-size": {
-     "numpy_dtype": "<i4",
-     "python_type": "int32",
+     "numpy_dtype": "<i8",
+     "python_type": "int64",
      "value": 2000
     },
     "bin-type": {
@@ -6499,7 +6499,7 @@
     },
     "generated-by": {
      "python_type": "str",
-     "value": "cooler-0.10.4"
+     "value": "cooler-0.12.1"
     },
     "genome-assembly": {
      "python_type": "str",
@@ -7101,7 +7101,7 @@
     "format": "HDF5::Cooler",
     "format-url": "https://github.com/open2c/cooler",
     "format-version": 3,
-    "generated-by": "cooler-0.10.4",
+    "generated-by": "cooler-0.12.1",
     "genome-assembly": "unknown",
     "metadata": {},
     "nbins": 341,
@@ -12344,8 +12344,8 @@
   "5000": {
    "attrs": {
     "bin-size": {
-     "numpy_dtype": "<i4",
-     "python_type": "int32",
+     "numpy_dtype": "<i8",
+     "python_type": "int64",
      "value": 5000
     },
     "bin-type": {
@@ -12371,7 +12371,7 @@
     },
     "generated-by": {
      "python_type": "str",
-     "value": "cooler-0.10.4"
+     "value": "cooler-0.12.1"
     },
     "genome-assembly": {
      "python_type": "str",
@@ -12779,7 +12779,7 @@
     "format": "HDF5::Cooler",
     "format-url": "https://github.com/open2c/cooler",
     "format-version": 3,
-    "generated-by": "cooler-0.10.4",
+    "generated-by": "cooler-0.12.1",
     "genome-assembly": "unknown",
     "metadata": {},
     "nbins": 147,
