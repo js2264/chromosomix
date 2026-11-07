@@ -40,6 +40,7 @@
  * outside all three. The format is two structures and three hundred lines.
  */
 
+import { yieldToEventLoop } from '../async'
 import { NameIndex } from '../genome/naming'
 import { inflateMember } from '../pairs/stream'
 import { TEXT_INFLATE_MAX, inflatedPast } from '../sources/untrusted'
@@ -101,6 +102,9 @@ export function blockSize(bytes: Uint8Array): number | null {
  */
 const inflateRaw = inflateMember
 
+/** How long {@link inflateBgzf} keeps the thread before handing it back. */
+const INFLATE_SLICE_MS = 8
+
 /**
  * Inflate every whole BGZF block in `bytes`, concatenated.
  *
@@ -132,7 +136,16 @@ export async function inflateBgzf(
   const parts: Uint8Array[] = []
   let total = 0
   let at = 0
+  let blocks = 0
+  let sliceFrom = performance.now()
   while (at + BGZF_HEADER_BYTES <= bytes.length) {
+    // A whole gene table is hundreds of members, and the annotations worker is
+    // the thread every lane of the tab asks for its window: handed back every
+    // few milliseconds, as a row parse is (`forEachRowCooperatively`).
+    if (++blocks % 16 === 0 && performance.now() - sliceFrom > INFLATE_SLICE_MS) {
+      await yieldToEventLoop()
+      sliceFrom = performance.now()
+    }
     const beganAt = at
     const size = blockSize(bytes.subarray(at, Math.min(at + 64, bytes.length)))
     if (size === null || at + size > bytes.length) break
@@ -233,12 +246,8 @@ export function parseTabix(inflated: Uint8Array): TabixIndex {
       const nChunk = view.getInt32(at, true)
       at += 4
       for (let c = 0; c < nChunk; c++) {
-        // A virtual offset is `(block start << 16) | offset within block`. The
-        // high 48 bits are the only part that matters here, and they must be
-        // read as a BigInt: the block offset alone exceeds 2^32 on any file past
-        // four gigabytes, and `getUint32` pairs would silently wrap.
-        const begin = Number(view.getBigUint64(at, true) >> 16n)
-        const end = Number(view.getBigUint64(at + 8, true) >> 16n)
+        const begin = blockOf(view, at)
+        const end = blockOf(view, at + 8)
         at += 16
         if (begin < from) from = begin
         if (end > to) to = end
@@ -247,7 +256,7 @@ export function parseTabix(inflated: Uint8Array): TabixIndex {
     const nIntv = view.getInt32(at, true)
     at += 4
     for (let i = 0; i < nIntv; i++) {
-      const offset = Number(view.getBigUint64(at, true) >> 16n)
+      const offset = blockOf(view, at)
       at += 8
       // The linear index only ever *lowers* the start: it points at the first
       // block that can hold a record overlapping each 16 kb window, and a bin's
@@ -259,6 +268,20 @@ export function parseTabix(inflated: Uint8Array): TabixIndex {
     }
   }
   return { names, spans, format, meta, skip }
+}
+
+/**
+ * The block half of the virtual offset at `at`.
+ *
+ * A virtual offset is `(block start << 16) | offset within block`, and only the
+ * block start matters here. It passes 2^32 on any file past four gigabytes, so
+ * it cannot be put together with `<<` and `|`, which work in 32 bits and wrap;
+ * it used to be read as a BigInt and shifted, which is right and slow — one an
+ * entry, and an index has an entry every 16 kb of every sequence. Two unsigned
+ * halves joined by multiplication are the same number, exact to 2^53.
+ */
+function blockOf(view: DataView, at: number): number {
+  return view.getUint32(at + 4, true) * 0x10000 + (view.getUint32(at, true) >>> 16)
 }
 
 /** A byte range to read, merged across the sequences asked for. */

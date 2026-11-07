@@ -14,6 +14,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **A gene table no longer holds up the lanes beside it (§8.3, §12).** One worker opens a tab's
+  tracks and answers every lane's request for its window, and it parsed a whole text file in one
+  stretch: the ten bigWig lanes of the landing page's *Human Hi-C data* waited for IGV's RefSeq genes,
+  166,923 transcripts, before any of them was drawn. A gene table, a GTF, a BED and a BEDPE are now
+  parsed in slices of 8 ms with the thread handed back between them, and so is the inflate before
+  them, so a lane is answered between two slices. The parse is faster as well, 1.9 s to 0.8 s on those
+  transcripts — each exon list read once rather than twice, a number a character at a time, a tabix
+  index's offsets without a BigInt each. For a reader in Paris, the bigWig lanes are drawn at 2.0 s
+  rather than 4.0 s and the gene lane at 3.2 s rather than 3.7 s.
 - **A remote map reads in quarter-megabyte chunks, not megabyte ones (§6.1, §12).** Opening a cooler
   walks HDF5 metadata a few hundred bytes at a time, scattered across the file, and each place cost a
   whole chunk. The 7.9 GB 4DN map of K562 behind the landing page's *Human Hi-C data* (§24.11) read

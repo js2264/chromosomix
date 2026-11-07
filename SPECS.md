@@ -3448,6 +3448,18 @@ all, and a cross-convention match whose lengths disagree (§5.9).
 Parsed in full, in the annotations worker, never on the main thread — a 9.5 MB GTF is a tenth of a
 second of parsing and that is a tenth of a second of frozen UI.
 
+**Parsed a row at a time, and the thread handed back as it goes** (`forEachRowCooperatively`). The
+annotations worker is one thread for every track of a tab: it opens them, and it answers every lane's
+request for the window it draws. A whole file parsed in one stretch held all of that — *Human Hi-C
+data* (§24.11) reads IGV's RefSeq genes, 166,923 transcripts in 54 MB of text, and its ten bigWig
+lanes, open and asking long before, were answered when that parse had finished. So a gene table, a
+GTF, a BED and a BEDPE are fed to their parsers in slices of 8 ms with the thread given back between
+them, and the BGZF inflate before them is too, every 16 members: a lane's request is answered between
+two slices, and the parse — which nothing else waits for — is the one that waits. What a parser makes
+of the rows is the same, row for row, in the same order. A genePred's two exon lists are read once a
+row, not once to test the row and again to draw it, and a number a character at a time: the parse of
+those 166,923 transcripts went from 1.9 s to 0.8 s.
+
 | Format | Accepted as | Coordinates |
 |---|---|---|
 | GTF / GFF | a gene model | 1-based, inclusive; converted on parse |
@@ -6187,6 +6199,7 @@ requests and bytes in total and for the last view; these are also paper figures.
 | Time to interactive, cold, remote | ≤ 3 s on a typical connection |
 | A region read chunk after chunk (remote) | from the third near miss, one request a stretch, a megabyte past what it needs and doubling to 16 MiB a fetch whatever the chunk — 32 MiB read a megabyte at a time in ≤ 8 requests (§6.1) |
 | Reads scattered across a file (remote) | exactly the 256 KiB chunk each asks for — no read-ahead (§6.1) |
+| A lane's window, asked while a whole text track parses (§8.3) | answered between two 8 ms slices of the parse, not after it — *Human Hi-C data*'s ten bigWig lanes, for a reader in Paris on the lab's bucket, at 2.0 s rather than at 4.0 s, when IGV's RefSeq genes had finished |
 
 And for a `.hic` (§3.6), whose one expensive shape is a read across every chromosome pair — a
 whole-genome picture, and the census §6.5 takes on every open:
