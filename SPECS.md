@@ -6019,6 +6019,23 @@ by `test/unit/sw-navigation.test.ts`. A browser holding a worker from before tak
 takes any new build: when its reader accepts the bar offering the new version, or once every tab of
 the site is closed.
 
+**The worker keeps a copy of the app only if it is this build's.** It asks the server for every
+file it keeps (`cache: 'no-cache'`), never the browser's HTTP cache, and before it keeps anything it
+checks the page: every script of the site's own that the page loads must be in this build's list.
+A page that fails is refused, for instance the build before's, which the host's CDN can still serve
+for a few minutes after a deploy. The install then fails, the worker in place stays, and the browser
+tries again on the next visit. The page is the one file the worker keeps whose name carries no hash,
+and GitHub Pages serves it with a ten-minute `max-age`. A worker that took it from the HTTP cache
+could therefore keep the build before's page, which the browser had fetched for the previous
+worker's install minutes earlier. It then answered every ordinary load with a page asking for
+scripts that had left the site: **a blank page on every ordinary reload**, while a hard reload,
+which skips the worker, showed the app. The reader stayed stuck until a later build replaced the
+worker and every tab of the site was closed. Such a page cannot run, so it cannot show the bar
+offering the new version. **A worker the new one replaces in that state is therefore not waited
+for**: its copy of the page loads a script its cache does not hold. The new worker takes over at
+once and reloads the app's pages it took over; a worker whose page can start is still waited for.
+Held by `test/unit/sw-install.test.ts`.
+
 **The page is written for a search engine too, which reads it after the app has run.** Its title,
 *chromosomix – genome browser for Hi-C, tracks and 3D models*, and its description name what the
 app is searched by — Hi-C and Micro-C, a genome browser, `.cool`, `.mcool` and `.hic` — inside the
