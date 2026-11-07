@@ -279,8 +279,12 @@ afterEach(() => {
 async function remote(chunkSize = 64 << 10): Promise<RemoteRangeSource> {
   served = (await fixture()).bytes
   stub('XMLHttpRequest', RangeXhr)
+  const source = await RemoteRangeSource.open(URL_UNDER_TEST, { fetchImpl: probe, chunkSize })
+  // What the open itself asked for — its probe, the file's first chunk (§6.1) —
+  // is not what these tests are about.
   ranges.length = 0
-  return RemoteRangeSource.open(URL_UNDER_TEST, { fetchImpl: probe, chunkSize })
+  cacheModes.length = 0
+  return source
 }
 
 // ---------------------------------------------------------------------------
@@ -396,9 +400,10 @@ describe('an exact read of a remote file', () => {
     const got = await source.readExact(100_000, 300)
     expect(Array.from(got)).toEqual(Array.from(served.subarray(100_000, 100_300)))
     expect(ranges).toEqual([[100_000, 100_299]])
-    expect(source.cachedChunkCount()).toBe(0)
-    // The probe, and the one read.
-    expect(source.stats()).toEqual({ requests: 2, bytes: 300 })
+    // Nothing kept of it: the one chunk held is the probe's, the file's first.
+    expect(source.cachedChunkCount()).toBe(1)
+    // The HEAD, the probe beside it (the first chunk, §6.1), and the one read.
+    expect(source.stats()).toEqual({ requests: 3, bytes: (64 << 10) + 300 })
   })
 
   it('goes round the browser’s HTTP cache, which would let one of a walk’s reads out at a time', async () => {
@@ -407,7 +412,8 @@ describe('an exact read of a remote file', () => {
     // another, each a full round trip. `no-store` keeps them out of the cache
     // entry, so they are on the wire together.
     const source = await remote()
-    await Promise.all([source.readExact(1_000, 64), source.readExact(50_000, 64), source.readExact(90_000, 64)])
+    // Past the first chunk, which the probe holds (§6.1).
+    await Promise.all([source.readExact(70_000, 64), source.readExact(80_000, 64), source.readExact(95_000, 64)])
     expect(cacheModes).toEqual(['no-store', 'no-store', 'no-store'])
   })
 
@@ -432,8 +438,11 @@ describe('an exact read of a remote file', () => {
     const source = await createSource({ kind: 'remote', url: URL_UNDER_TEST })
     expect(source.readExact).toBeTypeOf('function')
     ranges.length = 0
-    await source.readExact!(5_000, 64)
-    expect(ranges).toEqual([[5_000, 5_063]])
+    const got = await source.readExact!(5_000, 64)
+    expect(Array.from(got)).toEqual(Array.from(served.subarray(5_000, 5_064)))
+    // The probe's first chunk is the mount's (§6.1), and the borrower reaches
+    // it: these bytes come from it, for nothing.
+    expect(ranges).toEqual([])
   })
 })
 

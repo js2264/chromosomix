@@ -14,6 +14,29 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The landing page's *Human Hi-C data* and *Comparing data* read from the lab's bucket (§24.11).**
+  Every file either opens is now a copy in the lab's store in Paris rather than on 4DN's, IGV's and
+  1000 Genomes' buckets in Virginia and ENCODE's in Oregon. Opening an example is a chain of round
+  trips, and from Europe one is about 10 ms to Paris against 85 to 150 ms to those: for a reader in
+  Paris (a modelled network), *Human Hi-C data*'s first picture in 0.9 s rather than 1.6. *Comparing
+  data*'s files were in the store already; *Human Hi-C data*'s are listed under `k562/` and the bucket
+  needs `scripts/publish-store.sh --only k562/`.
+- **A comparison opens both its maps at once (§5.7, §6.1, §12).** A link or a workspace naming two
+  maps opened the second once the first had landed and its view had rendered: two walks of a dozen
+  dependent reads, one after the other. The second's open now starts beside the first's, with its own
+  read plan; the first map is drawn alone as soon as it can be and the second triangle joins it; and a
+  view's two blocks are read together. The landing page's *Comparing data* ships the read plans of
+  both its maps, and draws its upper triangle in 1.2 s and both in 1.9 s, where they took 3.6 and 5.7
+  over the real network.
+- **A gene table no longer holds up the lanes beside it (§8.3, §12).** One worker opens a tab's
+  tracks and answers every lane's request for its window, and it parsed a whole text file in one
+  stretch: the ten bigWig lanes of the landing page's *Human Hi-C data* waited for IGV's RefSeq genes,
+  166,923 transcripts, before any of them was drawn. A gene table, a GTF, a BED and a BEDPE are now
+  parsed in slices of 8 ms with the thread handed back between them, and so is the inflate before
+  them, so a lane is answered between two slices. The parse is faster as well, 1.9 s to 0.8 s on those
+  transcripts — each exon list read once rather than twice, a number a character at a time, a tabix
+  index's offsets without a BigInt each. For a reader in Paris, the bigWig lanes are drawn at 2.0 s
+  rather than 4.0 s and the gene lane at 3.2 s rather than 3.7 s.
 - **A remote map reads in quarter-megabyte chunks, not megabyte ones (§6.1, §12).** Opening a cooler
   walks HDF5 metadata a few hundred bytes at a time, scattered across the file, and each place cost a
   whole chunk. The 7.9 GB 4DN map of K562 behind the landing page's *Human Hi-C data* (§24.11) read
@@ -31,6 +54,61 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   `chromosomix circular` both leave such a sequence as it was. With the smaller
   chunk, the *Human Hi-C data* map's reads end in about 5 s through that link, where they took 22 s,
   and it moves 9.7 MB where it moved 61.
+- **A large block's first picture is drawn at the size it is looked at (§7.2, §12).** A block of
+  2,048² cells or more used to be transformed, measured, coloured into an image at matrix resolution,
+  put on a canvas and halved down to the level the plot draws — all on the main thread, before the
+  first frame. Its first frame now paints only the level it draws, straight from the values
+  (`render/levels.ts`): each cell coloured exactly as before and averaged into the pixel it falls in,
+  with the colour range the same number to the bit, read as order statistics of the raw values. A
+  finer level is painted when a zoom first needs it, between frames, while the nearest level made
+  stands in; an export paints the level it needs at once. Measured from a chromosome clicked in its
+  table, against a server answering as S3 does: mouse chr1 at 20 kb on screen in 4.3 s where it took
+  14.2, yeast chrIV at 100 bp in 4.2 s where it took 26.6, chicken chr1 at the 25 kb a `.hic` opens at
+  in 2.9 s where it took 6.3. A level painted from the values is the mean of its cells throughout,
+  where a canvas halving an odd-sized level drifted into sampling one cell in two: such a map is
+  smoother at fit zoom than it was, and no brighter or darker. The page's report of a finished picture
+  waits for a level still being painted when a report is due, and a zoom alone still makes none.
+- **A sparse block is read once, and only its contacts after that (§6.4, §7.2).** One pass over a
+  large block lists the cells that carry something, each with its value, and sets apart the rows and
+  columns a balancing left NaN; the colour range and every level are then read from that list
+  (`listCells`), the same numbers and the same pixels to the bit. Balancing leaves a zero its weights
+  cannot change where it is (`weighBlock`), bit for bit the product it was. Medians of three, from a
+  chromosome clicked in its table against a server answering as S3 does: mouse chr1 at 20 kb on
+  screen in 4.4 s where it took 4.9, its main-thread work 0.6 s where it was 1.3; yeast chrIV at
+  100 bp in 3.4 s where it took 4.1; chicken chr1 at 25 kb in 2.1 s where it took 2.5. A block in
+  which more than one cell in four carries something is read whole, as before.
+- **A chromosome is shown first from a coarser rung, while its own block reads (§7.2, §12).** Where a
+  stored rung puts at least 256 cells across the window and the block asked for is at least four times
+  finer, that rung is read first and drawn — its own cells, resolution and colour range — and held
+  with the spinner turning until the block replaces it, refitted and measured afresh as before. From
+  the click on the row, against a server answering as S3 does: chicken chr1 at 25 kb shows its 500 kb
+  preview in 0.2 s where the first picture took 2.0, its own block at 2.2 s; mouse chr1 at 80 kb shows
+  640 kb in 0.7 s where it took 2.3, its block at 2.9, the preview read first by the same reader. The
+  preview is not the finer block made smaller: its cells are sums of many, so its compartments show
+  more strongly than the block's. A window already as coarse as a preview, a file with no coarser
+  rung, a grid the reader chose and a map under a second file get none.
+- **The census and the circularity check wait for the first map (§6.5, §8.6, §12).** A `.hic`'s
+  census started beside the open and the circularity check as the Chromosomes table showed, so the
+  reader's first click found a step of one or the other in flight and waited for it: chicken chr1 a
+  moment after its table took 2.1–2.6 s where the same click later took 2.2. Both now wait for the
+  first block of the first map — on a landing table, the map a row opens — or four seconds, as a
+  file's tracks already did; the 1D browser, whose picture is its tracks, still lets them go at once.
+
+- **A remote map opened before opens all at once, and *Human Hi-C data* ships its own (§6.1, §12,
+  §24.11).** Opening a map over the network is a walk — each read names the place of the next — and
+  the example's map was 27 requests in a row before its first picture, at 0.15–0.35 s each over the
+  real buckets. The reader now writes down the chunks an open and its first window touch, and the
+  next open of the same map fetches them side by side as it starts, so the walk runs out of the
+  cache; the example ships its plan, so a first visitor gets the same. Pressing *Human Hi-C data*:
+  the map on screen in 1.5 s where it took 5.4, the *Opening…* line gone at 1.2 s where it stood
+  for 3.3. A map reached through an `.mcool`'s root keeps its plan under both addresses: the lab's
+  `progenitors.mcool` lists its chromosomes in 0.85 s on a second visit where the first took 1.5.
+- **The probe is the first read, and it goes out beside the `HEAD` (§6.1).** It asked for one byte,
+  after the `HEAD` had answered; it now asks for the file's first chunk — what the first read of any
+  container wants — at the same moment as the `HEAD`, and keeps it. A range is kept on the length the
+  page can read where a bucket hides `Content-Range`, as 4DN's does.
+- **`/bins` is listed after the map's first picture (§8.12).** Listing a cooler's bin columns for
+  the Metadata card's drop-down was four round trips the map waited for before its view was mounted.
 
 ## [0.21.0] - 2026-11-05
 

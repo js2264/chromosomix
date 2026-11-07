@@ -27,6 +27,11 @@ opens.
 
 It opens on the **Chromosomes** table, beside the **General** panel, which describes the file.
 
+A map on a server is read a piece at a time, and opening one means reading a few dozen small pieces
+one after another. The app remembers which pieces a map needed, so the next time you open the same
+map in this browser it asks for all of them at once and the map opens sooner. **Human Hi-C data**
+and **Comparing data** come with their lists, so they open quickly the first time too.
+
 ![The Chromosomes table of 4DN's K562 map, a row per chromosome with its length, beside the General panel, whose File card gives its bin size, 25 kb as it opens, and a sum of 186,956,649 contacts, and whose Sequences card lists its chromosomes.](../../../assets/screens/start/chromosomes.webp)
 
 ## Pick a resolution and open a chromosome

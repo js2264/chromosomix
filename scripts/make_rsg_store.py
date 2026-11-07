@@ -124,6 +124,49 @@ FIG1A_MARKS = [
 FIG1A_4C = f"{GM}_5000.4c-chr14-89150001-89180000.bw"
 #: CTCF's core motif in IUPAC, read with one mismatch: about the density of the bound sites.
 CTCF_MOTIF, CTCF_MOTIFS = "RCCASYAGRKGGCRS", "hg38.CTCF-motifs.bed"
+# K562 at MYC, the landing page's *Human Hi-C data* example (`ui/exampleSessions.ts`): 4DN's in situ
+# Hi-C of Rao et al. 2014, its replicates merged (4DNESI7DEJTM), 4DN's tracks of it, ENCODE's of the
+# same cells, IGV's hg38 genes and bands and 1000 Genomes' GRCh38 — byte for byte, so the read plan
+# the example ships with holds for the copy. Four buckets in Virginia and Oregon, copied to one in
+# Paris: from Europe a round trip to them is 85 to 150 ms, and to it about 10.
+#: 4DN's files: (uuid, name, what).
+K562_FOURDN = [
+    ("230ad652-0232-47f2-97ef-296c7a040bd9", "4DNFI18UHVRO.mcool",
+     "In situ Hi-C, K562, its replicates merged (Rao et al. 2014; 4DN 4DNESI7DEJTM)"),
+    ("e6af9802-c6b9-4db7-bb1f-7a8070c931a0", "4DNFIXU7QLG6.bw", "Insulation score of the map (4DN)"),
+    ("76dc2907-2bdc-4e78-87aa-dc0fcd0ab993", "4DNFI4EFYN3Q.bed.gz", "Boundaries called on the map (4DN)"),
+    ("1643fcdf-1258-4684-a835-89eb19ad5654", "4DNFIWUAO2QI.bw", "Compartments (E1) of the map (4DN)"),
+]
+#: ENCODE's files of K562, GRCh38: (key under encode-public, what). The signal is fold change over
+#: control, the DNase's read-depth normalised.
+K562_ENCODE = [
+    ("2022/10/10/f84d155e-5cce-4ad6-a8cb-990de539a929/ENCFF955KEB.bed.gz", "Subcompartments (ENCODE)"),
+    ("2020/08/16/fd75d5ae-d6d3-459d-a2ef-9b7e14483957/ENCFF118PBQ.bedpe.gz",
+     "CTCF ChIA-PET loops, Ruan lab, JAX (ENCODE ENCSR597AKG)"),
+    ("2020/09/26/85161a5a-d6b5-49d2-bc0a-db0b217ff0d5/ENCFF979PWH.bigWig",
+     "CTCF ChIP-seq, Bernstein lab, Broad (ENCODE ENCSR000AKO)"),
+    ("2020/12/12/5dd3b2bc-d063-45a9-a1a2-d72d954abc8d/ENCFF320RTQ.bigWig",
+     "RAD21 ChIP-seq, Weissman lab, Yale (ENCODE ENCSR000FAD)"),
+    ("2020/09/30/127536f7-16c3-4f65-b621-134645ea90d3/ENCFF660WUG.bigWig",
+     "H3K4me3 ChIP-seq, Bernstein lab, Broad (ENCODE ENCSR000AKU)"),
+    ("2022/06/14/a3a5887a-bfe4-4c51-856e-986d8d40cfe2/ENCFF381NDD.bigWig",
+     "H3K27ac ChIP-seq, Bernstein lab, Broad (ENCODE ENCSR000AKP)"),
+    ("2020/12/27/1d26d5d9-f56e-48d8-9ea8-eb31fae4f2cd/ENCFF937ZPS.bigWig",
+     "Pol II ChIP-seq, Snyder lab, Stanford (ENCODE ENCSR000EHL)"),
+    ("2022/06/14/9727529c-4692-4a48-b004-440358d2a5a8/ENCFF317VHO.bigWig",
+     "H3K36me3 ChIP-seq, Bernstein lab, Broad (ENCODE ENCSR000AKR)"),
+    ("2022/06/16/c9e15712-7cb9-453e-8b49-80e70709b234/ENCFF242ENK.bigWig",
+     "H3K27me3 ChIP-seq, Bernstein lab, Broad (ENCODE ENCSR000AKQ)"),
+    ("2020/10/29/c38d5ac9-2cb8-4d12-b0d9-843fadfafe92/ENCFF601JGK.bigWig",
+     "H3K9me3 ChIP-seq, Bernstein lab, Broad (ENCODE ENCSR000APE)"),
+    ("2021/03/16/b790ea43-824d-4934-840b-cb3612634cfd/ENCFF102ARJ.bigWig",
+     "ATAC-seq, Snyder lab, Stanford (ENCODE ENCSR868FGK)"),
+    ("2025/08/14/a5f81aa9-187f-4c0b-8018-fcf749307768/ENCFF957ZCO.bigWig",
+     "DNase-seq, Stamatoyannopoulos lab, UW (ENCODE ENCSR000EOT)"),
+]
+#: 1000 Genomes' GRCh38, the FASTA of IGV's `hg38_1kg`, read by range through the index beside it.
+K562_FASTA = "technical/reference/GRCh38_reference_genome/GRCh38_full_analysis_set_plus_decoy_hla.fa"
+
 HG38_AUTOSOMES_X = ",".join([*(f"chr{n}" for n in range(1, 23)), "chrX"])
 HG38_PRIMARY = HG38_AUTOSOMES_X + ",chrY"
 
@@ -499,6 +542,16 @@ def encode(key: str) -> str:
     return f"s3://encode-public/{key}"
 
 
+def igv(key: str) -> str:
+    """A copy from IGV's genomes bucket."""
+    return f"s3://igv.org.genomes/{key}"
+
+
+def thousand_genomes(key: str) -> str:
+    """A copy from the 1000 Genomes open-data bucket."""
+    return f"s3://1000genomes/{key}"
+
+
 def repo(path: str) -> str:
     """A file of this repository."""
     return f"repo:{path}"
@@ -692,6 +745,16 @@ FILES: list[tuple[str, str, str]] = [
     (PAPER + f"P_aeruginosa/{PAK_RNA}", s3(PAK + PAK_RNA), "RNA-seq, PAK at T0, counts per million (GEO GSE76513)"),
     *[(PAPER + f"P_aeruginosa/{sample}_8000.e1-arms.bw", repo(f"demo/store/{PAPER}P_aeruginosa/{sample}_8000.e1-arms.bw"),
        f"E1 along both arms at 8 kb, {label}, computed by the app") for sample, label in PAO1_STRAINS],
+    # -- K562 at MYC: every file the landing page's Human Hi-C data example reads, from the four buckets it
+    #    read them from, under their own names
+    *[(f"k562/{name}", fourdn(uuid, name), what) for uuid, name, what in K562_FOURDN],
+    *[(f"k562/{key.rsplit('/', 1)[-1]}", encode(key), what) for key, what in K562_ENCODE],
+    ("k562/ncbiRefSeq.txt.gz", igv("hg38/ncbiRefSeq.txt.gz"), "RefSeq genes, hg38 (IGV's copy of UCSC's ncbiRefSeq)"),
+    ("k562/ncbiRefSeq.txt.gz.tbi", igv("hg38/ncbiRefSeq.txt.gz.tbi"), "…and its tabix index"),
+    ("k562/cytoBandIdeo.txt.gz", igv("hg38/annotations/cytoBandIdeo.txt.gz"), "Cytogenetic bands, hg38 (IGV)"),
+    (f"k562/{K562_FASTA.rsplit('/', 1)[-1]}", thousand_genomes(K562_FASTA),
+     "GRCh38 with decoys and HLA, the 1000 Genomes analysis set"),
+    (f"k562/{K562_FASTA.rsplit('/', 1)[-1]}.fai", thousand_genomes(f"{K562_FASTA}.fai"), "…and its index"),
 ]
 
 
@@ -1324,6 +1387,11 @@ def stage(out: Path, local: str, work_dir: Path | None) -> None:
             where[dest] = "https://4dn-open-data-public.s3.amazonaws.com/" + source[len("s3://4dn-open-data-public/"):]
         elif source.startswith("s3://encode-public/"):
             where[dest] = ENCODE + source[len("s3://encode-public/"):]
+        elif source.startswith("s3://igv.org.genomes/"):
+            # Path-style: a bucket with dots in its name has no certificate as a host.
+            where[dest] = "https://s3.amazonaws.com/igv.org.genomes/" + source[len("s3://igv.org.genomes/"):]
+        elif source.startswith("s3://1000genomes/"):
+            where[dest] = "https://1000genomes.s3.amazonaws.com/" + source[len("s3://1000genomes/"):]
         elif source.startswith("repo:"):
             where[dest] = local.rstrip("/") + "/" + source[len("repo:"):]
         elif source.startswith("work:"):

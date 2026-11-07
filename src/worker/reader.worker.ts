@@ -69,12 +69,14 @@ import {
   type ResampleResult,
   type SourceKind,
   type StageWindowSide,
+  type ReadPlans,
   type StatsResult,
   type WorkerRequest,
   type WorkerResponse,
 } from './protocol'
 import type { WindowRead, WindowRun } from '../edit/paint'
-import { createSource, openIndexSource, releaseSources } from './sources'
+import { createSource, openIndexSource, releaseSources, remoteBehind } from './sources'
+import type { ReadPlan } from '../sources/RemoteRangeSource'
 import { importPairs, probePairs, rungInImport, suggestBase, type PairsImport } from '../pairs/import'
 import { mcoolNameFor } from '../pairs/mcoolName'
 import { writeMcool } from '../pairs/write'
@@ -164,6 +166,13 @@ interface Session {
    * the second lock on a door the first already shut.
    */
   metacool?: boolean
+  /**
+   * What this open read and what its first view read, written down as plans
+   * the next open of the file fetches side by side (§6.1, §12); `view` stays
+   * `null` until the first view's block has been read. Absent for a source that
+   * does not write reads down — anything but a remote one.
+   */
+  plans?: { open: ReadPlan | null; view: ReadPlan | null }
   /**
    * What the method weighs of the stage's last picture (§27.5), kept here for
    * the `suggest` requests that count its suggestions off the stage's thread
@@ -688,7 +697,11 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
     resample: null,
     lens,
     ...(request.metacool === undefined ? {} : { metacool: request.metacool }),
+    ...(remoteBehind(source) === null ? {} : { plans: { open: remoteBehind(source)?.recorded() ?? null, view: null } }),
   }
+  // The open's walk is written down; the first view's begins here, and ends
+  // with that view's block (`handleMatrix`).
+  remoteBehind(source)?.beginRecording()
 
   return {
     ...(pairs === null || request.binning === undefined
@@ -1230,6 +1243,28 @@ function pictureRung(open: MetaCooler, cap: number, contigs?: readonly number[])
 }
 
 async function handleMatrix(
+  request: Extract<WorkerRequest, { kind: 'matrix' }>,
+): Promise<MatrixResult> {
+  const result = await readMatrix(request)
+  // The first view's block is read: its walk is the second half of the plan.
+  // Not for a stand-in, whose block is still to come, nor for a read nobody is
+  // looking at.
+  const held = session
+  if (
+    held !== null &&
+    held.plans !== undefined &&
+    held.plans.view === null &&
+    request.preview !== true &&
+    request.background !== true
+  ) {
+    const behind = remoteBehind(held.source)
+    held.plans.view = behind?.recorded() ?? null
+    behind?.stopRecording()
+  }
+  return result
+}
+
+async function readMatrix(
   request: Extract<WorkerRequest, { kind: 'matrix' }>,
 ): Promise<MatrixResult> {
   const open = requireSession().mc
@@ -2147,6 +2182,22 @@ async function handleContacts(request: Extract<WorkerRequest, { kind: 'contacts'
   }
 }
 
+/**
+ * What the open and its first view read, for the session to keep for the next
+ * open of this file (§6.1, §12) — and the end of writing reads down, which
+ * nothing after the first picture needs.
+ */
+function handleReadPlan(): ReadPlans | null {
+  const held = session
+  if (held === null || held.plans === undefined) return null
+  const behind = remoteBehind(held.source)
+  if (behind !== null) {
+    if (held.plans.view === null) held.plans.view = behind.recorded()
+    behind.stopRecording()
+  }
+  return held.plans
+}
+
 function handleStats(): StatsResult {
   const { source } = requireSession()
   return { total: source.stats(), lastOp: { ...lastOp }, calls }
@@ -2211,6 +2262,8 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
       return handleContacts(request)
     case 'stats':
       return handleStats()
+    case 'readPlan':
+      return handleReadPlan()
     case 'picture':
       return handlePicture(request)
     case 'suggest':

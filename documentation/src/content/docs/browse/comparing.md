@@ -25,6 +25,8 @@ file's.
 - Hovering a cell gives both files' counts.
 - The link carries the second file as `uri2`. On a change of resolution it follows at the same bin
   size, or the card says it has none.
+- A link or a workspace that names both opens them at once: the upper triangle is drawn as soon as
+  the first file has its block, and the lower one joins it when the second file has its own.
 
 ### What the two files must share
 

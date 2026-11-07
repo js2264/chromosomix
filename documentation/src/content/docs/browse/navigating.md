@@ -100,6 +100,18 @@ Scrolling does not change the resolution chosen in the bar
 already read. A wide window may be read coarser, its bins summed, and the line under the heading
 says what one cell is worth: `4,033 × 4,033 bins · effective resolution: 3 kb`.
 
+A block of several million cells — a whole chromosome at a fine resolution — is first drawn at the
+size of the screen, which is what makes it appear quickly. Its finer detail is drawn when you first
+zoom in: for a moment after that zoom the picture is softer, then it sharpens. Nothing is read again,
+since the block is already in hand, and a saved figure is always drawn at full detail.
+
+Before that, while such a block is still being read, the window is shown from a coarser resolution
+the file stores, when it has one: clicking a whole chromosome puts a coarse map on screen in a
+fraction of a second, with a spinner in its corner, and the map at the resolution you chose replaces
+it when it arrives. The coarse map's key says its own resolution. Its cells are sums of many finer
+ones, so its compartments look stronger than they will in the finer map. It takes no gestures until
+it has been replaced. A window that is already about as coarse as that is read once, as before.
+
 To see finer data, narrow the window, down to the resolution chosen. Or turn on **Refine on zoom**
 in the command palette (<kbd>⌘ P</kbd> or <kbd>Ctrl P</kbd>): zooming in past what the block can
 show then reads it again, finer; <kbd>Esc</kbd> calls it off. It applies to every map, and this

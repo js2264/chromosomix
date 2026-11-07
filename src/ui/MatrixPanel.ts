@@ -3772,9 +3772,21 @@ export class MatrixPanel {
    * view that refitted whenever the colour scale moved would throw away the pan
    * and zoom the reader had arrived at.
    */
-  setData(data: MatrixResult, title: string, second?: MatrixResult): void {
+  setData(
+    data: MatrixResult,
+    title: string,
+    second?: MatrixResult,
+    options: {
+      /**
+       * A coarse stand-in for the block being read ({@link setPreview}): drawn
+       * as any block is, but not the first picture the session holds its
+       * tracks, census and circularity check behind (`firstData`).
+       */
+      preview?: boolean
+    } = {},
+  ): void {
     this.data = data
-    this.markFirstData()
+    if (options.preview !== true) this.markFirstData()
     this.syncCardsShown()
     // Before the derivation below, which builds the correlation's cache key out
     // of it. A block arriving is the one event the key cannot infer: a reader
@@ -3901,8 +3913,45 @@ export class MatrixPanel {
     // in it belongs to a picture that no longer exists.
     this.laneEditor?.close()
     this.heatmap.setScale(this.scale())
+    // The block a preview stood in for: the picture is the reader's again.
+    if (options.preview !== true) this.endPreview()
     this.setBusy(false)
     this.schedule()
+  }
+
+  /**
+   * A coarse stand-in is on screen, held still until the block it stands in
+   * for is drawn ({@link setPreview}).
+   */
+  private previewing = false
+
+  /**
+   * Draw a coarse stand-in for the block being read (§7.2): the same window
+   * from a coarser rung, on screen while the asked block reads, held still with
+   * the spinner turning — as the refine ladder holds a picture it is sharpening
+   * (`ui/refine.ts`) — until {@link setData} draws the block itself.
+   *
+   * Drawn as a block of its own, with its own colour range: its cells are sums
+   * of many of the asked block's, so no range of one is a range of the other,
+   * and the block that replaces it measures its own as any new block does. And
+   * not the first picture the session waits for: what it holds back — the
+   * tracks, the census, the circularity check — waits for the block the reader
+   * asked for, as it did before there was a preview.
+   */
+  setPreview(data: MatrixResult, title: string): void {
+    this.setData(data, title, undefined, { preview: true })
+    this.previewing = true
+    this.setFrozen(true)
+  }
+
+  /**
+   * Let a stand-in go without a block to replace it — the read it stood in for
+   * failed or was abandoned, and the picture on screen is what there is.
+   */
+  endPreview(): void {
+    if (!this.previewing) return
+    this.previewing = false
+    this.setFrozen(false)
   }
 
   /**
@@ -5740,6 +5789,9 @@ export class MatrixPanel {
       // the lanes asked for their windows in the draw above, so their reads are
       // counted before the paint is said to have been made.
       this.surface?.wait('lanes', this.lanes.waiting())
+      // A large block's finer level still being painted between frames
+      // (`render/levels.ts`): the picture on screen is about to sharpen.
+      this.surface?.wait('level', this.heatmap.sharpening)
       this.surface?.wait('paint', false)
     })
   }

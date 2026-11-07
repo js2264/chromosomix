@@ -71,19 +71,30 @@ import { FIELD_NAME } from '../annotations/fields'
 import { defaultStyle, placementOn } from '../annotations/types'
 import type { AnnotationCard, AnnotationKind, LaneEdge, StoredEntry } from '../annotations/types'
 import { CONFIG_VERSION, type SessionConfig } from '../state/SessionConfig'
+import type { StoredPlans } from '../state/readPlans'
 import type { ViewState } from '../types'
-import { demoFigure } from './examples'
+import { DEMO_BUCKET, demoFigure } from './examples'
 import { getPlotOptions } from './plotOptions'
 
-/** 4DN's open-data bucket, as the 4DN store reads it. */
-const FOURDN = 'https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/'
-/** ENCODE's public bucket, as the ENCODE store reads it. */
-const ENCODE = 'https://encode-public.s3.amazonaws.com/'
-/** IGV's own copy of its hg38 annotations, which answers a page where UCSC's does not. */
-const IGV_HG38 = 'https://s3.amazonaws.com/igv.org.genomes/hg38/'
-/** The FASTA of IGV's `hg38_1kg`, read by range through the index beside it. */
-const HG38_FASTA =
-  'https://1000genomes.s3.amazonaws.com/technical/reference/GRCh38_reference_genome/GRCh38_full_analysis_set_plus_decoy_hla.fa'
+/**
+ * The lab's store, on its bucket in Paris, where both built examples read every
+ * file they open (§24.11): copies, byte for byte, of 4DN's, ENCODE's, IGV's and
+ * 1000 Genomes' files, each listed with where it came from in
+ * `demo/store/MANIFEST.tsv` and put there by `scripts/publish-store.sh`. Those
+ * four buckets are in Virginia and Oregon, and an example's open is a chain of
+ * round trips: from Europe one is 85 to 150 ms to them, and about 10 to Paris.
+ *
+ * {@link DEMO_BUCKET} and not `demoBase`, for the hub example's reason
+ * (`exampleHubText`): a local copy of `demo/` does not hold these files, and an
+ * example is a thing to press.
+ */
+const LAB_STORE = `${DEMO_BUCKET}store/`
+/** Human Hi-C data's files: 4DN's map of K562 and its tracks, ENCODE's of the same cells, IGV's hg38. */
+const K562 = `${LAB_STORE}k562/`
+/** Comparing data's: 4DN's files of Gibcus et al. 2018, as the store's own card reads them. */
+const GIBCUS = `${LAB_STORE}gibcus2018/`
+/** The FASTA of IGV's `hg38_1kg`, 1000 Genomes' GRCh38, read by range through the index beside it. */
+const HG38_FASTA = `${K562}GRCh38_full_analysis_set_plus_decoy_hla.fa`
 
 /** What the column says over its buttons. */
 export const EXAMPLES = {
@@ -143,7 +154,7 @@ export function exampleSessions(): ExampleSession[] {
 }
 
 /** Human Hi-C data's map: 4DN's in situ Hi-C of K562, merged replicates (4DNESI7DEJTM). */
-export const HUMAN_MAP = `${FOURDN}230ad652-0232-47f2-97ef-296c7a040bd9/4DNFI18UHVRO.mcool`
+export const HUMAN_MAP = `${K562}4DNFI18UHVRO.mcool`
 
 /**
  * Where it opens: MYC, PVT1 and the blood enhancer cluster downstream of them,
@@ -152,10 +163,113 @@ export const HUMAN_MAP = `${FOURDN}230ad652-0232-47f2-97ef-296c7a040bd9/4DNFI18U
  */
 export const HUMAN_REGION = 'chr8:126800000-130200000'
 
+/**
+ * What opening Human Hi-C data's map reads, shipped with it (§6.1, §12): the
+ * walk through the cooler's HDF5 metadata at 10 kb and the window at MYC, as
+ * the reader wrote them down (`RemoteRangeSource.recorded`). Fetched side by
+ * side as the example opens, so a first visitor's map comes out of a cache
+ * filled in a couple of round trips rather than thirty in a row. Made on the
+ * file's size, which is its check: a file of any other size is another file and
+ * opens by walking, as it would with no plan. `scripts/record-plan.mjs` writes
+ * it again.
+ */
+const HUMAN_PLAN: StoredPlans | undefined = {
+  size: 7921321989,
+  open: [
+    [0, 262144],
+    [1801191424, 1801453568],
+    [4678746112, 4679008256],
+    [4680843264, 4681105408],
+    [5753012224, 5753274368],
+    [5753798656, 5754060800],
+    [7736131584, 7736393728],
+    [7807959040, 7808221184],
+  ],
+  views: {
+    [HUMAN_REGION]: [
+      [4678746112, 4679008256],
+      [4680843264, 4681105408],
+      [4703911936, 4704174080],
+      [5408292864, 5408555008],
+      [5410652160, 5412749312],
+      [5414846464, 5415108608],
+      [5416157184, 5416943616],
+      [5753012224, 5753798656],
+      [7843348480, 7843610624],
+      [7844397056, 7844659200],
+      [7845445632, 7845707776],
+    ],
+  },
+  at: 0,
+}
+
 /** Comparing data's two maps: DT40 at the G2 block (4DNES9LEZXN7) and 60 min after it (4DNESEQNSXSD). */
-export const CHICKEN_G2 = `${FOURDN}b829095a-28e6-49ec-bd18-2b4bc319d0eb/4DNFIT479GDR.mcool`
-export const CHICKEN_MITOSIS = `${FOURDN}6bc6bab2-1319-46ce-b296-cb2be777274b/4DNFIWHQLZTL.mcool`
+export const CHICKEN_G2 = `${GIBCUS}G2_4DNFIT479GDR.mcool`
+export const CHICKEN_MITOSIS = `${GIBCUS}60m_4DNFIWHQLZTL.mcool`
 export const COMPARISON_REGION = 'chr1:20000000-60000000'
+
+/**
+ * What opening Comparing data's two maps reads, shipped with it as Human Hi-C
+ * data's is: each map's walk through its HDF5 metadata at 100 kb and its block
+ * of chr1 from 20 to 60 Mb. The two maps open side by side, each with its own
+ * plan (§11), so the comparison is two walks run at once out of two caches
+ * filled in a round trip or two. `scripts/record-plan.mjs compare` writes them
+ * again.
+ */
+const CHICKEN_G2_PLAN: StoredPlans | undefined = {
+  size: 687217751,
+  open: [
+    [0, 262144],
+    [608698368, 608960512],
+    [635961344, 636223488],
+    [644349952, 644612096],
+    [647757824, 648019968],
+  ],
+  views: {
+    [COMPARISON_REGION]: [
+      [608698368, 609222656],
+      [609746944, 611319808],
+      [614727680, 614989824],
+      [615776256, 616562688],
+      [625999872, 626262016],
+      [635961344, 636223488],
+      [659554304, 660078592],
+    ],
+  },
+  at: 0,
+}
+const CHICKEN_MITOSIS_PLAN: StoredPlans | undefined = {
+  size: 890233974,
+  open: [
+    [0, 262144],
+    [801898496, 802160640],
+    [836763648, 837025792],
+    [845152256, 845414400],
+    [848822272, 849084416],
+  ],
+  views: {
+    [COMPARISON_REGION]: [
+      [801898496, 802422784],
+      [803209216, 805306368],
+      [807141376, 808976384],
+      [817364992, 817627136],
+      [836763648, 837025792],
+      [861405184, 861929472],
+    ],
+  },
+  at: 0,
+}
+
+/** The read plans the examples ship with, by the map address each opens. */
+export const EXAMPLE_PLANS: Readonly<Record<string, StoredPlans>> = Object.fromEntries(
+  (
+    [
+      [`${HUMAN_MAP}::resolutions/10000`, HUMAN_PLAN],
+      [`${CHICKEN_G2}::resolutions/100000`, CHICKEN_G2_PLAN],
+      [`${CHICKEN_MITOSIS}::resolutions/100000`, CHICKEN_MITOSIS_PLAN],
+    ] as Array<[string, StoredPlans | undefined]>
+  ).flatMap(([uri, plan]) => (plan === undefined ? [] : [[uri, plan]])),
+)
 
 /** One row of the Tracks card, on one edge — or, for an overlay, on the map. */
 function row(
@@ -203,46 +317,46 @@ const SUBCOMPARTMENT_COLOURS: Record<string, string> = {
 /** The pairs under the map: each group is one lane, its two tracks overlaid, each on its own axis. */
 const PAIRS: ReadonlyArray<{
   group: string
-  tracks: ReadonlyArray<readonly [id: string, label: string, path: string, colour: string]>
+  tracks: ReadonlyArray<readonly [id: string, label: string, file: string, colour: string]>
 }> = [
   {
     group: 'CTCF and cohesin',
     tracks: [
       // ENCSR000AKO, Bernstein (Broad); ENCSR000FAD, Weissman (Yale).
-      ['ctcf', 'CTCF', '2020/09/26/85161a5a-d6b5-49d2-bc0a-db0b217ff0d5/ENCFF979PWH.bigWig', '#0072b2'],
-      ['rad21', 'RAD21', '2020/12/12/5dd3b2bc-d063-45a9-a1a2-d72d954abc8d/ENCFF320RTQ.bigWig', '#e69f00'],
+      ['ctcf', 'CTCF', 'ENCFF979PWH.bigWig', '#0072b2'],
+      ['rad21', 'RAD21', 'ENCFF320RTQ.bigWig', '#e69f00'],
     ],
   },
   {
     group: 'promoters and enhancers',
     tracks: [
       // ENCSR000AKU and ENCSR000AKP, Bernstein (Broad).
-      ['h3k4me3', 'H3K4me3', '2020/09/30/127536f7-16c3-4f65-b621-134645ea90d3/ENCFF660WUG.bigWig', '#d55e00'],
-      ['h3k27ac', 'H3K27ac', '2022/06/14/a3a5887a-bfe4-4c51-856e-986d8d40cfe2/ENCFF381NDD.bigWig', '#f0c419'],
+      ['h3k4me3', 'H3K4me3', 'ENCFF660WUG.bigWig', '#d55e00'],
+      ['h3k27ac', 'H3K27ac', 'ENCFF381NDD.bigWig', '#f0c419'],
     ],
   },
   {
     group: 'transcription',
     tracks: [
       // ENCSR000EHL, Snyder (Stanford); ENCSR000AKR, Bernstein (Broad).
-      ['polr2a', 'Pol II', '2020/12/27/1d26d5d9-f56e-48d8-9ea8-eb31fae4f2cd/ENCFF937ZPS.bigWig', '#cc79a7'],
-      ['h3k36me3', 'H3K36me3', '2022/06/14/9727529c-4692-4a48-b004-440358d2a5a8/ENCFF317VHO.bigWig', '#009e73'],
+      ['polr2a', 'Pol II', 'ENCFF937ZPS.bigWig', '#cc79a7'],
+      ['h3k36me3', 'H3K36me3', 'ENCFF317VHO.bigWig', '#009e73'],
     ],
   },
   {
     group: 'repression',
     tracks: [
       // ENCSR000AKQ and ENCSR000APE, Bernstein (Broad).
-      ['h3k27me3', 'H3K27me3', '2022/06/16/c9e15712-7cb9-453e-8b49-80e70709b234/ENCFF242ENK.bigWig', '#7b5ea7'],
-      ['h3k9me3', 'H3K9me3', '2020/10/29/c38d5ac9-2cb8-4d12-b0d9-843fadfafe92/ENCFF601JGK.bigWig', '#8c8c8c'],
+      ['h3k27me3', 'H3K27me3', 'ENCFF242ENK.bigWig', '#7b5ea7'],
+      ['h3k9me3', 'H3K9me3', 'ENCFF601JGK.bigWig', '#8c8c8c'],
     ],
   },
   {
     group: 'accessibility',
     tracks: [
       // ENCSR868FGK, Snyder (Stanford); ENCSR000EOT, Stamatoyannopoulos (UW).
-      ['atac', 'ATAC', '2021/03/16/b790ea43-824d-4934-840b-cb3612634cfd/ENCFF102ARJ.bigWig', '#117733'],
-      ['dnase', 'DNase', '2025/08/14/a5f81aa9-187f-4c0b-8018-fcf749307768/ENCFF957ZCO.bigWig', '#56b4e9'],
+      ['atac', 'ATAC', 'ENCFF102ARJ.bigWig', '#117733'],
+      ['dnase', 'DNase', 'ENCFF957ZCO.bigWig', '#56b4e9'],
     ],
   },
 ]
@@ -254,18 +368,18 @@ const PAIRS: ReadonlyArray<{
 function humanTracks(): StoredEntry[] {
   return [
     // Above: IGV's hg38 — genes against the map, then the sequence, then the bands.
-    row('k562-genes', 'gtf', 'RefSeq genes (IGV)', `${IGV_HG38}ncbiRefSeq.txt.gz`, 'top', '#5b6169', 44, { primary: true }),
+    row('k562-genes', 'gtf', 'RefSeq genes (IGV)', `${K562}ncbiRefSeq.txt.gz`, 'top', '#5b6169', 44, { primary: true }),
     row('k562-sequence', 'sequence', 'hg38 sequence (IGV)', HG38_FASTA, 'top', '#5b6169', 24, { index: `${HG38_FASTA}.fai` }),
-    row('k562-bands', 'ideogram', 'hg38 bands (IGV)', `${IGV_HG38}annotations/cytoBandIdeo.txt.gz`, 'top', '#5b6169', 20),
+    row('k562-bands', 'ideogram', 'hg38 bands (IGV)', `${K562}cytoBandIdeo.txt.gz`, 'top', '#5b6169', 20),
     // Left: what the map is made of, 4DN's on this very map and ENCODE's on the same cells.
-    row('k562-insulation', 'track', 'insulation (4DN)', `${FOURDN}e6af9802-c6b9-4db7-bb1f-7a8070c931a0/4DNFIXU7QLG6.bw`, 'left', '#1aa0b8', 48),
-    row('k562-boundaries', 'segments', 'boundaries (4DN)', `${FOURDN}76dc2907-2bdc-4e78-87aa-dc0fcd0ab993/4DNFI4EFYN3Q.bed.gz`, 'left', '#1aa0b8', 16),
-    row('k562-e1', 'track', 'E1 · compartments (4DN)', `${FOURDN}1643fcdf-1258-4684-a835-89eb19ad5654/4DNFIWUAO2QI.bw`, 'left', '#8c8c8c', 48),
+    row('k562-insulation', 'track', 'insulation (4DN)', `${K562}4DNFIXU7QLG6.bw`, 'left', '#1aa0b8', 48),
+    row('k562-boundaries', 'segments', 'boundaries (4DN)', `${K562}4DNFI4EFYN3Q.bed.gz`, 'left', '#1aa0b8', 16),
+    row('k562-e1', 'track', 'E1 · compartments (4DN)', `${K562}4DNFIWUAO2QI.bw`, 'left', '#8c8c8c', 48),
     row(
       'k562-subcompartments',
       'segments',
       'subcompartments (ENCODE)',
-      `${ENCODE}2022/10/10/f84d155e-5cce-4ad6-a8cb-990de539a929/ENCFF955KEB.bed.gz`,
+      `${K562}ENCFF955KEB.bed.gz`,
       'left',
       '#8c8c8c',
       16,
@@ -286,7 +400,7 @@ function humanTracks(): StoredEntry[] {
       'k562-loops',
       'pairs',
       'CTCF ChIA-PET loops (ENCODE)',
-      `${ENCODE}2020/08/16/fd75d5ae-d6d3-459d-a2ef-9b7e14483957/ENCFF118PBQ.bedpe.gz`,
+      `${K562}ENCFF118PBQ.bedpe.gz`,
       'bottom',
       '#0072b2',
       16,
@@ -294,8 +408,8 @@ function humanTracks(): StoredEntry[] {
     ),
     // Below: ENCODE's 1D signal of K562, fold change over control for ChIP and ATAC.
     ...PAIRS.flatMap(({ group, tracks }) =>
-      tracks.map(([id, label, path, colour]) =>
-        row(`k562-${id}`, 'track', label, `${ENCODE}${path}`, 'bottom', colour, 36, { group }),
+      tracks.map(([id, label, file, colour]) =>
+        row(`k562-${id}`, 'track', label, `${K562}${file}`, 'bottom', colour, 36, { group }),
       ),
     ),
   ]
@@ -310,10 +424,10 @@ function comparisonTracks(): StoredEntry[] {
   const e1 = { limits: { auto: false, min: -1.5, max: 1.5 } }
   const insulation = { limits: { auto: false, min: -1, max: 1 } }
   return [
-    row('dt40-g2-e1', 'track', 'E1 · G2 (4DN)', `${FOURDN}1091e6d5-b6e9-4b5c-8b5e-e37f369ec91e/4DNFILLAMSTE.bw`, 'top', '#7b3294', 44, { style: e1 }),
-    row('dt40-g2-insulation', 'track', 'insulation · G2 (4DN)', `${FOURDN}a1f0586f-2b91-49b3-93ea-2f1f53e28657/4DNFI1PRBI5L.bw`, 'top', '#0072b2', 44, { style: insulation }),
-    row('dt40-60min-e1', 'track', 'E1 · 60 min (4DN)', `${FOURDN}ba2e9238-0812-4715-9b0d-043dca03f962/4DNFIX92O41A.bw`, 'left', '#7b3294', 44, { style: e1 }),
-    row('dt40-60min-insulation', 'track', 'insulation · 60 min (4DN)', `${FOURDN}3be0a8f1-c7e7-4434-aab5-e7f343228c3a/4DNFI12IF3LX.bw`, 'left', '#0072b2', 44, { style: insulation }),
+    row('dt40-g2-e1', 'track', 'E1 · G2 (4DN)', `${GIBCUS}G2_4DNFILLAMSTE_compartments.bw`, 'top', '#7b3294', 44, { style: e1 }),
+    row('dt40-g2-insulation', 'track', 'insulation · G2 (4DN)', `${GIBCUS}G2_4DNFI1PRBI5L_diamond.bw`, 'top', '#0072b2', 44, { style: insulation }),
+    row('dt40-60min-e1', 'track', 'E1 · 60 min (4DN)', `${GIBCUS}60m_4DNFIX92O41_compartments.bw`, 'left', '#7b3294', 44, { style: e1 }),
+    row('dt40-60min-insulation', 'track', 'insulation · 60 min (4DN)', `${GIBCUS}60m_4DNFI12IF3LX_diamond.bw`, 'left', '#0072b2', 44, { style: insulation }),
   ]
 }
 
