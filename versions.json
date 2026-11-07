@@ -256,6 +256,13 @@
   ],
   "pulls": [
     {
+      "number": 167,
+      "commit": "9d16228",
+      "title": "Service worker: keep a page only if it is this build's, and rescue a worker stuck on a blank one (§11)",
+      "branch": "ccr-346427f2-blzttg",
+      "date": "2026-11-07T08:33:25Z"
+    },
+    {
       "number": 165,
       "commit": "6d66078",
       "title": "Draw large blocks level-by-level from values, not whole",
