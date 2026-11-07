@@ -763,7 +763,13 @@ and are easy to lose:
   update check from the HTTP cache — GitHub Pages serves `sw.js` with a `max-age`, which would pin
   every visitor to the build that was live when they first arrived;
 - `activate` prunes both other caches *and* stale entries inside the current one, because two builds
-  of the same commit share a cache name and `addAll` only ever adds.
+  of the same commit share a cache name and an install only ever adds;
+- `install` asks the server for every file (`cache: 'no-cache'`) and refuses a page whose scripts
+  are not this build's. The page is the one unhashed file, Pages gives it a ten-minute `max-age`, and
+  a worker that took it from the HTTP cache kept the build before's page: a blank page on every
+  ordinary reload, and the app only on a hard reload. A worker still in that state is the one
+  exception to waiting, since its page cannot show the bar: the new worker takes over and reloads
+  its tabs (`test/unit/sw-install.test.ts`).
 
 To verify a change to any of this, build, `npm run preview`, then in devtools → Application →
 Service Workers: tick "Offline" and reload. The page must come back and open a local file.

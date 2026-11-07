@@ -31,7 +31,8 @@ serves the newest build, which can be ahead of the latest release: *About this v
 
 After one visit it works offline, through a reload too; only remote files, the data stores and the
 example sessions need a connection. A new version waits in a bar, *A new version of the viewer is
-ready*, until you press **reload**.
+ready*, until you press **reload**. If the copy your browser kept cannot start, the new version
+replaces it without asking and reloads the page.
 
 ### Install it as an app
 

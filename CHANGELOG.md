@@ -32,6 +32,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   chunk, the *Human Hi-C data* map's reads end in about 5 s through that link, where they took 22 s,
   and it moves 9.7 MB where it moved 61.
 
+### Fixed
+
+- **The site no longer comes up blank after an update (§11).** The service worker filled its cache
+  through the browser's HTTP cache, which could hand it the build before's page, fetched minutes
+  earlier: every ordinary load then showed a blank page, and only a hard reload showed the app. It
+  now asks the server for every file and keeps a page only if every script it loads is this build's.
+  A browser already stuck on a blank page recovers by itself on its first visit after this build:
+  the new version takes over without the bar, which that page could not show, and reloads the tab.
+
 ## [0.21.0] - 2026-11-05
 
 ### Added
