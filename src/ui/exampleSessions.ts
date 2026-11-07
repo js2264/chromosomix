@@ -193,15 +193,73 @@ const HUMAN_PLAN: StoredPlans | undefined = {
   at: 0,
 }
 
-/** The read plans the examples ship with, by the map address each opens. */
-export const EXAMPLE_PLANS: Readonly<Record<string, StoredPlans>> = Object.fromEntries(
-  HUMAN_PLAN === undefined ? [] : [[`${HUMAN_MAP}::resolutions/10000`, HUMAN_PLAN]],
-)
-
 /** Comparing data's two maps: DT40 at the G2 block (4DNES9LEZXN7) and 60 min after it (4DNESEQNSXSD). */
 export const CHICKEN_G2 = `${FOURDN}b829095a-28e6-49ec-bd18-2b4bc319d0eb/4DNFIT479GDR.mcool`
 export const CHICKEN_MITOSIS = `${FOURDN}6bc6bab2-1319-46ce-b296-cb2be777274b/4DNFIWHQLZTL.mcool`
 export const COMPARISON_REGION = 'chr1:20000000-60000000'
+
+/**
+ * What opening Comparing data's two maps reads, shipped with it as Human Hi-C
+ * data's is: each map's walk through its HDF5 metadata at 100 kb and its block
+ * of chr1 from 20 to 60 Mb. The two maps open side by side, each with its own
+ * plan (§11), so the comparison is two walks run at once out of two caches
+ * filled in a round trip or two. `scripts/record-plan.mjs compare` writes them
+ * again.
+ */
+const CHICKEN_G2_PLAN: StoredPlans | undefined = {
+  size: 687217751,
+  open: [
+    [0, 262144],
+    [608698368, 608960512],
+    [635961344, 636223488],
+    [644349952, 644612096],
+    [647757824, 648019968],
+  ],
+  views: {
+    [COMPARISON_REGION]: [
+      [608698368, 609222656],
+      [609746944, 611319808],
+      [614727680, 614989824],
+      [615776256, 616562688],
+      [625999872, 626262016],
+      [635961344, 636223488],
+      [659554304, 660078592],
+    ],
+  },
+  at: 0,
+}
+const CHICKEN_MITOSIS_PLAN: StoredPlans | undefined = {
+  size: 890233974,
+  open: [
+    [0, 262144],
+    [801898496, 802160640],
+    [836763648, 837025792],
+    [845152256, 845414400],
+    [848822272, 849084416],
+  ],
+  views: {
+    [COMPARISON_REGION]: [
+      [801898496, 802422784],
+      [803209216, 805306368],
+      [807141376, 808976384],
+      [817364992, 817627136],
+      [836763648, 837025792],
+      [861405184, 861929472],
+    ],
+  },
+  at: 0,
+}
+
+/** The read plans the examples ship with, by the map address each opens. */
+export const EXAMPLE_PLANS: Readonly<Record<string, StoredPlans>> = Object.fromEntries(
+  (
+    [
+      [`${HUMAN_MAP}::resolutions/10000`, HUMAN_PLAN],
+      [`${CHICKEN_G2}::resolutions/100000`, CHICKEN_G2_PLAN],
+      [`${CHICKEN_MITOSIS}::resolutions/100000`, CHICKEN_MITOSIS_PLAN],
+    ] as Array<[string, StoredPlans | undefined]>
+  ).flatMap(([uri, plan]) => (plan === undefined ? [] : [[uri, plan]])),
+)
 
 /** One row of the Tracks card, on one edge — or, for an overlay, on the map. */
 function row(

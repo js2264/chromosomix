@@ -12,9 +12,10 @@
 
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { readPlanFor } from '@/app/readPlan'
+import { planned, readPlanFor, windowOf } from '@/app/readPlan'
 import { mergeRanges, planFor, planOf, rememberPlans } from '@/state/readPlans'
-import { EXAMPLE_PLANS, HUMAN_MAP, HUMAN_REGION, humanConfig } from '@/ui/exampleSessions'
+import type { ViewState } from '@/types'
+import { EXAMPLE_PLANS, HUMAN_MAP, HUMAN_REGION, comparisonConfig, humanConfig } from '@/ui/exampleSessions'
 
 const CHUNK = 256 * 1024
 const URI = 'https://bucket.example/map.mcool::resolutions/10000'
@@ -107,6 +108,19 @@ describe('the plan an example ships with', () => {
     expect(plan!.ranges.length).toBeGreaterThan(EXAMPLE_PLANS[config.state.uri].open.length)
   })
 
+  it('is Comparing data’s two maps’, each at the rung and the window the example opens', () => {
+    const { uri, uri2, region } = comparisonConfig().state
+    expect(uri2).toBeDefined()
+    for (const map of [uri, uri2 as string]) {
+      expect(windowOf(comparisonConfig().state, map)).toBe(region)
+      const plan = readPlanFor(map, region)
+      expect(plan).not.toBeNull()
+      expect(plan!.ranges.length).toBeGreaterThan(EXAMPLE_PLANS[map].open.length)
+    }
+    // Two files, two sizes: neither plan can be fetched against the other map.
+    expect(readPlanFor(uri, region)!.size).not.toBe(readPlanFor(uri2 as string, region)!.size)
+  })
+
   it('is runs of whole chunks, inside the file it was made on', () => {
     for (const plan of Object.values(EXAMPLE_PLANS)) {
       for (const ranges of [plan.open, ...Object.values(plan.views)]) {
@@ -124,5 +138,36 @@ describe('the plan an example ships with', () => {
     const uri = `${HUMAN_MAP}::resolutions/10000`
     rememberPlans(uri, HUMAN_REGION, { open: { size: 7, ranges: [[0, 7]] }, view: null })
     expect(readPlanFor(uri, HUMAN_REGION)).toEqual({ size: 7, ranges: [[0, 7]] })
+  })
+})
+
+describe('which plan an open asks for', () => {
+  const state = { uri: URI, uri2: `${URI}?b`, view: 'region', region: 'chr2:1-1000000' } as ViewState
+
+  it('keeps a view plan under the window the state opens, for either map of a comparison', () => {
+    expect(windowOf(state, URI)).toBe('chr2:1-1000000')
+    expect(windowOf(state, `${URI}?b`)).toBe('chr2:1-1000000')
+    // Another map, a second window, a view with no window: no view plan.
+    expect(windowOf(state, 'https://elsewhere.example/x.mcool')).toBeUndefined()
+    expect(windowOf({ ...state, region2: 'chr3:1-1000' }, URI)).toBeUndefined()
+    expect(windowOf({ ...state, view: 'contigs' } as ViewState, URI)).toBeUndefined()
+    expect(windowOf(null, URI)).toBeUndefined()
+  })
+
+  it('hands a remote open the plan known for it, and leaves every other source as it is', () => {
+    rememberPlans(URI, 'chr2:1-1000000', {
+      open: { size: 4 * CHUNK, ranges: [[0, CHUNK]] },
+      view: { size: 4 * CHUNK, ranges: [[2 * CHUNK, 3 * CHUNK]] },
+    })
+    const remote = { kind: 'remote', url: 'https://bucket.example/map.mcool' } as const
+    expect(planned(remote, URI, 'chr2:1-1000000')).toEqual({
+      ...remote,
+      plan: { size: 4 * CHUNK, ranges: [[0, CHUNK], [2 * CHUNK, 3 * CHUNK]] },
+    })
+    // No plan known: the source unchanged.
+    expect(planned(remote, 'https://bucket.example/other.mcool', undefined)).toBe(remote)
+    // A source that names its own plan keeps it.
+    const own = { ...remote, plan: { size: 1, ranges: [[0, 1]] as Array<[number, number]> } }
+    expect(planned(own, URI, 'chr2:1-1000000')).toBe(own)
   })
 })

@@ -1169,10 +1169,13 @@ export class RegionView {
           this.title.textContent = regionLabel(this.props.region)
         }
         if (this.disposed) return
-        const result: MatrixResult = await this.props.client.request<'matrix'>(ask)
-        const second = await secondBlock(this.props.compare ?? this.props.lowerRead, (client) =>
-          client.request<'matrix'>(ask),
-        )
+        // Both maps' blocks at once (§11, §12): two readers, two walks, and the
+        // second has never needed the first's answer. `secondBlock` settles
+        // either way, so a second file that cannot answer costs the first nothing.
+        const [result, second]: [MatrixResult, MatrixResult | undefined] = await Promise.all([
+          this.props.client.request<'matrix'>(ask),
+          secondBlock(this.props.compare ?? this.props.lowerRead, (client) => client.request<'matrix'>(ask)),
+        ])
         if (this.disposed) return
         this.title.textContent = regionLabel(this.props.region)
         this.describeMatch(parsed, result)
@@ -1214,10 +1217,11 @@ export class RegionView {
         this.title.textContent = pairLabel(this.props.region, this.props.region2)
       }
       if (this.disposed) return
-      const result: MatrixResult = await this.props.client.request<'matrix'>(pair)
-      const second = await secondBlock(this.props.compare ?? this.props.lowerRead, (client) =>
-        client.request<'matrix'>(pair),
-      )
+      // Both maps' blocks at once, as above.
+      const [result, second]: [MatrixResult, MatrixResult | undefined] = await Promise.all([
+        this.props.client.request<'matrix'>(pair),
+        secondBlock(this.props.compare ?? this.props.lowerRead, (client) => client.request<'matrix'>(pair)),
+      ])
       if (this.disposed) return
       this.title.textContent =
         pairLabel(this.props.region, this.props.region2)

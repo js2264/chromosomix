@@ -1414,6 +1414,16 @@ diagonal, re-opening both rather than relabelling them, since the first file is 
 tracks and trail are on screen. `uri2` is part of the view state, so a comparison is a link — for
 two remote files, which is the same limit `uri` has always had (§11).
 
+**Opened from its address, the two files open side by side** (`SessionCompare.prefetch`). A link or
+a workspace naming both starts the second file's open beside the first's, each a walk of its own
+through its own file with its own read plan (§6.1), where it used to start once the first had landed
+and its view had rendered; the gate above is asked when both are open, as it always was. The first
+map is drawn alone as soon as it can be, and the second triangle joins it: the view is rebuilt with
+both once the first one's block is painted, not before — rebuilt on the second's arrival, it threw
+that picture away to draw both later. A view's two blocks are then read at once. *Comparing data*
+(§24.11) drew its upper triangle 3.6 s after its button was pressed and both 5.7 s after, over the real
+network; it draws them at 1.2 and 1.9 s.
+
 **The second file follows the first across a change of resolution.** A comparison belongs to the file
 it is a comparison *of*, so opening another file puts it down; changing rung is not that, and the
 reader closed nothing. What carries is the **bin size** rather than the URI, since the second file has
@@ -1981,7 +1991,8 @@ and a map reached through a collection's root — an `.mcool` named at its root 
 landing rung — is kept under both addresses, so the second visit fetches both walks at once: the
 lab's `progenitors.mcool` shows its table in 0.85 s where the first visit took 1.5 (200 ms a
 request). *Human Hi-C data* ships its plan (`HUMAN_PLAN`, §24.11, written by
-`scripts/record-plan.mjs`), so a first visitor's map opens as a second visitor's does. A plan is
+`scripts/record-plan.mjs`), and *Comparing data* one for each of its two maps, so a first visitor's
+map opens as a second visitor's does. A plan is
 checked by the size of the file it was made on, and a range is kept only where its answer is the
 range asked for — by its `Content-Range` where the page may read it, by its `Content-Length` where
 it may not, which is 4DN's bucket: its CORS exposes `ETag` alone. A plan that is wrong is never an
@@ -6185,6 +6196,7 @@ requests and bytes in total and for the last view; these are also paper figures.
 | Open + render genomes table (remote) | ≤ 20 range requests |
 | Open a remote map opened before, or an example's (§6.1, §24.11) | its plan's chunks requested side by side as the open starts, beside the `HEAD` and the probe; no chunk of the plan read again by the walk — *Human Hi-C data* on screen in 1.5 s where it took 5.4, over the real buckets |
 | Open a remote map, first visit | a `HEAD` and the file's first chunk side by side, then the walk; `/bins` listed after the first picture, not before it |
+| Open a comparison from its address (§5.7) | both files' opens started side by side, each with its plan; the first map drawn alone, the second triangle joining it — *Comparing data* upper triangle in 1.2 s and both in 1.9 s, where they took 3.6 and 5.7, over the real network |
 | Load one MAG's matrix (remote) | ≤ 5 range requests |
 | Pan/zoom within the block in hand | 0 requests, 60 fps |
 | First frame of a block of 2,048² cells or more | one pass over its values on the main thread — listing the cells that carry something where they are no more than one in four — the colour range and the level the frame draws read from that list, and no image at matrix resolution (§7.2) |
@@ -13519,7 +13531,9 @@ enough for G2's checkerboard of compartments and for the mitotic band that repla
 compartment eigenvector and insulation score — 4DN's own — is on the edge beside its own triangle,
 G2's along the top and the mitotic one's down the left, on **one fixed axis per kind** (E1 from −1.5
 to 1.5, insulation from −1 to 1), so the flattening of both in mitosis is read on the edges as it is
-on the map.
+on the map. **It ships the read plans of its two maps' opens** (`CHICKEN_G2_PLAN`,
+`CHICKEN_MITOSIS_PLAN`, written by `scripts/record-plan.mjs compare`), and the two open side by side
+(§5.7): the upper triangle on screen in 1.2 s, both in 1.9, where they took 3.6 and 5.7.
 
 **The two built in the bundle rather than published beside the demos**: every file they name is on
 its own consortium's bucket already, so the session is the only thing to publish, and a few

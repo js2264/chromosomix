@@ -14,6 +14,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **A comparison opens both its maps at once (§5.7, §6.1, §12).** A link or a workspace naming two
+  maps opened the second once the first had landed and its view had rendered: two walks of a dozen
+  dependent reads, one after the other. The second's open now starts beside the first's, with its own
+  read plan; the first map is drawn alone as soon as it can be and the second triangle joins it; and a
+  view's two blocks are read together. The landing page's *Comparing data* ships the read plans of
+  both its maps, and draws its upper triangle in 1.2 s and both in 1.9 s, where they took 3.6 and 5.7
+  over the real network.
 - **A gene table no longer holds up the lanes beside it (§8.3, §12).** One worker opens a tab's
   tracks and answers every lane's request for its window, and it parsed a whole text file in one
   stretch: the ten bigWig lanes of the landing page's *Human Hi-C data* waited for IGV's RefSeq genes,

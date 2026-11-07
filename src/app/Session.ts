@@ -50,7 +50,6 @@ import type { CarriedResult } from '../analysis/workspace'
 import { UNBINNED_NAME } from '../constants'
 import { CircularStore } from '../state/circular'
 import { rememberPlans } from '../state/readPlans'
-import type { ReadPlan } from '../sources/RemoteRangeSource'
 import { OriginStore } from '../state/origins'
 import {
   junctionCandidates,
@@ -220,7 +219,7 @@ import { canonicalUrl } from '../sources/rewrite'
 import { accessHeadersFor, credentialFor } from '../s3/credentials'
 import { contigNames, contigPairs } from './contigTable'
 import { PictureGate } from './pictureGate'
-import { readPlanFor } from './readPlan'
+import { planned, windowOf } from './readPlan'
 import { inferSource, mayResolve, resolveSource } from './resolve'
 import { SessionAnalysis } from './SessionAnalysis'
 import { SessionCommands } from './SessionCommands'
@@ -2346,22 +2345,21 @@ export class Session {
       // The window this open is going to, where it says: what the first view
       // read is kept under it, and a kept plan for it is fetched with the open.
       const going = carry ?? this.store.state
-      const firstWindow =
-        going !== null && going !== undefined && going.uri === uri && going.view === 'region' && going.region2 === undefined
-          ? going.region
-          : undefined
-      // What this open read the last time — or what an example ships with —
-      // fetched side by side as it starts, and the walk then run out of the
-      // cache (§6.1, §12).
-      const planned: SourceSpec =
-        source.kind === 'remote' && source.plan === undefined
-          ? withPlan(source, readPlanFor(uri, firstWindow))
-          : source
+      const firstWindow = going?.uri === uri ? windowOf(going, uri) : undefined
+      // A comparison's second map opens beside this one rather than after it
+      // (§11, §12): it is half of the picture asked for, and its open is a walk
+      // of its own that need not wait for this one to finish.
+      if (going?.uri === uri && going.uri2 !== undefined) {
+        this.compare.prefetch(going.uri2, windowOf(going, going.uri2))
+      }
       task = client.cancellable<'open'>(
         {
           kind: 'open',
           uri,
-          source: planned,
+          // What this open read the last time — or what an example ships with —
+          // fetched side by side as it starts, and the walk then run out of the
+          // cache (§6.1, §12).
+          source: planned(source, uri, firstWindow),
           ...(binning === undefined ? {} : { binning }),
           ...(edit === undefined ? {} : { edit }),
         },
@@ -4931,6 +4929,7 @@ export class Session {
     this.metadataCard = null
     this.bookmarksCard = null
     this.compare.drop()
+    this.compare.cancelEarly()
     this.compareCard = null
     this.wholeFile?.view.destroy()
     this.wholeFile = null
@@ -7525,8 +7524,10 @@ export class Session {
    * Keep what this open read — its walk, and its first view's — for the next
    * open of the same map (§6.1, §12; `state/readPlans.ts`). Asked once the map
    * has its first picture, which is when the reader has written both down.
+   *
+   * @internal SessionCompare keeps the second file's with it.
    */
-  private keepReadPlan(client: ReaderClient, uris: readonly string[], firstWindow: string | undefined): void {
+  keepReadPlan(client: ReaderClient, uris: readonly string[], firstWindow: string | undefined): void {
     const open = this.opens.get(client)
     void this.firstPicture().then(async () => {
       if (this.destroyed || this.opens.get(client) !== open) return
@@ -8524,6 +8525,38 @@ export class Session {
     return this.pictureGate.wait()
   }
 
+  /**
+   * The picture of the view on screen: settled once its map has its first block,
+   * at once for a view or a screen with no map reading, and after
+   * {@link MAP_FIRST_CAP_MS} whatever happens.
+   *
+   * @internal SessionCompare holds the remount that adds the second map behind
+   * it, so the first map is drawn as soon as it can be rather than with the
+   * second (§11).
+   */
+  shownPicture(): Promise<void> {
+    const panel = this.current?.panel
+    if (panel === undefined) return Promise.resolve()
+    // The block in hand is not yet the block on screen: the panel paints it on
+    // the next frame, so the frame after that is the one that has it — or a
+    // moment, where frames do not come (a tab in the background).
+    const painted = (): Promise<void> =>
+      new Promise((resolve) => {
+        const timer = setTimeout(resolve, PAINTED_CAP_MS)
+        if (typeof requestAnimationFrame !== 'function') return
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            clearTimeout(timer)
+            resolve()
+          }),
+        )
+      })
+    return Promise.race([
+      panel.firstData.then(painted, painted),
+      new Promise<void>((resolve) => setTimeout(resolve, MAP_FIRST_CAP_MS)),
+    ])
+  }
+
   /** @internal SessionRouter puts on screen what it decides through it. */
   showContent(
     node: HTMLElement,
@@ -9405,6 +9438,9 @@ const BIN_REFUSED = 'bin × bin ran out of memory in this tab.'
  */
 const MAP_FIRST_CAP_MS = 4000
 
+/** How long {@link Session.shownPicture} waits for the frame that paints a block, where frames do not come. */
+const PAINTED_CAP_MS = 300
+
 /**
  * Which levels the view on screen can draw, or `null` for none (§7.3).
  *
@@ -9453,6 +9489,3 @@ function sameSteps(a: ReferenceEdit | undefined, b: ReferenceEdit | undefined): 
 }
 
 /** A remote source spec carrying `plan`, or the spec as it was where there is none. */
-function withPlan(source: Extract<SourceSpec, { kind: 'remote' }>, plan: ReadPlan | null): SourceSpec {
-  return plan === null ? source : { ...source, plan }
-}
