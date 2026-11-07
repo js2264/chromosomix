@@ -14,6 +14,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The landing page's *Human Hi-C data* and *Comparing data* read from the lab's bucket (§24.11).**
+  Every file either opens is now a copy in the lab's store in Paris rather than on 4DN's, IGV's and
+  1000 Genomes' buckets in Virginia and ENCODE's in Oregon. Opening an example is a chain of round
+  trips, and from Europe one is about 10 ms to Paris against 85 to 150 ms to those: for a reader in
+  Paris (a modelled network), *Human Hi-C data*'s first picture in 0.9 s rather than 1.6. *Comparing
+  data*'s files were in the store already; *Human Hi-C data*'s are listed under `k562/` and the bucket
+  needs `scripts/publish-store.sh --only k562/`.
 - **A comparison opens both its maps at once (§5.7, §6.1, §12).** A link or a workspace naming two
   maps opened the second once the first had landed and its view had rendered: two walks of a dozen
   dependent reads, one after the other. The second's open now starts beside the first's, with its own

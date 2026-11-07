@@ -13501,13 +13501,21 @@ balanced at 10 kb on **chr8:126,800,001-130,200,000**: MYC, PVT1 and the blood e
 downstream of them, a sharp compartment edge and domains with loops at their corners. **It ships
 the read plan of that open** (§6.1): the chunks its walk through the map's metadata and its window
 read, written down by `scripts/record-plan.mjs` and fetched side by side as the button is pressed,
-so a first visitor's map is on screen in about 1.5 s where it took 5.4. Around it:
+so a first visitor's map is on screen in about 1.5 s where it took 5.4. **Every file it reads is
+the lab's copy**, in `demo/store/k562/` on the lab's bucket in Paris (§24.3): the map, 4DN's three
+tracks of it, ENCODE's twelve, IGV's genes and bands and 1000 Genomes' FASTA, byte for byte — which
+is what lets a plan made on 4DN's copy stand — each named in the store's manifest with the key it
+was copied from and put there by `scripts/publish-store.sh --only k562/`. They were read from four
+buckets, in Virginia and Oregon, and an open is a chain of round trips: from Europe one is 85 to
+150 ms to those, and about 10 to Paris — for a reader in Paris on a 200 Mbit/s line (a network
+modelled on those round trips), the first picture in 0.9 s where it took 1.6. Around it:
 
 - **Above**, IGV's hg38 (`hg38_1kg`, the IGV store's human genome): RefSeq genes against the map,
-  then the sequence, then the bands. The genes and the bands are read from IGV's own bucket and not
-  from the addresses IGV's genome table names, because UCSC's `ncbiRefSeq.txt.gz` carries no CORS
-  header; the sequence is the 1000 Genomes FASTA read by range through its index, because the FASTA of
-  IGV's own `hg38` is on a bucket that refuses an anonymous reader (§24.3).
+  then the sequence, then the bands. The genes and the bands are IGV's own copies and not the files
+  IGV's genome table names, because UCSC's `ncbiRefSeq.txt.gz` carries no CORS header; the sequence is
+  the 1000 Genomes FASTA read by range through its index, because the FASTA of IGV's own `hg38` is on
+  a bucket that refuses an anonymous reader (§24.3). All three are read from the lab's copies, as the
+  rest are.
 - **Down the left**, the structure computed from the same map and the same cells: 4DN's insulation
   score, the boundaries called on it and the first eigenvector at 250 kb, and ENCODE's
   subcompartments of K562 (`ENCFF955KEB`), each row coloured by the cluster it names in the file's own
@@ -13523,7 +13531,8 @@ so a first visitor's map is on screen in about 1.5 s where it took 5.4. Around i
   any, as the two stores read them.
 
 **Comparing data: G2 against mitosis in one square.** Chicken DT40 cells released from a G2 block into
-mitosis (Gibcus et al. 2018), from 4DN's bucket: the G2 map (`4DNES9LEZXN7`) above the diagonal and
+mitosis (Gibcus et al. 2018), 4DN's files as the lab's store holds them for its own card of the
+paper (`demo/store/gibcus2018/`): the G2 map (`4DNES9LEZXN7`) above the diagonal and
 the one 60 min on (`4DNESEQNSXSD`) — the time course's last point, which 4DN calls a prometaphase
 block, there being no sample of it called metaphase — below it, as two files in one square (§5.7): one
 colour scale, the two libraries within a percent of one depth. 40 Mb of chromosome 1 at 100 kb, wide
@@ -13535,8 +13544,9 @@ on the map. **It ships the read plans of its two maps' opens** (`CHICKEN_G2_PLAN
 `CHICKEN_MITOSIS_PLAN`, written by `scripts/record-plan.mjs compare`), and the two open side by side
 (§5.7): the upper triangle on screen in 1.2 s, both in 1.9, where they took 3.6 and 5.7.
 
-**The two built in the bundle rather than published beside the demos**: every file they name is on
-its own consortium's bucket already, so the session is the only thing to publish, and a few
+**The two built in the bundle rather than published beside the demos**: every file they name is in
+the lab's store already, its manifest saying where each was copied from, so the session is the only
+thing to publish, and a few
 kilobytes of code is a session that cannot go missing from a bucket. Each is a `SessionConfig` like
 any a workspace file holds, and its test reads it back through `parseWorkspaceFile`, the validator
 every such file meets. Each carries the reader's own overlay preferences and no column layout, so
