@@ -93,6 +93,7 @@ import type { LocusWindow } from '../render/locus'
 import { StructurePanel, type StructureCellProps } from './StructurePanel'
 import { TRACKS_CELL_NAME, TracksPanel, type TracksCellProps } from './TracksPanel'
 import { cellHeightOf } from './cellHeight'
+import { deckTools } from './deckHead'
 import type { LaneEdge } from '../annotations/types'
 import { HOVER_SOURCE_MAP, subscribeHoverPlace } from '../ui/hoverLocus'
 import { isStructureName } from '../annotations/g3d'
@@ -110,6 +111,7 @@ import {
   serialiseMaps,
   swapItems,
   isMapRef,
+  tracksCellKey,
   localCompanions,
   withLocalCompanions,
   readDeckLook,
@@ -3514,10 +3516,7 @@ export class PanelDeck {
       rename === undefined
         ? el('span', { class: 'deck-name', text: name, title })
         : renameBox(name, title, rename),
-      this.leadSequence,
-      this.leadStar,
-      this.leadLock,
-      this.leadClose,
+      deckTools(this.leadSequence, this.leadStar, this.leadLock, this.leadClose),
     )
     this.leadClose.classList.toggle('hidden', this.slots.length === 0)
     this.paintStars()
@@ -4078,9 +4077,16 @@ export class PanelDeck {
     // moment a map leaves there is nothing left to say which file it was. The
     // panel's own URI where there is one, so a companion that descended into an
     // entry of a collection is keyed by the map it is actually drawing.
+    // A tracks cell, which has no file, by its seat (`tracksCellKey`): the tracks
+    // placed on it are then parked, persisted and handed back exactly as a
+    // companion's are, where before they were kept against nothing and lost.
     const files = new Map<MapId, string>()
+    const tracksCells = this.slots.filter((slot) => slot.ref.kind === 'tracks')
     for (const slot of this.slots) {
-      const uri = slot.panel?.uri ?? (isMapRef(slot.ref) ? slot.ref.uri : undefined)
+      const uri =
+        slot.ref.kind === 'tracks'
+          ? tracksCellKey(tracksCells.indexOf(slot))
+          : (slot.panel?.uri ?? (isMapRef(slot.ref) ? slot.ref.uri : undefined))
       if (uri !== undefined) files.set(slot.id, uri)
     }
     store.noteMapFiles(files)

@@ -40,6 +40,7 @@
 import type { AnnotationStore } from '../annotations/store'
 import {
   assemblyAxis,
+  findContig,
   formatPosition,
   typedLociToRegions,
   typedLocusToRegion,
@@ -179,7 +180,12 @@ export class SequenceBar {
       // converted a second time and land a base to the left of the gene.
       ...(store === undefined
         ? {}
-        : { suggest: (text: string) => featureSuggestions(store, text, 'display') }),
+        : {
+            suggest: (text: string) => featureSuggestions(store, text, 'display'),
+            // A sequence's name opens the sequence, as it does with no gene
+            // model loaded: `IV` is chromosome IV before it is IVY1.
+            sequence: (text: string) => findContig(props.assembly, text)?.name ?? null,
+          }),
     })
 
     this.el = el(

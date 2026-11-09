@@ -51,7 +51,7 @@ import { AnalysisPanelCard } from '../ui/AnalysisPanelCard'
 import { groupNameOn, syntheticEntry, syntheticId, type SyntheticFormat } from '../ui/synthetic'
 import type { SourceSpec } from '../worker/protocol'
 import { gridAt } from './context'
-import { adoptCalledSet, calledPayloadOf, isCalledSet } from './surfaces'
+import { adoptCalledSet, anchorsOf, calledPayloadOf, isCalledSet } from './surfaces'
 import { calledSetFields } from '../ui/calledSurfaces'
 import { TASKS, tasksFor } from './registry'
 import { declaredOrigins } from './tasks/oriter'
@@ -91,6 +91,11 @@ export interface AnalysisWorkspaceHost {
    */
   source(task?: AnalysisTask): { uri: string; source: SourceSpec; cells?: readonly string[]; label?: string } | null
   context(task?: AnalysisTask): AnalysisContext | null
+  /**
+   * Where a map's task recipes are remembered (`AnalysisContext.memoryKey`): the
+   * session's key for the file. Absent, the file's own URI.
+   */
+  memoryKey?(uri: string): string
   framing(): AnalysisFraming | null
   block(): BlockInput | null
   /**
@@ -472,10 +477,11 @@ export class AnalysisWorkspace {
     const map = on.map
     const uri = result.provenance.framing.uri
     const context = this.host.context(task)
+    const key = this.host.memoryKey?.(uri) ?? uri
     rememberParams(
-      uri,
+      key,
       task.id,
-      asAsked(task, result.provenance.params, recallParams(uri, task.id), context?.uri === uri ? context : null),
+      asAsked(task, result.provenance.params, recallParams(key, task.id), context?.uri === uri ? context : null),
     )
 
     // **Before the early return below**, because this task produces neither a
@@ -562,6 +568,19 @@ export class AnalysisWorkspace {
       return
     }
 
+    // **One colour for one run.** Insulation at four windows, its boundaries
+    // and its domains are one answer, and four colours made them read as four
+    // files. The colour the run's rows already wear where it ran before — the
+    // reader may have picked it — else the next free one, once. A colour the
+    // task chose itself (a group's members, a scalogram's bands) stays its own.
+    const held = [
+      ...profiles.map((output) => syntheticId(output.id, map)),
+      ...intervals.map((output) => calledSetId(task.id, output.id, map)),
+    ]
+      .map((id) => store.byId(id)?.style.colour)
+      .find((colour) => colour !== undefined)
+    const runColour = held ?? store.nextColour()
+
     for (const output of profiles) {
       const source = {
         kind: 'computed' as const,
@@ -574,7 +593,7 @@ export class AnalysisWorkspace {
         },
         framing: result.provenance.framing.label,
       }
-      const entry = syntheticEntry(output, source, output.colour ?? store.nextColour(), on)
+      const entry = syntheticEntry(output, source, output.colour ?? runColour, on)
       // Before `begin`, which replaces the row: a run under an id already here
       // is new numbers for an old lane, and the caches have to be told.
       const previous = store.byId(entry.id)?.revision ?? 0
@@ -632,6 +651,8 @@ export class AnalysisWorkspace {
         store,
         on,
         named === undefined ? under : 'output' in named ? syntheticId(named.output, map) : named.entry,
+        true,
+        runColour,
       )
       if (named === undefined && row !== null) under = row
     }
@@ -667,6 +688,8 @@ export class AnalysisWorkspace {
     on: RunTarget,
     under: string | null,
     lanes = true,
+    /** The run's one colour, for a set no reader has coloured yet. */
+    runColour?: string,
   ): string | null {
     const map = on.map
     const source: ComputedSource = {
@@ -690,10 +713,7 @@ export class AnalysisWorkspace {
     // each `begin` replaced the row before it while `placeOnTarget` moved the
     // single survivor onto the next panel and off the last. The lead keeps the
     // bare id it has always had, so a restored session still resolves.
-    const base =
-      map === LEAD_MAP
-        ? `analysis:${task.id}:${output.id}`
-        : `analysis:${map}:${task.id}:${output.id}`
+    const base = calledSetId(task.id, output.id, map)
     const label = map === LEAD_MAP ? output.label : `${output.label} · ${on.label}`
     const held = { output, provenance: result.provenance, task: task.id }
 
@@ -713,7 +733,7 @@ export class AnalysisWorkspace {
         source,
         payload: output.payload,
         summary: countedAs(output),
-        colour: store.byId(base)?.style.colour ?? store.nextColour(),
+        colour: store.byId(base)?.style.colour ?? runColour ?? store.nextColour(),
         map,
         display: !lanes
           ? 'overlay'
@@ -1116,6 +1136,25 @@ export class AnalysisWorkspace {
     // coordinates, and they are on the entry. Written through the same
     // `annotations/export.ts` the hand-drawn marks use, so there is one opinion
     // in this repository about where a half-open interval ends.
+    // A set of pairs' anchors, each place once (§18.7) — from a called loop set
+    // or a loaded BEDPE alike, since the pairs are on the row either way.
+    if (format === 'anchors') {
+      const payload = calledPayloadOf(entry)
+      if (payload?.kind !== 'pairs') return
+      const held = this.intervals.get(entry.id)
+      const text = formatIntervals(
+        { kind: 'features', data: anchorsOf(payload.data) },
+        {
+          label: `${entry.label} anchors`,
+          ...(held === undefined
+            ? {}
+            : { file: held.provenance.framing.label, created: held.provenance.createdAt }),
+        },
+      )
+      void downloadBlob(new Blob([text], { type: 'text/plain' }), `${base}-anchors-${stamp}.bed`)
+      return
+    }
+
     if (format === 'bed') {
       // The set as it was called, whichever surface it is on: a loop set shown
       // as its anchors still leaves as its loops (§18.7).
@@ -1140,7 +1179,7 @@ export class AnalysisWorkspace {
     const intervalHeld = this.intervals.get(entry.id)
     if (intervalHeld !== undefined && format === 'tsv') {
       void downloadBlob(
-        new Blob([outputToTsv(intervalHeld.output, intervalHeld.provenance)], {
+        new Blob([...outputToTsv(intervalHeld.output, intervalHeld.provenance)], {
           type: 'text/tab-separated-values',
         }),
         tsvName(base, intervalHeld.output, stamp),
@@ -1163,7 +1202,7 @@ export class AnalysisWorkspace {
 
     if (format === 'tsv') {
       void downloadBlob(
-        new Blob([outputToTsv(held.output, held.provenance)], { type: 'text/tab-separated-values' }),
+        new Blob([...outputToTsv(held.output, held.provenance)], { type: 'text/tab-separated-values' }),
         tsvName(base, held.output, stamp),
       )
       return
@@ -1271,14 +1310,14 @@ export class AnalysisWorkspace {
 
     if (format === 'tsv') {
       await target.write(
-        new Blob([spansToTsv(entry.label, TRACK_OP_LABELS[recipe.op], spans, grid, provenance)], {
+        new Blob([...spansToTsv(entry.label, TRACK_OP_LABELS[recipe.op], spans, grid, provenance)], {
           type: 'text/tab-separated-values',
         }),
       )
       return
     }
     if (format === 'bedgraph') {
-      await target.write(new Blob([spansToBedGraph(spans, grid, provenance)], { type: 'text/plain' }))
+      await target.write(new Blob([...spansToBedGraph(spans, grid, provenance)], { type: 'text/plain' }))
       return
     }
     const blob = await writeBigWig({
@@ -1338,7 +1377,7 @@ export class AnalysisWorkspace {
     )
     if (target === null) return
     if (format === 'bedgraph') {
-      await target.write(new Blob([profileToBedGraph(output, grid, provenance)], { type: 'text/plain' }))
+      await target.write(new Blob([...profileToBedGraph(output, grid, provenance)], { type: 'text/plain' }))
       return
     }
 
@@ -1478,4 +1517,12 @@ function displaySignature(store: AnnotationStore): string {
     .filter(isCalledSet)
     .map((entry) => `${entry.id}:${entry.card}:${entry.style.shape}`)
     .join('|')
+}
+
+/**
+ * The id a called set lands on: its task and output, scoped to the map it was
+ * called from — bare on the lead, as a restored session expects.
+ */
+function calledSetId(task: string, output: string, map: MapId): string {
+  return map === LEAD_MAP ? `analysis:${task}:${output}` : `analysis:${map}:${task}:${output}`
 }

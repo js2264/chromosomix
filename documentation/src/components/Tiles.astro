@@ -1,0 +1,10 @@
+---
+/** A row of tiles, headed like the landing page's "NEW HERE?". */
+interface Props {
+  kicker?: string
+}
+const { kicker } = Astro.props
+---
+
+{kicker !== undefined && <p class="cx-kicker">{kicker}</p>}
+<div class="cx-tiles"><slot /></div>

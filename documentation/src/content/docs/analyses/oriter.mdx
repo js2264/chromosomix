@@ -1,0 +1,60 @@
+---
+title: "Origin and terminus"
+description: "Place the replication origin and terminus of a bacterial chromosome from its GC skew, its parS and matS sites and its Hi-C coverage."
+---
+
+import TaskCommand from '@components/TaskCommand.astro'
+import TaskOutputs from '@components/TaskOutputs.astro'
+import TaskParameters from '@components/TaskParameters.astro'
+import TaskSummary from '@components/TaskSummary.astro'
+
+<TaskSummary id="oriter" />
+
+A bacterial map is read from its origin of replication, which nothing in a `.cool` records. **Origin and terminus** places both ends of replication from the sequence, checks them against parS, matS and the coverage, and declares the origin for the rest of the app. Run it first on any bacterial genome.
+
+## Running it
+
+Load the genome's FASTA ([Reference sequences](/files/sequences/)), open **Origin and terminus** on the **1D tasks** card of the **Analysis** panel, and choose it under **reference**. Run it beside the map, so the loci land on the map's sequences. For the coverage step, choose a raw Hi-C coverage track under **coverage**, such as [Coverage and marginals](/analyses/coverage/) makes; it starts on *Do not use coverage*.
+
+Check that the chromosome is ticked **circular** in the **Chromosomes** table (the app ticks one it finds circular); read as linear, its origin at the first base is split between its two ends, and the run says so.
+
+It makes a track of the `ori` and `ter` loci of each sequence, `Origin and terminus · genome`; a track for each set of parS or matS sites found, such as `parS sites · TGTTNCACGTGNAACA`; with a coverage track and a map, the smoothed coverage, its name ending `spline fit`; the table **Origin and terminus per sequence**; and the origin, written into the **origin** column of the **Chromosomes** table unless you typed one there yourself.
+
+![The E. coli K-12 map at 10 kb with the matS sites, clustered about ter, and the ori and ter loci as lanes along its left edge, beside the drawer's table: NC_000913.3 read as circular, ori at 3,924,501 and ter at 1,552,501, the terminus placed by the nearest matS cluster, no parS site found.](../../../assets/screens/analyses/oriter-ecoli.webp)
+
+The same run from a shell, where `--circular` declares a circular sequence (`chromosomix circular` on the map lists them); pass the origin it reports to later runs, such as `interarm`, as `--origin`:
+
+<TaskCommand id="oriter" />
+
+## Parameters
+
+The defaults are the published ones and suit most bacteria. matS is searched exactly: at one mismatch it turns up dozens of times by chance in a genome with no MatP. Empty a motif to skip its step. **spline knots** shapes the smoothed coverage.
+
+<TaskParameters id="oriter" />
+
+## What it writes
+
+<TaskOutputs id="oriter" />
+
+## Reading the result
+
+### How a call is made
+
+The cumulative GC skew has its minimum at one end of replication and its maximum at the other. The terminus is chosen as Bacchus chooses it (Lamy-Besnier et al. 2023), each step used only where the one before says nothing:
+
+1. **matS**: with ten or more sites, the terminus is the candidate nearer their cluster.
+2. **parS**: with any sites, the terminus is the candidate farther from their cluster.
+3. **coverage**: the terminus is the candidate with the lower smoothed coverage.
+4. Otherwise, the skew's convention: the minimum is the origin.
+
+### The table
+
+For each sequence: its length, whether it was read as circular or linear, **ori** and **ter** (the centres of the two loci, 1-based), **terminus placed by** (the step that decided), the parS and matS sites found and how many parS sit in their cluster, and **ori/ter**: the highest smoothed coverage over the lowest, copies of the origin per copy of the terminus. It is above 1 in a growing culture, and higher the faster the culture was replicating.
+
+### What to watch for
+
+- A terminus placed by matS, parS or coverage at the skew's minimum, where the skew alone would put the origin, is named in a note: check the assembly, or the motifs.
+- The loci are a skew window wide, the precision the skew has.
+- A sequence shorter than four skew windows, or missing from the reference, is not placed; the note names it.
+- A FASTA over 64 MB is declined: the call reads each sequence whole.
+- The origin is what [inter-arm alignment](/analyses/interarm/) and the map's **ori** button read. The task's own is replaced by its next run, which is how you try other sites; one you typed is never overwritten.

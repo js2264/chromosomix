@@ -1,3 +1,4 @@
+// @dev-feature circle
 /**
  * Where the circle's rings go and how a ring is resized (§7.6): inside the
  * sections or outside them, the sections then the inner circle round the

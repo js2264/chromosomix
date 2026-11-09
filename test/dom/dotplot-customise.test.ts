@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// @dev-feature dotplot
 /**
  * *Customise this figure* on a dot plot (§28.2).
  *

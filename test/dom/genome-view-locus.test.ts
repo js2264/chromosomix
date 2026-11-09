@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// @dev-feature metacool
 /**
  * The genome view's locus box (§5.2), and the one way it differed from every
  * other locus box in the application.

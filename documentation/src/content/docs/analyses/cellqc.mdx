@@ -1,0 +1,57 @@
+---
+title: "Per-cell contact QC"
+description: "What each cell’s contacts look like, and where in the cycle that puts it."
+---
+
+import TaskCommand from '@components/TaskCommand.astro'
+import TaskOutputs from '@components/TaskOutputs.astro'
+import TaskParameters from '@components/TaskParameters.astro'
+import TaskSummary from '@components/TaskSummary.astro'
+
+<TaskSummary id="cellqc" />
+
+This task measures each cell of an `.scool` from its own contacts: its cis and trans shares, and its
+shares in the four bands of separation of Nagano et al. (2017), whose near band against its mitotic band
+draws the cell cycle as a horseshoe. Run it before you tick the cells to sum: a pseudo-bulk summed across
+phases smears the structure you opened the file to see.
+
+## Running it
+
+Open an `.scool`, which opens on its **Cells** table, choose **Per-cell contact QC** in the **2D tasks**
+card of the **Analysis** panel, leave **cells** on **every cell in the file** or pick **the ticked ones
+only**, and press **run**. The drawer shows a table with a row per cell and the phasing scatter. The
+shares also arrive as columns of the **Cells** table: sort by the near or the mitotic share, tick a run
+of cells, and sum them.
+
+![The Cells table of an .scool of 3,882 single mouse cells at 1 Mb, its new share columns sorted by the mitotic band, 2 Mb–12 Mb, from 0.423 down, beside the drawer on the Cell-cycle phasing scatter: a point per cell, near share across and mitotic share up, most in a dense cloud below about 0.12 and an arc of cells rising out of it to above 0.4.](../../../assets/screens/analyses/cellqc-scatter-cells.webp)
+
+The same run from a shell:
+
+<TaskCommand id="cellqc" />
+
+## Parameters
+
+The band edges are in base pairs, the paper's numbers, and sized for mouse: on a smaller genome, set them
+to its scale.
+
+<TaskParameters id="cellqc" />
+
+## What it writes
+
+<TaskOutputs id="cellqc" />
+
+## Reading the result
+
+The table has a row per cell: its name, whether it is **Ticked**, its **Contacts** and **Stored pixels**,
+its **Cis** and **Trans** shares, and its share in each band, headed by the band's edges — `< 23 kb`,
+`23 kb–2 Mb`, `2 Mb–12 Mb` and `> 12 Mb` at the defaults. Every share is of all the cell's contacts,
+trans included. A contact within one bin has a separation of 0 and counts in the first band. A cell with
+no contact has blank shares, not zeros.
+
+In the phasing scatter each point is a cell, its near share across and its mitotic share up. Across a
+population the cells fall on a horseshoe, and where a cell lies along it is where it was in the cycle:
+just after mitosis a large mitotic band and little near contact, in G1 the reverse, and S and G2 between.
+The task assigns no phase: where to cut the horseshoe is yours, by ticking cells in the **Cells** table.
+
+On an assembly whose longest sequence lies inside the near band, such as a yeast, the mitotic and far
+bands are empty and the scatter says nothing; the run's note says so. Set the band edges to its scale.

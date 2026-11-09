@@ -209,8 +209,8 @@ describe('the caret over a lane’s small print', () => {
     const { editor: lanes, host } = editor(held, tabs)
     lanes.openLimit({ entries: [held.byId('a')!], hit: MIN }, { left: 0, top: 0 })
     const input = host.querySelector('input') as HTMLInputElement
-    // A bottom above the top on screen.
-    input.value = '20'
+    // Not a number at all. (A bottom above the top is a flip, §8.8, and taken.)
+    input.value = 'twenty'
     press(input, 'Tab')
     expect(host.querySelector('input')).toBe(input)
     expect(tabs).toEqual([])

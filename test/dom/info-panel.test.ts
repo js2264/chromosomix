@@ -20,6 +20,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { resetDevFeatures } from '@/state/devFeatures'
 
+import { distEdges, type PairStats } from '@/pairs/stats'
 import { InfoPanel } from '@/ui/InfoPanel'
 import type { OpenResult } from '@/worker/protocol'
 import { all, setUpDom, textsOf, type DomTeardown } from '../support/dom'
@@ -371,5 +372,148 @@ describe('the two hosts the shell fills', () => {
     expect(view.el.querySelector('.sequence-host .sequence-card')).toBe(card)
     view.setSequences(null)
     expect(view.el.querySelector('.sequence-host')?.childElementCount).toBe(0)
+  })
+})
+
+describe('the pairs statistics (§3.7)', () => {
+  /** A small library's counts, as `pairs/stats.ts` hands them over. */
+  function counted(over: Partial<PairStats> = {}): PairStats {
+    const edges = distEdges()
+    const zeros = (): number[] => edges.map(() => 0)
+    const distFreq = { '+-': zeros(), '-+': zeros(), '--': zeros(), '++': zeros() }
+    distFreq['+-'][10] = 40
+    distFreq['-+'][10] = 40
+    distFreq['--'][10] = 40
+    distFreq['++'][10] = 40
+    return {
+      total: 1000,
+      totalUnmapped: 50,
+      totalSingleSidedMapped: 50,
+      totalMapped: 900,
+      totalDups: 90,
+      totalNodups: 810,
+      cis: 720,
+      trans: 90,
+      pairTypes: [
+        ['UU', 810],
+        ['DD', 90],
+        ['NN', 50],
+        ['NU', 50],
+      ],
+      cisAtLeast: [
+        [1, 360],
+        [2, 300],
+        [4, 240],
+        [10, 160],
+        [20, 80],
+        [40, 40],
+      ],
+      chromFreq: [['chrI', 'chrI', 720]],
+      distEdges: edges,
+      distFreq,
+      chromsizes: [['chrI', 230_218]],
+      pairTypeColumn: true,
+      scoped: false,
+      ...over,
+    }
+  }
+
+  function pairsResult(stats: PairStats | null): OpenResult {
+    return openResult({
+      uri: 'https://example.org/HCT116.pairs.gz',
+      layout: { kind: 'cool', group: '/' },
+      hasGenomes: false,
+      pairs: {
+        base: 1000,
+        rungs: [1000],
+        records: 900,
+        nnz: 400,
+        indexed: false,
+        skippedUnknownContig: 0,
+        skippedBadPosition: 0,
+        clampedPosition: 0,
+        requiredMerge: false,
+        truncated: false,
+        sequencesWithoutCisContacts: [],
+        download: false,
+        orientation: null,
+        stats,
+        binning: { base: 1000, rungs: 1 },
+      },
+    })
+  }
+
+  function rowsOf(view: InfoPanel): Record<string, string> {
+    const kv = view.el.querySelector('.pairs-stats .kv') as HTMLElement
+    const keys = textsOf(kv, '.k')
+    const values = textsOf(kv, '.v')
+    return Object.fromEntries(keys.map((key, index) => [key, values[index]]))
+  }
+
+  it('is not there for a map that was not imported from a .pairs', () => {
+    expect(panel(openResult()).el.querySelector('.pairs-stats')).toBeNull()
+  })
+
+  it('says what pairtools would, each share over pairtools’ own denominator', () => {
+    const view = panel(pairsResult(counted()))
+    const rows = rowsOf(view)
+    expect(rows['records']).toBe('1,000')
+    expect(rows['mapped']).toBe('900 · 90.0%')
+    expect(rows['duplicates']).toBe('90 · 10.0%')
+    expect(rows['cis']).toBe('720 · 88.9%')
+    // The shares past each distance are the cis chart's columns, not rows.
+    expect(rows['cis ≥ 10 kb']).toBeUndefined()
+    const cisChart = view.el.querySelector('.pairs-stats-cis-block svg')
+    expect(cisChart?.getAttribute('aria-label')).toContain('19.8% at least 10 kb apart')
+    expect(rows['library size']).toMatch(/molecules$/)
+    // The four orientations agree everywhere in this library.
+    expect(rows['strands meet']).toBe('everywhere')
+  })
+
+  it('lists every pair type, one chip a type', () => {
+    const view = panel(pairsResult(counted()))
+    expect(textsOf(view.el, '.pairs-stats-type')).toEqual(['UU 810', 'DD 90', 'NN 50', 'NU 50'])
+  })
+
+  it('says when no record could be counted as a duplicate, and estimates no library', () => {
+    const view = panel(pairsResult(counted({ pairTypeColumn: false, pairTypes: [], totalDups: 0, totalNodups: 900 })))
+    expect(rowsOf(view)['duplicates']).toBe('not marked')
+    expect(rowsOf(view)['library size']).toBe('not estimated')
+    expect(view.el.querySelector('.pairs-stats')?.textContent).toContain('no pair_type column')
+  })
+
+  it('says when an index scoped the import to part of the file', () => {
+    const view = panel(pairsResult(counted({ scoped: true })))
+    expect(view.el.querySelector('.pairs-stats')?.textContent).toContain('not the whole file')
+  })
+
+  it('saves the counts as pairtools writes them, under pairtools’ name', async () => {
+    const written: Array<{ name: string; text: string }> = []
+    ;(window as unknown as { showSaveFilePicker: unknown }).showSaveFilePicker = async (options: { suggestedName: string }) => ({
+      name: options.suggestedName,
+      createWritable: async () => {
+        const parts: Blob[] = []
+        return {
+          write: async (blob: Blob) => {
+            parts.push(blob)
+          },
+          close: async () => {
+            written.push({ name: options.suggestedName, text: await new Blob(parts).text() })
+          },
+        }
+      },
+    })
+    try {
+      const view = panel(pairsResult(counted()))
+      ;(view.el.querySelector('.pairs-stats-save') as HTMLButtonElement).click()
+      await new Promise((settled) => setTimeout(settled, 0))
+      await new Promise((settled) => setTimeout(settled, 0))
+      expect(written.map((file) => file.name)).toEqual(['HCT116.stats'])
+      expect(written[0].text.split('\n').slice(0, 3)).toEqual(['total\t1000', 'total_unmapped\t50', 'total_single_sided_mapped\t50'])
+      expect(written[0].text).toContain('pair_types/DD\t90')
+      expect(written[0].text).toContain('chromsizes/chrI\t230218')
+    } finally {
+      delete (window as unknown as { showSaveFilePicker?: unknown }).showSaveFilePicker
+    }
   })
 })

@@ -1,3 +1,4 @@
+// @dev-feature edit
 /**
  * The lens in the reader (SPECS §27.2, §27.7): the edited map read as though
  * it were a file.

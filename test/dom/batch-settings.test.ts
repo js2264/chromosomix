@@ -148,16 +148,28 @@ describe('a setting given to the ticked rows', () => {
     expect(made.changes()).toBe(1)
   })
 
-  it('waits for both bounds, and refuses a pair that runs backwards', () => {
+  it('waits for both bounds, and refuses two equal ones', () => {
     const made = make([['ATAC'], ['MNase']], ['ATAC', 'MNase'])
     const [low, high] = all<HTMLInputElement>(box(made), '.ann-limits input')
     low.value = '5'
     low.dispatchEvent(new Event('change'))
     expect(made.changes()).toBe(0)
-    high.value = '1'
+    high.value = '5'
     high.dispatchEvent(new Event('change'))
     expect(made.changes()).toBe(0)
     expect(high.classList.contains('is-bad')).toBe(true)
+  })
+
+  it('takes a pair that runs backwards as a flip of every row (§8.8)', () => {
+    const made = make([['ATAC'], ['MNase']], ['ATAC', 'MNase'])
+    const [low, high] = all<HTMLInputElement>(box(made), '.ann-limits input')
+    low.value = '5'
+    high.value = '1'
+    high.dispatchEvent(new Event('change'))
+    for (const id of ['ATAC', 'MNase']) {
+      expect(made.store.byId(id)?.style.limits).toEqual({ auto: false, min: 1, max: 5 })
+      expect(made.store.byId(id)?.style.flip).toBe(true)
+    }
   })
 
   it('goes back to auto keeping each row’s own pair', () => {

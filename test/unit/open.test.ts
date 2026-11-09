@@ -1,3 +1,4 @@
+// @fixtures metacooler
 /**
  * `MetaCooler.open` against the Python oracle (spec §6).
  *

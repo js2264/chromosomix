@@ -1,0 +1,37 @@
+---
+/**
+ * One way to use chromosomix, on the page that lists them (`start/ways.mdx`):
+ * its picture, its name, a line, and what to press or type to begin.
+ *
+ * The whole card answers a click, through the link of its name, which is
+ * stretched over it; a link written in its line is a link of its own, drawn
+ * above that. The `href` is written from the root, as a page writes any link,
+ * and the Markdown pipeline puts it under the copy's base (`base-links.mjs`);
+ * an address on another site opens there, and says so with its arrow.
+ */
+import { Icon } from '@astrojs/starlight/components'
+
+import WayArt from './WayArt.astro'
+
+interface Props {
+  kind: 'web' | 'installed' | 'desktop' | 'file' | 'pinned' | 'self' | 'embed' | 'notebook' | 'cli'
+  title: string
+  href: string
+  /** What to press or type to begin, set in the mono face. */
+  how?: string
+}
+const { kind, title, href, how } = Astro.props
+const elsewhere = /^https?:\/\//.test(href)
+---
+
+<article class="cx-way">
+  <div class="cx-way-art"><WayArt kind={kind} /></div>
+  <div class="cx-way-body">
+    <a class="cx-way-title" href={href}>
+      {title}
+      {elsewhere && <Icon name="external" size="0.8em" class="cx-way-elsewhere" />}
+    </a>
+    <span class="cx-way-text"><slot /></span>
+    {how !== undefined && <code class="cx-way-how">{how}</code>}
+  </div>
+</article>

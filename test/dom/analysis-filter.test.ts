@@ -124,7 +124,7 @@ describe('the box over the task list', () => {
   it('finds a task by another name for it', () => {
     const { el, box } = panel()
     type(box, 'TAD')
-    expect([...shown(el)].sort()).toEqual(['Diamond insulation', 'Directionality index'])
+    expect([...shown(el)].sort()).toEqual(['Diamond insulation', 'Directionality index', 'TAD annotation'])
     type(box, 'pileup')
     expect(shown(el)).toEqual(['Aggregate peak analysis'])
     type(box, 'a/b')

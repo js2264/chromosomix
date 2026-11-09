@@ -21,9 +21,10 @@
  * marker across the diagonal — and a set of extents is drawn as the corners of
  * the squares it claims (`OverlayShape`).
  *
- * The one set whose two pictures are two payloads is a loop set: on the map it
- * is its pairs, and as a 1D track it is its anchors. {@link setDisplay} swaps
- * one for the other and keeps the pairs behind the anchors to swap back.
+ * A loop set is its pairs on both: rings on the map, arcs as a 1D track — and a
+ * loaded BEDPE, longrange or interact file takes the same two displays
+ * ({@link offersDisplay}). It used to be its anchors as a track; a row stored
+ * then still carries the pairs behind them, and goes back to them.
  *
  * Pure but for the store it is handed, so it is tested without a workspace.
  */
@@ -64,6 +65,16 @@ export function isCalledSet(entry: Pick<AnnotationEntry, 'source' | 'kind' | 'ca
     (entry.kind === 'segments' || entry.kind === 'pairs') &&
     (entry.card === 'overlay' || entry.card === 'synthetic')
   )
+}
+
+/**
+ * Whether a row offers the display at all: a called set, and any loaded set of
+ * **pairs** — a BEDPE, a longrange, an interact file — which is a loop set as
+ * much as a called one is, and answers the same two questions: rings on the map,
+ * or arcs along a track (§8.1).
+ */
+export function offersDisplay(entry: Pick<AnnotationEntry, 'source' | 'kind' | 'card'>): boolean {
+  return isCalledSet(entry) || (entry.kind === 'pairs' && (entry.card === 'overlay' || entry.card === 'linear'))
 }
 
 /** Which surface a called set is on now. */
@@ -146,19 +157,13 @@ export function anchorsOf(pairs: PairSet): FeatureSet {
 }
 
 /**
- * The kind and payload a called set has on one surface: a loop set is its pairs
- * on the map and its anchors as a lane; every other set is the same set on both.
+ * The kind and payload a called set has on one surface — the same set on both:
+ * a loop set is its pairs, rings on the map and arcs as a track. It used to be
+ * its anchors as a track, which drew a loop as two boxes with nothing between
+ * them; the anchors leave as a BED of their own instead (`anchorsBed`).
  */
-function pictureOf(
-  payload: AnnotationPayload,
-  display: CalledDisplay,
-): { kind: 'segments' | 'pairs'; payload: AnnotationPayload } {
-  if (payload.kind === 'pairs') {
-    return display === 'overlay'
-      ? { kind: 'pairs', payload }
-      : { kind: 'segments', payload: { kind: 'features', data: anchorsOf(payload.data) } }
-  }
-  return { kind: 'segments', payload }
+function pictureOf(payload: AnnotationPayload): { kind: 'segments' | 'pairs'; payload: AnnotationPayload } {
+  return { kind: payload.kind === 'pairs' ? 'pairs' : 'segments', payload }
 }
 
 /**
@@ -258,7 +263,7 @@ export function adoptCalledSet(store: AnnotationStore, set: CalledSet): string {
     : prior !== undefined && isCalledSet(prior)
       ? displayOf(prior)
       : set.display
-  const picture = pictureOf(set.payload, display)
+  const picture = pictureOf(set.payload)
   const lanes = laneSetOf(set.payload)
 
   const anchor = set.under === null ? undefined : store.byId(set.under)
@@ -326,9 +331,11 @@ export function adoptCalledSet(store: AnnotationStore, set: CalledSet): string {
  */
 export function setDisplay(store: AnnotationStore, id: string, display: CalledDisplay): void {
   const entry = store.byId(id)
-  if (entry === undefined || !isCalledSet(entry) || displayOf(entry) === display) return
+  if (entry === undefined || !offersDisplay(entry) || displayOf(entry) === display) return
   const called = calledPayloadOf(entry)
-  const picture = called === undefined ? null : pictureOf(called, display)
+  const picture = called === undefined ? null : pictureOf(called)
+  // A called set's track is a computed row's; a loaded file's is a loaded one's.
+  const track = isCalledSet(entry) ? 'synthetic' : 'linear'
   // A row that has only ever been an overlay — one stored before a set was one
   // row, from a file whose lanes were not drawn — has no edges of its own yet,
   // and takes the computed tracks' edge as the default its maps are given.
@@ -343,7 +350,7 @@ export function setDisplay(store: AnnotationStore, id: string, display: CalledDi
     }
   }
   store.update(id, {
-    card: display === 'overlay' ? 'overlay' : 'synthetic',
+    card: display === 'overlay' ? 'overlay' : track,
     ...(picture === null ? {} : { kind: picture.kind, payload: picture.payload }),
     ...(display === 'lane' && !edged ? { placement: edges } : {}),
   })

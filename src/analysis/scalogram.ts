@@ -1,5 +1,5 @@
 /**
- * The scalogram — Cournac et al. 2012's picture of *how far* each locus reaches.
+ * The scalogram — Lioy et al. 2018's picture of *how far* each locus reaches.
  *
  * Every other reading of the near-diagonal in this subtree collapses a bin's
  * contacts to one number: how much crosses it, which way it leans, how much
@@ -12,7 +12,7 @@
  * bundle of curves hugging the axis, a region that reaches across the chromosome
  * is the same bundle flung upwards, and a boundary between the two is a step in
  * every curve at once. On a bacterial chromosome it is the standard reading of
- * where the fold is tight and where it is loose; Cournac's original figures are
+ * where the fold is tight and where it is loose; Lioy et al.'s original figures are
  * exactly this, and `HiContacts`' `scalogram()` is the same quantity.
  *
  * ## What is computed

@@ -185,11 +185,41 @@ describe('a computed track on the Tracks card', () => {
     height!.value = '90'
     height!.dispatchEvent(new Event('change'))
     expect(made.store.byId(made.id)?.style.size).toBe(90)
-    const [low, high] = all<HTMLInputElement>(row, '.ann-limits input')
+    const [low, high] = all<HTMLInputElement>(row, '.ann-limits input:not(.input-centre)')
     low.value = '-1'
     high.value = '2'
     high.dispatchEvent(new Event('change'))
     expect(made.store.byId(made.id)?.style.limits).toEqual({ auto: false, min: -1, max: 2 })
+  })
+
+  it('takes a head under the foot as a flip, and shows a flipped track ceiling first', () => {
+    const made = make()
+    let row = rowOf(made.card, made.id)
+    const [low, high] = all<HTMLInputElement>(row, '.ann-limits input:not(.input-centre)')
+    low.value = '25'
+    high.value = '0'
+    high.dispatchEvent(new Event('change'))
+    const style = made.store.byId(made.id)?.style
+    expect(style?.limits).toEqual({ auto: false, min: 0, max: 25 })
+    expect(style?.flip).toBe(true)
+    row = rowOf(made.card, made.id)
+    const shown = all<HTMLInputElement>(row, '.ann-limits input:not(.input-centre)').map((box) => box.value)
+    expect(shown).toEqual(['25', '0'])
+  })
+
+  it('takes a centre between the ends, empty by default and with no placeholder', () => {
+    const made = make()
+    const row = rowOf(made.card, made.id)
+    const centre = row.querySelector<HTMLInputElement>('.ann-limits .input-centre')!
+    expect(centre.value).toBe('')
+    expect(centre.placeholder).toBe('')
+    centre.value = '1'
+    centre.dispatchEvent(new Event('change'))
+    expect(made.store.byId(made.id)?.style.centre).toBe(1)
+    const again = rowOf(made.card, made.id).querySelector<HTMLInputElement>('.ann-limits .input-centre')!
+    again.value = ''
+    again.dispatchEvent(new Event('change'))
+    expect(made.store.byId(made.id)?.style.centre).toBeUndefined()
   })
 
   it('can be ticked into a batch with a loaded track', () => {

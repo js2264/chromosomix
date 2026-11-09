@@ -1,3 +1,4 @@
+// @fixtures metacooler
 /**
  * Contig and genome roll-up of an already-loaded matrix (spec §4, §6.2; M2).
  *

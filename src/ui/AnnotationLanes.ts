@@ -81,6 +81,8 @@ import {
   progressDetail,
 } from '../render/laneLabel'
 import { formatLocus } from '../genome/assembly'
+import { drawArcs } from '../render/browser'
+import { stretchBetween, type SequenceStretch } from './sequenceCopy'
 import { stretchOf, unitSpan, type LocusAxis } from '../render/locus'
 import { barLimitsOf } from '../render/barchart'
 import { drawSashimi, junctionsOfSamples } from '../render/sashimi'
@@ -1239,6 +1241,16 @@ export class AnnotationLanes {
    * it is asking one question — which way across this lane is more — and
    * `valueAcross` needs the whole frame to answer it.
    */
+  /**
+   * The stretch of one sequence a lane shows, in the file's coordinates — what
+   * *Copy sequence* copies (§8.8) — or `null` where it shows several, or none.
+   */
+  stretchOn(edge: LaneEdge, id: string, geometry: LaneGeometry): SequenceStretch | null {
+    const frame = this.frameFor(edge, id, geometry)
+    const axis = this.axisFor(edge)
+    return frame === null || axis === null ? null : stretchBetween(axis, frame.domain[0], frame.domain[1])
+  }
+
   frameFor(edge: LaneEdge, id: string, geometry: LaneGeometry): LaneFrame | null {
     const slot = this.slotsFor(edge).find((each) => each.entry.id === id)
     return slot === undefined ? null : this.frameOf(edge, slot, geometry)
@@ -1544,6 +1556,7 @@ export class AnnotationLanes {
             outline,
             baseline,
             flip: member.style.flip,
+            ...(member.style.centre === undefined ? {} : { centre: member.style.centre }),
           }
           if (dragged === null || !hasAMovableAxis(member.kind)) {
             drawTrack(ctx, laneFrame, profile, paint)
@@ -1684,6 +1697,23 @@ export class AnnotationLanes {
                   ? `${fmt.int(shown.size)} categories`
                   : `${fmt.int(shown.size)} of ${fmt.int(lane.categories.levels.length)} categories`,
             },
+            at: 'near',
+          }
+        }
+      } else if (entry.payload?.kind === 'pairs' && axis !== null) {
+        // A loop set as a track (§8.1): its pairs as arcs, the browser's own
+        // drawing on this edge of the map — the display a reader picks when
+        // the question is *what touches what along here* rather than *which
+        // pixels are loops*.
+        const drawn = drawArcs(ctx, frame, axis, entry.payload.data, {
+          colour: entry.style.colour,
+          opacity: entry.style.opacity,
+          flip: entry.style.flip,
+        })
+        if (text) {
+          label = {
+            entries: [entry],
+            detail: { kind: 'text', text: `${fmt.int(drawn)} pairs in view` },
             at: 'near',
           }
         }

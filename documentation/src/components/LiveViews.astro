@@ -1,0 +1,220 @@
+---
+/**
+ * The pictures that can become the app (`lib/live.mjs`, SPECS §32.4): a button
+ * on each, and the app itself in its place when the button is pressed.
+ *
+ * Nothing of the app is loaded before the press. A page with three live views
+ * would otherwise load the viewer three times for a reader who came to read one
+ * paragraph; the picture is what the page is, and the frame is what the reader
+ * asked for. Without scripts the picture simply stays.
+ *
+ * **Live, the frame takes the page's width**, not the column's: from the edge
+ * of the sidebar to the edge of the window. A map in a column of text is a
+ * stamp, and the reader who pressed asked for the app. The contents list on the
+ * right is a fixed panel over that width, so it steps out of the way while a
+ * frame is under it, and comes back once the frame is scrolled past. A frame
+ * that wide opens with the app's two side panels unfolded (`?panels=open`), so
+ * the controls are in sight beside the picture they change.
+ *
+ * **The reader can resize it**: the grip under the frame's corner drags its
+ * width and height, and its arrow keys step them. The app inside follows the
+ * frame's size, as it follows a window's.
+ */
+---
+
+<script>
+  import { PANELS_FROM, withPanels } from '../lib/live.mjs'
+
+  /** A triangle, as the app's play buttons draw one. */
+  const PLAY =
+    '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4.5 2.6v10.8L13.2 8z" fill="currentColor"/></svg>'
+  /** Three strokes in a corner, the mark a resizable corner carries. */
+  const GRIP =
+    '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M14 4 4 14M14 8.5 8.5 14M14 13l-1 1" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'
+
+  /** The smallest frame a drag leaves, in CSS pixels: below it the app's own controls overlap. */
+  const MIN_WIDTH = 320
+  const MIN_HEIGHT = 288
+  /** How far one arrow key moves an edge. */
+  const STEP = 32
+
+  /** The space kept either side of a frame: the page's own gutter, less on a phone. */
+  const gutter = (): number => (window.innerWidth < 800 ? 8 : 24)
+
+  function wire(holder: HTMLElement): void {
+    const src = holder.dataset.live
+    if (src === undefined || holder.querySelector('.cx-live-start') !== null) return
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'cx-live-start'
+    button.title = 'Open this view in the app itself, here on the page'
+    button.innerHTML = `${PLAY}<span>Try it live</span>`
+    button.addEventListener('click', () => start(holder, src, button))
+    holder.append(button)
+  }
+
+  function start(holder: HTMLElement, src: string, button: HTMLButtonElement): void {
+    const picture = holder.querySelector('img')
+    const frame = document.createElement('iframe')
+    frame.className = 'cx-live-frame'
+    frame.title = holder.dataset.liveTitle ?? 'chromosomix, live'
+    frame.allow = 'clipboard-write; fullscreen'
+
+    const open = document.createElement('a')
+    open.href = holder.dataset.liveViewer ?? src
+    open.target = '_blank'
+    open.rel = 'noopener'
+    open.textContent = 'open it in a tab of its own'
+    const back = document.createElement('button')
+    back.type = 'button'
+    back.className = 'cx-live-back'
+    back.textContent = 'back to the picture'
+    const note = document.createElement('span')
+    note.className = 'cx-live-note'
+    note.append('The app itself: pan, zoom and change it, and nothing is kept. ', open, ' · ', back)
+    const grip = document.createElement('button')
+    grip.type = 'button'
+    grip.className = 'cx-live-grip'
+    grip.title = 'Drag to resize the frame, or use the arrow keys; double-click to put it back'
+    grip.setAttribute('aria-label', 'Resize the frame')
+    grip.innerHTML = GRIP
+    const foot = document.createElement('span')
+    foot.className = 'cx-live-foot'
+    foot.append(note, grip)
+
+    // The holder is the picture's width until the frame takes the page's.
+    const held = holder.style.maxWidth
+    holder.style.maxWidth = 'none'
+    holder.classList.add('is-live')
+    holder.replaceChildren(frame, foot)
+    stretch(holder)
+    // Only now is the frame's width known, and with it whether the app's
+    // panels have the room to open beside the map.
+    frame.src = holder.getBoundingClientRect().width >= PANELS_FROM ? withPanels(src) : src
+    resizable(holder, frame, grip)
+    look()
+    back.addEventListener('click', () => {
+      holder.style.maxWidth = held
+      holder.style.marginInlineStart = ''
+      holder.style.width = ''
+      delete holder.dataset.sized
+      holder.classList.remove('is-live', 'is-resizing')
+      holder.replaceChildren(...(picture === null ? [] : [picture]), button)
+      look()
+      button.focus()
+    })
+  }
+
+  /** The widest a holder may be: from where it starts to the window's edge, less the gutter. */
+  function widest(holder: HTMLElement): number {
+    return document.documentElement.clientWidth - gutter() - holder.getBoundingClientRect().left
+  }
+
+  /**
+   * The grip's two ways in: a drag, which moves the frame's corner with the
+   * pointer, and the arrow keys, which step one edge. Either one makes the
+   * size the reader's: a window resize no longer stretches the frame back to
+   * the page's width, only keeps it inside the window.
+   */
+  function resizable(holder: HTMLElement, frame: HTMLIFrameElement, grip: HTMLButtonElement): void {
+    const size = (width: number, height: number): void => {
+      holder.dataset.sized = '1'
+      holder.style.width = `${Math.round(Math.min(Math.max(MIN_WIDTH, width), widest(holder)))}px`
+      frame.style.height = `${Math.round(Math.max(MIN_HEIGHT, height))}px`
+      soon(look)
+    }
+    grip.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return
+      event.preventDefault()
+      const from = { x: event.clientX, y: event.clientY }
+      const box = { width: holder.getBoundingClientRect().width, height: frame.getBoundingClientRect().height }
+      grip.setPointerCapture(event.pointerId)
+      // The frame would take the pointer as it passed over it, and the drag
+      // would stall the moment it shrank the frame under the hand.
+      holder.classList.add('is-resizing')
+      const move = (next: PointerEvent): void => size(box.width + next.clientX - from.x, box.height + next.clientY - from.y)
+      const end = (): void => {
+        holder.classList.remove('is-resizing')
+        grip.removeEventListener('pointermove', move)
+        grip.removeEventListener('pointerup', end)
+        grip.removeEventListener('pointercancel', end)
+      }
+      grip.addEventListener('pointermove', move)
+      grip.addEventListener('pointerup', end)
+      grip.addEventListener('pointercancel', end)
+    })
+    grip.addEventListener('keydown', (event) => {
+      const by = { ArrowLeft: [-STEP, 0], ArrowRight: [STEP, 0], ArrowUp: [0, -STEP], ArrowDown: [0, STEP] }[event.key]
+      if (by === undefined) return
+      event.preventDefault()
+      size(holder.getBoundingClientRect().width + by[0], frame.getBoundingClientRect().height + by[1])
+    })
+    grip.addEventListener('dblclick', () => {
+      delete holder.dataset.sized
+      frame.style.height = ''
+      stretch(holder)
+      soon(look)
+    })
+  }
+
+  /**
+   * Widen a live holder from its column to the page: from the sidebar's edge —
+   * or the window's, where the sidebar is folded away — to the window's, less a
+   * gutter each side. Measured rather than written in CSS, because where the
+   * column sits between the two sidebars is Starlight's arithmetic, not ours.
+   */
+  function stretch(holder: HTMLElement): void {
+    const column = holder.parentElement
+    if (column === null) return
+    const sidebar = document.querySelector<HTMLElement>('.sidebar-pane')
+    const edge = sidebar !== null && sidebar.offsetWidth > 0 && getComputedStyle(sidebar).position === 'fixed'
+      ? sidebar.getBoundingClientRect().right
+      : 0
+    const left = edge + gutter()
+    const right = document.documentElement.clientWidth - gutter()
+    holder.style.marginInlineStart = `${left - column.getBoundingClientRect().left}px`
+    holder.style.width = `${Math.max(0, right - left)}px`
+  }
+
+  /**
+   * Fold the contents list away while a live frame is under it, and bring it
+   * back once none is. The list's own box, and not its panel's: the panel runs
+   * the sidebar's whole width and more, and would fold the list away for a frame
+   * that passes well clear of it.
+   */
+  function look(): void {
+    const list = document.querySelector<HTMLElement>('.right-sidebar-panel starlight-toc')
+    if (list === null) return
+    const box = list.getBoundingClientRect()
+    let under = false
+    if (box.width > 0) {
+      for (const live of document.querySelectorAll<HTMLElement>('.cx-live.is-live')) {
+        const at = live.getBoundingClientRect()
+        if (at.right > box.left && at.left < box.right && at.bottom > box.top && at.top < box.bottom) under = true
+      }
+    }
+    document.documentElement.classList.toggle('cx-contents-away', under)
+  }
+
+  let pending = 0
+  /** Once a frame, however many events asked. */
+  function soon(work: () => void): void {
+    if (pending !== 0) return
+    pending = requestAnimationFrame(() => {
+      pending = 0
+      work()
+    })
+  }
+
+  for (const holder of document.querySelectorAll<HTMLElement>('.cx-live')) wire(holder)
+  window.addEventListener('scroll', () => soon(look), { passive: true })
+  window.addEventListener('resize', () =>
+    soon(() => {
+      for (const live of document.querySelectorAll<HTMLElement>('.cx-live.is-live')) {
+        if (live.dataset.sized === undefined) stretch(live)
+        else live.style.width = `${Math.round(Math.min(live.getBoundingClientRect().width, widest(live)))}px`
+      }
+      look()
+    }),
+  )
+</script>

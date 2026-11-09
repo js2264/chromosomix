@@ -80,52 +80,96 @@ const PAIRS_PER_SECOND = 160e6
  * Pairs a second one evaluation of the negative binomial visits.
  *
  * Measured against {@link PAIRS_PER_SECOND} on the same map and the same
- * machine: a likelihood evaluation costs about 2.3 times a SMACOF pass, which
- * is a `log1p` and a `log` per pair where the other has a square root. The
- * ratio is what is stable across machines, so it is the ratio that is written
- * down and this constant is derived from it.
+ * machine — the validation's yeast Micro-C at 12.8 kb, 905 beads: a likelihood
+ * evaluation costs about twenty SMACOF passes. pastis' likelihood is the whole
+ * negative binomial, its dispersion a power of the model's own mean, so every
+ * pair is a logarithm and an exponential for that power, a logarithm for the
+ * spread and one more for the gamma functions, where a pass is a square root.
+ * The ratio is what is stable across machines, so it is the ratio that is
+ * written down and this constant is derived from it.
  */
-const NB_PAIRS_PER_SECOND = PAIRS_PER_SECOND / 2.3
+const NB_PAIRS_PER_SECOND = PAIRS_PER_SECOND / 20
 
 /**
  * Evaluations of the likelihood one pastis-NB step costs.
  *
  * An L-BFGS iteration is one line search, and a line search is a value and a
- * gradient at each step length it tries — usually one, sometimes three. Just
- * over one on the runs this was measured on, which is what a quasi-Newton
- * direction scaled to a unit step is supposed to give.
+ * gradient at each step length it tries — almost always one: 152, 155 and 155
+ * evaluations for 150 steps on the three seeds the validation runs, which is
+ * what a quasi-Newton direction scaled to a unit step is supposed to give.
  */
-const NB_EVALUATIONS_PER_STEP = 1.3
+const NB_EVALUATIONS_PER_STEP = 1.03
+
+/**
+ * The threads pastis-NB's fit will be shared among, this one included.
+ *
+ * The analysis worker's rule (`worker/analysis.worker.ts`: one helper fewer
+ * than the cores, seven at most) and `likelihoodThreads.ts`'s (one thread under
+ * 256 beads), written here rather than imported: the panel's half of the tree
+ * does not load the likelihood to read two numbers off it.
+ */
+function likelihoodThreads(beads: number): number {
+  if (beads < 256) return 1
+  const cores = typeof navigator === 'undefined' ? 1 : navigator.hardwareConcurrency || 1
+  return 1 + Math.max(0, Math.min(7, cores - 1))
+}
+
+/**
+ * What the threads buy: each one past the first about six-tenths of a core.
+ * Measured in Chromium on four cores, where the page draws on the same cores
+ * the helpers compute on: a likelihood evaluation 2.7 times as fast on four
+ * threads as on one (`likelihoodThreads.ts`).
+ */
+const THREAD_WORTH = 0.6
 
 /**
  * How long a hundred refinement steps take at that rate.
  *
  * A ShRec3D step is the move and its stress, both a pass over every pair; a
- * pastis-NB step is a line search over a function that costs rather more per
- * pair. About half again as long, and the reader is told which before pressing
- * run rather than after.
+ * pastis-NB step is a line search over a function that costs ten times as much
+ * per pair, shared among the threads it will have, and the reader is told
+ * which before pressing run rather than after. pastis' MDS start is left out:
+ * it is a cheap function, stops at a part in five thousand, and costs about
+ * what four likelihood steps do.
  */
 function refineWords(beads: number, nb: boolean): string {
+  const threads = nb ? likelihoodThreads(beads) : 1
   const seconds = nb
-    ? (100 * NB_EVALUATIONS_PER_STEP * beads * beads) / NB_PAIRS_PER_SECOND
+    ? (100 * NB_EVALUATIONS_PER_STEP * beads * beads) / NB_PAIRS_PER_SECOND / (1 + THREAD_WORTH * (threads - 1))
     : (100 * 2 * beads * beads) / PAIRS_PER_SECOND
-  if (seconds < 1) return 'well under a second per hundred steps'
-  if (seconds < 90) return `about ${Math.round(seconds)} seconds per hundred steps`
-  return `about ${Math.round(seconds / 60)} minutes per hundred steps`
+  const on = threads > 1 ? ` on ${threads} threads` : ''
+  if (seconds < 1) return `well under a second per hundred steps${on}`
+  if (seconds < 90) return `about ${Math.round(seconds)} seconds per hundred steps${on}`
+  return `about ${Math.round(seconds / 60)} minutes per hundred steps${on}`
 }
 
 /**
- * The dense matrices a run holds, in bytes.
+ * The dense matrices a run holds, in bytes, `n²` singles each.
  *
- * **Two**, each `n²` singles: the pairs' weights, and the counts turned into
- * the distances they imply over the buffer they already occupy. A third is
- * what the run used to need and is the one the in-place passes removed.
+ * **Two** under ShRec3D: the pairs' weights, and the counts turned into the
+ * distances they imply over the buffer they already occupy. **One** under
+ * pastis-NB: the counts, compacted over the buffer they were read into, the
+ * likelihood reading them above the diagonal and the MDS start its wishes below
+ * it — no distance is ever filled in, so there is nothing else to hold.
  */
-function matrixWords(beads: number): string {
+function matricesFor(nb: boolean): number {
+  return nb ? 1 : 2
+}
+
+function matrixWords(beads: number, nb: boolean): string {
   // `fmt.bytes` and not a GB/MB branch of its own: §26.2 has one spelling of a
   // byte count, in thousands, and a second one here would report a different
   // size for the same allocation than the status bar does.
-  return `${fmt.bytes(2 * 4 * beads * beads)} of matrices`
+  const count = matricesFor(nb)
+  const matrices = `${fmt.bytes(count * 4 * beads * beads)} ${count === 1 ? 'matrix' : 'of matrices'}`
+  // A page shares no memory with its workers, so each helper is sent its rows
+  // of a triangle — the MDS's, then in their place the likelihood's: the
+  // helpers' share of half a matrix, this thread keeping 0.9 of a helper's
+  // (`likelihoodThreads.ts`).
+  const helpers = nb ? likelihoodThreads(beads) - 1 : 0
+  if (helpers === 0) return matrices
+  const copies = 2 * beads * beads * (helpers / (helpers + 0.9))
+  return `${matrices}, ${fmt.bytes(copies)} more copied to ${plural(helpers, 'helper')}`
 }
 
 /** The structure row, offered as the feature set it also is. */
@@ -314,6 +358,16 @@ const RECONSTRUCT_PARAMS: readonly ParamSpec[] = [
     ],
   },
   {
+    kind: 'seed',
+    key: 'seed',
+    label: 'seed',
+    // pastis' `random_state`, and the same draws: numpy's generator, so seed 0
+    // here places the beads where pastis' seed 0 does before either moves them.
+    hint: 'Where pastis’ MDS places the beads before the fit; another seed can settle in another optimum.',
+    default: 0,
+    when: (params) => params.method !== 'shrec3d',
+  },
+  {
     kind: 'number',
     key: 'iterations',
     label: 'refinement steps',
@@ -390,7 +444,7 @@ function reconstructEstimate(context: AnalysisContext, params: Params): CostEsti
     beads === 0
       ? 'The block the view holds, at the resolution it is drawn at.'
       : `${beads.toLocaleString()} beads at ${binWords(context.binsize)}, ${pairs.toLocaleString()} pairs a step; ` +
-        `${refineWords(beads, nb)}, ${matrixWords(beads)}` +
+        `${refineWords(beads, nb)}, ${matrixWords(beads, nb)}` +
         (reads ? `; ${plural((blocks * (blocks + 1)) / 2, 'block')} read from the file` : '')
   return {
     class: reads ? 'scan' : 'bounded',

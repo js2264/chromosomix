@@ -60,6 +60,22 @@ export interface CompareCardProps {
    */
   onPickDropped?(event: DragEvent): void
   /**
+   * Coolers dropped on, or chosen from, the rectangle that opens a map in a
+   * **cell of its own** (§16.9) — the deck's road rather than the square's,
+   * and every file of the drop rather than its first: several replicates let
+   * go together are a deck of them. Absent, the rectangle is not drawn.
+   */
+  onOpenInCell?(files: readonly File[]): void
+  /** A row out of the Files panel, let go on that rectangle (§20.5). */
+  onPickDroppedInCell?(event: DragEvent): void
+  /**
+   * Whether this session's deck can take one more map — `false` for a file
+   * with a genome layer, which holds no deck (§16.8), and beside the 1D
+   * browser, where a deck holds tracks and models but no map (§25.3). Absent
+   * is yes.
+   */
+  cellOffered?(): boolean
+  /**
    * Take the matrix out of the picture, or put it back — the eye on a row.
    *
    * `1` is this session's own map, and hiding it *is* the 1D browser; `2` is the
@@ -162,6 +178,8 @@ export class CompareCard {
   readonly el: HTMLElement
   private readonly body = el('div', { class: 'ann-list compare-body' })
   private readonly slots: [DropSlot, DropSlot]
+  /** The rectangle that opens a map in a cell of its own, beside the square (§16.9). */
+  private readonly cellSlot: DropSlot
   private state: CompareState = { kind: 'empty' }
   /**
    * The map whose row is being dragged, where it is one the card can reorder —
@@ -178,7 +196,24 @@ export class CompareCard {
     // One zone per slot, built once and reworded per render: which map a
     // rectangle asks for is a fact about the session that changes under it, and
     // rebuilding the element per frame would drop a drag in progress.
-    this.slots = [this.dropSlot(), this.dropSlot()]
+    const square: SlotRoad = {
+      files: (files) => {
+        const file = files[0]
+        if (file !== undefined) this.props.onOpen({ kind: 'local', file })
+      },
+      row: this.props.onPickDropped,
+    }
+    this.slots = [this.dropSlot(square), this.dropSlot(square)]
+    // Every file of the drop, and a chooser that takes several: a deck is the
+    // one place in the card where more than one map is the point.
+    this.cellSlot = this.dropSlot(
+      {
+        files: (files) => this.props.onOpenInCell?.(files),
+        row: this.props.onPickDroppedInCell,
+      },
+      true,
+    )
+    this.cellSlot.zone.classList.add('compare-drop-cell')
     this.el = el(
       'div',
       { class: 'card compare-card' },
@@ -235,6 +270,16 @@ export class CompareCard {
     this.slots[1].label.textContent = 'Load a map into the lower triangle'
     this.slots[1].hint.textContent =
       'A cooler on the same chromosomes and bin size. Drop one here, or click to choose.'
+    // *A cell of its own*, against the square's *lower triangle*: the two
+    // rectangles are the two ways a second map is drawn — in this square, or
+    // beside it (§16.9) — and say so in the same words. Side by side two grids
+    // may be two resolutions (§16.4), which is the hint's one fact the
+    // triangle's cannot say; and it takes several, which the triangle cannot.
+    const others = first && (this.props.deckMaps?.() ?? []).some((map) => map.shown !== false)
+    this.cellSlot.label.textContent = 'Load a map into a cell of its own'
+    this.cellSlot.hint.textContent =
+      `A cooler at any bin size, beside the ${others ? 'maps' : 'map'}. ` +
+      'Drop one or several here, or click to choose.'
 
     const top = first
       ? this.mapRow(1, this.props.primaryLabel(), paired)
@@ -272,6 +317,14 @@ export class CompareCard {
       this.reorderable(top, first ? LEAD_ROW : null),
       ...(open && bottom !== null ? [this.reorderable(bottom, first ? LEAD_ROW : null)] : []),
     ]
+    // **Always there while a map is open**, whatever the square holds: the
+    // triangle's rectangle goes once a second file fills it, and this one has
+    // no such thing to wait for — a deck takes one more map until it is full,
+    // and says so in its own bar when it is (§16.9).
+    const cell =
+      first && this.props.onOpenInCell !== undefined && (this.props.cellOffered?.() ?? true)
+        ? [this.cellSlot.zone]
+        : []
     this.order = first
       ? [...shownMaps.slice(0, at).map((map) => map.id), LEAD_ROW, ...shownMaps.slice(at).map((map) => map.id)]
       : []
@@ -281,6 +334,7 @@ export class CompareCard {
       ...shownMaps.slice(at).map((map) => this.reorderable(this.deckRow(map), map.id)),
       ...hiddenMaps.map((map) => this.deckRow(map)),
       ...(!open && bottom !== null ? [bottom] : []),
+      ...cell,
     )
     const wanted = this.refocus
     this.refocus = null
@@ -616,15 +670,23 @@ export class CompareCard {
     )
   }
 
-  /** A rectangle a map is dropped on, with its own file input. */
-  private dropSlot(): DropSlot {
+  /**
+   * A rectangle a map is dropped on, with its own file input.
+   *
+   * `road` is where what lands goes — the square's slots hand on the first
+   * file, the cell's every one — and `multiple` lets the chooser take several.
+   */
+  private dropSlot(road: SlotRoad, multiple = false): DropSlot {
     const label = el('span', { class: 'ann-drop-label' })
     const hint = el('span', { class: 'ann-drop-hint' })
     const zone = el('div', { class: 'ann-drop', attrs: { tabindex: '0', role: 'button' } }, label, hint)
     const fileInput = el('input', { class: 'hidden-input', type: 'file' })
+    fileInput.multiple = multiple
     fileInput.addEventListener('change', () => {
-      const file = fileInput.files?.[0]
-      if (file) this.props.onOpen({ kind: 'local', file })
+      const files = [...(fileInput.files ?? [])]
+      // Emptied, so the same file chosen twice is still a change.
+      fileInput.value = ''
+      if (files.length > 0) road.files(files)
     })
     zone.appendChild(fileInput)
     zone.addEventListener('click', (event) => {
@@ -636,8 +698,7 @@ export class CompareCard {
     // A file, or a row out of the Files panel, which is the same gesture with
     // the bytes still in the folder. Nothing else is offered the slot: it lit
     // for this card's own grips, and let a dragged row fall into it for nothing.
-    const takesRow = (event: DragEvent): boolean =>
-      this.props.onPickDropped !== undefined && dragHasFileRow(event)
+    const takesRow = (event: DragEvent): boolean => road.row !== undefined && dragHasFileRow(event)
     zone.addEventListener('dragover', (event) => {
       if (!dragHasFiles(event) && !takesRow(event)) return
       event.preventDefault()
@@ -651,14 +712,20 @@ export class CompareCard {
       if (takesRow(event)) {
         // Read in this handler, where the payload is still readable, and opened
         // by the session once the folder has handed the file over.
-        this.props.onPickDropped?.(event)
+        road.row?.(event)
         return
       }
-      const file = event.dataTransfer?.files?.[0]
-      if (file) this.props.onOpen({ kind: 'local', file })
+      const files = [...(event.dataTransfer?.files ?? [])]
+      if (files.length > 0) road.files(files)
     })
     return { zone, label, hint }
   }
+}
+
+/** Where what lands on a drop rectangle goes: the files, and a Files row. */
+interface SlotRoad {
+  files(files: readonly File[]): void
+  row?: ((event: DragEvent) => void) | undefined
 }
 
 /** A drop rectangle and the two lines written in it. */
@@ -723,21 +790,31 @@ export function compareRefusal(
  * anybody actually has.
  *
  * What is *not* relaxed is anything the spelling cannot explain. The lists must
- * still be the same length and in the same order, because every coordinate in
- * the blended picture is an index into one of them; and two sequences that
- * match by name must still be the same number of bases, because that is the
- * check that catches hg19 against hg38 — where `chr1` is `chr1` in both and is
- * not the same sequence in either.
+ * still be in the same order, because every coordinate in the blended picture
+ * is an index into one of them; and two sequences that match by name must
+ * still be the same number of bases, because that is the check that catches
+ * hg19 against hg38 — where `chr1` is `chr1` in both and is not the same
+ * sequence in either.
+ *
+ * **The second list may run on past the first.** A `.hic` out of Juicer keeps
+ * the mitochondrion, `M`, after `Y`, where a 4DN cooler of the same assembly
+ * stops at `chrY`. Every bin the picture reads is the first file's, and while
+ * the second's list opens with the whole of the first's, each of those bins is
+ * the same locus in both — the global index is the same running sum up to
+ * there. What follows in the second file is never asked for, as a sequence the
+ * first does not have could not be. The other way round is still refused: the
+ * first file's last sequences would have a lower triangle with nothing to read.
  */
 function firstContigMismatch(
   a: Array<[string, number]>,
   b: Array<[string, number]>,
 ): string | null {
-  if (a.length !== b.length) {
+  if (a.length > b.length) {
     return (
       `Chromosome counts differ: ${fmt.int(a.length)} against ${fmt.int(b.length)}. Every ` +
-      'coordinate in the picture is an index into one list of sequences, so the two files have ' +
-      'to carry the same list, in the same order.'
+      'coordinate in the picture is an index into one list of sequences, so the second file has ' +
+      'to carry every sequence of the first, in the same order. It may carry more after them: ' +
+      'opened the other way round, this pair is drawn.'
     )
   }
   const named = ([name, length]: [string, number]): NamedSequence => ({ name, length })

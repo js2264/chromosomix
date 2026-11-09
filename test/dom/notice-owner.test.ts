@@ -18,7 +18,7 @@ import { App } from '@/app/App'
 import type { Session } from '@/app/Session'
 import { resetMounting } from '@/embed'
 import type { ViewState } from '@/types'
-import { setUpDom, type DomTeardown } from '../support/dom'
+import { setUpDom, type DomTeardown, stopsWithTheDom } from '../support/dom'
 
 /** A worker that is created, listened to, and never answers. */
 class DeadWorker {
@@ -68,7 +68,7 @@ function windowOn(...files: ViewState[]): App {
   resetMounting()
   const root = document.createElement('div')
   document.body.appendChild(root)
-  const app = new App(root)
+  const app = stopsWithTheDom(new App(root))
   app['sessions'][0].prime(files[0])
   for (const state of files.slice(1)) {
     const session = app['newSession']() as Session

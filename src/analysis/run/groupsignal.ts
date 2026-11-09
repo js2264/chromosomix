@@ -2,10 +2,13 @@
  * Signal by group, run — in the annotations worker, beside the tracks and sets.
  *
  * Three steps. The **groups** are made: from a feature set, its intervals under
- * each label merged and cut into stretches of at most a bin, and what the set
- * does not cover as a group of its own; from a track, the bins of the assembly
- * cut by the track's sign or its quantiles. Every **track** is then read over
- * every stretch, as its mean over the bases it has a value for. And the groups
+ * each label merged, and what the set does not cover as a group of its own; from
+ * a track, the bins of the assembly cut by the track's sign or its quantiles.
+ * What is compared is **one value per entry** by default — each merged run of a
+ * label, each stretch between them, each run of bins in one group — or, with a
+ * bin size, stretches of at most a bin. Every **track** is then read over
+ * every one, as its exact mean over the bases it has a value for, at its
+ * own resolution rather than a zoom level's. And the groups
  * are **compared**: summarised, drawn as violins, and tested by ranks pairwise
  * and together (`analysis/groupstats.ts`), every test's q-value adjusted with
  * every other's in the run (Benjamini–Hochberg).
@@ -31,7 +34,7 @@ import {
   type TrackJobContext,
   type TrackTaskRunner,
 } from '../job'
-import { nanMedian, quantileEdges } from '../stats'
+import { quantileEdges } from '../stats'
 import { GROUP_BINSIZE } from '../tasks/groupsignal'
 import type { CurveOutput, IntervalsOutput, TableOutput, TaskOutput } from '../types'
 
@@ -41,6 +44,16 @@ interface Stretch {
   start: number
   end: number
   group: number
+  /**
+   * An entry that runs on past the end of a circular sequence: it covers
+   * `[0, wrap)` as well as `[start, end)`, `end` being the sequence's end.
+   */
+  wrap?: number
+}
+
+/** The bases a stretch covers, both sides of a circle's origin. */
+function basesOf(stretch: Stretch): number {
+  return stretch.end - stretch.start + (stretch.wrap ?? 0)
 }
 
 /** The groups a run compares, and the stretches that make them up. */
@@ -62,9 +75,6 @@ const REST = 'rest of the genome'
 /** The most values a violin is drawn from; beyond it they are thinned evenly by rank. */
 const DRAWN = 20_000
 
-/** Samples to aim for across a typical stretch. */
-const SAMPLES_PER_STRETCH = 20
-
 export const runGroupSignal: TrackTaskRunner = async (job) => {
   const tracks = listParam(job.params, 'tracks')
   if (tracks.length === 0) {
@@ -79,32 +89,32 @@ export const runGroupSignal: TrackTaskRunner = async (job) => {
     job.note('This session knows no sequence lengths, so there is no genome to cut into stretches. Load a chrom.sizes, or the map itself.')
     return []
   }
-  // The bin size asked for; unanswered, the map's resolution where there is a
-  // map, and 10 kb where there is not — as base composition reads its own.
+  // The bin size asked for. 0, the default, is one value per entry; a track is
+  // still cut on a grid, the map's resolution where there is a map and 10 kb
+  // where there is not, as base composition reads its own.
   const asked = numParam(job.params, 'resolution', 0)
+  const perEntry = !(asked > 0)
   const binsize =
     asked > 0
       ? Math.round(asked)
       : job.framing.binsize > 0 && !coversNoMatrix(job.framing)
         ? job.framing.binsize
         : GROUP_BINSIZE
+  const circular = new Set(job.framing.circular ?? [])
 
   let grouping =
     strParam(job.params, 'groupBy', 'features') === 'track'
-      ? await fromTrack(job, contigs, binsize)
-      : fromFeatures(job, contigs, binsize)
+      ? await fromTrack(job, contigs, binsize, perEntry, circular)
+      : fromFeatures(job, contigs, perEntry ? Number.POSITIVE_INFINITY : binsize, circular)
   if (grouping === null) return []
-  grouping = withoutEmpty(grouping, job)
+  const unit = perEntry ? { one: 'entry', many: 'entries' } : { one: 'stretch', many: 'stretches' }
+  grouping = withoutEmpty(grouping, job, unit.one)
   if (grouping.stretches.length === 0) {
-    job.note('No stretch of the genome fell in any group, so there is nothing to compare.')
+    job.note(`No ${unit.one} of the genome fell in any group, so there is nothing to compare.`)
     return []
   }
 
   const labelOf = (id: string): string => job.inputs.labels?.[id] ?? id
-  const step = Math.max(
-    1,
-    Math.round(nanMedian(Float64Array.from(grouping.stretches, (s) => s.end - s.start)) / SAMPLES_PER_STRETCH),
-  )
   const k = grouping.names.length
   const summaryRows: Array<Record<string, string | number>> = []
   const testRows: Array<Record<string, string | number>> = []
@@ -114,7 +124,7 @@ export const runGroupSignal: TrackTaskRunner = async (job) => {
     job.throwIfCancelled()
     const name = labelOf(tracks[t])
     job.progress(t, tracks.length, name)
-    const values = await meansOver(job, tracks[t], grouping.stretches, step)
+    const values = await meansOver(job, tracks[t], grouping.stretches)
     const byGroup: number[][] = grouping.names.map(() => [])
     for (let i = 0; i < grouping.stretches.length; i++) {
       if (Number.isFinite(values[i])) byGroup[grouping.stretches[i].group].push(values[i])
@@ -136,7 +146,7 @@ export const runGroupSignal: TrackTaskRunner = async (job) => {
       const restMean = others > 0 ? (allSum - summary.mean * summary.n) / others : Number.NaN
       let bases = 0
       for (const stretch of grouping.stretches) {
-        if (stretch.group === g) bases += stretch.end - stretch.start
+        if (stretch.group === g) bases += basesOf(stretch)
       }
       summaryRows.push({
         track: name,
@@ -214,9 +224,14 @@ export const runGroupSignal: TrackTaskRunner = async (job) => {
     row.q = q[i]
   })
   const drawnFrom = figures.some((figure) => figure.series.some((series) => (series.n ?? 0) > DRAWN))
+  const count = grouping.stretches.length.toLocaleString()
+  const compared = !perEntry
+    ? `${count} stretches of at most ${binsize.toLocaleString()} bp`
+    : grouping.segments !== undefined
+      ? `${count} entries, each a run of ${binsize.toLocaleString()} bp bins in one group,`
+      : `${count} entries, each a run of features under one name or a stretch between them,`
   job.note(
-    `Compared over ${grouping.stretches.length.toLocaleString()} stretches of at most ` +
-      `${binsize.toLocaleString()} bp in ${k} groups, each the track's mean over the bases it has a ` +
+    `Compared over ${compared} in ${k} groups, each the track's mean over the bases it has a ` +
       `value for.${drawnFrom ? ` A violin of more than ${DRAWN.toLocaleString()} is drawn from that many, evenly by rank; the tests use every one.` : ''}`,
   )
 
@@ -228,7 +243,7 @@ export const runGroupSignal: TrackTaskRunner = async (job) => {
     columns: [
       { key: 'track', label: 'Track', kind: 'text' },
       { key: 'group', label: 'Group', kind: 'text' },
-      { key: 'n', label: 'Stretches', kind: 'number' },
+      { key: 'n', label: perEntry ? 'Entries' : 'Stretches', kind: 'number' },
       { key: 'bases', label: 'Bases', kind: 'number' },
       { key: 'mean', label: 'Mean', kind: 'number', digits: 4 },
       { key: 'sd', label: 'SD', kind: 'number', digits: 4 },
@@ -289,7 +304,7 @@ export const runGroupSignal: TrackTaskRunner = async (job) => {
   }
 
   if (strParam(job.params, 'groupBy', 'features') !== 'track' && boolParam(job.params, 'perFeature', false)) {
-    const perFeature = await perFeatureTable(job, tracks, labelOf, step)
+    const perFeature = await perFeatureTable(job, tracks, labelOf)
     if (perFeature !== null) outputs.push(perFeature)
   }
   return outputs
@@ -299,11 +314,15 @@ export const runGroupSignal: TrackTaskRunner = async (job) => {
 // The groups
 // ---------------------------------------------------------------------------
 
-/** Groups from a feature set: what is written on each feature, and the rest. */
+/**
+ * Groups from a feature set: what is written on each feature, and the rest. A
+ * `binsize` of infinity cuts nothing, so each merged run is one entry.
+ */
 function fromFeatures(
   job: TrackJobContext,
   contigs: ReadonlyArray<{ name: string; length: number }>,
   binsize: number,
+  circular: ReadonlySet<string>,
 ): Grouping | null {
   const offered = chosenInput(job.inputs.features, job.params, 'features')
   // Only a set the form chose: an input nobody picked is not one to group by.
@@ -409,16 +428,21 @@ function fromFeatures(
   return {
     names,
     colours: names.map((name, i) => (name === REST ? REST_COLOUR : PALETTE[i % PALETTE.length])),
-    stretches,
+    stretches: binsize === Number.POSITIVE_INFINITY ? acrossOrigin(stretches, contigs, circular) : stretches,
     of: splitWord === '' ? setName : `${setName}, by ${splitWord}`,
   }
 }
 
-/** Groups from a track: the assembly's bins, by the track's sign or its quantiles. */
+/**
+ * Groups from a track: the assembly's bins, by the track's sign or its
+ * quantiles — compared a bin at a time, or `perEntry` a run of them at a time.
+ */
 async function fromTrack(
   job: TrackJobContext,
   contigs: ReadonlyArray<{ name: string; length: number }>,
   binsize: number,
+  perEntry: boolean,
+  circular: ReadonlySet<string>,
 ): Promise<Grouping | null> {
   const entry = idParam(job.params, 'groupTrack')
   if (entry === null) {
@@ -432,7 +456,7 @@ async function fromTrack(
       bins.push({ contig: contig.name, start, end: Math.min(contig.length, start + binsize), group: -1 })
     }
   }
-  const values = await meansOver(job, entry, bins, Math.max(1, Math.round(binsize / SAMPLES_PER_STRETCH)))
+  const values = await meansOver(job, entry, bins)
   const cutBy = strParam(job.params, 'cut', 'sign') === 'quantiles' ? 'quantiles' : 'sign'
   let names: string[]
   if (cutBy === 'sign') {
@@ -460,9 +484,13 @@ async function fromTrack(
 
   // The grouping as intervals: consecutive bins of one group on one sequence, joined.
   const segments = new FeatureBuilder()
+  const runs: Stretch[] = []
   let open: Stretch | null = null
   const close = (): void => {
-    if (open !== null) segments.add(open.contig, open.start, open.end, { name: names[open.group] })
+    if (open !== null) {
+      segments.add(open.contig, open.start, open.end, { name: names[open.group] })
+      runs.push(open)
+    }
     open = null
   }
   for (const bin of stretches) {
@@ -477,7 +505,7 @@ async function fromTrack(
   return {
     names,
     colours: names.map((_, i) => PALETTE[i % PALETTE.length]),
-    stretches,
+    stretches: perEntry ? acrossOrigin(runs, contigs, circular) : stretches,
     of: `${name}, ${cutBy === 'sign' ? 'by sign' : 'in quantiles'}`,
     segments: segments.finish(),
   }
@@ -489,12 +517,12 @@ async function fromTrack(
  * quantile that ties left empty. A violin of nothing and a row of dashes say
  * less than the sentence does.
  */
-function withoutEmpty(grouping: Grouping, job: TrackJobContext): Grouping {
+function withoutEmpty(grouping: Grouping, job: TrackJobContext, unit: string): Grouping {
   const counts = new Array<number>(grouping.names.length).fill(0)
   for (const stretch of grouping.stretches) counts[stretch.group]++
   if (counts.every((count) => count > 0)) return grouping
   const empty = grouping.names.filter((_, g) => counts[g] === 0)
-  job.note(`${empty.join(', ')} had no stretch in ${empty.length === 1 ? 'it' : 'them'}, and ${empty.length === 1 ? 'is' : 'are'} left out.`)
+  job.note(`${empty.join(', ')} had no ${unit} in ${empty.length === 1 ? 'it' : 'them'}, and ${empty.length === 1 ? 'is' : 'are'} left out.`)
   const kept = grouping.names.map((_, g) => g).filter((g) => counts[g] > 0)
   const renumbered = new Map(kept.map((g, i) => [g, i]))
   return {
@@ -537,6 +565,38 @@ function merged(intervals: ReadonlyArray<[number, number]>): Array<[number, numb
 }
 
 /**
+ * An entry that runs on past the end of a circular sequence, as one entry: the
+ * run of a group that ends at the sequence's end carries on over the run of the
+ * same group that starts at 0, rather than counting as two — a compartment
+ * across a bacterial chromosome's coordinate origin is one compartment.
+ */
+function acrossOrigin(
+  stretches: Stretch[],
+  contigs: ReadonlyArray<{ name: string; length: number }>,
+  circular: ReadonlySet<string>,
+): Stretch[] {
+  if (circular.size === 0) return stretches
+  const lengths = new Map(contigs.map((contig) => [contig.name, contig.length]))
+  const ends = new Map<string, { head?: Stretch; tail?: Stretch }>()
+  for (const stretch of stretches) {
+    const length = lengths.get(stretch.contig)
+    if (!circular.has(stretch.contig) || length === undefined) continue
+    const key = `${stretch.contig}\t${stretch.group}`
+    const held = ends.get(key) ?? {}
+    if (stretch.start === 0 && stretch.end < length) held.head = stretch
+    if (stretch.end === length && stretch.start > 0) held.tail = stretch
+    ends.set(key, held)
+  }
+  const joined = new Set<Stretch>()
+  for (const { head, tail } of ends.values()) {
+    if (head === undefined || tail === undefined) continue
+    tail.wrap = head.end
+    joined.add(head)
+  }
+  return joined.size === 0 ? stretches : stretches.filter((stretch) => !joined.has(stretch))
+}
+
+/**
  * A run cut into stretches of at most a bin, on the genome's bin grid.
  *
  * A run no longer than a bin is one stretch, whatever grid line it crosses — a
@@ -571,19 +631,34 @@ export function cut(start: number, end: number, binsize: number): Array<[number,
 // ---------------------------------------------------------------------------
 
 /**
- * A track's mean over each stretch — over the bases it has a value for, so a
- * stretch half of which the track does not cover reports the half it does.
+ * How many bases one request asks for, at most, and how many stretches — a
+ * stretch longer than that, an entry a compartment or a chromosome long, is
+ * read a piece at a time and its pieces summed.
  *
- * One sample request per sequence, as FRiP makes them (`run/frip.ts`), and the
- * worker's answers clipped to the stretch they were asked for: a zoom bin that
- * overlaps an edge would otherwise credit the stretch with its neighbour.
+ * Every track is read **at its own resolution** — a bigWig's base-level records,
+ * never a zoom level — because a stretch's value is the mean over the bases it
+ * covers, and a zoom record is a mean over *its* span: read at a twentieth of a
+ * stretch, a mouse ATAC-seq track's 896 bp records put the next stretch's signal
+ * into this one's ends, and chr19's 10 kb stretches came out a median 0.2 % from
+ * their own means, one in thirteen more than 1 %. Reading at base resolution
+ * makes the read the whole file, which is what an exact mean costs; a megabase at
+ * a time keeps what is held to one megabase's records, as track correlation
+ * reads its own (`run/trackcorr.ts`).
  */
-async function meansOver(
-  job: TrackJobContext,
-  entry: string,
-  stretches: readonly Stretch[],
-  step: number,
-): Promise<Float64Array> {
+const CHUNK_BASES = 1 << 20
+const CHUNK_STRETCHES = 4096
+
+/**
+ * A track's mean over each stretch — over the bases it has a value for, so a
+ * stretch half of which the track does not cover reports the half it does —
+ * each record weighted by how much of the stretch it covers: pyBigWig's
+ * `stats(…, exact=True)`.
+ *
+ * By sequence, the stretches in order along it and read a batch at a time, and
+ * matched back by the coordinates each reply echoes: `sample` drops what its
+ * file cannot answer, so matching by position would shift every one after it.
+ */
+async function meansOver(job: TrackJobContext, entry: string, stretches: readonly Stretch[]): Promise<Float64Array> {
   const out = new Float64Array(stretches.length).fill(Number.NaN)
   const byContig = new Map<string, number[]>()
   stretches.forEach((stretch, i) => {
@@ -592,25 +667,57 @@ async function meansOver(
     else held.push(i)
   })
   for (const [contig, indices] of byContig) {
-    job.throwIfCancelled()
+    // Each piece once, however many groups or features share it.
     const keyed = new Map<string, Region>()
+    const piecesOf = new Map<number, string[]>()
     for (const i of indices) {
-      const { start, end } = stretches[i]
-      keyed.set(`${start}-${end}`, { contig, start, end })
+      const { start, end, wrap } = stretches[i]
+      const keys: string[] = []
+      const spans: Array<[number, number]> = wrap === undefined ? [[start, end]] : [[start, end], [0, wrap]]
+      for (const [from, to] of spans) {
+        for (let at = from; at < to; at += CHUNK_BASES) {
+          const piece = { contig, start: at, end: Math.min(to, at + CHUNK_BASES) }
+          const key = `${piece.start}-${piece.end}`
+          keyed.set(key, piece)
+          keys.push(key)
+        }
+      }
+      piecesOf.set(i, keys)
     }
-    const sampled = await job.sample(entry, [...keyed.values()], step)
-    const answers = new Map<string, TrackSamples>()
-    for (const answer of sampled.regions) answers.set(`${answer.start}-${answer.end}`, answer)
+    const regions = [...keyed.values()].sort((a, b) => a.start - b.start || a.end - b.end)
+    const sums = new Map<string, [number, number]>()
+    for (let first = 0; first < regions.length; ) {
+      job.throwIfCancelled()
+      let last = first + 1
+      let bases = regions[first].end - regions[first].start
+      while (last < regions.length && last - first < CHUNK_STRETCHES) {
+        bases += regions[last].end - regions[last].start
+        if (bases > CHUNK_BASES) break
+        last++
+      }
+      const sampled = await job.sample(entry, regions.slice(first, last), 1)
+      for (const answer of sampled.regions) {
+        sums.set(`${answer.start}-${answer.end}`, clippedSum(answer, answer.start, answer.end))
+      }
+      first = last
+    }
     for (const i of indices) {
-      const { start, end } = stretches[i]
-      const answer = answers.get(`${start}-${end}`)
-      if (answer !== undefined) out[i] = clippedMean(answer, start, end)
+      let sum = 0
+      let covered = 0
+      for (const key of piecesOf.get(i) ?? []) {
+        const held = sums.get(key)
+        if (held === undefined) continue
+        sum += held[0]
+        covered += held[1]
+      }
+      if (covered > 0) out[i] = sum / covered
     }
   }
   return out
 }
 
-function clippedMean(answer: TrackSamples, start: number, end: number): number {
+/** The sum of a track's values over `[start, end)`, each weighted by the bases it covers, and those bases. */
+function clippedSum(answer: TrackSamples, start: number, end: number): [number, number] {
   let sum = 0
   let covered = 0
   for (let k = 0; k < answer.values.length; k++) {
@@ -622,7 +729,7 @@ function clippedMean(answer: TrackSamples, start: number, end: number): number {
     sum += value * (to - from)
     covered += to - from
   }
-  return covered > 0 ? sum / covered : Number.NaN
+  return [sum, covered]
 }
 
 /** Every feature of the set, unmerged, with its mean on every track. */
@@ -630,7 +737,6 @@ async function perFeatureTable(
   job: TrackJobContext,
   tracks: readonly string[],
   labelOf: (id: string) => string,
-  step: number,
 ): Promise<TableOutput | null> {
   const set = chosenInput(job.inputs.features, job.params, 'features').value
   if (set === undefined) return null
@@ -646,7 +752,7 @@ async function perFeatureTable(
     name: set.name[feature.group] ?? '',
   })) as Array<Record<string, string | number>>
   for (let t = 0; t < tracks.length; t++) {
-    const values = await meansOver(job, tracks[t], features, step)
+    const values = await meansOver(job, tracks[t], features)
     values.forEach((value, i) => {
       rows[i][columns[t]] = value
     })

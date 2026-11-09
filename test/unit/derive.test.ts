@@ -26,6 +26,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  BALANCE_PRECISION,
   BALANCE_TOLERANCE,
   balanceBlock,
   coverageNormalise,
@@ -182,13 +183,16 @@ describe('iterative balancing', () => {
     const b = outerProduct([1, 3, 9, 27], [1, 3, 9, 27])
     const balanced = balanceBlock(b).values
     const first = balanced[0]
-    // To the convergence tolerance rather than to a decimal count, and to a
-    // small multiple of it rather than to the number itself: the loop stops when
-    // the *marginals* are flat to `BALANCE_TOLERANCE`, and every cell carries
-    // the residual error of the two weights that scale it, so the cell-level
-    // bound is a couple of times the marginal one by construction.
+    // To where the loop stops rather than to a decimal count: the *marginals*
+    // flat to `BALANCE_PRECISION`, and every cell carrying the residual error of
+    // the two weights that scale it, a couple of times that — on top of the
+    // Float32 each cell is rounded to, half a unit in the last place for each of
+    // the two compared. Stopping at `BALANCE_TOLERANCE`, as it once did, is a
+    // hundred times past this.
+    const bound = 2 ** -23 + 4 * BALANCE_PRECISION
+    expect(4 * BALANCE_TOLERANCE).toBeGreaterThan(100 * bound)
     for (const value of balanced) {
-      expect(Math.abs(value / first - 1)).toBeLessThan(4 * BALANCE_TOLERANCE)
+      expect(Math.abs(value / first - 1)).toBeLessThan(bound)
     }
   })
 

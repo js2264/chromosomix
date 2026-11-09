@@ -54,11 +54,12 @@ function typeAndEnter(input: HTMLInputElement, text: string): void {
 }
 
 describe('one map', () => {
-  it('shows the map’s own total in grey and nothing typed', () => {
+  it('shows an example as its placeholder, the map’s own total in its tooltip, and nothing typed', () => {
     const { box, input } = rig()
     expect(box.el.querySelector('.res-label')?.textContent).toBe('contacts')
     expect(input.value).toBe('')
-    expect(input.placeholder).toBe('179,175,551')
+    expect(input.placeholder).toBe('e.g. 10M')
+    expect(input.title).toContain('179,175,551 contacts in this map')
     expect(input.classList.contains('is-set')).toBe(false)
   })
 

@@ -63,6 +63,9 @@ const STRAND_ALIASES = {
   strand2: ['strand2', 'strand_2'],
 } as const
 
+/** The pair type's spellings: pairtools' `pair_type`, and the one without the underscore. */
+const PAIR_TYPE_ALIASES = ['pair_type', 'pairtype'] as const
+
 /**
  * How much of the file may be header before the reader gives up looking.
  *
@@ -94,8 +97,9 @@ export interface PairsColumns {
   /**
    * Where the two strands are, or `-1` where the file does not carry them.
    *
-   * **The one thing §3.7 reads out of a record beyond its four coordinates**,
-   * and the clause it narrows is stated there rather than stepped around. The
+   * **One of the two things §3.7 reads out of a record beyond its four
+   * coordinates** — the pair type is the other, below — and the clause it
+   * narrows is stated there rather than stepped around. The
    * original rule — *nothing about strands, pair types or mapping quality is
    * read or re-decided* — was about what a **matrix** is built from, and it
    * still holds: no strand reaches a bin, a pixel or a written `.mcool`, and a
@@ -107,6 +111,13 @@ export interface PairsColumns {
    */
   strand1: number
   strand2: number
+  /**
+   * Where the pair type is — `UU`, `DD`, `NM`, … as pairtools writes it — or
+   * `-1` where the file does not carry one. Read for `pairtools stats`'
+   * counts and nothing else (`pairs/stats.ts`), on the terms the strands are
+   * read on: counted, never acted on, and no record is kept or dropped for it.
+   */
+  pairType: number
 }
 
 export interface PairsHeader {
@@ -317,10 +328,11 @@ export function resolveColumns(names: readonly string[], wasDeclared: boolean): 
     pos2: find(COLUMN_ALIASES.pos2),
     strand1: find(STRAND_ALIASES.strand1),
     strand2: find(STRAND_ALIASES.strand2),
+    pairType: find(PAIR_TYPE_ALIASES),
   }
-  // The strands are optional, so they are left out of the completeness check:
-  // `-1` there means *this file does not carry them*, which is a fact rather
-  // than a fault.
+  // The strands and the pair type are optional, so they are left out of the
+  // completeness check: `-1` there means *this file does not carry them*, which
+  // is a fact rather than a fault.
   const missing = (['chrom1', 'pos1', 'chrom2', 'pos2'] as const).filter(
     (key) => columns[key] < 0,
   )

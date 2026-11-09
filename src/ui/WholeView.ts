@@ -52,7 +52,8 @@ import {
 import { axisRegion } from './mapSelection'
 import { blockSummary, poolingNote } from './mapSummary'
 import { REMOTE_SCAN_BYTE_LIMIT, overviewTarget } from './Overview'
-import { presentationOf, secondBlock, type CompareRead } from './compare'
+import { presentationOf, secondBlock, type CompareRead, type LowerRead } from './compare'
+import type { LowerPresentation } from './LowerReading'
 import { attachRefine, rungsOf, type BlockLadder } from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox, featureSuggestions, locusPlaceholder } from './SearchBox'
@@ -261,6 +262,12 @@ export interface WholeViewProps {
    */
   annotations?: AnnotationContext
   /**
+   * The sequence a name typed into the box means, as the file names it, or
+   * `null` (`findContig`'s ladder: `chr4`, `4` and `IV` alike). With genes on
+   * offer the box lists it first, so `IV` opens chromosome IV and not IVY1.
+   */
+  sequenceNamed?(text: string): string | null
+  /**
    * A second cooler in the lower-left triangle (`render/compare.ts`).
    *
    * Read with the same request, after the first — sequentially rather than in
@@ -269,6 +276,17 @@ export interface WholeViewProps {
    * asks permission for.
    */
   compare?: CompareRead
+  /**
+   * The lower triangle in a reading of its own (§5.10), for the map's second
+   * tab; absent beside a second file and in a deck.
+   */
+  lower?: LowerPresentation
+  /**
+   * The second read that reading needs where its score is another column or
+   * the balancing the other way — the same requests as the first, asked of the
+   * same file again (`ui/compare.ts`). Never beside {@link compare}.
+   */
+  lowerRead?: LowerRead
   /** File and genome context for the exported figure's caption. */
   caption?: FigureSubject
 }
@@ -402,7 +420,12 @@ export class WholeView {
       // reads what it shows back through `typedLocusToRegion`.
       ...(store === undefined
         ? {}
-        : { suggest: (text: string) => featureSuggestions(store, text, 'display') }),
+        : {
+            suggest: (text: string) => featureSuggestions(store, text, 'display'),
+            ...(props.sequenceNamed === undefined
+              ? {}
+              : { sequence: (text: string) => props.sequenceNamed?.(text) ?? null }),
+          }),
     })
     this.gate = el('div', { class: 'gate hidden' })
     this.progressBar.max = 1
@@ -424,6 +447,7 @@ export class WholeView {
       ...(presentationOf(props.compare) === undefined
         ? {}
         : { compare: presentationOf(props.compare) }),
+      ...(props.lower === undefined ? {} : { lower: props.lower }),
       detachedControls: true,
       hideTitle: true,
       initial: { ...props.scale, level: props.level },
@@ -913,7 +937,7 @@ export class WholeView {
       // The same three shapes, against the other file. Written out for the
       // reason the reads above are: a request type is a discriminated union and
       // narrowing it through a ternary argument loses the discriminant.
-      const second = await secondBlock(this.props.compare, (other) =>
+      const second = await secondBlock(this.props.compare ?? this.props.lowerRead, (other) =>
         selection !== undefined && this.level === 'bin'
           ? other.request<'selection'>({
               kind: 'selection',
@@ -1033,7 +1057,7 @@ export class WholeView {
         return {
           cancel: own.cancel,
           promise: own.promise.then(async (block) => {
-            const other = await secondBlock(this.props.compare, (client2) =>
+            const other = await secondBlock(this.props.compare ?? this.props.lowerRead, (client2) =>
               client2.request<'matrix'>({
                 kind: 'matrix',
                 ...(rung === undefined ? {} : { rung }),

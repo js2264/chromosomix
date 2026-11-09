@@ -11,11 +11,14 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { erf, fminbound, globalIdr, idrRanks, scaledIdr } from '@/analysis/idr'
+import { erf, fminbound, globalIdr, idrRanks, pseudoValuePair, pseudoValues, scaledIdr } from '@/analysis/idr'
 import { numpyMean, numpySum } from '@/analysis/stats'
 import {
   CONCAVE_TOLERANCE,
   ConcaveScan,
+  StrongestRegions,
+  concaveMask,
+  convolutionCentre,
   convolutionReach,
   convolveSame,
   descendingRanks,
@@ -25,6 +28,7 @@ import {
   scaledThreshold,
   strongestRegions,
   yapcKernel,
+  type ConcaveRegions,
   type Runs,
   type YapcKernel,
 } from '@/analysis/yapc'
@@ -130,6 +134,104 @@ function expectClose(
   }
 }
 
+/**
+ * The convolution as it was summed before it went piece by piece: a position at a
+ * time, its pieces left to right. `convolveSame` is held to this bit for bit.
+ */
+function positionAtATime(
+  runs: Runs,
+  kernel: YapcKernel,
+  length: number,
+  from: number,
+  to: number,
+  flat: Uint8Array,
+): Float64Array {
+  const taps = kernel.values.length
+  const values = kernel.values
+  const cumulative = kernel.cumulative
+  const centre = convolutionCentre(kernel, length)
+  const out = new Float64Array(Math.max(0, to - from))
+  let first = 0
+  for (let i = from; i < to; i++) {
+    const reach = i + centre - (taps - 1)
+    const low = Math.max(0, reach)
+    const high = Math.min(length, i + centre + 1)
+    while (first < runs.length && runs.ends[first] <= low) first++
+    if (
+      reach >= 0 &&
+      i + centre + 1 <= length &&
+      first < runs.length &&
+      runs.starts[first] <= low &&
+      runs.ends[first] >= high
+    ) {
+      flat[i - from] = 1
+    }
+    const anchor = i + centre + 1
+    let total = 0
+    for (let r = first; r < runs.length; r++) {
+      const start = runs.starts[r]
+      if (start >= high) break
+      const value = runs.values[r]
+      if (value !== value) {
+        total = Number.NaN
+        break
+      }
+      const s = start > low ? start : low
+      const end = runs.ends[r]
+      const e = end < high ? end : high
+      total += e - s === 1 ? value * values[anchor - 1 - s] : value * (cumulative[anchor - s] - cumulative[anchor - e])
+    }
+    out[i - from] = total
+  }
+  return out
+}
+
+/** A seeded uniform draw in `[0, 1)`. */
+function uniform(seed: number): () => number {
+  let state = seed
+  return () => {
+    state = (state * 16807) % 2147483647
+    return state / 2147483647
+  }
+}
+
+/**
+ * Pieces of every kind a bigWig has, over `[0, length)`: one base wide, a few,
+ * longer than the kernel; zeros, float32 levels, and the odd missing stretch.
+ */
+function randomRuns(length: number, seed: number): Runs {
+  const random = uniform(seed)
+  const starts: number[] = []
+  const ends: number[] = []
+  const values: number[] = []
+  for (let at = 0; at < length; ) {
+    const kind = random()
+    const width = kind < 0.3 ? 1 : kind < 0.8 ? 2 + Math.floor(random() * 30) : 1 + Math.floor(random() * 1_500)
+    const end = Math.min(length, at + width)
+    const draw = random()
+    starts.push(at)
+    ends.push(end)
+    values.push(draw < 0.02 ? Number.NaN : draw < 0.2 ? 0 : Math.fround(random() * 50))
+    at = end
+  }
+  return {
+    starts: Int32Array.from(starts),
+    ends: Int32Array.from(ends),
+    values: Float64Array.from(values),
+    length: starts.length,
+  }
+}
+
+/** The pieces of `runs` over `[from, to)`, cut at its two ends: what a window reads. */
+function runsOverRange(runs: Runs, from: number, to: number): Runs {
+  return runsOver(runs.starts, runs.ends, runs.values, from, to)
+}
+
+/** Bit for bit, `NaN` being `NaN`. */
+function sameBits(a: number, b: number): boolean {
+  return Object.is(a, b) || (Number.isNaN(a) && Number.isNaN(b))
+}
+
 /** Scan a sequence of pooled second derivatives, fed in windows of `window`. */
 function scanned(d2: Float64Array, window: number) {
   const scan = new ConcaveScan('chr', d2.length, [false])
@@ -200,6 +302,69 @@ describe('the run-wise convolution', () => {
     expect(threes[0]).toBeLessThan(0)
     expect(threes[0]).toBeGreaterThan(-1e-9)
     expect(threes[0] < CONCAVE_TOLERANCE).toBe(true)
+  })
+
+  it('adds each position’s terms in the order a position at a time did, bit for bit', () => {
+    // Piece by piece, each position still receives one term per piece, left to
+    // right, as the same products of the same differences — so not one value
+    // moves in its last place: pieces inside the window and across either end
+    // of it, one base wide or wider than the kernel, at both ends of the
+    // sequence, and on a sequence shorter than the kernel.
+    const cases: Array<[YapcKernel, number]> = [
+      [yapcKernel(150, 3), 6_000],
+      [yapcKernel(5, 1), 3_000],
+      [yapcKernel(150, 0), 2_000],
+      [yapcKernel(150, 3), 300],
+    ]
+    cases.forEach(([kernel, length], c) => {
+      const runs = randomRuns(length, 101 + c)
+      const { left, right } = convolutionReach(kernel, length)
+      for (const [from, to] of [
+        [0, length],
+        [0, Math.min(length, 700)],
+        [Math.floor(length / 3), Math.floor((2 * length) / 3)],
+        [Math.max(0, length - 500), length],
+      ]) {
+        // What a window reads: its pieces cut at its ends, and abutting ones of
+        // one value merged, as `runsOver` gives them to both.
+        const window = runsOverRange(runs, Math.max(0, from - left), Math.min(length, to + right))
+        const flatBefore = new Uint8Array(to - from)
+        const expected = positionAtATime(window, kernel, length, from, to, flatBefore)
+        const flat = new Uint8Array(to - from)
+        const actual = convolveSame(window, kernel, length, from, to, flat)
+        for (let k = 0; k < expected.length; k++) {
+          if (!sameBits(actual[k], expected[k])) {
+            expect(actual[k], `case ${c}, [${from}, ${to}), at ${from + k}`).toBe(expected[k])
+          }
+        }
+        expect(Array.from(flat), `case ${c}, [${from}, ${to}), flat`).toEqual(Array.from(flatBefore))
+        if (length > 2_000) expect(flat.includes(1), `case ${c}: some window is flat`).toBe(true)
+      }
+    })
+  })
+
+  it('computes only the positions asked for, each as it would be computed anyway', () => {
+    const kernel = yapcKernel(150, 3)
+    const runs = randomRuns(5_000, 7)
+    const whole = convolveSame(runs, kernel, 5_000, 0, 5_000)
+    const random = uniform(99)
+    // Stretches of a few hundred, as concave regions are, and single positions.
+    const only = new Uint8Array(5_000)
+    for (let k = 0; k < only.length; ) {
+      const width = random() < 0.3 ? 1 : Math.floor(random() * 400)
+      only.fill(random() < 0.5 ? 1 : 0, k, Math.min(only.length, k + width))
+      k += Math.max(1, width)
+    }
+    const some = convolveSame(runs, kernel, 5_000, 0, 5_000, undefined, only)
+    for (let k = 0; k < only.length; k++) {
+      if (only[k] === 1 ? !sameBits(some[k], whole[k]) : !Number.isNaN(some[k])) {
+        expect(some[k], `at ${k}`).toBe(only[k] === 1 ? whole[k] : Number.NaN)
+      }
+    }
+    // The pooled track's concave positions, as the scan asks for them.
+    const mask = concaveMask(whole)
+    expect(mask.reduce((a, b) => a + b, 0)).toBeGreaterThan(100)
+    for (let k = 0; k < mask.length; k++) expect(mask[k]).toBe(Math.fround(whole[k]) < CONCAVE_TOLERANCE ? 1 : 0)
   })
 })
 
@@ -338,6 +503,100 @@ describe('from regions to peaks', () => {
     expect(Array.from(kept)).toEqual([1, 2, 0])
   })
 
+  it('keeps the same strongest, in the same order, holding only what can be among them', () => {
+    // Scores drawn from a few dozen values, so ranks tie everywhere — at the cut
+    // too — and a track absent from a sequence scores −∞ throughout it.
+    for (const tracks of [1, 2]) {
+      for (const [count, limit] of [
+        [3_000, 100],
+        [3_000, 1],
+        [3_000, 2_999],
+        [3_000, 3_000],
+        [3_000, 5_000],
+        [500, 37],
+      ]) {
+        const random = uniform(count + limit + tracks)
+        const sequences = ['chr2', 'chr10', 'chr1', 'chrX'].map((contig, c) => {
+          const n = Math.floor(count / 4)
+          const regions: ConcaveRegions = {
+            contig,
+            starts: Int32Array.from({ length: n }, (_, i) => i * 300),
+            ends: Int32Array.from({ length: n }, (_, i) => i * 300 + 75 + Math.floor(random() * 200)),
+            modes: Int32Array.from({ length: n }, (_, i) => i * 300 + 10),
+            scores: Array.from({ length: tracks }, (_, t) =>
+              Float64Array.from({ length: n }, () =>
+                t === 1 && c === 3 ? Number.NEGATIVE_INFINITY : Math.floor(random() * 40) / 4 - 1,
+              ),
+            ),
+            flat: Uint8Array.from({ length: n }, () => (random() < 0.05 ? 1 : 0)),
+          }
+          return regions
+        })
+        // Everything, as the cut was made before.
+        const all = {
+          contig: sequences.flatMap((s) => Array.from(s.starts, () => s.contig)),
+          starts: Int32Array.from(sequences.flatMap((s) => Array.from(s.starts))),
+          ends: Int32Array.from(sequences.flatMap((s) => Array.from(s.ends))),
+          scores: Array.from({ length: tracks }, (_, t) =>
+            Float64Array.from(sequences.flatMap((s) => Array.from(s.scores[t]))),
+          ),
+        }
+        const expected = strongestRegions(all.contig, all.starts, all.ends, all.scores, limit)
+        const streaming = new StrongestRegions(tracks, limit, { below: tracks === 1 })
+        for (const s of sequences) for (let i = 0; i < s.starts.length; i++) streaming.add(s, i)
+        const held = streaming.finish()
+        const label = `${tracks} track(s), ${count} regions, limit ${limit}`
+        expect(held.exact, label).toBe(true)
+        // Where the cut is well above the weakest, most of them were let go.
+        if (limit <= count / 10) expect(held.starts.length, label).toBeLessThan(count / 2)
+        const key = (contig: string, start: number): string => `${contig}:${start}`
+        expect(
+          Array.from(held.tested, (i) => key(held.contig[i], held.starts[i])),
+          label,
+        ).toEqual(Array.from(expected, (i) => key(all.contig[i], all.starts[i])))
+        expect(Array.from(held.tested, (i) => held.scores[0][i]), label).toEqual(
+          Array.from(expected, (i) => all.scores[0][i]),
+        )
+        if (tracks === 1) {
+          // What the one-track figure draws below the cut: every candidate never
+          // tested, positive and not flat, whether let go or held to the end.
+          const flat = Uint8Array.from(sequences.flatMap((s) => Array.from(s.flat)))
+          const tested = new Set(Array.from(expected))
+          const want = all.scores[0].filter((v, i) => !tested.has(i) && v > 0 && flat[i] === 0)
+          const inHeld = new Set(Array.from(held.tested))
+          const got = [
+            ...held.scores[0].filter((v, i) => !inHeld.has(i) && v > 0 && held.flat[i] === 0),
+            ...held.below,
+          ]
+          expect(Float64Array.from(got).sort(), label).toEqual(want.sort())
+        }
+      }
+    }
+  })
+
+  it('says when a NaN score leaves no cut but over everything, and holds everything when asked', () => {
+    const regions = (scores: number[]): ConcaveRegions => ({
+      contig: 'chr1',
+      starts: Int32Array.from(scores, (_, i) => i * 100),
+      ends: Int32Array.from(scores, (_, i) => i * 100 + 80),
+      modes: Int32Array.from(scores, (_, i) => i * 100 + 40),
+      scores: [Float64Array.from(scores)],
+      flat: new Uint8Array(scores.length),
+    })
+    const many = regions(Array.from({ length: 5_000 }, (_, i) => (i * 7919) % 1_000))
+    const late = regions([Number.NaN, 3, 2])
+    const pruned = new StrongestRegions(1, 10)
+    for (let i = 0; i < many.starts.length; i++) pruned.add(many, i)
+    for (let i = 0; i < late.starts.length; i++) pruned.add(late, i)
+    expect(pruned.finish().exact).toBe(false)
+    const whole = new StrongestRegions(1, 10, { prune: false })
+    for (let i = 0; i < many.starts.length; i++) whole.add(many, i)
+    for (let i = 0; i < late.starts.length; i++) whole.add(late, i)
+    const held = whole.finish()
+    expect(held.exact).toBe(true)
+    expect(held.starts.length).toBe(5_003)
+  })
+
   it('bounds a peak by its region, or by a half-width about its summit, cut at the ends', () => {
     expect(peakBounds(100, 300, 180, 0, 1_000)).toEqual([100, 300])
     expect(peakBounds(100, 300, 180, 50, 1_000)).toEqual([130, 231])
@@ -403,5 +662,19 @@ describe('what the ports borrow', () => {
 
   it('ranks for IDR from the lowest score, ties by position', () => {
     expect(Array.from(idrRanks(Float64Array.from([5, 1, 5, 3])))).toEqual([2, 0, 3, 1])
+  })
+
+  it('finds two replicates’ pseudo-values from one bisection, each as its own would', () => {
+    const random = uniform(5)
+    const r1 = idrRanks(Float64Array.from({ length: 2_000 }, () => random()))
+    const r2 = idrRanks(Float64Array.from({ length: 2_000 }, () => random()))
+    for (const [mu, sigma, p, eps] of [
+      [0.1, 1.0, 0.5, 1e-8],
+      [2.75, 0.88, 0.06, 1e-12],
+    ]) {
+      const [z1, z2] = pseudoValuePair(r1, r2, mu, sigma, p, eps)
+      expect(Array.from(z1)).toEqual(Array.from(pseudoValues(r1, mu, sigma, p, eps)))
+      expect(Array.from(z2)).toEqual(Array.from(pseudoValues(r2, mu, sigma, p, eps)))
+    }
   })
 })

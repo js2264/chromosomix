@@ -90,9 +90,9 @@ function context(): AnalysisContext {
 const TASK = { id: 'chromosight', title: 'Pattern detection', params: [] } as unknown as AnalysisTask
 
 /** The seam the runner calls when a task finishes — reached as the lanes test does. */
-function finish(workspace: AnalysisWorkspace, output: IntervalsOutput): void {
+function finish(workspace: AnalysisWorkspace, output: IntervalsOutput | IntervalsOutput[]): void {
   const result = {
-    outputs: [output],
+    outputs: Array.isArray(output) ? output : [output],
     provenance: {
       task: TASK.id,
       taskVersion: 1,
@@ -177,6 +177,19 @@ function notesOn(workspace: AnalysisWorkspace, store: AnnotationStore): string[]
   mounted.destroy()
   return notes
 }
+
+describe('the colour of one run', () => {
+  it('is one colour for every set the run returns', () => {
+    const { workspace, store } = bench()
+    finish(workspace, [boundaries(3), { ...loops(2), id: 'domains', label: 'Domains' }])
+    const colours = ['insulation-boundaries', 'domains'].map(
+      (id) => store.byId(`analysis:chromosight:${id}`)?.style.colour,
+    )
+    expect(colours[0]).toBeDefined()
+    expect(colours[1]).toBe(colours[0])
+    workspace.destroy()
+  })
+})
 
 describe('the count on a called set', () => {
   it('is written onto the row, in the task’s own word', () => {

@@ -109,6 +109,17 @@ export interface RotateOptions {
    * an artefact of nothing.
    */
   mirror?: boolean
+  /**
+   * What the mirrored band reads, where it is not the block itself: the square
+   * of a **second reading** of the same file (§5.10), the same shape as the block.
+   *
+   * A split of two files is one merged square read from both sides, and its
+   * diagonal is the first file's in both bands. Two readings are two squares,
+   * and the second band's diagonal row is the second reading's own — a diagonal
+   * of balanced counts drawn on an O/E's ramp would be a stripe of saturated
+   * colour along the axis, in the one row a reader compares the two bands by.
+   */
+  below?: Float32Array
 }
 
 /**
@@ -196,6 +207,7 @@ export function rotateBlock(block: RotatableBlock, options: RotateOptions): Rota
   // other side.
   for (let pass = 0; pass < (fold === undefined ? 1 : 2); pass++) {
     const transposed = pass === 1
+    const source = transposed ? (options.below ?? block.values) : block.values
     for (let separation = 0; separation <= maxSeparation; separation++) {
       // Rows are emitted in the order they are drawn, so the renderer needs no
       // notion of which way up this is: `up` puts the widest separation in row 0,
@@ -214,9 +226,7 @@ export function rotateBlock(block: RotatableBlock, options: RotateOptions): Rota
       values.fill(Number.NaN, base + Math.max(0, 2 * n - separation - 1), base + width)
       for (let i = 0; i + separation < n; i++) {
         const j = i + separation
-        const value = transposed
-          ? block.values[j * block.ncols + i]
-          : block.values[i * block.ncols + j]
+        const value = transposed ? source[j * block.ncols + i] : source[i * block.ncols + j]
         // Two columns per cell, which is what makes the output dense rather than
         // a checkerboard: `i + j` and `i + j + 1` are the two half-bin columns the
         // cell covers, and the second is where the parity gap would otherwise be.

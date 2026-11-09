@@ -66,7 +66,8 @@ import {
 import type { CurveSeries, TaskOutput } from '../types'
 import { binPairs } from '../../pairs/bin'
 import { readPairsHeader } from '../../pairs/format'
-import { orientationFigure, type OrientationCounts } from '../orientation'
+import type { OrientationCounts } from '../orientation'
+import { openRecords, orientationOutput } from './pairsqc'
 import type { ByteSource } from '../../types'
 import type { SourceSpec } from '../../worker/protocol'
 
@@ -229,12 +230,12 @@ function planUnits(
  * mirrored dense square, arrived at from the other side.
  *
  * With balancing on, a pair is only countable when **both** its bins survived
- * the balancer, which is no longer a closed form and costs a walk of `L` per
- * separation. That is quadratic in the length of a span and it is paid anyway:
- * dropping the filtered bins from the sum but not from the count would depress
- * P(s) by whatever fraction of the map the balancer threw away, and that
- * fraction is largest at exactly the short separations where the curve matters
- * most.
+ * the balancer, and that has to be paid for: dropping the filtered bins from
+ * the sum but not from the count would depress P(s) by whatever fraction of the
+ * map the balancer threw away, and that fraction is largest at exactly the
+ * short separations where the curve matters most. On a line it is counted by
+ * {@link keptPairs}, without a walk of `L` per separation; round a circle, which
+ * is one bacterial chromosome, it still is.
  */
 function countPairs(units: Unit[], doubled: boolean, weight: Float64Array | null): Float64Array[] {
   return units.map((unit) => {
@@ -242,6 +243,7 @@ function countPairs(units: Unit[], doubled: boolean, weight: Float64Array | null
     for (const span of unit.spans) {
       const length = span.to - span.from
       const lap = unit.lap
+      let kept: Float64Array | undefined
       for (let k = 0; k <= unit.maxOffset && k < length; k++) {
         let pairs: number
         if (lap > 0) {
@@ -266,16 +268,58 @@ function countPairs(units: Unit[], doubled: boolean, weight: Float64Array | null
         } else if (weight === null) {
           pairs = length - k
         } else {
-          pairs = 0
-          for (let i = span.from; i + k < span.to; i++) {
-            if (!Number.isNaN(weight[i]) && !Number.isNaN(weight[i + k])) pairs++
-          }
+          kept ??= keptPairs(weight, span.from, span.to, Math.min(unit.maxOffset, length - 1))
+          pairs = kept[k]
         }
         count[k] += doubled && k > 0 ? pairs * 2 : pairs
       }
     }
     return count
   })
+}
+
+/**
+ * How many pairs of bins `k` apart, for each `k` from `0` to `last`, have both
+ * bins kept by the balancer on the line of bins `[from, to)` — kept meaning a
+ * weight that is not `NaN`.
+ *
+ * Counted the other way round from the walk it replaces, and to the same
+ * integers. Of the `L − k` pairs at separation `k`, those whose first bin was
+ * dropped and those whose second was are two running counts away; the pairs
+ * with both dropped were subtracted twice, and are added back from the dropped
+ * bins taken two at a time. That last is the only part that is not a closed
+ * form, and its cost is the square of the dropped bins rather than the square
+ * of the line: on the validation's mouse map at 10 kb, a tenth of the bins, and
+ * the whole genome's pairs in 0.04 s where the walk took 6. Where more bins are
+ * dropped than kept, the kept ones are taken two at a time instead, and those
+ * pairs are the answer.
+ */
+export function keptPairs(weight: Float64Array, from: number, to: number, last: number): Float64Array {
+  const length = to - from
+  // `dropped[i]`: how many of the line's first `i` bins the balancer dropped.
+  const dropped = new Int32Array(length + 1)
+  for (let i = 0; i < length; i++) dropped[i + 1] = dropped[i] + (Number.isNaN(weight[from + i]) ? 1 : 0)
+  const gone = dropped[length]
+  const keptFewer = length - gone <= gone
+  // The smaller of the two sets, as offsets along the line, in order.
+  const at = new Int32Array(keptFewer ? length - gone : gone)
+  let n = 0
+  for (let i = 0; i < length; i++) if (Number.isNaN(weight[from + i]) !== keptFewer) at[n++] = i
+  const within = new Float64Array(last + 1)
+  for (let a = 0; a < n; a++) {
+    within[0]++
+    for (let b = a + 1; b < n; b++) {
+      const k = at[b] - at[a]
+      if (k > last) break
+      within[k]++
+    }
+  }
+  if (keptFewer) return within
+  const out = new Float64Array(last + 1)
+  for (let k = 0; k <= last; k++) {
+    out[k] = length - k - dropped[length - k] - (gone - dropped[k]) + within[k]
+  }
+  return out
 }
 
 /** A finished curve from totals accumulated outside the accumulator class. */
@@ -577,6 +621,17 @@ export const runExpected: TaskRunner = async (job) => {
 async function strandedCurves(job: JobContext): Promise<TaskOutput | null> {
   if (!boolParam(job.params, 'stranded', false)) return null
 
+  // **Drawn, and said to have moved.** The form no longer asks for these
+  // (`tasks/ps.ts`, `retired`): a run reaching here is a stored session, a link
+  // or a `--stranded` line, and it comes out as it always did — the same curve
+  // from the same records — with the one sentence that says where the reader
+  // will find it next time.
+  job.note(
+    'The four orientations have moved to Pairs QC, which draws them beside the rest of the ' +
+      "library's statistics from the same records; this run drew them here because its " +
+      'parameters asked for them.',
+  )
+
   const named = strParam(job.params, 'pairsUri', '').trim()
   let counts: OrientationCounts | null = null
 
@@ -586,7 +641,7 @@ async function strandedCurves(job: JobContext): Promise<TaskOutput | null> {
       job.note(
         'The four orientations are counted from the records, and this map has none to count: it ' +
           'was opened as a matrix rather than binned from a .pairs, or the file it was binned ' +
-          'from carried no strand1/strand2 columns. Drop a .pairs on the form, or give its address.',
+          'from carried no strand1/strand2 columns. Run Pairs QC and give it the .pairs.',
       )
       return null
     }
@@ -601,40 +656,9 @@ async function strandedCurves(job: JobContext): Promise<TaskOutput | null> {
   // below any grid, and the separation the four converge at — usually shorter
   // than one bin of the map — is the one thing this figure is drawn for. Floored
   // at the curve's two bins it would be cut off, and the run would report that
-  // the four never settle.
-  const figure = orientationFigure(counts, {
-    factor: Math.max(1.01, numParam(job.params, 'factor', 1.1)),
-  })
-  if (figure === null) {
-    job.note(
-      'Fewer than two orientations have any cis record in them, so there is nothing to compare. ' +
-        'A file whose strand columns are all `.` reads this way.',
-    )
-    return null
-  }
-
-  job.note(
-    figure.convergence === null
-      ? 'The four orientations never settle to within a tenth of each other, so no convergence ' +
-        'point is reported. On a library that is otherwise fine this usually means the axis does ' +
-        'not reach far enough — the sequences are short — rather than that the records are bad.'
-      : `The four orientations converge at about ${Math.round(figure.convergence).toLocaleString()} bp, ` +
-        'which is the shortest separation this library can be read at. Below it the counts are ' +
-        'self-circles, dangling ends and undigested fragments rather than contacts.',
-  )
-
-  return {
-    kind: 'curve',
-    id: 'ps-orientation',
-    label: 'P(s) by pair orientation',
-    series: figure.curves.map(
-      (curve): CurveSeries => ({ name: curve.name, x: curve.x, y: curve.y, n: curve.n }),
-    ),
-    xLabel: 'Genomic separation (bp)',
-    yLabel: 'Density, over the records in all four',
-    xScale: 'log',
-    yScale: 'log',
-  }
+  // the four never settle. The figure and its sentence are Pairs QC's own
+  // (`run/pairsqc.ts`), so the two tasks draw one curve from one set of counts.
+  return orientationOutput(job, counts, 'ps-orientation')
 }
 
 /**
@@ -653,7 +677,7 @@ async function countNamed(
   uri: string,
   handed?: SourceSpec,
 ): Promise<OrientationCounts | null> {
-  const source = await openNamed(job, uri, handed)
+  const source = await openRecords(job, uri, handed)
   if (source === null) return null
   // Closed whatever happens: a detached source is the caller's (`JobContext`),
   // and a gigabyte contact list left mounted after its one pass is memory the
@@ -662,49 +686,6 @@ async function countNamed(
     return await countOrientations(job, uri, source)
   } finally {
     source.close()
-  }
-}
-
-/**
- * The bytes of the `.pairs` a run was given, by whichever road reaches them.
- *
- * A file **handed** to the form comes first — dropped, chosen, or picked out of a
- * connected place — because its source is exactly what the reader gave and the
- * name beside it is only the record of it. An address is fetched as it stands,
- * and a path is read where the venue has a filesystem, which is a shell's whole
- * case and a worker's impossible one: each venue says which it is by the
- * capability it answers (`JobContext.openFile`).
- */
-async function openNamed(
-  job: JobContext,
-  uri: string,
-  handed: SourceSpec | undefined,
-): Promise<ByteSource | null> {
-  const remote = /^(https?|s3):\/\//i.test(uri)
-  const open =
-    handed !== undefined && job.openSource !== undefined
-      ? () => job.openSource!(handed)
-      : remote && job.openBytes !== undefined
-        ? () => job.openBytes!(uri)
-        : !remote && job.openFile !== undefined
-          ? () => job.openFile!(uri)
-          : null
-  if (open === null) {
-    job.note(
-      remote
-        ? `Reading ${uri} needs a venue that can fetch an address, and this one reads local ` +
-            'files only. Fetch it first and name the file, or run it in the app.'
-        : `“${uri}” is not an address this can fetch, and the file is no longer in hand — a ` +
-            'dropped file is kept for the session it was dropped in. Drop it on the form again, ' +
-            'or name it on a `chromosomix` command line, which reads it from disk.',
-    )
-    return null
-  }
-  try {
-    return await open()
-  } catch (error) {
-    job.note(`Could not open ${uri}: ${error instanceof Error ? error.message : String(error)}`)
-    return null
   }
 }
 

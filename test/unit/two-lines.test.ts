@@ -1,3 +1,4 @@
+// @dev-feature circle
 /**
  * The map drawn as two lines (§7.6): which column can split the genomes, which
  * line each genome is on, what is drawn between the lines and where, and what

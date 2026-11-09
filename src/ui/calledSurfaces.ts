@@ -1,6 +1,7 @@
 /**
  * A called set's two dropdowns (§18.7): its **display** — a 1D track beside the
  * map, or an overlay on it — and, on the map, the **look** of a set of places.
+ * A loaded set of pairs takes the display too (§8.1): arcs, or rings.
  *
  * One row and one choice, where there used to be two rows and a switch on each:
  * a run of insulation listed its boundaries twice and its domains twice, and
@@ -18,7 +19,7 @@ import type { AnnotationStore } from '../annotations/store'
 import { POINT_LOOKS, overlayShapeOf, type AnnotationEntry, type OverlayShape } from '../annotations/types'
 import {
   displayOf,
-  isCalledSet,
+  offersDisplay,
   offersLook,
   setDisplay,
   setLook,
@@ -31,12 +32,13 @@ import { settingsField } from './laneSettings'
 const DISPLAYS: readonly CalledDisplay[] = ['lane', 'overlay']
 
 function displayWords(entry: AnnotationEntry, display: CalledDisplay): { label: string; hint: string } {
+  const pairs = entry.kind === 'pairs' || entry.payload?.kind === 'pairs'
   if (display === 'lane') {
     return {
-      label: '1D track',
+      label: pairs ? 'arcs (1D track)' : '1D track',
       hint:
         entry.kind === 'pairs' || entry.payload?.kind === 'pairs'
-          ? 'Both ends of every pair, as segments beside the map and in the 1D browser.'
+          ? 'An arc joining the two ends of every pair, beside the map and in the 1D browser.'
           : 'Segments beside the map and in the 1D browser, each as wide as its call.',
     }
   }
@@ -44,7 +46,7 @@ function displayWords(entry: AnnotationEntry, display: CalledDisplay): { label: 
     label: 'map overlay',
     hint:
       entry.kind === 'pairs' || entry.payload?.kind === 'pairs'
-        ? 'A ring round each pair on the map it was called from.'
+        ? 'A ring round each pair on the map.'
         : offersLook(entry)
           ? 'On the diagonal of the map it was called from, in the look beside it.'
           : 'The corner of each one’s square along the diagonal of the map it was called from.',
@@ -96,7 +98,7 @@ export function calledSetFields(
   entry: AnnotationEntry,
   options: { map: boolean; onDisplay?: (select: HTMLSelectElement) => void },
 ): HTMLElement | null {
-  if (!isCalledSet(entry) || !options.map) return null
+  if (!offersDisplay(entry) || !options.map) return null
   const look = el('span', { class: 'ann-called-look' })
   const fillLook = (): void => {
     const live = store.byId(entry.id) ?? entry

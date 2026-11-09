@@ -54,6 +54,7 @@ import { DEFAULT_DIVERGING_COLORMAP } from '../../render/colormaps'
 import {
   PileupAccumulator,
   domainScore,
+  evenWindow,
   p2ll,
   ratioOf,
   resampleWindow,
@@ -61,6 +62,7 @@ import {
   scaledEdges,
   scaledLayout,
   shiftedControls,
+  zoomWindow,
   type AnchorPair,
   type ScaledLayout,
 } from '../apa'
@@ -88,8 +90,10 @@ import {
   minDistOf,
   onDiagonal,
   poolsAnchors,
+  stretchesEvenly,
   usesPairSet,
   allPairs,
+  consecutivePairs,
   distanceBins,
   MAX_GENERATED_PAIRS,
   windowBins,
@@ -134,6 +138,11 @@ interface Plan {
   bounds: Span
   /** The scaled on-diagonal layout this window is resampled on; absent otherwise. */
   body?: Body
+  /**
+   * A domain window stretched evenly onto the grid by interpolation, gaps and
+   * all ({@link stretchesEvenly}), rather than pinned or resampled by area.
+   */
+  zoomed?: boolean
 }
 
 /**
@@ -181,18 +190,24 @@ export const runApa: TaskRunner = async (job) => {
   const norm = strParam(job.params, 'norm', 'matched')
 
   const madePairs = allPairs(job.params)
+  const neighbours = consecutivePairs(job.params)
   const anchors = usingPairs
     ? pairAnchors(job, pairs as PairSet)
     : madePairs
       ? generatedPairs(job, features as FeatureSet)
-      : featureAnchors(job, features as FeatureSet)
+      : neighbours
+        ? consecutiveAnchors(job, features as FeatureSet)
+        : featureAnchors(job, features as FeatureSet)
   if (anchors.length === 0) {
     job.note(
       madePairs
         ? 'No two features of this set are on one sequence within the separation range, so there ' +
             'is no pair to pile up. Widen the range, or check that the set and the file spell ' +
             'their sequences alike.'
-        : 'No anchor of this set lands inside a sequence this file has, so there is nothing to pile up.',
+        : neighbours
+          ? 'No two features of this set are on one sequence this file has, so no feature has a ' +
+              'next one to pair with. Check that the set and the file spell their sequences alike.'
+          : 'No anchor of this set lands inside a sequence this file has, so there is nothing to pile up.',
     )
     return []
   }
@@ -200,6 +215,12 @@ export const runApa: TaskRunner = async (job) => {
     job.note(
       `${anchors.length.toLocaleString()} pairs made from ` +
         `${(features as FeatureSet).length.toLocaleString()} features.`,
+    )
+  }
+  if (neighbours) {
+    job.note(
+      `${anchors.length.toLocaleString()} pairs, each feature with the next along its sequence, ` +
+        `made from ${(features as FeatureSet).length.toLocaleString()} features.`,
     )
   }
 
@@ -226,7 +247,7 @@ export const runApa: TaskRunner = async (job) => {
   // window stops reaching the diagonals it would have gaps cut in — and is what
   // the validation types. It is a floor on *where* a loop is, not a sample of the
   // set, and it is said: how many, how near, and how to have them all.
-  const piled = usingPairs && !isScaled(job.params) ? nearEnough(job, anchors) : anchors
+  const piled = (usingPairs || neighbours) && !isScaled(job.params) ? nearEnough(job, anchors) : anchors
   if (piled.length === 0) return []
 
   // Every anchor of every group. There used to be a cap here, and it was not a
@@ -312,20 +333,18 @@ export const runApa: TaskRunner = async (job) => {
     return []
   }
 
-  // **Observed/expected has no meaning on a scaled grid**, and the estimate
-  // refuses the combination before Run rather than here. This is the stored
-  // session that names it anyway: one cell of a scaled pileup is fed by windows
-  // at a dozen different separations — that is what scaling *is* — so there is
-  // no single diagonal offset to divide it by, and dividing it by one anyway
-  // produced a plausible picture of nothing. Said out loud and the raw pileup
-  // shown, which is the honest half of what was asked for.
-  const oeOnAScaledGrid = norm === 'oe' && isScaled(job.params)
+  // **Observed/expected on a scaled grid is for a domain pileup**, which is
+  // coolpuppy's and is held to it ({@link stretchesEvenly}); for scaled pairs
+  // the estimate refuses it before Run rather than here, there being no pileup
+  // of coolpuppy's like that window. This is the stored session that names it
+  // anyway: said out loud and the raw pileup shown, which is the honest half of
+  // what was asked for.
+  const oeOnAScaledGrid = norm === 'oe' && isScaled(job.params) && !onDiagonal(job.params)
   if (oeOnAScaledGrid) {
     job.note(
-      'Observed / expected is not available in the scaled mode: every window contributes cells ' +
-        'at a different separation to the same cell of the picture, so a pileup cell has no one ' +
-        'diagonal offset to divide by. The raw pileup is shown — use the distance-matched ' +
-        'control, which is drawn at the same separations by construction.',
+      'Observed / expected on a scaled grid is for a feature set on the diagonal, and these are ' +
+        'pairs. The raw pileup is shown — use the distance-matched control, which is drawn at ' +
+        'the same separations by construction.',
     )
   }
 
@@ -471,7 +490,9 @@ export const runApa: TaskRunner = async (job) => {
     // feature, 0 to 1 — and keeps its own labels ({@link scaledTickLabels}).
     const ticks = isScaled(job.params)
       ? scaledDomains
-        ? scaledTickLabels(layout, flankFractionOf(job.params))
+        ? stretchesEvenly(job.params)
+          ? evenTickLabels(flankFractionOf(job.params))
+          : scaledTickLabels(layout, flankFractionOf(job.params))
         : []
       : offsetTicks(side, job.mc.binsize)
 
@@ -705,6 +726,12 @@ interface Anchor {
    */
   rows: Span
   cols: Span
+  /**
+   * The feature's own start and end on its sequence, in base pairs, for an
+   * on-diagonal anchor: what a window stretched evenly is scaled about
+   * ({@link evenWindow}), which works in base pairs as bioframe does.
+   */
+  extent?: { start: number; end: number }
 }
 
 function pairAnchors(job: JobContext, set: PairSet): Anchor[] {
@@ -777,15 +804,31 @@ function nearEnough(job: JobContext, anchors: Anchor[]): Anchor[] {
  * The end takes the feature's **last base** rather than its exclusive end, which
  * is a bin off on any feature whose end lands on a bin boundary — and on a gene
  * set that is most of them, since annotation ends are round numbers.
+ *
+ * The centre is {@link midpointBase}: coolpuppy's bin for it, never the next one.
  */
 function anchorBase(set: FeatureSet, i: number, at: 'start' | 'centre' | 'end'): number {
   const start = set.start[i]
   const end = set.end[i]
-  if (at === 'centre') return Math.round((start + end) / 2)
+  if (at === 'centre') return midpointBase(start, end)
   const last = Math.max(start, end - 1)
   const reversed = set.strand[i] < 0
   if (at === 'start') return reversed ? last : start
   return reversed ? start : last
+}
+
+/**
+ * The base an interval's midpoint is binned by: the midpoint **rounded down**.
+ *
+ * coolpuppy bins a feature by `floor((start + end) / 2 / binsize)`, the exact
+ * midpoint, and rounding it down to a base first lands in the same bin whatever
+ * the bin size. Rounding it to the nearest base did not: a feature an odd
+ * number of bases long whose midpoint sits half a base before a bin edge went
+ * into the next bin — one CTCF peak of 2,106 on GM12878's chr19 at 2 kb, enough
+ * to move a pileup's cells by a per cent from coolpuppy's.
+ */
+function midpointBase(start: number, end: number): number {
+  return Math.floor((start + end) / 2)
 }
 
 function featureAnchors(job: JobContext, set: FeatureSet): Anchor[] {
@@ -810,6 +853,7 @@ function featureAnchors(job: JobContext, set: FeatureSet): Anchor[] {
       span: at.body.to - at.body.from,
       rows: at.body,
       cols: at.body,
+      extent: { start: set.start[i], end: set.end[i] },
     })
   }
   return out
@@ -841,7 +885,7 @@ function binOf(
   // before the choice existed. The *body* below is the feature either way: the
   // scaled mode resamples the whole interval, and where it is cut about is a
   // question only the fixed mode asks.
-  const bin = job.mc.coords.binIndex(cid, options.point ?? Math.round((start + end) / 2))
+  const bin = job.mc.coords.binIndex(cid, options.point ?? midpointBase(start, end))
   if (bin < from || bin >= to) return null
   // The bins the interval itself covers, clamped to the sequence and never
   // empty: a feature narrower than one bin is one bin, since that is the finest
@@ -933,7 +977,7 @@ function planFor(
   anchor: Anchor,
   side: number,
   layout: ScaledLayout,
-): { rect: Rect; body?: Body } | null {
+): { rect: Rect; body?: Body; zoomed?: boolean } | null {
   const { from, to } = anchor.bounds
   if (isScaled(job.params)) {
     // Nothing to scale *by*: a pair whose two anchors land in the same bin has
@@ -941,6 +985,21 @@ function planFor(
     // stretched over the grid is a flat square averaged in as though it were
     // evidence. Dropped, as it was before there was a body.
     if (anchor.span <= 0) return null
+    // **A domain over the expected is scaled about its middle and stretched
+    // evenly**, as coolpuppy cuts it ({@link stretchesEvenly}): the window is the
+    // feature's base pairs times `1 + 2f`, snapped out to whole bins, and a
+    // window that runs off its sequence is dropped rather than clipped.
+    if (stretchesEvenly(job.params) && anchor.extent !== undefined) {
+      const bins = evenWindow(anchor.extent.start, anchor.extent.end, flankFractionOf(job.params), job.mc.binsize)
+      const rect = {
+        rowFrom: from + bins.from,
+        rowTo: from + bins.to,
+        colFrom: from + bins.from,
+        colTo: from + bins.to,
+      }
+      if (rect.rowFrom < from || rect.rowTo > to || rect.rowTo <= rect.rowFrom) return null
+      return { rect, zoomed: true }
+    }
     // No flank cells on the grid means no flank read: a reader who asked for
     // none gets the body, not a band of bins that is read and then dropped.
     const pad = layout.flank === 0 ? 0 : anchor.span * flankFractionOf(job.params)
@@ -1016,6 +1075,18 @@ function scaledTickLabels(layout: ScaledLayout, flankFraction: number): string[]
   // `Number(...)` rather than the fixed string, so `1.00` reads as `1` and a
   // rounded `-0.00` reads as `0` rather than as a minus sign nobody can explain.
   return [0, 0.25, 0.5, 0.75, 1].map((fraction) => String(Number(at(fraction).toFixed(2))))
+}
+
+/**
+ * The same five labels for a window stretched evenly ({@link stretchesEvenly}),
+ * where the axis is one straight line from `−f` to `1 + f`: at the default half
+ * a feature each side the feature's two ends are the second and fourth labels,
+ * `0` and `1`, whatever the grid.
+ */
+function evenTickLabels(flankFraction: number): string[] {
+  return [0, 0.25, 0.5, 0.75, 1].map((fraction) =>
+    String(Number((fraction * (1 + 2 * flankFraction) - flankFraction).toFixed(2))),
+  )
 }
 
 function spanOf(plan: Plan): Span {
@@ -1158,6 +1229,7 @@ function cut(
       cutOut[r * cols + c] = denominator > 0 ? observed / denominator : Number.NaN
     }
   }
+  if (plan.zoomed === true) return zoomWindow(cutOut, rows, side)
   if (plan.body === undefined) return resampleWindow(cutOut, rows, cols, side, side)
   // In cells of this window rather than absolute bins, which is what the edges
   // are measured in.
@@ -1227,6 +1299,93 @@ async function expectedBySequence(
 // Pairs made rather than loaded
 // ---------------------------------------------------------------------------
 
+/** One feature where the file has it: its bin, and the point its pairs are measured between. */
+interface Placed {
+  contig: string
+  centre: number
+  /**
+   * The point unrounded — half way along the feature where the window is cut
+   * about its centre — which is where coolpuppy measures a pair's separation
+   * from, so the nearest loop keeps the same pairs as it does.
+   */
+  exact: number
+  bin: number
+  bounds: Span
+  body: Span
+  label: string
+}
+
+/**
+ * A feature set's features on this file, in order along each sequence.
+ *
+ * Resolved once per feature rather than once per pair: `contigIdFor` walks a
+ * naming context and a set of forty thousand features inside a 2 Mb window
+ * produces millions of pairs, so resolving inside the inner loop is the one
+ * decision that would make a run minutes rather than seconds. Sorted by this
+ * file's own sequence name and then by position, because the set's order is the
+ * *set's* and two of its names may resolve to one sequence here (§5.9): sorting
+ * on what was resolved is what keeps a walk along a sequence correct in exactly
+ * that case.
+ */
+function placedFeatures(job: JobContext, set: FeatureSet): Placed[] {
+  const from = contextOf(set.contigs)
+  const placed: Placed[] = []
+  const reference = anchorAt(job.params)
+  for (let i = 0; i < set.length; i++) {
+    // The **same point** the window is cut about is the point the separation is
+    // measured between, and it has to be: a range of 20 kb to 2 Mb between gene
+    // centres and a pileup at gene starts would be two different sets of pairs
+    // wearing one caption.
+    const point = anchorBase(set, i, reference)
+    const at = binOf(job, set.contigs[set.contig[i]], set.start[i], set.end[i], from, { point })
+    if (at === null) continue
+    placed.push({
+      contig: at.contig,
+      centre: point,
+      exact: reference === 'centre' ? (set.start[i] + set.end[i]) / 2 : point,
+      bin: at.bin,
+      bounds: at.bounds,
+      body: at.body,
+      label: set.name[i] === '' ? formatPosition(set.contigs[set.contig[i]], set.start[i]) : set.name[i],
+    })
+  }
+  placed.sort((a, b) => (a.contig === b.contig ? a.centre - b.centre : a.contig < b.contig ? -1 : 1))
+  return placed
+}
+
+/**
+ * Each feature of a set with the next one along its sequence.
+ *
+ * One pair a neighbour, the two in the set's order along the sequence, and no
+ * sampling: a set of n features on one sequence makes n − 1 pairs. A pair is
+ * kept whatever its separation and held to the nearest loop afterwards, as a
+ * loaded BEDPE of the same pairs is (`nearEnough`), measured between the two
+ * features' own centres as coolpuppy measures it — so a pileup of these pairs
+ * and coolpuppy's of a BEDPE listing them are of the same pairs.
+ */
+function consecutiveAnchors(job: JobContext, set: FeatureSet): Anchor[] {
+  const placed = placedFeatures(job, set)
+  const out: Anchor[] = []
+  for (let i = 0; i + 1 < placed.length; i++) {
+    const a = placed[i]
+    const b = placed[i + 1]
+    if (b.contig !== a.contig) continue
+    const row = Math.min(a.bin, b.bin)
+    const col = Math.max(a.bin, b.bin)
+    out.push({
+      pair: { row, col, separation: col - row },
+      bounds: a.bounds,
+      label: `${a.label} × ${b.label}`,
+      rank: Number.NaN,
+      span: col - row,
+      centreDistance: Math.abs(b.exact - a.exact),
+      rows: { from: row, to: row + 1 },
+      cols: { from: col, to: col + 1 },
+    })
+  }
+  return out
+}
+
 /**
  * Every pair of a feature set on one sequence, inside the separation range.
  *
@@ -1264,45 +1423,8 @@ function generatedPairs(job: JobContext, set: FeatureSet): Anchor[] {
       `${shortBp(minSep * job.mc.binsize)} to ${shortBp(maxSep * job.mc.binsize)} at this ` +
       `file’s ${job.mc.binsize.toLocaleString()} bp resolution.`,
   )
-  const from = contextOf(set.contigs)
   const rng = makeRandom(Math.round(numParam(job.params, 'seed', 1)))
-
-  // Resolved once per feature rather than once per pair: `contigIdFor` walks a
-  // naming context and a set of forty thousand features inside a 2 Mb window
-  // produces millions of pairs, so resolving inside the inner loop is the one
-  // decision here that would make the run minutes rather than seconds.
-  interface Placed {
-    contig: string
-    centre: number
-    bin: number
-    bounds: Span
-    body: Span
-    label: string
-  }
-  const placed: Placed[] = []
-  const reference = anchorAt(job.params)
-  for (let i = 0; i < set.length; i++) {
-    // The **same point** the window is cut about is the point the separation is
-    // measured between, and it has to be: a range of 20 kb to 2 Mb between gene
-    // centres and a pileup at gene starts would be two different sets of pairs
-    // wearing one caption.
-    const point = anchorBase(set, i, reference)
-    const at = binOf(job, set.contigs[set.contig[i]], set.start[i], set.end[i], from, { point })
-    if (at === null) continue
-    placed.push({
-      contig: at.contig,
-      centre: point,
-      bin: at.bin,
-      bounds: at.bounds,
-      body: at.body,
-      label: set.name[i] === '' ? formatPosition(set.contigs[set.contig[i]], set.start[i]) : set.name[i],
-    })
-  }
-  // By this file's own sequence name and then by position, because the set's
-  // order is the *set's* and two of its names may resolve to one sequence here
-  // (§5.9). Sorting on what was resolved is what keeps the sliding window below
-  // correct in exactly that case.
-  placed.sort((a, b) => (a.contig === b.contig ? a.centre - b.centre : a.contig < b.contig ? -1 : 1))
+  const placed = placedFeatures(job, set)
 
   const out: Anchor[] = []
   let seen = 0

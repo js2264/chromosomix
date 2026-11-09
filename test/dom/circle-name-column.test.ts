@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// @dev-feature circle
 /**
  * The circle's name column, kept apart from the 1D browser's (§7.6): on until
  * the reader turns it off, stored on a key of its own, and the one `u` and the

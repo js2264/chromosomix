@@ -1,0 +1,64 @@
+---
+/**
+ * The top of a task's page, from the registry: how it came out against its
+ * reference, the method and its paper, where it is in the app, what it reads,
+ * what it runs first, and the other names it is found by.
+ */
+import Agreement from './Agreement.astro'
+import { inline } from '../lib/inline.mjs'
+import { task } from '../lib/tasks.mjs'
+
+interface Props {
+  id: string
+}
+const entry = task(Astro.props.id)
+const reference = entry.reference
+const reads = entry.readsMap
+  ? `A contact map${entry.needsPeers ? ', and the other maps it is compared with' : ''}`
+  : 'Tracks and interval files, with or without a contact map'
+---
+
+<div class="cx-task-summary">
+  <div class="cx-meta">
+    <Agreement id={entry.id} />
+    {
+      reference !== null && (
+        <span>
+          <span set:html={inline(reference.method)} /> <a href={`https://doi.org/${reference.doi}`}>doi:{reference.doi}</a>
+        </span>
+      )
+    }
+  </div>
+  <dl class="cx-facts">
+    <dt>In the app</dt>
+    <dd>Analysis panel, under <strong>{entry.groupLabel}</strong>: <em>{entry.title}</em></dd>
+    <dt>Command</dt>
+    <dd><code>chromosomix {entry.id}</code></dd>
+    <dt>Reads</dt>
+    <dd>{reads}</dd>
+    {
+      entry.requires.length > 0 && (
+        <>
+          <dt>Runs first</dt>
+          <dd>
+            {entry.requires.map((required, index) => (
+              <>
+                {index > 0 && ', '}
+                <a href={`../${required.id}/`}>{required.title}</a>
+              </>
+            ))}
+            , at its defaults, and reads the result
+          </dd>
+        </>
+      )
+    }
+    {
+      entry.keywords.length > 0 && (
+        <>
+          <dt>Also known as</dt>
+          <dd>{entry.keywords.join(', ')}</dd>
+        </>
+      )
+    }
+  </dl>
+</div>

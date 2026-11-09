@@ -566,6 +566,18 @@ export class SessionDeck {
   }
 
   /**
+   * Whether a map dropped on the Contact maps card's *cell of its own* would
+   * get one (§16.9): beside a map, and never on a file with a genome layer,
+   * which holds no deck (§16.8). Not {@link possible}, which is about what the
+   * *view* can frame: a cooler dropped on a table view still joins the deck,
+   * and waits there, drawn, for a view that can show it ({@link
+   * Session.dropFiles}).
+   */
+  get takesMaps(): boolean {
+    return this.mapsAllowed && this.session.file?.info.hasGenomes !== true
+  }
+
+  /**
    * Tell the deck which lead the session just mounted, in whichever shape.
    *
    * A map's panel drives the lock; the browser drives the cells by loci

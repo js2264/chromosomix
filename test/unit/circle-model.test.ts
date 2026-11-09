@@ -1,3 +1,4 @@
+// @dev-feature circle
 /**
  * The map drawn round (§7.6): which sections a block is cut into, what each
  * chord weighs, where everything is laid out, and what the pointer is over.

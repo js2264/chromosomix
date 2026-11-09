@@ -1,0 +1,24 @@
+{
+  "name": "chromosomix-documentation",
+  "private": true,
+  "type": "module",
+  "description": "The documentation site of chromosomix, published at https://doc.chromosomix.app (SPECS \u00a732).",
+  "license": "GPL-3.0-or-later",
+  "engines": {
+    "node": ">=22.23.4"
+  },
+  "scripts": {
+    "data": "node ../scripts/docs-data.mjs",
+    "dev": "npm run data && astro dev",
+    "build": "npm run data && astro build --force",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/markdown-satteri": "0.4.6",
+    "@astrojs/starlight": "0.42.8",
+    "astro": "7.4.5",
+    "satteri": "0.10.5",
+    "starlight-links-validator": "0.27.0",
+    "starlight-theme-rapide": "0.6.0"
+  }
+}

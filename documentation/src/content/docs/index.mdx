@@ -1,0 +1,52 @@
+---
+title: chromosomix documentation
+description: How to use chromosomix, the genome browser for Hi-C and Micro-C contact maps, genome tracks and 3D models, and the command line that runs its analyses.
+template: splash
+editUrl: false
+---
+
+import { Icon } from '@astrojs/starlight/components'
+import Masthead from '@components/Masthead.astro'
+import Tile from '@components/Tile.astro'
+import Tiles from '@components/Tiles.astro'
+import { APP_URL } from '@lib/site.mjs'
+
+{/* The rows follow the sidebar's groups, in its order: a newcomer meets the
+    pages here in the order the sidebar lists them. */}
+
+<div class="cx-landing">
+  <Masthead />
+  <p class="cx-tagline">Contact maps, genome tracks and 3D models, side by side, straight from your files.</p>
+  <div class="cx-actions">
+    <a class="cx-button" href="/start/introduction/">What chromosomix is</a>
+    <a class="cx-button cx-filled" href={APP_URL}>Open the browser <Icon name="right-arrow" size="1rem" /></a>
+  </div>
+
+  <Tiles kicker="Get started">
+    <Tile href="/start/ways/" icon="puzzle" title="Ways to use it">The web, a window, one file, a notebook or a shell.</Tile>
+    <Tile href="/start/first-map/" icon="rocket" title="Your first map">Open a public Hi-C map and find your way.</Tile>
+    <Tile href="/start/window/" icon="laptop" title="A tour of the window">The deck, the panels, the console.</Tile>
+    <Tile href="/start/tutorial/" icon="seti:video" title="The guided tutorial">A first session, step by step, in the app.</Tile>
+  </Tiles>
+
+  <Tiles kicker="Your files">
+    <Tile href="/files/opening/" icon="document" title="Opening files">From your disk, a URL, a bucket, Drive or Dropbox.</Tile>
+    <Tile href="/files/contact-maps/" icon="seti:image" title="Contact maps">.cool, .mcool, .hic, HiC-Pro and .pairs.</Tile>
+    <Tile href="/files/tracks/" icon="seti:csv" title="Tracks and features">bigWig, BED, GTF, BAM, VCF and more.</Tile>
+    <Tile href="/files/stores/" icon="list-format" title="Data stores">4DN, ENCODE, IGV, DNA Zoo and track hubs.</Tile>
+  </Tiles>
+
+  <Tiles kicker="Using the browser">
+    <Tile href="/browse/navigating/" icon="magnifier" title="Moving around">Drag, scroll, or type a locus.</Tile>
+    <Tile href="/browse/contact-maps/" icon="open-book" title="Reading a contact map">Balance, O/E, colours and clipping.</Tile>
+    <Tile href="/browse/comparing/" icon="random" title="Comparing two maps">Two triangles, or their ratio.</Tile>
+    <Tile href="/browse/genome-browser/" icon="bars" title="The genome browser">Tracks on their own, no map needed.</Tile>
+  </Tiles>
+
+  <Tiles kicker="Going further">
+    <Tile href="/analyses/" icon="seti:graphql" title="Analyses">Every task, checked against its reference.</Tile>
+    <Tile href="/cli/install/" icon="seti:shell" title="Command line">The same tasks in a script.</Tile>
+    <Tile href="/embed/jupyter/" icon="seti:python" title="Notebooks and web pages">Jupyter, R, Shiny or any page.</Tile>
+    <Tile href="/advanced/hosting/" icon="seti:db" title="Advanced">Host your data, publish a store.</Tile>
+  </Tiles>
+</div>

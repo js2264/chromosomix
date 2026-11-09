@@ -5,8 +5,9 @@ name: Preview pull requests
 #
 #   https://<owner>.github.io/<repo>/pr/<number>/
 #
-# so a reviewer opens the change rather than reading it, and a figure made on a
-# branch can be shown before it lands. It is the same arrangement as
+# with its documentation under it, at `pr/<number>/docs/`, so a reviewer opens
+# the change rather than reading it, and a figure made on a branch can be shown
+# before it lands. It is the same arrangement as
 # `v/<commit>/` in deploy.yml — a pinned build on the `pages-archive` branch,
 # listed in `versions.json` and offered from the About dialog, in a group of
 # its own — with two differences: a preview is replaced on every push to the
@@ -58,14 +59,17 @@ jobs:
       # About dialog with the branch should see the same hash. On `closed` the
       # head still resolves — GitHub keeps `refs/pull/<n>/head` — and only the
       # scripts are needed from it.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            documentation/package-lock.json
 
       # The same resolution as deploy.yml, because the preview is served under
       # the same site and Vite bakes the base into every asset URL.
@@ -106,6 +110,42 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
           GOOGLE_API_KEY: ${{ vars.GOOGLE_API_KEY }}
           DROPBOX_APP_KEY: ${{ vars.DROPBOX_APP_KEY }}
+
+      # The documentation of the same head, beside its app at `pr/<number>/docs/`
+      # (SPECS §32.5), so a change to the app and to the page that tells a reader
+      # about it are reviewed together — and its live views embed this preview's
+      # app, not the published one (`DOCS_APP_URL`). Inside the preview's own
+      # directory, so the archive, the deploy and the removal on `closed` carry
+      # it with the app and need no step of their own.
+      #
+      # Built without its commit (`DOCS_COMMIT` unset, which every page's footer
+      # would print): a page a push did not change is then the same bytes as
+      # before, and the archive branch stores it once rather than once a push.
+      # The links are checked by the Tests workflow, at the root, where the
+      # validator runs; a copy under a path is the same pages.
+      #
+      # Not fatal: a pull request whose documentation does not build — a task
+      # added before its page, which the build refuses — still gets its app's
+      # preview, and the comment says the documentation is missing and links the
+      # run that says why. Failing the pull request is the Tests workflow's job.
+      - name: Install the documentation's own packages
+        id: docs-install
+        if: github.event.action != 'closed'
+        continue-on-error: true
+        run: npm ci --prefix documentation
+
+      - name: Build the documentation's preview
+        id: docs
+        if: github.event.action != 'closed' && steps.docs-install.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          npm run docs:build
+          cp -R documentation/dist dist-pinned/docs
+        env:
+          DOCS_BASE: ${{ steps.base.outputs.path }}pr/${{ github.event.number }}/docs/
+          DOCS_APP_URL: ${{ steps.base.outputs.url }}
+          DOCS_PREVIEW: ${{ github.event.number }}
 
       # Shallow and by token, exactly as deploy.yml fetches it.
       - name: Fetch the archive of published builds
@@ -180,19 +220,25 @@ jobs:
 
       # One comment per pull request, updated rather than repeated, so the
       # thread carries the address once and says when it stopped answering.
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v9
         env:
           PREVIEW_URL: ${{ steps.base.outputs.url }}
           ACTION: ${{ github.event.action }}
           HEAD: ${{ github.event.pull_request.head.sha }}
+          DOCS: ${{ steps.docs.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |
             const marker = '<!-- chromosomix-preview -->'
-            const { PREVIEW_URL, ACTION, HEAD } = process.env
+            const { PREVIEW_URL, ACTION, HEAD, DOCS, RUN_URL } = process.env
             const short = HEAD.slice(0, 7)
+            const docs = DOCS === 'success'
+              ? `**Documentation:** ${PREVIEW_URL}docs/`
+              : `**Documentation:** not built from this push; [its run](${RUN_URL}) says why.`
+            const live = DOCS === 'success' ? " The documentation's live views open this preview's app." : ''
             const body = ACTION === 'closed'
               ? `${marker}\nThe preview of this pull request has been taken down; it was published at ${PREVIEW_URL} while the pull request was open.`
-              : `${marker}\n**Preview:** ${PREVIEW_URL}\n\nBuilt from ${short}. It appears a few minutes after this comment, once the deploy that publishes the site has run; every push here replaces it, and it is removed when the pull request closes. The About dialog lists it under *Pull request previews*.`
+              : `${marker}\n**Preview:** ${PREVIEW_URL}\n${docs}\n\nBuilt from ${short}, and published a few minutes after this comment, once the deploy that publishes the site has run. Every push here replaces the preview, and it is removed when the pull request closes.${live} The About dialog lists the preview under *Pull request previews*.`
             const { owner, repo } = context.repo
             const issue_number = context.issue.number
             const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number, per_page: 100 })

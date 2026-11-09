@@ -25,7 +25,7 @@ import type { JobContext } from '@/analysis/job'
 import { optionOf, type FigureTheme } from '@/figures/option'
 import { specOf, type XyFigureSpec } from '@/figures/spec'
 import { defaultStyle } from '@/figures/style'
-import { outputToTsv } from '@/analysis/write/tsv'
+import { outputToTsv, textOf } from '@/analysis/write/tsv'
 import type {
   AnalysisFraming,
   CurveOutput,
@@ -313,7 +313,7 @@ describe('the TSV under the bars', () => {
 
   it('names the sequence in the first column and leaves a gap as a gap', async () => {
     const { bars } = await run({ bars: 'both' })
-    const text = outputToTsv(bars, PROVENANCE)
+    const text = textOf(outputToTsv(bars, PROVENANCE))
     expect(text).not.toContain('NaN')
     expect(body(text)).toEqual([
       ['Sequence', 'cis', 'trans'],
@@ -329,12 +329,12 @@ describe('the TSV under the bars', () => {
     // §26.2's *a table cell is not a summary*: the figure reads `75%` and the
     // file a reader checks it against holds `0.75`.
     const { bars } = await run({})
-    expect(body(outputToTsv(bars, PROVENANCE))[1]).toEqual(['A', '0.75'])
+    expect(body(textOf(outputToTsv(bars, PROVENANCE)))[1]).toEqual(['A', '0.75'])
   })
 
   it('carries the provenance every other export carries', async () => {
     const { bars } = await run({ bars: 'both' })
-    const text = outputToTsv(bars, PROVENANCE)
+    const text = textOf(outputToTsv(bars, PROVENANCE))
     expect(text).toContain('# param bars: both')
     expect(text).toContain('cistrans v1')
     expect(text).toContain('# output: Cis and trans fraction per sequence')

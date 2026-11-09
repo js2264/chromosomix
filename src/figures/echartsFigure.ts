@@ -34,7 +34,7 @@ import { plotTheme, type PlotFigure } from '../ui/analysisPlots'
 import { subscribeTextScale } from '../ui/textScale'
 import { paintSvgString } from './svgPaint'
 import { attachMarquee, windowOf, type Marquee, type MarqueeAxes, type MarqueeBox } from './marquee'
-import { axisReach, optionOf, paperOption, ZOOM_X, ZOOM_Y, type ChartOption, type FigureTheme } from './option'
+import { axisReach, axisRoom, optionOf, paperOption, ZOOM_X, ZOOM_Y, type ChartOption, type FigureTheme } from './option'
 import { matrixOptionOf } from './matrixOption'
 import type { MatrixFigureSpec, XyFigureSpec } from './spec'
 import type { FigureStyle } from './style'
@@ -272,7 +272,10 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
           showMaxLabel: reach.labels['showMaxLabel'] ?? null,
           customValues: reach.ticks ?? null,
         })
-        const xReach = axisReach(spec, style, 'x')
+        // The abscissa's ticks are chosen for the window *and* the width, which
+        // a scaled region's landmarks are (`figures/scaledTicks.ts`): wheeled
+        // into the body, quarters become tenths.
+        const xReach = axisReach(spec, style, 'x', axisRoom(spec, style, themeOf(host), { width, height }))
         const yReach = axisReach(spec, style, 'y')
         const refit = style.y.domain === null && style.x.domain !== before
         settling = true
@@ -353,8 +356,11 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
     // A matrix's grid is stated in pixels, so a new box is a new layout — the
     // alternative is a square pileup that stops being square the moment the
     // drawer is dragged. So is a legend down the right, whose names wrap to
-    // the width; a curve's grid is otherwise insets and needs nothing.
-    if (options.spec.kind === 'matrix' || style.legend === 'right') apply()
+    // the width, and a scaled region's abscissa, whose ticks are as many as
+    // fit it (`figures/scaledTicks.ts`); a curve's grid is otherwise insets and
+    // needs nothing.
+    const spec = options.spec
+    if (spec.kind === 'matrix' || style.legend === 'right' || spec.xScaled !== undefined) apply()
   }
 
   const observer =

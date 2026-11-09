@@ -44,12 +44,16 @@ import { OVERLAP_TASK } from "./tasks/overlap";
 import { TRACK_CORRELATION_TASK } from "./tasks/trackcorr";
 import { METAPLOT_TASK } from "./tasks/metaplot";
 import { MOTIF_TASK } from "./tasks/motif";
+import { RESTRICTION_TASK } from "./tasks/restriction";
+import { PAIRS_QC_TASK } from "./tasks/pairsqc";
+import { MAP_REPORT_TASK } from "./tasks/mapreport";
 import { PEAKS_TASK } from "./tasks/peaks";
 import { COMPOSITION_TASK } from "./tasks/composition";
 import { DOTPLOT_TASK } from "./tasks/dotplot";
 import { GROUP_SIGNAL_TASK } from "./tasks/groupsignal";
 import { ORITER_TASK } from "./tasks/oriter";
 import { INSULATION_TASK } from "./tasks/insulation";
+import { ARROWHEAD_TASK } from "./tasks/arrowhead";
 import { DI_TASK } from "./tasks/di";
 import { HIC_SCORE_TASK } from "./tasks/hicscore";
 import { SCALOGRAM_TASK } from "./tasks/scalogram";
@@ -86,11 +90,26 @@ export const TASKS: readonly AnalysisTask[] = [
   CIS_TRANS_TASK,
   CELL_QC_TASK,
   EXPECTED_TASK,
+  // The library under the map, beside the decay it takes its first figure
+  // from: P(s) by orientation is the four curves the matrix sums together, and
+  // it moved here from P(s)'s own form along with the rest of what a `.pairs`
+  // says about itself — pairtools' counts and, with an enzyme, its fragments.
+  // Read after P(s) because it answers the question P(s) raises first: how
+  // short a separation the curve above can be believed at.
+  PAIRS_QC_TASK,
+  // The library on one page: after the four it gathers from — coverage, cis and
+  // trans, P(s) and the records under them — since it is their composite, and
+  // before the tasks that read structure out of a map it has said can bear it.
+  MAP_REPORT_TASK,
   SCALOGRAM_TASK,
   FOURC_TASK,
   INSULATION_TASK,
   DI_TASK,
   HIC_SCORE_TASK,
+  // The domains read off the map's corners rather than off a track of minima:
+  // after the three that score each bin, because what it calls — nested, and
+  // with gaps — is the answer those three cannot give by construction.
+  ARROWHEAD_TASK,
   COMPARTMENTS_TASK,
   // The arms of a bacterial chromosome, after the compartments that are read
   // with their secondary diagonal divided out: how strongly the two arms touch
@@ -112,6 +131,10 @@ export const TASKS: readonly AnalysisTask[] = [
   // take. Same reading order as the 2D card's — the thing that comes first is
   // the thing the next one is built on.
   MOTIF_TASK,
+  // Beside it, the search for one particular kind of site: where an enzyme
+  // cuts, to the base, rather than where its recognition sequence lies — the
+  // digest a Hi-C library is read against, which Pairs QC requires.
+  RESTRICTION_TASK,
   // And the other that makes one: peaks called from a track, which is the input
   // FRiP, the metaplot and the overlap below were always handed from elsewhere.
   // A motif search reads the sequence and this reads a track, so the two open

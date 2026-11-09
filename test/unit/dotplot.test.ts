@@ -1,3 +1,4 @@
+// @dev-feature dotplot
 /**
  * Two sequence sets against each other (SPECS §28): the minimizers of each,
  * the anchors their merge-join makes, and the streaks those chain into — a

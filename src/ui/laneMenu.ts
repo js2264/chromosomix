@@ -33,6 +33,8 @@ import { CEILING_LABEL, colourInput } from './LaneControls'
 import { copyTextToClipboard } from './export'
 import { FEATURE_DISPLAY_WORDS, patchFeatures } from './laneSettings'
 import { openMenu, type MenuItem } from './Menu'
+import { SEQUENCE_COPY_LIMIT, type SequenceStretch } from './sequenceCopy'
+import { fmt } from './dom'
 
 /**
  * A feature a lane's menu was opened on, and what may be done with it from there.
@@ -77,6 +79,35 @@ export function laneMenuFeature(
 /** The first letter up, for a menu row built from a word the card writes lower-case. */
 function capitalised(word: string): string {
   return word.length === 0 ? word : word[0].toUpperCase() + word.slice(1)
+}
+
+/**
+ * *Copy sequence*: the bases a sequence lane shows, as plain text — offered
+ * wherever the lane is drawn, GC trace or letters, and greyed with the reason
+ * where there is no one stretch to copy or it is more than a clipboard should
+ * take.
+ */
+function sequenceRow(stretch: SequenceStretch | null, run: (stretch: SequenceStretch) => void): MenuItem {
+  if (stretch === null) {
+    return {
+      label: 'Copy sequence',
+      hint: 'one sequence at a time',
+      title: 'The lane shows more than one sequence here; zoom in to one to copy it.',
+      disabled: true,
+    }
+  }
+  const length = stretch.end - stretch.start
+  const tooLong = length > SEQUENCE_COPY_LIMIT
+  return {
+    label: 'Copy sequence',
+    hint: fmt.bp(length),
+    title: tooLong
+      ? `More than ${fmt.bp(SEQUENCE_COPY_LIMIT)}: zoom in to copy the bases in view.`
+      : `The bases in view, ${stretch.contig}:${fmt.int(stretch.start + 1)}-${fmt.int(stretch.end)}, as plain text` +
+        (stretch.reversed ? ', read as drawn — reverse-complemented' : ''),
+    disabled: tooLong,
+    run: () => run(stretch),
+  }
 }
 
 /**
@@ -150,6 +181,11 @@ export function openLaneMenu(
    * nowhere, since a mark's rule runs through every lane it crosses.
    */
   marks: readonly MenuItem[] = [],
+  /**
+   * *Copy sequence* (§8.8), on a sequence lane: the stretch the lane shows, or
+   * `null` inside where it shows more than one sequence. Absent elsewhere.
+   */
+  sequence: { stretch: SequenceStretch | null; run(stretch: SequenceStretch): void } | null = null,
 ): void {
   const limits = entry.style.limits
   const items: MenuItem[] = []
@@ -180,6 +216,7 @@ export function openLaneMenu(
             run: copy,
           },
         ]),
+    ...(sequence === null ? [] : [sequenceRow(sequence.stretch, sequence.run)]),
     {
       label: 'Colour…',
       hint: entry.style.colour,
@@ -284,6 +321,9 @@ export function openLaneMenu(
       run: () => store.update(entry.id, { visible: !entry.visible }),
     },
     { label: 'Remove', run: (): void => store.remove(entry.id) },
+    // A twin to restyle — another colour, a log scale, another edge — drawn
+    // where this one is.
+    { label: 'Duplicate', run: (): void => void store.duplicate(entry.id) },
     ...marks,
   )
   openMenu(x, y, items)

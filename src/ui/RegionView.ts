@@ -36,7 +36,7 @@
 import type { ParsedRange } from '../types'
 import { devFeature } from '../state/devFeatures'
 import type { MatrixResult } from '../worker/protocol'
-import { parseRegion } from '../annotations/bookmarks'
+import { formatRegion, parseRegion } from '../annotations/bookmarks'
 import { pairLabel, regionLabel, typedLociToRegions } from '../genome/assembly'
 import { ViewerError } from '../errors'
 import type { ReaderClient } from '../worker/client'
@@ -54,7 +54,8 @@ import {
 import { axisRegion } from './mapSelection'
 import { blockSummary } from './mapSummary'
 import { icon, iconButton } from './icons'
-import { presentationOf, secondBlock, type CompareRead } from './compare'
+import { presentationOf, secondBlock, type CompareRead, type LowerRead } from './compare'
+import type { LowerPresentation } from './LowerReading'
 import { attachRefine, poolingRung, rungsOf, type BlockLadder } from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox, featureSuggestions, locusPlaceholder } from './SearchBox'
@@ -152,7 +153,11 @@ export interface RegionViewProps {
    * A new selection. The second region makes the block rectangular — the
    * contacts *between* two contigs rather than within one (§5.3).
    */
-  onChangeRegion(region: string, region2?: string): void
+  /**
+   * Open another block. `focus`, where given, is a window of it to open
+   * framed on (§8.10's bookmark gesture) — a searched gene, read with context.
+   */
+  onChangeRegion(region: string, region2?: string, focus?: string): void
   onScaleChange(scale: ScaleState): void
   onOpenGenome(genome: string): void
   onError(err: unknown): void
@@ -165,6 +170,12 @@ export interface RegionViewProps {
    */
   annotations?: AnnotationContext
   /**
+   * The sequence a name typed into the box means, as the file names it, or
+   * `null` (`findContig`'s ladder: `chr4`, `4` and `IV` alike). With genes on
+   * offer the box lists it first, so `IV` opens chromosome IV and not IVY1.
+   */
+  sequenceNamed?(text: string): string | null
+  /**
    * A second cooler in the lower-left triangle (`render/compare.ts`).
    *
    * The same block, read from the other file. The two agree about contigs and
@@ -173,6 +184,17 @@ export interface RegionViewProps {
    * has to be parsed twice.
    */
   compare?: CompareRead
+  /**
+   * The lower triangle in a reading of its own (§5.10), for the map's second
+   * tab; absent beside a second file and in a deck.
+   */
+  lower?: LowerPresentation
+  /**
+   * The second read that reading needs where its score is another column or
+   * the balancing the other way — the same requests as the first, asked of the
+   * same file again (`ui/compare.ts`). Never beside {@link compare}.
+   */
+  lowerRead?: LowerRead
   /** File and genome context for the exported figure's caption. */
   caption?: FigureSubject
   /**
@@ -196,6 +218,13 @@ export interface RegionViewProps {
    */
   circular?: CircularPresentation
 }
+
+/**
+ * How many bins of context a gene picked in the map's box is read with, each
+ * side (§5.4): enough to wheel a long way back out of the gene at the file's
+ * own bins, and a block small enough to come back at them.
+ */
+export const SEARCH_CONTEXT_BINS = 100
 
 /**
  * The four steps the zoom buttons take, in the order they sit on the bar.
@@ -485,8 +514,17 @@ export class RegionView {
       // rather than two that can come to disagree about what the box holds.
       go: true,
       // One window, or two — rows, then columns — for a block between them.
-      onSubmit: (text) => {
+      // A gene picked from the list is read with context round it (§5.4): the
+      // block is the gene and a hundred bins either side, framed on the gene,
+      // so a wheel back out finds the neighbourhood rather than the paper past
+      // a block cut to the gene. Coordinates typed are a block asked for, and
+      // are cut as asked.
+      onSubmit: (text, hit) => {
         const typed = typedLociToRegions(text)
+        if (hit !== undefined && typed.region2 === undefined) {
+          void this.openWithContext(typed.region)
+          return
+        }
         props.onChangeRegion(typed.region, typed.region2)
       },
       // Only where there is something to search. A map with no gene model
@@ -505,6 +543,9 @@ export class RegionView {
                 ...hit,
                 value: regionLabel(hit.value),
               })),
+            ...(props.sequenceNamed === undefined
+              ? {}
+              : { sequence: (text: string) => props.sequenceNamed?.(text) ?? null }),
           }),
     })
     // Ordinary bordered buttons, like `go` beside them: these move the view, and
@@ -533,6 +574,7 @@ export class RegionView {
       ...(presentationOf(props.compare) === undefined
         ? {}
         : { compare: presentationOf(props.compare) }),
+      ...(props.lower === undefined ? {} : { lower: props.lower }),
       initial: props.scale,
       // Same shape as the genome view: heading names the selection, controls
       // live in the sidebar. Only the Contigs card is missing, because inside a
@@ -555,6 +597,13 @@ export class RegionView {
       // directly under it — so the summary prints the span alone where the two
       // would say the same thing. See `MatrixPanel.setWindowNamedAbove`.
       headingLocus: () => this.title.textContent,
+      // A click on a cell opens the sequence the window is on (below), and
+      // nothing on the picture says so.
+      clickHint: () => {
+        if (props.region2 !== undefined) return null
+        const window = parseRegion(props.region)
+        return window === null ? null : `click to see the whole of ${regionLabel(window.contig)}`
+      },
       onCellClick: (_cell, groups) => {
         if (groups.row !== undefined && groups.row.label !== props.region) {
           props.onChangeRegion(groups.row.label)
@@ -915,7 +964,7 @@ export class RegionView {
         return {
           cancel: own.cancel,
           promise: own.promise.then(async (block) => {
-            const second = await secondBlock(this.props.compare, (client) =>
+            const second = await secondBlock(this.props.compare ?? this.props.lowerRead, (client) =>
               client.request<'matrix'>(query(rowExtent, colExtent, rung, binsPerCell)),
             )
             return second === undefined ? { result: block } : { result: block, second }
@@ -962,6 +1011,38 @@ export class RegionView {
   private pooled(): { binsPerCell?: number } {
     const k = this.props.binsPerCell ?? 1
     return k > 1 ? { binsPerCell: k } : {}
+  }
+
+  /**
+   * Open `region` framed, inside a block {@link SEARCH_CONTEXT_BINS} bins wider
+   * each side, clipped to its sequence.
+   *
+   * The sequence's length is asked of the worker, as {@link wholeOf} asks it,
+   * and the far end is held a bin short of it: the last bin is partial, and a
+   * range past the end is refused rather than clipped (§10). Anything that
+   * cannot be read that way — no coordinates, a name the file does not hold —
+   * is opened as it was asked.
+   */
+  private async openWithContext(region: string): Promise<void> {
+    const window = parseRegion(region)
+    if (window === null) {
+      this.props.onChangeRegion(region)
+      return
+    }
+    let bins: number
+    try {
+      const whole: ParsedRange = await this.props.client.request<'range'>({ kind: 'range', range: window.contig })
+      bins = whole.extent[1] - whole.extent[0]
+    } catch {
+      this.props.onChangeRegion(region)
+      return
+    }
+    const bin = this.props.binsize * (this.props.binsPerCell ?? 1)
+    const pad = SEARCH_CONTEXT_BINS * bin
+    const last = Math.max(window.end, (bins - 1) * this.props.binsize)
+    const start = Math.max(0, window.start - pad)
+    const end = Math.min(last, window.end + pad)
+    this.props.onChangeRegion(formatRegion({ contig: window.contig, start, end }), undefined, region)
   }
 
   /**
@@ -1040,7 +1121,7 @@ export class RegionView {
           ...(this.props.value === undefined ? {} : { value: this.props.value }),
         }
         const result: MatrixResult = await this.props.client.request<'matrix'>(ask)
-        const second = await secondBlock(this.props.compare, (client) =>
+        const second = await secondBlock(this.props.compare ?? this.props.lowerRead, (client) =>
           client.request<'matrix'>(ask),
         )
         if (this.disposed) return
@@ -1081,7 +1162,7 @@ export class RegionView {
         ...(this.props.value === undefined ? {} : { value: this.props.value }),
       }
       const result: MatrixResult = await this.props.client.request<'matrix'>(pair)
-      const second = await secondBlock(this.props.compare, (client) =>
+      const second = await secondBlock(this.props.compare ?? this.props.lowerRead, (client) =>
         client.request<'matrix'>(pair),
       )
       if (this.disposed) return

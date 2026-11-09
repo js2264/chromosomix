@@ -419,7 +419,7 @@ function seriesCard(
             ? style.hidden.filter((id) => id !== series.id)
             : [...style.hidden, series.id],
         }),
-      { class: 'btn btn-icon btn-toggle', size: 13 },
+      { class: 'btn btn-icon btn-toggle ann-eye', size: 13 },
     )
     eye.setAttribute('aria-pressed', String(!hidden))
     const swatch = el('input', { class: 'figure-swatch', type: 'color' }) as HTMLInputElement

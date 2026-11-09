@@ -201,13 +201,17 @@ export class LaneEditor {
           }
           const next =
             hit.part === 'min' ? { min: typed, max: shown.max } : { min: shown.min, max: typed }
-          // An inverted pair is refused rather than swallowed. `resolveLimits`
-          // would answer it with `{0, 1}`, which is a lane redrawn against an
-          // axis nobody asked for — and the reader would be left looking for the
-          // number they typed.
-          if (!(next.max > next.min)) return false
+          // Two equal ends are refused: no axis can be drawn between them. An
+          // inverted pair is a flip (§8.8) — stored in order, the track turned
+          // over — as the same pair typed into the settings' boxes is.
+          if (next.max === next.min) return false
+          const inverted = next.max < next.min
           for (const entry of entries) {
-            this.options.store.restyle(entry.id, { limits: { auto: false, ...next } })
+            const flip = this.options.store.byId(entry.id)?.style.flip ?? false
+            this.options.store.restyle(entry.id, {
+              limits: { auto: false, min: Math.min(next.min, next.max), max: Math.max(next.min, next.max) },
+              ...(inverted ? { flip: !flip } : {}),
+            })
           }
           return true
         },

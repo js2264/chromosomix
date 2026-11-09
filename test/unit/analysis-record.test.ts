@@ -98,14 +98,16 @@ describe('a run the shell can take', () => {
 
   it('keeps the caveats about a line apart from the command', () => {
     const insulation = task('insulation')
-    // A remote file: the command names the URL, which the shell fetches, and
-    // says outright what that costs — the whole file, where the app read ranges.
+    // A map drawn one way and read the other: a shell has one flag for both,
+    // and the line says so above the command rather than in it. (A remote file
+    // carries no caveat any more: the shell reads it by range, as the app does.)
     const record = provenance('insulation', {
       framing: { ...framing(), uri: 'https://example.org/yeast.mcool::resolutions/1000' },
     })
     const draft = runDraft({ task: insulation, provenance: record, context: CONTEXT })
     expect(draft.notes?.every((note) => note.startsWith('#'))).toBe(true)
-    expect(draft.notes?.join(' ')).toContain('remote')
+    expect(draft.notes?.join(' ')).toContain('--no-balance sets both together')
+    expect(draft.notes?.join(' ')).not.toContain('remote')
     expect(draft.line.startsWith('#')).toBe(false)
   })
 

@@ -1,0 +1,20 @@
+quantity	value
+peaks, chromosomix / yapc	2,106 / 2,106
+peaks, Jaccard	1.0000
+boundaries at 50 kb, chromosomix / cooltools	306 / 306
+boundaries at 50 kb, Jaccard	1.0000
+insulation at 50 kb, max |Δ| (log2)	4.7e-06
+insulation at 100 kb, max |Δ| (log2)	4.8e-06
+insulation at 200 kb, max |Δ| (log2)	5.0e-06
+insulation at 400 kb, max |Δ| (log2)	4.9e-06
+APA, consecutive peaks, max |Δ| (observed / expected)	5.0e-06
+APA, consecutive peaks, max |Δ| (log2 observed / expected)	6.6e-06
+APA, TADs, max |Δ| (observed / expected)	5.0e-06
+APA, TADs, max |Δ| (log2 observed / expected)	7.1e-06
+b: CTCF-Broad, mean profile, max |Δ|	4.5e-05
+b: CTCF-UW, mean profile, max |Δ|	2.8e-05
+b: ATAC, mean profile, max |Δ|	4.8e-06
+c: 400kb, mean profile, max |Δ|	5.6e-08
+c: 200kb, mean profile, max |Δ|	6.1e-08
+c: 100kb, mean profile, max |Δ|	4.9e-07
+c: 50kb, mean profile, max |Δ|	4.9e-07

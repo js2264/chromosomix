@@ -23,6 +23,7 @@ import {
   laneSetOf,
   laneStyleFor,
   legacyLaneIdOf,
+  offersDisplay,
   offersLook,
   setDisplay,
   setLook,
@@ -248,15 +249,15 @@ describe('a called set, as one row', () => {
 })
 
 describe('a loop set, on its two surfaces', () => {
-  it('is its pairs on the map, and its anchors as a 1D track', () => {
+  it('is its pairs on both surfaces: rings on the map, arcs as a 1D track', () => {
     const store = fresh()
     const id = adoptCalledSet(store, called({ payload: loops(), display: 'overlay' }))
     expect(store.byId(id)?.kind).toBe('pairs')
     expect(store.overlays().map((row) => row.id)).toEqual([id])
     setDisplay(store, id, 'lane')
     const lane = store.byId(id)
-    expect(lane?.kind).toBe('segments')
-    expect(lane?.payload?.kind === 'features' ? lane.payload.data.length : 0).toBe(3)
+    expect(lane?.kind).toBe('pairs')
+    expect(lane?.payload?.kind === 'pairs' ? lane.payload.data.length : 0).toBe(2)
     expect(store.drawnOn('left').map((row) => row.id)).toEqual([id])
     // …and it leaves as its loops from either surface.
     expect(calledPayloadOf(lane!)?.kind).toBe('pairs')
@@ -264,6 +265,30 @@ describe('a loop set, on its two surfaces', () => {
     const back = store.byId(id)
     expect(back?.kind).toBe('pairs')
     expect(back?.payload?.kind === 'pairs' ? back.payload.data.length : 0).toBe(2)
+  })
+})
+
+describe('a loaded set of pairs (§8.1)', () => {
+  it('takes the same two displays, a loaded track’s card on the way to a lane', () => {
+    const store = fresh()
+    const entry = store.begin({
+      card: 'overlay',
+      kind: 'pairs',
+      source: { kind: 'remote', url: 'https://x/loops.bedpe', name: 'loops.bedpe' },
+    })
+    store.update(entry.id, { status: 'ready', payload: loops() })
+    expect(offersDisplay(store.byId(entry.id)!)).toBe(true)
+    setDisplay(store, entry.id, 'lane')
+    expect(store.byId(entry.id)?.card).toBe('linear')
+    expect(store.byId(entry.id)?.kind).toBe('pairs')
+    setDisplay(store, entry.id, 'overlay')
+    expect(store.byId(entry.id)?.card).toBe('overlay')
+  })
+
+  it('leaves as its anchors, each exact place once', () => {
+    const anchors = anchorsOf((loops() as { kind: 'pairs'; data: never }).data)
+    const places = Array.from({ length: anchors.length }, (_, i) => `${anchors.contigs[anchors.contig[i]]}:${anchors.start[i]}`)
+    expect(new Set(places).size).toBe(places.length)
   })
 })
 

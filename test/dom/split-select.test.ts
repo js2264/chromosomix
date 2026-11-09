@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// @dev-feature circle
 /**
  * The two lines' `split by` select (§7.6), as a reader meets it on the Map card
  * and on the picture before a column is chosen: every column of the Genomes

@@ -1,0 +1,57 @@
+---
+title: "Reproducibility"
+description: "Score how well the contact maps on screen agree with HiCRep's stratum-adjusted correlation, pooled over every sequence, per sequence and by separation."
+---
+
+import TaskCommand from '@components/TaskCommand.astro'
+import TaskOutputs from '@components/TaskOutputs.astro'
+import TaskParameters from '@components/TaskParameters.astro'
+import TaskSummary from '@components/TaskSummary.astro'
+
+<TaskSummary id="hicrep" />
+
+**Reproducibility** scores every pair of maps on screen with HiCRep's stratum-adjusted correlation coefficient, the SCC. A plain correlation of two maps is near 0.9 even for unrelated ones, because every map falls with distance; HiCRep smooths both maps and correlates each diagonal on its own. Use it on replicates before merging them, or to put a number on how far two conditions are apart.
+
+## Running it
+
+Put the maps side by side in one deck at the same resolution: press **+** along the edge of the map and drop another file in ([Maps side by side](/browse/deck/)). Then choose **Reproducibility** in the **2D tasks** card of the **Analysis** panel (<kbd>4</kbd>) and press **run**. Every pair of the deck's maps is compared; with one map, the row waits.
+
+A map at another resolution is left out and named, and a run with no other map on its grid is refused; an `.mcool` opens at any resolution it stores. A sequence whose length differs between two maps is left out, with a note.
+
+The drawer shows **Stratum-adjusted correlation**, the matrix of every pair on a fixed 0 to 1 scale; **Pooled over every sequence**, every pair, highest first; **Per sequence**, every pair on every sequence, with the strata each pooled; and **Correlation by separation**, a line per pair.
+
+![A deck of three chicken maps of chromosome 7 at 100 kb, DT40 cells in G2 and 5 and 60 minutes into mitosis, beside the Reproducibility drawer: the coefficient matrix over 36 sequences, G2 against 5 min at 0.62 and 60 min against G2 and 5 min at 0.15 and 0.22, the pooled and per-sequence tables, and the correlation by separation with a line per pair.](../../../assets/screens/analyses/hicrep-deck-drawer.webp)
+
+The same run from a shell, with each other map named after `--against`:
+
+<TaskCommand id="hicrep" />
+
+```sh
+chromosomix hicrep rep1.mcool::/resolutions/100000 --against rep2.mcool::/resolutions/100000 \
+  --against rep3.mcool::/resolutions/100000 --out results/
+```
+
+## Parameters
+
+Both settings, like the resolution, change the answer: compare coefficients made with the same settings at the same resolution. **furthest separation compared** is how many strata count, as hicrep's `dBPMax`: 5 Mb is 50 strata at 100 kb. **smoothing half-width** is the mean filter applied to both maps first; at 0, two shallow replicates can score worse than two deep maps of different conditions.
+
+<TaskParameters id="hicrep" />
+
+## What it writes
+
+<TaskOutputs id="hicrep" />
+
+## Reading the result
+
+An SCC is a correlation, at most 1; two maps that agree in structure score near it. The pooled coefficient weights each stratum of each sequence by the positions it compares, so a long chromosome counts for more than a short one. In **Per sequence**, one sequence far below the others is worth opening on the deck.
+
+**Correlation by separation** says more than the number. Two maps that agree near the diagonal and part further from it differ in depth; two that disagree at every separation are two experiments. Where a stratum compares nothing, the line has a gap, not a zero.
+
+### What to watch for
+
+- **Balancing.** In the app a file with weights is read balanced, while HiCRep is defined on raw counts: for hicrep's own number, run it with `--no-balance` on the command line.
+- **On a deck**, every map's run computes the same pairs, so the **all maps** tab shows the comparison once.
+
+## Compared with hicrep
+
+The arithmetic is that of `hicrep` 0.2.6, the Python port of the R package: in [the validation](https://chromosomix.app/validation/#reproducibility-hicrep), on raw counts, every pair agrees with it to the four decimals written.

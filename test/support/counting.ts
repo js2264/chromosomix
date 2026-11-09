@@ -134,8 +134,14 @@ async function installShims(): Promise<void> {
 }
 
 export interface CountingOptions {
-  /** Bytes per cached chunk. Defaults to the production 1 MiB. */
+  /** Bytes per cached chunk. Defaults to the production 256 KiB. */
   chunkSize?: number
+  /**
+   * Fetch ahead of a stretch read chunk after chunk, as production does
+   * (default on). Off for a measurement that compares byte totals across
+   * different orders of reads, which read-ahead makes depend on the order.
+   */
+  readAhead?: boolean
   /** Retained chunk bytes before LRU eviction. Defaults to the production 64 MiB. */
   maxCacheBytes?: number
 }

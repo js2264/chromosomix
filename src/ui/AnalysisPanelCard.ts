@@ -29,11 +29,13 @@
  */
 
 import { TASK_GROUP_LABELS, tasksFor } from '../analysis/registry'
+import { referenceOf } from '../analysis/references'
 import { devFeature } from '../state/devFeatures'
 import type { AnalysisRunner, JobState } from '../analysis/runner'
 import { readsMap, type AnalysisContext, type AnalysisTask, type TaskGroup } from '../analysis/types'
 import { el, fmt } from './dom'
 import { cardTitle, iconButton, type IconName } from './icons'
+import { referenceMark } from './taskReference'
 import { durationText } from '../units'
 
 /** Re-exported: the text moved to `src/units.ts`, and this is where callers found it. */
@@ -188,6 +190,13 @@ interface Row {
   batch: HTMLElement
   /** The cell the chip and the stop share, so the stop can come and go. */
   cell: HTMLElement
+  /**
+   * The `?` naming what the task re-implements (`analysis/references.ts`), last
+   * in the cell so it stays at the row's right edge — or, for a task that
+   * re-implements none, an empty space its width, so that every row's chip
+   * stands in one column.
+   */
+  mark: HTMLElement
   /** Which heading this row sits under, for the shared waiting line. */
   group: TaskGroup
 }
@@ -424,7 +433,12 @@ export class AnalysisPanelCard {
     // parameters is two answers to one gesture.
     stop.addEventListener('click', (event) => event.stopPropagation())
 
-    const cell = el('div', { class: 'plot-icon-row' }, chip, batch)
+    const reference = referenceOf(task.id)
+    const mark =
+      reference === null
+        ? el('span', { class: 'task-ref-blank', attrs: { 'aria-hidden': 'true' } })
+        : referenceMark(reference)
+    const cell = el('div', { class: 'plot-icon-row' }, chip, batch, mark)
     const blurb = el('span', { class: 'analysis-row-blurb', text: task.blurb })
     // What the task is waiting for. A **sibling** of the row rather than a third
     // line inside it: inside, it read as one more thing the task claims about
@@ -459,7 +473,7 @@ export class AnalysisPanelCard {
       event.preventDefault()
       open()
     })
-    return { task, el: node, chip, blurb, needs, stop, batch, cell, group: task.group }
+    return { task, el: node, chip, blurb, needs, stop, batch, cell, mark, group: task.group }
   }
 
   // -------------------------------------------------------------------------
@@ -560,7 +574,8 @@ export class AnalysisPanelCard {
       row.el.title = waiting ? available.needs : chip.detail
 
       const stop = stoppable(state)
-      if (stop && row.stop.parentNode === null) row.cell.appendChild(row.stop)
+      // Before the `?`, which keeps the row's right edge whatever comes and goes.
+      if (stop && row.stop.parentNode === null) row.cell.insertBefore(row.stop, row.mark)
       else if (!stop && row.stop.parentNode !== null) row.stop.remove()
 
       const open = active === row.task.id

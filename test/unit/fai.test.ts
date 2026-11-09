@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { byteOf, byteRange, contigsOf, looksLikeFai, parseFai, residuesIn } from '@/annotations/fai'
+import { byteOf, byteRange, contigsOf, looksLikeFai, parseFai, residuesIn, residuesInLines } from '@/annotations/fai'
 import { parseFasta } from '@/annotations/fasta'
 
 function bytes(text: string): Uint8Array {
@@ -154,5 +154,44 @@ describe('residuesIn', () => {
     const clean = bytes('ACGT')
     expect(residuesIn(clean)).toBe(clean)
     expect(new TextDecoder().decode(residuesIn(bytes('AC\r\nGT\nn')))).toBe('ACGTn')
+  })
+})
+
+describe('residuesInLines', () => {
+  /** A FASTA of several line widths, a last line short, and a sequence of one line. */
+  const LONG =
+    '>a\nACGTACGTAC\nGGTTCCAAGG\nTTAAC\n>b\nCCCCAAAATTTTGGGGNNNN\nacgtacgtacgtacgtacgt\nACG\n>c\nA\n>d\nGATTACA\n'
+
+  it('gathers every window of every sequence in place exactly as residuesIn does, LF and CRLF', () => {
+    for (const text of [LONG, LONG.replace(/\n/g, '\r\n'), FASTA]) {
+      const file = bytes(text)
+      for (const record of parseFai(faidx(text))) {
+        for (let start = 0; start <= record.length; start++) {
+          for (let end = start; end <= record.length + 1; end++) {
+            const { from, to } = byteRange(record, start, end)
+            const want = new TextDecoder().decode(residuesIn(file.subarray(from, to)))
+            // A fresh copy, as a read from disk is: the gathering writes over it.
+            const own = file.slice(from, to)
+            const got = residuesInLines(own, record, start)
+            expect(new TextDecoder().decode(got), `${record.name}:${start}-${end}`).toBe(want)
+            expect(got.buffer).toBe(own.buffer)
+          }
+        }
+      }
+    }
+  })
+
+  it('leaves the bytes alone and looks at each where the index does not describe the file', () => {
+    const file = bytes(LONG)
+    const [a] = parseFai(faidx(LONG))
+    // An index of a file one byte longer before this sequence: every line ending it
+    // expects is a residue.
+    const stale = { ...a, offset: a.offset - 1 }
+    const { from, to } = byteRange(stale, 0, a.length)
+    const own = file.slice(from, to)
+    const untouched = own.slice()
+    const got = residuesInLines(own, stale, 0)
+    expect(new TextDecoder().decode(got)).toBe(new TextDecoder().decode(residuesIn(untouched)))
+    expect(own).toEqual(untouched)
   })
 })

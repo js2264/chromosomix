@@ -38,6 +38,7 @@ import type {
   SourceSpec,
 } from '../../worker/protocol'
 import type { CorrelationField } from '../compartments'
+import type { PairStats } from '../../pairs/stats'
 import type { Census } from '../../metacooler/resample'
 import type { SmoothedField } from '../../render/derive'
 import type { Smoothing } from '../../render/smooth'
@@ -168,6 +169,23 @@ export interface TaskInputs {
    */
   orientation?: OrientationSummary
   /**
+   * What `pairtools stats` counted over the same import's records (§3.7), for
+   * the reason {@link orientation} is handed in: the records are gone by the
+   * time anything runs, and every one of these numbers is about records.
+   */
+  pairsStats?: PairStats
+  /**
+   * The `.pairs` the map was binned from, where it was binned from one (§3.7).
+   *
+   * The one place a task is handed the **map's own** source rather than one a
+   * form was given: the worker mounted the pixel table it was binned into, and
+   * Pairs QC's restriction statistics are about where each read ends — below
+   * any bin — so they need the records again. Read for its bytes alone, through
+   * `JobContext.openSource`, and closed by the task. Absent on a map that was
+   * opened rather than binned.
+   */
+  mapSource?: SourceSpec
+  /**
    * Files handed to the task's `file` parameters, by parameter key (§18.8).
    *
    * A dropped `File`, or a row picked out of a connected place with whatever
@@ -188,6 +206,16 @@ export interface TaskInputs {
    * a time, closing as it goes.
    */
   peers?: PeerMap[]
+  /**
+   * The map this job measures, as a peer is named: its address and the source
+   * it is mounted from — for the one task that reads **another rung of the same
+   * file**. The map report's resolution ladder starts at the file's finest
+   * resolution, and the map on screen is often a coarser one (§18.8); the worker
+   * mounts one file, so the finer rung is opened through `JobContext.peer` under
+   * this address with its group changed, and closed when the pass is done.
+   * Absent on a map binned from a `.pairs`, whose rungs are not a file's.
+   */
+  self?: PeerMap
   /**
    * What the reader calls the map this job measures (§16.10), for a task that
    * names it beside its peers — the matrix, the tables and the lines of a

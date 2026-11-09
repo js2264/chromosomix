@@ -23,6 +23,8 @@
  * simulation and an entirely adequate one for resampling a few thousand rows a
  * few thousand times: what is being asked of it is that draws be uncorrelated
  * and repeatable, not that the sequence be unguessable or astronomically long.
+ * The one other generator here, {@link numpyRandom}, is numpy's Mersenne
+ * Twister, for the one task that has to draw what a Python package draws.
  * Nothing here is a cryptographic generator and nothing here should be used as
  * one.
  */
@@ -55,6 +57,52 @@ export function makeRandom(seed: number): () => number {
     t = Math.imul(t ^ (t >>> 15), t | 1)
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/**
+ * numpy's `RandomState(seed).random_sample`, draw for draw: the Mersenne Twister
+ * (MT19937), seeded as numpy seeds it from a whole number, each double made of
+ * two 32-bit outputs as numpy makes it.
+ *
+ * Here for a task that reproduces a Python package which draws, so that the
+ * same seed is the same draws on both sides rather than merely the same kind of
+ * draws: *Model from the map* starts pastis-NB from random positions, and with
+ * this generator seed `s` places every bead where pastis' `random_state=s` does
+ * (§25.6). Everything else samples with {@link makeRandom}, whose state is a
+ * thousandth of the size and whose period is ample for what it is asked.
+ *
+ * The seed is folded to 32 bits as {@link makeRandom} folds it; numpy refuses a
+ * seed outside `[0, 2³²)` rather than folding it, so a seed in that range is the
+ * only one that means the same on both sides.
+ */
+export function numpyRandom(seed: number): () => number {
+  const key = new Uint32Array(624)
+  key[0] = (Number.isFinite(seed) ? Math.trunc(seed) : 0) >>> 0
+  for (let i = 1; i < 624; i++) {
+    const previous = key[i - 1] ^ (key[i - 1] >>> 30)
+    key[i] = (Math.imul(1812433253, previous) + i) >>> 0
+  }
+  let position = 624
+  const next = (): number => {
+    if (position >= 624) {
+      for (let i = 0; i < 624; i++) {
+        const y = (key[i] & 0x80000000) | (key[(i + 1) % 624] & 0x7fffffff)
+        key[i] = key[(i + 397) % 624] ^ (y >>> 1) ^ (y & 1 ? 0x9908b0df : 0)
+      }
+      position = 0
+    }
+    let y = key[position++]
+    y ^= y >>> 11
+    y ^= (y << 7) & 0x9d2c5680
+    y ^= (y << 15) & 0xefc60000
+    y ^= y >>> 18
+    return y >>> 0
+  }
+  return function sample(): number {
+    const a = next() >>> 5
+    const b = next() >>> 6
+    return (a * 67108864 + b) / 9007199254740992
   }
 }
 

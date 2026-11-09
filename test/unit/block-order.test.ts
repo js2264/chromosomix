@@ -1,3 +1,4 @@
+// @dev-feature circle
 /**
  * The reader's order (§7.6): what is kept, and a block laid out in it — whole
  * genomes moved, whole contigs moved within their genome, every value with its

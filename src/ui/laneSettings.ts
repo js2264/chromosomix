@@ -291,7 +291,7 @@ export function opacityField(store: AnnotationStore, entry: AnnotationEntry): HT
 }
 
 /**
- * Auto, or a pair of numbers.
+ * Auto, or a pair of numbers — and the centre the lane grows from.
  *
  * Auto means *what is in view*, recomputed as the view moves, which is the
  * behaviour a reader expects from a genome browser. The boxes are seeded from
@@ -301,9 +301,21 @@ export function opacityField(store: AnnotationStore, entry: AnnotationEntry): HT
  * widened to a double, so the faithful value of a seed is
  * `0.03999999910593033`, and nothing past the third place of that survives
  * being drawn in a lane forty pixels tall.
+ *
+ * **The two ends are the lane's two edges, foot then head** (§8.8): the first
+ * box is the value drawn at the lane's foot — its bottom in the 1D browser —
+ * and the last the value at its head. A flipped track draws its ceiling at
+ * the foot, so it shows its ceiling first and its floor last; and typing a
+ * last value smaller than the first *is* a flip — the pair is stored in order
+ * and the track turned over, rather than refused as an inverted pair.
+ *
+ * **The box between them is the centre**, IGV's: empty, the lane grows from
+ * zero as it always has; a number there is the value bars and areas grow from,
+ * above it one way and below it the other — `1` under a ratio of two tracks
+ * shows at a glance where one is over the other.
  */
 export function limitsField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
-  const { limits } = entry.style
+  const { limits, flip } = entry.style
   // A barChart has no `fileExtent` — that is filled by the signal readers, and a
   // chart is a feature set — but it does carry the one number that is the same
   // fact: the tallest bar anywhere in the file, which is precisely the ceiling
@@ -311,17 +323,28 @@ export function limitsField(store: AnnotationStore, entry: AnnotationEntry): HTM
   // means leaving auto starts on the picture that was already on screen, rather
   // than on `0 to 1` and a lane of full-height bars (§8.17).
   const seed = entry.fileExtent ?? glyphExtentOfRow(entry) ?? { min: 0, max: 1 }
+  const pair = limits.auto ? seed : limits
+  const [first, last] = flip ? [pair.max, pair.min] : [pair.min, pair.max]
   const min = el('input', {
     class: 'input input-num',
     type: 'number',
-    value: trimNumber(limits.auto ? seed.min : limits.min, 3),
-    title: 'Floor of the value axis',
+    value: trimNumber(first, 3),
+    title: 'The value at the foot of the lane. Above the last box, the track is drawn flipped.',
+  })
+  const centre = el('input', {
+    class: 'input input-num input-centre',
+    type: 'number',
+    value: entry.style.centre === undefined ? '' : trimNumber(entry.style.centre, 3),
+    title:
+      'Centre: the value the lane grows from, above it one way and below it the other — 1 for a ' +
+      'ratio. Empty is zero.',
+    attrs: { 'aria-label': 'centre' },
   })
   const max = el('input', {
     class: 'input input-num',
     type: 'number',
-    value: trimNumber(limits.auto ? seed.max : limits.max, 3),
-    title: 'Ceiling of the value axis',
+    value: trimNumber(last, 3),
+    title: 'The value at the head of the lane. Below the first box, the track is drawn flipped.',
   })
   /**
    * The mark the colour clip carries, and for the same act.
@@ -343,22 +366,25 @@ export function limitsField(store: AnnotationStore, entry: AnnotationEntry): HTM
 
   /** Put the row in a state, paint it, and store it. */
   const setAuto = (on: boolean): void => {
-    const low = Number(min.value)
-    const high = Number(max.value)
-    // Refused rather than stored. `resolveLimits` answers an inverted or
-    // unreadable pair with `{0, 1}`, so a mistyped bound would redraw the lane
-    // against an axis nobody asked for and leave the reader hunting for the
-    // number they typed. The box says so and keeps what was there — the same
-    // answer the range under the lane's name gives to the same mistake.
-    if (!on && (!Number.isFinite(low) || !Number.isFinite(high) || !(high > low))) {
+    const near = Number(min.value)
+    const far = Number(max.value)
+    // Refused rather than stored: an unreadable bound, or two equal ones,
+    // which no axis can be drawn between. `resolveLimits` would answer either
+    // with `{0, 1}`, and the reader would be left hunting for the number they
+    // typed. The box says so and keeps what was there.
+    if (!on && (!Number.isFinite(near) || !Number.isFinite(far) || near === far)) {
       for (const box of [min, max]) {
         box.classList.add('is-bad')
         window.setTimeout(() => box.classList.remove('is-bad'), 700)
       }
       return
     }
-    paintAuto(on, low, high)
-    store.restyle(entry.id, { limits: { auto: on, min: low, max: high } })
+    const turned = on ? flip : far < near
+    paintAuto(on, near, far)
+    store.restyle(entry.id, {
+      limits: { auto: on, min: Math.min(near, far), max: Math.max(near, far) },
+      ...(turned === flip ? {} : { flip: turned }),
+    })
   }
 
   /**
@@ -369,13 +395,13 @@ export function limitsField(store: AnnotationStore, entry: AnnotationEntry): HTM
    * — which leaves the caret in the box, and a rebuild while a control in the
    * list has the caret is deliberately deferred.
    */
-  const paintAuto = (on: boolean, low: number, high: number): void => {
+  const paintAuto = (on: boolean, near: number, far: number): void => {
     auto.disabled = on
     auto.title = on
       ? 'Back to the data’s own range, which is what this lane is on.'
       : 'Back to the data’s own range, rescaling to what is on screen as the view moves.'
-    const pair = `${trimNumber(low, 3)} – ${trimNumber(high, 3)}`
-    note.textContent = `${on ? 'auto' : 'clipped'} · ${pair}`
+    const pair = `${trimNumber(near, 3)} – ${trimNumber(far, 3)}`
+    note.textContent = `${on ? 'auto' : 'clipped'} · ${pair}${far < near ? ' · flipped' : ''}`
   }
 
   for (const box of [min, max]) {
@@ -385,6 +411,17 @@ export function limitsField(store: AnnotationStore, entry: AnnotationEntry): HTM
     // effect was to be forgotten.
     box.addEventListener('change', () => setAuto(false))
   }
+  centre.step = 'any'
+  centre.addEventListener('change', () => {
+    const text = centre.value.trim()
+    const value = Number(text)
+    if (text !== '' && !Number.isFinite(value)) {
+      centre.classList.add('is-bad')
+      window.setTimeout(() => centre.classList.remove('is-bad'), 700)
+      return
+    }
+    store.restyle(entry.id, { centre: text === '' ? undefined : value })
+  })
 
   paintAuto(limits.auto, Number(min.value), Number(max.value))
 
@@ -394,10 +431,11 @@ export function limitsField(store: AnnotationStore, entry: AnnotationEntry): HTM
       class: 'field field-block',
       title:
         'Auto rescales to whatever is on screen, as the view moves. A one-signed track is ' +
-        'anchored at zero; a signed one is made symmetric so no change sits in the middle.',
+        'anchored at zero; a signed one is made symmetric so no change sits in the middle. ' +
+        'The middle box is the centre the lane grows from.',
     },
     el('span', { class: 'field-label', text: 'limits' }),
-    el('div', { class: 'ann-limits' }, min, max, auto),
+    el('div', { class: 'ann-limits' }, min, centre, max, auto),
     note,
   )
 }

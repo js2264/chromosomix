@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// @dev-feature edit
 /**
  * The stage that edits the reference (SPECS §27.3, §27.4), in a DOM.
  *

@@ -809,7 +809,14 @@ export type ConfigRefusal =
    * about a file that *is* one sends them to inspect the wrong thing.
    */
   | { reason: 'not-a-store' }
-  | { reason: 'newer'; version: number; producer?: string }
+  /**
+   * A file in a newer version of its format than this build reads. `format`
+   * says which format — a store's `version` counts the store format's
+   * revisions, not the workspace's — and `reads` is the version this build
+   * reads, carried rather than imported so that this file needs nothing of
+   * `state/store.ts`. Absent, it is a workspace.
+   */
+  | { reason: 'newer'; version: number; producer?: string; format?: 'store'; reads?: number }
 
 /**
  * `true` when a reader answered with a refusal rather than the thing asked for.
@@ -837,6 +844,16 @@ export function refusalMessage(refusal: ConfigRefusal, label: string): string {
     // Names both numbers and the build, because the fix is not to the file: it
     // is to update the viewer, or to save the session again from this one.
     const from = refusal.producer === undefined ? '' : ` — ${refusal.producer}`
+    if (refusal.format === 'store') {
+      // A store's own numbers and its own fix: it is written by a publisher or
+      // by `scripts/make_store.py`, not saved from the viewer, so the reader
+      // cannot save it again — only update, or ask for a copy this build reads.
+      return (
+        `${label} is a store written for a newer version of the viewer${from}, in store format ` +
+        `${refusal.version}. This build reads store format ${refusal.reads ?? 1}. Update the viewer, ` +
+        'or ask whoever publishes the store for a copy in that format.'
+      )
+    }
     return (
       `${label} was saved by a newer version of the viewer${from}, in workspace format ` +
       `${refusal.version}. This build reads format ${CONFIG_VERSION}. Update the viewer, or ` +

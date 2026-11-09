@@ -22,7 +22,8 @@ import {
   type ManualPoint,
 } from '../../src/annotations/manual'
 import { LEAD_MAP, resolveStyle } from '../../src/annotations/placement'
-import { ANNOTATION_PALETTE, AnnotationStore, cleanLabel } from '../../src/annotations/store'
+import { ANNOTATION_PALETTE, AnnotationStore } from '../../src/annotations/store'
+import { cleanLabel } from '../../src/annotations/names'
 import { defaultStyle, placementOn, type Placement } from '../../src/annotations/types'
 import { remember } from '../../src/state/UiMemory'
 import { overlapWarning } from '../../src/ui/AnnotationCard'
@@ -46,6 +47,21 @@ describe('the annotation store', () => {
 
   beforeEach(() => {
     store = freshStore(`file-${Math.random()}.cool`)
+  })
+
+  it('duplicates a row straight after it, with its settings and its lanes, and a new id', () => {
+    const first = store.begin({ card: 'linear', kind: 'track', source: localSource })
+    const after = store.begin({ card: 'linear', kind: 'track', source: { ...localSource, name: 'Pol2.bw' } })
+    store.restyle(first.id, { colour: '#123456', flip: true })
+    store.placeOn(first.id, 'other-map', placementOn('right'))
+    const copy = store.duplicate(first.id)!
+    expect(copy.id).not.toBe(first.id)
+    expect(copy.label).toBe('ATAC (copy)')
+    expect(copy.style.colour).toBe('#123456')
+    expect(copy.style.flip).toBe(true)
+    expect(store.forCard('linear').map((entry) => entry.id)).toEqual([first.id, copy.id, after.id])
+    expect(store.mapsDrawing(copy.id).sort()).toEqual(store.mapsDrawing(first.id).sort())
+    expect(store.duplicate('gone')).toBeNull()
   })
 
   it('puts a row on screen before a byte is read', () => {

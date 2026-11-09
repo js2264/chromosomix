@@ -1,0 +1,80 @@
+---
+title: "Pattern detection"
+description: "Find loops, borders, hairpins, centromeres or stripes on a contact map by matching them to a template, as chromosight does, each call with a score and a q-value."
+---
+
+import TaskCommand from '@components/TaskCommand.astro'
+import TaskOutputs from '@components/TaskOutputs.astro'
+import TaskParameters from '@components/TaskParameters.astro'
+import TaskSummary from '@components/TaskSummary.astro'
+
+<TaskSummary id="chromosight" />
+
+Pattern detection finds the shapes a contact map is made of, such as loops, domain borders, hairpins, the depletion around a centromere or a stripe, by scoring every pixel's window against a template on the detrended map, as chromosight does. For loops alone, [Loop calling](/analyses/loops/) tests each pixel against its local background instead.
+
+## Running it
+
+In the **Analysis** panel (<kbd>4</kbd>), choose **Pattern detection**, pick a **pattern**, tick the sequences, and press **run**. The price beside **run** counts the multiply-accumulates the scan takes, which is where the time goes.
+
+The calls land on the map as a set named for the pattern, such as **Detected loops** or **Detected borders**: a row of the **Tracks** card in the **Annotations** panel, marked `*`. Loops and stripes are pairs, drawn as rings and saved as BEDPE; borders, hairpins and centromeres are single bins, drawn as short diagonal markers and saved as BED. The drawer's table lists the strongest 200 calls; the set holds every one.
+
+![A yeast map of chromosome IV from 1.0 to 1.2 Mb with the loops Pattern detection found drawn as rings, beside the drawer narrowed to show the pileup of the 121 loops on IV on its 0 to 2 scale, with patterns 121 and a median score of 0.410 under it.](../../../assets/screens/analyses/chromosight-rings-pileup.webp)
+
+The same run from a shell:
+
+<TaskCommand id="chromosight" />
+
+```sh
+chromosomix chromosight sample.cool --pattern borders --out results/
+```
+
+## Parameters
+
+**Every threshold follows the pattern**, tuned with its template. With **thresholds** at **from the pattern**, the default, the boxes stay hidden; **Set them myself** opens them at the loops preset, to check against your pattern; its distances are counts of bins. The presets, in base pairs, become bins of your file:
+
+| Pattern | Template | Score threshold | Furthest from the diagonal | Nearest to the diagonal | Nearest two calls may be |
+| --- | --- | --- | --- | --- | --- |
+| loops | 17 × 17 | 0.3 | 2 Mb | 20 kb | 5 kb |
+| loops small | 7 × 7 | 0.5 | 2 Mb | 20 kb | 5 kb |
+| borders | 17 × 17, three | 0.15 | on the diagonal | — | 5 kb |
+| hairpins | 15 × 15 | 0.1 | on the diagonal | — | 5 kb |
+| centromeres | 81 × 81 | 0.5 | on the diagonal | — | 100 kb |
+| stripes left, stripes right | 31 × 31 | 0.17 | 2 Mb | 60 kb | 40 kb |
+
+<TaskParameters id="chromosight" />
+
+## What it writes
+
+<TaskOutputs id="chromosight" />
+
+## Reading the result
+
+### Scores and q-values
+
+A call's score is its window's Pearson correlation with the template: the closer to 1, the more it looks like the pattern. Every call is at or above the **score threshold**. Its p-value comes from the correlation, and its q-value from Benjamini-Hochberg over every call of the run, so it depends on which sequences were ticked; **report down to a q-value of** at 1, the default, keeps every call.
+
+### The pileup
+
+The **pileup** is the mean of every called window, on chromosight's fixed scale: seismic from 0 to 2, with 1, the expected on the detrended map, in the middle. The scale does not move with the data, so a pileup can be set beside another run's or a published chromosight figure. Under it are the number of patterns and their median score. A good set shows its pattern plainly in the middle, on a background near 1.
+
+### The score spectrum
+
+The **Score spectrum** shows how the scores spread from the threshold up. A peak clear of the threshold says the calls are a population of their own; a shoulder running down to it says the calling stopped at the threshold, not where the pattern did.
+
+### The loop spectrum
+
+The **Loop spectrum**, off the diagonal only, sets each call's score against its anchors' separation, with the median in log-spaced bands. A set whose 30 kb calls are loops and whose 2 Mb calls are noise looks fine in a pileup or a histogram; here it does not. Scores that fall away with separation are distance decay the detrending missed; scores piled at the nearest distance are calls on the diagonal's own shoulder.
+
+### What to watch for
+
+- **Balancing.** On a file without balancing weights, detectable bins are chosen by **detectability cut** on the raw coverage, and the drawer says the scores then match chromosight's in kind, not to the digit.
+- **Missing data.** A window with more than the pattern's share of undetectable or empty pixels is not scored; the drawer says how many candidates that dropped.
+- **Band size.** A sequence whose scan band would not fit is skipped and named: bring **furthest from the diagonal** down, or open a coarser resolution.
+- **Refinement.** A pileup with gaps cannot be a template, so **refinement passes** stop there, and the drawer says on which sequence.
+- **Circular sequences.** Near the junction of a sequence ticked **circular**, the expected is the far end of the distance law: a seam at the junction, not a wrong answer elsewhere.
+
+To score a loop set you already have against a template, use the **Chromosight** normalisation of [aggregate peak analysis](/analyses/apa/).
+
+## Compared with chromosight
+
+This is chromosight's detection, rule for rule. In [§ 6 of the validation](https://chromosomix.app/validation/#loops-chromosight), on a yeast Micro-C map at 800 bp, it calls the same loops at the same bin pairs as `chromosight detect` 1.6.3, with the same scores, and p- and q-values that agree to the digits printed.

@@ -368,17 +368,20 @@ function limitsField(options: BatchFieldsOptions, applies: readonly AnnotationEn
     (a, b) => a.auto === b.auto && (a.auto || (a.min === b.min && a.max === b.max)),
   )
   const manual = shared.same && !shared.value.auto ? shared.value : null
+  // Foot then head, as one row's boxes are: flipped together, the ceiling first.
+  const flips = sharedOf(applies, (entry) => entry.style.flip)
+  const turned = flips.same && flips.value
   const min = el('input', {
     class: 'input input-num',
     type: 'number',
-    value: manual === null ? '' : trimNumber(manual.min, 3),
+    value: manual === null ? '' : trimNumber(turned ? manual.max : manual.min, 3),
     placeholder: shared.same ? 'min' : MIXED,
     title: 'Floor of the value axis',
   })
   const max = el('input', {
     class: 'input input-num',
     type: 'number',
-    value: manual === null ? '' : trimNumber(manual.max, 3),
+    value: manual === null ? '' : trimNumber(turned ? manual.min : manual.max, 3),
     placeholder: shared.same ? 'max' : MIXED,
     title: 'Ceiling of the value axis',
   })
@@ -408,18 +411,20 @@ function limitsField(options: BatchFieldsOptions, applies: readonly AnnotationEn
     if (min.value.trim() === '' || max.value.trim() === '') return
     const low = Number(min.value)
     const high = Number(max.value)
-    if (!Number.isFinite(low) || !Number.isFinite(high) || !(high > low)) {
+    if (!Number.isFinite(low) || !Number.isFinite(high) || high === low) {
       for (const box of [min, max]) {
         box.classList.add('is-bad')
         window.setTimeout(() => box.classList.remove('is-bad'), 700)
       }
       return
     }
-    note.textContent = `clipped · ${trimNumber(low, 3)} – ${trimNumber(high, 3)}`
+    // A head under the foot turns them all over, as it turns one (§8.8).
+    const flip = high < low
+    note.textContent = `clipped · ${trimNumber(low, 3)} – ${trimNumber(high, 3)}${flip ? ' · flipped' : ''}`
     auto.disabled = false
     store.restyleEach(
       applies.map((entry) => entry.id),
-      { limits: { auto: false, min: low, max: high } },
+      { limits: { auto: false, min: Math.min(low, high), max: Math.max(low, high) }, flip },
     )
   }
   for (const box of [min, max]) {

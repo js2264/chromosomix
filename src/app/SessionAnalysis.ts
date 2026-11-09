@@ -27,6 +27,7 @@ import type { AnalysisFacts } from '../panels/MapPanel'
 import { fileBaseLabel } from '../ui/labels'
 import { rungsOf } from '../ui/refine'
 import type { OpenResult, OrientationSummary, PairsBinning } from '../worker/protocol'
+import type { PairStats } from '../pairs/stats'
 import type { Session } from './Session'
 
 /**
@@ -95,11 +96,15 @@ function cellsOfMap(info: OpenResult): { cells?: readonly string[] } {
 function binningOfMap(info: OpenResult): {
   binning?: PairsBinning
   orientation?: OrientationSummary
+  pairsStats?: PairStats
 } {
   if (info.pairs === undefined) return {}
   return {
     binning: info.pairs.binning,
     ...(info.pairs.orientation === null ? {} : { orientation: info.pairs.orientation }),
+    // And what `pairtools stats` counted in the same pass, which Pairs QC draws
+    // as it draws the curves: from the import, with nothing read again.
+    ...(info.pairs.stats === null ? {} : { pairsStats: info.pairs.stats }),
   }
 }
 
@@ -199,6 +204,7 @@ export class SessionAnalysis {
   /** The callbacks `AnalysisWorkspace` reads the session through. */
   private workspaceHost(): AnalysisWorkspaceHost {
     return {
+      memoryKey: (uri) => this.session.memoryKey(uri),
       source: (task) => {
         const starred = this.starredFacts(task)
         if (starred !== null) {
@@ -541,6 +547,7 @@ export class SessionAnalysis {
       if (assembly === null) return null
       return buildAnalysisContext({
         uri: assembly.uri,
+        memoryKey: this.session.memoryKey(assembly.uri),
         layout: 'cool',
         binsize: browsingBinsize(assembly.total),
         nBins: 0,
@@ -602,6 +609,7 @@ export class SessionAnalysis {
     const block = panel === undefined || panel === null || derived !== null ? null : panel.analysisBlock()
     return buildAnalysisContext({
       uri,
+      memoryKey: this.session.memoryKey(uri),
       layout: info.layout.kind,
       binsize,
       nBins: derived?.grid.nBins ?? info.nBins,
@@ -634,8 +642,8 @@ export class SessionAnalysis {
           ? { ...peer, binsize: derived.rung.binsize }
           : peer,
       ),
-      // The starred map's import, where it was binned from a `.pairs`: P(s)
-      // then has its four orientations already, and asks for no file (§18.8).
+      // The starred map's import, where it was binned from a `.pairs`: Pairs QC
+      // then has its counts already, and asks for no file (§18.8).
       ...(info.pairs === undefined
         ? {}
         : {

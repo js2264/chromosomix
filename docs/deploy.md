@@ -95,7 +95,7 @@ Two things do not move, and both belong to the browser rather than to this repos
 
 - **Storage is per origin.** Workspaces kept in the browser, the restore slot, the recent files and
   the settings stay with the old address. Export what matters before the move.
-- **An installed copy keeps the old build.** The service worker answers every page load at the old
+- **An installed copy keeps the old build.** The service worker answers a load of the app at the old
   address from its cache, so a reader who has used it there is never shown the redirect — and its
   update check, a request for `sw.js` at the old address, is redirected too, which a browser refuses
   for a service worker. That reader keeps the last build from before the move until they go to
@@ -476,7 +476,10 @@ because 20 builds is ~100 MB and the budget is what it is.
 The worker is registered at `/<repo>/`, so `/<repo>/v/<commit>/` is inside its scope, and its
 navigation handler answers **every** navigation in scope from the precached shell. Left alone it
 would serve the newest app at a pinned address: the right URL, the wrong code, and no symptom.
-`src/sw.js` now passes navigations under `<scope>v/` straight through.
+`src/sw.js` now passes navigations under `<scope>v/` straight through. (It has since stopped keeping
+a list at all: it answers only the app's own address — the scope itself and `index.html` — and
+leaves every other navigation to the network, which is what a list of exceptions kept failing to do
+for the next file published beside the app, `llms.txt` last; SPECS §11.)
 
 That fix only reaches a visitor once their worker updates, and a worker updates only when a page it
 controls is loaded — so a reader carrying an older one can still land on this exact bug.
@@ -580,13 +583,26 @@ them: a preview is somebody's work in progress, and a reviewer should not have t
 a release by its label. The service worker passes navigations under `pr/` through exactly as it does
 under `v/`, and `recoverPinnedNavigation()` covers both prefixes, for the reason given above.
 
+**The documentation comes with it.** The same job builds the documentation of the same head
+(`npm run docs:build`, SPECS §32.5) for `pr/<number>/docs/` and copies it into the preview's directory
+before the archive is written, so it is published, replaced and removed with the app and with nothing
+of its own: `chromosomix.app/pr/<number>/docs/` beside `chromosomix.app/pr/<number>/`. Its live
+views embed the preview's app (`DOCS_APP_URL`), its banner names the pull request, and it leaves the
+commit out of its footer so that a page a push did not change stays the same bytes and the archive
+branch keeps one copy of it. The comment on the pull request gives both addresses. A push whose
+documentation does not build — a task added before its page — still gets the preview of its app: the
+two documentation steps may fail without failing the job, the comment then says the documentation was
+not built and links the run, and the Tests workflow is what fails the pull request.
+
 **Whose code runs.** A pull request from a fork carries a read-only token and no secrets, and this
 job needs to write a branch. It is skipped for forks at the job's `if` rather than granted
 `pull_request_target`, which would run the fork's code with this repository's permissions. A
 maintainer who wants a preview of a fork's change pushes it to a branch here.
 
-**What it costs.** One pinned build per open pull request, ~5 MB, inside the same 1 GB budget the
-archive lives in, and gone when the pull request is. A pull request open for a month with fifty
+**What it costs.** One pinned build per open pull request, the size of an archived push (above),
+and its documentation, ~19 MB, inside the same 1 GB budget the archive lives in, and gone when the
+pull request is. Almost half of the documentation is its pictures, the same bytes in every preview
+and every push, which the archive branch stores once. A pull request open for a month with fifty
 pushes still costs one directory.
 
 ### The generated stores are published here too
@@ -603,26 +619,87 @@ once, hence the test in the assembly step.
 
 ### So are the rendered notebooks
 
-`/validation/` and `/timings/` are `notebooks/validation.qmd` and `notebooks/timing.qmd` as
-`.github/workflows/notebooks.yml` last rendered them (SPECS §18.10). That workflow runs when a
-release is published — `release.yml` makes the release a draft and a person publishes it, which is
-the event that reaches it — and from **Actions → Notebooks → Run workflow** on any branch or tag,
-with the number of timed runs (five by default) and whether to publish. It installs everything on a
-fresh runner, renders both notebooks (about three hours, most of it the timings), force-pushes the
-two pages and the files beside them to the `notebooks` branch as one commit, attaches them to the
-release with the tables beside them — among them `validation.txt`, every number the validation's
-figures draw — and dispatches this deploy, which copies `validation/` and `timings/` from
-that branch on every run after — the stores' arrangement exactly. Every run also keeps what it
-rendered as an artifact for 90 days, even when it fails — the validation alone, with the timing
-rounds it finished, when the timings fail — and its summary lists every verdict.
+`/validation/`, `/timings/`, `/viewers/` and `/parity/` are `notebooks/validation.qmd`,
+`notebooks/timing.qmd`, `notebooks/viewers.qmd` and `notebooks/parity.qmd` as
+`.github/workflows/notebooks.yml` last rendered them (SPECS §18.10). That workflow runs when a release
+is published — `release.yml` makes the release a draft and a person publishes it, which is the event
+that reaches it — and from **Actions → Notebooks → Run workflow** on any branch or tag, with the
+number of timed runs (four by default) and whether to publish. It also runs every Sunday at 02:37 UTC on
+the default branch, with the defaults, and that run publishes nothing: no push to the branch, no
+release's assets, no deploy — only its artifacts and its summary, a check between releases that the
+notebooks still render. Each notebook renders in a job of its
+own, on a fresh runner, through the setup in `.github/actions/notebooks-setup`, and the four jobs start
+together: the parity, in about a quarter of an hour in its three browsers; the validation and the
+timings in one job, the timings after the validation, since they run the validation's commands on the
+inputs it fetched and made (an hour to an hour and a half, then about twenty minutes a timed run); the
+viewers, with their own 15 GB, in about twenty minutes a round of pictures; and the laptop, the 23
+analyses on the command line and in the app's three browsers and then the deep human map. The run
+takes as long as the longest. A last job, which waits for every job but the laptop's — whose render is
+published nowhere, writes its own section of the run's summary, and is never the run's failure, a
+render that fails or overruns being a notice — publishes only if the four pages rendered: it force-pushes
+them and the files beside them to the `notebooks` branch as one commit, attaches them to the release
+with the tables beside them — among them `validation.txt`, every number the validation's figures draw
+— and dispatches this deploy, which copies `validation/`, `timings/`, `viewers/` and `parity/` from
+that branch on every run after — the stores' arrangement exactly. Every job also keeps what it
+rendered as an artifact for 90 days, even when it fails — the validation alone, with the timing rounds
+it finished, when the timings fail — and the run's summary has a section a notebook: where it is,
+from what, in how long, the line of findings it wrote, and its table. Which page is published where,
+with which files beside it, is one table, `notebooks/scripts/pages.py`.
+
+**`/laptop/` is not the workflow's.** `notebooks/laptop.qmd` measures a genome-wide analysis on a
+laptop, so the page the site publishes is rendered by hand on one and committed as
+`notebooks/laptop.html` — the one page `.gitignore` lets through. It runs each analysis on the command
+line and in the app in Chromium, Firefox and WebKit (`LAPTOP_BROWSERS` names fewer). To publish a new
+one, render it from the root of a clone and commit the file:
+
+```bash
+npm ci && npm run build && npm run build:cli
+npm ci --prefix notebooks/viewers && npx --prefix notebooks/viewers playwright install chromium firefox webkit
+micromamba create -f notebooks/environment-laptop.yml
+micromamba run -n open2c quarto render notebooks/laptop.qmd
+git add notebooks/laptop.html
+```
+
+`notebooks/environment-laptop.yml` makes the environment, named `open2c`: Quarto, Jupyter, the packages
+the page imports, and the four its deep human map's reference script runs, at the versions
+`notebooks/requirements.txt` pins. Any environment that holds them renders it; the page checks before it
+downloads anything and names the versions it found.
+
+The page carries its table and its `rendered.json` inside it, as links that download them, so the one
+file is the whole of it; this deploy writes it as `laptop/index.html` and unpacks the two beside it
+(`python3 notebooks/scripts/pages.py committed dist`). The workflow renders the laptop on a runner
+too, keeps that as the run's artifact and in its summary, and publishes it nowhere — not to the
+branch, not to a release. No `/laptop/` until a render is committed.
 
 Each page says, in a block under its title, when it was rendered, from which version, commit and
 release, by which run, and on what machine; `rendered.json` beside it says the same for a script.
-The service worker leaves both addresses to the network (`src/sw.js`), as it does `v/` and `pr/`:
-they are pages of their own, and the app's shell answered there would be the app wearing their
-address. A reader whose worker predates this sees the app at those two addresses until they take
+The service worker leaves the five addresses to the network (`src/sw.js`), as it does `v/`, `pr/`
+and every address but the app's own: they are pages of their own, and the app's shell answered there would be the app wearing
+their address. A reader whose worker predates this sees the app at those addresses until they take
 the update the app offers. Absent until the workflow has published once; the first run is by
 hand, or the next release.
+
+### And the test coverage
+
+`/coverage/` is the full suite's coverage report, file by file, as the last green run of it on
+`main` measured it, and `/coverage/badge.json` is that run's line coverage as a shields.io
+endpoint, which the README's **Coverage** badge is drawn from. The goldens job of
+`.github/workflows/test.yml` is the only run that has the whole suite — metacooler's fixtures need
+the `METACOOLER_REPO_TOKEN` it checks out with — so it writes both, from
+`npm test -- --coverage` and `node scripts/coverage-summary.mjs --badge`, into its `coverage-full`
+artifact; a job of its own, `coverage`, which runs none of the code under test, force-pushes that
+artifact to the `coverage` branch as one commit and dispatches this deploy, which copies the
+branch's tree into `coverage/` then and on every run after — the stores' and the notebooks'
+arrangement once more. Only a push to `main` publishes, and only when the full suite passed: a
+pull request's coverage is in its run's summary and artifact, and a figure from a red suite or
+from the fixture-free half alone is not the app's.
+
+The badge is read from the site rather than from the branch over `raw.githubusercontent.com` for
+the stores' reason, and so that the figure on the badge is always the figure on the page it links
+to. The report is about 43 MB, every source file drawn with its counts, and replaces the last one
+rather than adding to it. The service worker leaves `/coverage/` to the network like the
+notebooks' addresses. Absent until the first green full suite on `main` after this arrangement
+landed, and until then the badge says it could not read the file.
 
 ## Why Pages works at all for this app
 
@@ -686,7 +763,13 @@ and are easy to lose:
   update check from the HTTP cache — GitHub Pages serves `sw.js` with a `max-age`, which would pin
   every visitor to the build that was live when they first arrived;
 - `activate` prunes both other caches *and* stale entries inside the current one, because two builds
-  of the same commit share a cache name and `addAll` only ever adds.
+  of the same commit share a cache name and an install only ever adds;
+- `install` asks the server for every file (`cache: 'no-cache'`) and refuses a page whose scripts
+  are not this build's. The page is the one unhashed file, Pages gives it a ten-minute `max-age`, and
+  a worker that took it from the HTTP cache kept the build before's page: a blank page on every
+  ordinary reload, and the app only on a hard reload. A worker still in that state is the one
+  exception to waiting, since its page cannot show the bar: the new worker takes over and reloads
+  its tabs (`test/unit/sw-install.test.ts`).
 
 To verify a change to any of this, build, `npm run preview`, then in devtools → Application →
 Service Workers: tick "Offline" and reload. The page must come back and open a local file.
@@ -799,6 +882,29 @@ from a source tarball, say — reports the version alone rather than failing.
 That stamp is also the *anchor* for the version dropdown directly beneath it: the commit it names is
 how the picker knows which of the published builds is the one currently running. See
 [Every push stays reachable](#every-push-stays-reachable).
+
+## The documentation site, which is deployed elsewhere
+
+<https://doc.chromosomix.app> is not part of this site and nothing above publishes it. Its source is
+`documentation/`, and `.github/workflows/docs.yml` builds it — main's copy on every push, a release's
+on its tag — and writes it into the `gh-pages` branch of **js2264/chromosomix-docs**, which GitHub
+Pages serves under its own domain: a repository has one Pages domain, and this one's is
+`chromosomix.app`. The contract is SPECS §32, and `documentation/README.md` says how to build it.
+
+It needs three things set up once, outside the repository:
+
+1. **The domain verified** for the account that owns the repositories (*Settings → Pages → Add a
+   domain*, `chromosomix.app`), so that no other account's Pages site can claim one of its
+   subdomains while `doc` points at GitHub.
+2. **A deploy key**: an SSH key pair with no passphrase, the public half on js2264/chromosomix-docs
+   (*Settings → Deploy keys*, with **Allow write access**), the private half in this repository's
+   `DOCS_DEPLOY_KEY` secret. Until it is set the workflow builds every copy, keeps them as the run's
+   artifact, and says it published nothing.
+3. **Pages on js2264/chromosomix-docs** from the `gh-pages` branch, its root, with the custom domain
+   `doc.chromosomix.app` (the branch's `CNAME` says the same, and every publish writes it), a `CNAME`
+   record `doc` → `js2264.github.io.` at the DNS host, and **Enforce HTTPS** once the certificate is
+   issued. Every `.app` domain is HTTPS-only in browsers, so until then the address shows a
+   certificate error.
 
 ## What CI does not do
 

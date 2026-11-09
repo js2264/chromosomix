@@ -148,7 +148,7 @@ describe('the lab’s gallery', () => {
     expect(all(fold, '.row-verb-add')).toHaveLength(9)
     // The landscape's seven, the three maps' five, human chrX's five, the time
     // course's fifteen, the metagenome's two; then the papers: the Chromosomix
-    // paper's thirty-eight, over four organisms, and the Meneu paper's sixteen.
+    // paper's sixty-three, over five organisms, and the Meneu paper's sixteen.
     expect(textsOf(view.el, '.gallery-card-more > summary').slice(0, 8)).toEqual([
       '9 files',
       '7 files',
@@ -156,7 +156,7 @@ describe('the lab’s gallery', () => {
       '5 files',
       '15 files',
       '2 files',
-      '38 files',
+      '63 files',
       '16 files',
     ])
     // A file one figure reaches into another's folder for is one row, under

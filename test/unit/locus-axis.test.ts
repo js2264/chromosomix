@@ -182,3 +182,22 @@ describe('refusals', () => {
     ).toBeNull()
   })
 })
+
+describe('a place named in another file’s spelling (§5.9)', () => {
+  const runs: AxisRun[] = [
+    { label: 'I', start: 0, end: 231, unitStart: 0, unitLength: 230218 },
+    { label: 'IV', start: 231, end: 1763, unitStart: 231, unitLength: 1531933 },
+  ]
+  const axis = locusAxisFrom({ runs, blockStart: 0, level: 'bin', binsize: 1000, contigLength: lengthOf })
+
+  it('lands a loop set’s `chrIV` on an axis that writes `IV`', () => {
+    expect(axis?.locusToUnit('chrIV', 10_500)).toBe(axis?.locusToUnit('IV', 10_500))
+    expect(axis?.locusToUnits('chrIV', 10_500)).toEqual(axis?.locusToUnits('IV', 10_500))
+    expect(axis?.segmentOf('chrIV')?.contig).toBe('IV')
+  })
+
+  it('finds nothing for a sequence the axis does not carry', () => {
+    expect(axis?.locusToUnit('chrXV', 1000)).toBeNull()
+    expect(axis?.locusToUnits('chrXV', 1000)).toEqual([])
+  })
+})

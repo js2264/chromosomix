@@ -665,6 +665,9 @@ export class ParamForm {
       // greyed-out tickbox saying "balanced, and you may not change it" is a
       // control whose whole content is an apology.
       if (paramDerived(spec)) continue
+      // Nor a retired one (`ParamBase.retired`): a question this task no longer
+      // asks, whose stored answer is carried to the run and never shown.
+      if (spec.retired === true) continue
       const control = this.build(spec)
       this.controls.push(control)
       this.groups.get(spec.section ?? '')?.appendChild(control.wrapper)
@@ -753,9 +756,9 @@ export class ParamForm {
    * document.
    */
   private sections(): string[] {
-    // Derived specs are not counted, or a section whose only member is one would
-    // be an empty card with a heading over it.
-    const shown = this.specs.filter((spec) => !paramDerived(spec))
+    // Derived and retired specs are not counted, or a section whose only member
+    // is one would be an empty card with a heading over it.
+    const shown = this.specs.filter((spec) => !paramDerived(spec) && spec.retired !== true)
     const out = ['']
     for (const spec of shown) {
       const section = spec.section ?? ''

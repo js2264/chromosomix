@@ -36,6 +36,7 @@ import { OVERLAY_DRAG_TYPE, TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt } fro
 import { tabAmong } from './tabWalk'
 import { dragHasFileRow } from './fileDrag'
 import { chooseFiles, filesFrom } from './chooseFiles'
+import { allowHandles, hasHandle } from '../state/handles'
 import { pairIndexes } from '../annotations/loader'
 import { cardTitle, icon, iconButton } from './icons'
 import { batchFields } from './batchSettings'
@@ -45,6 +46,7 @@ import { calledSetFields } from './calledSurfaces'
 import {
   framingOf,
   isSynthetic,
+  pairExports,
   recomputeNote,
   syntheticExports,
   syntheticMark,
@@ -177,6 +179,8 @@ export class AnnotationCard {
   private readonly open = new Set<string>()
   /** A rebuild that arrived while a control was being edited. */
   private pending = false
+  /** The focus is moving between two fields of the list; see the listeners in the constructor. */
+  private committing = false
   /** The row being dragged, while one is; see {@link grip}. */
   private dragging: string | null = null
   /** A control that should get the focus back after the next rebuild. */
@@ -262,6 +266,27 @@ export class AnnotationCard {
         if (this.pending) this.render()
       }, 0)
     })
+    // A commit made by *leaving* a field for another — Tab from one limit to
+    // the next, or a press on the next — is a `change` fired while the focus is
+    // between the two, on nobody: the check below saw no caret and rebuilt the
+    // row under the field being moved to, and the caret fell out of the card.
+    // So the move is marked, from the key or the press that starts it to the
+    // end of the task, when the focus has landed.
+    const moving = (): void => {
+      this.committing = true
+      setTimeout(() => {
+        this.committing = false
+      }, 0)
+    }
+    this.list.addEventListener('keydown', (event) => {
+      if (event.key === 'Tab') moving()
+    }, true)
+    this.list.addEventListener('pointerdown', (event) => {
+      const at = event.target
+      if (at instanceof HTMLInputElement || at instanceof HTMLSelectElement || at instanceof HTMLTextAreaElement) {
+        if (!(at instanceof HTMLInputElement && at.type === 'checkbox')) moving()
+      }
+    }, true)
 
     this.unsubscribe = props.store.subscribe(() => this.render())
     // A press on the lane itself asks for this row (`ui/revealTrack.ts`). The
@@ -378,6 +403,14 @@ export class AnnotationCard {
    */
   private holdsFocus(): boolean {
     const active = document.activeElement
+    // Between two fields of the list, on a commit made by leaving one: held, and
+    // the focusout above releases it once the focus has landed, or held on.
+    if (this.committing && (active === null || active === document.body)) {
+      setTimeout(() => {
+        if (this.pending) this.render()
+      }, 0)
+      return true
+    }
     if (!(active instanceof HTMLElement) || !this.list.contains(active)) return false
     if (active instanceof HTMLInputElement && active.type === 'checkbox') return false
     return (
@@ -571,7 +604,53 @@ export class AnnotationCard {
       class: 'btn btn-quiet',
       title: 'The settings below were kept; only the data has to be read again.',
     })
-    return el('p', { class: 'ann-note ann-detached' }, `${entry.source.name} · `, pick, input)
+    // "or re-open this file" travels as one piece, so a narrow column wraps it
+    // whole onto the next line rather than leaving a word hanging off this one.
+    const or = el('span', { text: 'or ' })
+    const allow = this.allowButton(entry.source.name, () => or.remove())
+    return el(
+      'p',
+      { class: 'ann-note ann-detached' },
+      `${entry.source.name} · `,
+      ...(allow === null ? [pick] : [allow, el('span', {}, or, pick)]),
+      input,
+    )
+  }
+
+  /**
+   * *allow access*, where this browser still holds a grant for the file that
+   * has lapsed to ask first (§5.6) — the click the permission prompt needs, spent
+   * on this file and then on every other one the browser remembers, as the
+   * picker's button spends it. The row comes back through the announcement every
+   * tab hears, with every other file the answer covers, so nothing is
+   * reattached here.
+   * A grant forgotten on the way — the file moved, or reading it refused for
+   * good — takes the button away, and `gone` the word that joined it to the next.
+   */
+  private allowButton(name: string, gone: () => void): HTMLButtonElement | null {
+    if (!hasHandle(name)) return null
+    const allow = button(
+      'allow access',
+      () => {
+        allow.disabled = true
+        void allowHandles(name).then((file) => {
+          if (file !== null) return
+          if (hasHandle(name)) {
+            allow.disabled = false
+          } else {
+            allow.remove()
+            gone()
+          }
+        })
+      },
+      {
+        class: 'btn btn-quiet',
+        title:
+          'This browser remembers the file and only needs your permission to read it again — and ' +
+          'every other file it remembers, at the same time.',
+      },
+    )
+    return allow
   }
 
   // -------------------------------------------------------------------------
@@ -1285,6 +1364,10 @@ export class AnnotationCard {
       const framing = framingOf(entry)
       if (framing !== null) out.push(el('p', { class: 'ann-origin', text: framing, title: framing }))
       return out
+    }
+    // A loaded set of pairs leaves as its anchors (§8.1); the pairs are the file.
+    if (entry.kind === 'pairs' && entry.payload?.kind === 'pairs' && this.props.onExport !== undefined) {
+      out.push(pairExports(entry, this.props.onExport))
     }
     out.push(this.origin(entry))
     return out

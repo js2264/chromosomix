@@ -255,6 +255,12 @@ function mergeCurves(
   const shared =
     names !== undefined &&
     group.every((entry) => entry.curve.xTicks?.join('\u0000') === names.join('\u0000'))
+  const axis = first.xScaled
+  const scaled =
+    axis !== undefined &&
+    group.every((entry) => JSON.stringify(entry.curve.xScaled) === JSON.stringify(axis))
+      ? axis
+      : undefined
   return {
     kind: 'curve',
     id: `${id}__all`,
@@ -267,5 +273,7 @@ function mergeCurves(
     xScale: first.xScale,
     yScale: first.yScale,
     ...(shared ? { xTicks: [...names] } : {}),
+    // A scaled region's landmarks, where every map's run put them in one place.
+    ...(scaled !== undefined ? { xScaled: { ...scaled } } : {}),
   }
 }

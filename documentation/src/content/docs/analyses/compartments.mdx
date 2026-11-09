@@ -1,0 +1,89 @@
+---
+title: "Compartments"
+description: "Call A/B compartments from the leading eigenvectors of a contact map, phased by genes, a track or GC content, with the saddle plot that measures them, as cooltools does."
+---
+
+import TaskCommand from '@components/TaskCommand.astro'
+import TaskOutputs from '@components/TaskOutputs.astro'
+import TaskParameters from '@components/TaskParameters.astro'
+import TaskSummary from '@components/TaskSummary.astro'
+
+<TaskSummary id="compartments" />
+
+Compartments finds the checkerboard of a chromosome's two kinds of chromatin, each touching its own kind more than the other. E1, the leading component of the map over its expected, is the compartment track. Phased by genes, a track or GC content, it is cut by its sign into A and B, and the saddle plot measures how strongly they keep apart.
+
+## Running it
+
+Open the map at a resolution that suits compartments: on a mammalian genome 250 kb is usual, 100 kb the fine end. To phase the result, load a gene model such as a GTF, a track, or the genome's FASTA ([Tracks and features](/files/tracks/), [Reference sequences](/files/sequences/)). In the **Analysis** panel (<kbd>4</kbd>), choose **Compartments**, check **Phasing**, and press **run**.
+
+E1, and E2 and E3 with **components** at 2 or 3, land in the **Tracks** card of the **Annotations** panel, marked `*`, with **A/B compartments** beside E1. The drawer holds the **Components** table, the saddle (with **draw the saddle** on) and notes on the phasing and on bins with too little data.
+
+![Chicken chromosome 7 at 100 kb from DT40 cells in G2, with E1 and the A/B compartments in two lanes to the left of its checkerboard, the genes it was phased by under it, and the drawer beside it on the saddle, AA 1.79, BB 1.51 and AB 0.48.](../../../assets/screens/analyses/compartments-e1-saddle.webp)
+
+The same run from a shell:
+
+<TaskCommand id="compartments" />
+
+To phase by GC content, load the reference with `--sequence` and name it again for the parameter:
+
+```sh
+chromosomix compartments sample.mcool::/resolutions/100000 --sequence ref.fa.gz --phaseSequence ref.fa.gz --out results/
+```
+
+A gene model is loaded and named the same way, `--features genes.gtf --phaseFeatures genes.gtf`; a track is named alone, `--phaseTrack signal.bw`.
+
+## Parameters
+
+**Contacts** and **method** decide the run. **Cis only**, the default, gives a track per chromosome and is the one that runs at a fine resolution; **cis and trans** gives one genome-wide answer; **trans only** leaves the distance decay out. Under **cooltools**, the default method, the tracks are on cooltools' own scale; **Lieberman-Aiden 2009** is the paper's correlation of rows. The two agree where a chromosome has compartments, and part where it has none. **Diagonals to ignore** keeps the near-diagonal, the map's largest and least structural cells, out of the matrix.
+
+<TaskParameters id="compartments" />
+
+## What it writes
+
+<TaskOutputs id="compartments" />
+
+## Reading the result
+
+### Phasing: which way up
+
+An eigenvector's sign means nothing until something phases it. **Phasing** uses the first of these that is chosen:
+
+1. **phase by gene density**: a gene model, positive where its features are dense;
+2. **phase by a track**: any loaded or computed track, positive where it is high;
+3. **phase by GC content**: a reference sequence, positive where it is GC-rich.
+
+Gene density and GC content start on what you loaded, the starred set or sequence or else the first; a track starts unset. Any interval set counts as a gene model, so check it before you run: if it is a set of peaks, pick another or **Do not use a gene model**.
+
+A component is turned to correlate positively with the signal once that correlation reaches **least convincing correlation**. Below it, the drawer says the phasing was ambiguous: do not compare E1's sign with another run's. With no phasing at all, every sign is arbitrary.
+
+### E1, E2 and E3
+
+Components are ranked by eigenvalue alone, so E1 always has the largest; phasing signs them but never picks among them. If E1 does not follow the phasing signal, E2 is worth a look. The **Components** table has a row per sequence and component:
+
+- **eigenvalue**;
+- **of contacts**: the share of the map's departure from expected (observed/expected, clipped, less one) that this component's checkerboard carries; the shares of several components add up;
+- **r with phasing**: Pearson's r with the phasing signal, positive once the sign is fixed;
+- **variance**, under **Lieberman-Aiden 2009** only: how alike the rows are, rather than how much of the map.
+
+Bins with too little data are gaps in the tracks, not zeros.
+
+### A and B
+
+Each run of bins on one side of zero is a segment, `A` where E1 is positive and `B` where it is negative. A is the compartment the phasing signal is high in, and means nothing more. Segments never cross into the next sequence, and save as a BED for [signal by group](/analyses/groupsignal/) or [interval set overlap](/analyses/overlap/).
+
+### The saddle
+
+The saddle sorts a sequence's bins by E1 into **quantile groups** (50 by default) and draws the mean observed/expected between every two groups, from B to A on both axes, with 1 in the middle of its scale. Under **cis only** there is one per sequence. Under it are three corner means, each over the fifth of the groups at that end: **AA**, the most A-like bins with each other; **BB**, the most B-like; **AB**, the two with each other. A map with compartments has AA and BB above 1 and AB below: bright corners on the diagonal, dark ones off it. The further apart, the stronger the compartments. Under an ambiguous phasing the saddle also shows the phasing r, as AA and BB may be the wrong way round.
+
+### What to watch for
+
+- **Size.** A matrix past 8,192 bins a side is refused: under **cis only** that sequence is skipped and named; otherwise the run says what to untick or how coarse to open the file. Under **Lieberman-Aiden 2009** the cost grows as the cube of the bins, and past about 2,000 the price beside **run** names a resolution that fits.
+- **A chromosome with no compartments.** E1 still carries whatever dominates its map; a small **of contacts** and a weak **r with phasing** give it away.
+- **Circular sequences.** A sequence ticked **circular** in the Chromosomes table is divided by its decay the short way round.
+- **Bacterial chromosomes.** Where the two arms are held together, the map has a second diagonal, and divided by the distance decay alone E1 follows the arms rather than compartments: on a *Pseudomonas aeruginosa* map, the distance from the origin. **Expected** at **decay along both arms**, under **cis only**, removes both diagonals within **window along the arms** bins (0 is the whole chromosome), and on that map E1 then follows GC content. The arms are read from the origin in the Chromosomes table, the first base unless set; [Inter-arm alignment](/analyses/interarm/) measures the second diagonal.
+
+## Compared with cooltools
+
+Under the default method all three components are `cooltools.eigs_cis`'s on the same balanced matrix. In [§ 3 of the validation](https://chromosomix.app/validation/#compartments), on a mouse Hi-C map at 100 kb phased by GC content, E1 agrees with cooltools' to 5·10⁻⁶ in any bin, the eigenvalues agree, and the A/B call is the same in every bin.
+
+The badge says *equivalent* because of the sign: cooltools phases by Spearman's correlation, this task by Pearson's r, left alone below **least convincing correlation**, so an E2 or E3 that barely follows GC content can come out the other way round. The saddle matches `cooltools.saddle` ([§ 21](https://chromosomix.app/validation/#saddle-cooltools)) to the digits written. The **Lieberman-Aiden 2009** method is not validated.

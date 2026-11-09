@@ -37,15 +37,16 @@
  * name, then to the only track loaded, there being nothing else it could have
  * meant.
  *
- * A track named by an **address** is filed under the address and read from the
- * copy `cli/remote.ts` fetched, so the key, the name a figure calls it by and
- * the framing a run with no map records are the reader's words, and only the
- * bytes come from the temporary directory.
+ * A track named by an **address** is filed under the address and read where it
+ * is: a bigWig or a `.2bit` by range, through the source the app reads one
+ * with (`cli/remote.ts`), and a text track in one request, being parsed whole
+ * anyway — or from a copy, where the host serves no range. So the key, the name
+ * a figure calls it by and the framing a run with no map records are the
+ * reader's words, and only the bytes come from elsewhere.
  */
 
-import { open, readFile } from 'node:fs/promises'
-
 import { BigWig } from '@gmod/bbi'
+import type { GenericFilehandle } from 'generic-filehandle2'
 
 import { decodeAnnotationBytes, decodeAnnotationText } from '../annotations/parse'
 import { gcBins, looksLikeFasta, parseFasta } from '../annotations/fasta'
@@ -65,7 +66,7 @@ import type { Contig } from '../genome/assembly'
 import { contigIndexOf } from '../genome/naming'
 import { heldReference, type Reference } from './reference'
 import { HeldFile } from './heldFile'
-import { fileNameOf } from './remote'
+import { SourceHandle, fileNameOf, wholeBytes, type Where } from './remote'
 
 /** One loaded track, sampled the way the annotations worker samples it. */
 export interface LoadedTrack {
@@ -88,31 +89,34 @@ export interface LoadedTrack {
  * refused by name, before any map is opened, since a track that cannot be read
  * is a fault in the command line and not in the two hundredth file.
  *
- * `localOf` answers where an address's bytes were fetched to, and `undefined`
- * for a path, which is read where it lies.
+ * `whereOf` answers where a name's bytes are read from: the path itself, an
+ * address by range, or the copy of one fetched whole (`cli/remote.ts`).
  */
 export async function loadTracks(
   paths: readonly string[],
-  localOf: (path: string) => Promise<string | undefined> = async () => undefined,
+  whereOf: (path: string) => Promise<Where> = async (path) => ({ kind: 'disk', path }),
 ): Promise<Map<string, LoadedTrack>> {
   const held = new Map<string, LoadedTrack>()
   for (const path of paths) {
     if (held.has(path)) continue
-    held.set(path, await loadTrack(path, (await localOf(path)) ?? path))
+    held.set(path, await loadTrack(path, await whereOf(path)))
   }
   return held
 }
 
-/** One track: filed and named by `path`, as it was typed, and read from `at`. */
-async function loadTrack(path: string, at: string): Promise<LoadedTrack> {
+/** One track: filed and named by `path`, as it was typed, and read from `where`. */
+async function loadTrack(path: string, where: Where): Promise<LoadedTrack> {
   const name = fileNameOf(path)
+  const handle: GenericFilehandle =
+    where.kind === 'disk' ? new HeldFile(where.path) : new SourceHandle(where.source)
   // The four bytes that settle the reader, and only those. A bigWig and a
   // `.2bit` are read by range from here on, and reading one whole to look at
   // its magic cost a second a gigabyte before the run began — and refused any
   // file past 2 GiB, which is `readFile`'s ceiling.
-  const magic = await headOf(at, 4)
-  if (bbiMagic(magic) === 'bigwig') return openBigWig(path, name, at)
+  const magic = await handle.read(4, 0)
+  if (bbiMagic(magic) === 'bigwig') return openBigWig(path, name, handle)
   if (bbiMagic(magic) === 'bigbed') {
+    await handle.close()
     throw new Error(
       `${name} is a bigBed, which is a feature set and not a signal: name it with --features.`,
     )
@@ -121,8 +125,10 @@ async function loadTrack(path: string, at: string): Promise<LoadedTrack> {
   // settles it — and never read whole: a `.2bit` of a human genome is 800 MB on
   // disk and 3.1 GB unpacked, so the CLI reads it by range just as the browser
   // does (§8.21).
-  if (looksLikeTwoBit(magic)) return twoBitTrack(path, name, at)
-  const bytes = await decodeAnnotationBytes(new Uint8Array(await readFile(at)))
+  if (looksLikeTwoBit(magic)) return twoBitTrack(path, name, handle)
+  const whole = await wholeBytes(where)
+  await handle.close()
+  const bytes = await decodeAnnotationBytes(whole)
   if (looksLikeFasta(bytes)) return gcTrack(path, name, heldReference(parseFasta(bytes)))
   const text = await decodeAnnotationText(bytes)
   // Asked before `sniffSignal` for the reason it is asked before it everywhere:
@@ -143,24 +149,12 @@ async function loadTrack(path: string, at: string): Promise<LoadedTrack> {
   return signalTrack(path, name, format, new IntervalTrack(set), set)
 }
 
-/** The first `length` bytes of a file, or fewer where it is shorter. */
-async function headOf(path: string, length: number): Promise<Uint8Array> {
-  const handle = await open(path, 'r')
-  try {
-    const head = new Uint8Array(length)
-    const { bytesRead } = await handle.read(head, 0, length, 0)
-    return head.subarray(0, bytesRead)
-  } finally {
-    await handle.close()
-  }
-}
-
 // ---------------------------------------------------------------------------
 // bigWig
 // ---------------------------------------------------------------------------
 
-async function openBigWig(path: string, name: string, at: string): Promise<LoadedTrack> {
-  const bigwig = new BigWig({ filehandle: new HeldFile(at) })
+async function openBigWig(path: string, name: string, filehandle: GenericFilehandle): Promise<LoadedTrack> {
+  const bigwig = new BigWig({ filehandle })
   const header = await bigwig.getHeader()
   const contigs: Contig[] = Object.values(header.refsByNumber)
     .sort((a, b) => a.id - b.id)
@@ -343,8 +337,7 @@ export function gcTrack(path: string, name: string, store: Reference): LoadedTra
  * one pass, so there is no second question about a window to answer from a
  * cache — and a cache sized for a genome-wide run is the memory this avoids.
  */
-async function twoBitTrack(path: string, name: string, at: string): Promise<LoadedTrack> {
-  const handle = new HeldFile(at)
+async function twoBitTrack(path: string, name: string, handle: GenericFilehandle): Promise<LoadedTrack> {
   const file = await openTwoBit((length, position) => handle.read(length, position), (await handle.stat()).size)
   const recordOf = (contig: string): TwoBitRecord | undefined => {
     const direct = file.records.get(contig)

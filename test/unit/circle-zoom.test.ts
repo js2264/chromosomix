@@ -1,3 +1,4 @@
+// @dev-feature circle
 /**
  * The circle zoomed in on (§7.6): which of it a box shows, where a point under
  * the pointer goes as the circle grows, which names a zoom writes, and the bins

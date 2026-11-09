@@ -21,12 +21,17 @@
  *
  * ## What is compared
  *
- * Stretches of at most one bin: a group's merged intervals are cut on the bin
- * grid, a stretch shorter than half a bin joined to its neighbour, and a feature
- * shorter than a bin kept whole — so a 30 kb compartment is three observations
- * and a 300 bp peak is one. Each is the track's mean over the bases it has a
- * value for. The bin size is the open map's resolution unless changed, and
- * 10 kb with no map open, as for base composition (§18.2).
+ * One value per entry, by default: each run of a group's features, merged where
+ * they overlap or touch, each stretch of the rest between them, and each run of
+ * bins in one group of a track — so a 30 kb compartment is one observation, as
+ * a 300 bp peak is. Neighbouring bins of one compartment share their GC, their
+ * expression and their place in the nucleus, and a test that counted each as
+ * independent gave a P that followed the bin size rather than the data. A bin
+ * size compares stretches of at most one bin instead: a group's merged
+ * intervals cut on the bin grid, a stretch shorter than half a bin joined to its
+ * neighbour, and a feature shorter than a bin kept whole. Either way each is the
+ * track's mean over the bases it has a value for. A track is cut on the open
+ * map's resolution, and on 10 kb with no map open, unless a bin size is given.
  *
  * The groups are summarised, drawn as violins, and tested pairwise and together
  * by ranks (`analysis/groupstats.ts`), with the q-values of every test in the
@@ -36,11 +41,11 @@
 import type { AnalysisContext, AnalysisTask, CostEstimate, Params, ParamSpec } from '../types'
 import { READY, waitingFor } from '../types'
 
-/** The bin size with no map open, in base pairs — base composition's too. */
+/** The bins a track is cut on with no map open, in base pairs — base composition's too. */
 export const GROUP_BINSIZE = 10_000
 
-/** The bin size a context gives: the open map's resolution, else 10 kb. */
-function seededBinsize(context: AnalysisContext): number {
+/** The bins a context gives a track: the open map's resolution, else 10 kb. */
+function gridOf(context: AnalysisContext): number {
   return context.hasMap && context.binsize > 0 ? context.binsize : GROUP_BINSIZE
 }
 
@@ -131,11 +136,12 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'resolution',
     label: 'bin size',
     unit: 'bp',
-    hint: 'Values are compared per stretch of at most this many bases.',
-    default: GROUP_BINSIZE,
-    min: 1,
+    hint:
+      '0 compares one value per entry — a run of features, the stretch between two, a run of bins ' +
+      'in one group — and any other size compares stretches of at most that many bases.',
+    default: 0,
+    min: 0,
     integer: true,
-    seed: seededBinsize,
   },
   {
     kind: 'toggle',
@@ -158,8 +164,12 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   if (byTrack(params) && !chosen('groupTrack')) {
     return { ...free, refusal: 'Choose the track to group the bins by.' }
   }
-  const binsize =
-    typeof params.resolution === 'number' && params.resolution > 0 ? params.resolution : seededBinsize(context)
+  const read = `${tracks.toLocaleString()} track${tracks === 1 ? '' : 's'} read`
+  const perEntry = !(typeof params.resolution === 'number' && params.resolution > 0)
+  if (perEntry && byFeatures(params)) {
+    return { class: 'bounded', requests: null, bytes: null, note: `${read} once over each entry of the groups` }
+  }
+  const binsize = perEntry ? gridOf(context) : (params.resolution as number)
   let bases = 0
   for (const contig of context.contigs) bases += contig.length
   const stretches = bases > 0 ? Math.ceil(bases / binsize) : 0
@@ -168,8 +178,8 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     requests: null,
     bytes: null,
     note:
-      `${tracks.toLocaleString()} track${tracks === 1 ? '' : 's'} read over up to ` +
-      `${stretches.toLocaleString()} stretches of ${binsize.toLocaleString()} bp`,
+      `${read} over up to ${stretches.toLocaleString()} ${perEntry ? 'bins' : 'stretches'} of ` +
+      `${binsize.toLocaleString()} bp${perEntry ? ', compared a run of one group at a time' : ''}`,
   }
 }
 
@@ -182,7 +192,9 @@ export const GROUP_SIGNAL_TASK: AnalysisTask = {
   // Tracks and interval sets, which live in the annotations worker; no map is
   // needed, so a 1D browser runs it as well as a map does.
   venue: 'annotations',
-  version: 1,
+  // 2: a bin size of 0, the default, is one value per entry, where it was the
+  // map's resolution.
+  version: 2,
   // A track is all it needs: a second track, or the same one, can do the
   // grouping, so a feature set is one way in rather than a requirement.
   availability: (context) =>

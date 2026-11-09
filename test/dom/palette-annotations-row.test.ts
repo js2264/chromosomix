@@ -15,11 +15,13 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { App } from '@/app/App'
+import { stopApps, stopsWithTheDom } from '../support/dom'
 import type { Command } from '@/ui/commands'
 
 const roots: HTMLElement[] = []
 
 afterEach(() => {
+  stopApps()
   for (const root of roots.splice(0)) root.remove()
 })
 
@@ -29,7 +31,7 @@ function appOver(session: Record<string, unknown> | undefined): App {
   const root = document.createElement('div')
   document.body.appendChild(root)
   roots.push(root)
-  const app = new App(root)
+  const app = stopsWithTheDom(new App(root))
   const stand = session === undefined ? undefined : { commands: () => [], ...session }
   Object.defineProperty(app, 'current', { get: () => stand })
   return app

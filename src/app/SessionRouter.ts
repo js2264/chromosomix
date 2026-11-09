@@ -31,6 +31,8 @@ import {
   differsOnlyInFocus,
   differsOnlyInPresentation,
   differsOnlyInPresentationOrScore,
+  hasLower,
+  withoutLower,
   matrixLevel,
 } from '../state/ViewState'
 import type { ViewState } from '../types'
@@ -316,6 +318,15 @@ export class SessionRouter {
     // first file's map is a complete picture on its own, and showing it while
     // the second is read is better than showing nothing. `remount` brings the
     // comparison in when it lands.
+    // A second file in the lower triangle, or a deck, puts the lower reading down
+    // (§5.10): the first has its own claim on the triangle and the second on the
+    // card, and a reading kept in the link behind either would come back on a
+    // map nobody set it for.
+    if ((state.uri2 !== undefined || state.maps !== undefined) && hasLower(state)) {
+      this.session.store.set(withoutLower(state), { replace: true })
+      return
+    }
+
     if (this.session.compare.reconcile(state)) return
 
     // …and the same reconciliation for the deck (§16), one line lower because
@@ -357,13 +368,19 @@ export class SessionRouter {
     // of the balancing *in force*, is a new read — `balance=1` written away on a
     // file balanced by default is the same one; the picker is pointed at the
     // choice, which a link or the back button can make as well as the picker.
+    //
+    // The lower reading's score likewise (§5.10): told to the map where it reads
+    // the block the map holds, or the second read the map was built with, and a
+    // rebuild only where it asks for a read the map does not have.
+    const lowerRead = this.session.lowerReadKey(state)
     const scoreOnly =
       this.mounting === null &&
       this.session.mounted !== null &&
       this.session.current?.panel !== undefined &&
       differsOnlyInPresentationOrScore(this.session.mounted, state) &&
       this.session.valueOf(this.session.mounted) === this.session.valueOf(state) &&
-      this.session.balanceOf(this.session.mounted) === this.session.balanceOf(state)
+      this.session.balanceOf(this.session.mounted) === this.session.balanceOf(state) &&
+      (lowerRead === '' || lowerRead === this.session.lowerReadKey(this.session.mounted))
     if (
       this.mounting === null &&
       this.session.mounted !== null &&

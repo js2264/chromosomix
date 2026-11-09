@@ -1,3 +1,4 @@
+// @dev-feature metacool
 /**
  * The overview's axes, and the accumulator behind them.
  *

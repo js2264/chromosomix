@@ -26,6 +26,9 @@ const LUCIDE = [
   'x',
   'check',
   'info',
+  // What a task re-implements, on its row in the Analysis column (`ui/taskReference.ts`):
+  // drawn rather than a `?` typed in a ring, which a font's metrics set off-centre.
+  'circle-question-mark',
   'keyboard',
   'sun',
   'moon',
@@ -189,6 +192,10 @@ const LUCIDE = [
   // locus box's `go` (§5.4).
   'move-left',
   'move-right',
+  // The documentation (§32), on the header beside the shortcuts: an open book,
+  // the web's settled sign for *how to use this*, and distinct from the stores'
+  // row of books, which is somebody else's shelf of data.
+  'book-open',
 ]
 
 /**

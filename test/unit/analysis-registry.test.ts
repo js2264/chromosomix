@@ -23,7 +23,7 @@ import { buildAnalysisContext } from '@/analysis/context'
 import { TASK_GROUP_LABELS, TASKS, runnableTasks, taskById, tasksFor } from '@/analysis/registry'
 import { RUNNERS } from '@/analysis/run/index'
 import { TRACK_RUNNERS } from '@/analysis/run/tracks'
-import { defaultParams } from '@/analysis/types'
+import { defaultParams, type Params } from '@/analysis/types'
 import type { AnalysisContext, AnalysisTask } from '@/analysis/types'
 import { defaultStyle } from '@/annotations/types'
 import type { AnnotationEntry } from '@/annotations/types'
@@ -283,6 +283,8 @@ describe('every descriptor', () => {
       'insulation',
       'di',
       'hicscore',
+      // Domains read off the map's corners: nested, and with gaps.
+      'arrowhead',
       'compartments',
       'cistrans',
       'hicrep',
@@ -290,19 +292,25 @@ describe('every descriptor', () => {
     // A second map on the same grid, without which reproducibility refuses for
     // a reason of its own before the list is asked about.
     const deck = context({ peers: [{ label: 'rep2', uri: 'rep2.cool', binsize: 1000 }] })
+    // This is about the ticks, not the length: the context's one sequence is
+    // 100 bins, and the directionality index needs more than twice its window
+    // of 50 for any bin to have a whole window each side (§18.8), so it is
+    // given a window the sequence can carry.
+    const fits: Readonly<Record<string, Params>> = { di: { window: 10 } }
     for (const id of perSequence) {
       const task = taskById(id)
       expect(task, id).toBeDefined()
       if (task === undefined) continue
       expect(task.params.some((spec) => spec.kind === 'sequences'), id).toBe(true)
-      const none = task.estimate(deck, { ...defaultParams(task.params), sequences: [] })
+      const defaults = { ...defaultParams(task.params), ...(fits[id] ?? {}) }
+      const none = task.estimate(deck, { ...defaults, sequences: [] })
       expect(none.refusal, id).toBe(
         id === 'compartments'
           ? 'Tick at least one sequence. All of them is the genome-wide compartment call.'
           : 'Tick at least one sequence.',
       )
       expect(none.requests, id).toBe(0)
-      const all = task.estimate(deck, { ...defaultParams(task.params), sequences: null })
+      const all = task.estimate(deck, { ...defaults, sequences: null })
       expect(all.refusal, id).toBeUndefined()
     }
   })
@@ -404,11 +412,18 @@ describe('the cards', () => {
       'cistrans',
       'cellqc',
       'expected',
+      // The library under the map, beside the decay whose four orientations
+      // it took over: how short a separation P(s) can be believed at.
+      'pairsqc',
+      // Their composite: the library on one page, after what it gathers.
+      'mapreport',
       'scalogram',
       'fourc',
       'insulation',
       'di',
       'hicscore',
+      // Domains read off the map's corners: nested, and with gaps.
+      'arrowhead',
       'compartments',
       'interarm',
       // Detection, the caller built for loops before the one that matches any
@@ -429,11 +444,14 @@ describe('the cards', () => {
   })
 
   it('opens the 1D card with the tasks that make an interval set', () => {
-    // A motif search and a peak call produce exactly the input the tasks below
-    // them take — one from the sequence, the other from a track. Two sequence
+    // A motif search, a digest and a peak call produce exactly the input the
+    // tasks below them take — two from the sequence, one from a track. Two sequence
     // sets against each other come last, a dev feature (§28, §29).
     expect(idsIn('1d')).toEqual([
       'motif',
+      // Where an enzyme cuts, beside where a motif lies: the digest Pairs QC
+      // requires, and a lane of its own.
+      'restriction',
       'peaks',
       'composition',
       'oriter',
