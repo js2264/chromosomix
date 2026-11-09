@@ -275,13 +275,6 @@
       "title": "Add ideogram visualization of chromosomes",
       "branch": "js/nifty-cori-oe9zx1",
       "date": "2026-10-20T22:36:17Z"
-    },
-    {
-      "number": 107,
-      "commit": "ae43db2",
-      "title": "Add circular visualization of metagenome contact maps (§7.6)",
-      "branch": "claude/metagenome-circos-viz-dzev74",
-      "date": "2026-10-17T01:58:40Z"
     }
   ]
 }
