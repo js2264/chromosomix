@@ -1,0 +1,1677 @@
+<!DOCTYPE html><html lang="en" dir="ltr" data-theme="dark" data-has-toc data-has-sidebar class="astro-g5ptsecz"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>chromosomix 0.11.0 | chromosomix</title><link rel="canonical" href="https://doc.chromosomix.app/releases/v0.11.0/"/><link rel="sitemap" href="/pr/168/docs/sitemap-index.xml"/><link rel="shortcut icon" href="/pr/168/docs/favicon.png" type="image/png"/><meta name="generator" content="Astro v7.4.5"/><meta name="generator" content="Starlight v0.42.8"/><meta property="og:title" content="chromosomix 0.11.0"/><meta property="og:type" content="article"/><meta property="og:url" content="https://doc.chromosomix.app/releases/v0.11.0/"/><meta property="og:locale" content="en"/><meta property="og:description" content="What changed in chromosomix 0.11.0, released on 14 August 2026."/><meta property="og:site_name" content="chromosomix"/><meta name="twitter:card" content="summary_large_image"/><meta name="description" content="What changed in chromosomix 0.11.0, released on 14 August 2026."/><meta name="robots" content="noindex"/><script>
+	window.StarlightThemeProvider = (() => {
+		const storedTheme =
+			typeof localStorage !== 'undefined' && localStorage.getItem('starlight-theme');
+		const theme =
+			storedTheme ||
+			(window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+		document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+		return {
+			updatePickers(theme = storedTheme || 'auto') {
+				document.querySelectorAll('starlight-theme-select').forEach((picker) => {
+					const select = picker.querySelector('select');
+					if (select) select.value = theme;
+					/** @type {HTMLTemplateElement | null} */
+					const tmpl = document.querySelector(`#theme-icons`);
+					const newIcon = tmpl && tmpl.content.querySelector('.' + theme);
+					if (newIcon) {
+						const oldIcon = picker.querySelector('svg.label-icon');
+						if (oldIcon) {
+							oldIcon.replaceChildren(...newIcon.cloneNode(true).childNodes);
+						}
+					}
+				});
+			},
+		};
+	})();
+</script><template id="theme-icons"><svg aria-hidden="true" class="light astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M5 12a1 1 0 0 0-1-1H3a1 1 0 0 0 0 2h1a1 1 0 0 0 1-1Zm.64 5-.71.71a1 1 0 0 0 0 1.41 1 1 0 0 0 1.41 0l.71-.71A1 1 0 0 0 5.64 17ZM12 5a1 1 0 0 0 1-1V3a1 1 0 0 0-2 0v1a1 1 0 0 0 1 1Zm5.66 2.34a1 1 0 0 0 .7-.29l.71-.71a1 1 0 1 0-1.41-1.41l-.66.71a1 1 0 0 0 0 1.41 1 1 0 0 0 .66.29Zm-12-.29a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.71-.71a1.004 1.004 0 1 0-1.43 1.41l.73.71ZM21 11h-1a1 1 0 0 0 0 2h1a1 1 0 0 0 0-2Zm-2.64 6A1 1 0 0 0 17 18.36l.71.71a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.76-.66ZM12 6.5a5.5 5.5 0 1 0 5.5 5.5A5.51 5.51 0 0 0 12 6.5Zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Zm0 3.5a1 1 0 0 0-1 1v1a1 1 0 0 0 2 0v-1a1 1 0 0 0-1-1Z"/></svg><svg aria-hidden="true" class="dark astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.64 13a1 1 0 0 0-1.05-.14 8.049 8.049 0 0 1-3.37.73 8.15 8.15 0 0 1-8.14-8.1 8.59 8.59 0 0 1 .25-2A1 1 0 0 0 8 2.36a10.14 10.14 0 1 0 14 11.69 1 1 0 0 0-.36-1.05Zm-9.5 6.69A8.14 8.14 0 0 1 7.08 5.22v.27a10.15 10.15 0 0 0 10.14 10.14 9.784 9.784 0 0 0 2.1-.22 8.11 8.11 0 0 1-7.18 4.32v-.04Z"/></svg><svg aria-hidden="true" class="auto astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg></template><link rel="stylesheet" href="/pr/168/docs/_astro/print.ehPL0gv-.css" media="print"><link rel="stylesheet" href="/pr/168/docs/_astro/common.Uvfwwubp.css"><style>@layer starlight.components{svg:where(.astro-hkc32dio){color:var(--sl-icon-color);font-size:var(--sl-icon-size,1em);width:1em;height:1em;overflow:visible}}
+</style><script type="module" src="/pr/168/docs/_astro/page.cNngjUgL.js"></script></head><body class="astro-g5ptsecz"><a class="sl-skip-link astro-qb7clj6f" href="#_top">Skip to content</a><div class="page sl-flex astro-yntsjkba"><header class="header astro-yntsjkba"><div class="header astro-by6fddyj"><div class="title-wrapper sl-flex astro-by6fddyj"><div class="cx-title"><a href="/pr/168/docs/" class="site-title sl-flex astro-6rvad3va"><img class="astro-6rvad3va" alt src="/pr/168/docs/_astro/mark.DvluVtot.png" width="192" height="192"><span class="astro-6rvad3va" translate="no">chromosomix</span></a><span class="cx-docs" aria-hidden="true">docs</span><span class="cx-version cx-version-preview" title="A preview of pull request #168">#168</span></div><script type="module">for(let e of document.querySelectorAll(`select[data-cx-versions]`)){let t=e.dataset.current??`dev`,n=e.dataset.base??`/`,r=e.dataset.manifest??`/versions.json`;fetch(r,{cache:`no-cache`}).then(e=>e.ok?e.json():null).then(n=>{if(n===null||!Array.isArray(n.releases))return;let r=[];for(let e of n.releases){let i=e.version===n.latest;r.push({value:i?`/`:e.path,label:i?`${e.version} · latest`:e.version,selected:e.version===t})}n.dev!==null&&r.push({value:n.dev.path,label:`dev · unreleased`,selected:t===`dev`}),r.some(e=>e.selected)&&e.replaceChildren(...r.map(e=>{let t=document.createElement(`option`);return t.value=e.value,t.textContent=e.label,t.selected=e.selected,t}))}).catch(()=>{}),e.addEventListener(`change`,()=>{let t=e.value,r=`${t}${location.pathname.startsWith(n)?location.pathname.slice(n.length):``}`;fetch(r,{method:`HEAD`}).then(e=>location.assign(e.ok?`${r}${location.hash}`:t)).catch(()=>location.assign(t))})}</script></div><div class="sl-flex print:hidden astro-by6fddyj"><site-search class="astro-by6fddyj astro-b5kgnn7o" data-translations="{&quot;placeholder&quot;:&quot;Search the docs…&quot;}"><button data-open-modal disabled aria-label="Search the docs…" aria-keyshortcuts="Control+K" class="astro-b5kgnn7o"><svg aria-hidden="true" class="astro-b5kgnn7o astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.71 20.29 18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.39ZM11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"/></svg><span class="sl-hidden md:sl-block astro-b5kgnn7o" aria-hidden="true">Search the docs…</span><kbd class="sl-hidden md:sl-flex astro-b5kgnn7o" style="display: none;"><kbd class="astro-b5kgnn7o">Ctrl</kbd><kbd class="astro-b5kgnn7o">K</kbd></kbd></button><dialog style="padding:0" aria-label="Search the docs…" class="astro-b5kgnn7o"><div class="dialog-frame sl-flex astro-b5kgnn7o"><button data-close-modal class="sl-flex md:sl-hidden astro-b5kgnn7o">Cancel</button><div class="search-container astro-b5kgnn7o"><div id="starlight__search" class="astro-b5kgnn7o"></div></div></div></dialog></site-search><script>
+	(() => {
+		const openBtn = document.querySelector('button[data-open-modal]');
+		const shortcut = openBtn?.querySelector('kbd');
+		if (!openBtn || !(shortcut instanceof HTMLElement)) return;
+		const platformKey = shortcut.querySelector('kbd');
+		if (platformKey && /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform)) {
+			platformKey.textContent = '⌘';
+			openBtn.setAttribute('aria-keyshortcuts', 'Meta+K');
+		}
+		shortcut.style.display = '';
+	})();
+</script><script type="module" src="/pr/168/docs/_astro/Search.astro_astro_type_script_index_0_lang.DHdbw3jc.js"></script></div><div class="sl-hidden md:sl-flex print:hidden right-group astro-by6fddyj"><div class="sl-flex social-icons astro-by6fddyj"><a class="cx-open-app" href="https://chromosomix.app/pr/168/">Open chromosomix #168</a><a class="cx-icon-button" href="https://github.com/js2264/chromosomix" aria-label="chromosomix on GitHub"><svg aria-hidden="true" class=" astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"/></svg></a></div><starlight-rapide-theme-select class="astro-xgdtbcdp"><button aria-label="Select theme" aria-live="polite" class="sl-flex astro-xgdtbcdp" title="Select theme"><svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16" class="astro-xgdtbcdp"><mask class="moon astro-xgdtbcdp" id="moon-mask-c17a6b17"><rect x="0" y="0" width="100%" height="100%" fill="white" class="astro-xgdtbcdp"></rect><circle cx="24" cy="10" r="6" fill="black" class="astro-xgdtbcdp"></circle></mask><circle class="sun astro-xgdtbcdp" cx="12" cy="12" r="6" mask="url(#moon-mask-c17a6b17)"></circle><g class="sun-beams astro-xgdtbcdp" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="3" class="astro-xgdtbcdp"></line><line x1="12" y1="21" x2="12" y2="23" class="astro-xgdtbcdp"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" class="astro-xgdtbcdp"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" class="astro-xgdtbcdp"></line><line x1="1" y1="12" x2="3" y2="12" class="astro-xgdtbcdp"></line><line x1="21" y1="12" x2="23" y2="12" class="astro-xgdtbcdp"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" class="astro-xgdtbcdp"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" class="astro-xgdtbcdp"></line></g></svg></button></starlight-rapide-theme-select><script>
+  StarlightThemeProvider.updatePickers()
+</script><script type="module">var e=`starlight-theme`;function t(e){return e===`auto`||e===`dark`||e===`light`?e:`auto`}function n(){return t(typeof localStorage<`u`&&localStorage.getItem(e))}function r(t){typeof localStorage<`u`&&localStorage.setItem(e,t===`light`||t===`dark`?t:``)}function i(){return matchMedia(`(prefers-color-scheme: light)`).matches?`light`:`dark`}function a(e){StarlightThemeProvider.updatePickers(e),document.documentElement.dataset.theme=e===`auto`?i():e,r(e)}matchMedia(`(prefers-color-scheme: light)`).addEventListener(`change`,()=>{n()===`auto`&&a(`auto`)}),customElements.define(`starlight-rapide-theme-select`,class extends HTMLElement{constructor(){super(),a(n());let e=this.querySelector(`button`);e?.addEventListener(`click`,()=>{let n=t(document.documentElement.dataset.theme),r=n===`dark`?`light`:n===`light`?`dark`:`auto`;a(r),e?.setAttribute(`aria-label`,`${r} theme`)})}});</script></div></div></header><nav class="sidebar print:hidden astro-yntsjkba" aria-label="Main"><button popovertarget="starlight__sidebar" class="sl-menu-button sl-flex md:sl-hidden print:hidden astro-r2osgdlg"><svg aria-hidden="true" class="open-menu astro-r2osgdlg astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M3 8h18a1 1 0 1 0 0-2H3a1 1 0 0 0 0 2Zm18 8H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Zm0-5H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Z"/></svg><svg aria-hidden="true" class="close-menu astro-r2osgdlg astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="m13.41 12 6.3-6.29a1.004 1.004 0 1 0-1.42-1.42L12 10.59l-6.29-6.3a1.004 1.004 0 0 0-1.42 1.42l6.3 6.29-6.3 6.29a1 1 0 0 0 0 1.42.998.998 0 0 0 1.42 0l6.29-6.3 6.29 6.3a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.42L13.41 12Z"/></svg><span class="sr-only astro-r2osgdlg">Menu</span></button><script type="module">var e=class extends HTMLElement{constructor(){super();let e=matchMedia(`(min-width: 50em)`),t=()=>{this.popover=e.matches?null:`auto`};t(),e.addEventListener(`change`,()=>t()),this.addEventListener(`toggle`,({newState:e})=>this.trapFocus(e===`open`))}trapFocus(e){document.querySelectorAll(`.main-frame, .sl-skip-link`).forEach(t=>{t.toggleAttribute(`inert`,e)})}};customElements.define(`sl-sidebar-pane`,e);</script><sl-sidebar-pane popover id="starlight__sidebar" class="sidebar-pane astro-yntsjkba"><div class="sidebar-content sl-flex astro-yntsjkba"><sl-sidebar-state-persist data-hash="0homnmc" class="astro-ipdry5cl"><script aria-hidden="true">
+		(() => {
+			try {
+				if (!matchMedia('(min-width: 50em)').matches) return;
+				/** @type {HTMLElement | null} */
+				const target = document.querySelector('sl-sidebar-state-persist');
+				const state = JSON.parse(sessionStorage.getItem('sl-sidebar-state') || '0');
+				if (!target || !state || target.dataset.hash !== state.hash) return;
+				window._starlightScrollRestore = state.scroll;
+				customElements.define(
+					'sl-sidebar-restore',
+					class SidebarRestore extends HTMLElement {
+						connectedCallback() {
+							try {
+								const idx = parseInt(this.dataset.index || '');
+								const details = this.closest('details');
+								if (details && typeof state.open[idx] === 'boolean') details.open = state.open[idx];
+							} catch {}
+						}
+					}
+				);
+			} catch {}
+		})();
+	</script><ul class="top-level astro-rmhv4bp6"><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Get started</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="0"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/168/docs/start/introduction/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">What chromosomix is</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/start/ways/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Ways to use it</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/start/first-map/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Your first map</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/start/window/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">A tour of the window</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/start/tutorial/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">The guided tutorial</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/start/where-to-run/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Web, desktop or one file</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Your files</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="1"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/168/docs/files/opening/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Opening files</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/files/contact-maps/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Contact maps</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/files/tracks/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Tracks and features</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/files/interactions/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Interactions</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/files/sequences/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Reference sequences</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/files/structures/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">3D models</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/files/stores/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Data stores</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/files/problems/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">When a file will not open</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Using the browser</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="2"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/168/docs/browse/navigating/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Moving around</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/browse/contact-maps/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Reading a contact map</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/browse/comparing/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Comparing two maps</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/browse/turn/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">The 45° view</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/browse/genome-browser/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">The genome browser</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/browse/deck/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Maps side by side</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/browse/structures/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">3D models beside the map</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/browse/annotations/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Annotations and bookmarks</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/browse/sessions-and-links/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Sessions, workspaces and links</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/browse/figures/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Figures and export</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/browse/console/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">The console</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/browse/keyboard/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Keyboard and command palette</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Analyses</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="3"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">How analyses run</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/validation/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">How the results are checked</span></a></li><li class="astro-rmhv4bp6"><details class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">2D tasks</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="4"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/coverage/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Coverage and marginals</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/cistrans/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Cis and trans per sequence</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/cellqc/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Per-cell contact QC</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/expected/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Contact probability P(s)</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/pairsqc/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Pairs QC</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/mapreport/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Map report</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/scalogram/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Scalogram</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/fourc/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">4C profile from an anchor</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/insulation/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Diamond insulation</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/di/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Directionality index</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/hicscore/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">HiC score</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/arrowhead/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">TAD annotation</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/compartments/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Compartments</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/interarm/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Inter-arm alignment</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/loops/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Loop calling</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/chromosight/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Pattern detection</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/hicrep/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Reproducibility</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/apa/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Aggregate peak analysis</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">3D tasks</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="5"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/reconstruct3d/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Model from the map</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/structuremap/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Model versus map</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/spatialtracks/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Spatial tracks</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">1D tasks</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="6"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/motif/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Find a motif</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/restriction/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Restriction sites</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/peaks/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Peak calling</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/composition/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Base composition</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/oriter/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Origin and terminus</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/metaplot/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Metaplot over a feature set</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/trackcorr/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Track correlation</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/frip/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Fraction of signal in features</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/groupsignal/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Signal by group</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/analyses/overlap/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Interval set overlap</span></a></li></ul></details></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Command line</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="7"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/168/docs/cli/install/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Installing it</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/cli/running/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Running a task</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/cli/from-the-app/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">From the app to a script</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/cli/pipelines/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">In a pipeline</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Notebooks and web pages</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="8"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/168/docs/embed/jupyter/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Jupyter notebooks</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/embed/r/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">R, Quarto and Shiny</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/embed/web-page/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Embedding in a web page</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Advanced</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="9"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/168/docs/advanced/hosting/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Hosting your data</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/advanced/data-store/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Your own data store</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/advanced/track-hubs/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">UCSC track hubs</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/advanced/self-hosting/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Running your own copy</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/advanced/privacy/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Privacy</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Reference</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="10"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/168/docs/reference/files-and-stores/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Files, hosts and stores</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/reference/links/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Link keys</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/reference/command-line/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Command line</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/reference/embedding/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Embedding messages</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/glossary/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Glossary</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Release notes</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="11"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/unreleased/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Unreleased</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.21.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.21.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.20.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.20.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.19.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.19.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.18.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.18.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.17.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.17.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.16.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.16.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.15.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.15.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.13.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.13.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.12.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.12.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.11.0/" aria-current="page" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.11.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.10.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.10.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.9.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.9.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.8.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.8.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.7.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.7.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.6.1/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.6.1</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.6.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.6.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.5.1/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.5.1</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.5.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.5.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.4.1/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.4.1</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.4.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.4.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.3.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.3.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.2.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.2.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/releases/v0.1.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.1.0</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Contributing</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="12"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/168/docs/contributing/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Source code and contributing</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/168/docs/contributing/readers-and-tasks/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Adding a reader or a task</span></a></li></ul></details></li></ul><script aria-hidden="true">
+		(() => {
+			const scroller = document.getElementById('starlight__sidebar');
+			if (!window._starlightScrollRestore || !scroller) return;
+			scroller.scrollTop = window._starlightScrollRestore;
+			delete window._starlightScrollRestore;
+		})();
+	</script></sl-sidebar-state-persist><div class="md:sl-hidden"><div class="mobile-preferences sl-flex astro-p4azlveh"><div class="social-icons astro-p4azlveh"><a class="cx-open-app" href="https://chromosomix.app/pr/168/">Open chromosomix #168</a><a class="cx-icon-button" href="https://github.com/js2264/chromosomix" aria-label="chromosomix on GitHub"><svg aria-hidden="true" class=" astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"/></svg></a></div><starlight-rapide-theme-select class="astro-xgdtbcdp"><button aria-label="Select theme" aria-live="polite" class="sl-flex astro-xgdtbcdp" title="Select theme"><svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16" class="astro-xgdtbcdp"><mask class="moon astro-xgdtbcdp" id="moon-mask-721b4a86"><rect x="0" y="0" width="100%" height="100%" fill="white" class="astro-xgdtbcdp"></rect><circle cx="24" cy="10" r="6" fill="black" class="astro-xgdtbcdp"></circle></mask><circle class="sun astro-xgdtbcdp" cx="12" cy="12" r="6" mask="url(#moon-mask-721b4a86)"></circle><g class="sun-beams astro-xgdtbcdp" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="3" class="astro-xgdtbcdp"></line><line x1="12" y1="21" x2="12" y2="23" class="astro-xgdtbcdp"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" class="astro-xgdtbcdp"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" class="astro-xgdtbcdp"></line><line x1="1" y1="12" x2="3" y2="12" class="astro-xgdtbcdp"></line><line x1="21" y1="12" x2="23" y2="12" class="astro-xgdtbcdp"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" class="astro-xgdtbcdp"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" class="astro-xgdtbcdp"></line></g></svg></button></starlight-rapide-theme-select><script>
+  StarlightThemeProvider.updatePickers()
+</script></div></div></div></sl-sidebar-pane></nav><div class="main-frame astro-yntsjkba"><script type="module">var e=document.getElementById(`starlight__sidebar`),t=e?.querySelector(`sl-sidebar-state-persist`),n=`sl-sidebar-state`,r=()=>{let r=[],i=t?.dataset.hash||``;try{let e=sessionStorage.getItem(n),t=JSON.parse(e||`{}`);Array.isArray(t.open)&&t.hash===i&&(r=t.open)}catch{}return{hash:i,open:r,scroll:e?.scrollTop||0}},i=e=>{try{sessionStorage.setItem(n,JSON.stringify(e))}catch{}},a=()=>i(r()),o=(e,t)=>{let n=r();n.open[t]=e,i(n)};t?.addEventListener(`click`,e=>{if(!(e.target instanceof Element))return;let t=e.target.closest(`summary`)?.closest(`details`);if(!t)return;let n=t.querySelector(`sl-sidebar-restore`),r=parseInt(n?.dataset.index||``);isNaN(r)||o(!t.open,r)}),addEventListener(`visibilitychange`,()=>{document.visibilityState===`hidden`&&a()});</script><div class="lg:sl-flex astro-lrzkfocr"><aside class="right-sidebar-container print:hidden astro-lrzkfocr"><div class="right-sidebar astro-lrzkfocr"><div class="lg:sl-hidden astro-qok35upx"><mobile-starlight-toc data-min-h="2" data-max-h="3" class="astro-66cqc7ze"><nav aria-labelledby="starlight__on-this-page--mobile" class="astro-66cqc7ze"><details id="starlight__mobile-toc" class="astro-66cqc7ze"><summary id="starlight__on-this-page--mobile" class="sl-flex astro-66cqc7ze"><span class="toggle sl-flex astro-66cqc7ze">On this page<svg aria-hidden="true" class="caret astro-66cqc7ze astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></span><span class="display-current astro-66cqc7ze"></span></summary><div class="dropdown astro-66cqc7ze"><ul class="isMobile astro-jugkfwgx" style="--depth: 0;"><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#_top" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Overview</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#changed" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Changed</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#fixed" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Fixed</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#added" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Added</span></a></li></ul></div></details></nav></mobile-starlight-toc><script type="module" src="/pr/168/docs/_astro/MobileTableOfContents.astro_astro_type_script_index_0_lang.C3fM4Kra.js"></script></div><div class="right-sidebar-panel sl-hidden lg:sl-block astro-qok35upx"><div class="sl-container astro-qok35upx"><starlight-toc data-min-h="2" data-max-h="3"><nav aria-labelledby="starlight__on-this-page"><h2 id="starlight__on-this-page">On this page</h2><ul class="astro-jugkfwgx" style="--depth: 0;"><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#_top" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Overview</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#changed" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Changed</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#fixed" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Fixed</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#added" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Added</span></a></li></ul></nav></starlight-toc><script type="module" src="/pr/168/docs/_astro/TableOfContents.astro_astro_type_script_index_0_lang.BpJaGz7G.js"></script></div></div></div></aside><div class="main-pane astro-lrzkfocr"><main class="astro-g5ptsecz" lang="en" dir="ltr"><div class="sl-banner cx-version-notice" data-pagefind-ignore>This is a <strong>preview</strong> of <a href="https://github.com/js2264/chromosomix/pull/168">pull request #168</a>, for its review: it is replaced on every push and taken down when the pull request closes. The published documentation is at <a href="https://doc.chromosomix.app/">doc.chromosomix.app</a>.</div><script type="module">for(let e of document.querySelectorAll(`[data-cx-dev]`))fetch(e.dataset.manifest??`/versions.json`,{cache:`no-cache`}).then(e=>e.ok?e.json():null).then(t=>{if(t===null||t.latest===null)return;let n=e.querySelector(`[data-cx-latest-offer]`),r=e.querySelector(`[data-cx-latest-link]`);r!==null&&(r.textContent=`Read ${t.latest}’s`,location.pathname.startsWith(`/dev/`)&&(r.href=`/${location.pathname.slice(5)}`)),n!==null&&(n.hidden=!1)}).catch(()=>{});for(let e of document.querySelectorAll(`[data-cx-older]`)){let t=e.dataset.cxOlder,n=e.dataset.base??`/`;fetch(e.dataset.manifest??`/versions.json`,{cache:`no-cache`}).then(e=>e.ok?e.json():null).then(r=>{if(r===null||r.latest===null||r.latest===t)return;let i=e.querySelector(`[data-cx-latest]`),a=e.querySelector(`[data-cx-latest-link]`);i!==null&&(i.textContent=r.latest),a!==null&&location.pathname.startsWith(n)&&(a.href=`/${location.pathname.slice(n.length)}`),e.hidden=!1}).catch(()=>{})}</script><div class="content-panel astro-a7po4psb"><div class="sl-container astro-a7po4psb"><h1 id="_top" class="astro-bebwqqxs">chromosomix 0.11.0</h1></div></div><div class="content-panel astro-a7po4psb"><div class="sl-container astro-a7po4psb"><div class="sl-markdown-content"><p>What changed in chromosomix 0.11.0, released on 14 August 2026.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="changed">Changed</h2><a class="sl-anchor-link" href="#changed"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Changed”</span></a></div>
+<ul>
+<li>
+<p><strong><code dir="auto">f</code> folds the Files panel, and the track-fill overlay has no shortcut.</strong> The
+single-letter space was down to <code dir="auto">q</code> and <code dir="auto">z</code> when a fifth panel arrived, and
+neither is a letter anyone reaches for a list of files. Between a column — one
+of five, in the row of marks at the top of every window, whose four siblings
+are <code dir="auto">b</code>, <code dir="auto">a</code>, <code dir="auto">m</code> and <code dir="auto">j</code> — and one of eleven overlay toggles whose button is
+on screen beside the picture it changes, the letter belongs to the column. The
+fill toggle is untouched and still in the command palette; it is one keystroke
+that is gone.</p>
+</li>
+<li>
+<p><strong>Save writes the whole window, and the file is now called a workspace.</strong> The
+disk button in the top bar used to write the tab in front of you, which made it
+the third button on that row doing something a reader could reasonably have
+expected of the other two. It now writes <strong>every open tab in one file</strong> — each
+with its view, its tracks, its marks, its bookmarks, its ticked sequences, its
+table filters and its analysis recipes — and records which one was in front.
+Dropping it back opens all of them.</p>
+<p>The pair of buttons now states a real difference rather than two words for one
+thing:</p>
+<blockquote>
+<p><strong>Share this session as a link</strong> — the tab you are looking at.
+<strong>Save this workspace as a file</strong> — every tab, with everything in it.</p>
+</blockquote>
+<p>A link stays one tab on purpose. The advice line already warns past about eight
+thousand characters and a single session with eight tracks is a few thousand,
+so a link carrying six tabs would open by telling the reader not to use it.
+What is new is that both roads carry the <em>same format</em> — a link is a workspace
+of one — so there is one parser, one version gate and no way for the two to
+drift apart.</p>
+<p><strong>A dropped workspace is added, never substituted.</strong> Six open tabs are not
+closed by a drop; they were the reader’s, and there is no undo. The one place
+that does replace a window is the offer on the first screen after a browser
+restart, which has asked first. A window showing nothing but the picker gives
+that tab up, and a file with more tabs than the window can hold says how many
+it left rather than dropping them in silence.</p>
+<p><strong>The file format is a clean break, and old <code dir="auto">.metacooler.json</code> files stop
+opening.</strong> They are a tab where the reader now has a window, and carrying both
+shapes would mean two readers to keep in step for the sake of files that are a
+few weeks old and a re-save away from being current. Saving again from this
+build is the whole of the fix. The published example datasets and the CLI’s
+<code dir="auto">replay</code> moved with it — <code dir="auto">replay</code> takes a workspace and re-runs the tab that
+was in front, or the one <code dir="auto">--tab &lt;n&gt;</code> names.</p>
+<p><code dir="auto">GLOSSARY.md</code> moved with it too. It had <em>session file</em> as one of the senses of
+<strong>session</strong> and gave the saved file to <code dir="auto">SessionConfig</code>; there is no such thing
+any more, so <strong>workspace file</strong> is now its own entry and a config is what one
+holds. The glossary’s own rule — where it and the code disagree, the code is
+right and the glossary is a bug — is the reason that is part of this change
+rather than a follow-up.</p>
+</li>
+<li>
+<p><strong>On a turned map the guide becomes a vertical line while a stretch is being
+chosen.</strong> At rest the guide under the pointer is a pair of 45° rays, and that
+is the honest answer to <em>what is this cell</em>: a turned map’s two directions are
+not its two axes, so the cells sharing a place with the contact under the
+pointer are a ray rather than a column. It is the wrong answer the moment the
+next press names an <strong>interval</strong> instead — Shift held, Option held, or a form
+waiting to be pointed at — because then the reader is not choosing a contact,
+and the mark that says where an interval starts is the edge it starts on. So
+the rays collapse to one vertical line at the pointer’s own column, and the
+tracks beside the map drop back to a single hairline under it rather than
+marking the two anchors of a contact nobody is selecting. It answers the
+modifier rather than the movement, so pressing Shift over a stationary hand
+changes the guide immediately.</p>
+</li>
+<li>
+<p><strong>Windows installers are temporarily not built.</strong> The <code dir="auto">--win</code> leg of the
+release workflow is commented out, so releases carry the macOS and Linux
+installers and no <code dir="auto">.exe</code>. Nothing about the target changed — <code dir="auto">npx electron-builder --win</code> still works from a clone — and the leg is left in
+place, commented, so restoring it is uncommenting three lines. <code dir="auto">fail-fast: false</code> meant the other legs never depended on it, and <code dir="auto">collect</code> attaches
+whatever artifacts exist. <code dir="auto">docs/desktop.md</code> and the release body say so, and
+both point Windows readers at the standalone HTML page, which needs no
+installer anywhere.</p>
+</li>
+<li>
+<p><strong>A folded column leaves a tab rather than nothing.</strong> Folding one used to take
+it out of the layout entirely, which left the four marks up in the header as the
+only sign it existed — and a mark in the window furniture says neither which
+column is folded nor what is in it. A folded column now keeps a strip of itself
+with a <strong>tab</strong> standing on the bottom of it, carrying the panel’s mark, its
+name, the key that opens it and a chevron pointing the way it will open. The
+tab is turned a quarter-turn anticlockwise, so the name reads bottom-to-top up
+the side of the window like the spine of a book — which is what buys it the room
+to be named at all: a strip wide enough for “General” written upright would be a
+column, and what a folded column has to cost is a strip.</p>
+<p>They <strong>nest</strong>, and it costs no arithmetic: the four columns are already ordered
+outermost-first from each edge, and a folded strip sits exactly where its column
+would. Two folded panels on the left are two tabs side by side at the edge of
+the screen; open General and the Annotations tab moves out to stand against
+it, while General’s own tab always stands at the screen edge. The right side is
+the mirror — Analysis at the edge, Aesthetics against it. Nothing is measured,
+so no tab can be left stranded behind an expanded column. A panel with <em>nothing
+to show</em> still leaves altogether: a tab is an invitation, and one that opens an
+empty column is worse than the column’s absence.</p>
+</li>
+<li>
+<p><strong>The panel buttons come after the name in the header, and the strapline is
+gone.</strong> Four unlabelled marks used to open the row, so a reader identified them
+before reaching the thing that says what they are looking at. They are now a
+group set off from the title by a rule, and the line that explained the app to
+somebody who had already opened it has given them its room.</p>
+</li>
+<li>
+<p><strong>General is marked <code dir="auto">file-cog</code></strong> rather than a fold arrow. Its three siblings
+are already marked by what they hold — <code dir="auto">layers</code> for the annotation stack,
+<code dir="auto">chart-spline</code> for the picture’s controls, <code dir="auto">beaker</code> for what can be computed —
+and an arrow said only “this panel folds”, which is true of all four of them.
+What is behind this one is the file and what can be read off it.</p>
+</li>
+<li>
+<p><strong>A Shift-drag now opens the stretch it named on the diagonal.</strong> The gesture
+names a band of one axis and zooms to it; the axis nobody dragged took the same
+zoom and kept whatever centre it happened to have. So the same drag over the
+same stretch of chromosome I landed on a different picture depending on where
+the view had been panned to — that stretch against a megabase somewhere else —
+and nothing on screen said which. What a reader dragging a band out of a
+contact map means is <em>this stretch, against itself</em>, so the other axis is now
+centred on the same stretch and what comes back is the on-diagonal square.</p>
+<p>Unchanged where the block has no diagonal to open, which is a <code dir="auto">chrI × chrII</code>
+panel: there the other axis keeps its centre, since pulling it to a bin the
+block does not contain would only jam it against an edge.</p>
+</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="fixed">Fixed</h2><a class="sl-anchor-link" href="#fixed"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Fixed”</span></a></div>
+<ul>
+<li>
+<p><strong>A ratio drew “present here, absent there” in the colour that means the
+opposite.</strong> <code dir="auto">x / 0</code> is <code dir="auto">Infinity</code>, and it is a real reading — the strongest
+statement a ratio can make in the numerator’s favour. The raster tested the
+pooled value with <code dir="auto">Number.isFinite</code> and sent everything that failed to the
+<strong>bottom</strong> of the ramp. That is right for <code dir="auto">-Infinity</code>, which is what <code dir="auto">0 / x</code>
+becomes on <code dir="auto">log2</code>, and it is exactly backwards for <code dir="auto">+Infinity</code>: the cells where
+the first file has contacts and the second has none were painted the second
+file’s colour.</p>
+<p>The two arms are the same size — on an <em>E. coli</em> pair at 5 kb, 7.7% of cells
+each — so <strong>half of every saturated cell in the picture carried the wrong
+sign</strong>, and the half that was wrong was the half worth looking at. It could
+only be caught at the pointer, where two adjacent cells reading <code dir="auto">0.001 · 0</code> and
+<code dir="auto">0 · 0.001</code> were the same shade of dark blue.</p>
+</li>
+<li>
+<p><strong>A ratio of two balanced maps was silently rescaled, and the rescale ate the
+finding.</strong> <code dir="auto">ratio</code> and <code dir="auto">difference</code> forced the depth match on and hid its
+tickbox, on the grounds that two libraries of different depth differ by a
+scalar and a ratio <em>is</em> that scalar everywhere. True of raw counts. Not true of
+balanced ones: ICE puts every bin’s marginal at 1, so two balanced matrices
+arrive on one normalisation with nothing left to correct — on the pair above,
+the two marginals agree to 0.2%.</p>
+<p>Matching them again was not a no-op, because <code dir="auto">matchGain</code> does not measure
+depth. It measures the 99th percentile, and the 99th percentile of a Hi-C map
+is made entirely of near-diagonal cells — which is where two conditions differ.
+It returned <strong>1.478</strong> and shifted every cell of the ratio by <strong>−0.56 in
+<code dir="auto">log2</code></strong>, a quarter of the ±1 range such a map is drawn on: a near-diagonal
+band that another tool puts at +0.60 came out at +0.04, white instead of red,
+and the same comparison made anywhere else disagreed with the viewer. It also
+moved with the viewport, since the gain is measured on the block that was read
+— the same cell reported a different ratio at different zooms.</p>
+<p>Depth matching is now <strong>off by default on balanced values</strong> and on as before
+for raw counts, and the tickbox is offered under all three operations instead
+of being hidden under two of them.</p>
+</li>
+<li>
+<p><strong>The hover readout printed most of a balanced map as <code dir="auto">0</code>.</strong> <code dir="auto">fmt.num</code> rounded
+to three decimal places, and a balanced cell is a fraction — at 5 kb on a
+bacterial genome the typical value is a few times <code dir="auto">1e-4</code>. Two cells three-fold
+apart printed the same string, so a reader checking a ratio against the counts
+under it was shown a pair that could not have produced it. Values below a
+thousandth now keep three <em>significant</em> digits, and below <code dir="auto">1e-7</code> an exponent.</p>
+</li>
+<li>
+<p><strong>Two metagenomes selected together hung the tab.</strong> A file with a genome layer
+has no deck for a second one to join (§16.8), and the fallback for that case
+was written as “open it as this session’s map” but implemented by calling the
+dropped-file router — which had since learned to send a map back to the
+companion path that was calling it. The pair recursed until the stack ran out,
+in the one place where the fallback was meant to be the calm one. Found while
+giving the header’s new add button the same rule to follow.</p>
+</li>
+<li>
+<p><strong>A shared link carried three things it promised not to.</strong> Two comments in the
+codebase already stated the rule — a session’s <code dir="auto">compare</code> field says “a shared
+link still cannot” carry a local second file, and the deck’s own module says
+spelling a companion’s name into a link “would post a private filename to a
+stranger, which <code dir="auto">shareLink.ts</code> already refuses to do”. Neither was true. A link
+carried the local compared file, the deck’s local companions, and (once
+sessions began recording it) the size and modification time of the sender’s own
+file.</p>
+<p>Worse than useless to a recipient: those names are bare filenames, and opening
+one goes through a grant store keyed on the bare name whose guard compares only
+the name — so somebody who had ever granted their own <code dir="auto">rep2.cool</code> would have
+opened <strong>their</strong> file in the sender’s slot, with every label on screen
+agreeing. The redaction now happens inside the encoder rather than at its call
+site, so a second caller cannot forget it, and the test asserts against the
+encoded payload rather than the decoded object: the point is that the name
+never leaves the machine, not that the far end ignores it.</p>
+<p>A <strong>local track is kept</strong>, and the rule that decides all of it is now written
+down in both places: a private name is stripped only where the structure
+survives without it. A dropped companion costs a label — the <code dir="auto">~</code> placeholder
+keeps the slot, the count and the order — while a dropped track costs the row.</p>
+</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="added">Added</h2><a class="sl-anchor-link" href="#added"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Added”</span></a></div>
+<ul>
+<li>
+<p><strong>Connect a folder, and browse it in a panel — a directory on this machine, or
+a bucket, read the same way.</strong> Every door to a file this app had asked <em>which
+file</em> once and then closed: the picker, the header’s <code dir="auto">+</code>, the browse button
+beside a URL box. That is the right shape for opening one thing and the wrong
+shape for the way people actually work with a directory of data, which is to
+open one, look, open the next, and keep going for an afternoon. Files on a
+bucket could only be added one at a time, and a folder on the disk could not be
+browsed at all.</p>
+<p>A <strong>Connect</strong> button now sits beside the <code dir="auto">+</code> in the header — a plug, because
+what it attaches is a <em>place</em> rather than a file — and what it fills is a fifth
+side panel, <strong>Files</strong>, folded with <code dir="auto">f</code>. Inside it: the folders you have
+connected, and the tree of whichever one you are in, with crumbs and a filter.
+Every file row loads into the tab you are in when you click it or press the
+<code dir="auto">→</code> at its end, and every file row can be <strong>dragged</strong> — onto the map’s edge
+rectangles for a lane in that stack, onto a companion for a track on that map,
+onto the Tracks card, onto the page. A dragged row carries a folder and a path
+rather than bytes; the file behind it is fetched at the drop, once.</p>
+<p><strong>A local folder and a bucket are one thing to everything above the byte
+layer.</strong> <code dir="auto">browse/folder.ts</code> is the whole interface — given a path, the
+sub-folders and the files; given a file, how to open it — and the two backends
+are the entire difference between them. It is one column, one tree, one set of
+crumbs, and one filter, over both.</p>
+<p>What a local folder means depends on the browser, and the row says which you
+got. In Chrome, Edge and the desktop app it is a real connection: this browser
+keeps permission to <em>list the folder and read what is in it</em> — not the files
+themselves, and nothing is uploaded or copied — so it is still there after a
+reload, and it picks up a file a pipeline wrote into it five minutes ago.
+Firefox and Safari have no such thing; there the folder is a <strong>snapshot</strong>
+taken when you connect it, marked <em>this visit</em> on its row, gone after a reload.
+Offering it in two browsers and not the other two would have taken a working
+gesture away to avoid writing one sentence.</p>
+<p>A connected folder is a wider grant than a chosen file, so it is listed in
+<strong>About → what is stored</strong> beside the files you have allowed, disconnectable
+one at a time and swept by <em>forget everything</em>. Nothing about §11 changes: a
+local folder is read in place by code on your own machine, a bucket is read by
+your browser from the bucket, and there is no server in between because there
+is no server.</p>
+</li>
+<li>
+<p><strong>A public bucket needs nothing but its link.</strong> A bucket entry used to demand
+six fields, five of which are a key — so a reader with a URL out of a paper met
+a form that read as <em>you need an AWS account for this</em>. Public is now the
+default and it is one field; a key is behind a switch. Everything under a
+keyless prefix is listed and read unsigned, which is what public data always
+took.</p>
+<p>One thing to know before pointing it at a bucket: <strong>listing needs
+<code dir="auto">s3:ListBucket</code> granted to everyone in the bucket policy</strong>, which is a
+different grant from the <code dir="auto">s3:GetObject</code> that makes files downloadable, and most
+published buckets grant the second and not the first. A public bucket that
+refuses to be listed is an ordinary configuration rather than a fault, there is
+nothing an app with no backend can do about it, and the message says which of
+the two grants is missing and that files under the prefix still open by URL.
+<code dir="auto">docs/hosting.md</code> has the policy to paste. Browsing a public prefix needs <em>no</em>
+CORS change: an unsigned listing is a simple request, so it is never
+preflighted, and the policy that serves public downloads already answers it.</p>
+<p>The dialog behind <em>private buckets…</em> is now just <strong>Buckets</strong>, since it lists
+both kinds, and its add form is the one the Connect dialog uses — one
+implementation, so the two cannot come to disagree about what a valid entry is.</p>
+</li>
+<li>
+<p><strong><code dir="auto">correlation</code>, a new entry in the score picker: the square replaced by the
+Pearson correlation between its rows.</strong> Two bins correlate when they contact
+the rest of the sequence in the same pattern, so the checkerboard this draws
+<em>is</em> the A/B compartments — and it is drawn through the same
+<code dir="auto">correlationMatrix</code> and the same <code dir="auto">usableBins</code> the Compartments task solves for
+its eigenvector, not a second implementation “for display” that would agree
+with the first until it did not.</p>
+<p><strong>It is one entry rather than three controls</strong>, and it belongs in that list for
+the reason O/E is kept out of it. O/E is excluded because it <em>composes</em> — the
+standard pipeline is O/E of balanced counts, and folding it in would make
+<code dir="auto">balanced</code> and <code dir="auto">O/E</code> mutually exclusive for no reason but the control. The
+correlation composes with nothing: the cell no longer holds a contact at all,
+it holds a coefficient between −1 and 1 for a pair of bins’ whole rows, and the
+pipeline that produces the compartments is fixed at balanced → O/E →
+correlate. So the entry carries all three steps and the reader picks one thing;
+a control per step would be three controls with exactly one legal combination.
+Offered only on a file that carries weights, since a correlation of unbalanced
+O/E is a correlation of the coverage bias — which is per-bin, and therefore
+looks exactly like a compartment. The caption names every step that was
+applied.</p>
+<p><strong>A dropped bin comes back as a gap</strong>, not as a zero. A zeroed row asserts that
+its bin is uncorrelated with everything, which is a strong and false claim; on
+a map it would be a stripe of definite colour across the checkerboard. The
+scope line says how many were dropped, because a blank row and a sparse corner
+look the same.</p>
+<p>It is the one <strong>cubic</strong> step in the viewer, so it runs on the analysis thread
+— its own client, not the drawer’s, so a correlation never queues behind
+somebody’s insulation pass — reports a percentage, and is cancelled by picking
+another score. Measured at 32 ms for 232 bins, 232 ms for 464 and 2.8 s for
+929, so the map caps at 1,500 a side.</p>
+<p>Where it cannot be drawn — a second file open under <code dir="auto">ratio</code>, a <code dir="auto">contig_A × contig_B</code> block whose rows and columns are not the same bins, or a square past
+the cap — the map falls back to the O/E underneath it and <strong>the caption says
+so</strong>. That is deliberate: the O/E is a real picture and looks like one, so
+nothing else on screen would betray that it is not what was asked for, and the
+caption is the only part that survives an export.</p>
+</li>
+<li>
+<p><strong>A despeckle, in the <code dir="auto">smooth</code> picker beside the transform.</strong> Each cell
+replaced by the mean of the cells around it with <strong>its own value left out</strong> —
+<code dir="auto">terra::focal</code> with a zero centre weight, which is the filter Hi-C figures are
+usually made with. Off, <code dir="auto">3 × 3</code>, <code dir="auto">5 × 5</code>, <code dir="auto">7 × 7</code>; carried in the link, and
+written into the colourbar caption (<code dir="auto">counts · smoothed 3 × 3</code>), because a
+smoothed map otherwise looks exactly like a map.</p>
+<p>Leaving the centre out is what makes it a despeckle rather than a blur: a cell
+that disagrees with all eight of its neighbours is evidence about the
+neighbourhood and not about itself, and a filter that kept a ninth of its own
+value would carry a wild pixel into the result at a ninth strength instead of
+removing it.</p>
+<p><strong>It is applied per file, before two files are combined</strong>, which is what makes
+it useful on a ratio rather than merely cosmetic. Smoothing the ratio would
+have to average the <code dir="auto">Infinity</code> and <code dir="auto">0</code> that <code dir="auto">x / 0</code> and <code dir="auto">0 / x</code> produce, and one
+infinite cell poisons every window it falls in; smoothing the inputs makes
+those cells finite <em>before</em> the division, because a zero cell with contacts
+around it is no longer zero. On the <em>E. coli</em> pair at 5 kb it takes the
+saturated cells of the ratio from <strong>15.3% to none at all</strong> at <code dir="auto">3 × 3</code>, while
+the 0.43% that are genuinely unbalanced bins stay blank.</p>
+<p>Two departures from the R original, both about edges. The divisor is the number
+of cells that contributed rather than the fixed <code dir="auto">(2r+1)² - 1</code>, because here the
+boundary is the <em>viewport</em> and the alternative is a dark frame that moves when
+the map is panned; and a <code dir="auto">NaN</code> cell keeps none, because filling it from its
+neighbours paints a measurement over the one place the map is saying it has
+none.</p>
+<p>Cost is flat in the radius — a separable running window rather than <code dir="auto">(2r+1)²</code>
+reads per cell — so <code dir="auto">7 × 7</code> is no dearer than <code dir="auto">3 × 3</code>.</p>
+</li>
+<li>
+<p><strong>A blue–white–red diverging ramp, <code dir="auto">BuWtRd</code>.</strong> Higher contrast than <code dir="auto">RdBu_r</code>
+and with more of its range spent away from the centre, which suits a sparse
+ratio map: most cells sit near neutral, so a ramp that stays pale through the
+first third of each arm spends its colour where there is least to say. Its
+white is anchored to the <strong>middle</strong> of the scale rather than to the fifth of
+its eight stops — spread evenly that would land at <code dir="auto">4/7</code>, and a map of two
+identical files would have come out faintly blue everywhere.</p>
+</li>
+<li>
+<p><strong>A button that adds a file to the tab you are in.</strong> Dropping a file on the
+page has always <em>added</em> rather than replaced — a second cooler comes up beside
+the first, a bigWig joins the tracks, a <code dir="auto">chrom.sizes</code> answers a browser’s
+guessed lengths — and that is the behaviour the whole content area has taken
+since decks existed. What it never had was a button. Every click-sized door to
+a file went the other way: the file crumb, the brand, <em>Open a different file</em>
+and a new tab all replace what is open. So the commonest thing a reader wants
+to do with a second file was reachable only by dragging one in from a window,
+and the controls that looked like they would do it did the one thing that
+loses work.</p>
+<p>The header now carries it, past a divider of its own after the four panel
+buttons: a file with a <code dir="auto">+</code> on it, in every view, opening the picker over what
+is on screen. It is the same picker the file crumb opens — the drop area that
+also takes a click, the URL box, the way into a private bucket — with the
+published catalogue left out, because every entry on that list is a whole
+<em>session</em> and offering it here would be offering to throw the tab away from
+the one control whose promise is that it will not. The mark is a <em>file</em> with a
+plus rather than the bare <code dir="auto">+</code> one row below it in the tab strip, since that
+one adds a tab and this one adds a file to the tab you are in.</p>
+<p>A URL typed into it takes the routing a dropped file takes, which it could not
+before: a map goes into the deck beside the one that is open, anything else
+goes to the tracks, and a bucket-browsed file carries its own key there. On an
+empty tab the distinction does not exist — there is nothing to add to — so it
+opens instead, exactly as the landing page does, rather than taking a lone
+bigWig and finding no track list to put it in.</p>
+</li>
+<li>
+<p><strong>The picker now says which file it wants back, not just its name.</strong> A session
+saved from a local file names it by its bare filename, and <code dir="auto">rep1.cool</code> is a
+name a reader may well have several of — so the note asking for it now carries
+the size and the modification date the session was made with. That is the
+difference between finding the right file and finding <em>a</em> file with the right
+name.</p>
+<p>And when a file arrives whose <strong>name matches but whose bytes do not</strong>, the app
+says so once and opens anyway. That is either the same file re-run through a
+pipeline — legitimate, and worth knowing, because the numbers on screen are
+then not the numbers in the figure — or somebody else’s file of the same name.
+The two are indistinguishable from inside the app and one of them is a thing
+people do on purpose, so it is a remark and never a refusal.</p>
+<p>Saying it needed a third way to speak. The shell had a modal, which takes the
+keyboard and demands an answer, and the error view, which replaces what is on
+screen; both are far too loud for <em>“this opened, and here is something you may
+want to know”</em>. Notes now appear as a dismissible row under the tab strip,
+where the restore offer already lives.</p>
+</li>
+<li>
+<p><strong>Closing the browser no longer ends the session — it offers it back.</strong> The tab
+strip has always lived in <code dir="auto">sessionStorage</code>, which is a deliberate rule and not
+an oversight: a set of open files is a train of thought, it belongs to the
+window it was opened in, and closing the tab is meant to end it. That rule is
+unchanged, and <code dir="auto">sessionStorage</code> still wins whenever it is present — a reload
+reads it and never looks anywhere else. What is new is an answer for the one
+case it cannot cover, because the storage is gone with the window: the browser
+was closed.</p>
+<p>Alongside it there is now a durable record — every tab, its file, its tracks
+with their colours and limits, its marks, bookmarks, ticked sequences, table
+filters and analysis recipes — written to IndexedDB on a debounce and flushed
+when the page goes away. On the first screen of a browser that was closed with
+work in it, a row above the picker says what was open and when, and offers to
+bring it back.</p>
+<p><strong>Offered, never applied</strong>, and that is two decisions rather than one. Silently
+reopening six files a week later reverses the decision the reader made by
+closing them; and on a shared machine it would put somebody’s unpublished
+figure on screen for whoever sat down next, which is the reader §11 is written
+for. <em>Start fresh</em> is a real answer and it deletes the record rather than
+hiding the note, because an offer that returns tomorrow having been declined
+today is not an offer.</p>
+<p>The record holds no file contents and never will. A local file still comes back
+detached, exactly as it does from a reload, so this stage changes nothing about
+what is read or copied — §11 and §12 are untouched, and every browser gets it,
+not only the ones with a file-handle API.</p>
+<p>Two traps are worth recording, because both failed silently and both were
+found by driving the real application rather than by reading the code.</p>
+<p>A restored tab is <em>primed</em> — it holds a view state and has read nothing — and a
+config is built by reading that tab’s session memory, which after a browser
+restart is empty. So the first click would have gathered eight empty configs
+and written them over the good record. The workspace is therefore applied into
+memory <em>before</em> the first tab is primed, which is also the order <code dir="auto">applyConfig</code>
+already required for its own reason.</p>
+<p>And <strong>a window with nothing open is two different facts.</strong> After the reader
+closes their last tab it means <em>forget this</em>; at startup it means <em>nothing has
+been restored yet</em> — and acting on the second deletes the record while the read
+that would have offered it back is still in flight. A race, resolving
+differently on a warm cache than a cold one, so the workspace disappeared on
+some loads and not others with nothing in the console either way. The rule is
+now a pure function with a test rather than three conditions in the shell.</p>
+<p>A third thing that had to change for any of it to be true: the record follows
+the <strong>workspace</strong>, not the view state. Loading a track, placing a mark and
+saving a bookmark are most of what a session <em>is</em> and none of them navigate, so
+a record written at the last navigation came back missing everything the reader
+had done since.</p>
+</li>
+<li>
+<p><strong>A local file you have already opened reopens itself after a reload.</strong> In
+Chromium and in the desktop build, dropping or choosing a file now also hands
+the page a <code dir="auto">FileSystemFileHandle</code> — a <em>capability</em>, not a path and not a copy —
+and that is what is kept. A reload, a restored tab or a reopened workspace
+resolves the grant and reads the same file, with no drag and, while the browser
+session lasts, no prompt.</p>
+<p>Nothing about how the file is read changes: what comes back is the same <code dir="auto">File</code>
+object a drop produces, read a slice at a time by the same <code dir="auto">LocalFileSource</code> as
+before. No bytes are stored, nothing is uploaded and nothing is duplicated on
+disk, so §11 and §12 stand exactly as written. Firefox and Safari have no such
+grant to give, and there a local file comes back detached as it always has.</p>
+<p><strong>The tracks come back too</strong>, which is the larger half of what a reload used to
+cost: a map is one drop and the bigWigs beside it are eight. A restored track
+with a grant behind it says <em>reopening…</em> and fills itself in, keeping its id —
+so it does not jump to the bottom of the card — along with its colour, its
+limits, its height and its edge. They resolve in parallel rather than one after
+another, and a grant that turns out to be spent puts the row back exactly where
+it used to land, with the <em>re-open this file</em> button that has always been the
+way back.</p>
+<p>Two things this deliberately does <strong>not</strong> do. It does not put local file names
+into the URL hash: this browser being able to reopen <code dir="auto">rep1.cool</code> says nothing
+about anybody else’s, so the shareability test the hash is gated on is
+unchanged, and a link still carries only what a recipient can act on. And it
+does not ask for permission on the boot path, because a permission request
+without a user gesture resolves without ever showing a dialog — the reader is
+asked when they click, and never by a page that is merely loading.</p>
+<p>A grant is keyed by the file rather than by the tab, so two tabs on one file
+share it and one <code dir="auto">.mcool</code> at five resolutions is one grant. The row also
+records the file’s name, size and modification time, because a local file’s URI
+is its bare name and two <code dir="auto">rep1.cool</code> from two directories would otherwise
+collide: a name that no longer matches is refused outright rather than opened,
+since showing the wrong file with every label on screen agreeing is worse than
+asking for it again. A file that has merely <em>changed</em> is not refused — a re-run
+pipeline overwriting a file somebody is reading is a legitimate thing to do.</p>
+</li>
+<li>
+<p><strong>The deck and the comparison come back too, and the tracks land on the right
+panels.</strong> These were the two files a reload lost most quietly. A local
+companion is destroyed at <em>serialisation</em> — <code dir="auto">maps</code> writes <code dir="auto">~</code> for one — and a
+local second file was never in the hash at all, so neither could even be
+refused: by the time anything could ask, the name was gone.</p>
+<p>Neither is fixed by changing the hash, and that is the design. The <code dir="auto">~</code> is a
+promise to a <strong>recipient</strong> (§16.6): it keeps the count and the order, so a
+shared deck arrives with a drop rectangle where the sender’s file was rather
+than silently one map short. Putting a filename there instead would post a
+private name to a stranger and leave their deck trying to <em>fetch</em> it. So the
+names live beside the hash, in the session’s own memory, as private as the
+files they name — which means a plain reload restores them as well as a
+remembered workspace does.</p>
+<p>A stale note can only ever degrade to today’s behaviour: a remembered cell that
+now holds a published map is left alone, and one past the end of a deck that
+has since shrunk is dropped. A companion whose file cannot be re-opened comes
+back as a cell that <strong>names it</strong>, rather than as the link’s “a map was here” —
+which is true of a stranger’s deck and misleading about a file on your own
+disk.</p>
+<p>And <strong>where a track was drawn is remembered with it</strong>. Until now a restored
+deck put every track back on the first map, however carefully they had been
+arranged across the panels. What is stored is keyed by the <em>file</em> each
+companion was showing rather than by its panel id, because panel ids are minted
+per deck and one written down today names nothing tomorrow — so it is seeded
+into the same parking mechanism that already hands a lane back when a map
+reopens its file. Where the companions do not come back, the tracks park onto
+the lead exactly as they always have.</p>
+</li>
+<li>
+<p><strong>A screen that says what this browser is remembering, and a button that ends
+it.</strong> Reachable from the command palette. It lists the durable workspace, the
+per-window entries, the preferences, and — named outright rather than counted —
+any bucket access keys, which are stored in plain text and which a reader
+deciding what to clear on a borrowed machine should not have to press the
+button to discover.</p>
+<p><em>Forget everything</em> means everything: both web storages and both IndexedDB
+stores, swept by one rule over the prefix every key this app writes shares.
+A rule rather than a list of names, because a list only covers the keys
+somebody remembered to add to it — and a sweep that quietly missed one while
+telling the reader it had cleared everything would be worse than no button at
+all. A test reads every <code dir="auto">setItem</code> in <code dir="auto">src/</code> and holds the rule to it.</p>
+</li>
+<li>
+<p><strong>Recentre on the diagonal</strong>, a button in Aesthetics → Map between the turn and
+<code dir="auto">O/E</code>. It slides the view onto the nearest on-diagonal window at the zoom it is
+already at — the perpendicular foot of the picture’s own centre on the line the
+two axes name the same bin, which is the least it has to move — without
+touching the region or the resolution.</p>
+<p>Every gesture that lands off the diagonal takes several more of the same
+gestures to come back from, and none of them can be asked for directly: a pan
+is relative, a box is where the hand drew it, and a wheel zoom is around the
+pointer. There is no drag that says <em>here, but on the diagonal</em>. Greyed where
+the block has no diagonal — the trans corner of two chromosomes — and while the
+map is turned, where the picture already is one.</p>
+</li>
+<li>
+<p><strong>Rectangles, in the Manual annotations card.</strong> The card drew two of the three
+things people put on a contact map by hand: a line says <em>this coordinate</em> and
+an arrowhead says <em>this cell</em>, and there was no way at all to say <em>this block
+of contacts</em> — which is the mark a domain, a corner peak and a pair of loci
+worth boxing all want. The workaround was four lines making a box out of
+crosshairs, which is four marks to move and four to delete.</p>
+<p>A rectangle is <strong>two intervals</strong>, one per axis, rather than an interval and a
+shape. That is what makes on- and off-diagonal the same mark and any ratio
+expressible: <code dir="auto">I:120000-180000</code> against itself is a domain, two short stretches
+a megabase apart is a corner peak, and a short stretch against a long one is a
+locus against a whole arm — a thing no square could have said. Typed with the
+second box left empty means <em>the same stretch on both axes</em>, the same courtesy
+the arrowhead form does for a cell on the diagonal.</p>
+<p><strong>Drawn with a drag</strong>, which is the gesture a hand already makes for a box:
+press at one corner, let go at the other, with the map’s own marquee and its
+coordinate chips showing what is about to exist. The marquee follows the hand
+on both axes — a <em>selection</em> is squared because it resolves to one range, and a
+mark does not — and it snaps out to the edges of the cells the two ends are in,
+which is what commits. Holding Shift locks the box to the diagonal, so a domain
+is one gesture. The mode stays on afterwards, as the other two do, because
+marking up a figure is several marks — and a click while the map is waiting for
+a drag places nothing rather than navigating away from the picture being drawn
+on.</p>
+<p><strong>On a turned map the box is off the diagonal if that is where it was drawn.</strong>
+Both ends of the drag are taken back to the square the band was rotated out of,
+exactly as a click is, so pressing over one contact and releasing over another
+names the rectangle those two contacts span — the one thing a band selection
+there cannot say, since a selection over a turned map is always a stretch of
+the genome against itself. Shift there collapses each end onto its own midpoint
+rather than snapping the pointer, which gives the on-diagonal square through
+the two places the drag ran between. And what is drawn while the hand moves is
+the mark itself, through the code that will draw it for good: a rectangle of
+rows against columns leans at 45° on a turned map and folds where it crosses
+the diagonal, so a rubber band would be a box drawn around a shape that is not
+one.</p>
+<p>Which gesture a form asks for is now part of what it hands the map: the two
+marks that name a place take clicks, the one that names an extent takes drags.
+A plain drag draws the box rather than panning, because a reader who has just
+pressed a button that says <em>draw on map</em> is going to drag on the map, and
+asking for a modifier on top of an armed mode with a lit button and a changed
+cursor is asking twice.</p>
+<p>On a <strong>turned</strong> map a box is drawn as the contacts it names rather than as its
+own outline, which is the same rule every other mark there follows: off the
+diagonal that is a parallelogram leaning at 45°, and on it that is exactly the
+triangle a BED domain gets, because an on-diagonal box <em>is</em> a domain drawn by
+hand. A box drawn across the diagonal has an image on each side of it; where
+they genuinely fall apart — a locus against a whole arm turns into two stripes
+leaning opposite ways — both are drawn, and where one falls inside the other,
+which is every box drawn near the diagonal, only the outer one is, since a
+second outline in there is the edge of nothing.</p>
+<p>Boxes are anchored in the <strong>lane stacks</strong> the way loops already were, a
+triangle per edge on each axis: a domain boxed on the map puts its two
+boundaries under the tracks, in the coordinate the tracks are drawn in, which
+is where the comparison is actually made. They go out with the loops as
+<strong>BEDPE</strong>, whose six coordinate columns are exactly a pair of intervals — the
+row is the box rather than a summary of it — and they are carried in a session
+file and in per-file session memory like every other mark.</p>
+</li>
+<li>
+<p><strong>bigWigs, gene models and interval sets on a metagenome.</strong> §8.5 gated every
+annotation card on the file having no genome layer, so a <code dir="auto">.metacool</code> had no
+Tracks card, no drop zones and no way to draw a coverage track beside the map
+it was computed from. The argument was that a metacool’s axis is contigs from
+thousands of independently assembled organisms, so a file keyed on contig
+names either coincides or misleads.</p>
+<p>The premise was wrong about the files people have. A metagenomic Hi-C dataset
+is <strong>one co-assembly</strong> binned into MAGs afterwards: the names in <code dir="auto">/contigs</code>
+are one namespace — on the reference file, 20,566 sequences with 20,566
+distinct names — and a bigWig over that assembly is keyed on exactly those
+names, in the (contig, start, end) coordinates every other lane here is drawn
+in. The naming ladder (§5.9) was already inert on opaque assembler ids, which
+is what makes the rename safe on a metagenome in the first place.</p>
+<p>So the whole column is offered on every container. What a metagenome needed
+instead of a gate was an honest <strong>report</strong>: a track over a co-assembly covers
+the organisms it was made about, and the sequence counts state that as <code dir="auto">794 of 20,566</code>, which is arithmetically true and reads exactly like a file that
+failed to match. Where the map has genomes the sentence now counts them —
+<em>794 of 20,566 sequences, in 4 of 48 genomes: metator_00001_00000, …</em> — and
+says it as a note rather than a warning, because partial coverage is the
+expected shape of a track here. <code dir="auto">__unbinned__</code> is not among them (§7.4). The
+two real faults keep their voice: no overlap at all, and a cross-convention
+match whose lengths disagree.</p>
+<p>Measured rather than assumed, on the 48-MAG reference file with a bigWig
+written over four of its MAGs: the whole-metagenome picture costs the track
+<strong>three range requests</strong>, because the sample cache asks once per view and bbi
+answers two thousand regions out of one zoom level. No cap was needed.</p>
+</li>
+<li>
+<p><strong>A band dragged across several sequences no longer names a region that does
+not exist.</strong> The reading took the sequence’s <em>name</em> from where the hand went
+down and the <em>end</em> from where it came up — one contig’s name against another
+contig’s coordinate — which on a whole-metagenome view, where a cell is a
+contig or two and any real drag crosses boundaries, produced things like
+<code dir="auto">NODE_…:1-260,000</code> for a 200 kb sequence. The range parser refused it:
+<em>Genomic region out of bounds</em>. So the 4C anchor could not be picked on the
+picture it is most naturally picked on, and the same gesture put an unusable
+string on the clipboard. A band is now clamped to the sequence it began in,
+and never runs past the end of it.</p>
+</li>
+<li>
+<p><strong>4C on a metagenome reads the whole community, and asks one question.</strong> A
+MAG’s contacts with everything else in the tube are the reading a metagenomic
+map exists for, and the task was giving back the other one: a profile
+restricted to the anchor’s own assembly, with the rest of the file left as
+gaps — one organism pictured as though it had been sequenced on its own. So on
+a <code dir="auto">.metacool</code> the run is now always the whole-file pass, cis and trans
+together, across every contig.</p>
+<p><em>Cis only</em> and <em>Normalisation</em> are gone from the form <strong>there, and only
+there</strong>. On a cooler both are real questions and both are unchanged: a
+chromosome is a self-contained thing, cis is the commonest reading and the
+bounded one, and that chromosome’s own P(s) is the curve to divide by. On a
+metacool neither survives contact with the file — an anchor is one MAG among
+hundreds, and a decay accumulated from one assembly’s contigs is not an
+expectation for contact <em>between</em> assemblies, so the ratio would carry two
+meanings in one track.</p>
+<p>The runner settles both keys itself on such a file rather than trusting what a
+stored session or a form filled in on a cooler left behind, and the estimate
+prices the pass it will actually make instead of the four range requests the
+absent toggle would have implied. The arithmetic of both switches is untouched
+and still goldened; what varies by file is which of it is offered. A stored
+session carrying a key for a control the form no longer has at all is dropped
+when the form resolves its defaults.</p>
+</li>
+<li>
+<p><strong>A metagenome is read by genome, and now the gestures agree.</strong> Four things
+on a <code dir="auto">.metacool</code> said otherwise.</p>
+<p><strong>A click on the whole-file map.</strong> Its three levels are one picture at three
+depths and are labelled and divided by genome at all of them, but only two of
+them resolved a <em>click</em> that way: <code dir="auto">contig × contig</code> and <code dir="auto">genome × genome</code>
+opened a MAG’s own map on the diagonal and the pair off it, while <code dir="auto">bin × bin</code>
+— the default, the level a reader lands on — opened a region view of the two
+<code dir="auto">NODE_</code> contigs under the pointer. All three now dispatch on one rule, so the
+same gesture means the same thing at every depth (§7.3).</p>
+<p><strong>The 4C task on those pictures.</strong> The runner has always accepted a whole
+genome as an anchor — cis then means the MAG rather than whichever contig the
+first bin fell in — and three things upstream of it disagreed. The estimate
+refused the name with <em>this file has no sequence called…</em>; the locus box
+suggested twenty thousand contigs and no MAG; and at genome level the form
+<em>invented</em> a default, reading an axis of 48 genome slots as 48 bins and
+offering <code dir="auto">NODE_17248_len_278011:1-48,000</code> — a real window of the file’s first
+sequence, chosen by nobody, ready to run. All three are fixed, and <strong>Pick on
+map</strong> now works there too: a drag on an axis of genomes names the genome,
+which is the only thing it can honestly name (§8.9).</p>
+<p><strong>The Contact maps card and the deck.</strong> Neither has ever worked on a metacool
+— <code dir="auto">compareRefusal</code> says so, and §16’s whole premise is a coordinate system two
+panels share, which two independent assemblies have not — but the card was
+still the first thing in the Annotations column and the <code dir="auto">+</code> edges were still
+on the map. A control whose only function on this file is to invite a gesture
+and then explain that it does not work is worse than no control: both are
+absent now, along with the “add a map” command and the deck a shared <code dir="auto">maps=</code>
+link would have built (§8.5).</p>
+</li>
+<li>
+<p><strong>The map’s own metadata, as lanes beside it.</strong> Every file this viewer opens
+carries tables about its own units — a <code dir="auto">.metacool</code>’s <code dir="auto">/genomes</code> with
+completeness, redundancy and GC content in it, its <code dir="auto">/contigs</code> with the MGE
+calls and bin ids the annotator joined on, every cooler’s <code dir="auto">/bins</code> with the
+weight it was balanced with — and until now all of it was readable only as a
+table, one row at a time, in a view that is not the picture.</p>
+<p>A new <strong>Metadata annotations</strong> card, between the tracks and the marks, lists
+what the open file carries and draws any of it beside the map. The columns are
+discovered rather than declared, so a file with a column this app has never
+heard of offers it like any other. A row is an ordinary annotation from the
+moment it is added: same colour picker, same rename, same height, same limits,
+same four edges, same multi-map placement, same reorder, same tooltip, same
+figure, same session memory — because it joins the store a dropped bigWig
+joins, which is the argument §18.5 already made for computed tracks.</p>
+<p><strong>The ink follows the data.</strong> A quantitative column is bars against a value
+axis; a qualitative one is runs of colour with the category written into the
+runs wide enough to hold it, from a fixed colour-vision-safe palette — the
+colours belong to the categories, not to the lane, because they have to mean
+the same thing in the lane above the map and the one down its side. Which of
+the two a column is comes from what is in it, so a cluster id written as small
+integers is a set of labels rather than a barplot of the numbering.</p>
+<p><strong>What is offered is what the view can show.</strong> One cell of a genome × genome
+overview is a whole MAG and one cell of a bin × bin view is a bin, so a genome
+column draws on all three levels and a bin weight draws on one. A coarser
+column is broadcast down, which invents nothing; a finer one is refused
+upward, because rolling bins into a MAG means choosing a statistic nobody
+asked for and then drawing it in the same ink as a number the file wrote. The
+drop-down lists the ones this view cannot show <strong>disabled, with the reason</strong>,
+and a lane whose view has since coarsened says so in its row rather than
+vanishing.</p>
+<p><strong>A metacool has an annotations column for the first time.</strong> §8.5’s gate is
+about <em>files</em> — a bigWig keyed on contig names from thousands of independently
+assembled organisms either coincides or misleads — and it never covered a
+column of the map’s own tables, which cannot be matched to the wrong sequence
+because the names are the map’s. So a metagenome now gets this card, and only
+this card.</p>
+<p><code dir="auto">/bins</code> stays bounded, as §3.3 requires: what is read when a file opens is the
+column <em>names and dtypes</em>, and a column is then read over the bins the picture
+covers, widened by half so panning costs nothing. A window too large to read
+at once is refused in the row, with the number.</p>
+<p>Giving a metacool a store had one consequence worth naming: the analysis
+drawer decides where a computed result goes by asking whether there is
+somewhere to put it, and “a store exists” is not the same question as “a lane
+can draw”. A profile’s values live in the annotations worker, which a metacool
+still has none of, so the question is now the second one — profiles stay in
+the drawer that drew them, and a called interval set, whose coordinates are on
+the entry itself, becomes an overlay on the map (§18.5).</p>
+<p>Each column exports as a TSV at <strong>its own</strong> granularity — one row per genome,
+sequence or bin, under <code dir="auto">#</code> lines naming the file, the table and the column —
+because a lane is drawn at whatever level the view is, and checking a bar
+against the file means having the rows the file wrote.</p>
+</li>
+<li>
+<p><strong>Every box that takes a file URL now has a <code dir="auto">browse…</code> beside it.</strong> The bucket
+browser existed and was reachable from one place: the picker’s <em>private
+buckets…</em> dialog, the screen for typing secret keys into. So a reader with a
+map open and four bigWigs on a private prefix had to go back to the landing
+page, open a credentials form, scroll past an access key to the folder view
+underneath it, and pick a file — which then opened as a <em>map</em>, because that
+dialog belongs to the picker and the picker opens maps. The way to load them
+as tracks was to copy four URLs out of the AWS console.</p>
+<p>The folder view is now a component and the four URL boxes all offer it: the
+picker’s <em>open a remote file</em>, the Tracks card’s fold, the Contact maps card’s
+fold, and the deck’s add row. Each opens the same listing and does its own
+thing with what comes back — a track stays a track, a map added to the deck
+lands in the next empty cell the reader left. The credentials dialog keeps it
+inline, where it still doubles as the check that a key just typed works.</p>
+<p><strong>A picked file is opened with the key that listed it</strong>, rather than by the
+lookup at the worker boundary. That lookup resolves the same key today, since
+a listed URL is under its scope’s prefix by construction — but two scopes may
+overlap, longest-prefix wins between them, and a file reached <em>through</em> one
+key should not open under the other.</p>
+<p>There is a filter over a listing, and it is a filter rather than a search:
+<code dir="auto">ListObjectsV2</code> matches a key prefix and never a substring, so what it narrows
+is the level on screen. The line under the list says how many of how many are
+showing, because the failure worth designing against is a reader reading three
+rows out of twelve as a folder holding three files. Truncation outranks it: a
+prefix past a thousand keys is the one case where the list is not the folder.</p>
+</li>
+<li>
+<p><strong>A second map can be opened by URL, from the deck itself.</strong> The boxes existed
+— a file chooser, a URL field and an <code dir="auto">add</code> — and nothing on screen opened
+them: the row was revealed by the command palette alone. So a reader with a
+published cooler and a deck in front of them had a drop rectangle for a local
+file and no way at all to name a remote one, which is the road §11 exists for.
+The deck’s bar now opens with <strong>add a map…</strong>, and every empty cell carries its
+own folded <em>or open one by URL</em> under the drop hint — with a <code dir="auto">browse…</code> beside
+it, like every other box in the app that takes a file URL. Typed there it
+fills <em>that</em> cell rather than the first empty one, which matters in a 2 × 2
+with three gaps. The box lives inside the drop zone rather than under it, so
+an empty cell stays exactly the size of the map it stands in for.</p>
+<p>It is the half that makes a shared deck repairable. A link carries a local
+companion as <code dir="auto">~</code> (§16.6), so the recipient meets a cell they could previously
+only fill from their own disk — and the deck they mended could not be sent on.</p>
+</li>
+<li>
+<p><strong>Each map of a deck can be read as its own quantity.</strong> A companion was built
+with no score picker, on the argument that the score is one of the things a
+deck <em>shares</em>. That is right about the default and wrong about the choice:
+four replicates should be one quantity unless somebody says otherwise, and
+“unless somebody says otherwise” needs a control to say it with. Two ordinary
+cases had none — a companion carrying a <code dir="auto">/pixels</code> column its lead has not got,
+and a pair a reader wants at two normalisations — and both ended at a picker
+that does not exist.</p>
+<p>So the corner menu on each map now holds a <strong>score</strong>, built from <em>that</em> file’s
+own columns, starting on whatever the deck resolved. Picking one takes that
+panel off the shared answer and leaves every other panel where it was; the
+clip goes back to auto with it, because a clip is a pair of numbers in one
+score’s units and a balanced matrix is fractions where counts are integers.
+A panel nobody has touched follows the deck exactly as before, and its picker
+follows too — the lead’s own control, a link and the back button all move the
+shared score, and a dropdown left on the previous answer is a control lying
+about the map it sits on.</p>
+</li>
+<li>
+<p><strong>Pointing at a track is answered on every map on screen.</strong> The deck already
+echoed a pointer on a <em>map</em> to its neighbours (§16.3) and had nothing at all
+for a pointer on a <strong>track</strong>, which is half the gesture: a hand moving along
+one profile asking “what is here” is asking it of every profile in the deck.
+Now the stacks that measure the same axis get a tick at that place, and each
+map gets the small form of the guide the panel under the pointer is drawing
+across itself.</p>
+<p>On a turned map that mark is deliberately <strong>not</strong> the little cross the cell
+echo leaves. A place is not a contact: the contacts it is in leave the
+diagonal along two 45° rays rather than along an axis, so a cross there would
+be two arms pointing at nothing — the horizontal one running through contacts
+between two <em>other</em> places, the vertical one through a column that is only a
+midpoint. The mark is the first few pixels of that V, standing on the diagonal
+under the position being pointed at. A square map keeps the cross, where its
+two axes really are the two directions the place is an anchor along.</p>
+</li>
+<li>
+<p><strong><code dir="auto">chr1</code>, <code dir="auto">1</code>, <code dir="auto">01</code>, <code dir="auto">I</code> and <code dir="auto">NC_000001.11</code> are one chromosome.</strong> Two files of
+the same genome disagree about its names more often than they agree — UCSC
+writes <code dir="auto">chr1</code>, Ensembl writes <code dir="auto">1</code>, a yeast cooler writes <code dir="auto">chrI</code> and the
+<code dir="auto">chrom.sizes</code> beside it writes <code dir="auto">01</code> — and until now every one of those was a
+<em>different sequence</em> to this viewer. A <code dir="auto">.hic</code> off 4DN put beside a <code dir="auto">.cool</code> out
+of a local pipeline gave a blank rectangle under a bar claiming the deck was
+one navigation, and the only fix was to go and rewrite one of the files.</p>
+<p>So a deck of files that spell their chromosomes differently is now one deck,
+a track is renamed into the map’s vocabulary as it loads, the locus box takes
+whichever spelling you have in your hand, and two coolers of one assembly are
+no longer refused the blended square for the <code dir="auto">chr</code> in front of one of them.</p>
+<p><strong>The rule is that it never silently matches two different sequences</strong>, and
+everything else follows from it. <code dir="auto">length</code> vetoes rather than persuades: two
+sequences of equal length are not the same sequence, so nothing is ever
+matched <em>because</em> the lengths agree, and a match whose two lengths disagree is
+reported rather than taken — hg19’s <code dir="auto">chrM</code> and hg38’s <code dir="auto">chrM</code> are one name and
+two sequences, two bases apart. A name whose shape is not recognised is
+matched by its spelling and nothing else, which is what makes this safe on a
+metagenome: <code dir="auto">NODE_1_length_338947_cov_15.4</code> is an opaque id from an
+independently assembled organism, and two of them agree by coincidence (§8.5).</p>
+<p><strong><code dir="auto">X</code> is the hard one, and the list settles it.</strong> <code dir="auto">X</code> is the tenth chromosome
+of <em>S. cerevisiae</em> and the sex chromosome of everything else, and the string
+cannot tell you which — so the decision is made from the whole file: one that
+also holds <code dir="auto">IX</code> and <code dir="auto">XI</code> is counting in Roman, and its <code dir="auto">X</code> is ten; one whose
+numerals stop at <code dir="auto">V</code> is <em>C. elegans</em>, and has no chromosome ten to confuse it
+with. Which is also why the reading travels: a companion panel is told how the
+lead counts, because a name cannot carry that and a guess would draw
+chromosome ten under the label <code dir="auto">X</code>.</p>
+<p>Every match says which rule reached it — the <code dir="auto">chr</code> prefix, leading zeros,
+Roman numerals, an organelle spelled another way, the accession — and a panel
+that answered a name it does not itself write prints both spellings under its
+heading. A rename that is invisible is the one way this can be quietly wrong.</p>
+<p>And a good deal is deliberately <strong>not</strong> equated. <code dir="auto">2L</code> is not <code dir="auto">2</code> — a
+<em>Drosophila</em> arm is its own sequence — which is the same rule that keeps
+wheat’s <code dir="auto">1A</code>, <code dir="auto">1B</code> and <code dir="auto">1D</code> apart. <code dir="auto">_random</code>, <code dir="auto">_alt</code> and <code dir="auto">_fix</code> stay, because
+a patch is not the chromosome it patches. <code dir="auto">LG1</code> keeps its <code dir="auto">LG</code>. <code dir="auto">C</code>, <code dir="auto">D</code> and
+<code dir="auto">M</code> are not Roman numerals here, because no genome has a hundredth chromosome
+and <code dir="auto">chrM</code> needs to stay the mitochondrion. Genome and MAG names are never
+matched at all.</p>
+<p>Two ranges of per-species knowledge are hard-coded and both are arithmetic:
+human’s <code dir="auto">NC_000001</code>–<code dir="auto">NC_000024</code> and mouse’s <code dir="auto">NC_000067</code>–<code dir="auto">NC_000087</code>. There is
+no alias table to download, no assembly to declare and no network call — the
+three constraints (§1) rule all three out, and a rule that works on a genome
+nobody has published is worth more than a table of the ones somebody has.</p>
+<p><code dir="auto">parseMetacoolerRange</code> stays a faithful port of <code dir="auto">metacooler.ops.range</code>: the
+conventions are consulted <strong>after</strong> both namespaces have been asked literally
+and the answer would otherwise have been <code dir="auto">unknown-label</code>, so every string a
+file does carry resolves exactly as it did, and a session of one file cannot
+tell any of this exists. SPECS §5.9.</p>
+</li>
+<li>
+<p><strong><code dir="auto">metacooler-run</code>: the Analysis panel, from a shell.</strong> Fourteen tasks, every
+one of them goldened against cooltools, coolpuppy, pyBigWig and numpy — and
+reachable only by clicking. The moment somebody has two hundred files rather
+than one, clicking stops being the interface and they leave for cooltools,
+which is the right tool and a <em>different set of definitions</em>, so the numbers in
+the figure and the numbers in the table stop being the same numbers.</p>
+<p>So: the same kernels, the same writers, the same <code dir="auto">#</code> provenance header. Not a
+port — <code dir="auto">RUNNERS</code> is imported and the job handed to it is built exactly as the
+analysis worker builds one, so a TSV produced in a batch and a TSV produced by
+clicking are byte-identical given the same inputs. If the two ever disagree,
+one of them is wrong and there is a golden that says which.</p>
+<div class="expressive-code"><link rel="stylesheet" href="/pr/168/docs/_astro/ec.zh6mu.css"><script type="module" src="/pr/168/docs/_astro/ec.0vx5m.js"></script><figure class="frame not-content"><figcaption class="header"></figcaption><pre data-language="plaintext" class="wrap" style="--ecMaxLine:65ch"><code><div class="ec-line"><div class="code"><span style="--0:#dbd7caee;--1:#393a34">metacooler-run tasks</span></div></div><div class="ec-line"><div class="code"><span style="--0:#dbd7caee;--1:#393a34">metacooler-run insulation *.mcool --window chrII --out results/</span></div></div><div class="ec-line"><div class="code"><span style="--0:#dbd7caee;--1:#393a34">metacooler-run replay session.metacooler.json --over 'data/*.hic'</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="Copy to clipboard" data-copied="Copied!" data-code="metacooler-run tasksmetacooler-run insulation *.mcool --window chrII --out results/metacooler-run replay session.metacooler.json --over &#x27;data/*.hic&#x27;"><div></div></button></div></figure></div>
+<p><strong><code dir="auto">replay</code> is the half that matters.</strong> It takes the session file the Save
+button and the Share link already produce, and re-runs the analyses recorded in
+it — with the parameters recorded in it — over any number of other files. That
+closes a loop the app was missing at both ends: parameters get chosen the way
+parameters should be, by looking at a picture and adjusting until it is right,
+and then applied to the other hundred and ninety-nine with no retyping. A
+transcription error in a batch of two hundred is two hundred wrong numbers that
+look right.</p>
+<p>Built by <code dir="auto">npm run build:cli</code> — a fourth invocation of the same bundler over the
+same source, never an edit to the first. Node needs no loader for it and the
+CLI needs no dependency beyond the app’s own.</p>
+<p>Three refusals, each for a reason. <strong>No remote files</strong>: the reader uses
+synchronous range requests, which exist in a worker and not in Node, and <code dir="auto">curl</code>
+is better at the missing half than anything this could contain. <strong>An unknown
+<code dir="auto">--flag</code> is an error</strong>, never ignored — a typo in a script that runs for an
+hour must not quietly use the default. And <strong>a task’s own parameters win over
+the CLI’s flags</strong> where the names collide, which is <code dir="auto">--balance</code> on six tasks:
+reserving the name first would have set the framing and left the task at its
+default, which is exactly the failure the unknown-flag error exists to prevent.
+The framing’s window is <code dir="auto">--window</code> rather than <code dir="auto">--region</code> for the same reason —
+two tasks already have a <code dir="auto">region</code> parameter meaning <em>which sequence</em>.</p>
+</li>
+<li>
+<p><strong>A deck’s results stop overwriting each other, and become one figure.</strong> Three
+things, and the first was a defect rather than a gap.</p>
+<p><code dir="auto">runAll</code> has computed one result per panel since the deck existed, and the
+runner stored them keyed by <strong>task alone</strong> — so the fourth library overwrote
+the third overwrote the second. What a batch of four left behind was four
+synthetic tracks and <em>one</em> plot: the tracks were filed per map and the figures
+were not. The same map also serves as the composite cache (§18.2), and a recipe
+is params plus framing, and <strong>a batch shares one framing across every target</strong>
+— it is taken once, when Run is pressed. So the reuse test could not see that
+cached eigenvectors were measured on a different file, and a saddle run over a
+deck drew panel B’s compartments out of panel A’s numbers. Silently, and only
+for the composites. Results are keyed by map and task now, which fixes both.</p>
+<p>With four results to show, the drawer grew <strong>tabs</strong>: one per map, arrows either
+side, and <code dir="auto">all maps</code> last. Both navigations, because they answer different
+questions — a reader checking whether panel three looks like panel two presses
+<em>next</em> repeatedly without aiming, and a reader who wants the fourth library
+clicks its name.</p>
+<p><code dir="auto">all maps</code> is the <strong>overlay</strong>: every map’s curves on one set of axes, the
+series named by the map. This is not §18.9’s refused differential and the
+distinction is exact: that declined a <em>subtraction</em>, on the grounds it is a
+worse version of a picture the app can already make. Four P(s) curves on one
+axis is not a subtraction, derives nothing, and is a picture the app could not
+make — the single most-drawn figure in the literature and the reason people
+leave a browser. The machinery was all here and unconnected: <code dir="auto">CurveOutput</code> has
+been multi-series with a legend and band drawing since it was written.</p>
+<p>A matrix and a table stay per map, and the tab <strong>says which</strong> rather than
+showing three of a task’s five outputs and letting the reader assume that is
+all there are. A pileup averaged over four libraries would be a fifth thing
+nobody asked for.</p>
+</li>
+<li>
+<p><strong>The figures answer questions now.</strong> Log toggles per axis, a series picker
+(alt-click a chip to isolate it), a hover readout, a drag across the plot to
+zoom an x range, double-click to reset — and, for a pileup or a saddle, its
+colour range and colormap.</p>
+<p>No chart library, and no second renderer. The whole technique is that <strong>an
+interactive figure is a plain figure of a derived output</strong>: a log axis is a
+<code dir="auto">CurveOutput</code> with <code dir="auto">xScale: 'log'</code> handed to the same <code dir="auto">drawCurve</code>, a hidden
+series is one with fewer entries, a zoom is one whose series are clipped to the
+dragged range. So the PNG is still a redraw and the PDF is still true vector —
+and, the property worth the most, <strong>the export is what is on screen</strong>. A reader
+who zooms into the first decade of a P(s) and presses PDF gets that picture,
+at vector resolution, with its axes relabelled for the range it shows. A canvas
+transform would have given them the whole curve behind a clipping rectangle.</p>
+</li>
+<li>
+<p><strong>Share: the whole session as a link.</strong> §5.5 says the URL carries what is being
+looked at and the session <em>file</em> says the rest; both stay true, and neither
+serves the case between them — somebody wants to send a colleague what they are
+looking at, right now. A link carries none of the work, and a file has to be
+attached, downloaded and dropped, by which time the moment has gone.</p>
+<p>So the session — the view, the tracks with their colours and limits, the marks,
+the bookmarks — is deflated and base64url-encoded into the <strong>fragment</strong>. That
+choice is the privacy property, not an implementation detail: a fragment is
+never sent on navigation, so what somebody is looking at never reaches the host
+serving the page. Nothing holds the link, so it cannot expire, cannot be taken
+down, works offline and works in the desktop build.</p>
+<p>What it costs is length, and length is the cheapest of those to give up — a few
+hundred characters for a view, a few thousand for a workspace. The dialog says
+the number when it gets large rather than guessing on the reader’s behalf: they
+know where they are about to paste it and the app does not.</p>
+<p><strong>A third-party shortener is offered beside it, never instead of it</strong>, and is
+named in the button rather than hidden behind a verb, because it breaks two of
+those properties: the link starts depending on somebody else’s service, and the
+address of the file being viewed leaves the browser. It is refused outright for
+a session over a local file — the long link is still worth having there, the
+recipient getting the tracks and the marks and being asked for the file, but
+shortening it would post a filename to a stranger in exchange for nothing. If
+the service cannot be reached the long link is untouched and stays on screen.</p>
+</li>
+<li>
+<p><strong>bedGraph and wig open as tracks</strong>, which closes an asymmetry that was
+invisible and slightly embarrassing: the app <em>wrote</em> bedGraph — every analysis
+result offers the button — and could not read one back. A four-column bedGraph
+is BED-shaped, the sniffer knew three formats, and the value column landed in
+<code dir="auto">name</code>, so the file came back as a lane of featureless grey boxes with no
+signal in it. Silently, which is the worst of the three ways that could have
+gone.</p>
+<p>A bedGraph <em>is</em> a bigWig written out, so it becomes the same kind of thing:
+values held in the annotations worker and sampled per view, which is what gives
+it a range, a ceiling, an autoscale, a colour chip and the ⌘-scroll without one
+line of new interface. What it cannot borrow is the bigWig’s on-disk zoom
+levels, so the summary for a window — mean, min and max, the mean weighted by
+covered bases rather than by interval count — is computed when the window is
+asked for. wig arrives with it, both step styles, its 1-based inclusive
+coordinates converted at the parser.</p>
+<p>The new sniffer runs <em>before</em> the feature sniffer and is deliberately the
+stricter of the two: exactly four columns, numeric on every row it inspects, or
+a declaration line saying so. A rule loose enough to capture a real BED4 would
+turn every peak set into a signal track of NaN, which is a worse bug than the
+one being fixed, so the suite tests the refusals as hard as the acceptances.</p>
+</li>
+<li>
+<p><strong>A tabix sidecar makes a feature file a bounded read.</strong> Every other read here
+already was — HDF5 through range requests, a bigWig by zoom level, a <code dir="auto">.hic</code> by
+the blocks its rectangle covers — and then a GTF was downloaded whole. The demo
+file is 9.5 MB; GENCODE is five times that.</p>
+<p>Where a <code dir="auto">.gz</code> is BGZF and a <code dir="auto">.tbi</code> is beside it — dropped alongside, or at the
+conventional <code dir="auto">&lt;url&gt;.tbi</code> — only the byte spans holding the sequences this map is
+about are fetched. Against a map of one chromosome that is about a twentieth of
+GENCODE. BGZF and the index are read here rather than depended on, for the
+reason <code dir="auto">hic/format.ts</code> gives at length: the byte layer, its LRU, its request
+accounting and its S3 signature belong to <code dir="auto">ByteSource</code>, and a parser that
+fetches for itself sits outside all three.</p>
+<p><strong>The fallbacks are the feature.</strong> A plain GTF still works, a bgzipped one with
+no index still works, and an index that is absent, corrupt, truncated or for
+another assembly falls back to the whole-file read rather than refusing the
+track — an index that can prevent a file from opening is worse than no index. A
+sidecar is only asked for when the file is a <code dir="auto">.gz</code>; a span set covering more
+than four fifths of the file is abandoned as no saving; and sequence names are
+matched through the <code dir="auto">chr</code> prefix in both directions, because Ensembl writes <code dir="auto">1</code>
+where UCSC writes <code dir="auto">chr1</code> and reading the whole file over that would be the
+index quietly not working.</p>
+<p>One thing worth knowing before touching it: the fetch has to over-ask by up to
+64 KiB, because a span ends at the <em>start</em> of the last block holding a record
+and a block’s length is not knowable without reading its header. The decode is
+bounded separately. Without that, a one-sequence read on a densely packed file
+hands back the several sequences that happened to follow it — which the suite
+caught, and which reads as the index working.</p>
+</li>
+<li>
+<p><strong><code dir="auto">.hic</code> files open, and nothing downstream can tell.</strong> Versions 7, 8 and 9,
+local and remote, at every base-pair resolution the file carries. This is where
+the published record is: most mammalian Hi-C on 4DN, ENCODE and GEO is
+distributed as <code dir="auto">.hic</code> and as nothing else, and until now this viewer could not
+be pointed at any of it.</p>
+<p>It costs no constraint. A <code dir="auto">.hic</code> is block-indexed with a master index at a known
+offset, so a region is a bounded range read through the same <code dir="auto">ByteSource</code> as
+everything else — the same 1 MiB LRU, the same §12 request accounting, the same
+S3 signature for a private bucket. <strong>A block is not a tile</strong>: nothing is
+composited, nothing is cached to be assembled, and a read hands up one whole
+bounded matrix in COO exactly as a cooler’s does. If anything the format suits
+§2 better than HDF5 does, its index being two-dimensional — so the off-diagonal
+rectangle this application exists to draw costs the blocks it covers rather than
+a whole row band across the genome.</p>
+<p>The integration is two modules and a seam rather than a second reader.
+<code dir="auto">hic/handle.ts</code> answers the questions a cooler’s HDF5 groups answer — a chrom
+table, an offset array, root attributes, a weight column — and
+<code dir="auto">metacooler/store.ts</code> draws a <code dir="auto">PixelStore</code> seam at the <em>operation</em> rather than at
+the dataset, because the one thing a <code dir="auto">.hic</code> genuinely cannot pretend to have is a
+globally sorted pixel table. Above those two, <code dir="auto">MetaCooler</code> is unchanged and every
+<code dir="auto">layout.kind === 'metacool'</code> branch in the application falls the right way
+untouched. The resolution ladder is spelled <code dir="auto">file.hic::/resolutions/5000</code>, so the
+entry picker, the URL hash, the refine ladder and a deck descending to its lead’s
+rung all work with no code of their own.</p>
+<p>Three translations, each argued in <code dir="auto">SPECS.md</code> §3.6: the synthetic <code dir="auto">All</code>
+chromosome is dropped by name (never by index — the master index is keyed on the
+file’s own numbering); normalisation vectors become <code dir="auto">bins/weight</code>, reciprocated
+into cooler’s multiply-by convention, with the chosen one named in the info panel
+rather than implied; and fragment-resolution matrices are excluded, because a
+fragment grid is variable bins under another name and §3.3 excludes those from
+the whole application.</p>
+<p><strong>Checked three ways</strong>, and the third is the one that earned its place.
+Fixtures whose contents are known exactly, across every encoding the format
+allows — v7/v8/v9, short and float values, short and int positions,
+list-of-rows and dense blocks, grid and diagonal block numbering. Then
+<code dir="auto">hic-straw</code>, the reference implementation, as a devDependency oracle over all
+of them. Then <code dir="auto">MetaCooler</code> itself, asserting the ordinary cooler surface answers
+identically. The oracle immediately found what a self-consistent reader and
+writer cannot: they had agreed with each other that the format is big-endian,
+and it is little-endian. It also caught a v9 straddle clause that silently lost
+every near-diagonal block while leaving the distant ones correct — a map with
+rectangular holes exactly where the signal is.</p>
+</li>
+<li>
+<p><strong>Bookmarks: places worth coming back to</strong>, in a card under the hand-drawn
+marks. A bookmark is a <strong>region and a bin size</strong>, and carrying the second one
+separately is the point — on a contact map <em>where</em> and <em>how closely</em> are two
+questions, a loop found at 1 kb is not visible at 20 kb, and coordinates without
+the grain give back a picture the note was never made against. Nothing else is
+in one: not the zoom, not the colour scale, not which way the map was turned.
+Those are how the picture happened to be drawn, and a bookmark that restored
+them would be a saved screenshot rather than a saved place.</p>
+<p><strong>Going to one opens the whole sequence, standing on the location</strong> — and that
+is not what typing <code dir="auto">chrI:1,200,000-1,260,000</code> into the region box does. That
+<em>cuts a block</em> at those coordinates, so the edges of the picture are the edges
+of the data and panning off them shows paper. A saved place opens <code dir="auto">chrI</code> and
+puts the location in a new <code dir="auto">focus</code> key, which is a window over a block read
+whole: the first thing anybody does on arriving somewhere — look at what is
+either side of it — works. It lands on the diagonal, because a locus is one
+coordinate and a contact map takes two, and both presentations are served from
+the same window: a square map takes it on both axes, a turned one along the
+genomic axis with the other following. Arriving at a second place on the same
+chromosome is a <em>zoom</em> rather than a navigation, so walking a list of forty
+peaks costs one read of the chromosome and not forty.</p>
+<p><code dir="auto">focus</code> is in the hash, so <strong>a bookmark is a link</strong>. It is a one-shot initial
+condition rather than a live position — pan and zoom are deliberately not
+shareable state, and a URL that rewrote itself on every wheel notch would make
+the back button a scrollback — so the link goes on naming the place it was made
+for however far its recipient then wanders.</p>
+<p><strong>Three ways in, because they are three moments.</strong> A <code dir="auto">bookmark</code> button beside
+<code dir="auto">go</code> on the title line saves the window on screen, for the place you have just
+found and do not want to retype; the round trip to a sidebar to copy coordinates
+you are already looking at was the whole cost of not having it. The card takes
+<strong>typed coordinates</strong>, in every spelling this app’s own readout and tooltips
+produce — separators, <code dir="auto">kb</code>/<code dir="auto">Mb</code>, <code dir="auto">..</code> from an IGV or Ensembl URL, and a bare
+position for a loop anchor. And it imports <strong>BED</strong>, which is what anybody who
+has called peaks or loops already has in hand: the first three columns and the
+name, so a narrowPeak, a BEDPE’s first mate and a headed table from R all
+import without a format question being asked. It says how many arrived and how
+many lines had nothing in them, because an import that silently keeps four rows
+out of forty has told the reader nothing.</p>
+<p>Every refusal is <strong>said</strong>: a coordinate that will not parse, a picture that is
+not at one place, a file with no regions in it, a place already saved. All four
+are a press that would otherwise appear to do nothing — including pressing
+<code dir="auto">bookmark</code> twice, which is what anybody does when they cannot remember whether
+the first press worked, and which answers “that place is already bookmarked”
+rather than growing a second identical row.</p>
+<p>They are kept in per-file session memory beside the marks, so they survive a
+change of resolution, a switch of view, a deck opening and closing, and a
+reload; and they are carried in an <strong>exported session</strong>, because a list of loci
+walked one after another is work, and it is the one part of a workspace a
+recipient can act on without the bytes.</p>
+</li>
+<li>
+<p><strong>A square map is resized by dragging any of its four edges</strong>, as a band has
+been by three of its own. The handles are the same bars, faint until they are
+approached and lit under the hand, and a <strong>double-click on any of them</strong> — or
+<code dir="auto">Home</code> with one focused, since they answer the keyboard too — gives back as much
+room as there is.</p>
+<p>It is <strong>one number, and every edge sets it</strong>. A band has a width and a depth
+because it is <em>cut</em> to fill them; a square block has no shape to choose, so a
+box of any other shape is paper down two sides of the picture. The two ends move
+it at twice the hand, because the box is centred in its column and the edge under
+the pointer has to stay under it; the top and bottom move it at once, and the
+picture grows downward from the stack above it rather than floating in a
+reserved column with its tracks detached.</p>
+<p>The size is a <strong>preference about the window</strong>, like the band’s box and the theme:
+it is remembered in <code dir="auto">localStorage</code>, it is shared by every map on screen so a deck
+stays one shape, and it survives the navigation that rebuilds the panel — which
+is the gesture anybody who has just sized a map is about to make. It is clamped
+to the room rather than stored as what was drawn, so a size chosen in a tall
+window comes back in full when that window comes back, and a narrower one draws
+as much of it as fits. It works in a <strong>deck</strong> too, from any panel: the number is
+shared, so one drag resizes every map on screen and they stay comparable.</p>
+</li>
+<li>
+<p><strong>The whole viewer as one HTML file you double-click.</strong> <code dir="auto">npm run build:standalone</code> emits a single <code dir="auto">dist-standalone/index.html</code> — every script,
+stylesheet, worker and icon inlined, h5wasm included — and it is attached to
+every release as <code dir="auto">metacooler-viewer-&lt;tag&gt;.html</code>, so nobody has to build it.
+No server, no install, no npm, no clone. Put it on a USB stick or in an
+attachment; the reader opens it and drops a file on it.</p>
+<p>Three situations the site, the PWA and the installers between them do not
+cover: an <strong>air-gapped or HPC machine</strong> with no route to the website, a
+<strong>reviewer</strong> who will not install an unsigned binary, and a <strong>laptop holding
+unpublished patient-derived data</strong> whose owner would rather not take anybody’s
+word about what leaves it. Nothing is uploaded from any build of this app, and
+§11 has said so from the start — but this is the build where that is not a
+claim. There is no origin to upload <em>to</em>.</p>
+<p><strong>Four things a <code dir="auto">file://</code> page cannot do</strong>, each measured in Chromium before a
+line of the config was written, and each absolute rather than degraded: it
+cannot construct a module worker, cannot fetch a sibling <code dir="auto">.js</code>, cannot reach
+the network at all, and cannot register a service worker. So the workers are
+classic ones over blob URLs (<code dir="auto">?worker&amp;inline</code>, <code dir="auto">worker.format: 'iife'</code>), the
+whole graph is one chunk (<code dir="auto">inlineDynamicImports</code>), and the interface is honest
+about the third: remote URLs, the published examples and the version picker
+are <strong>absent</strong> in this build rather than present and failing. The fourth needed
+no change — <code dir="auto">pwa.ts</code> already treats a refused registration as “this page has
+no cache”.</p>
+<p>The one thing that turned out not to be a problem is the largest: h5wasm ships
+its wasm base64-inlined in its own JavaScript, so there is no <code dir="auto">.wasm</code> to fetch
+and nothing to work around. It is also why the file is about 11 MB, four fifths
+of it that runtime, appearing twice because two workers need it and a <code dir="auto">file://</code>
+page has no shared chunk to give them. It gzips to about a fifth of that in
+transit; on open it is roughly a second of parsing with no HTTP cache behind
+it.</p>
+<p><code dir="auto">scripts/standalone-shape.mjs</code> states the shape as rules the build enforces and
+a test holds, because <strong>every one of these failures is silent</strong>: a page that
+kept a <code dir="auto">&lt;script src&gt;</code> paints its shell and then stops, and one that kept the
+module worker format looks completely normal until a file is dropped on it.
+One file, within a size band, no external reference, no root-absolute path, no
+<code dir="auto">{type:"module"}</code> worker. <code dir="auto">scripts/smoke-standalone.mjs</code> then drives a real
+Chromium at a real <code dir="auto">file://</code> URL and opens a real <code dir="auto">.hic</code> through a real worker,
+because every one of those rules can pass on a page that does not run.</p>
+</li>
+<li>
+<p><strong>A saved tab records which file it was made from.</strong> Name, size and
+modification time, for a local file. It reads as bookkeeping and it closes a
+real hole: a tab names its file by URI, that URI is the bare filename for a
+local file, and opening one goes through a grant store keyed on exactly that
+name. So a workspace received from a colleague and naming <code dir="auto">rep1.cool</code> opened
+<strong>this</strong> browser’s <code dir="auto">rep1.cool</code> — somebody else’s data under the sender’s marks,
+bookmarks and colour limits, with nothing on screen disagreeing.</p>
+<p>It informs and never vetoes. A re-run pipeline overwriting a file somebody is
+reading is a legitimate thing to do, and the app cannot tell that from a
+different file on another machine — so a mismatch is said once and the session
+opens. Absent for a remote file, whose identity is its URL, and stripped from
+shared links, where it would be metadata about a private disk.</p>
+</li>
+<li>
+<p><strong>A saved file from a newer build was read as though it were current.</strong> The
+format carries a version, and <code dir="auto">CONFIG_VERSION</code>’s own docstring says the number
+is bumped only when a field <strong>changes meaning</strong> — so the single situation it
+exists for was the one situation nothing acted on. A file whose <code dir="auto">vmin</code> meant a
+percentile would have been drawn as a log10 value, with every label on screen
+agreeing.</p>
+<p>It is now refused, and there is deliberately no <em>open anyway</em>: a version bump
+cannot say which field moved, so the button would be an offer to be silently
+wrong. When a bump does happen the honest fix is a migration on that line
+rather than a way past it, and the comment says so.</p>
+<p>Refusing needed a <strong>reason</strong> rather than a <code dir="auto">null</code>, because two of the three
+sentences a reader used to get were false. A file from a newer build landed
+them on “is a JSON file but not a saved workspace”, and a <em>link</em> from one on “may
+have been cut short in transit” — both sending somebody to inspect the file, or
+their network, when what is actually wrong is the build they are holding. All
+three roads now say the same true thing, naming both format numbers and the
+build the file came from:</p>
+<blockquote>
+<p><code dir="auto">figure3.metacooler.json</code> was saved by a newer version of the viewer —
+(meta)cooler 9.9.9, in workspace format 2. This build reads format 1. Update
+the viewer, or ask for the session to be saved again from this one.</p>
+</blockquote>
+<p>A shared link also now separates <em>did not survive the journey</em> from <em>arrived
+intact and this build will not read it</em>. Only the first is the link’s fault,
+and telling a recipient the second was truncated sends them back to the sender
+for a fresh copy that will fail identically.</p>
+</li>
+<li>
+<p><strong>A workspace published beside its data broke the moment it named a deck.</strong>
+<code dir="auto">resolveConfig</code> points a tab’s relative file names at wherever the file it came
+in was found — that is what makes <code dir="auto">demo/yeast/</code> a folder anyone can copy to a
+bucket, to a colleague’s bucket, or to a laptop. It resolved the map, the
+compared file and the tracks, and it had never been taught the three fields a
+tab grew when decks, lanes and local companions started travelling. So a
+published workspace naming a companion <code dir="auto">rep2.cool</code> handed the deck a bare name,
+which was fetched <strong>against the site root</strong> — a 404 on the website, and
+<code dir="auto">app://viewer/rep2.cool</code> in the desktop build. It read as a broken panel rather
+than as an unresolved name.</p>
+<p><code dir="auto">state.maps</code> now resolves through the deck’s own parser rather than a second
+<code dir="auto">|</code> splitter written beside it: the rule that a raw pipe separates and a <code dir="auto">%7C</code>
+inside a member is data lives in one place, and a second copy of it fails by
+resolving to a <em>different number of maps</em> than were written.</p>
+<p><code dir="auto">lanes[].uri</code> resolves through the <strong>same</strong> call, and that pairing is
+load-bearing. A lane names the <em>file</em> its companion was showing and is matched
+by string equality, so resolving one and not the other would put every placed
+track back on the first map — a perfectly legal lane, drawn without complaint,
+and not where the sender put it. The test asserts the two against each other
+rather than against a literal, so it cannot pass with both halves wrong.</p>
+<p><strong>Two fields are now dropped rather than resolved</strong>, and that is the more
+interesting half. A local compared file and a deck’s local companions are bare
+filenames from the sender’s own disk. Left alone they reach the grant lookup,
+which is keyed on the bare name and whose guard compares only the name — so a
+recipient who had ever granted their own <code dir="auto">rep2.cool</code> would open <strong>their</strong> file
+in the sender’s slot, with every label on screen agreeing with them. Resolving
+them instead would mint a URL for a file that was never published. Dropping
+them costs only a label: the <code dir="auto">~</code> placeholder still holds the slot, so the
+count, the order and the drop rectangle all survive.</p>
+<p>A <em>local track</em> is kept, and the rule that decides both is now written down: a
+private name is stripped only where the structure survives without it. A
+dropped companion costs a label; a dropped track costs the row, and a recipient
+silently receiving seven tracks where eight were sent is the exact failure the
+placeholder exists to prevent.</p>
+</li>
+<li>
+<p><strong>Which score the cells were drawn from did not survive a link, a reload or the
+back button.</strong> <code dir="auto">score</code> has been in <code dir="auto">KEY_ORDER</code> since the field existed, so
+every hash the app wrote carried it — and <code dir="auto">parseViewState</code> never read it back.
+The round trip <code dir="auto">state/ViewState.ts</code> requires of itself in its own header was
+broken for exactly one of its twenty-two keys, and silently, because what a
+dropped <code dir="auto">score</code> lands on is <code dir="auto">count</code>: a legal picture of the same region, in the
+same colours, with nothing on screen saying the quantity had changed.</p>
+<p>Three things it cost, none of which looked like the same bug. A shared link
+naming <code dir="auto">balanced</code> or <code dir="auto">ICE</code> opened on raw counts for the recipient. A restored
+tab did the same, because the tab strip stores that very string
+(<code dir="auto">app/sessions.ts</code>). And the back button did it <em>within</em> a session: <code dir="auto">readHash</code>
+re-parses on every popstate and compares by serialising, so it saw a
+difference, adopted the parsed state, and redrew a different quantity — press
+Back after a bookmark and the map changed meaning.</p>
+<p>The parser now reads it, as an open string like <code dir="auto">colormap</code> rather than against
+a closed list, because which <code dir="auto">/pixels</code> columns exist is a fact about the file
+and not about this build; an id this file has no column for is repaired by
+<code dir="auto">scoreFor</code>, exactly as a link naming a missing genome is. The round-trip test
+gained the case, and a second one that would have caught this on the day it
+was written: a state with <strong>every</strong> key set at once. Each of the twelve cases
+there is a picture somebody looks at, which is why none of them covered a key
+no case happened to use.</p>
+</li>
+<li>
+<p><strong>An exported session forgot how its deck was arranged.</strong> <code dir="auto">deck:starred</code> and
+<code dir="auto">deck:columns</code> are per-file session memory like the ticked sequences and the
+table filters beside them, and they were the two scopes <code dir="auto">buildConfig</code> walked
+straight past. <code dir="auto">state.maps</code> says which maps a session holds, so those came
+back; the arrangement around them did not. A deck of six exported at three
+columns reopened at whatever the importing window computed for itself, and the
+Analysis column reopened pointed at the lead rather than at the map the sender
+had starred — both silently, because both are legal decks.</p>
+<p>Nothing is validated on the way in, deliberately: <code dir="auto">PanelDeck</code> already refuses a
+column count it cannot use and already moves a star naming a slot it did not
+build back onto the lead. A second copy of those rules in the config reader
+would be a second place to keep them in step.</p>
+</li>
+<li>
+<p><strong>Shift stopped sticking the readout to the diagonal as soon as the pointer
+moved.</strong> Shift is the map’s on-diagonal modifier — a Shift-drag names a stretch
+and opens it there — and holding it snaps the crosshair and the coordinates
+onto the diagonal so the reader can see which stretch that would be. Pressing
+the key snapped them; the first pixel of movement put them back, because the
+key press asked for Shift and the pointer move asked for Option-with-Shift.
+That is the one shape of bug a reader cannot report: it worked until they
+moved. Both now ask the same question, and a key event reconstructs the state
+of the modifier it did not carry rather than assuming it is up.</p>
+</li>
+<li>
+<p><strong>A turned map’s card went on describing a cell while the pointer was naming a
+place.</strong> With a modifier down the crosshair stands up as a single vertical line
+— the edge a band would begin on — and the card beside it still printed the two
+loci under the pointer and the distance between them, which is a fact about the
+cell and not about what the next drag would select. Held, the readout now names
+the position along the bottom and nothing else: the midpoint of the pair, which
+is what a turned column stands over and the same number the ruler is printing.
+Let go, it is a card about a cell again.</p>
+</li>
+<li>
+<p><strong>An arrowhead sat on a corner of the very cell it pointed at.</strong> The glyph is
+stood off along its own 45° axis, which puts it four pixels from the mark’s
+anchor — and the anchor is the cell’s <em>centre</em>, so the gap cleared the centre
+and not the corner. At any zoom where a bin is a handful of pixels, the tip
+covered the last row and column of the cell the reader was being asked to look
+at, which is the one thing an overlay here is not allowed to do. The whole
+glyph now stands a further pixel out, square to the axes: right and up in the
+upper triangle, left and down in the lower. Turned, where it stands straight
+over the dot, the extra pixel is vertical only — a sideways nudge there is a
+nudge to a different separation, and so to a different pair of loci.</p>
+</li>
+<li>
+<p><strong>Publishing the demos switched private buckets off, and the error blamed the
+wrong setting.</strong> An S3 CORS policy is bucket-wide — the rules have no prefix
+condition — and <code dir="auto">put-bucket-cors</code> replaces the whole document rather than
+adding to it. <code dir="auto">scripts/publish-demo.sh</code> wrote one rule, correct for public
+data and naming <code dir="auto">Range</code> in <code dir="auto">AllowedHeaders</code>, so every run wiped whatever
+allowed signed requests: from then on the landing page and every pasted demo
+URL worked exactly as before, and no private prefix could be read or browsed
+from any origin. The policy now carries both rules, and the verify step
+preflights the signed headers rather than only the unsigned read — the check
+that would have caught this, and the one nothing above it can, since every
+other call it makes is answered by the public rule.</p>
+<p>The message shown when the preflight fails sent the reader somewhere else
+entirely: it said the policy had to name the page in <code dir="auto">AllowedOrigins</code> because
+<code dir="auto">*</code> “is not enough for a credentialed request”. A credentialed request is one
+carrying cookies or a client certificate; this app sets <code dir="auto">Authorization</code> from
+script, sends no cookies, and a wildcard origin answers its preflight
+perfectly well. So the advice was to narrow a list that was not the problem,
+which changes nothing and leaves the one wrong line — <code dir="auto">AllowedHeaders</code>,
+missing <code dir="auto">Authorization</code>, <code dir="auto">x-amz-date</code> and <code dir="auto">x-amz-content-sha256</code> — in place.
+It now names that line, and says that a bucket serving the demos correctly is
+expected to fail this way. <code dir="auto">docs/hosting.md</code> carried the same claim and no
+longer does.</p>
+</li>
+<li>
+<p><strong>A batch ran on fewer maps than its own button counted.</strong> <em>Run on all N maps</em>
+over a freshly opened deck ran on the ones that happened to be ready and left
+the rest behind — and said nothing, because a result that never arrives looks
+exactly like a task that had nothing to report. Pressing again worked, which
+made a question about timing look like a question about the file.</p>
+<p>A companion opens to <em>draw a picture</em>: the two tables an analysis needs are a
+further pair of reads it makes only when it is starred or batched, so an
+eight-panel deck does not fetch sixteen tables to show eight rectangles. The
+batch took the list of maps that could answer <em>at that instant</em>. It now waits
+for the ones still opening — every panel at once, since these are two small
+reads against workers that already exist — and the button counts every cell in
+the grid rather than only the ready ones, because every cell is going to be
+run on. A panel that genuinely cannot answer is still left out, and its own
+note already says why.</p>
+</li>
+<li>
+<p><strong>Dragging a lane on a companion moved the first map’s lane instead.</strong> The
+handle on a track’s lane is dragged onto another edge to move it there, and on
+a companion it moved the wrong picture: the track jumped to the edge on the
+<strong>lead</strong>, and the map the hand was actually over was left exactly as it was.</p>
+<p>One call was doing two jobs. <code dir="auto">place</code> writes the <em>track’s default placement</em>,
+which is what the row in the Tracks card shows and what a session with no deck
+means — and the lead’s lane follows it, because that control is the lead’s.
+Every gesture went through it, including the ones made on a picture that is
+not the lead. Now they go through a call that takes the map they were made on:
+the drag, the drop of a row onto an edge, the lane’s own right-click menu and
+the location control all move <em>that</em> map’s lane, and the axis still turns on
+the way across so the lane arrives reading the same way up as its neighbours —
+as a lane override on a companion, which is exactly why <code dir="auto">flip</code> is one of the
+two fields a lane may differ on.</p>
+<p>It bit computed tracks hardest, because a computed track opens on the left and
+wanting it under the map is the first thing anybody does with one.</p>
+</li>
+<li>
+<p><strong>Closing a deck left a companion’s tracks drawn nowhere.</strong> Putting the grid
+down is a statement about layout, and the two things a reader means by it are
+that the extra pictures should go and that the work they did on them should
+not. A coverage track computed on the third replicate simply disappeared —
+still imported, still in the list, drawn on no map — which reads as the close
+having deleted it.</p>
+<p>A departing map’s lanes now come to the <strong>lead</strong>, at the edge they were on,
+and the reader gets them back where they were the moment a map opens that file
+again. Keyed on the <strong>file</strong>, never on the map: a map id is a slot minted per
+deck and a deck closed and reopened mints new ones, so the id a lane was
+parked under would never be seen again — what a reader means by “that map” is
+the file it was showing. A track the reader had deliberately put on <em>both</em> the
+lead and a companion is not rearranged: the lead’s lane is not going anywhere,
+and moving it to wherever the departing copy sat would be the close changing
+something nobody asked it to.</p>
+</li>
+<li>
+<p><strong>The score sat last in a companion’s corner menu and first in the Map card.</strong>
+The same five fields in two orders, on two maps of one deck. It leads both
+now, which is where it belongs: what the numbers <em>are</em> is the question the
+transform, the ramp and the clip all answer about.</p>
+</li>
+<li>
+<p><strong>A computed track had no way to say which map it belongs to.</strong> §18.5’s whole
+claim is that a per-bin result <em>is</em> a track — same colour chip, same name,
+same limits, same four edges — and the Synthetic card was the counter-example:
+it carried the colour, the name, the eye and the exports, and nothing at all
+about where the lane is drawn. The Tracks card’s own location control is now
+on those rows too, from one module rather than two, so a computed lane and a
+loaded one are moved by one gesture: four edges, a row per map once a deck has
+more than one, and <em>every map</em> / <em>no map</em> beside them.</p>
+</li>
+<li>
+<p><strong>A task run across a deck skipped the file that spells its chromosomes
+differently.</strong> Three <code dir="auto">.cool</code> files and a <code dir="auto">.hic</code> beside them, Run pressed on
+compartments: three tracks and three sets of A/B intervals came back, and the
+<code dir="auto">.hic</code> produced nothing at all.</p>
+<p>A batch (§18.2) runs <em>one</em> set of parameters against every panel, and those
+parameters were filled in against the <strong>starred</strong> map — so the ticked sequence
+list is that map’s spellings, a typed region is, and a loaded BED was renamed
+into the session’s on the way in. The worker then matched them by string.
+<code dir="auto">MetaCooler.contigId</code> is a faithful port of cooler’s own lookup and knows only
+what the file writes, so on the panel that writes <code dir="auto">1</code> where the others write
+<code dir="auto">chr1</code> every name matched nothing, and the run ended on <em>none of the ticked
+sequences has any bins in it</em> — true, and not the reason.</p>
+<p>Names that arrive from outside the file now go through the same door §5.9
+gives every other holder of a name list: the literal answer first, the
+conventions only where that would otherwise be a refusal, and the naming
+context of the list the name <em>came out of</em> carried with it — a ticked list is
+the source file’s own spellings, so it is what says whether its numerals are
+Roman. Compartments, insulation, P(s) and APA all read through it, so a
+region, a ticked sequence and a BED anchor each resolve on every panel of a
+deck.</p>
+<p><strong>And a short run now says why it was short.</strong> A sequence a file has not got
+is not an error — a deck holds different assemblies on purpose — but the ones
+that were left out are named, and a run that matched nothing says so and lists
+what the file does have, rather than reporting a clean result over nothing.
+The one thing still refused is a bare <code dir="auto">X</code> with no list behind it: it is the
+sex chromosome far more often than it is the tenth, and only the list it was
+written in can say which.</p>
+</li>
+<li>
+<p><strong>Picking a locus for 4C zoomed the map out from under the pointer.</strong> <em>Pick on
+map</em> is a mode: while it is armed a plain drag names a stretch of genome for
+the form that asked, and nothing else. It zoomed as well, every time, and the
+reason is an ordering. The mode disarms itself the moment it has an answer —
+one pick per arming — and it disarms by calling straight back into the map to
+say the next drag zooms again. The map then consulted that setting on the line
+<em>after</em> it reported the band, so what it read was the mode the gesture had
+just left. The reading is now taken before the report, which is the rule the
+same gesture on a lane stack was already following.</p>
+</li>
+<li>
+<p><strong>A turned map’s echo marked a place no track has anything at.</strong> Hovering one
+map of a deck leaves a tick in the tracks beside every other map, and under a
+turn that tick was drawn at the column the echoed cell sits in — which is the
+<em>midpoint</em> between the two places the contact is between, and a coordinate the
+profile below has nothing at. It is two ticks now, one per anchor, and one
+where the two are the same place, which is exactly what the panel under the
+pointer was already doing with its own crosshair.</p>
+</li>
+<li>
+<p><strong>The desktop app’s header carried a broken image, in every release that had
+one.</strong> <code dir="auto">publicDir</code> is off for that target — deliberately, and it is one of the
+two guards that no dataset reaches the installer — so the one file from
+<code dir="auto">public/</code> the renderer actually asks for, <code dir="auto">icon-192.png</code>, was never emitted and
+<code dir="auto">markUrl()</code> resolved to nothing.</p>
+<p>The pinned build had hit this first and solved it privately, with a nine-line
+plugin inside its own config; the desktop config was written afterwards by
+somebody who had no way to know there was a problem to solve. So the plugin is
+now <code dir="auto">scripts/shell-icon.mjs</code> and both configs call it — the same argument
+<code dir="auto">pwa-tags.mjs</code> makes for itself in its own docstring, arrived at from the other
+direction. The next config to switch <code dir="auto">publicDir</code> off inherits the fix rather
+than the bug.</p>
+<p>Emitted rather than inlined as a data URI, which is what the standalone target
+does: the desktop renderer has no size pressure, <code dir="auto">img-src 'self'</code> already
+covers it, and there is still exactly one drawing of the mark.</p>
+</li>
+<li>
+<p><strong>Hand-drawn marks were lost on a change of resolution.</strong> Placing two marks on
+a map at 2 kb and picking 5 kb in the breadcrumb drew an unmarked map, in a
+single view and in a deck alike — and lost them in the worst way, invisibly:
+the marks stayed in storage under the old level’s own key, so they came back if
+the reader went back to 2 kb and stayed gone if they did not, which reads as the
+app deciding at random whether to keep your work.</p>
+<p>A session’s memory of a file — the marks, the ticked sequences, a table’s
+filters, how a group of tracks is scaled — hung on the URI it was <em>opened at</em>,
+and for an <code dir="auto">.mcool</code> that URI names an entry: <code dir="auto">…/Ecoli.mcool::resolutions/2000</code>.
+Changing resolution reopens the file at another entry, so it asked a key nothing
+had ever been written under. It is now keyed on the <strong>file</strong>, the path before
+<code dir="auto">::</code> — the definition <code dir="auto">reopeningSameFile</code> already uses, and the reason a change
+of resolution carries every field of the view state across. Everything under that
+key is the same kind of fact: a mark is a contig and a base pair (§8.1), a ticked
+sequence is a name, a filter is a phrase about rows, and none of them means
+anything different at another bin size. Two tabs on one file stay two workspaces,
+because the session id is the other half of the key. Tracks were the exception
+that hid the size of this — they are handed across the reopen live rather than
+recalled — which is why it surfaced as “my annotations are gone” and not as
+everything at once.</p>
+</li>
+<li>
+<p><strong>A deck of square maps drew them at whatever size their canvases happened to
+be left at, with air between them.</strong> Two maps at 1 kb came up as 182-pixel
+pictures in 430-pixel cells; changing resolution in the breadcrumb moved them to
+320 and still never reached the cell; and turning the map and back was the only
+thing that settled it — which is the shape of the report that named this bug.</p>
+<p>A map’s box sits in a grid track sized from its own contents, because a map has
+to be able to give width back to the lane stacks beside it. Inside a deck its
+width was <code dir="auto">min(100%, …)</code>, and a percentage with no definite containing block
+falls back to intrinsic sizing — which for a box whose only child is a canvas
+means <em>the canvas’s own pixel size</em>, a number derived from that same box a frame
+earlier. A change of resolution is a new canvas, so the circle settled somewhere
+new; a turn writes lengths, so it broke the circle. Both the lead’s rule and the
+companions’ fallback are now the size the panel measured, and
+<code dir="auto">test/unit/deck-plot-css.test.ts</code> keeps them numbers — the same fault had already
+been fixed once for a turned companion’s height.</p>
+</li>
+<li>
+<p><strong>A turned map now takes the room it is given, whenever the room changes.</strong> A
+band’s rectangle is the one picture in this app whose size is a number the panel
+computes rather than a length the stylesheet sets, and only some of the roads
+into it redrew that number. So the band kept the width of the window it was
+first drawn in: folding two columns handed it three hundred pixels it never
+took, pressing the turn toggle drew it to a room measured before the fold, and a
+window resized around it left it where it was. All four roads — the shell folding
+a column, the view’s own resize observer for a window or a new lane, a turn
+arriving or leaving, and a deck relaying out — now end in one place that
+re-measures the room and redraws the box, and the band’s depth follows on the
+next frame as it always did. A width the reader <em>dragged</em> is still theirs: it is
+clamped to the room rather than grown into it, and a double-click on the handle
+gives back “as much as there is room for”.</p>
+</li>
+<li>
+<p><strong>The band on a long chromosome aliased while scrolling into it.</strong> Pooling caps
+each axis on its own, which is right for a genome pair — the two axes are two
+different sequences, and halving the short one to suit the long one loses
+detail nothing asked for. On a <strong>turned</strong> band the two axes are one measure: the
+rotation is isometric, so a raster pixel four cells across and two up is drawn
+as a rectangle where the geometry promises a square. E. coli at 1 kb turned is
+9,281 × 4,039, which pooled to 4 × 2 — and then every decision downstream had
+one answer for two scales. At the crossover the x axis was <em>magnified through a
+blur</em> while y was still point-sampled; past it, nearest neighbour laid cells
+down two device pixels wide and one tall. Against structure that runs at 45°
+that is a cross-hatch of smeared diagonals over the whole band, which is what a
+reader saw as aliasing at the very zooms they had scrolled in to look closely.</p>
+<p>A turned band now pools with <strong>one stride on both axes</strong>, so its raster pixels
+are square in matrix space, the filter question has one answer, and the pyramid
+level is the right one for both directions. It costs no memory (E. coli’s band
+is 4.2 M pixels where it was 4.7 M) and no detail worth having: the axis that
+loses resolution is the one that was already being drawn at three cells per
+device pixel, and zooming in re-reads the window at a finer grid anyway.</p>
+</li>
+<li>
+<p><strong>Marks could not be placed by pointing at a turned map, which is every map a
+region view opens.</strong> <code dir="auto">pick on map</code> collected nothing and the right-click <em>Mark
+this point</em> menu did not open at all — silently, both of them, because a click
+that places nothing looks exactly like a click that missed. Typing coordinates
+worked and the marks drew correctly once they existed, so the feature looked
+broken in the one presentation it is most useful in.</p>
+<p>One conversion is behind both gestures: a cell into the pair of loci a mark
+names, one per axis, which is what lets a single click serve a line, a
+crosshair and a loop. It read the loci off the axes the <em>picture</em> is drawn
+against, and on a turned map the row axis of that pair is deliberately absent —
+y there is distance from the diagonal, which is not a place, and x is counted
+in half bins. The cell is now taken back to the square it was rotated out of
+and read against that block’s own two axes, which is what the tooltip, the
+readout and the region-opening selection have always done. Clicking a dot in
+the band therefore marks the loop it <em>is</em>: the two ends of the contact, 10 kb
+apart at ten rows up, rather than nothing at all.</p>
+</li>
+<li>
+<p><strong>The three track tasks failed with “nothing is open” in a session that has
+no contact map.</strong> A metaplot, a track correlation and an interval overlap read
+the loaded tracks and never touch a matrix (§18.3) — the 1D browser session is
+exactly where a reader has the bigWigs and not the map, and the panel is
+offered there deliberately. Everything on the way was ready for it: the context
+is built without a file, the framing falls back to one over the tracks. The
+last line still assuming a matrix was the <em>target</em> a result is filed under,
+which came from the open file and so from nothing at all.</p>
+<p>It now comes from the genome the tracks were loaded against, and a target with
+no file behind it is no longer a broken target: a chain that mounts nothing
+does not need something to mount. A map task that reaches one refuses in its
+own words — <em>Diamond insulation reads a contact map, and this session is
+browsing a genome without one</em> — instead of the queue’s old “nothing is open”
+for a session with a genome and nine tracks in it.</p>
+</li>
+<li>
+<p><strong>The map aliased near the diagonal on screen while the exported figure did
+not.</strong> A canvas filter is one bilinear tap: it reads a 2 × 2 neighbourhood per
+destination pixel, which is a filter down to a halving and a fiction past it.
+A whole chromosome at 1 kb is a 3,000-pixel raster drawn into 460, so seven
+cells of every eight were never read — and on a turned map, whose lattice is
+half a bin and shifts parity row by row, what beat against the pixel grid was a
+moiré of diagonal stripes across the band. The export was spared because 300
+dpi is three times the density: the same tap had a fifth of the work to do.</p>
+<p>The view now keeps <strong>halved copies</strong> of the raster and samples the one nearest
+the size it is drawing, so the filter is never asked to reduce by more than a
+half — which is the one reduction it does honestly. Levels are built on demand
+and dropped with the raster: a region view drawn a pixel per bin builds none,
+and no level is ever built for a frame that does not ask for it. Magnified
+pictures are untouched, still nearest-neighbour, still crisp to the bin.</p>
+</li>
+</ul>
+</div><footer class="sl-flex astro-ddtxxk7k"><div class="meta sl-flex astro-ddtxxk7k"></div><div class="pagination-links print:hidden astro-g3wxxdym" dir="ltr"><a href="/pr/168/docs/releases/v0.12.0/" rel="prev" class="astro-g3wxxdym"><span class="link-label sl-flex astro-g3wxxdym"><svg aria-hidden="true" class="astro-g3wxxdym astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="M17 11H9.41l3.3-3.29a1.004 1.004 0 1 0-1.42-1.42l-5 5a1 1 0 0 0-.21.33 1 1 0 0 0 0 .76 1 1 0 0 0 .21.33l5 5a1.002 1.002 0 0 0 1.639-.325 1 1 0 0 0-.219-1.095L9.41 13H17a1 1 0 0 0 0-2Z"/></svg>Previous</span><span class="link-title astro-g3wxxdym">0.12.0</span></a><a href="/pr/168/docs/releases/v0.10.0/" rel="next" class="astro-g3wxxdym"><span class="link-label sl-flex astro-g3wxxdym">Next<svg aria-hidden="true" class="astro-g3wxxdym astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="M17.92 11.62a1.001 1.001 0 0 0-.21-.33l-5-5a1.003 1.003 0 1 0-1.42 1.42l3.3 3.29H7a1 1 0 0 0 0 2h7.59l-3.3 3.29a1.002 1.002 0 0 0 .325 1.639 1 1 0 0 0 1.095-.219l5-5a1 1 0 0 0 .21-.33 1 1 0 0 0 0-.76Z"/></svg></span><span class="link-title astro-g3wxxdym">0.10.0</span></a></div></footer><script type="module" src="/pr/168/docs/_astro/LiveViews.astro_astro_type_script_index_0_lang.IJNGwHXs.js"></script><script type="module">var e={ArrowLeft:`prev`,ArrowRight:`next`};for(let[t,n]of Object.entries(e)){let e=document.querySelector(`.pagination-links a[rel="${n}"]`);e!==null&&(e.setAttribute(`aria-keyshortcuts`,t),e.title=`${n===`prev`?`Previous`:`Next`} page (${t===`ArrowLeft`?`←`:`→`})`)}document.addEventListener(`keydown`,t=>{if(t.defaultPrevented||t.altKey||t.ctrlKey||t.metaKey||t.shiftKey)return;let n=e[t.key];if(n===void 0)return;let r=t.target;if(r instanceof Element&&r.closest(`input, textarea, select, [contenteditable]:not([contenteditable="false"]), dialog, pre, .expressive-code, .cx-table-wrap, [role="slider"], [role="listbox"], [role="menu"], .cx-live-grip`)!==null||document.querySelector(`dialog[open]`)!==null)return;let i=document.querySelector(`.pagination-links a[rel="${n}"]`);i!==null&&(t.preventDefault(),window.location.assign(i.href))});</script><p class="cx-build">Documentation of chromosomix, a preview of pull request #168 · <a href="https://github.com/js2264/chromosomix/pull/168/files">source</a></p></div></div></main></div></div></div></div></body></html>

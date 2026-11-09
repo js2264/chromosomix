@@ -256,6 +256,13 @@
   ],
   "pulls": [
     {
+      "number": 168,
+      "commit": "bf0eeff",
+      "title": "Draw a metagenome's map as a circle or as two lines, a dev feature (§7.6)",
+      "branch": "js/epic-ramanujan-6titl7",
+      "date": "2026-11-09T22:30:11Z"
+    },
+    {
       "number": 165,
       "commit": "7a1df40",
       "title": "Draw a map's first picture sooner, and read the examples from the lab's bucket",
