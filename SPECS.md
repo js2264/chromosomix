@@ -1860,7 +1860,8 @@ tab is lit with a dot while the reading is on, so a reader on the map's own tab 
 triangle is not a mirror. The tab a reader chose is the one the next map opens on. The row is shown
 only where the reading is offered: **on a map of one file** — a region, the whole file, a selection
 — and not beside a second file, whose triangle the lower one is (§5.7), nor in a deck, where the card
-sets whichever map is starred (§16.5).
+sets whichever map is starred (§16.5), nor while a metagenome's map is drawn round or as two lines,
+which have no lower triangle (§7.6); the reading is kept, and is there again with the square.
 
 **Switching it on changes nothing on screen.** A reading nobody has set starts from the upper one as
 it is — its score, its O/E, its despeckle, and the scale it would be drawn on with nothing derived —
@@ -3073,8 +3074,9 @@ the refit, lit while the circle is drawn (§26.3) — and while it is lit the ca
 circle answers to: the transform and the colours stay, because they colour the chords, and three rows
 of the circle's own appear, `sections`, `chords` and `tracks` — and `order`, square or round, once
 the reader has moved a genome or a contig (below) — while the square's — its other picture toggles,
-the score, the despeckle, the clip, the comparison and the level — step aside and come back as they
-were. Its `overlays` row stays, with the four the circle reads (`CIRCLE_OPTIONS`): `labels` names the
+the score, the despeckle, the clip, the comparison and the level, and the lower reading's tabs
+(§5.10), since a chord is one number for a pair with no triangle to read otherwise — step aside and
+come back as they were. Its `overlays` row stays, with the four the circle reads (`CIRCLE_OPTIONS`): `labels` names the
 sections, `legend` is the key, `crosshair` the guide line through the rings and `tooltip` the card;
 `dividers`, `breaks` and `ticks` are marks on the square's cells and edges, and step aside with it.
 The Tracks card's switches all act on the rings, below. The Genomes table's *circle →*, last in its row (§5.1), opens the ticked genomes

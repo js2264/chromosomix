@@ -177,6 +177,12 @@ async function compute() {
   await button.first().click()
 }
 
+/**
+ * The Tracks card's drop zone. Not the page's first `.ann-drop`: that is the
+ * Contact maps card's, in the General column, which takes any file as a map.
+ */
+const TRACK_DROP = '.annotation-card:not(.structure-card) .ann-drop'
+
 async function columnOpen(key, selector, open) {
   const shown = await page.evaluate((s) => {
     const node = document.querySelector(s)
@@ -291,11 +297,11 @@ G = await settledCircle()
 // ---------------------------------------------------------------------------
 
 console.log('before the drop:', await where())
-await columnOpen('2', '.ann-drop', true)
+await columnOpen('2', TRACK_DROP, true)
 console.log('column open:', await where(), '·', describe(await geo()))
 await page.evaluate(
   (files) => {
-    const target = document.querySelector('.ann-drop')
+    const target = [...document.querySelectorAll('.ann-drop')].find((node) => /Load a track/.test(node.textContent ?? ''))
     const transfer = new DataTransfer()
     for (const file of files) transfer.items.add(new File([file.text], file.name, { type: 'text/plain' }))
     for (const kind of ['dragenter', 'dragover', 'drop']) {
@@ -335,7 +341,7 @@ for (const value of ['genomes/parent', 'genomes/Completeness', 'contigs/GC_conte
 G = await settledCircle()
 console.log('with metadata:', describe(G))
 await shot('ci09-metadata-rings')
-await columnOpen('2', '.ann-drop', false)
+await columnOpen('2', TRACK_DROP, false)
 G = await settledCircle()
 await away()
 await shot('ci10-rings')
@@ -385,7 +391,7 @@ await shot('ci12-ring-held')
 await page.mouse.up()
 G = await settledCircle()
 console.log('rings after: ', order(G))
-await columnOpen('2', '.ann-drop', true)
+await columnOpen('2', TRACK_DROP, true)
 await sleep(400)
 console.log(
   'Tracks and Metadata cards:',
@@ -421,7 +427,7 @@ await page
   .locator('select')
   .selectOption(' new')
 await sleep(800)
-await columnOpen('2', '.ann-drop', false)
+await columnOpen('2', TRACK_DROP, false)
 const groupsCard = page.locator('.controls-card').filter({ has: page.locator('.controls-title', { hasText: /^Groups$/ }) }).first()
 await groupsCard.scrollIntoViewIfNeeded().catch(() => {})
 console.log('overlaid:', await press('A lane each. Press to draw all of these into one lane'))
@@ -913,9 +919,11 @@ await page.keyboard.press('Escape')
 await sleep(300)
 
 // The dev features off: a .metacool is refused whole (§29), and its circle
-// with it — no toggle, no button, nothing drawn round.
-await page.evaluate(() => localStorage.removeItem('chromosomix:dev-features'))
-await page.reload()
+// with it — no toggle, no button, nothing drawn round. The switch is the
+// page's address (§29.1), so the same page and hash without `?dev`.
+const devOff = new URL(page.url())
+devOff.searchParams.delete('dev')
+await page.goto(devOff.toString(), { waitUntil: 'domcontentloaded' })
 await sleep(6000)
 console.log(
   'dev off:',

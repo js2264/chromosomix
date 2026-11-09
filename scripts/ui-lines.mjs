@@ -354,7 +354,7 @@ G = await settled()
 await page.keyboard.press('2')
 await sleep(700)
 await page.evaluate((text) => {
-  const target = document.querySelector('.ann-drop')
+  const target = [...document.querySelectorAll('.ann-drop')].find((node) => /Load a track/.test(node.textContent ?? ''))
   const data = new DataTransfer()
   data.items.add(new File([text], 'hits_per_kb_log10.bedgraph', { type: 'text/plain' }))
   for (const kind of ['dragenter', 'dragover', 'drop']) target.dispatchEvent(new DragEvent(kind, { bubbles: true, cancelable: true, dataTransfer: data }))

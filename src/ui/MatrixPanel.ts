@@ -5470,6 +5470,8 @@ export class MatrixPanel {
       // …and the Tracks card, whose name column is the circle's alone.
       card.classList.toggle('is-lines', laid)
     }
+    // The lower reading's tabs are the square's, and step aside with its rows.
+    if (was !== active) this.paintMapTabs()
     this.paintCircle(presentation, data === null || drawable)
     if (round) view.schedule()
     if (laid) flat.schedule()
@@ -6062,7 +6064,10 @@ export class MatrixPanel {
   private paintMapTabs(): void {
     const tabs = this.mapTabs
     if (tabs === null) return
-    const offered = this.options.lower !== undefined
+    // Not while the map is drawn round or as two lines (§7.6): a chord is one
+    // number for a pair, with no triangle below a diagonal to read otherwise.
+    // The reading is kept, and the square comes back with it as it was.
+    const offered = this.options.lower !== undefined && this.roundView() === null
     const open = offered ? tabs.open : 'map'
     tabs.row.classList.toggle('hidden', !offered)
     for (const [which, node] of [['map', tabs.map], ['lower', tabs.lower]] as const) {

@@ -17,7 +17,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 - **A metagenome's map drawn as a circle (§7.6, a dev feature).** Each genome an arc as long as it
   is, the contacts between two genomes a chord as wide as they are, the tracks the map draws as rings
   inside — the map's own block drawn round, so nothing more is read and the square comes back at
-  once. Turned on by the orbit toggle on the Map card, by *circle →* at the end of the Genomes
+  once, with its lower reading (§5.10), whose tabs step aside while the map is round. Turned on by the orbit toggle on the Map card, by *circle →* at the end of the Genomes
   table's row (the ticked genomes, or every one), or by *Circle* in the palette; `circle=true` in the
   link, kept as the reader navigates, so a genome clicked on the circle opens its contigs drawn round.
   The whole metagenome is genomes at `genome × genome` and contigs under each genome's band at
