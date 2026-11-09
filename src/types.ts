@@ -589,6 +589,48 @@ export interface ViewState {
    */
   flip?: boolean
   /**
+   * Whether a metagenome's map is drawn round (§7.6): its genomes — or one
+   * genome's contigs — as arcs of a circle, the contacts between them as
+   * chords, the tracks as rings.
+   *
+   * **Absent means the square**, and only an explicit `true` is the circle —
+   * the turn's rule, for the turn's reason: it is a reading the reader asks for,
+   * and the hash of an ordinary view says nothing about it. A reading rather
+   * than a fact about the block, so it outlives a navigation as the turn does
+   * (`READING_KEYS`): a reader who opened the whole metagenome as a circle and
+   * clicks a genome lands on that genome's contigs, drawn round. Ignored by a
+   * view whose block cannot be drawn round — a pair of genomes, a window of one
+   * sequence, a file with no genome layer — quietly, without writing the
+   * refusal back. A dev feature (§29): read and drawn only with the switch on.
+   */
+  circle?: boolean
+  /**
+   * How the circle cuts a block divided by genome — the whole metagenome read
+   * by bin, several ticked genomes (§7.6): **absent is its genomes**, and
+   * `contigs` is their contigs, grouped under each genome as the contig level's
+   * circle is. Every other block is cut the one way its axis is divided, and
+   * ignores it. A reading, kept across a navigation beside `circle`.
+   */
+  sections?: 'contigs'
+  /**
+   * Whether a metagenome's map is drawn as **two lines** (§7.6): its genomes
+   * split in two by a column of the Genomes table ({@link split}), each value's
+   * genomes along a line, the contacts between the two lines as ribbons and the
+   * tracks as lanes. Absent is the square, as for the circle; the two are one
+   * picture or the other, and drawing either puts the other away. A reading,
+   * kept across a navigation as the circle is. A dev feature (§29).
+   */
+  lines?: boolean
+  /**
+   * The column of the Genomes table the two lines split the genomes by — one
+   * holding two values over the genomes on screen. Absent until the reader
+   * picks one; kept beside `lines` when they are put away, so the next two
+   * lines are drawn by it.
+   */
+  split?: string
+  /** Which of {@link split}'s two values is drawn on the top line; absent is the first in order. */
+  top?: string
+  /**
    * The window a `browser` view is open at: `chrI:1,001-20,000`, 1-based
    * inclusive, as every genome browser writes one and as the locus box accepts
    * one. Absent means the whole genome, which is where a browser opens.

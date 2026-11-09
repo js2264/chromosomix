@@ -406,6 +406,8 @@ export class SessionDeck {
         const { onAvailable: _grey, ...shared } = this.session.turnPresentation(state)
         return shared
       },
+      // The reader's order (§7.6): every map of the deck drawn in the lead's.
+      order: () => this.session.leadOrder(),
       binsize: () => this.session.file?.info.binsize ?? undefined,
       // The two directions "fix all …" needs that the deck cannot take itself.
       //

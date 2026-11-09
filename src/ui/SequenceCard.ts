@@ -84,6 +84,12 @@ export interface SequenceCardProps {
   /** The tooltip on a row's name, where *show the whole sequence* is not what a click does. */
   goTitle?(row: SequenceRow): string
   /**
+   * The same rows in another order, each time the reader moves a genome or a
+   * contig (§7.6). Put in place in this card rather than a new one, so the
+   * filter being typed, the scroll and the ticks stay as they were.
+   */
+  reordered?: { subscribe(listener: (rows: readonly SequenceRow[]) => void): () => void }
+  /**
    * Nodes between the title and the list: the map's **level** (§7.3), and on a
    * metagenome the line saying whose contigs these are. Held by the caller, so
    * the level can change with the view without the list being rebuilt.
@@ -92,7 +98,8 @@ export interface SequenceCardProps {
 }
 
 export function sequenceCard(props: SequenceCardProps): HTMLElement {
-  const { contigs, selection } = props
+  const { selection } = props
+  let contigs = props.contigs
   const list = el('div', { class: 'seq-list' })
   const note = el('p', { class: 'hint seq-note' })
   const chosen = el('p', { class: 'hint seq-chosen' })
@@ -233,6 +240,16 @@ export function sequenceCard(props: SequenceCardProps): HTMLElement {
       offRound?.()
       return
     }
+    paint(filter.value)
+    sync()
+  })
+  // Another order is a repaint of the same card, on the same self-teardown.
+  const offOrder = props.reordered?.subscribe((rows) => {
+    if (!list.isConnected) {
+      offOrder?.()
+      return
+    }
+    contigs = rows
     paint(filter.value)
     sync()
   })

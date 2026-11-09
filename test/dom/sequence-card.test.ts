@@ -288,3 +288,44 @@ describe('a metagenome’s list of genomes (§5.8)', () => {
     expect(order.indexOf('seq-level')).toBeLessThan(order.findIndex((name) => name.includes('seq-list')))
   })
 })
+
+describe('the reader’s order (§7.6)', () => {
+  const GENOMES = Array.from({ length: 14 }, (_, at) => ({ name: `MAG_${at}`, length: 1_000_000 + at }))
+
+  it('puts the rows in a new order in place, the filter and the ticks kept', () => {
+    const selection = new SequenceSelection()
+    const listeners = new Set<(rows: readonly { name: string; length: number }[]) => void>()
+    const el = sequenceCard({
+      contigs: GENOMES,
+      selection,
+      onGoTo: () => {},
+      reordered: {
+        subscribe: (listener) => {
+          listeners.add(listener)
+          return () => listeners.delete(listener)
+        },
+      },
+      ...GENOME_TICKS,
+    })
+    mounted(el, () => {
+      selection.set(['MAG_2'])
+      const filter = all<HTMLInputElement>(el, '.seq-filter')[0]
+      filter.value = 'MAG_1'
+      filter.dispatchEvent(new Event('input'))
+      expect(textsOf(el, '.seq-name')).toEqual(['MAG_1', 'MAG_10', 'MAG_11', 'MAG_12', 'MAG_13'])
+
+      // MAG_12 dragged to the front.
+      const moved = [GENOMES[12], ...GENOMES.filter((_, at) => at !== 12)]
+      for (const listener of listeners) listener(moved)
+      expect(textsOf(el, '.seq-name')).toEqual(['MAG_12', 'MAG_1', 'MAG_10', 'MAG_11', 'MAG_13'])
+      expect(filter.value).toBe('MAG_1')
+      filter.value = ''
+      filter.dispatchEvent(new Event('input'))
+      expect(textsOf(el, '.seq-name').slice(0, 3)).toEqual(['MAG_12', 'MAG_0', 'MAG_1'])
+      expect(ticks(el).filter((box) => box.checked).map((box) => box.dataset.seq)).toEqual(['MAG_2'])
+    })
+    // Off the page, the next order lets go of it.
+    for (const listener of [...listeners]) listener(GENOMES)
+    expect(listeners.size).toBe(0)
+  })
+})
