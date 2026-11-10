@@ -263,13 +263,6 @@
       "date": "2026-11-10T03:04:25Z"
     },
     {
-      "number": 169,
-      "commit": "ffcc228",
-      "title": "Open a map at the screen's resolution, and sharpen it as you zoom without freezing",
-      "branch": "js/zen-brown-c1q95x",
-      "date": "2026-11-10T03:04:25Z"
-    },
-    {
       "number": 168,
       "commit": "bf0eeff",
       "title": "Draw a metagenome's map as a circle or as two lines, a dev feature (§7.6)",
