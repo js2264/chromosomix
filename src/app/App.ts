@@ -2518,7 +2518,9 @@ export class App implements SessionHost {
         // one preference across a whole deck rather than a property of one
         // map, so the picture row holds the turn and the baseline and this is a
         // palette command only (§2).
-        hint: 'Zooming past the block in hand reads the window again at a finer grid.',
+        hint:
+          'On, a map is read at the size of the screen and zooming reads it finer, down to the ' +
+          'resolution chosen. Off, it is read once as finely as memory allows, and zooming magnifies it.',
         state: chipOf(refineEnabled()),
         run: () => void toggleRefine(),
       },

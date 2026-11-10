@@ -267,8 +267,10 @@ as the root and goes on drawing the same picture. **About** lists the published 
 
 ## Refine on zoom
 
-A preference in the command palette, off by default: zooming past what was read reads the window
-again at a finer resolution, rather than magnifying it. See [Moving around](/browse/navigating/).
+A preference in the command palette, on by default: a map is read at about the size of the screen,
+and zooming in reads the stretch on screen again at a finer resolution, down to the one chosen,
+without the map ever stopping. Off, a window is read once, as finely as memory allows, and zooming
+magnifies it. See [Moving around](/browse/navigating/#resolution-and-the-zoom).
 
 ## Resolution
 

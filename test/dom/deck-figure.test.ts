@@ -210,6 +210,8 @@ function leadPanel() {
     setLaneFloor: () => {},
     remeasure: () => {},
     bpPerCell: () => 1000,
+    // Its block is already the figure's: nothing to read before the deck draws.
+    prepareFigure: async () => true,
     cellCount: () => ({ rows: 400, cols: 400 }),
     blockLevel: () => 'bin',
     blockSpan: () => ({ rows: 400000, cols: 400000, sequences: { rows: 1, cols: 1 } }),

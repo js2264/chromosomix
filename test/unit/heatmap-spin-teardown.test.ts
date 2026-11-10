@@ -1,15 +1,16 @@
 /**
  * What a view stops doing when it is taken off the page.
  *
- * `HeatmapView.setFrozen(true)` starts a `requestAnimationFrame` chain that
+ * `HeatmapView.setWaiting(true)` starts a `requestAnimationFrame` chain that
  * turns the spinner: `tick` re-arms itself and calls `draw()` for as long as
- * `frozen` is true. The only thing that ever stopped it was `setFrozen(false)`,
- * and no teardown path calls that — the ladder holding the freeze is
- * *destroyed* rather than aborted, so the `onBusy(false)` that would have
- * released it never runs, and `detach()` cancelled only the view's own deferred
- * redraw. A panel closed while a refine read was in flight therefore went on
- * blitting its raster once per vsync for the life of the tab, holding that
- * view's matrix, raster and offscreen canvas alive behind the `tick` closure.
+ * the wait lasts. The only thing that ever stopped it was ending the wait, and
+ * no teardown path does that — the ladder whose read started it is *destroyed*
+ * rather than finished, so the `onBusy(false)` that would have ended it never
+ * runs, and `detach()` cancelled only the view's own deferred redraw. A panel
+ * closed while a refine read was in flight therefore went on blitting its
+ * raster once per vsync for the life of the tab, holding that view's matrix,
+ * raster and offscreen canvas alive behind the `tick` closure. (The wait was a
+ * freeze then, which also held the gestures; the leak was the spinner's.)
  *
  * Which is invisible in the ordinary suite: under Node there is no
  * `requestAnimationFrame`, so `frameLoop` returns `null` and the chain never
@@ -149,27 +150,27 @@ function block(n: number): DenseMatrix {
   return { nrows: n, ncols: n, values, rowExtent: [0, n], colExtent: [0, n] }
 }
 
-function frozenView(): HeatmapView {
+function waitingView(): HeatmapView {
   const heatmap = new HeatmapView(stubCanvas(), { devicePixelRatio: 1 })
   heatmap.setMatrix(block(64))
   heatmap.draw()
-  heatmap.setFrozen(true)
+  heatmap.setWaiting(true)
   return heatmap
 }
 
-describe('a view torn down while it is frozen', () => {
+describe('a view torn down while it waits', () => {
   it('turns its spinner for as long as it is on the page', () => {
     // The control: without this the assertions below would pass against a view
     // that had simply never started a loop.
-    const heatmap = frozenView()
-    expect(heatmap.isFrozen).toBe(true)
+    const heatmap = waitingView()
+    expect(heatmap.isWaiting).toBe(true)
     pump(30)
     expect(queued.size, 'the loop re-arms itself every frame').toBe(1)
     expect(blits).toBeGreaterThan(0)
   })
 
   it('stops turning it on detach', () => {
-    const heatmap = frozenView()
+    const heatmap = waitingView()
     pump(5)
     expect(queued.size).toBe(1)
 
@@ -183,13 +184,13 @@ describe('a view torn down while it is frozen', () => {
     expect(blits, 'a detached view must not draw').toBe(0)
   })
 
-  it('ends the freeze itself, not just the timer it scheduled', () => {
-    // Cancelling `spinTimer` alone would leave `frozen` true, and any later
-    // `draw()` on the same instance would take the frozen branch and paint a
-    // spinner — so the flag has to go with it.
-    const heatmap = frozenView()
+  it('ends the wait itself, not just the timer it scheduled', () => {
+    // Cancelling `spinTimer` alone would leave the wait standing, and any later
+    // `draw()` on the same instance would paint a spinner — so the flag has to
+    // go with it.
+    const heatmap = waitingView()
     heatmap.detach()
-    expect(heatmap.isFrozen).toBe(false)
+    expect(heatmap.isWaiting).toBe(false)
 
     heatmap.draw()
     pump(30)
@@ -197,17 +198,17 @@ describe('a view torn down while it is frozen', () => {
   })
 
   it('is idempotent, as its docblock says', () => {
-    const heatmap = frozenView()
+    const heatmap = waitingView()
     heatmap.detach()
     heatmap.detach()
     expect(queued.size).toBe(0)
-    expect(heatmap.isFrozen).toBe(false)
+    expect(heatmap.isWaiting).toBe(false)
   })
 
-  it('turns the same spinner for a wait, and stops it the same ways', () => {
-    // A stand-in on screen while its block reads (§7.2) turns the spinner
-    // without holding the view; the loop must end with the wait, and with the
-    // view.
+  it('stops the spinner when the wait ends, and again on detach', () => {
+    // A stand-in on screen while its block reads (§7.2), or a sharper block
+    // read for the window on screen (§2): the loop must end with the wait, and
+    // with the view.
     const heatmap = new HeatmapView(stubCanvas(), { devicePixelRatio: 1 })
     heatmap.setMatrix(block(64))
     heatmap.draw()
@@ -226,26 +227,6 @@ describe('a view torn down while it is frozen', () => {
     heatmap.draw()
     pump(30)
     expect(queued.size, 'a draw after detach must not restart the loop').toBe(0)
-  })
-
-  it('keeps turning while a freeze or a wait remains', () => {
-    // The two are independent: a refine freezing the view under a stand-in's
-    // wait, or the other way round, must not stop the spinner when one ends.
-    const heatmap = new HeatmapView(stubCanvas(), { devicePixelRatio: 1 })
-    heatmap.setMatrix(block(64))
-    heatmap.draw()
-    heatmap.setWaiting(true)
-    heatmap.setFrozen(true)
-    heatmap.setFrozen(false)
-    pump(3)
-    expect(queued.size, 'still waiting').toBe(1)
-    heatmap.setFrozen(true)
-    heatmap.setWaiting(false)
-    pump(3)
-    expect(queued.size, 'still frozen').toBe(1)
-    heatmap.setFrozen(false)
-    pump(2)
-    expect(queued.size).toBe(0)
   })
 
   it('stands the spinner clear of the axis labels drawn inside the plot', async () => {
@@ -281,7 +262,7 @@ describe('a view torn down while it is frozen', () => {
     heatmap.setWaiting(false)
   })
 
-  it('leaves an unfrozen view’s teardown exactly as it was', () => {
+  it('leaves the teardown of a view with no wait exactly as it was', () => {
     const heatmap = new HeatmapView(stubCanvas(), { devicePixelRatio: 1 })
     heatmap.setMatrix(block(64))
     heatmap.draw()
@@ -291,6 +272,6 @@ describe('a view torn down while it is frozen', () => {
     expect(queued.size).toBe(1)
     heatmap.detach()
     expect(queued.size).toBe(0)
-    expect(heatmap.isFrozen).toBe(false)
+    expect(heatmap.isWaiting).toBe(false)
   })
 })

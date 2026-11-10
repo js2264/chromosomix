@@ -95,30 +95,38 @@ greyed.
 
 ## Resolution and the zoom
 
-Scrolling does not change the resolution chosen in the bar
-([Resolution](/browse/contact-maps/#resolution)): zooming in magnifies the cells of the block
-already read. A wide window may be read coarser, its bins summed, and the line under the heading
-says what one cell is worth: `4,033 × 4,033 bins · effective resolution: 3 kb`.
+The resolution chosen in the bar ([Resolution](/browse/contact-maps/#resolution)) is the finest a
+map reads, not the first thing it reads. A map opens at about the size of the screen: a whole
+chromosome is read from a coarser resolution the file stores, a cell or so to each pixel, which is
+what puts it on screen in a fraction of a second. As you zoom in, the finer data is read for the
+stretch you are looking at, step by step, down to the resolution chosen. The map never stops
+following the scroll or the drag while it reads: for a moment its cells are larger and a spinner
+turns in its corner, then it sharpens where you are. The line under the heading says what one cell
+is worth at any moment, `785 × 785 bins · effective resolution: 250 kb` on a whole chromosome, and
+the resolution chosen once you are close enough to see it.
 
-A block of several million cells — a whole chromosome at a fine resolution — is first drawn at the
-size of the screen, which is what makes it appear quickly. Its finer detail is drawn when you first
-zoom in: for a moment after that zoom the picture is softer, then it sharpens. Nothing is read again,
-since the block is already in hand, and a saved figure is always drawn at full detail.
+Saving or copying a figure first reads the window you have framed at the resolution chosen, so a
+figure has every bin the file has there, however coarse the map on screen; the Export card says it is
+reading ([Figures](/browse/figures/#saving-a-view)).
 
-Before that, while such a block is still being read, the window is shown from a coarser resolution
-the file stores, when it has one: clicking a whole chromosome puts a coarse map on screen in a
-fraction of a second, with a spinner in its corner, and the map at the resolution you chose replaces
-it when it arrives. The coarse map's key says its own resolution. Its cells are sums of many finer
-ones, so its compartments look stronger than they will in the finer map. You can scroll, drag and
-hover it straight away: the finer map lands on the stretch you have moved to, or fills the panel if
-you have not moved. Saving or copying the figure, and running an analysis, wait for the finer map,
-and the Export card says so. A window that is already about as coarse as that is read once, as
-before.
+To read a map once and zoom without reading again, turn off **Refine on zoom** in the command palette
+(<kbd>⌘ P</kbd> or <kbd>Ctrl P</kbd>). The window you open is then read as finely as memory allows,
+a wide window coarser with its bins summed, and zooming in magnifies what was read. It applies to
+every map, and this browser remembers it.
 
-To see finer data, narrow the window, down to the resolution chosen. Or turn on **Refine on zoom**
-in the command palette (<kbd>⌘ P</kbd> or <kbd>Ctrl P</kbd>): zooming in past what the block can
-show then reads it again, finer; <kbd>Esc</kbd> calls it off. It applies to every map, and this
-browser remembers it.
+With it off, a block of several million cells — a whole chromosome at a fine resolution — is first
+drawn at the size of the screen, which is what makes it appear quickly. Its finer detail is drawn when
+you first zoom in: for a moment after that zoom the picture is softer, then it sharpens. Nothing is
+read again, since the block is already in hand.
+
+And while such a block is still being read, the window is shown from a coarser resolution the file
+stores, when it has one: clicking a whole chromosome puts a coarse map on screen in a fraction of a
+second, with a spinner in its corner, and the map at the resolution you chose replaces it when it
+arrives. The coarse map's key says its own resolution. Its cells are sums of many finer ones, so its
+compartments look stronger than they will in the finer map. You can scroll, drag and hover it
+straight away: the finer map lands on the stretch you have moved to, or fills the panel if you have
+not moved. Saving or copying the figure, and running an analysis, wait for the finer map, and the
+Export card says so. A window that is already about as coarse as that is read once, as before.
 
 ## Crumbs, back and forward
 

@@ -138,6 +138,7 @@ import {
   refineEnabled,
   setRefineEnabled,
   subscribeRefine,
+  type BlockHandover,
   type RefineView,
 } from './refine'
 import { diagonalLocked, subscribeDiagonalLock, toggleDiagonalLock } from './diagonalLock'
@@ -270,12 +271,12 @@ const TURN_ICONS = { off: 'triangle', on: 'square' } as const
 const REFINE_ICON = 'bars-decreasing'
 
 const REFINE_HINT =
-  'Adaptive resolution. Off, the block is read once and zooming magnifies it — which is what ' +
-  'every map here has always done. On, zooming past what that block can show reads the same ' +
-  'window again at a finer grid, down to the file’s own bins: the map holds still while it does, ' +
-  'with a spinner in the corner, and Escape calls it off. Panning to the edge of what has been ' +
-  'read fetches the next stretch at the same resolution. Nothing is tiled and nothing is ' +
-  'stitched — every picture is one whole block.'
+  'Adaptive resolution. On, the default, the map is read at about the size of the screen and ' +
+  'zooming reads the stretch on screen again at a finer grid, down to the file’s own bins: the ' +
+  'map keeps following the gesture, with a spinner in the corner, and sharpens where it lands. ' +
+  'Panning reads ahead of the edge of what has been read. Off, the block is read once as finely ' +
+  'as memory allows and zooming magnifies it. Nothing is tiled and nothing is stitched — every ' +
+  'picture is one whole block.'
 
 /**
  * What the Export card says while a coarse stand-in is on screen (§7.2,
@@ -283,6 +284,13 @@ const REFINE_HINT =
  * rung they did not ask for, with seconds to live.
  */
 const PREVIEW_EXPORT_HOLD = 'waits for the map: a coarser stand-in is on screen while it reads'
+
+/**
+ * The narrowest plot a screen-sized read is sized to, in CSS pixels: below it
+ * the canvas has not been laid out, and the window's size stands in
+ * ({@link MatrixPanel.screenWidth}).
+ */
+const MIN_SCREEN_PX = 256
 
 const TURN_HINT =
   'Turn the map 45°: position along the bottom, distance from the diagonal up the side. ' +
@@ -1367,7 +1375,7 @@ export class MatrixPanel {
    * The widest block installed since the view was built — see {@link gaugeFor}.
    * `null` until the first one arrives.
    */
-  private gaugeBlock: { spanBp: number; dense: DenseMatrix } | null = null
+  private gaugeBlock: { spanBp: number; cellBp: number; dense: DenseMatrix } | null = null
   /** The gauge the view is currently measuring from — see {@link gaugeFor}. */
   private gaugeShown: DenseMatrix | null = null
   /** The open map's own bin size — see {@link openBinsize}. */
@@ -1704,6 +1712,7 @@ export class MatrixPanel {
       renderKeys: (ctx, scale, origin) => this.renderKeys(ctx, scale, origin),
       caption: (now) => this.figureCaption(now),
       exportName: () => this.exportName,
+      prepare: (onReading) => this.prepareFigure(onReading),
     })
     this.exportEl = this.figure.card
 
@@ -1963,9 +1972,8 @@ export class MatrixPanel {
 
     // Then the refine, because it decides what the two after it are *of*: the
     // turn changes the geometry and `O/E` changes the units, and both of those
-    // are read off whatever grid the picture is on. Off by default
-    // (`ui/refine.ts`), so this is the control that turns it on rather than a
-    // light that happens to be lit.
+    // are read off whatever grid the picture is on. On by default
+    // (`ui/refine.ts`).
     const refineButton = iconButton(
       REFINE_ICON,
       REFINE_HINT,
@@ -3176,8 +3184,25 @@ export class MatrixPanel {
     // A stand-in's extents are in another rung's bins, under this view's file
     // name (§7.2): a task framed on one would read the wrong stretch of the map.
     if (data === null || this.standIn) return null
-    const binsPerCell = Math.max(1, Math.round((data.binsPerCell ?? 1) / (derived?.rung.factor ?? 1)))
-    const binsize = derived?.rung.binsize ?? this.options.binsize
+    // **In the open map's bins**, whatever the block was read at. A block read
+    // from a sibling rung — the screen-sized read a view opens with (§2), and
+    // every refine on a laddered file — describes itself on that rung's grid:
+    // its extents count the rung's bins and its `binsPerCell` the rung's bins
+    // per cell. A task reads the framing as bins of the map at `uri`, and reads
+    // `binsPerCell === 1` as *the block on screen is at the file's own bins*;
+    // framed on the rung's numbers it read the wrong stretch of the map, and
+    // took a 100 kb rung's block for 25 kb data. So the window is the one that
+    // was asked for (`source`), and the grid is the rung's factor times its
+    // pooling.
+    const rung = Math.max(1, Math.round((data.binsize ?? this.baseBinsize) / this.baseBinsize))
+    const binsPerCell = Math.max(1, Math.round((rung * (data.binsPerCell ?? 1)) / (derived?.rung.factor ?? 1)))
+    // The open map's, not `options.binsize`: that is the *effective* resolution
+    // the panel draws in, the read's bin size times its pooling, which the
+    // views set before every block (`setResolution`) — and which wrote a 20 kb
+    // file pooled four to the cell as `80 kb bins`.
+    const binsize = derived?.rung.binsize ?? this.baseBinsize
+    const rowExtent = data.source?.rows ?? data.rowExtent
+    const colExtent = data.source?.cols ?? data.colExtent
 
     // The score picker's `current` is an **id**, and an id is not a column.
     // `balanced` is counts times two weights and `ICE` is computed here from
@@ -3226,8 +3251,8 @@ export class MatrixPanel {
     if (depth !== null && depth.mode !== 'none') parts.push(depthPhrase(depth))
     return {
       uri,
-      rows: derived === null ? [data.rowExtent[0], data.rowExtent[1]] : derived.grid.toCoarse(data.rowExtent),
-      cols: derived === null ? [data.colExtent[0], data.colExtent[1]] : derived.grid.toCoarse(data.colExtent),
+      rows: derived === null ? [rowExtent[0], rowExtent[1]] : derived.grid.toCoarse(rowExtent),
+      cols: derived === null ? [colExtent[0], colExtent[1]] : derived.grid.toCoarse(colExtent),
       binsize,
       binsPerCell,
       balance,
@@ -3270,8 +3295,11 @@ export class MatrixPanel {
 
   analysisBlock(): BlockInput | null {
     const data = this.data
-    // Nor is a stand-in lent to one, for the same reason (§7.2).
+    // Nor is a stand-in lent to one, for the same reason (§7.2) — nor any block
+    // read from a sibling rung: its cells and extents are that rung's, and a
+    // task indexes what it borrows as the open map's bins. It reads for itself.
     if (data === null || this.standIn) return null
+    if (data.binsize !== undefined && data.binsize !== this.baseBinsize) return null
     if (data.values.byteLength > BLOCK_COPY_LIMIT_BYTES) return null
     // **Never a block read round a circle** (SPECS §8.15). Its extents are
     // unwrapped — they run off the end of the sequence and resolve modulo it —
@@ -3884,6 +3912,7 @@ export class MatrixPanel {
     this.installLower()
     this.gaugeBlock = {
       spanBp: Math.max(data.nrows, data.ncols) * Math.max(1, this.options.binsize),
+      cellBp: Math.max(1, this.options.binsize),
       dense: this.square ?? dense,
     }
     // A cell is a bin, so a block's span in cells is its length in base pairs:
@@ -3977,10 +4006,9 @@ export class MatrixPanel {
   setPreview(data: MatrixResult, title: string): void {
     this.setData(data, title, undefined, { preview: true })
     this.previewing = true
-    this.heatmap.setWaiting(true)
     // The page's report of a finished picture waits for the block, not for
     // the stand-in (`perf/rendered.ts`).
-    this.surface?.wait('preview', true)
+    this.wait('preview', true)
     this.figure.hold(PREVIEW_EXPORT_HOLD)
   }
 
@@ -4003,8 +4031,7 @@ export class MatrixPanel {
   endPreview(): void {
     if (!this.previewing) return
     this.previewing = false
-    this.heatmap.setWaiting(false)
-    this.surface?.wait('preview', false)
+    this.wait('preview', false)
     this.figure.hold(null)
   }
 
@@ -4063,15 +4090,17 @@ export class MatrixPanel {
    * it does. The caller's fallback is {@link setData}, which refits: a picture in
    * the right place at the wrong zoom is recoverable, and one in the wrong place
    * is not.
+   *
+   * `how.measure` measures the colour range on this block ({@link gaugeFor}).
    */
-  regrid(data: MatrixResult, binsize: number, second?: MatrixResult): boolean {
+  regrid(data: MatrixResult, binsize: number, second?: MatrixResult, how?: BlockHandover): boolean {
     if (this.data === null) return false
     // Read *before* anything moves, off the axes the picture is currently drawn
     // against. A turned map has no row locus, and that is not a failure: its
     // rows are distance from the diagonal and are decided by the band's own cut.
     const want = {
-      rows: this.framedEdges(this.locusAxes.rows, this.heatmap.scaleY),
-      cols: this.framedEdges(this.locusAxes.cols, this.heatmap.scaleX),
+      rows: this.shownEdges(this.locusAxes.rows, this.heatmap.scaleY),
+      cols: this.shownEdges(this.locusAxes.cols, this.heatmap.scaleX),
     }
     if (want.cols === null) return false
 
@@ -4111,7 +4140,7 @@ export class MatrixPanel {
       { rows: [rows[0], rows[1]], cols: [cols[0], cols[1]] },
       {
         separators: turned === null ? separatorsFor(data) : { rows: [], cols: [] },
-        gauge: this.gaugeFor(data, gauge),
+        gauge: this.gaugeFor(data, gauge, how?.measure === true),
       },
     )
     this.lowerGauged = this.lowerSquare !== null
@@ -4163,23 +4192,49 @@ export class MatrixPanel {
    * but the magnification. A loop that was bright at fit zoom has to be the same
    * brightness when the finer data lands, or the picture is arguing with itself.
    *
-   * Widening is the one case that re-measures, and it should: a reader zooming
+   * Widening is one case that re-measures, and it should: a reader zooming
    * out is looking at data that was not in the picture before, and pinning the
    * range to a window they have left is the opposite error.
+   *
+   * **A figure's block** (`measure`, from `BlockLadder.sharpen`) is the other,
+   * and it is not a zoom: the same window, read finer for a page than the
+   * screen needed. Kept, the range of the block it replaces is a range for
+   * cells many times the size: chicken chr1 saved from its 250 kb picture is
+   * drawn from the 25 kb rung, cells holding about a hundredth as much, and it
+   * came out white but for the diagonal. Measured on itself, it looks as that
+   * window read once at its resolution always did. And a block **coarser** than the one the range came
+   * from re-measures, for the same arithmetic run the other way — which only a
+   * figure's block, finer than the screen, can be.
    *
    * `undefined` leaves whatever the view holds, which is what makes the ordinary
    * refine cost nothing — the memo on the gauge survives (`render/heatmap.ts`).
    */
-  private gaugeFor(data: MatrixResult, own: DenseMatrix | undefined): DenseMatrix | null | undefined {
-    const spanBp = Math.max(data.nrows, data.ncols) * Math.max(1, this.options.binsize)
+  private gaugeFor(
+    data: MatrixResult,
+    own: DenseMatrix | undefined,
+    measure = false,
+  ): DenseMatrix | null | undefined {
+    const cellBp = Math.max(1, this.options.binsize)
+    const spanBp = Math.max(data.nrows, data.ncols) * cellBp
     const held = this.gaugeBlock
-    if (held === null || spanBp > held.spanBp) {
+    // Wider by more than a cell of either grid. The same window read on two
+    // grids ends at two cell edges — a chromosome's last bin is short by a
+    // different amount on each — so a 100 kb block of a whole chromosome is a
+    // few kilobases "wider" than the 250 kb block it refines, and re-measuring
+    // on that was the longest stall of a zoom: the order statistics of four
+    // million cells, for a range that by construction had not moved (§2).
+    if (
+      held === null ||
+      measure ||
+      cellBp > held.cellBp ||
+      spanBp > held.spanBp + Math.max(cellBp, held.cellBp)
+    ) {
       // Wider than anything held, or the first block of a view: this is the
       // gauge from now on. `this.square` is what `derive` just produced, before
       // any rotation — the range belongs to the square whether or not the
       // picture is a band cut out of it.
       const dense = this.square ?? { ...toDense(data), values: data.values }
-      this.gaugeBlock = { spanBp, dense }
+      this.gaugeBlock = { spanBp, cellBp, dense }
       this.gaugeShown = own ?? null
       return this.gaugeShown
     }
@@ -4194,18 +4249,28 @@ export class MatrixPanel {
   }
 
   /**
-   * The stretch of genome an axis is showing, as its two edges.
+   * The stretch of genome an axis is showing, as its two edges, **to the base
+   * pair**.
    *
    * Two loci rather than a span, because a whole-genome axis crosses sequences
    * and the far edge is not in the same one as the near edge. `null` for an axis
    * with no locus at all — a turned map's rows, an axis of whole contigs — which
    * is a fact about the picture rather than an error.
+   *
+   * What {@link regrid} carries a window across a change of grid by. It used to
+   * be rounded out to the outgoing block's whole cells, so the window grew by up
+   * to a cell at each edge on every refine — a coarse cell, at the moment a
+   * coarse block is replaced — and the ladder then found a block read for
+   * exactly the framed window no longer covering the view it was put on, and
+   * took a coarser one back (`ui/refine.ts`). Clipped to the block.
    */
-  private framedEdges(
+  private shownEdges(
     axis: LocusAxis | null,
     scale: Scale,
   ): { from: { contig: string; bp: number }; to: { contig: string; bp: number } } | null {
-    const windows = this.framedWindows(axis, scale)
+    if (axis === null) return null
+    const [d0, d1] = scale.domain
+    const windows = axis.windows([Math.max(0, d0), Math.min(axis.unitEnd, d1)])
     if (windows.length === 0) return null
     const first = windows[0]
     const last = windows[windows.length - 1]
@@ -5884,19 +5949,33 @@ export class MatrixPanel {
   }
 
   /**
-   * Hold the map still while a finer block is read for it.
+   * Say a sharper block is being read for the picture on screen (§2).
    *
-   * Straight through to the view, because that is where both halves of it live
-   * — the gestures it refuses and the spinner it draws. It is a method rather
-   * than something the panel infers from its own busy state because the two are
-   * different waits: {@link setBusy} veils the map while a *navigation* fetches
-   * a different picture, and this holds the picture that is already there while
-   * a sharper version of it arrives.
+   * The spinner in the plot's corner, over a view that goes on taking every
+   * gesture: the block lands on wherever the reader has got to
+   * (`MatrixPanel.regrid`). It is a method rather than something the panel
+   * infers from its own busy state because the two are different waits:
+   * {@link setBusy} veils the map while a *navigation* fetches a different
+   * picture, and this marks the picture that is already there while a sharper
+   * version of it arrives.
    */
-  setFrozen(on: boolean, onCancel?: () => void): void {
-    this.heatmap.setFrozen(on, onCancel)
-    // The picture held still is about to be replaced by a sharper one.
-    this.surface?.wait('refine', on)
+  setWaiting(on: boolean): void {
+    this.wait('refine', on)
+  }
+
+  /** The things the picture is waiting for; see {@link wait}. */
+  private readonly waits = new Set<'preview' | 'refine'>()
+
+  /**
+   * Start or stop one wait. The spinner turns while any is outstanding — a
+   * preview's block, a refine's — and the page's report of a finished picture
+   * (`perf/rendered.ts`) waits for each by name.
+   */
+  private wait(reason: 'preview' | 'refine', on: boolean): void {
+    if (on) this.waits.add(reason)
+    else this.waits.delete(reason)
+    this.heatmap.setWaiting(this.waits.size > 0)
+    this.surface?.wait(reason, on)
   }
 
   /**
@@ -5957,6 +6036,52 @@ export class MatrixPanel {
   }
 
   /**
+   * The plot's wider side in CSS pixels: what a screen-sized read is sized to,
+   * a cell to each pixel of the view (§2).
+   *
+   * Measured off the canvas as it is laid out, which forces the layout once and
+   * is the point: a view plans its first read moments after its panel is
+   * placed, and the size it is drawn at is the size to read for. A canvas not
+   * laid out yet — not in the document, or measured before the page has a size
+   * — reports nothing worth reading for, and gets most of the window's shorter
+   * side instead, which is about what a map is given.
+   */
+  screenWidth(): number {
+    const side = Math.max(this.canvas.clientWidth, this.canvas.clientHeight)
+    if (side >= MIN_SCREEN_PX) return side
+    const room = typeof window === 'undefined' ? 0 : Math.min(window.innerWidth, window.innerHeight)
+    return Math.max(MIN_SCREEN_PX, Math.round(room * 0.7))
+  }
+
+  /** What a figure waits for before it is drawn; see {@link prepareFigure}. */
+  private figurePrep: ((view: RefineView, onReading: () => void) => Promise<boolean>) | null = null
+
+  /** Set by the view's ladder (`ui/refine.ts`); `null` takes it back. */
+  setFigurePrep(prep: ((view: RefineView, onReading: () => void) => Promise<boolean>) | null): void {
+    this.figurePrep = prep
+  }
+
+  /**
+   * Put on screen the block a figure of what is framed should be drawn from,
+   * and say whether it is there (§19.2).
+   *
+   * A screen-sized block is as fine as the screen, and a figure is a page: so
+   * the view's ladder reads the framed window at the grid the reader chose, as
+   * memory allows, and the figure is drawn once it lands — sharper on screen
+   * too, since it is the block on screen. `onReading` is told only when a read
+   * is made, so a block already that fine says nothing. `true` with nothing to
+   * read, on a view with no ladder, and on a stand-in, whose figure waits for
+   * its block anyway (§7.2).
+   */
+  prepareFigure(onReading: () => void = () => {}): Promise<boolean> {
+    const prep = this.figurePrep
+    if (prep === null || this.standIn) return Promise.resolve(true)
+    const view = this.refineWindow()
+    if (view === null) return Promise.resolve(true)
+    return prep(view, onReading)
+  }
+
+  /**
    * What is on screen, in absolute bins of the file — or `null` where the
    * question has no answer.
    *
@@ -6005,16 +6130,31 @@ export class MatrixPanel {
       // "is this coarse enough to be worth replacing" comparison is between two
       // numbers in one unit.
       const scale = Math.max(1, (data.binsize ?? 1) / Math.max(1, this.openBinsize()))
-      return { rows, cols, binsPerCell: Math.max(1, Math.round(k * scale)) }
+      return { rows, cols, binsPerCell: Math.max(1, Math.round(k * scale)), ...this.screenOf() }
     }
     if (this.turned !== null) {
       const span = binsOf(window.cols, data.colExtent, k * BIN_FRACTION)
-      return { rows: span, cols: span, binsPerCell: k }
+      return { rows: span, cols: span, binsPerCell: k, ...this.screenOf() }
     }
     return {
       rows: binsOf(window.rows, data.rowExtent, k),
       cols: binsOf(window.cols, data.colExtent, k),
       binsPerCell: k,
+      ...this.screenOf(),
+    }
+  }
+
+  /**
+   * The two things the ladder reads off the screen rather than the window: how
+   * wide the plot is, which is what a read is sized to, and how the view is
+   * zoomed against the block's own fit, which is what tells a fitted view from
+   * a reader pushing against an edge (`ui/refine.ts`).
+   */
+  private screenOf(): { screen: number; fit: number } {
+    const fitZoom = this.heatmap.fitZoom
+    return {
+      screen: this.screenWidth(),
+      fit: fitZoom > 0 ? this.heatmap.zoomLevel / fitZoom : 1,
     }
   }
 

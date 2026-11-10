@@ -89,7 +89,7 @@ import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
 import type { PickedFile } from '../browse/folder'
 import { resolutionLabel } from '../units'
 import { firstEntry } from '../ui/FilePicker'
-import { attachRefine, rungsOf, type BlockLadder } from '../ui/refine'
+import { attachRefine, refineEnabled, rungsOf, screenPlan, type BlockLadder } from '../ui/refine'
 import { icon, iconButton } from '../ui/icons'
 import { paintSequencePicker, sequencePicker, shownSequence } from './sequencePicker'
 import { entryLabel, fileBaseLabel, fileLabel, splitUri } from '../ui/labels'
@@ -1936,11 +1936,46 @@ export class MapPanel {
       rows,
       ...cols,
       ...(wrap === undefined ? {} : { wrap }),
+      ...this.firstPlan(rows, colRange === null ? rows : colRange.extent, info),
       ...balance,
       ...value,
       budgetBytes,
     })
     return wrap === undefined ? { block } : { block, wrap }
+  }
+
+  /**
+   * How this panel's first read is asked for: **screen-sized** while *Refine
+   * on zoom* is on, the stored rung and pooling that put about a cell on each
+   * pixel of the panel (`screenPlan`, §2), and as memory allows when it is off.
+   */
+  private firstPlan(
+    rows: [number, number],
+    cols: [number, number],
+    info: OpenResult,
+  ): { rung?: string; binsPerCell?: number } {
+    if (!refineEnabled()) return {}
+    const span = Math.max(rows[1] - rows[0], cols[1] - cols[0])
+    const plan = screenPlan({
+      rungs: rungsOf(info.entries),
+      binsize: info.binsize ?? 1,
+      view: span,
+      read: span,
+      screen: this.screenWidth(),
+    })
+    return {
+      ...(plan.rung === undefined ? {} : { rung: plan.rung }),
+      ...(plan.binsPerCell === undefined ? {} : { binsPerCell: plan.binsPerCell }),
+    }
+  }
+
+  /**
+   * The width a screen-sized read of this panel is sized to: its map's plot,
+   * or — before the first block has built one — most of its own cell.
+   */
+  private screenWidth(): number {
+    if (this.panel !== null) return this.panel.screenWidth()
+    return Math.max(256, Math.round(this.el.clientWidth * 0.9) || 512)
   }
 
   /**
@@ -2077,7 +2112,8 @@ export class MapPanel {
     // a circle ticked under the deck offers the baseline along its arms (§8.15).
     this.panel.offerScores(this.scoreChoicesOf(info), score.id)
     this.say('')
-    this.panel.setResolution((info.binsize ?? 1) * (result.binsPerCell ?? 1))
+    // The bin size of the map that answered: a rung's, where one was read.
+    this.panel.setResolution((result.binsize ?? info.binsize ?? 1) * (result.binsPerCell ?? 1))
     // Both on every block, not only at construction: a panel outlives a change
     // of rung, and an exported figure captioned with the entry this map *was*
     // at is wrong in the one place nobody re-checks.
@@ -2116,14 +2152,20 @@ export class MapPanel {
     const wrap = this.wrap
     this.ladder = attachRefine({
       panel: this.panel as MatrixPanel,
-      ceiling: { rows: result.rowExtent, cols: result.colExtent },
+      // In the open map's bins: a block read from a sibling rung describes
+      // itself on that rung's grid, and `source` is the window it was asked for.
+      ceiling: {
+        rows: result.source?.rows ?? result.rowExtent,
+        cols: result.source?.cols ?? result.colExtent,
+      },
       binsize: info.binsize ?? 1,
       rungs: rungsOf(info.entries),
       budget: () => this.props.budgetBytes(),
-      read: (rows, cols, rung) => {
+      read: (rows, cols, rung, binsPerCell) => {
         const own = this.client.cancellable<'matrix'>({
           kind: 'matrix',
           ...(rung === undefined ? {} : { rung }),
+          ...(binsPerCell === undefined ? {} : { binsPerCell }),
           rows,
           cols,
           ...(wrap === undefined ? {} : { wrap }),

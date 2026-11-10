@@ -60,34 +60,59 @@ nothing is composited, and no picture is ever assembled from parts.
 
 **The fourth clause used to be "no progressive refinement", and it is now bounded rather than
 absent.** What the app grew into is what changed it: §9 made whole-genome coolers a first-class view
-and §7.2 made a block larger than the picture arrive already coarsened, so a whole chromosome now
-opens at a grid the reader can see is coarse — and, until this, could do nothing about but leave.
-Zooming past what the block in hand can show therefore reads the window again, at the grid the
-picture could show, **the moment that edge is crossed**. The properties that keep this inside §2
-rather than beside it:
+and §7.2 made a block larger than the picture arrive already coarsened, so a whole chromosome opens
+at a grid the reader can see is coarse — and, until this, could do nothing about but leave. Zooming
+past what the block in hand can show therefore reads the window again, at the grid the picture could
+show. The properties that keep this inside §2 rather than beside it:
 
-- **a gesture still costs nothing**, and cannot continue into one. Crossing the edge of what the
-  block in hand can show *freezes* the map — pan, zoom and refit refused, a spinner in the corner of
-  the plot, clear of the axis labels drawn inside it — until the new grid lands. One crossing is one read, by construction rather than by
-  timing, and the reader is shown the moment their resolution changes instead of having it happen
-  under them. Escape calls the read off and gives the gestures back, because a picture that is
-  already complete is never worth locking the map for;
-- **one block, never tiles.** The picture is always exactly one bounded read, drawn whole. Two or
-  three are *retained* so that zooming back out is a swap rather than a request, which is a small
-  bounded cache of blocks and not a tile cache: nothing is evicted mid-picture and nothing is
-  stitched;
+- **a gesture never waits for a read.** The map never holds still: the block in hand takes every
+  pan and zoom while a sharper one is read, a spinner turns in the corner of the plot, clear of the
+  axis labels drawn inside it (`HeatmapView.setWaiting`), and the sharper block lands on wherever the
+  gesture has got to, its window carried in base pairs (`MatrixPanel.regrid`). A read in flight is the
+  read every frame of the gesture wants while it still covers the view on a grid within a factor of
+  two of the view's own, and is called off for a finer one once the zoom outruns it — so a fast zoom
+  reads its last window rather than every step on the way. It used to *freeze* the map instead,
+  refusing every gesture until the block came: one crossing was one read by construction, and the
+  map stopped following the hand at every crossing, for seconds at a time;
+- **a read is the size of the screen.** It asks for about a cell to each CSS pixel of the view, from
+  the coarsest stored rung whose bins are no bigger than that cell, pooled within it to the cell
+  (`screenPlan`, `ui/refine.ts`), and never more than 3.2 screens of cells across whatever window it
+  is for. Every read used to be as large as memory allowed — the reader's own plan fills the device's
+  budget (§7.2), so a window of 16,384 bins was read a bin to a cell — and it was that, not the
+  network, that made a refine slow: chicken chr1 at 10 kb read a 15,027-bin square (226 M cells,
+  0.9 GB of values) at the second wheel notch, held the map 3.1 s and stalled the page 1.2 s putting
+  it on screen. Screen-sized, the same zoom reads a block about the screen's size at each step — the
+  100 kb rung, the 50 kb, the 10 kb bins pooled two to a cell, then the 10 kb bins themselves — and
+  the page's longest stall is under a fifth of a second (§12);
+- **it reads ahead.** A zoom still going inward reads at a factor of 1.4 rather than of two, so the
+  block for the next step is usually in before its cells would have been big enough to see; a pan
+  reads around the view once it comes within a quarter of a view of an edge of its block, so the edge
+  is gone before the view reaches it; and the last step, onto the file's own bins, is taken whenever
+  the view can show them, factor of two or not. A view showing its whole block reads nothing for the
+  block's edges — it is pressed against every one of them because it shows all of it — until the
+  reader pulls back past them;
+- **one block, never tiles.** The picture is always exactly one bounded read, drawn whole. Up to eight
+  are *retained*, within 160 MB, so that zooming back out is a swap rather than a request, which is a
+  small bounded cache of blocks and not a tile cache: nothing is evicted mid-picture and nothing is
+  stitched. The one drawn is the finest retained block good enough to stay on screen, and the block on
+  screen gives way only to a finer one while it is still a whole picture of the view. A block a zoom
+  left behind is finer than the screen needs, and handing it back whenever it covered the view — near
+  its edge, where the view reads ahead — read around it, handed it back again for being finer than
+  that read, and read again, for as long as the reader stood still;
 - **it terminates.** There is no grid below the file's own bins, so the staircase from the widest
-  view to the finest data is `⌈log₂ k⌉` reads — one for a whole yeast genome at 1 kb, three for a
-  human chromosome at 5 kb, **none at all for a MAG**, whose block already is the finest data in the
-  file. §2's own case is untouched;
+  view to the finest data is about a read each time the zoom doubles, ending on those bins. A MAG's
+  block already is the finest data in its file, so §2's own case reads nothing more;
 - **it is bounded by the view.** A zoom can never widen past the domain the view was entered on, so
   it cannot become the full pixel scan §7.3 gates;
-- **it is a preference, and it is off.** The default is the behaviour that keeps this clause
-  absolute: a block read once, and a zoom that magnifies it. Refinement is a palette command — *Refine
-  on zoom* — rather than a switch on a map's picture row, which holds the turn and the baseline: the
+- **it is a preference, and it is on.** A view's first read is screen-sized too (§7.2), so a map opens
+  at the screen's resolution — a chromosome of a remote file in well under a second, whatever rung it
+  was opened at — and sharpens as the reader zooms. Off, the palette's *Refine on zoom*, is this
+  clause kept absolute: the window read once, as finely as memory allows, and every pan and zoom
+  after it free of reads; turning it off reads the view's whole domain that way. It is a palette
+  command rather than a switch on a map's picture row, which holds the turn and the baseline: the
   preference is one setting for the whole window, and a control on one map of a deck would claim it
-  was that map's. A zoom that reads is a zoom that can wait, and a wait nobody asked for is a surprise
-  rather than a feature.
+  was that map's. A figure is the other read that is not the screen's size: it is drawn from the
+  framed window read at the grid the reader chose (§7.2).
 
 **And a place already seen is not read again.** A navigation builds its view afresh, and a view used
 to ask for its block whatever had been asked before — so chr1, then chr2, then chr1 read chr1 twice,
@@ -2288,7 +2313,12 @@ diverges from what a reader reproduces locally.
   numbers, and re-measuring would re-brighten the map for a reader who changed nothing but the
   magnification. The range is measured from the **widest block held** and stays there while the
   reader zooms in; zooming out past it re-measures, which is right, because that reader is looking at
-  data that was not in the picture before
+  data that was not in the picture before. A **figure's block** (§7.2) is measured on itself too: it
+  is not a zoom but the same window read finer, and the range of the block it replaces is a range for
+  cells many times its size — kept, chicken chr1 saved from its 250 kb picture was drawn from the 25 kb
+  rung, cells holding about a hundredth as much, and came out white but for the diagonal. So is a
+  block **coarser** than the one the range came from, the same arithmetic the other way, which only a
+  zoom after a figure meets
 - the **cell size** is named in the key, on its own line under the scale's name, and in the exported
   key as well — it is the one fact about a refining map that cannot be recovered from the pixels, and
   a figure that carries it needs no caption to say it
@@ -2415,13 +2445,28 @@ because a control that appears on hover appears never where there is no hover; a
 is inert while it is invisible, so a tap or a click that lands where one is hidden reaches what is
 behind it rather than firing a button nobody saw.
 
-**One grid, and one place it is decided.** This is what a refine (§2) re-uses
-rather than works around: it asks for a narrower window and *nothing else*, and
-the reader plans the grid for it exactly as it plans every other read. A caller
-that named its own grid would bypass the widening below and anchor the cells to
-wherever the reader had panned to, so a cell's value would change as it crossed
-the screen — which is why the plan is never sent by anything driven from a
-viewport.
+**One grid, and one place it is anchored.** A read names the grid it wants or
+leaves it to the reader, and either way the reader anchors it to the *sequence*
+(below), never to the request: a grid anchored to wherever the reader had panned
+to would change a cell's value as it crossed the screen. That is what lets a view
+name its grid — a screen-sized read (§2), a resolution the reader added (§3.4) —
+and pan around in it. A read that names none is planned as memory allows, which
+is what the next two paragraphs describe: every read with *Refine on zoom* off,
+and the read a figure is drawn from.
+
+**A view's reads are screen-sized while *Refine on zoom* is on**, which is the
+default (§2): about a cell to each CSS pixel of the plot, from the coarsest stored
+rung whose bins are no bigger than that cell, pooled within it to the cell
+(`screenPlan`). The plot is measured off the canvas as laid out, and a panel not
+yet laid out is sized from the window. So a chromosome opened at a fine rung of a
+laddered file reads one of its coarse rungs first, a few hundred cells across —
+chicken chr1 opened at 10 kb is 785 cells of its 250 kb rung, 2.1 MB in one
+request, on screen in 0.34 s where its first picture took 1.9 s — and the zoom
+reads the rest as it goes. A cell made of several of a rung's bins is read from
+the rung that stores it whole where the ladder has one: two of a `zoomify`
+ladder's 160 kb bins are its 320 kb rung's own. A file
+with no ladder is pooled from its own bins to the same grid: the same pixels are
+read, but the block is the screen's size rather than the memory's.
 
 **A window is read at its own bins up to `denseCellCap`**: the widest square the dense guard
 (§9) passes on this machine, and never wider than `RASTER_MAX_DIM`, **16,384** — on a machine
@@ -2498,10 +2543,12 @@ yeast chrIV at 100 bp in 4.2 s where it took 26.6; chicken chr1 at the 25 kb a `
 and a field read about a middle keep the whole-image path, whose reductions they each have a rule of
 their own in.
 
-**A window is drawn first from a coarser rung while its own block reads** (`previewRung`,
-`ui/refine.ts`). A chromosome clicked at the rung a file lands on is the slowest first picture a reader
-is given — the whole block read, decoded and spread a cell at a time before anything is on screen — and
-the same window a few rungs up is a fraction of its reads and of its cells. So a region view's first
+**With *Refine on zoom* off, a window is drawn first from a coarser rung while its own block reads**
+(`previewRung`, `ui/refine.ts`). On, which is the default, there is nothing to stand in for: the first
+read is already screen-sized, the cheapest picture of the window there is (above). Off, a chromosome
+clicked at the rung a file lands on is the slowest first picture a reader is given — the whole block,
+as memory allows, read, decoded and spread a cell at a time before anything is on screen — and the
+same window a few rungs up is a fraction of its reads and of its cells. So a region view's first
 read is preceded by one from the **coarsest stored rung that still puts 256 cells across the window**,
 where the block asked for is **at least four times finer** than that along its wider axis — measured
 against the grid the reader will actually read, so a pooled first read is not "previewed" by a picture
@@ -2636,6 +2683,19 @@ one preference, kept with the overlays' kind (`localStorage`), and shared: off b
 off in the 1D browser, and in the deck's figure, whose cells each read it (§16.5). The tracks'
 own names and ranges are the picture's and are saved as they are on screen, whatever the switch
 says.
+
+**A figure is drawn from the window read at the grid the reader chose.** A screen-sized block is as
+fine as the screen, and a saved figure is a page at 300 dpi or a vector drawing: so the Export card's
+save and copy, and the deck's (§16.5), first read the framed window as memory allows — the read every
+view made before reads were sized to the screen — and draw once it is in, the card saying *reading the
+map at its resolution for the figure…* meanwhile (`BlockLadder.sharpen`). The save's file is chosen
+before the read, while the press is still the reader's, and the copy hands the clipboard the image's
+promise at once for the same reason. Its colour range is measured on the block it brings, as the
+window read once at its resolution always was (§7.1). The block stays on screen until the reader next
+moves the map, so the map is as sharp as its figure and the same colour; it is read only a twentieth wider than the frame, and
+the view's own rules would otherwise read a screen-sized block around it on the next frame. A block
+already that fine reads nothing; a read that fails leaves the figure drawn as the
+screen is, and the line says so.
 
 **Copy this: the object under the pointer, and nothing round it.** The right-click menu on the map,
 on a lane beside it and on a lane of the 1D browser — and a right click that does not drag on a 3D
@@ -6215,7 +6275,9 @@ requests and bytes in total and for the last view; these are also paper figures.
 | Pan/zoom within the block in hand | 0 requests, 60 fps |
 | First frame of a block of 2,048² cells or more | one pass over its values on the main thread — listing the cells that carry something where they are no more than one in four — the colour range and the level the frame draws read from that list, and no image at matrix resolution (§7.2) |
 | A zoom past the levels a large block has made | 0 requests and no re-colouring: the level it wants painted between frames, the nearest made drawn meanwhile |
-| First picture of a window four times finer than a stored rung with 256 cells across it | one read of that rung, drawn live while the window's own block reads after it and lands on whatever window the reader has moved it to — chicken chr1 at 25 kb on screen in 0.2 s, mouse chr1 at 80 kb in 0.7 s, from a 40 ms, 25 MiB/s link (§7.2) |
+| First picture of a chromosome, *Refine on zoom* on (the default) | one screen-sized read, from the coarsest stored rung that puts a cell on each pixel of the plot — chicken chr1 opened at 10 kb on screen in 0.34 s and 2.1 MB where it took 1.9 s and 14.7 MB, at 25 kb in 0.33 s where it took 2.4; mouse chr1 opened at 10 kb in 1.7 s and 9.4 MB where it took 4.8 s and 42 MB, at 80 kb in 1.2 s where it took 2.9; from a 40 ms, 25 MiB/s link (§2, §7.2) |
+| A zoom from a whole chromosome to its file's own bins, *Refine on zoom* on | never a frozen frame; each step a screen-sized read landing on the window the gesture has reached; the page's longest stall under 0.2 s — sixteen wheel notches into chicken chr1 at 10 kb read the 100, 50 and 20 kb grids and then the 10 kb bins, with stalls of 0.4 s in all and 0.18 s at most, where the map used to be frozen 2.0 s and the page stalled 4.6 s in all and 1.9 s at once, every notch while frozen dropped (§2) |
+| First picture of a window four times finer than a stored rung with 256 cells across it, *Refine on zoom* off | one read of that rung, drawn live while the window's own block reads after it and lands on whatever window the reader has moved it to — chicken chr1 at 25 kb on screen in 0.2 s, mouse chr1 at 80 kb in 0.7 s, from a 40 ms, 25 MiB/s link (§7.2) |
 | Refine, on crossing the block's grid (§2) | ≤ 5 range requests, one bounded read |
 | Pan to the edge of the block in hand | one read, **at the same resolution** |
 | Zoom out to a block already read | 0 requests |
@@ -8213,6 +8275,12 @@ that it is drawn at (§3.4) — which is then the bin size, its bins the ones th
 preview has no framing** (§7.2): while a coarser rung stands in for the block being read, or stays on
 screen after that read failed, a press of **Run** is refused as on a view with no map, and no task
 borrows the block, because its extents count another rung's bins under the file the view reads.
+**Any other block read from a sibling rung is framed in the open map's bins**: the window it was asked
+for, and a grid of the rung's factor times its pooling — so a task reads the stretch of the map that
+is on screen, and never takes a 100 kb rung's block for 25 kb data. It is never lent to a task, which
+reads for itself. The bin size the framing names is the open map's, whatever the picture is pooled to:
+`20 kb bins · 4 per drawn cell`, where it used to print the cell, `80 kb bins`, in every provenance
+line written from a pooled view.
 
 **The framing line is one string in one grammar.** The window it names is the display form (§26.1),
 written by `formatLocus` — so the drawer's *will run on*, the figure's caption and the cell's

@@ -180,7 +180,7 @@ export interface ViewedPlaces {
  * The window an axis is showing, as {@link ViewedPlaces}.
  *
  * What a block landing under a stand-in the reader has moved is put back on
- * (SPECS §7.2, `MatrixPanel.setData`). Not `MatrixPanel.framedEdges`, which
+ * (SPECS §7.2, `MatrixPanel.setData`). Not the window the panel names on screen, which
  * rounds the window out to whole cells: on a stand-in's grid a cell can be half
  * a megabase, and a reader zoomed onto a few of them would see the block land
  * up to a whole cell wider at each edge. And not clipped to the block either: a
