@@ -16,9 +16,10 @@
  * ladder is ordered and has a fixed number of rungs, which is what slots show;
  * a continuous track would suggest there is somewhere between two of them to
  * stop. Only the two ends are labelled, so the row stays a row on a laptop
- * with eleven rungs; a slot says its resolution under the pointer. The thumb
- * stands between two slots while refining a grid no rung stores — 20 kb is two
- * of the 10 kb rung's bins — at the place a log scale would put it.
+ * with eleven rungs; a slot says its resolution under the pointer. What is
+ * drawn is a stored rung (§2), so the thumb sits on a slot; it stands past the
+ * coarse end, where a log scale puts it, only for a read too wide for the
+ * coarsest rung, which the reader pools.
  *
  * The box is the same choice as a list, for the reader who would rather read
  * it than slide to it, and it has no arrow: it is a number first, and a menu

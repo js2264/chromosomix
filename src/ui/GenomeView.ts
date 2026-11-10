@@ -25,6 +25,7 @@ import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import {
   attachRefine,
   finestFloor,
+  openPick,
   pickedRead,
   refineEnabled,
   rungsOf,
@@ -376,8 +377,10 @@ export class GenomeView {
    */
   private firstPlan(span: number): { rung?: string; binsPerCell?: number } {
     if (!refineEnabled()) {
-      // The resolution picked, as memory allows (§3.4).
-      const pick = this.props.picked?.() ?? null
+      // The resolution picked, as memory allows (§3.4) — the open map's where
+      // none is, by the same rule.
+      const pick =
+        this.props.picked?.() ?? ((this.props.binsPerCell ?? 1) > 1 ? null : openPick(this.props.binsize))
       return pick === null ? this.pooled() : pickedRead(pick, rungsOf(this.props.rungs ?? []), this.props.binsize, span)
     }
     const rungs = rungsOf(this.props.rungs ?? [])

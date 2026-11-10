@@ -117,6 +117,21 @@ export const MIN_DENSE_BUDGET_BYTES = 1e9
 export const MIN_DENSE_BUDGET_GIB = 2
 
 /**
+ * The widest window, in bins a side, ever read bin for bin: 8,192, whatever the
+ * machine's budget would allow above it (`denseCellCap`).
+ *
+ * It was the raster's own 16,384, which on any desktop is what bound — and a
+ * block that wide is 268 million cells, a gigabyte of values before a pixel is
+ * coloured, for a picture a screen shows a few million pixels of. Measured on a
+ * zoom out from 6 Mb of chicken chr1 at 1 kb, on a line answering as a bucket
+ * does: 16,380 bins a side read in 3.6 s and took the tab from 0.9 to 2.0 GB;
+ * 8,190 in 1.0 s, to 1.3 GB. What it costs is reach — a resolution picked with
+ * *Refine on zoom* off is drawn whole over 8,192 of its bins rather than 16,384
+ * (§2) — and the raster keeps its own bound for a block handed to it unplanned.
+ */
+export const DENSE_READ_MAX_DIM = 8192
+
+/**
  * Above this many stored pixels, the whole-genome view asks before it reads.
  *
  * What that read costs is a pass over every pixel of the file. The block it

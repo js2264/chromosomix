@@ -75,16 +75,22 @@ show. The properties that keep this inside §2 rather than beside it:
   reads its last window rather than every step on the way. It used to *freeze* the map instead,
   refusing every gesture until the block came: one crossing was one read by construction, and the
   map stopped following the hand at every crossing, for seconds at a time;
-- **a read is the size of the screen.** It asks for about a cell to each CSS pixel of the view, from
-  the coarsest stored rung whose bins are no bigger than that cell, pooled within it to the cell
-  (`screenPlan`, `ui/refine.ts`), and never more than 3.2 screens of cells across whatever window it
-  is for. Every read used to be as large as memory allowed — the reader's own plan fills the device's
+- **a read is the size of the screen, at a resolution the file stores.** It asks for about a cell to
+  each CSS pixel of the view, from the stored rung **nearest** that cell on a log scale (`screenPlan`,
+  `ui/refine.ts`) — cells between about two thirds of a pixel and one and a half on a `zoomify` or
+  4DN ladder — and never more than 3.2 screens of cells across whatever window it is for. It is
+  never pooled out of a finer rung into a grid the file does not store: it was the coarsest rung no
+  bigger than a pixel, summed within it to the pixel, so chr6 of a 4DN `.mcool`, 248 kb a pixel, was
+  its 100 kb rung summed two by two into 200 kb cells — every 100 kb pixel downloaded, 56 MB, where
+  the 250 kb rung's own picture is 35 MB, and balanced values that were sums of the finer rung's.
+  Only a file with one resolution, a map under a second file (whose ladder need not match), and a
+  read too wide for even the coarsest rung within the 3.2 screens are pooled. Every read used to be as large as memory allowed — the reader's own plan fills the device's
   budget (§7.2), so a window of 16,384 bins was read a bin to a cell — and it was that, not the
   network, that made a refine slow: chicken chr1 at 10 kb read a 15,027-bin square (226 M cells,
   0.9 GB of values) at the second wheel notch, held the map 3.1 s and stalled the page 1.2 s putting
   it on screen. Screen-sized, the same zoom reads a block about the screen's size at each step — the
-  100 kb rung, the 50 kb, the 10 kb bins pooled two to a cell, then the 10 kb bins themselves — and
-  the page's longest stall is under a fifth of a second (§12);
+  100 kb rung, the 50 kb, the 25 kb, the 10 kb and on down the ladder — and the page's longest stall
+  is under a fifth of a second (§12);
 - **it reads ahead.** A zoom still going inward reads at a factor of 1.4 rather than of two, so the
   block for the next step is usually in before its cells would have been big enough to see; a pan
   reads around the view once it comes within a quarter of a view of an edge of its block, so the edge
@@ -116,12 +122,12 @@ show. The properties that keep this inside §2 rather than beside it:
   deck would claim it was that map's. Ticked, the row's slider and box are greyed and follow the
   map, saying which resolution is drawn. **Off, the reader picks the resolution, and the pick is the
   picture** (§3.4): read in place where the reader stands, around the view and as much of it as a
-  block at that resolution holds (about 16,000 bins a side, §7.2), so a window that fits is drawn at
-  the pick whatever its width, and every pan and zoom inside what was read is free of reads. A window
-  too wide for a block at the pick is drawn coarser — from the coarsest stored rung a pooled read of
-  it would use, light enough to read while the reader is on their way in — and the line under the map says which
-  resolution it is not, and that zooming in reads it (`blockSummary`); zooming in reads it as soon as
-  the window fits. Unticking keeps the resolution on screen as the pick, so the picture does not jump.
+  block at that resolution holds (8,192 bins a side, §7.2), so a window that fits is drawn at the
+  pick whatever its width, and every pan and zoom inside what was read is free of reads. A window
+  too wide for a block at the pick is drawn from the finest stored rung that fits (`chooseRung`) —
+  never the pick summed into a grid the file does not store — and the line under the map says
+  which resolution it is not, and that zooming in reads it (`blockSummary`); zooming in reads it as
+  soon as the window fits. Nothing picked, the open map is the pick, by the same rule. Unticking keeps the resolution on screen as the pick, so the picture does not jump.
   A figure is never a read of its own: it is the picture on screen (§16.5).
 
 **And a place already seen is not read again.** A navigation builds its view afresh, and a view used
@@ -1238,9 +1244,10 @@ all on one line and one height:
 
 - **the tick is *Refine on zoom*** (§2), ticked by default. Ticked, the zoom picks the resolution —
   the screen's, down to the finest rung the file stores — and the slider, the box and the `+` are
-  greyed and follow the map: the thumb glides from slot to slot as a zoom sharpens the picture, and
-  stands *between* two slots on a grid no rung stores (20 kb is two of the 10 kb rung's bins), where
-  a log scale puts it, so the row always says which resolution is drawn. Unticked, the reader picks,
+  greyed and follow the map: the thumb glides from slot to slot as a zoom sharpens the picture —
+  always onto a slot, since what is drawn is a stored rung (§2) — and stands past the coarse end
+  only where a read too wide for the coarsest rung pools it, where a log scale puts it, so the row
+  always says which resolution is drawn. Unticked, the reader picks,
   and the pick is what is drawn (§2, §3.4). Unticking keeps the resolution on screen — the stored rung
   nearest it — as the pick, so nothing jumps;
 - **the slider is a row of round, unlabelled slots on a track of fixed width** (168 px, whatever the
@@ -2475,38 +2482,45 @@ to would change a cell's value as it crossed the screen. That is what lets a vie
 name its grid — a screen-sized read (§2), a resolution the reader added (§3.4) —
 and pan around in it. A read that names none is planned as memory allows, which
 is what the next two paragraphs describe: a view's reads with *Refine on zoom*
-off, at the resolution the reader picked (§2) — the rung's own bins, pooled
-where the window is too wide for them — or, with none picked, at the open map's.
+off, at the resolution the reader picked (§2) — the open map's where none is —
+or from the finest stored rung that fits where the window is too wide for it.
 
 **A view's reads are screen-sized while *Refine on zoom* is on**, which is the
-default (§2): about a cell to each CSS pixel of the plot, from the coarsest stored
-rung whose bins are no bigger than that cell, pooled within it to the cell
-(`screenPlan`). The plot is measured off the canvas as laid out, and a panel not
-yet laid out is sized from the window. So a chromosome opened at a fine rung of a
-laddered file reads one of its coarse rungs first, a few hundred cells across —
-chicken chr1 opened at 10 kb is 785 cells of its 250 kb rung, 2.1 MB in one
-request, on screen in 0.34 s where its first picture took 1.9 s — and the zoom
-reads the rest as it goes, down to the finest rung the file stores (§2). A cell made of several of a rung's bins is read from
-the rung that stores it whole where the ladder has one: two of a `zoomify`
-ladder's 160 kb bins are its 320 kb rung's own. A file
-with no ladder is pooled from its own bins to the same grid: the same pixels are
-read, but the block is the screen's size rather than the memory's.
+default (§2): about a cell to each CSS pixel of the plot, from the stored rung
+nearest that cell (`screenPlan`). The plot is measured off the canvas as laid
+out, and a panel not yet laid out is sized from the window. So a chromosome
+opened at a fine rung of a laddered file reads one of its coarse rungs first, a
+few hundred cells across — chicken chr1 opened at 10 kb is 785 cells of its
+250 kb rung, 2.1 MB in one request, on screen in 0.34 s where its first picture
+took 1.9 s — and the zoom reads the rest as it goes, down to the finest rung the
+file stores (§2). **The whole-genome view's first read is one too**, whatever entry
+the link opened the file at: it was planned from that entry, its bins pooled to
+4,096 cells and read from the coarsest rung no bigger than such a cell, so a K562
+`.mcool` was drawn at 1 Mb, 3,102 bins and 17 MB from its 1 Mb entry and at
+500 kb, 6,188 bins and 57 MB from its 25 kb one; it is now its 5 Mb rung from
+either, 631 bins, 3.9 and 5.8 MB (`WholeView.firstPlan`). A file with no ladder
+is pooled from its own bins to the same grid: the same pixels are read, but the
+block is the screen's size rather than the memory's.
 
 **A window is read at its own bins up to `denseCellCap`**: the widest square the dense guard
-(§9) passes on this machine, and never wider than `RASTER_MAX_DIM`, **16,384** — on a machine
-reporting 8 GiB it is the 16,384 that binds. That is what draws a whole yeast chromosome IV at
-100 bp, 15,320 bins a side, one bin to a pixel, so that a zoom into it reaches single bins without
-another read: 45 s and 2.9 GB in the tab, measured in headless Chromium, where the 4,096 the raster
-stopped at before drew it at 400 bp in 9 s and 235 MB. A smaller machine gets a smaller square, from
-the same budget, so the window it cannot afford is pooled rather than refused.
+(§9) passes on this machine, and never wider than `DENSE_READ_MAX_DIM`, **8,192** — on any machine
+reporting 2 GiB or more it is the 8,192 that binds. It was the raster's own 16,384, and a block
+that wide is 268 million cells, a gigabyte of values before a pixel is coloured, for a picture a
+screen shows a few million pixels of: on a zoom out from 6 Mb of chicken chr1 at a picked 1 kb, on
+the link of §12, 16,380 bins a side were read in 3.6 s and took the tab from 0.9 to 2.0 GB, where
+8,190 take 1.0 s and leave it at 1.3. What the halving costs is reach: a resolution picked with
+*Refine on zoom* off is drawn whole over 8,192 of its bins (§2). A smaller machine gets a smaller
+square, from the same budget. **A window wider than that is read from the finest stored rung that
+fits** (`chooseRung`) — a whole yeast genome of a 1 kb ladder is its 2 kb rung, 6,050 bins — and
+pooled only where no rung fits, which a file with one resolution always is.
 
 A wider block is coarsened **once, in the reader**, into cells that hold at most a capacity of bins
 and never part of one sequence beside anything else: a sequence longer than the
 capacity keeps cells of its own, cut at its own start, and only the ones too small
 to fill a cell share. The capacity is searched for against `POOLED_CELL_CAP`, **4,096**, which is
 narrower than the raster on purpose: the pooled read is the one a whole genome takes when no rung
-brings it under `denseCellCap` (a ladder's coarser rung often does — the whole yeast genome of a
-100 bp ladder is its 2 kb rung, 6,064 bins, read whole), it is not under the dense guard, and its accumulator is sized by this cap — at 16,384 it would be a gigabyte for every
+brings it under `denseCellCap` — a file with no ladder, or a window too wide for the whole of one —
+it is not under the dense guard, and its accumulator is sized by this cap — at 16,384 it would be a gigabyte for every
 whole-genome view of a large file. Narrower is never pooled twice: the grid the reader builds fits the
 raster, and the raster's own pooling is reached only by a block a caller hands it unplanned. The
 grid is anchored to the *sequence*, not to the request, so the same base pair falls
@@ -6025,24 +6039,22 @@ Concretely:
   block — so that landing there made the first wait of every large file its longest. A reader who
   wants the finest level picks it, and it is then the floor of every zoom (§16.2); a rung a comparison
   or a deck asks for by bin size is still opened as asked
-- **the whole genome of a laddered file is read at a coarse rung**, not pooled from the open one:
-  the coarsest rung whose bins still fit one drawn cell draws the same cells from a fraction of the
-  pixels, balanced at its own resolution. On a 5 GB `.mcool` opened at 25 kb that is the 500 kb
-  rung's few million pixels in seconds, where the open rung was a gate asking to download the whole
-  file; the open rung is left as it is, and a zoom inside the picture still refines to it. A file
-  with no rung that fits, a selection and a second file in the square keep the pooled read and its
-  gate
-- **so is the first picture of a region wider than the reader draws at the open rung** — a whole
-  chromosome, most often. A window wider than the reader reads at its own bins (`denseCellCap`, §7.2)
-  is pooled into cells of several bins, so mouse chr1 at 10 kb is a 50 kb picture summed from every
-  10 kb pixel; where the ladder stores a rung
-  whose bins divide that cell, the first read comes from it: the same cells, balanced at their own
-  resolution, from a fraction of the pixels (`poolingRung`). Never coarser than the pooled grid, so
-  the picture is the one it was and the refine takes it as it stands; a zoom then reads the open
-  rung as before. On a 1 GB `.hic` from S3, chr1's read took 1.3 s where it took 4.3. That chr1 was
-  at 25 kb, 7,849 bins, which is now read at its own bins: the open rung's 4.3 s, for a picture
-  twice as fine on each axis. A declared
-  resolution (§3.4) and a second file keep the open rung. A `.hic` opened with no rung named stands
+- **the whole genome of a laddered file is read at a stored rung**, never pooled from the open one,
+  by the rule every view's first read is (§2, §7.2): with *Refine on zoom* on, the rung nearest a
+  cell to each pixel of the panel, whichever entry was opened — a K562 `.mcool`'s 5 Mb rung, 631
+  bins and a few megabytes, from its 1 Mb entry as from its 25 kb one; off, the resolution picked,
+  the open map's where none is, or the finest stored rung that fits 8,192 bins a side. It was
+  planned from the open entry, its bins pooled to 4,096 cells and read from the coarsest rung no
+  bigger than one: 1 Mb from the 1 Mb entry and 500 kb, 6,188 bins and 57 MB, from the 25 kb one,
+  where a 5 GB file's open rung had been a gate asking to download it whole. A zoom inside the
+  picture refines as anywhere else. A file with no ladder, a selection and a second file in the
+  square keep the pooled read and its gate
+- **so is the first picture of a region wider than a block read bin for bin** — a whole chromosome,
+  most often. A window wider than the reader reads at its own bins (`denseCellCap`, 8,192, §7.2) is
+  read from the finest stored rung that fits (`chooseRung`): mouse chr1 at 10 kb, 19,547 bins, is
+  its 40 kb rung's 4,887, where the reader used to sum the open map five to a cell into 50 kb, which
+  the file does not store. A declared resolution (§3.4) and a second file keep the open rung. A
+  `.hic` opened with no rung named stands
   the resolution picker on the rung it opened at, not on its finest
 
 The app is therefore not a HiGlass replacement for standard Hi-C. Say so in the paper rather than let
@@ -6310,7 +6322,8 @@ requests and bytes in total and for the last view; these are also paper figures.
 | Pan/zoom within the block in hand | 0 requests, 60 fps |
 | First frame of a block of 2,048² cells or more | one pass over its values on the main thread — listing the cells that carry something where they are no more than one in four — the colour range and the level the frame draws read from that list, and no image at matrix resolution (§7.2) |
 | A zoom past the levels a large block has made | 0 requests and no re-colouring: the level it wants painted between frames, the nearest made drawn meanwhile |
-| First picture of a chromosome, *Refine on zoom* on (the default) | one screen-sized read, from the coarsest stored rung that puts a cell on each pixel of the plot — chicken chr1 opened at 10 kb on screen in 0.34 s and 2.1 MB where it took 1.9 s and 14.7 MB, at 25 kb in 0.33 s where it took 2.4; mouse chr1 opened at 10 kb in 1.7 s and 9.4 MB where it took 4.8 s and 42 MB, at 80 kb in 1.2 s where it took 2.9; from a 40 ms, 25 MiB/s link (§2, §7.2) |
+| First picture of a chromosome, *Refine on zoom* on (the default) | one screen-sized read, from the stored rung nearest a cell to each pixel of the plot — chicken chr1 opened at 10 kb on screen in 0.34 s and 2.1 MB where it took 1.9 s and 14.7 MB, at 25 kb in 0.33 s where it took 2.4; mouse chr1 opened at 10 kb in 1.7 s and 9.4 MB where it took 4.8 s and 42 MB, at 80 kb in 1.2 s where it took 2.9; from a 40 ms, 25 MiB/s link (§2, §7.2) |
+| Whole genome of a laddered map, *Refine on zoom* on | one screen-sized read of the stored rung nearest a cell to each pixel, whichever entry the link opened — a K562 `.mcool`'s 5 Mb rung, 631 bins: 3.9 MB from its 1 Mb entry and 5.8 MB from its 25 kb one, where it was 17 MB at 1 Mb and 57 MB at 500 kb, 6,188 bins a side (§7.2) |
 | A zoom from a whole chromosome to its file's own bins, *Refine on zoom* on | never a frozen frame; each step a screen-sized read landing on the window the gesture has reached; the page's longest stall under 0.2 s — sixteen wheel notches into chicken chr1 at 10 kb read the 100, 50 and 20 kb grids and then the 10 kb bins, with stalls of 0.4 s in all and 0.18 s at most, where the map used to be frozen 2.0 s and the page stalled 4.6 s in all and 1.9 s at once, every notch while frozen dropped (§2) |
 | First picture of a window four times finer than a stored rung with 256 cells across it, *Refine on zoom* off | one read of that rung, drawn live while the window's own block reads after it and lands on whatever window the reader has moved it to — chicken chr1 at 25 kb on screen in 0.2 s, mouse chr1 at 80 kb in 0.7 s, from a 40 ms, 25 MiB/s link (§7.2) |
 | Refine, on crossing the block's grid (§2) | ≤ 5 range requests, one bounded read |

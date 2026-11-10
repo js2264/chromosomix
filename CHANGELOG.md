@@ -16,7 +16,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **A map opens at the screen's resolution and sharpens as you zoom, down to the finest resolution the
   file stores: *Refine on zoom* is on by default (§2, §7.2, §12).** A view's first read is the
-  coarsest stored rung that puts about a cell on each pixel of the plot, so a chromosome opens quickly
+  stored rung nearest a cell to each pixel of the plot, so a chromosome opens quickly
   whatever resolution the file was opened at — chicken chr1 at 10 kb in 0.34 s, 785 cells of its
   250 kb rung in one 2.1 MB request, where it took 1.9 s; mouse chr1 at 10 kb in 1.7 s where it took
   4.8 — and every zoom reads the next grid, down to the finest rung the file stores rather than the
@@ -36,12 +36,30 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   box while it is picked.
 - **The resolution you pick is the picture, read where you are (§2, §3.4, §7.2).** With *refine on
   zoom* off, the map is drawn at the rung picked, or the one you added, at every zoom: read around the
-  view as far as a block at it holds, about 16,000 bins a side. A window too wide for that is drawn
-  coarser, and the line under the map says so — *10 kb is too fine for this window: zoom in* — until
-  the window fits. A rung finer than the one the file was opened at is read as any other: 1 kb picked
+  view as far as a block at it holds, 8,192 bins a side. A window too wide for that is drawn from the
+  finest stored rung that fits, and the line under the map says so — *10 kb is too fine for this
+  window: zoom in* — until the window fits. A rung finer than the one the file was opened at is read as any other: 1 kb picked
   on chicken chr1 opened at 10 kb draws 1 kb once the window is under about 16 Mb. A pick is read in place, keeping the window you zoomed to, where it re-opened
   the file at the whole sequence, and its block is measured for a colour range of its own, as a map
   opened at it was; the link names it, `resolution=` beside `coarsen=`.
+- **A map is only ever drawn at a resolution the file stores (§2, §7.2).** A screen-sized read takes
+  the stored rung nearest a cell to each pixel, where it took the coarsest rung no bigger than a
+  pixel and summed it to the pixel: chr6 of the K562 `.mcool` opened at 1 Mb was its 100 kb rung
+  summed two by two into 200 kb cells, every 100 kb pixel downloaded, 56 MB; it is now its 250 kb
+  rung, 35 MB. A read as memory allows takes the finest stored rung that fits, where a gap in the
+  ladder had the reader sum the open map into a grid nobody stored. The reader pools only a file
+  with one resolution, a map under a second file, and a window too wide for a whole ladder; the
+  resolutions you add with `+` are still summed, as declared.
+- **The whole-genome view opens at the screen's resolution, whichever entry the link names (§2,
+  §7.2).** Its first read was planned from the entry the file was opened at: the K562 `.mcool` was
+  drawn at 1 Mb, 3,102 bins and 17 MB, from its 1 Mb entry, and at 500 kb, 6,188 bins and 57 MB
+  (54 s from a machine far from the bucket), from its 25 kb one. With *refine on zoom* ticked it is
+  now its 5 Mb rung from either, 631 bins and 3.9 or 5.8 MB, and sharpens as you zoom; unticked, the
+  resolution picked, or the open map's, as a region view reads it.
+- **A block read bin for bin is at most 8,192 bins a side (§2, §7.2).** It was 16,384 on any desktop:
+  a block of 268 million cells. On a zoom out from 6 Mb of chicken chr1 at a picked 1 kb, the read
+  around the view took 3.6 s and took the tab from 0.9 to 2.0 GB; it takes 1.0 s and leaves it at
+  1.3. With *refine on zoom* unticked, a pick is drawn whole over up to 8,192 of its bins.
 - **An analysis is run at the resolution the crumb row names (§18.4).** With *refine on zoom* off, the
   rung picked, read from its own entry of the file — `sample.mcool::resolutions/25000` while the file
   is open at 10 kb — or a resolution you added, summed from the rung it is made of; while the zoom
@@ -189,6 +207,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A block read around the view as wide as a block may be no longer reads itself again on every
+  landing, with *refine on zoom* off (§2).** Clipped to the most a block may hold, it left the view
+  nearer its edges than the read-ahead margin, so each landing asked for the same block again.
 - **An analysis run on a map read from another rung reads the stretch on screen (§18.4).** Its
   framing counted the rung's bins under the open map's name, so a task read the wrong window of the
   map and took the rung's block for the file's own bins; it is framed in the bins of the rung it runs

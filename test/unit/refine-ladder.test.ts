@@ -34,7 +34,8 @@ import {
   covers,
   gridFor,
   pad,
-  poolingRung,
+  openPick,
+  pickedRead,
   recentre,
   refineEnabled,
   rungsOf,
@@ -210,10 +211,10 @@ describe('the coverage and padding arithmetic', () => {
   })
 
   it('restates the reader’s grid choice, and never finer than it', () => {
-    // A window the dense read takes is read at the file's own bins — a whole
-    // yeast chromosome IV at 100 bp among them.
+    // A window the dense read takes is read at the file's own bins: up to
+    // 8,192 a side, whatever the device would allow above it (§2).
     const dense = denseCellCap()
-    expect(dense).toBeGreaterThanOrEqual(15_320)
+    expect(dense).toBe(8_192)
     expect(gridFor([0, dense], [0, dense])).toBe(1)
     // One bin past it is pooled, to the pooled read's grid.
     expect(gridFor([0, dense + 1], [0, dense + 1])).toBe(Math.ceil((dense + 1) / POOLED_CELL_CAP))
@@ -249,15 +250,16 @@ describe('choosing a rung of a laddered file', () => {
     expect(rungsOf(['0', '1000'])).toEqual([])
   })
 
-  it('takes the coarsest rung whose bins still fill a cell', () => {
-    // 40 Mb at 1 kb: 40,000 bins is past what is read bin for bin, and into
-    // 4,096 cells is about 9,766 bp a cell, so the 5 kb level fits and the 10 kb
-    // one would put more than one of its bins in a cell — the pooling this avoids.
+  it('takes the finest stored rung whose bins fit a block read bin for bin', () => {
+    // 40 Mb at 1 kb: 40,000 bins is past the 8,192 read bin for bin, and so is
+    // 20,000 at 2 kb; 8,000 of the 5 kb level's bins fit.
     expect(chooseRung(YEAST, 40_000, 1000)).toBe('5000')
-    // Three times as much genome, three times coarser a cell.
+    // Three times as much genome: no rung fits, so the coarsest, pooled.
     expect(chooseRung(YEAST, 121_000, 1000)).toBe('10000')
-    // A whole 12.1 Mb yeast genome is read bin for bin, so at the open 1 kb.
-    expect(chooseRung(YEAST, 12_100, 1000)).toBeUndefined()
+    // A whole 12.1 Mb yeast genome is past 8,192 bins at 1 kb, and 6,050 at 2 kb.
+    expect(chooseRung(YEAST, 12_100, 1000)).toBe('2000')
+    // …and a window that fits is read at the open 1 kb.
+    expect(chooseRung(YEAST, 8_000, 1000)).toBeUndefined()
   })
 
   it('names no rung once the window is small enough for the open map', () => {
@@ -468,19 +470,20 @@ describe('panning against the edge of the block in hand', () => {
 
   it('judges a block by the budget its reads carry, so a deck panel does not read forever', () => {
     // A deck's panel reads with a share of the device (§16.7), and the reader
-    // reads bin for bin only as wide as that share affords. 15,300 bins on half
-    // a gigabyte is pooled four to a cell — and a ladder that judged it against
-    // the whole device would want one bin to a cell, get four, and ask again.
+    // reads bin for bin only as wide as that share affords. 6,000 bins on half
+    // a gigabyte is pooled two to a cell — and a ladder that judged it against
+    // the whole device would want one bin to a cell, get two, and ask again.
     const budget = 5e8
-    expect(denseCellCap(budget)).toBeLessThan(15_300)
-    const l = ladder({ ceiling: [0, 15_300], budget })
-    l.it.adopt(block([0, 15_300], 4))
-    l.it.consider({ rows: [0, 15_300], cols: [0, 15_300], binsPerCell: 4 })
+    expect(denseCellCap(budget)).toBeLessThan(6_000)
+    expect(denseCellCap()).toBeGreaterThanOrEqual(6_000)
+    const l = ladder({ ceiling: [0, 6_000], budget })
+    l.it.adopt(block([0, 6_000], 2))
+    l.it.consider({ rows: [0, 6_000], cols: [0, 6_000], binsPerCell: 2 })
     expect(l.asked).toHaveLength(0)
     // The same block on the device's own budget is not good enough.
-    const whole = ladder({ ceiling: [0, 15_300] })
-    whole.it.adopt(block([0, 15_300], 4))
-    whole.it.consider({ rows: [0, 15_300], cols: [0, 15_300], binsPerCell: 4 })
+    const whole = ladder({ ceiling: [0, 6_000] })
+    whole.it.adopt(block([0, 6_000], 2))
+    whole.it.consider({ rows: [0, 6_000], cols: [0, 6_000], binsPerCell: 2 })
     expect(whole.asked).toHaveLength(1)
   })
 
@@ -587,15 +590,33 @@ describe('a screen-sized read', () => {
     expect(plan.grid).toBe(10)
   })
 
-  it('pools within the rung to the cell where the rung is finer', () => {
+  it('reads the stored rung nearest a pixel as it is, and never pools a ladder into a resolution it does not store', () => {
+    // A cell of 280 kb, and the ladder stops at 100 kb: the 100 kb rung, read
+    // bin for bin. It used to be summed three by three into 300 kb cells — the
+    // same pixels downloaded, to draw a resolution the file does not have.
     const rungs = rungsOf(['25000', '100000'])
-    // A cell of 280 kb out of 100 kb bins: three of them, the nearest whole
-    // number, a 300 kb grid — not two, which would put nearly one and a half
-    // cells on each pixel and colour twice what the screen can show.
     const plan = screenPlan({ rungs, binsize: 25_000, view: 7_849, read: 7_849, screen: 700 })
-    expect(plan.rung).toBe('100000')
-    expect(plan.binsPerCell).toBe(3)
-    expect(plan.grid).toBe(12)
+    expect(plan).toEqual({ rung: '100000', grid: 4 })
+  })
+
+  it('takes the coarser rung where it is the nearer, rather than pooling the finer', () => {
+    // chr6 of a 4DN `.mcool` opened at 1 Mb, 171 Mb over 690 pixels: 248 kb a
+    // pixel. The 250 kb rung, not the 100 kb one summed two by two into 200 kb.
+    const rungs = rungsOf(['1000', '5000', '10000', '25000', '50000', '100000', '250000', '500000', '1000000'])
+    const plan = screenPlan({ rungs, binsize: 1_000_000, view: 171, read: 171, screen: 690, floor: 0.001 })
+    expect(plan.rung).toBe('250000')
+    expect(plan.binsPerCell).toBeUndefined()
+    expect(plan.grid).toBeCloseTo(0.25, 9)
+  })
+
+  it('pools a ladder only where even its coarsest rung is too fine for the read', () => {
+    // A whole human genome opened at 1 kb, on 690 pixels: within 3.2 screens a
+    // cell can be no smaller than about 1.4 Mb, and the coarsest rung is 1 Mb.
+    const rungs = rungsOf(['1000', '10000', '100000', '1000000'])
+    const plan = screenPlan({ rungs, binsize: 1_000, view: 3_088_270, read: 3_088_270, screen: 690, floor: 1 })
+    expect(plan.rung).toBe('1000000')
+    expect(plan.binsPerCell).toBe(2)
+    expect(plan.grid).toBe(2_000)
   })
 
   it('reads the stored rung that is the cell, rather than pooling a finer one into it', () => {
@@ -1026,38 +1047,30 @@ describe('BlockLadder, inside a frame across a circle’s origin', () => {
   })
 })
 
-describe('the first read of a pooled window (§12)', () => {
+describe('the first read of a window too wide for its resolution (§2, §3.4)', () => {
   /** A 4DN `.hic`'s ladder, opened at 25 kb. */
   const HIC = rungsOf(['2500000', '1000000', '500000', '250000', '100000', '50000', '25000', '10000', '5000'])
-  /**
-   * Mouse chr1 at 10 kb — 19,547 bins, past what is read bin for bin. At 25 kb
-   * (7,849 bins) it no longer is: that window is now read at the open map.
-   */
+  /** Mouse chr1 at 10 kb: 19,547 bins, past the 8,192 a block is read bin for bin. */
   const CHR1: Extent = [0, 19_547]
 
-  it('comes from the rung that is the grid the reader would pool the open map into', () => {
-    // 19,547 bins into 4,096 cells is five bins a cell: a 50 kb picture, which
-    // the 50 kb rung holds in a twenty-fifth of the pixels.
-    expect(gridFor(CHR1, CHR1)).toBe(5)
-    expect(poolingRung(HIC, CHR1, CHR1, 10_000)).toBe('50000')
-    // The same chromosome at 25 kb is read whole, so no rung is named.
-    expect(poolingRung(HIC, [0, 7849], [0, 7849], 25_000)).toBeUndefined()
+  it('comes from the finest stored rung that fits, not the open map summed', () => {
+    // 195 Mb: 7,819 of the 25 kb rung's bins, which fit. The open map summed
+    // three by three into 30 kb cells would be a resolution nobody stored.
+    expect(pickedRead(openPick(10_000), HIC, 10_000, CHR1[1])).toEqual({ rung: '25000' })
   })
 
-  it('never reads coarser than that grid, so the picture is the one it was', () => {
-    // Six bins a cell is 150 kb: the 50 kb rung divides it, the 100 kb one does
-    // not, and 250 kb would be a coarser picture.
-    const wide: Extent = [0, 6 * POOLED_CELL_CAP]
-    expect(poolingRung(HIC, wide, wide, 25_000)).toBe('50000')
-    const wider: Extent = [0, 10 * POOLED_CELL_CAP]
-    expect(poolingRung(HIC, wider, wider, 25_000)).toBe('250000')
+  it('reads the open map wherever the window fits it', () => {
+    expect(pickedRead(openPick(25_000), HIC, 25_000, 7_849)).toEqual({})
   })
 
-  it('reads the open map where nothing is pooled, or no rung is the grid', () => {
-    const window: Extent = [0, 400]
-    expect(poolingRung(HIC, window, window, 25_000)).toBeUndefined()
-    expect(poolingRung(rungsOf(['10000', '100000']), CHR1, CHR1, 10_000)).toBeUndefined()
-    expect(poolingRung([], CHR1, CHR1, 10_000)).toBeUndefined()
+  it('crosses a gap in the ladder to the next stored rung, rather than pooling into it', () => {
+    // 130 Mb of a `10 / 100 kb` file: the 100 kb rung, 1,300 bins — where the
+    // open map used to be summed four by four into 40 kb.
+    expect(pickedRead(openPick(10_000), rungsOf(['10000', '100000']), 10_000, 13_000)).toEqual({ rung: '100000' })
+  })
+
+  it('leaves a file with no ladder to the reader, which pools it', () => {
+    expect(pickedRead(openPick(10_000), [], 10_000, CHR1[1])).toEqual({})
   })
 
   it('is taken by the ladder as it is, so no refine follows until the reader zooms', () => {

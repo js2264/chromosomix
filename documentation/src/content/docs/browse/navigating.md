@@ -98,7 +98,9 @@ greyed.
 With **refine on zoom** ticked, at the head of the resolution row
 ([Resolution](/browse/contact-maps/#resolution)), a map opens at about the size of the screen: a
 whole chromosome is read from a coarser resolution the file stores, a cell or so to each pixel, which
-is what puts it on screen in a fraction of a second. As you zoom in, the finer data is read for the
+is what puts it on screen in a fraction of a second. It is always one the file stores, the nearest to
+a pixel: the slider's thumb sits on a slot. The whole genome (<kbd>W</kbd>) opens the same way,
+whichever resolution the link opened the file at. As you zoom in, the finer data is read for the
 stretch you are looking at, step by step, down to the finest resolution the file stores, whichever it
 was opened at. The map never stops following the scroll or the drag while it reads: for a moment its
 cells are larger and a small spinner turns in its top right corner, then it sharpens where you are.
@@ -107,7 +109,7 @@ is worth at any moment, `785 × 785 bins · effective resolution: 250 kb` on a w
 
 Untick it to pick the resolution yourself: the map is then drawn at the resolution picked, wherever
 you zoom. A pick is read where you are, keeping the window you zoomed to, and unticking keeps the
-resolution on screen as the pick. A window too wide for that resolution, about 16,000 bins a side, is
+resolution on screen as the pick. A window too wide for that resolution, 8,192 bins a side, is
 drawn coarser, and the line under the heading says so — *10 kb is too fine for this window:
 zoom in* — until you zoom in far enough for it. Inside what was read, panning and zooming read
 nothing more. **Refine on zoom** is also in the command palette (<kbd>⌘ P</kbd> or <kbd>Ctrl P</kbd>);

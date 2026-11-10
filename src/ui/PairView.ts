@@ -31,6 +31,7 @@ import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import {
   attachRefine,
   finestFloor,
+  openPick,
   pickedRead,
   refineEnabled,
   rungsOf,
@@ -362,7 +363,8 @@ export class PairView {
               pickedRead(this.props.picked?.() as PickedResolution, rungs, this.props.binsize, span)
             : (this.props.binsPerCell ?? 1) > 1
               ? { binsPerCell: this.props.binsPerCell }
-              : {}
+              : // The open map, by the rule a pick is read by.
+                pickedRead(openPick(this.props.binsize), rungs, this.props.binsize, span)
       const result: MatrixResult =
         this.level === 'bin'
           ? await this.props.client.request<'matrix'>({ kind: 'matrix', ...query, ...pooled })

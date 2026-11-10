@@ -16,6 +16,7 @@
 import { fmt } from '../units'
 import {
   DENSE_MATRIX_BIN_LIMIT,
+  DENSE_READ_MAX_DIM,
   DEVICE_MEMORY_FALLBACK_GIB,
   DEVICE_MEMORY_SHARE,
   MAX_DENSE_ARRAY_BYTES,
@@ -177,18 +178,18 @@ export function deviceDenseBudgetBytes(): number {
  * The widest window, in bins a side, this machine reads unpooled.
  *
  * A window up to this wide is read bin for bin through the dense path, which
- * {@link checkBrowserDenseSize} guards; a wider one is pooled to `POOLED_CELL_CAP`
- * cells by the reader. Derived from the same budget so that the two cannot
- * disagree: a window this wide always passes the guard, and the picture never
- * turns into a refusal where a pooled one would have drawn. Bounded by
- * {@link RASTER_MAX_DIM}, past which the raster would pool it anyway — on a
- * laptop reporting 8 GiB that bound is what binds, and a whole yeast
- * chromosome IV at 100 bp (15,320 bins) is read whole.
+ * {@link checkBrowserDenseSize} guards; a wider one is read from a coarser
+ * stored rung where the file has one, and pooled to `POOLED_CELL_CAP` cells by
+ * the reader where it has none. Derived from the same budget so that the two
+ * cannot disagree: a window this wide always passes the guard, and the picture
+ * never turns into a refusal where a pooled one would have drawn. Bounded by
+ * {@link DENSE_READ_MAX_DIM}, 8,192 — on any machine reporting 2 GiB or more
+ * that bound is what binds.
  */
 export function denseCellCap(budgetBytes = deviceDenseBudgetBytes()): number {
   // Square, at one raster pixel per cell: 4 B of values and 12 of raster.
   const side = Math.floor(Math.sqrt(Math.max(0, budgetBytes - PIXEL_CHUNK_BYTES) / 16))
-  return Math.max(1, Math.min(RASTER_MAX_DIM, side))
+  return Math.max(1, Math.min(DENSE_READ_MAX_DIM, RASTER_MAX_DIM, side))
 }
 
 /**

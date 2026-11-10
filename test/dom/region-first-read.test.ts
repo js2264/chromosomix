@@ -123,15 +123,16 @@ describe('a region view’s first read', () => {
     open(asked)
     const reads = await matrixReads(asked)
     // The preview from the coarsest rung that still puts 256 cells across it,
-    // then the block, pooled for nothing from the rung that is its own grid.
+    // then the block.
     expect(reads[0].preview).toBe(true)
     expect(reads[0].rung).toBe('640000')
-    // The reader pools 19,547 bins five to a cell, and no rung is that grid (a
-    // 50 kb cell is not a whole number of 20 or 40 kb bins): the open map, with
-    // the plan left to the reader.
+    // 19,547 bins is past the 8,192 read bin for bin, and so is 9,774 of the
+    // 20 kb rung's: the 40 kb rung's 4,887 fit. A stored resolution, where the
+    // reader used to sum the open map five to a cell into 50 kb, which the
+    // file does not store.
     const block = reads[1]
     expect(block.preview).toBeUndefined()
-    expect(block.rung).toBeUndefined()
+    expect(block.rung).toBe('40000')
     expect(block.binsPerCell).toBeUndefined()
   })
 })

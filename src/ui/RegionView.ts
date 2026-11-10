@@ -57,11 +57,11 @@ import { presentationOf, secondBlock, type CompareRead, type LowerRead } from '.
 import type { LowerPresentation } from './LowerReading'
 import {
   attachRefine,
-  poolingRung,
   previewRung,
   refineEnabled,
   rungsOf,
   finestFloor,
+  openPick,
   pickedRead,
   screenPlan,
   type BlockLadder,
@@ -1006,19 +1006,6 @@ export class RegionView {
    * fits the finest grid the window's cell count allows, which is what a view of
    * a whole chromosome has always relied on.
    */
-  /**
-   * `{ rung }` where a sibling rung draws this window's first picture from
-   * fewer pixels with nothing lost ({@link poolingRung}), else nothing.
-   *
-   * Not with a declared grid, which is a whole number of the *open* map's bins
-   * (§3.4), nor beside a second file, whose ladder need not have the rung.
-   */
-  private firstRung(rows: [number, number], cols: [number, number]): { rung?: string } {
-    if ((this.props.binsPerCell ?? 1) > 1 || this.props.compare !== undefined) return {}
-    const rung = poolingRung(rungsOf(this.props.rungs ?? []), rows, cols, this.props.binsize)
-    return rung === undefined ? {} : { rung }
-  }
-
   private pooled(): { binsPerCell?: number } {
     const k = this.props.binsPerCell ?? 1
     return k > 1 ? { binsPerCell: k } : {}
@@ -1028,26 +1015,29 @@ export class RegionView {
    * How the first read of a window is asked for.
    *
    * **Screen-sized** while *Refine on zoom* is on, which is the default (§2):
-   * the stored rung and the pooling within it that put about a cell on each
-   * pixel of the panel ({@link screenPlan}), so a chromosome is read in a few
-   * hundred milliseconds whatever resolution the file was opened at, and the
-   * ladder reads finer as the reader zooms, down to that resolution. Off, the
-   * window is read as memory allows — from the rung that pools it for nothing
-   * ({@link firstRung}), at the grid the reader declared ({@link pooled}) —
-   * once, and every zoom after it is free of reads.
+   * the stored rung nearest a cell to each pixel of the panel ({@link
+   * screenPlan}), so a chromosome is read in a fraction of a second whatever
+   * resolution the file was opened at, and the ladder reads finer as the reader
+   * zooms. Off, the window is read as memory allows at the resolution picked —
+   * the open map's where none is — or from the finest stored rung that fits
+   * where the window is too wide for it ({@link pickedRead}), once, and every
+   * zoom inside it after is free of reads.
    *
-   * Never a rung beside a second file, whose ladder need not have it, for the
-   * reason {@link firstRung} gives.
+   * Never a rung beside a second file, whose ladder need not have it: its
+   * window is read at the open map's bins, pooled by the reader where it must
+   * be, or at the grid the reader declared ({@link pooled}).
    */
   private firstPlan(rows: [number, number], cols: [number, number]): { rung?: string; binsPerCell?: number } {
     if (!refineEnabled()) {
-      // The resolution picked, as memory allows (§3.4).
-      const pick = this.props.picked?.() ?? null
+      // The resolution picked, as memory allows (§3.4) — the open map's where
+      // none is, by the same rule.
+      const pick =
+        this.props.picked?.() ?? ((this.props.binsPerCell ?? 1) > 1 ? null : openPick(this.props.binsize))
       if (pick !== null && this.props.compare === undefined) {
         const span = Math.max(rows[1] - rows[0], cols[1] - cols[0])
         return pickedRead(pick, rungsOf(this.props.rungs ?? []), this.props.binsize, span)
       }
-      return { ...this.firstRung(rows, cols), ...this.pooled() }
+      return this.pooled()
     }
     const span = Math.max(rows[1] - rows[0], cols[1] - cols[0])
     const rungs = this.props.compare === undefined ? rungsOf(this.props.rungs ?? []) : []

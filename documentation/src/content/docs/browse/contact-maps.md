@@ -29,7 +29,8 @@ At the far end of the bar above the map is the resolution, in one row:
 
 With *refine on zoom* unticked, the resolution you pick is what is drawn, read where you are, without
 leaving the window you zoomed to. Unticking keeps the resolution on screen. A window too wide for
-that resolution (about 16,000 bins a side) is drawn coarser, and the summary line says so:
+that resolution (8,192 bins a side) is drawn from the finest stored resolution that fits, and the
+summary line says so:
 *10 kb is too fine for this window: zoom in*
 ([Resolution and the zoom](/browse/navigating/#resolution-and-the-zoom)).
 

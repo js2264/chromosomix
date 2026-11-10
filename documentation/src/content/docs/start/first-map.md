@@ -63,7 +63,7 @@ checkerboard off the diagonal is the long arm's compartments.
 Open chr15 from 30 to 60 Mb and choose **5 kb**. Closer in, at `chr15:38,100,001-50,025,000`, the
 squares along the diagonal are domains, mostly nested, and the dots at their corners are loops.
 
-A window too wide for the resolution picked, about 16,000 bins a side, is drawn coarser, and the
+A window too wide for the resolution picked, 8,192 bins a side, is drawn coarser, and the
 line under the title says so; zoom in and it is drawn at the one picked. <kbd>-</kbd> and <kbd>+</kbd>
 step coarser or finer.
 
