@@ -64,9 +64,12 @@ green if identical or equivalent, in the text's colour if not compared yet.
   **recompute here** runs it on the view as it is now.
 - **What the form names**, not the window on screen: the sequences ticked (all, unless you untick some),
   an anchor, a feature set.
-- **The map's resolution**: one the file stores or one you added (marked `*`, as in `3 kb*`), never the
-  coarser cells of a zoomed-out picture. To run at another, open the map at it. The map report is the
-  exception: its ladder counts from the file's finest resolution.
+- **The resolution the row above the map names** ([Resolution](/browse/contact-maps/#resolution)): with
+  *refine on zoom* unticked, the one you picked — one the file stores, or one you added (marked `*`,
+  as in `3 kb*`); while *refine on zoom* picks, the one the map is drawn from at that moment, so a
+  chromosome on screen at 250 kb is analysed at 250 kb, and at 25 kb once you have zoomed to it. Never
+  the coarser cells of a zoomed-out picture. To run at another, untick *refine on zoom* and pick it.
+  The map report is the exception: its ladder counts from the file's finest resolution.
 - **Balanced counts**, wherever the file carries weights, however the map is drawn; `--no-balance` on the
   command line reads the raw counts. Coverage is the one task that asks, raw unless you turn its weights
   on; the map report reads its coverage and its cis and trans raw.

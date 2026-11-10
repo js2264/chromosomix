@@ -62,6 +62,7 @@ export const KEY_ORDER = [
   'locus',
   'level',
   'coarsen',
+  'resolution',
   'transform',
   'colormap',
   'vmin',
@@ -99,6 +100,7 @@ const OPTIONAL_KEYS = [
   'locus',
   'level',
   'coarsen',
+  'resolution',
   'transform',
   'colormap',
   'vmin',
@@ -253,6 +255,13 @@ export function parseViewState(hash: string): ViewState | null {
   if (coarsen !== undefined && coarsen !== '') {
     const parsed = Number(coarsen)
     if (Number.isInteger(parsed) && parsed > 0) state.coarsen = parsed
+  }
+  // The stored rung picked, on the same terms: a positive whole number, and a
+  // rung the file does not have is the file's own, as above.
+  const resolution = raw.get('resolution')
+  if (resolution !== undefined && resolution !== '') {
+    const parsed = Number(resolution)
+    if (Number.isInteger(parsed) && parsed > 0) state.resolution = parsed
   }
 
   const transform = raw.get('transform')
@@ -632,6 +641,15 @@ export function differsOnlyInPresentationOrScore(a: ViewState, b: ViewState): bo
  */
 export function differsOnlyInFocus(a: ViewState, b: ViewState): boolean {
   return a.focus !== b.focus && differsOnly(a, b, ['focus'])
+}
+
+/**
+ * `true` when two states differ only in **the resolution picked** (§3.4) — a
+ * stored rung or one the reader added — which a mounted view reads in place,
+ * where the reader stands, rather than being rebuilt from its named region.
+ */
+export function differsOnlyInResolution(a: ViewState, b: ViewState): boolean {
+  return (a.resolution !== b.resolution || a.coarsen !== b.coarsen) && differsOnly(a, b, ['resolution', 'coarsen'])
 }
 
 function differsOnly(a: ViewState, b: ViewState, allowed: readonly string[]): boolean {

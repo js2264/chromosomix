@@ -175,7 +175,8 @@ export class ClipRange {
     this.setBox(this.highInput, this.value.vmax)
 
     this.el.classList.toggle('clip-manual', !this.auto)
-    this.autoButton.disabled = this.auto
+    // Never disabled: auto is a range measured on what is in view, and the view
+    // moves, so asking again is always a question with a new answer (§7.1).
     // Nothing until a block has been scaled. The control starts on `{0, 1}`,
     // which is a placeholder rather than a range, and printing `auto · 1 – 10`
     // beside a view that has drawn nothing yet — the whole-genome gate — is the

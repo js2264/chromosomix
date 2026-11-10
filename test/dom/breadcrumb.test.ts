@@ -16,6 +16,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { Breadcrumb, resolutionLabel, type BreadcrumbProps } from '@/ui/Breadcrumb'
+import { REFINE_DEFAULT, refineEnabled, setRefineEnabled } from '@/ui/refine'
 import type { ViewState } from '@/types'
 import { all, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
@@ -366,50 +367,106 @@ describe('the resolution picker', () => {
     }
   })
 
-  it('writes the rungs in bp, kb and Mb rather than in bins', () => {
+  /** The slots, by the resolution each says under the pointer, left to right. */
+  const slots = (crumb: Breadcrumb): string[] =>
+    all<HTMLButtonElement>(crumb.el, '.res-slot').map((slot) => slot.getAttribute('aria-label') ?? '')
+  const box = (crumb: Breadcrumb): HTMLSelectElement => crumb.el.querySelector('.res-pick') as HTMLSelectElement
+  const shown = (crumb: Breadcrumb): string => box(crumb).selectedOptions[0]?.textContent ?? ''
+
+  afterEach(() => setRefineEnabled(REFINE_DEFAULT))
+
+  it('writes the rungs in bp, kb and Mb rather than in bins, coarsest on the left', () => {
     const { crumb } = ladder()
     crumb.render(REGION)
-    expect(textsOf(crumb.el, '.res-stop span')).toEqual(['1 kb', '10 kb', '50 kb', '1 Mb'])
+    // The slots run coarsest to finest, and only the ends are written out.
+    expect(slots(crumb).sort()).toEqual(['1 Mb', '1 kb', '10 kb', '50 kb'].sort())
+    expect(textsOf(crumb.el, '.res-end')).toEqual(['1 Mb', '1 kb'])
+    const place = (label: string): number =>
+      parseFloat(all<HTMLElement>(crumb.el, '.res-slot').find((slot) => slot.getAttribute('aria-label') === label)?.style.left ?? '')
+    expect(place('1 Mb')).toBeLessThan(place('50 kb'))
+    expect(place('50 kb')).toBeLessThan(place('10 kb'))
+    expect(place('10 kb')).toBeLessThan(place('1 kb'))
+    // And the box lists them as the ladder does, finest first.
+    expect([...box(crumb).options].filter((option) => !option.hidden).map((option) => option.text)).toEqual([
+      '1 kb', '10 kb', '50 kb', '1 Mb',
+    ])
   })
 
-  it('marks the rung that is open, and only it', () => {
+  it('stands on the rung that is open, with *Refine on zoom* off', () => {
+    setRefineEnabled(false)
     const { crumb } = ladder()
     crumb.render(REGION)
-    expect(textsOf(crumb.el, '.res-stop.current span')).toEqual(['10 kb'])
-    const checked = all<HTMLInputElement>(crumb.el, '.res-radio').map((box) => box.checked)
-    expect(checked).toEqual([false, true, false, false])
+    expect(shown(crumb)).toBe('10 kb')
+    expect(all(crumb.el, '.res-slot.is-current').map((slot) => slot.getAttribute('aria-label'))).toEqual(['10 kb'])
+    expect(crumb.el.querySelector('.crumb-res')?.classList.contains('is-refining')).toBe(false)
   })
 
-  it('opens the rung a stop is clicked on', () => {
+  it('opens the rung a slot is clicked on', () => {
+    setRefineEnabled(false)
     const built = ladder()
     built.crumb.render(REGION)
-    const stop = all<HTMLInputElement>(built.crumb.el, '.res-radio')[2]
-    stop.checked = true
-    stop.dispatchEvent(new Event('change'))
+    const slot = all<HTMLButtonElement>(built.crumb.el, '.res-slot').find((each) => each.getAttribute('aria-label') === '50 kb')
+    slot?.click()
     expect(built.entries).toEqual(['50000'])
   })
 
-  it('walks the same ladder with the slider, on release rather than per rung', () => {
+  it('walks the ladder with the keys: left coarser, right finer', () => {
+    setRefineEnabled(false)
     const built = ladder()
     built.crumb.render(REGION)
-    const slider = built.crumb.el.querySelector('.res-slider') as HTMLInputElement
-    expect(slider.min).toBe('0')
-    expect(slider.max).toBe('3')
-    expect(slider.value).toBe('1')
-    slider.value = '3'
-    // Dragging across the ladder must not re-open the file at every rung.
-    slider.dispatchEvent(new Event('input'))
-    expect(built.entries).toEqual([])
-    slider.dispatchEvent(new Event('change'))
-    expect(built.entries).toEqual(['1000000'])
+    const track = built.crumb.el.querySelector('.res-track') as HTMLElement
+    track.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
+    expect(built.entries).toEqual(['50000'])
+    track.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    expect(built.entries).toEqual(['50000', '1000'])
   })
 
   it('says nothing about a rung the reader is already on', () => {
+    setRefineEnabled(false)
     const built = ladder()
     built.crumb.render(REGION)
-    const slider = built.crumb.el.querySelector('.res-slider') as HTMLInputElement
-    slider.dispatchEvent(new Event('change'))
+    const slot = all<HTMLButtonElement>(built.crumb.el, '.res-slot').find((each) => each.getAttribute('aria-label') === '10 kb')
+    slot?.click()
     expect(built.entries).toEqual([])
+  })
+
+  it('is greyed while *Refine on zoom* picks, and follows the map', () => {
+    setRefineEnabled(true)
+    const built = ladder()
+    built.crumb.render(REGION)
+    expect(built.crumb.el.querySelector('.crumb-res')?.classList.contains('is-refining')).toBe(true)
+    expect(box(built.crumb).disabled).toBe(true)
+    built.crumb.showResolution(50_000)
+    expect(shown(built.crumb)).toBe('50 kb')
+    // A slot pressed while the zoom picks is a reading, not a pick.
+    all<HTMLButtonElement>(built.crumb.el, '.res-slot')[0]?.click()
+    expect(built.entries).toEqual([])
+  })
+
+  it('stands between two slots on a grid no rung stores', () => {
+    setRefineEnabled(true)
+    const { crumb } = ladder()
+    crumb.render(REGION)
+    // Two of the 10 kb rung's bins to a cell: between 10 and 50 kb.
+    crumb.showResolution(20_000)
+    expect(shown(crumb)).toBe('20 kb')
+    const left = (label: string): number =>
+      parseFloat(all<HTMLElement>(crumb.el, '.res-slot').find((slot) => slot.getAttribute('aria-label') === label)?.style.left ?? '')
+    const thumb = parseFloat((crumb.el.querySelector('.res-thumb') as HTMLElement).style.left)
+    expect(thumb).toBeGreaterThan(left('50 kb'))
+    expect(thumb).toBeLessThan(left('10 kb'))
+  })
+
+  it('keeps what is on screen as the pick when unticked', () => {
+    setRefineEnabled(true)
+    const built = ladder()
+    built.crumb.render(REGION)
+    built.crumb.showResolution(50_000)
+    const tick = built.crumb.el.querySelector('.res-refine input') as HTMLInputElement
+    tick.checked = false
+    tick.dispatchEvent(new Event('change'))
+    expect(refineEnabled()).toBe(false)
+    expect(built.entries).toEqual(['50000'])
   })
 
   it('is absent where there is nothing to pick between', () => {
@@ -457,33 +514,31 @@ describe('a ladder with more rungs than fit', () => {
     '100000', '250000', '500000', '1000000', '2500000',
   ]
 
+  afterEach(() => setRefineEnabled(REFINE_DEFAULT))
+
   /**
-   * **A dropdown, not a slider and one chip.**
-   *
-   * What stood here asserted the thinned row: the slider, whose tooltip listed
-   * every rung, and a single chip naming the one being read. Between them they
-   * said how many rungs there were and which one you were on, and named the rest
-   * only to a reader who hovered the track — so the control that was there to
-   * save room was also the one that hid the ladder. The dropdown is the whole
-   * list, in the ladder's own order, in about the same width.
+   * **One slider of fixed width, and the box beside it.** A row of eleven chips
+   * pushed the place off a laptop's screen; a slot is a dot, so eleven of them
+   * fit the track the four-rung ladder has, and the box lists every one by name.
    */
-  it('collapses to a dropdown of every rung, not eleven chips', () => {
+  it('keeps every rung on one slider of fixed width, and every one in the box', () => {
     const { crumb } = build({ entries: MANY, currentEntry: '25000', entryNoun: 'resolution' })
     crumb.render({ uri: 'f::resolutions/25000', view: 'contigs' })
-    expect(crumb.el.querySelector('.res-slider')).toBeNull()
-    expect(all(crumb.el, '.res-stop')).toHaveLength(0)
+    expect(all(crumb.el, '.res-slot')).toHaveLength(11)
+    expect((crumb.el.querySelector('.res-track') as HTMLElement).style.width).toBe('168px')
     const picker = crumb.el.querySelector('.res-pick') as HTMLSelectElement
-    expect([...picker.options].map((option) => option.text)).toEqual([
+    expect([...picker.options].filter((option) => !option.hidden).map((option) => option.text)).toEqual([
       '1 kb', '2 kb', '5 kb', '10 kb', '25 kb', '50 kb',
       '100 kb', '250 kb', '500 kb', '1 Mb', '2.5 Mb',
     ])
-    expect(picker.options[picker.selectedIndex]?.text).toBe('25 kb')
   })
 
-  it('walks the whole ladder from the dropdown', () => {
+  it('walks the whole ladder from the box', () => {
+    setRefineEnabled(false)
     const built = build({ entries: MANY, currentEntry: '25000', entryNoun: 'resolution' })
     built.crumb.render({ uri: 'f::resolutions/25000', view: 'contigs' })
     const picker = built.crumb.el.querySelector('.res-pick') as HTMLSelectElement
+    expect(picker.options[picker.selectedIndex]?.text).toBe('25 kb')
     picker.value = '0'
     picker.dispatchEvent(new Event('change'))
     expect(built.entries).toEqual(['1000'])

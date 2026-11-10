@@ -267,10 +267,11 @@ as the root and goes on drawing the same picture. **About** lists the published 
 
 ## Refine on zoom
 
-A preference in the command palette, on by default: a map is read at about the size of the screen,
-and zooming in reads the stretch on screen again at a finer resolution, down to the one chosen,
-without the map ever stopping. Off, a window is read once, as finely as memory allows, and zooming
-magnifies it. See [Moving around](/browse/navigating/#resolution-and-the-zoom).
+The tick at the head of a map's resolution row, also in the command palette, on by default: a map is
+read at about the size of the screen, and zooming in reads the stretch on screen again at a finer
+resolution, down to the finest the file stores, without the map ever stopping; the row follows,
+greyed. Off, the map is drawn at the resolution you pick, coarser only where the window is too wide
+for it. See [Moving around](/browse/navigating/#resolution-and-the-zoom).
 
 ## Resolution
 

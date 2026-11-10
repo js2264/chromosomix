@@ -23,6 +23,7 @@ import { describe, expect, it } from 'vitest'
 import { denseCellCap } from '@/metacooler/matrix'
 import { POOLED_CELL_CAP } from '@/metacooler/pooling'
 import {
+  attachRefine,
   BlockLadder,
   INWARD_MS,
   READ_AHEAD_EDGE,
@@ -40,8 +41,8 @@ import {
   screenPlan,
   setRefineEnabled,
   subscribeRefine,
-  type BlockHandover,
   type ReadPlan,
+  type RefineView,
 } from '@/ui/refine'
 import type { Extent } from '@/types'
 import type { MatrixResult } from '@/worker/protocol'
@@ -65,12 +66,26 @@ function block(rows: Extent, binsPerCell: number, cols: Extent = rows): MatrixRe
 
 /** A ladder with a fake clock and a recording reader. */
 function ladder(
-  options: { ceiling?: Extent; reads?: Array<Extent>; budget?: number; now?: () => number } = {},
+  options: {
+    ceiling?: Extent
+    reads?: Array<Extent>
+    budget?: number
+    now?: () => number
+    /** The ladder's floor, in bins of the open map; see `LadderOptions.floor`. */
+    floor?: number
+    /** `false` reads as memory allows at the floor: *Refine on zoom* off. */
+    screenSized?: boolean
+    /** A laddered file: its rungs, and the open one's bin size. */
+    file?: { rungs: string[]; binsize: number }
+    /** The window on screen now; see `LadderOptions.view`. */
+    view?: () => ReturnType<typeof seen> | null
+    /** What a read as memory allows comes back on; see `LadderOptions.memoryGrid`. */
+    memoryGrid?: (window: { rows: Extent; cols: Extent }) => number | undefined
+  } = {},
 ) {
   const ceiling: Extent = options.ceiling ?? [0, 50_000]
   const asked: Array<{ rows: Extent; cols: Extent; plan?: ReadPlan }> = []
   const given: MatrixResult[] = []
-  const hows: Array<BlockHandover | undefined> = []
   const busy: boolean[] = []
   let settle: ((result: MatrixResult) => void) | null = null
   let refuse: ((err: unknown) => void) | null = null
@@ -90,21 +105,40 @@ function ladder(
         },
       }
     },
-    onBlock: (result, how) => {
+    onBlock: (result) => {
       given.push(result)
-      hows.push(how)
       return true
     },
     onBusy: (on) => busy.push(on),
     ...(options.budget === undefined ? {} : { budget: () => options.budget }),
     ...(options.now === undefined ? {} : { now: options.now }),
+    ...(options.floor === undefined ? {} : { floor: () => options.floor as number }),
+    ...(options.screenSized === undefined ? {} : { screenSized: () => options.screenSized as boolean }),
+    ...(options.view === undefined ? {} : { view: options.view }),
+    ...(options.memoryGrid === undefined ? {} : { memoryGrid: options.memoryGrid }),
+    ...(options.file === undefined
+      ? {}
+      : {
+          // As `attachRefine` plans and measures for a laddered file.
+          planFor: (window: { rows: Extent; cols: Extent }, view: { rows: Extent; cols: Extent; screen?: number }) =>
+            screenPlan({
+              rungs: rungsOf(options.file?.rungs ?? []),
+              binsize: options.file?.binsize ?? 1,
+              view: Math.max(view.rows[1] - view.rows[0], view.cols[1] - view.cols[0]),
+              read: Math.max(window.rows[1] - window.rows[0], window.cols[1] - window.cols[0]),
+              screen: view.screen ?? 1,
+              floor: options.floor ?? 1,
+            }),
+          gridOf: (result: MatrixResult) =>
+            ((result.binsize ?? options.file?.binsize ?? 1) * (result.binsPerCell ?? 1)) /
+            (options.file?.binsize ?? 1),
+        }),
   })
 
   return {
     it,
     asked,
     given,
-    hows,
     busy,
     get cancels() {
       return cancels
@@ -482,6 +516,22 @@ describe('panning against the edge of the block in hand', () => {
   })
 })
 
+describe('a ladder armed after the reader has moved', () => {
+  it('considers the window already on screen when it adopts its block', () => {
+    // A view arms its ladder once it knows its sequence's extent, a round trip
+    // a reader can zoom through; nothing asks again until the map moves.
+    let shown: ReturnType<typeof seen> | null = seen([10_000, 12_000], { screen: 700, fit: 25 })
+    const l = ladder({ view: () => shown })
+    l.it.adopt(block(WHOLE, 72))
+    expect(l.asked).toHaveLength(1)
+    // Fitted, there is nothing to read.
+    shown = seen(WHOLE, { screen: 700, fit: 1 })
+    const again = ladder({ view: () => shown })
+    again.it.adopt(block(WHOLE, 72))
+    expect(again.asked).toHaveLength(0)
+  })
+})
+
 describe('what the ladder holds', () => {
   it('hands back a block it already has instead of reading it again', async () => {
     const l = ladder()
@@ -619,6 +669,115 @@ describe('a screen-sized read', () => {
   })
 })
 
+describe('down to the finest rung the file stores (§2)', () => {
+  // Chicken's `.hic`, opened at 10 kb, stores 1, 2 and 5 kb as well.
+  const CHICKEN = ['1000', '2000', '5000', '10000', '25000', '50000', '100000', '250000']
+
+  it('reads a rung finer than the one that is open, as it is', () => {
+    // 400 kb over 700 pixels is a cell of about 570 bp: the 1 kb rung.
+    const plan = screenPlan({ rungs: rungsOf(CHICKEN), binsize: 10_000, view: 40, read: 80, screen: 700, floor: 0.1 })
+    expect(plan.rung).toBe('1000')
+    expect(plan.binsPerCell).toBeUndefined()
+    expect(plan.grid).toBeCloseTo(0.1, 9)
+  })
+
+  it('reads the finer rung that is the cell, not the open one', () => {
+    // 2 Mb over 700 pixels is a cell of about 2.9 kb: the 2 kb rung.
+    const plan = screenPlan({ rungs: rungsOf(CHICKEN), binsize: 10_000, view: 200, read: 400, screen: 700, floor: 0.1 })
+    expect(plan.rung).toBe('2000')
+    expect(plan.grid).toBeCloseTo(0.2, 9)
+  })
+
+  it('stops at the open rung where the floor is the open rung', () => {
+    // *Refine on zoom* off, the picked resolution is the floor: nothing finer.
+    const plan = screenPlan({ rungs: rungsOf(CHICKEN), binsize: 10_000, view: 40, read: 80, screen: 700, floor: 1 })
+    expect(plan.rung).toBeUndefined()
+    expect(plan.grid).toBe(1)
+  })
+
+  it('comes to rest on the finest rung, and reads no more', async () => {
+    const l = ladder({ floor: 0.1, file: { rungs: CHICKEN, binsize: 10_000 } })
+    l.it.adopt(block(WHOLE, 25))
+    const view = seen([20_000, 20_040], { screen: 700, fit: 600 })
+    l.it.consider(view)
+    expect(l.asked).toHaveLength(1)
+    expect(l.asked[0].plan?.rung).toBe('1000')
+    // The 1 kb rung's block: ten of its cells to a bin of the open map.
+    const rows = l.asked[0].rows
+    const fine = { ...block(rows, 1), nrows: (rows[1] - rows[0]) * 10, ncols: (rows[1] - rows[0]) * 10, binsize: 1_000 }
+    await l.land(fine as MatrixResult)
+    expect(l.given.at(-1)).toBe(fine)
+    for (let frame = 0; frame < 3; frame++) l.it.consider(view)
+    expect(l.asked).toHaveLength(1)
+  })
+})
+
+describe('the picked resolution, with *Refine on zoom* off (§3.4)', () => {
+  it('reads it as memory allows, around the view, as soon as the view fits', () => {
+    // A view of 12,000 bins fits a block at the picked grid; twice it, which a
+    // read padded half a view each side asks for, would not, and was pooled.
+    const budget = 600 << 20
+    const cap = denseCellCap(budget)
+    const l = ladder({ screenSized: false, ceiling: [0, 100_000], budget })
+    l.it.adopt(block([0, 100_000], 25))
+    const at: Extent = [40_000, 40_000 + Math.floor(cap * 0.75)]
+    l.it.consider(seen(at, { screen: 700, fit: 8 }))
+    expect(l.asked).toHaveLength(1)
+    const read = l.asked[0]
+    expect(read.plan, 'as memory allows').toBeUndefined()
+    expect(read.rows[1] - read.rows[0]).toBeLessThanOrEqual(cap)
+    expect(read.rows[0]).toBeLessThanOrEqual(at[0])
+    expect(read.rows[1]).toBeGreaterThanOrEqual(at[1])
+  })
+
+  it('reads a rung finer than the open map’s, which a read in its bins can reach', () => {
+    // 1 kb picked over a file opened at 10 kb: the floor is a tenth of an open
+    // bin. Counted in open bins a read is never finer than one, so the 10 kb
+    // block passed for as fine as memory allows and the pick was never read.
+    const file = { rungs: ['1000', '10000'], binsize: 10_000 }
+    const l = ladder({
+      screenSized: false,
+      floor: 0.1,
+      file,
+      ceiling: [0, 20_000],
+      // As `attachRefine` answers it from the picked read: a 600-bin window is
+      // 6,000 of the 1 kb rung's bins, which fit a block unpooled.
+      memoryGrid: () => 0.1,
+    })
+    l.it.adopt({ ...block([0, 20_000], 1), binsize: 10_000 })
+    const view = seen([5_000, 5_600], { fit: 30 })
+    l.it.consider(view)
+    expect(l.asked).toHaveLength(1)
+    expect(l.asked[0].plan, 'as memory allows').toBeUndefined()
+    // Landed, the pick is the picture, and nothing more is read for it.
+    void l.land({ ...block(l.asked[0].rows, 1, l.asked[0].cols), binsize: 1_000 })
+    return Promise.resolve().then(() => {
+      l.it.consider(view)
+      expect(l.asked).toHaveLength(1)
+    })
+  })
+
+  it('leaves the open map’s block alone where no read could be finer', () => {
+    // The same block, the same view, no pick: the open map's bins are the
+    // finest a read of it comes back on.
+    const l = ladder({ screenSized: false, ceiling: [0, 20_000] })
+    l.it.adopt(block([0, 20_000], 1))
+    l.it.consider(seen([5_000, 5_600], { fit: 30 }))
+    expect(l.asked).toHaveLength(0)
+  })
+
+  it('reads a view too wide for it pooled, as it was asked', () => {
+    const budget = 600 << 20
+    const cap = denseCellCap(budget)
+    const l = ladder({ screenSized: false, ceiling: [0, 100_000], budget })
+    l.it.adopt(block([0, 100_000], 40))
+    const at: Extent = [20_000, 20_000 + cap * 2]
+    l.it.consider(seen(at, { screen: 700, fit: 1.5 }))
+    expect(l.asked).toHaveLength(1)
+    expect(l.asked[0].rows[1] - l.asked[0].rows[0]).toBeGreaterThan(cap)
+  })
+})
+
 describe('a gesture that outruns its read', () => {
   it('calls the read off for a finer one once the zoom is twice past it', () => {
     const l = ladder()
@@ -750,71 +909,6 @@ describe('a view showing its whole block', () => {
     l.it.consider(seen([20_000, 22_000], { screen: 4_000, fit: 0.6 }))
     expect(l.asked).toHaveLength(1)
     expect(l.asked[0].rows).toEqual([18_000, 24_000])
-  })
-})
-
-describe('a figure’s block', () => {
-  it('reads the framed window as memory allows, and nothing else meanwhile', async () => {
-    const l = ladder()
-    l.it.adopt(block(WHOLE, 72))
-    let reading = 0
-    const done = l.it.sharpen({ rows: [10_000, 14_000], cols: [10_000, 14_000] }, () => (reading += 1))
-    expect(reading).toBe(1)
-    expect(l.asked).toHaveLength(1)
-    expect(l.asked[0].plan, 'no screen plan: as memory allows').toBeUndefined()
-    // The framed window and a twentieth of it each side, so the view carried
-    // onto the block stays inside it.
-    expect(l.asked[0].rows).toEqual([9_800, 14_200])
-    // A frame meanwhile asks for nothing: a read now would be for a picture the
-    // figure's block is about to replace.
-    l.it.consider(seen([11_000, 12_000], { screen: 600, fit: 10, binsPerCell: 72 }))
-    expect(l.asked).toHaveLength(1)
-    await l.land(block([9_800, 14_200], 1))
-    expect(await done).toBe(true)
-    expect(l.given.at(-1)?.binsPerCell).toBe(1)
-    // The same window on a finer grid, not a zoom: its colours are measured on
-    // itself, where a zoom's are kept from the block it replaces.
-    expect(l.hows.at(-1)).toEqual({ measure: true })
-  })
-
-  it('stays on screen until the reader moves', async () => {
-    // Finer than the screen needs and only a twentieth wider than the frame:
-    // left to the rules for a view, the next frame would read a screen-sized
-    // block around it, for a reader who has not moved.
-    const l = ladder()
-    l.it.adopt(block(WHOLE, 72))
-    const done = l.it.sharpen({ rows: [10_000, 14_000], cols: [10_000, 14_000] })
-    const figure = block([9_800, 14_200], 1)
-    await l.land(figure)
-    expect(await done).toBe(true)
-    const framed = seen([10_000, 14_000], { screen: 600, fit: 1.1 })
-    for (let frame = 0; frame < 3; frame++) l.it.consider(framed)
-    expect(l.asked).toHaveLength(1)
-    expect(l.given.at(-1)).toBe(figure)
-    // A pan: the view's own rules again, which read around where it went.
-    l.it.consider(seen([10_100, 14_100], { screen: 600, fit: 1.1 }))
-    expect(l.asked).toHaveLength(2)
-    expect(l.asked[1].plan).toBeDefined()
-  })
-
-  it('reads nothing where the block on screen is already that fine', async () => {
-    const l = ladder()
-    l.it.adopt(block([10_000, 14_000], 1))
-    let reading = 0
-    expect(await l.it.sharpen({ rows: [11_000, 12_000], cols: [11_000, 12_000] }, () => (reading += 1))).toBe(true)
-    expect(reading).toBe(0)
-    expect(l.asked).toHaveLength(0)
-    // Nor handed over again: the figure is the picture the reader framed.
-    expect(l.given).toHaveLength(0)
-  })
-
-  it('says so when its read fails, and leaves the picture as it was', async () => {
-    const l = ladder()
-    l.it.adopt(block(WHOLE, 72))
-    const done = l.it.sharpen({ rows: [10_000, 14_000], cols: [10_000, 14_000] })
-    await l.fail(new Error('too large'))
-    expect(await done).toBe(false)
-    expect(l.given).toHaveLength(0)
   })
 })
 
@@ -978,5 +1072,66 @@ describe('the first read of a pooled window (§12)', () => {
     l.it.adopt(rung)
     l.it.consider({ rows: CHR1, cols: CHR1, binsPerCell: 5 })
     expect(l.asked).toEqual([])
+  })
+})
+
+describe('attachRefine, with a resolution picked (§3.4)', () => {
+  /** A ladder joined to a stand-in panel, *Refine on zoom* off, recording its reads. */
+  function picked(pick: { binsize: number; rung: { name: string; binsize: number }; factor: number }) {
+    let listener: ((view: RefineView) => void) | null = null
+    const reads: Array<{ rows: Extent; rung: string | undefined; binsPerCell: number | undefined }> = []
+    const ladder = attachRefine({
+      panel: {
+        setRefineListener: (fn) => {
+          listener = fn
+        },
+        regrid: () => true,
+        setWaiting: () => {},
+      },
+      read: (rows, _cols, rung, binsPerCell) => {
+        reads.push({ rows, rung, binsPerCell })
+        return { promise: new Promise(() => {}), cancel: () => {} }
+      },
+      ceiling: { rows: [0, 20_000], cols: [0, 20_000] },
+      // Opened at 10 kb, beside a 1 kb rung.
+      binsize: 10_000,
+      rungs: [
+        { name: '1000', binsize: 1_000 },
+        { name: '10000', binsize: 10_000 },
+      ],
+      picked: () => pick,
+    })
+    // The open map's block, from its own entry.
+    ladder.adopt(block([0, 20_000], 1))
+    return { ladder, reads, look: (view: RefineView) => listener?.(view) }
+  }
+
+  it('reads a rung finer than the one the file was opened at, once the window fits it', () => {
+    const was = refineEnabled()
+    setRefineEnabled(false)
+    try {
+      const { ladder, reads, look } = picked({ binsize: 1_000, rung: { name: '1000', binsize: 1_000 }, factor: 1 })
+      // Six megabases: 600 bins of the open map, 6,000 of the 1 kb rung's.
+      look(seen([5_000, 5_600], { fit: 30 }))
+      expect(reads).toHaveLength(1)
+      expect(reads[0].rung).toBe('1000')
+      expect(reads[0].binsPerCell).toBeUndefined()
+      ladder.destroy()
+    } finally {
+      setRefineEnabled(was)
+    }
+  })
+
+  it('reads nothing for a pick the block on screen already is', () => {
+    const was = refineEnabled()
+    setRefineEnabled(false)
+    try {
+      const { ladder, reads, look } = picked({ binsize: 10_000, rung: { name: '10000', binsize: 10_000 }, factor: 1 })
+      look(seen([5_000, 5_600], { fit: 30 }))
+      expect(reads).toHaveLength(0)
+      ladder.destroy()
+    } finally {
+      setRefineEnabled(was)
+    }
   })
 })

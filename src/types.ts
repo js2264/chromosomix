@@ -501,6 +501,18 @@ export interface ViewState {
    */
   coarsen?: number
   /**
+   * The **stored** rung the reader picked, in bp, where it is not the one {@link
+   * uri} opened (§3.4): what the map draws with *Refine on zoom* off. A rung the
+   * reader added is {@link coarsen} instead.
+   *
+   * Its own key rather than a new entry in `uri`, because picking a rung is a
+   * change of the picture and not of the file: the block on screen is swapped
+   * where the reader stands, and re-opening the file at another entry threw away
+   * the window they had zoomed to. Part of the shared view for {@link coarsen}'s
+   * reason — a link that dropped it would send a different picture.
+   */
+  resolution?: number
+  /**
    * Multiply counts by their bin weights — cooler's balanced matrix (§6.4).
    *
    * Part of the shared view, not a preference: a balanced map and a raw one are

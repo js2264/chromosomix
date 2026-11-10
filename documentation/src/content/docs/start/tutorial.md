@@ -48,11 +48,12 @@ correlation of −1.
 
 ## The parts
 
-Fifty-eight steps in twelve parts, each named on the card:
+Fifty-nine steps in twelve parts, each named on the card:
 
 1. **Welcome**.
 2. **The 4DN store**: open `4DNESC23ZYOF` with its tracks.
-3. **The map**: the General panel, 250 kb, chr15, moving about, the Aesthetics panel.
+3. **The map**: the General panel, *refine on zoom* unticked and 250 kb picked, chr15, moving about,
+   the Aesthetics panel.
 4. **Compartments**: the *correlation* plaid, then the task on chr15, its saddle, and your E1 against
    4DN's.
 5. **Zooming in**: a drag holding <kbd>⇧ Shift</kbd> and <kbd>⌥ Option</kbd> (<kbd>Shift</kbd> and

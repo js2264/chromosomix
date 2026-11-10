@@ -308,6 +308,23 @@ export interface DerivedGrid {
 }
 
 /**
+ * The grid an analysis of a map is framed and run on where it is not the open
+ * map's own bins (§3.4, §18.4): the resolution the crumb row names — a rung the
+ * file stores, read from its own entry, or one the reader added, summed from
+ * the stored rung it is made of.
+ */
+export interface AnalysisGrid {
+  /** The bin size every task is measured at. */
+  binsize: number
+  /** Where it is a resolution the reader added: what it is made of, and how. */
+  derived: DerivedGrid | null
+  /** The stored rung read, in base pairs: the derived one's base, else {@link binsize}. */
+  rung: number
+  /** An extent of a block read at the stored rung `from` (bp), on this grid. */
+  carry(extent: readonly [number, number], from: number): [number, number]
+}
+
+/**
  * The sequence a bin is in, by its offsets: the last whose first bin is at or
  * before it — past every sequence of no bins, which start where the next does.
  */
@@ -331,4 +348,82 @@ export function offsetsOf(lengths: ArrayLike<number>, binsize: number): Float64A
   const out = new Float64Array(lengths.length + 1)
   for (let c = 0; c < lengths.length; c++) out[c + 1] = out[c] + Math.ceil(Number(lengths[c]) / binsize)
   return out
+}
+
+/**
+ * The grid an analysis reads a map on at its stored rung `rung`, summed
+ * `factor` bins at a time where that is a resolution the reader added (§3.4):
+ * laid out from the sequence lengths, as a cooler lays out every rung, and
+ * carrying a block read at any rung of the same map onto it.
+ */
+export function analysisGridOf(
+  lengths: ArrayLike<number>,
+  rung: Rung,
+  factor = 1,
+): { nBins: number; grid: AnalysisGrid } {
+  const base = offsetsOf(lengths, rung.binsize)
+  const derived: DerivedGrid | null =
+    factor > 1
+      ? { rung: { binsize: rung.binsize * factor, from: rung, factor }, grid: CoarseGrid.of(base, factor) }
+      : null
+  const layouts = new Map<number, Float64Array>([[rung.binsize, base]])
+  const layout = (binsize: number): Float64Array => {
+    let offsets = layouts.get(binsize)
+    if (offsets === undefined) {
+      offsets = offsetsOf(lengths, binsize)
+      layouts.set(binsize, offsets)
+    }
+    return offsets
+  }
+  return {
+    nBins: derived?.grid.nBins ?? base[base.length - 1] ?? 0,
+    grid: {
+      binsize: rung.binsize * factor,
+      derived,
+      rung: rung.binsize,
+      carry: (extent, from) => {
+        const onRung: [number, number] =
+          from === rung.binsize
+            ? [extent[0], extent[1]]
+            : carryExtent(extent, { binsize: from, offsets: layout(from) }, { binsize: rung.binsize, offsets: base }, lengths)
+        return derived === null ? onRung : derived.grid.toCoarse(onRung)
+      },
+    },
+  }
+}
+
+/** One rung's layout of a map: its bin size and where each sequence starts, {@link offsetsOf}. */
+export interface RungLayout {
+  binsize: number
+  offsets: Float64Array
+}
+
+/**
+ * An extent of one rung's bins carried onto another rung of the same map
+ * (§3.4): the fewest bins of `to` holding every bin of `from`'s extent.
+ *
+ * Through the base pairs each bin covers, one sequence at a time, because every
+ * rung lays a sequence out from its own first bin and ends it on a part-bin —
+ * so bin `i` of a 10 kb rung is not bin `i / 2.5` of a 25 kb one anywhere past
+ * the first sequence. Either direction, and either rung may divide the other or
+ * not. An extent is clamped to the map first.
+ */
+export function carryExtent(
+  extent: readonly [number, number],
+  from: RungLayout,
+  to: RungLayout,
+  lengths: ArrayLike<number>,
+): [number, number] {
+  const fromTotal = from.offsets[from.offsets.length - 1] ?? 0
+  const toTotal = to.offsets[to.offsets.length - 1] ?? 0
+  const lo = Math.max(0, Math.min(fromTotal, extent[0]))
+  const hi = Math.max(lo, Math.min(fromTotal, extent[1]))
+  if (lo >= fromTotal) return [toTotal, toTotal]
+  const first = sequenceAt(from.offsets, lo)
+  const start = to.offsets[first] + Math.floor(((lo - from.offsets[first]) * from.binsize) / to.binsize)
+  if (hi <= lo) return [start, start]
+  const last = sequenceAt(from.offsets, hi - 1)
+  const endBp = Math.min(Number(lengths[last]), (hi - from.offsets[last]) * from.binsize)
+  const end = to.offsets[last] + Math.ceil(endBp / to.binsize)
+  return [start, Math.max(start, Math.min(toTotal, end))]
 }

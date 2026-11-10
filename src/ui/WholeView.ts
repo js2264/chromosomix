@@ -53,7 +53,7 @@ import { blockSummary, poolingNote } from './mapSummary'
 import { REMOTE_SCAN_BYTE_LIMIT, overviewTarget } from './Overview'
 import { presentationOf, secondBlock, type CompareRead, type LowerRead } from './compare'
 import type { LowerPresentation } from './LowerReading'
-import { attachRefine, rungsOf, type BlockLadder } from './refine'
+import { attachRefine, refineEnabled, rungsOf, type BlockLadder, type PickedResolution } from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox, featureSuggestions, locusPlaceholder } from './SearchBox'
 
@@ -76,6 +76,12 @@ export interface WholeViewProps {
    * Absent, or 1, is every view of every file until somebody adds one.
    */
   binsPerCell?: number
+  /**
+   * The resolution picked (§3.4), asked live: what *Refine on zoom* off draws,
+   * read in place when it changes. Absent or `null` is the open map, at
+   * {@link binsPerCell}.
+   */
+  picked?: () => PickedResolution | null
   /**
    * Open the file at another rung, by entry name — the gate's second button.
    *
@@ -1035,6 +1041,7 @@ export class WholeView {
       binsize: this.props.binsize,
       rungs: rungsOf(this.props.rungs ?? []),
       floor: () => this.props.binsPerCell ?? 1,
+      ...(this.props.picked === undefined ? {} : { picked: this.props.picked }),
       budget: () => budget.budgetBytes,
       read: (rows, cols, rung, binsPerCell) => {
         const own = client.cancellable<'matrix'>({
@@ -1125,7 +1132,7 @@ export class WholeView {
   private summarise(result: MatrixResult): Array<string | HTMLElement> {
     const raster = this.level === 'bin' ? poolingNote(result.nrows, result.ncols) : null
     return [
-      ...blockSummary(this.props.binsize, result, this.props.noun),
+      ...blockSummary(this.props.binsize, result, this.props.noun, refineEnabled() ? undefined : (this.props.picked?.()?.binsize ?? this.props.binsize * (this.props.binsPerCell ?? 1))),
       ...(raster === null ? [] : [` · ${raster.phrase}`]),
       ' · ',
       this.panel.viewNote,

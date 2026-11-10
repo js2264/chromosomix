@@ -66,8 +66,9 @@ past what the block in hand can show therefore reads the window again, at the gr
 show. The properties that keep this inside §2 rather than beside it:
 
 - **a gesture never waits for a read.** The map never holds still: the block in hand takes every
-  pan and zoom while a sharper one is read, a spinner turns in the corner of the plot, clear of the
-  axis labels drawn inside it (`HeatmapView.setWaiting`), and the sharper block lands on wherever the
+  pan and zoom while a sharper one is read, a small spinner turns in the map's top right corner, left
+  of its legend where one is shown (`MatrixPanel.setWaiting`; only for a read longer than 140 ms, so a
+  quick refine shows nothing), and the sharper block lands on wherever the
   gesture has got to, its window carried in base pairs (`MatrixPanel.regrid`). A read in flight is the
   read every frame of the gesture wants while it still covers the view on a grid within a factor of
   two of the view's own, and is called off for a finer one once the zoom outruns it — so a fast zoom
@@ -87,8 +88,8 @@ show. The properties that keep this inside §2 rather than beside it:
 - **it reads ahead.** A zoom still going inward reads at a factor of 1.4 rather than of two, so the
   block for the next step is usually in before its cells would have been big enough to see; a pan
   reads around the view once it comes within a quarter of a view of an edge of its block, so the edge
-  is gone before the view reaches it; and the last step, onto the file's own bins, is taken whenever
-  the view can show them, factor of two or not. A view showing its whole block reads nothing for the
+  is gone before the view reaches it; and the last step, onto the finest rung, is taken whenever
+  the view can show it, factor of two or not. A view showing its whole block reads nothing for the
   block's edges — it is pressed against every one of them because it shows all of it — until the
   reader pulls back past them;
 - **one block, never tiles.** The picture is always exactly one bounded read, drawn whole. Up to eight
@@ -99,20 +100,29 @@ show. The properties that keep this inside §2 rather than beside it:
   left behind is finer than the screen needs, and handing it back whenever it covered the view — near
   its edge, where the view reads ahead — read around it, handed it back again for being finer than
   that read, and read again, for as long as the reader stood still;
-- **it terminates.** There is no grid below the file's own bins, so the staircase from the widest
-  view to the finest data is about a read each time the zoom doubles, ending on those bins. A MAG's
-  block already is the finest data in its file, so §2's own case reads nothing more;
+- **it terminates.** There is no grid below the finest rung the file stores — whichever rung it was
+  opened at, so a zoom into a map opened at 10 kb walks on to its 4 and 1 kb rungs — and the
+  staircase from the widest view to the finest data is about a read each time the zoom doubles,
+  ending on those bins. It used to end on the rung the file was opened at, which made the finest
+  data a reader could zoom to depend on which entry a link happened to name. A MAG's block already is
+  the finest data in its file, so §2's own case reads nothing more;
 - **it is bounded by the view.** A zoom can never widen past the domain the view was entered on, so
   it cannot become the full pixel scan §7.3 gates;
 - **it is a preference, and it is on.** A view's first read is screen-sized too (§7.2), so a map opens
   at the screen's resolution — a chromosome of a remote file in well under a second, whatever rung it
-  was opened at — and sharpens as the reader zooms. Off, the palette's *Refine on zoom*, is this
-  clause kept absolute: the window read once, as finely as memory allows, and every pan and zoom
-  after it free of reads; turning it off reads the view's whole domain that way. It is a palette
-  command rather than a switch on a map's picture row, which holds the turn and the baseline: the
-  preference is one setting for the whole window, and a control on one map of a deck would claim it
-  was that map's. A figure is the other read that is not the screen's size: it is drawn from the
-  framed window read at the grid the reader chose (§7.2).
+  was opened at — and sharpens as the reader zooms. It is the tick at the head of the crumb bar's
+  resolution row (§5.5), and *Refine on zoom* in the palette: one setting for the whole window, never
+  a switch on a map's picture row, which holds the turn and the baseline — a control on one map of a
+  deck would claim it was that map's. Ticked, the row's slider and box are greyed and follow the
+  map, saying which resolution is drawn. **Off, the reader picks the resolution, and the pick is the
+  picture** (§3.4): read in place where the reader stands, around the view and as much of it as a
+  block at that resolution holds (about 16,000 bins a side, §7.2), so a window that fits is drawn at
+  the pick whatever its width, and every pan and zoom inside what was read is free of reads. A window
+  too wide for a block at the pick is drawn coarser — from the coarsest stored rung a pooled read of
+  it would use, light enough to read while the reader is on their way in — and the line under the map says which
+  resolution it is not, and that zooming in reads it (`blockSummary`); zooming in reads it as soon as
+  the window fits. Unticking keeps the resolution on screen as the pick, so the picture does not jump.
+  A figure is never a read of its own: it is the picture on screen (§16.5).
 
 **And a place already seen is not read again.** A navigation builds its view afresh, and a view used
 to ask for its block whatever had been asked before — so chr1, then chr2, then chr1 read chr1 twice,
@@ -277,7 +287,7 @@ bins added up**. This viewer has summed consecutive bins into one cell since its
 was written (§7.2); what was missing was a way to *ask* for a particular grid rather than have one
 fitted to the screen.
 
-A `+` past the coarse end of the resolution picker asks for one. What can be given is exactly what
+A `+` at the end of the resolution row (§5.5) asks for one. What can be given is exactly what
 is **a whole number of some stored rung's bins**: on a `1 / 2 / 5 / 10 kb` ladder, 3 kb is three 1 kb
 bins — perfectly ordinary, and not a rung anybody would have written, which is why it is worth
 offering — while 2.5 kb is two and a half, and there is no such thing. A contact is recorded in a
@@ -299,36 +309,31 @@ Three properties make it a resolution rather than a rendering:
   (`snapToGrid`), so the same base pair lands in the same cell holding the same sum at every zoom
   and every pan — which is what a cooler at that resolution would also give, and what a grid
   anchored to the request would not.
-- **It holds.** The zoom-to-refine ladder takes it as a floor and never reads past it; the
-  whole-genome view takes it as a floor too, and its own plan still wins where the picture cannot
-  hold that many cells, with the summary saying which.
+- **It holds, while it is picked.** With *Refine on zoom* off (§2) the ladder takes it as a floor
+  and never reads past it, and draws it — a coarser picture only where the window is too wide for a
+  block at it, with the line under the map saying so; the whole-genome view takes it as a floor too,
+  and its own plan still wins where the picture cannot hold that many cells, with the summary saying
+  which. While the zoom picks, it is a rung on the slider like the others, and the zoom does not stop
+  at it.
 - **It is in the link.** `coarsen=` beside `balance=` and `level=`, because a 10 kb map and a 1 kb
   map of one window are different pictures. Which resolutions a reader has *added* is a different
   question — a fact about the file, like which sequences they declared circular — and travels with
   the tracks they loaded (§8.15's argument, restated).
 
-A derived rung wears a **`*`** in the picker, in the label rather than beside it, because the number
-is what somebody quotes in a methods section and `3 kb` would be a resolution this file does not
-contain. It sorts where its number says — 3 kb before 5 kb — since a ladder whose order is not its
-resolutions' order is a lie about which of two pictures is coarser, and it carries a `×`, which the
-file's own rungs do not: they are not the reader's to remove, and that asymmetry is the second thing
-the `*` is saying.
+A derived rung wears a **`*`** in its name — under its slot, in the box and in the box's list — in
+the label rather than beside it, because the number is what somebody quotes in a methods section and
+`3 kb` would be a resolution this file does not contain. It sorts where its number says — its slot
+between 5 kb's and 2 kb's — since a ladder whose order is not its resolutions' order is a lie about
+which of two pictures is coarser, and it can be taken back off, which the file's own rungs cannot:
+they are not the reader's to remove, and that asymmetry is the second thing the `*` is saying.
 
-**Otherwise it is drawn exactly as a stored rung is**, and the `×` takes no room until it is wanted.
-A derived rung used to carry a dashed border whether or not it was the one being read, so a row of
-four added rungs was four outlined chips beside one stored rung with no outline at all — the thing
-the file *does* contain being the quiet one — and each of them reserved fourteen pixels for a `×`
-that only appeared under the pointer, which made the row look padded for no reason a reader could
-see. So: no border when it is not current, a **dotted** border where a stored rung's is solid, and a
-`×` at zero width that the hovered rung grows to hold, pushing the rungs after it along. It keeps its
-width rather than being undisplayed, because a button that is not displayed cannot be tabbed to and
-this one is the only way back off a rung.
-
-**Past nine rungs the row is a dropdown** beside the word, listing every rung in the ladder's own
-order. It was a slider and one chip: between them they said how many rungs there were and which one
-was being read, and named the rest only to a reader who hovered the slider's own tooltip — so the
-control that was there to save room was also the one that hid the ladder. A `<select>` cannot hold a
-button, so where the rung being read is the reader's own the `×` follows the picker.
+**Otherwise it is drawn exactly as a stored rung is**: a slot like the others, its ring **dotted**
+where a stored rung's is solid, quietly, as its `*` says. A derived rung used to carry a dashed
+border whether or not it was the one being read, so a row of four added rungs was four outlined
+chips beside one stored rung with no outline at all — the thing the file *does* contain being the
+quiet one. The **`×`** that takes it off sits beside the box while it is the rung picked, and is put
+away while *Refine on zoom* picks, when the box names another resolution and the `×` beside it would
+offer to remove what is not on screen.
 
 **One caveat, always printed.** Counts coarsen *exactly*: a contact is in one fine bin and therefore
 in one coarse bin, so the sum is the count. Balanced values do not. `cooler zoomify --balance` sums
@@ -341,7 +346,8 @@ quietly shadowing it, and `chooseRung` still prefers a real rung for every read 
 a declared grid (§9).
 
 **Every task measures it too** (§18.4). A task run while the map is drawn at a derived rung reads the
-map at that rung, not at the stored one underneath — it used to read the stored one, so a reader
+map at that rung, summed from the stored one it is made of — read from that rung's own entry where
+the file is open at another — not at the stored one underneath — it used to read the stored one, so a reader
 looking at 3 kb\* got an insulation track at 1 kb under a picture at 3. The analysis worker's mount
 is the stored rung summed on the same grid (`metacooler/coarseMap.ts`), behind the two seams an
 ordinary map is read through — its pixels and its handle — so every task, whatever it reads (a
@@ -1227,22 +1233,42 @@ pressed, and the assembly a reader was looking at was named only on a tab and in
 locus box below it print the same place, and a row ending `› IV › IV:1,000,001-1,400,000` above two
 more copies of that string is three readings of one fact in three typefaces.
 
-**And a `+` at the coarse end of it**, which asks for a resolution the file does not store: any
-whole number of one of its own bins, added up as it is read. §3.4 is where that lives — what the
-bar contributes is the stop, starred, in bin-size order, with a `×` to take it back off.
+**The resolution row: a tick, a slider, a box and a `+`** (`ui/ResolutionRow.ts`), in that order,
+all on one line and one height:
 
-**Nine rungs are chipped; past that the row is a dropdown of every rung.** A `zoomify` ladder that
-doubles from 1 kb reaches a megabase in ten rungs and one that walks the 1–2–5 series reaches it in
-nine, so nine covers most of the files in the wild — about three hundred pixels of short numbers,
-right-aligned into whatever the trail leaves. The cap was six, on the grounds that more would push
-the place the reader is looking at off the left of a laptop screen; what it actually cost was the
-aim-and-click on the files with the most rungs to aim at, and on the files somebody is most likely
-to *add* a rung to, since a ninth stop used to collapse an eight-rung row to a bare slider. Past
-nine — a 4DN `.mcool` has eleven — the word `resolution` is followed by a `<select>` holding every
-rung in the ladder's own order, each wearing the `*` and the tooltip its chip would have, with the
-`×` of an added rung after it while that rung is the one being read. It was the slider and one chip,
-which between them said how many rungs there were and which was being read, and named the rest
-only to a reader who hovered the slider.
+- **the tick is *Refine on zoom*** (§2), ticked by default. Ticked, the zoom picks the resolution —
+  the screen's, down to the finest rung the file stores — and the slider, the box and the `+` are
+  greyed and follow the map: the thumb glides from slot to slot as a zoom sharpens the picture, and
+  stands *between* two slots on a grid no rung stores (20 kb is two of the 10 kb rung's bins), where
+  a log scale puts it, so the row always says which resolution is drawn. Unticked, the reader picks,
+  and the pick is what is drawn (§2, §3.4). Unticking keeps the resolution on screen — the stored rung
+  nearest it — as the pick, so nothing jumps;
+- **the slider is a row of round, unlabelled slots on a track of fixed width** (168 px, whatever the
+  number of rungs), one per rung, evenly spaced and **coarsest on the left**, with a thumb on the one
+  picked. Only the two ends are written out, the coarsest left of the track and the finest right of
+  it; a slot says its resolution under the pointer, in a tip on the page rather than in the bar,
+  which scrolls sideways and would clip it. A ladder is an *ordered* thing with a fixed number of
+  rungs, which is what slots show — how many there are, which one is on screen, which way is finer —
+  and a continuous track would suggest somewhere between two of them to stop. A press on a slot
+  picks it; a drag walks the thumb from slot to slot, naming each, and picks the one under it when
+  the button comes up — one read, not one per slot passed; the arrow keys on the focused track walk
+  it a rung at a time (left and down coarser), `Home` and `End` to the ends. It replaces a slider
+  over labelled radio stops, nine of which were about three hundred pixels of short numbers and past
+  which the row became a dropdown of every rung;
+- **the box names the resolution** — `1 kb`, `50 kb`, `1 Mb`, never `1000`, `50000`, `1000000`, which
+  a reader would have to divide — and is the same choice as a list: pressed, it is a menu of every
+  rung, finest first, each with its bin size in its tooltip. It has **no arrow**: it is a number
+  first, and a menu only when asked. A derived rung's `×` sits beside it while that rung is picked;
+- **the `+`** asks for a resolution the file does not store: any whole number of one of its own bins,
+  added up as it is read. §3.4 is where that lives — what the row contributes is the slot, starred,
+  in bin-size order, and the box's `×` to take it back off.
+
+**A pick is read in place** (§3.4): a rung of the file's ladder, stored or added, is read where the
+reader stands, as a refine is, and the file stays open at the entry it was opened at. A pick used to
+re-open the file at the rung's entry, which threw away the window the reader had zoomed to: every
+pick was a jump back to the whole sequence. The hash names the pick — `resolution=` for a stored
+rung, `coarsen=` for one the reader added — so a link carries it; a link naming the open rung names
+neither.
 
 **The resolution is not a segment of that trail.** A rung of a `zoomify` ladder (§3.4) is the same
 file drawn more or less finely: it does not contain the crumbs after it and clicking it does not go
@@ -1260,24 +1286,17 @@ of the file, re-seated at the end of the row on every render rather than rebuilt
 trail is redrawn on every pan and a box rebuilt under the cursor loses what is being typed into it.
 
 **A one-rung file is drawn without the slider.** There is nothing to slide along, so the row reads
-`resolution  1 kb  +` and the `+` is the only control on it — which is §8.5's rule, not an exception
-to it: a control that cannot keep its promise is absent rather than greyed, and a plain `.cool` is
-the commonest file a lab opens. The slider arrives with the second rung, which is what the `+` makes.
+`refine on zoom  1 kb  +` and the `+` is the only control on it — which is §8.5's rule, not an
+exception to it: a control that cannot keep its promise is absent rather than greyed, and a plain
+`.cool` is the commonest file a lab opens. The slider arrives with the second rung, which is what the
+`+` makes.
 
-Up to nine rungs it is a **slider over a row of labelled stops** rather than a dropdown, and the
-stops say `1 kb`, `50 kb`, `1 Mb` rather than `1000`, `50000`, `1000000`. A ladder is an *ordered*
-thing with a fixed number of rungs, which is exactly what a slider over stops shows — how many there
-are, which one you are on, and which way is finer — and a dropdown of raw bin counts shows none of
-the three and asks the reader to divide before the number means anything. Both halves write the
-same value: the stops are real radio inputs, so the arrow keys and a screen reader get the list, and
-the slider commits on release rather than per rung, since dragging across five rungs must not
-re-open the file five times.
-
-**`-` and `+` walk the same stops from the keyboard**, one rung coarser and one finer (*Coarser
-resolution*, *Finer resolution*): counted from the stop that is lit, onto a rung the reader added as
-onto one the file stores and by the road a press on its stop takes, and stopping at both ends rather
+**`-` and `+` walk the same slots from the keyboard**, one rung coarser and one finer (*Coarser
+resolution*, *Finer resolution*): counted from the rung picked, onto a rung the reader added as
+onto one the file stores and by the road a press on its slot takes, and stopping at both ends rather
 than wrapping — the palette says which end, and at the coarse one that the `+` beside the rung adds
-a coarser one. Their hint is the rung they go to, as `<` and `>` name the sequence. They are bound by
+a coarser one. They pick, so they are greyed while *Refine on zoom* picks, and the palette says how to
+pick instead. Their hint is the rung they go to, as `<` and `>` name the sequence. They are bound by
 what they type rather than where they are, since the two marks stand in different places on QWERTY
 and on AZERTY: either half of each key does — `_` and `=` as well — so neither needs Shift, which
 `+` takes on both; and an AZERTY PC's minus, the bare half of its 6 key, is still the minus under
@@ -2313,12 +2332,16 @@ diverges from what a reader reproduces locally.
   numbers, and re-measuring would re-brighten the map for a reader who changed nothing but the
   magnification. The range is measured from the **widest block held** and stays there while the
   reader zooms in; zooming out past it re-measures, which is right, because that reader is looking at
-  data that was not in the picture before. A **figure's block** (§7.2) is measured on itself too: it
-  is not a zoom but the same window read finer, and the range of the block it replaces is a range for
-  cells many times its size — kept, chicken chr1 saved from its 250 kb picture was drawn from the 25 kb
-  rung, cells holding about a hundredth as much, and came out white but for the diagonal. So is a
-  block **coarser** than the one the range came from, the same arithmetic the other way, which only a
-  zoom after a figure meets
+  data that was not in the picture before. So does a block **coarser** than the one the range came
+  from — its cells hold many times as much, and the finer block's range would burn it out — and the
+  block of a **resolution picked** of another grid than the one drawn, finer or coarser (§3.4): the
+  reader changed the resolution rather than the magnification, and a map opened at that rung was
+  always measured on itself; kept, a 250 kb range left a picked 25 kb map pale but for its diagonal.
+  Unticking *Refine on zoom* picks the rung already drawn and keeps the range. **The clip row's *auto* is always offered, and measures
+  the view.** A range kept across a zoom is still automatic but no longer the view's own — after a
+  zoom from a whole chromosome to a domain, a range for cells many times the size of the ones on
+  screen — so *auto* is never greyed, and a press measures the stretch of the block in view, by the
+  same rule, and keeps it as the range the next refine holds (`MatrixPanel.measureInView`)
 - the **cell size** is named in the key, on its own line under the scale's name, and in the exported
   key as well — it is the one fact about a refining map that cannot be recovered from the pixels, and
   a figure that carries it needs no caption to say it
@@ -2451,8 +2474,9 @@ leaves it to the reader, and either way the reader anchors it to the *sequence*
 to would change a cell's value as it crossed the screen. That is what lets a view
 name its grid — a screen-sized read (§2), a resolution the reader added (§3.4) —
 and pan around in it. A read that names none is planned as memory allows, which
-is what the next two paragraphs describe: every read with *Refine on zoom* off,
-and the read a figure is drawn from.
+is what the next two paragraphs describe: a view's reads with *Refine on zoom*
+off, at the resolution the reader picked (§2) — the rung's own bins, pooled
+where the window is too wide for them — or, with none picked, at the open map's.
 
 **A view's reads are screen-sized while *Refine on zoom* is on**, which is the
 default (§2): about a cell to each CSS pixel of the plot, from the coarsest stored
@@ -2462,7 +2486,7 @@ yet laid out is sized from the window. So a chromosome opened at a fine rung of 
 laddered file reads one of its coarse rungs first, a few hundred cells across —
 chicken chr1 opened at 10 kb is 785 cells of its 250 kb rung, 2.1 MB in one
 request, on screen in 0.34 s where its first picture took 1.9 s — and the zoom
-reads the rest as it goes. A cell made of several of a rung's bins is read from
+reads the rest as it goes, down to the finest rung the file stores (§2). A cell made of several of a rung's bins is read from
 the rung that stores it whole where the ladder has one: two of a `zoomify`
 ladder's 160 kb bins are its 320 kb rung's own. A file
 with no ladder is pooled from its own bins to the same grid: the same pixels are
@@ -2554,8 +2578,8 @@ where the block asked for is **at least four times finer** than that along its w
 against the grid the reader will actually read, so a pooled first read is not "previewed" by a picture
 as coarse as itself. That preview is drawn as the block it is: its own cells, its own resolution in the
 key, its own colour range. **It is live**: the reader can pan, zoom and hover it at once, nothing is held
-still, and the spinner turning in its corner (`HeatmapView.setWaiting`) is the one sign that the block
-is on its way. The block then replaces it **on the window the reader arrived at**, carried in base pairs
+still, and the spinner turning in the map's top right corner (`MatrixPanel.setWaiting`) is the one sign
+that the block is on its way. The block then replaces it **on the window the reader arrived at**, carried in base pairs
 — to the base pair rather than rounded out to the preview's cells, and past the block's own edges where
 they zoomed out beyond it (`viewedPlaces`, `ui/blockAxes.ts`) — or refitted where nobody moved it, which
 is exactly the picture there was before there were previews. Either way its colour range is measured
@@ -2567,7 +2591,7 @@ preview or borrows it, not even when the block's read fails and the preview stay
 is, because its extents are in another rung's bins under the name of the file the view reads. The tracks,
 the census and the circularity check the session holds behind its first picture (§8.6) wait for that
 block too, not for its stand-in. None is read for a window already about as coarse as a preview would be, a file with no
-coarser rung, a grid the reader chose (`binsPerCell`), a window across a circle's origin, or a map
+coarser rung, a resolution the reader picked or added, a window across a circle's origin, or a map
 under a second file or a second reading; a preview that fails is a picture that comes later, never an
 error.
 
@@ -2684,18 +2708,12 @@ off in the 1D browser, and in the deck's figure, whose cells each read it (§16.
 own names and ranges are the picture's and are saved as they are on screen, whatever the switch
 says.
 
-**A figure is drawn from the window read at the grid the reader chose.** A screen-sized block is as
-fine as the screen, and a saved figure is a page at 300 dpi or a vector drawing: so the Export card's
-save and copy, and the deck's (§16.5), first read the framed window as memory allows — the read every
-view made before reads were sized to the screen — and draw once it is in, the card saying *reading the
-map at its resolution for the figure…* meanwhile (`BlockLadder.sharpen`). The save's file is chosen
-before the read, while the press is still the reader's, and the copy hands the clipboard the image's
-promise at once for the same reason. Its colour range is measured on the block it brings, as the
-window read once at its resolution always was (§7.1). The block stays on screen until the reader next
-moves the map, so the map is as sharp as its figure and the same colour; it is read only a twentieth wider than the frame, and
-the view's own rules would otherwise read a screen-sized block around it on the next frame. A block
-already that fine reads nothing; a read that fails leaves the figure drawn as the
-screen is, and the line says so.
+**A figure is the picture on screen.** The Export card's save and copy, and the deck's (§16.5), draw
+the block on screen as it is drawn — its grid, its colour range — and never read one of their own: a
+figure read afresh at another grid is another picture, its colour range measured on another block,
+and the one thing a reader composing a figure must be able to trust is that the file is what they
+were looking at. A reader who wants a finer figure zooms in, or unticks *Refine on zoom* and picks the
+resolution, which is then what the screen draws (§2).
 
 **Copy this: the object under the pointer, and nothing round it.** The right-click menu on the map,
 on a lane beside it and on a lane of the 1D browser — and a right click that does not drag on a 3D
@@ -8287,17 +8305,36 @@ which would neuter the array the heatmap is drawing from.
 **What a task runs on is the map's current framing**, captured at the instant **Run** is pressed: the
 row and column bin extents, the bin size, any pooling in force, the score column, whether balancing
 is on, the total the map is drawn to (§6.5), the sequences declared circular and their origins
-(§8.15), the edit of the reference it is drawn through (§27.7), and the resolution the reader added
-that it is drawn at (§3.4) — which is then the bin size, its bins the ones the extents count. **A
+(§8.15), the edit of the reference it is drawn through (§27.7), and **the resolution the crumb row
+names** (§5.5) — which is then the bin size, its bins the ones the extents count. **A
 preview has no framing** (§7.2): while a coarser rung stands in for the block being read, or stays on
 screen after that read failed, a press of **Run** is refused as on a view with no map, and no task
 borrows the block, because its extents count another rung's bins under the file the view reads.
-**Any other block read from a sibling rung is framed in the open map's bins**: the window it was asked
-for, and a grid of the rung's factor times its pooling — so a task reads the stretch of the map that
-is on screen, and never takes a 100 kb rung's block for 25 kb data. It is never lent to a task, which
-reads for itself. The bin size the framing names is the open map's, whatever the picture is pooled to:
-`20 kb bins · 4 per drawn cell`, where it used to print the cell, `80 kb bins`, in every provenance
-line written from a pooled view.
+
+**The resolution the row names is the one a task reads** (`Session.analysisAt`). With *Refine on
+zoom* off it is the rung picked (§2): a rung the file stores, read from **its own entry** of the
+ladder — the task's file is `sample.mcool::resolutions/25000` where the file is open at 10 kb, and
+so are the provenance line and the command it writes — or one the reader added, summed from the
+stored rung it is made of (§3.4). While the zoom picks, it is the stored rung the block on screen was
+read from, its pooling being the picture's and not the numbers': a chromosome on screen at its
+250 kb rung is analysed at 250 kb, and at 25 kb once the zoom has reached it. A pick is read in place
+and leaves the file open at the entry it was opened at, so that entry stopped being the resolution a
+reader is looking at, and a task framed on it measured a map nobody had asked for. Where the row
+names the open map's own bins, nothing changes. An import is the exception (§3.7): its rungs are
+binned by the worker that opened it rather than stored, and a task reads its open map. The drawer's
+heading follows a pick, a refine onto another rung and the tick as they happen, since none of them
+mounts a view, which is what tells it otherwise.
+
+**The block on screen is framed in those bins**: its extents, on the grid of the rung it was read
+from, carried onto the rung the task reads through the base pairs they cover, one sequence at a time
+— every rung lays a sequence out from its own first bin and ends it on a part-bin, so bin `i` of a
+10 kb rung is not bin `i / 2.5` of a 25 kb one past the first sequence (`carryExtent`). A block read
+from another rung than the task's — a window too wide for the pick, drawn coarser — is never lent to
+it, and the task reads for itself; nor is one at a resolution the reader added, which is another sum
+of the map than the task's. The bin size the framing names is the task's, whatever the picture is
+pooled to: `20 kb bins · 4 per drawn cell`, where it used to print the cell, `80 kb bins`, in every
+provenance line written from a pooled view; a block coarser than the task's grid counts how many of
+its bins a drawn cell sums, to the nearest whole.
 
 **The framing line is one string in one grammar.** The window it names is the display form (§26.1),
 written by `formatLocus` — so the drawer's *will run on*, the figure's caption and the cell's
@@ -10642,7 +10679,8 @@ transcription start (chr8:127,730,001-127,740,000), over the whole genome as § 
 --no-cis`, *cis only* off in the app's form, `virtual4c` as it is. **Five sides** run them. `chromosomix` **on the command line** runs them as a shell
 script does, six commands, the pileup reading the loops the first wrote. chromosomix **in Chromium**
 runs them as a reader does, in one page (`notebooks/scripts/laptop.mjs`, given `steps`): the map opened
-once at 10 kb, balanced, whole genome, with the GC content beside it as a track, each task opened from
+once at 10 kb, balanced, whole genome, *Refine on zoom* off so that the crumb row names the rung a
+task reads (§18.4), with the GC content beside it as a track, each task opened from
 the Analysis panel, its form set as the command's flags set it, and run in turn, the pileup over the
 loops the first called in the same page, the map moved to 250 kb in the crumb row's resolution for the
 compartments and back; it is left out where `LAPTOP_BROWSERS` leaves Chromium out. The reference is
@@ -16241,7 +16279,7 @@ match 4DN's upside down, at −1.
 
 ### 30.3 The steps
 
-Fifty-eight, in twelve parts, each part's name printed over its steps' titles. The welcome and the end
+Fifty-nine, in twelve parts, each part's name printed over its steps' titles. The welcome and the end
 are a card each in the middle of the window, and between them every step lights one thing:
 
 - **Welcome** — what the tutorial is, in two sentences, with its parts listed under them and *let's
@@ -16251,7 +16289,8 @@ are a card each in the middle of the window, and between them every step lights 
   beside it that copies it, and *type it for me* beside the step for a reader who would rather not
   type twelve characters at all; open the set with its tracks, one press.
 - **The map** — a step that is only read, lighting the General column: the file, its sequences, its
-  metadata; pick 250 kb; open chr15 from the Chromosomes table, scrolled to its row when the table has
+  metadata; untick *Refine on zoom*, which the step says reads the map at the screen's resolution and
+  finer as the reader zooms, so that a resolution is the reader's to pick; pick 250 kb; open chr15 from the Chromosomes table, scrolled to its row when the table has
   not drawn it; a step that is only read, about the map, and how to scroll, drag and double-click on
   it; and one lighting the Aesthetics column, which a map brings — the Map card, the Tracks card and
   Export.

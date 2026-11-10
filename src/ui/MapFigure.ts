@@ -61,21 +61,7 @@ export interface FigureHost {
   caption(now: Date): { title: string; detail: string }
   /** What the figure is called, for the name of the file it is saved as. */
   exportName(): string
-  /**
-   * Put on screen the block the figure should be drawn from, and say whether it
-   * is there: `MatrixPanel.prepareFigure`, which reads the framed window at the
-   * grid the reader chose where the block on screen is coarser (§19.2).
-   * `onReading` is told when a read is made. Absent is a host with nothing to
-   * read.
-   */
-  prepare?(onReading: () => void): Promise<boolean>
 }
-
-/** What the Export card says while it reads the framed window for a figure. */
-const READING_FOR_FIGURE = 'reading the map at its resolution for the figure…'
-
-/** What a saved figure's line adds when that read failed and it was drawn from the screen's block. */
-const FIGURE_AS_SHOWN = 'drawn as on screen: the finer read failed'
 
 /** The Export card, and every figure drawn for it. */
 export class MapFigure {
@@ -186,17 +172,6 @@ export class MapFigure {
   }
 
   /**
-   * Have the block the figure is drawn from put on screen, saying so on the
-   * card while it reads; whether it is there (`FigureHost.prepare`).
-   */
-  private prepare(): Promise<boolean> {
-    if (this.host.prepare === undefined) return Promise.resolve(true)
-    return this.host.prepare(() => {
-      this.exportStatus.textContent = READING_FOR_FIGURE
-    })
-  }
-
-  /**
    * Hold the export back, saying why, or let it go again with `null`.
    *
    * Held while the picture on screen stands in for a block still being read
@@ -284,32 +259,12 @@ export class MapFigure {
         return
       }
       const now = new Date()
-      // The clipboard is given a promise of the image while the press is still
-      // the reader's, and the image follows once the figure's block is in
-      // (`prepare`): a browser writes to the clipboard only inside the gesture
-      // that asked, and the read can outlast it. Drawing is the part that can
-      // throw a message worth showing, so its error is kept and shown rather
-      // than whatever the clipboard says about a promise that failed.
-      let size = ''
-      let sharp = true
-      let drawn: unknown = null
-      const png = this.prepare().then((ready) => {
-        sharp = ready
-        try {
-          const canvas = this.exportCanvas(this.exportDpi, now)
-          size = `${canvas.width}×${canvas.height} px`
-          return canvasToPng(canvas)
-        } catch (err) {
-          drawn = err
-          throw err
-        }
-      })
-      try {
-        await copyPngToClipboard(png)
-      } catch (err) {
-        throw drawn ?? err
-      }
-      this.exportStatus.textContent = `copied · ${size}` + (sharp ? '' : ` · ${FIGURE_AS_SHOWN}`)
+      // The canvas is drawn *before* the clipboard item is built rather than
+      // inside the promise handed to it, because drawing is the part that can
+      // throw a message worth showing. What the item waits on is the encode.
+      const canvas = this.exportCanvas(this.exportDpi, now)
+      await copyPngToClipboard(canvasToPng(canvas))
+      this.exportStatus.textContent = `copied · ${canvas.width}×${canvas.height} px`
     } catch (err) {
       this.exportStatus.textContent =
         err instanceof Error ? `copy failed: ${err.message}` : 'copy failed'
@@ -509,18 +464,14 @@ export class MapFigure {
     // Where it goes first, while the press is still the reader's (`ui/export.ts`).
     const target = await chooseSaveTarget(name, format === 'png' ? 'image/png' : 'application/pdf')
     if (target === null) return
+    this.exportStatus.textContent = `saving ${target.name}…`
     try {
-      // The block the figure is drawn from, read once the file is chosen: a
-      // screen-sized block is as fine as the screen, and the page is finer.
-      const sharp = await this.prepare()
-      this.exportStatus.textContent = `saving ${target.name}…`
       const blob =
         format === 'png'
           ? await canvasToPng(this.exportCanvas(this.exportDpi, now))
           : await this.vectorFigure(now)
       await target.write(blob)
-      this.exportStatus.textContent =
-        `${target.name} · ${fmt.bytes(blob.size)}` + (sharp ? '' : ` · ${FIGURE_AS_SHOWN}`)
+      this.exportStatus.textContent = `${target.name} · ${fmt.bytes(blob.size)}`
     } catch (err) {
       // Nothing here is worth an error screen: the view is intact and the user
       // can try a smaller size. Say what failed and stay put.

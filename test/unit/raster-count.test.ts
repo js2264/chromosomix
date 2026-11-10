@@ -152,42 +152,6 @@ describe('what rebuilds the raster', () => {
     expect(heatmap.rasterisations).toBe(after + 1)
   })
 
-  it('takes every gesture while it waits for a sharper block', () => {
-    const heatmap = view()
-    heatmap.setMatrix(block(64))
-    heatmap.draw()
-    heatmap.zoomAt(200, 200, 2)
-    const before = { zoom: heatmap.zoomLevel, window: heatmap.cellWindow() }
-
-    heatmap.setWaiting(true)
-    expect(heatmap.isWaiting).toBe(true)
-    // A read in flight for the window on screen holds nothing still (§2): the
-    // block it brings lands on wherever the reader has got to.
-    heatmap.zoomAt(200, 200, 2)
-    expect(heatmap.zoomLevel).toBeGreaterThan(before.zoom)
-    heatmap.panBy(50, 50)
-    expect(heatmap.cellWindow()).not.toEqual(before.window)
-    const arrowed = heatmap.cellWindow()
-    heatmap.handleKeyDown({ key: 'ArrowRight', preventDefault: () => {} } as KeyboardEvent)
-    expect(heatmap.cellWindow()).not.toEqual(arrowed)
-    heatmap.setWaiting(false)
-  })
-
-  it('does not re-rasterise while a wait is drawn', () => {
-    const heatmap = view()
-    heatmap.setMatrix(block(64))
-    heatmap.draw()
-    const after = heatmap.rasterisations
-    heatmap.setWaiting(true)
-    for (let i = 0; i < 10; i++) heatmap.draw()
-    heatmap.setWaiting(false)
-    heatmap.draw()
-    // The spinner turns on a `requestAnimationFrame` loop that calls `draw`, so
-    // a spinner that cost a raster would cost one sixty times a second while
-    // the reader waits — on the very block a slow read says is large.
-    expect(heatmap.rasterisations).toBe(after)
-  })
-
   it('builds exactly one for a block swapped in under a live transform', () => {
     const heatmap = view()
     heatmap.setMatrix(block(64))

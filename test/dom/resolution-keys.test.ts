@@ -2,12 +2,12 @@
 /**
  * `-` and `+` walk the resolution bar (§3.4), one stop at a time.
  *
- * They are the bar's stops asked for from the keyboard, so what is pinned is
- * that they are the *same* stops: counted from the one that is lit, a derived
- * rung among them where the reader added one, stopping at both ends rather than
- * wrapping, and taking the road a press on the stop takes — the file re-opened
- * at a stored rung, the hash patched for one the reader added. And that they
- * say where they go, as `[` and `]` do, and why not where they cannot.
+ * They are the bar's slots asked for from the keyboard, so what is pinned is
+ * that they are the *same* slots: counted from the one picked, a derived rung
+ * among them where the reader added one, stopping at both ends rather than
+ * wrapping, and taking the road a press on the slot takes — the hash patched,
+ * the rung read in place. And that they say where they go, as `[` and `]` do,
+ * and why not where they cannot — *Refine on zoom* among the reasons.
  *
  * The session is real; the file is a stand-in with only what the ladder reads,
  * and `open` is caught rather than sent to a worker, because what a step *asks
@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { Session, type SessionHost } from '@/app/Session'
 import { KEYS, type Command } from '@/ui/commands'
+import { REFINE_DEFAULT, setRefineEnabled } from '@/ui/refine'
 import type { ResolutionStore } from '@/state/resolutions'
 import type { ViewState } from '@/types'
 import { setUpDom, type DomTeardown } from '../support/dom'
@@ -132,6 +133,11 @@ const step = (session: Session, id: 'resolution-coarser' | 'resolution-finer'): 
 }
 
 describe('the two resolution keys', () => {
+  // They pick, and a pick is the reader's with *Refine on zoom* off; while it
+  // is on the bar's slider is greyed, and so are they (the last test).
+  beforeEach(() => setRefineEnabled(false))
+  afterEach(() => setRefineEnabled(REFINE_DEFAULT))
+
   it('are bound to − and +, and named for where they go', () => {
     const { session } = standingOn('2000')
     const coarser = step(session, 'resolution-coarser')
@@ -144,17 +150,21 @@ describe('the two resolution keys', () => {
     expect([finer.enabled, finer.hint]).toEqual([true, '1 kb'])
   })
 
-  it('open the file at the next stored rung, coarser or finer', () => {
+  it('stand on the next stored rung, coarser or finer, in place', () => {
     const { session, opened } = standingOn('2000')
     step(session, 'resolution-coarser').run()
+    // The rung is read where the reader stands: the hash names it, and the
+    // file is not re-opened at it, which threw the window away (§3.4).
+    expect(session.store.state?.resolution).toBe(5_000)
+    expect(session.store.state?.region).toBe('I')
+    expect(step(session, 'resolution-coarser').hint).toBe('10 kb')
     step(session, 'resolution-finer').run()
-    expect(opened.map((one) => one.uri)).toEqual([
-      'sample.mcool::resolutions/5000',
-      'sample.mcool::resolutions/1000',
-    ])
-    // The place on screen travels; a resolution the reader added does not.
-    expect(opened[0]?.carry?.region).toBe('I')
-    expect(opened[0]?.carry?.coarsen).toBeUndefined()
+    step(session, 'resolution-finer').run()
+    expect(session.store.state?.resolution).toBe(1_000)
+    // Back on the rung the file was opened at, the hash names none.
+    step(session, 'resolution-coarser').run()
+    expect(session.store.state?.resolution).toBeUndefined()
+    expect(opened).toEqual([])
   })
 
   it('stop at both ends, saying why — and where to get a coarser one', () => {
@@ -204,6 +214,18 @@ describe('the two resolution keys', () => {
       'This file stores one resolution — the + beside it adds a coarser one.',
     )
     expect(step(session, 'resolution-finer').enabled).toBe(false)
+  })
+
+  it('are greyed while *Refine on zoom* picks, and say how to pick', () => {
+    setRefineEnabled(true)
+    const { session, opened } = standingOn('2000')
+    for (const id of ['resolution-coarser', 'resolution-finer'] as const) {
+      expect(step(session, id).enabled).toBe(false)
+      expect(step(session, id).hint).toBe('Refine on zoom picks the resolution — untick it in the bar to pick one.')
+    }
+    step(session, 'resolution-coarser').run()
+    expect(session.store.state?.resolution).toBeUndefined()
+    expect(opened).toEqual([])
   })
 
   it('have nothing to step with the map put away for its tracks', () => {

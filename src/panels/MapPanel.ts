@@ -89,7 +89,7 @@ import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
 import type { PickedFile } from '../browse/folder'
 import { resolutionLabel } from '../units'
 import { firstEntry } from '../ui/FilePicker'
-import { attachRefine, refineEnabled, rungsOf, screenPlan, type BlockLadder } from '../ui/refine'
+import { attachRefine, finestFloor, refineEnabled, rungsOf, screenPlan, type BlockLadder } from '../ui/refine'
 import { icon, iconButton } from '../ui/icons'
 import { paintSequencePicker, sequencePicker, shownSequence } from './sequencePicker'
 import { entryLabel, fileBaseLabel, fileLabel, splitUri } from '../ui/labels'
@@ -1956,12 +1956,15 @@ export class MapPanel {
   ): { rung?: string; binsPerCell?: number } {
     if (!refineEnabled()) return {}
     const span = Math.max(rows[1] - rows[0], cols[1] - cols[0])
+    const rungs = rungsOf(info.entries)
     const plan = screenPlan({
-      rungs: rungsOf(info.entries),
+      rungs,
       binsize: info.binsize ?? 1,
       view: span,
       read: span,
       screen: this.screenWidth(),
+      // Down to the finest rung, as the zoom after it goes (§2).
+      floor: finestFloor(rungs, info.binsize ?? 1),
     })
     return {
       ...(plan.rung === undefined ? {} : { rung: plan.rung }),

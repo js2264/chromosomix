@@ -21,11 +21,13 @@ import { buildAnalysisContext } from '../analysis/context'
 import type { RunTarget } from '../analysis/runner'
 import { readsMap, type AnalysisContext, type AnalysisFraming, type AnalysisTask } from '../analysis/types'
 import type { AnalysisWorkspace, AnalysisWorkspaceHost } from '../analysis/workspace'
+import type { BlockInput } from '../analysis/worker/protocol'
 import { LEAD_MAP } from '../annotations/placement'
 import { browsingBinsize } from '../genome/assembly'
 import type { AnalysisFacts } from '../panels/MapPanel'
 import { fileBaseLabel } from '../ui/labels'
 import { rungsOf } from '../ui/refine'
+import type { MatrixPanel } from '../ui/MatrixPanel'
 import type { OpenResult, OrientationSummary, PairsBinning } from '../worker/protocol'
 import type { PairStats } from '../pairs/stats'
 import type { Session } from './Session'
@@ -226,7 +228,9 @@ export class SessionAnalysis {
           // worker mounts the file for itself and would otherwise have no way to
           // know a selection exists.
           return {
-            uri: file.uri,
+            // At the rung the crumb row names, which may be another entry of
+            // the ladder than the one open (§3.4).
+            uri: this.leadUri(file.uri),
             source: file.source,
             ...cellsOfMap(file.info),
             ...binningOfMap(file.info),
@@ -276,9 +280,9 @@ export class SessionAnalysis {
           ? null
           : this.session.withEditOf(
               withCircularNames(
-                // At the resolution the reader added, where the map is drawn at
-                // one (§3.4): the framing every task on it is run at.
-                panel.analysisFraming(file.uri, this.session.analysisGrid()),
+                // At the resolution the crumb row names (§3.4): the framing
+                // every task on it is run at.
+                this.leadFraming(panel, file.uri),
                 this.session.circularStore()?.list() ?? [],
                 this.session.originStore()?.record() ?? {},
               ),
@@ -287,10 +291,7 @@ export class SessionAnalysis {
       block: () => {
         const starred = this.session.deck.grid?.starredPanel ?? null
         if (starred !== null) return starred.map?.analysisBlock() ?? null
-        // None at a resolution the reader added: the runner reads the map summed
-        // (§3.4), and the block drawn is another sum of it.
-        if (this.session.analysisGrid() !== null) return null
-        return this.session.current?.panel?.analysisBlock() ?? null
+        return this.leadBlock(this.session.current?.panel)
       },
       store: () => this.session.annotations?.store ?? null,
       // The same object both surfaces draw groups from, so a suggestion a task
@@ -429,7 +430,13 @@ export class SessionAnalysis {
     const out: Array<{ label: string; uri: string; binsize: number }> = []
     const file = this.session.file
     if (file !== null && file.uri !== uri) {
-      out.push({ label: this.session.mapLabel(file.uri), uri: file.uri, binsize: file.info.binsize ?? 0 })
+      // At the rung the crumb row names, as a task on the lead itself reads it.
+      const at = this.session.analysisAt()
+      out.push({
+        label: this.session.mapLabel(file.uri),
+        uri: at?.uri ?? file.uri,
+        binsize: at?.grid.binsize ?? file.info.binsize ?? 0,
+      })
     }
     for (const { panel } of this.session.deck.grid?.analysable() ?? []) {
       if (panel.analysisFacts() === null) void panel.prepareAnalysis(() => this.workspace?.refresh())
@@ -438,6 +445,35 @@ export class SessionAnalysis {
       out.push({ label: this.session.mapLabel(panel.uri), uri: panel.uri, binsize: info.binsize ?? 0 })
     }
     return out
+  }
+
+  /**
+   * The address a task on the lead reads (§3.4): the entry of the rung the
+   * crumb row names, which may be another entry of the ladder than the one the
+   * file is open at — the reader's picks are read in place, and the file stays
+   * open where it was.
+   */
+  private leadUri(open: string): string {
+    return this.session.analysisAt()?.uri ?? open
+  }
+
+  /** The lead's framing, on the grid the crumb row names ({@link Session.analysisAt}). */
+  private leadFraming(panel: MatrixPanel, open: string): AnalysisFraming | null {
+    const at = this.session.analysisAt()
+    return panel.analysisFraming(at?.uri ?? open, at?.grid ?? null)
+  }
+
+  /**
+   * The block on screen, lent to a task on the lead where it is on the grid
+   * the task reads: from the rung the crumb row names, and never at a
+   * resolution the reader added — the runner reads the map summed (§3.4), and
+   * the block drawn is another sum of it.
+   */
+  private leadBlock(panel: MatrixPanel | null | undefined): BlockInput | null {
+    if (panel === undefined || panel === null) return null
+    const at = this.session.analysisAt()
+    if (at !== null && at.grid.derived !== null) return null
+    return at === null ? panel.analysisBlock() : panel.analysisBlock(at.grid.rung)
   }
 
   /**
@@ -456,7 +492,7 @@ export class SessionAnalysis {
     if (file !== null) {
       lead = {
         map: LEAD_MAP,
-        uri: file.uri,
+        uri: this.leadUri(file.uri),
         source: file.source,
         ...cellsOfMap(file.info),
         ...binningOfMap(file.info),
@@ -592,8 +628,9 @@ export class SessionAnalysis {
     // and its bins counted, at that resolution rather than at the rung
     // underneath. Only with the map on screen — a link's `coarsen=` carried into
     // the browser draws no map at it, and the tracks there are binned as before.
-    const derived = starred === null && panel !== undefined && panel !== null ? this.session.analysisGrid() : null
-    const binsize = derived?.rung.binsize ?? info.binsize
+    const at = starred === null && panel !== undefined && panel !== null ? this.session.analysisAt() : null
+    const derived = at?.grid.derived ?? null
+    const binsize = at?.grid.binsize ?? info.binsize
     if (binsize === null || binsize <= 0) return null
     const declared = this.declarations()
     // The framing a task is **run** on, and so the one that has to carry the
@@ -601,18 +638,18 @@ export class SessionAnalysis {
     // a circle ticked on the table was still measured as a line (§8.15).
     const framing = this.session.withEditOf(
       withCircularNames(
-        panel === undefined || panel === null ? null : panel.analysisFraming(uri, derived),
+        panel === undefined || panel === null ? null : panel.analysisFraming(at?.uri ?? uri, at?.grid ?? null),
         declared.circular,
         declared.origins,
       ),
     )
-    const block = panel === undefined || panel === null || derived !== null ? null : panel.analysisBlock()
+    const block = starred === null ? this.leadBlock(panel) : (panel?.analysisBlock() ?? null)
     return buildAnalysisContext({
-      uri,
+      uri: at?.uri ?? uri,
       memoryKey: this.session.memoryKey(uri),
       layout: info.layout.kind,
       binsize,
-      nBins: derived?.grid.nBins ?? info.nBins,
+      nBins: at?.nBins ?? info.nBins,
       hasGenomes: info.hasGenomes,
       hasWeights: info.hasWeights,
       scoreColumns: info.scoreColumns,

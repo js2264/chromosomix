@@ -60,7 +60,14 @@ import {
   type JunctionReader,
 } from '../analysis/circularity'
 import { ResolutionStore } from '../state/resolutions'
-import { CoarseGrid, ladderWith, offsetsOf, type DerivedGrid, type DerivedRung, type Rung } from '../metacooler/coarsen'
+import {
+  analysisGridOf,
+  ladderWith,
+  offsetsOf,
+  type AnalysisGrid,
+  type DerivedRung,
+  type Rung,
+} from '../metacooler/coarsen'
 import { openResolutionDialog } from '../ui/ResolutionDialog'
 import { ViewerError } from '../errors'
 import {
@@ -213,7 +220,7 @@ import {
   withMapName,
   type MapNames,
 } from '../ui/mapNames'
-import { rungsOf } from '../ui/refine'
+import { refineEnabled, rungsOf, subscribeRefine, type PickedResolution } from '../ui/refine'
 import { accessHeaders } from '../sources/access'
 import { canonicalUrl } from '../sources/rewrite'
 import { accessHeadersFor, credentialFor } from '../s3/credentials'
@@ -708,6 +715,11 @@ export class Session {
      * view kinds kept in the render path.
      */
     showFocus?(region: string | undefined): void
+    /**
+     * Read a newly picked resolution where the reader stands (§3.4), rather
+     * than being rebuilt from the named region. Absent, a pick rebuilds.
+     */
+    resolutionChanged?(): void
     /** Present on the heatmap views; the manual card places marks through it. */
     panel?: MatrixPanel
     /** Present on the genome browser, which owns a canvas of its own. */
@@ -799,6 +811,8 @@ export class Session {
   rendering = new AbortController()
   /** Memoised {@link stepTargets}, keyed on the state object's identity. */
   private stepCache: { state: ViewState; previous: string | null; next: string | null } | null = null
+  /** The resolution the lead map last said it is drawn at; see {@link resolution}. */
+  private shownBinsize: number | null = null
   /**
    * The second file in the lower-left triangle, and everything it takes to
    * hold one: its reader, its gate, its eye, and its carry across a change of
@@ -966,6 +980,10 @@ export class Session {
   private readonly stopFolders: () => void
   /** Lets go of the renewed grants' announcements; see {@link grantsChanged}. */
   private readonly stopGrants: () => void
+  /** Releases the *Refine on zoom* subscription; see {@link analysisResolutionMoved}. */
+  private readonly stopRefine: () => void
+  /** The resolution an analysis was last framed at, as `uri@binsize`; see {@link analysisResolutionMoved}. */
+  private analysisResolution = ''
   /**
    * The config being applied, for the length of one open.
    *
@@ -1027,6 +1045,18 @@ export class Session {
 
   constructor(host: SessionHost, id?: string) {
     this.host = host
+    // The resolution the lead map is drawn at, for the crumb bar's row, which
+    // follows it while *Refine on zoom* picks it (§2). From the lead's panel
+    // only: a companion's is its own cell's business.
+    this.contentEl.addEventListener('chromosomix:resolution', (event) => {
+      const panel = this.current?.panel
+      if (panel === undefined || panel === null || !(event.target instanceof Node)) return
+      if (!panel.el.contains(event.target)) return
+      const binsize = (event as CustomEvent<{ binsize: number | null }>).detail?.binsize ?? null
+      this.shownBinsize = binsize
+      this.breadcrumb?.showResolution(binsize)
+      this.analysisResolutionMoved()
+    })
     this.id = id ?? `s${nextSessionId++}`
     this.picker = new FilePicker({
       onOpen: (uri, source) => void this.openWithConfig(uri, source),
@@ -1068,6 +1098,7 @@ export class Session {
     })
     this.stopFolders = subscribeFolders(() => this.foldersChanged())
     this.stopGrants = subscribeGrants(() => this.grantsChanged())
+    this.stopRefine = subscribeRefine(() => this.analysisResolutionMoved())
   }
 
   /**
@@ -1144,6 +1175,20 @@ export class Session {
   /** The bin size of the map open here, or `null` with none, or none fixed. */
   get binsize(): number | null {
     return this.file?.info.binsize ?? null
+  }
+
+  /**
+   * The resolution the map in front is drawn at, as the reader asked for it, in
+   * base pairs (§3.4): with *Refine on zoom* off, the rung picked — stored or
+   * added — or the open map's where none is; while the zoom picks, the one on
+   * screen, as the lead's panel last said it. `null` with no map open.
+   */
+  get resolution(): number | null {
+    const file = this.file
+    if (file === null) return null
+    const open = file.info.binsize ?? null
+    if (refineEnabled()) return this.shownBinsize ?? open
+    return this.pickedResolution()?.binsize ?? open
   }
 
   /**
@@ -1456,6 +1501,7 @@ export class Session {
     this.destroyed = true
     this.stopFolders()
     this.stopGrants()
+    this.stopRefine()
     // What it said goes with the tab.
     this.unsay()
     // The stage goes with the tab; the edit it made is kept with the file.
@@ -2487,7 +2533,9 @@ export class Session {
         // (§3.4). Given even where the file has none to merge with: a plain
         // `.cool` has one resolution and the `+` beside it is the whole feature.
         ladder: () => this.ladderRungs(),
-        coarsen: () => this.store.state?.coarsen,
+        // The rung the bar stands on: one the reader added, else a stored one
+        // they picked, else the entry the file was opened at.
+        coarsen: () => this.store.state?.coarsen ?? this.store.state?.resolution,
         onSelectRung: (entry) => this.openStoredRung(entry),
         onSelectDerived: (binsize) => this.openDerived(binsize),
         onAddResolution: () => this.askResolution(),
@@ -5978,9 +6026,10 @@ export class Session {
    * `null` (§3.4).
    *
    * The bar's own ladder, read from where the bar says it stands
-   * (`rungStandingAt`), so a key steps from the stop that is lit and never from
+   * (`rungStandingAt`), so a key steps from the rung picked and never from
    * somewhere the reader is not. `null` on a view with no bar to step — the
-   * browser — at either end, and on a ladder of one.
+   * browser — at either end, on a ladder of one, and while *Refine on zoom*
+   * picks the resolution, when the bar's slider is greyed and so are its keys.
    *
    * @internal SessionCommands enables the resolution keys by it.
    */
@@ -5988,9 +6037,36 @@ export class Session {
     const state = this.store.state
     const file = this.file
     if (state === null || file === null || state.view === 'browser') return null
+    if (refineEnabled()) return null
     const rungs = this.ladderRungs()
     if (rungs.length < 2) return null
-    return rungs[rungStandingAt(rungs, state.coarsen, file.currentEntry) + direction] ?? null
+    return rungs[rungStandingAt(rungs, state.coarsen ?? state.resolution, file.currentEntry) + direction] ?? null
+  }
+
+  /**
+   * The resolution the reader picked (§3.4) — a stored rung (`resolution`) or
+   * one they added (`coarsen`) — as a view reads it, asked live so a pick is
+   * read in place; `null` for the rung the file was opened at.
+   *
+   * @internal The map views hand it to their ladders.
+   */
+  pickedResolution(): PickedResolution | null {
+    const state = this.store.state
+    const file = this.file
+    if (state === null || file === null) return null
+    if (state.coarsen !== undefined) {
+      const added = this.ladderRungs().find((rung) => rung.derived !== undefined && rung.binsize === state.coarsen)
+      if (added?.derived !== undefined) {
+        return { binsize: added.binsize, rung: added.derived.from, factor: added.derived.factor }
+      }
+      const derived = this.derivedRung(state)
+      if (derived !== null) return { binsize: derived.binsize, rung: derived.from, factor: derived.factor }
+    }
+    if (state.resolution !== undefined) {
+      const stored = rungsOf(file.info.entries).find((rung) => rung.binsize === state.resolution)
+      if (stored !== undefined) return { binsize: stored.binsize, rung: stored, factor: 1 }
+    }
+    return null
   }
 
   /**
@@ -6014,6 +6090,9 @@ export class Session {
     const rung = this.rungStep(direction)
     if (rung !== null) return resolutionLabel(rung.binsize) + (rung.derived === undefined ? '' : '*')
     if (this.file === null || this.store.state?.view === 'browser') return undefined
+    if (refineEnabled() && this.ladderRungs().length > 1) {
+      return 'Refine on zoom picks the resolution — untick it in the bar to pick one.'
+    }
     // The `+` on the bar adds only coarser rungs — bins are added up, never
     // split — so it is the way on at the coarse end and at no other.
     if (direction < 0) return 'Already the finest resolution this file stores.'
@@ -6039,28 +6118,76 @@ export class Session {
   }
 
   /**
-   * The resolution the reader added that the session's map is drawn at, with
-   * the grid its stored rung's bins are summed on — what an analysis of the map
-   * is framed, priced and run at (§3.4, §18.4) — or `null` at a stored rung,
-   * and before the sequence table the grid is laid out from has been read.
+   * The resolution every analysis of the lead map is framed, priced and run at
+   * (§3.4, §18.4), where it is not the open map's own bins: **the one the crumb
+   * row names.** With *Refine on zoom* off, the rung picked — read from its own
+   * entry of the ladder — or a resolution the reader added, summed from the
+   * stored rung it is made of; while the zoom picks, the stored rung the block
+   * on screen was read from, its pooling being the picture's and not the
+   * numbers'. `null` at the open map's own bins, which every task reads as it
+   * always has; on an import, whose rungs are binned by the worker that opened
+   * it rather than stored; and before the sequence table a grid is laid out
+   * from has been read.
    *
    * From the table rather than from offsets, which the page does not hold: a
-   * cooler lays each sequence out as `ceil(length / binsize)` bins, and the
-   * check against the file's bin count is what says this one does.
+   * cooler lays each sequence out as `ceil(length / binsize)` bins at every
+   * rung, and the check against the open map's bin count is what says this one
+   * does. A sibling rung is taken to carry the weights and the score columns
+   * the open one does, which `cooler zoomify` writes to every rung at once.
    *
    * @internal SessionAnalysis frames every task on the lead through it.
    */
-  analysisGrid(): DerivedGrid | null {
+  analysisAt(): { uri: string; nBins: number; grid: AnalysisGrid } | null {
     const state = this.store.state
     const file = this.file
-    if (state === null || file === null) return null
-    const rung = this.derivedRung(state)
-    if (rung === null) return null
+    if (state === null || file === null || file.info.pairs !== undefined) return null
+    const open = file.info.binsize ?? 0
+    if (!(open > 0)) return null
+    // The stored rung a task reads, and how many of its bins it sums.
+    let rung: Rung
+    let factor = 1
+    if (refineEnabled()) {
+      const drawn = this.current?.panel?.block?.binsize ?? open
+      const stored = rungsOf(file.info.entries).find((each) => each.binsize === drawn)
+      if (drawn === open || stored === undefined) return null
+      rung = stored
+    } else {
+      const pick = this.pickedResolution()
+      if (pick === null) return null
+      rung = pick.rung
+      factor = pick.factor
+    }
+    if (rung.binsize === open && factor === 1) return null
     const lengths = file.contigs?.table.data['length']
     if (lengths === undefined || Array.isArray(lengths)) return null
-    const fine = offsetsOf(lengths as ArrayLike<number>, rung.from.binsize)
-    if (fine[fine.length - 1] !== file.info.nBins) return null
-    return { rung, grid: CoarseGrid.of(fine, rung.factor) }
+    const sizes = lengths as ArrayLike<number>
+    const own = offsetsOf(sizes, open)
+    if (own[own.length - 1] !== file.info.nBins) return null
+    // Another rung is another entry of the ladder, which a task opens for itself.
+    let uri = file.uri
+    if (rung.binsize !== open) {
+      if (file.info.entryGroup !== 'resolutions') return null
+      uri = `${splitUri(file.uri).path}::${file.info.entryGroup}/${rung.name}`
+    }
+    return { uri, ...analysisGridOf(sizes, rung, factor) }
+  }
+
+  /**
+   * The Analysis drawer, told the resolution it frames a task at has moved
+   * (§18.4): a pick read in place, a refine that landed on another rung, the
+   * tick of *Refine on zoom*. None of them mounts a view, which is what tells
+   * the drawer otherwise, and a header naming the rung before would describe a
+   * run that is not the one Run starts. Only on a change of rung — a refine
+   * lands many blocks on one, and a refresh refills every control.
+   *
+   * @internal SessionRouter calls it after a pick read in place.
+   */
+  analysisResolutionMoved(): void {
+    const at = this.analysisAt()
+    const now = at === null ? '' : `${at.uri}@${at.grid.binsize}`
+    if (now === this.analysisResolution) return
+    this.analysisResolution = now
+    this.analysis.workspace?.refresh()
   }
 
   /**
@@ -6070,9 +6197,11 @@ export class Session {
    * takes and what the views hand to their ladders. Spread into every map view's
    * props so that one answer reaches the first read, the refine and the summary.
    */
-  private pooledProps(state: ViewState): { binsPerCell?: number } {
+  private pooledProps(state: ViewState): { binsPerCell?: number; picked: () => PickedResolution | null } {
     const derived = this.derivedRung(state)
-    return derived === null ? {} : { binsPerCell: derived.factor }
+    // And the pick itself, asked live, so a change of it is read in place (§3.4).
+    const picked = (): PickedResolution | null => this.pickedResolution()
+    return derived === null ? { picked } : { binsPerCell: derived.factor, picked }
   }
 
   /**
@@ -6080,10 +6209,11 @@ export class Session {
    *
    * Two halves, and which of them runs depends on where the base rung is. A
    * derived rung is a whole number of some *stored* rung's bins, and the read
-   * that produces it is an ordinary read of that rung with a plan on it — so
-   * the file has to be open at it. Where it already is, this is a patch to the
-   * hash and nothing is re-read that was not going to be; where it is not, the
-   * file is re-opened at the base and the resolution rides along.
+   * that produces it is an ordinary read of that rung with a plan on it. Where
+   * the file holds that rung — open, or beside it on the ladder — this is a
+   * patch to the hash, and the views read the base rung in place, the window
+   * kept (§3.4); where it does not, the file is re-opened at the base and the
+   * resolution rides along.
    *
    * A patch rather than a navigation, and not `replace`, for the reason the
    * level toggle is the same: stepping through resolutions is looking at one
@@ -6096,8 +6226,14 @@ export class Session {
     const derived = rung?.derived
     if (derived === undefined) return
     const open = this.file?.info.binsize ?? 0
-    if (open === derived.from.binsize) {
-      this.store.patch({ coarsen: binsize })
+    // In place where the file holds the base rung — the one open, or another
+    // rung of its ladder, which the views read beside it as they read a stored
+    // pick (§3.4) — so the window the reader zoomed to stays where it is.
+    const laddered =
+      this.file?.info.entryGroup === 'resolutions' &&
+      rungsOf(this.file.info.entries).some((each) => each.name === derived.from.name)
+    if (open === derived.from.binsize || laddered) {
+      this.store.patch({ coarsen: binsize, resolution: undefined })
       return
     }
     const uri = this.file?.uri
@@ -6138,7 +6274,19 @@ export class Session {
     // same read the bar's own `currentEntry` is made with.
     const open = /^\/(?:entries|resolutions)\/(.+)$/.exec(splitUri(uri).group)?.[1]
     if (!entries.includes(entry) || entry === open) {
-      if (state.coarsen !== undefined) this.store.patch({ coarsen: undefined })
+      if (state.coarsen !== undefined || state.resolution !== undefined) {
+        this.store.patch({ coarsen: undefined, resolution: undefined })
+      }
+      return
+    }
+    // **A rung of a laddered map is read in place** (§3.4): the block on screen
+    // is swapped where the reader stands, as a refine swaps one. Re-opening the
+    // file at the entry threw away the window they had zoomed to — every pick a
+    // jump back to the whole sequence. An entry of a collection is another map,
+    // and still opens as one.
+    const rung = this.file?.info.entryGroup === 'resolutions' ? rungsOf(entries).find((each) => each.name === entry) : undefined
+    if (rung !== undefined) {
+      this.store.patch({ resolution: rung.binsize, coarsen: undefined })
       return
     }
     const next = `${splitUri(uri).path}::${this.file?.info.entryGroup || 'entries'}/${entry}`
@@ -8565,6 +8713,8 @@ export class Session {
       applyScale?(scale: ScaleState): void
       /** For a view that can be moved to a saved place rather than rebuilt (§8.10). */
       showFocus?(region: string | undefined): void
+      /** For a view that reads a picked resolution in place (§3.4). */
+      resolutionChanged?(): void
       sideEl?: HTMLElement
       panel?: MatrixPanel
       /** For a view that owns a canvas but not a {@link MatrixPanel}. */

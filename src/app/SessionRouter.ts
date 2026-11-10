@@ -29,6 +29,7 @@ import { el } from '../ui/dom'
 import { begin } from '../perf/rendered'
 import {
   differsOnlyInFocus,
+  differsOnlyInResolution,
   differsOnlyInPresentation,
   differsOnlyInPresentationOrScore,
   hasLower,
@@ -398,6 +399,24 @@ export class SessionRouter {
       this.session.current.showFocus?.(state.focus)
       this.session.mounted = state
       this.session.breadcrumb?.render(state)
+      this.session.host.activity(this.session)
+      return
+    }
+
+    // **A resolution picked is read in place** (§3.4), where the view can: the
+    // block on screen is swapped where the reader stands, as a refine swaps
+    // one. Rebuilt from its named region, the view threw away the window the
+    // reader had zoomed to, so every pick was a jump back to the whole sequence.
+    if (
+      this.mounting === null &&
+      this.session.mounted !== null &&
+      this.session.current?.resolutionChanged !== undefined &&
+      differsOnlyInResolution(this.session.mounted, state)
+    ) {
+      this.session.mounted = state
+      this.session.breadcrumb?.render(state)
+      this.session.current.resolutionChanged()
+      this.session.analysisResolutionMoved()
       this.session.host.activity(this.session)
       return
     }

@@ -2513,14 +2513,12 @@ export class App implements SessionHost {
         id: 'refine-on-zoom',
         group: 'View',
         title: 'Refine on zoom',
-        // One line, and it no longer sends the reader to a button that is not
-        // there: `MatrixPanel`'s `OFFER_REFINE` is false, because refinement is
-        // one preference across a whole deck rather than a property of one
-        // map, so the picture row holds the turn and the baseline and this is a
-        // palette command only (§2).
+        // The same switch as the tick at the head of the resolution row: one
+        // preference across a whole deck rather than a property of one map, so
+        // it is not in any map's picture row (`MatrixPanel`'s `OFFER_REFINE`).
         hint:
-          'On, a map is read at the size of the screen and zooming reads it finer, down to the ' +
-          'resolution chosen. Off, it is read once as finely as memory allows, and zooming magnifies it.',
+          'On, a map is read at the resolution of the screen and zooming reads it finer, down to ' +
+          'the finest the file stores. Off, it is drawn at the resolution picked in the bar.',
         state: chipOf(refineEnabled()),
         run: () => void toggleRefine(),
       },
@@ -2834,7 +2832,7 @@ export class App implements SessionHost {
   private tutorialHost(): TutorialHost {
     return {
       view: () => this.current?.state ?? null,
-      binsize: () => this.current?.binsize ?? null,
+      binsize: () => this.current?.resolution ?? null,
       score: () => this.current?.scoreInForce ?? null,
       file: () => this.current?.fileUri ?? null,
       sequences: () => this.current?.contigNames() ?? null,

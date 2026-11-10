@@ -22,7 +22,16 @@ import { MatrixPanel,
 import { axisRegion } from './mapSelection'
 import { blockSummary, poolingNote } from './mapSummary'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
-import { attachRefine, refineEnabled, rungsOf, screenPlan, type BlockLadder } from './refine'
+import {
+  attachRefine,
+  finestFloor,
+  pickedRead,
+  refineEnabled,
+  rungsOf,
+  screenPlan,
+  type BlockLadder,
+  type PickedResolution,
+} from './refine'
 import { SearchBox, locusPlaceholder } from './SearchBox'
 import { stepper } from './Stepper'
 
@@ -65,6 +74,12 @@ export interface GenomeViewProps {
    * Absent, or 1, is every view of every file until somebody adds one.
    */
   binsPerCell?: number
+  /**
+   * The resolution picked (§3.4), asked live: what *Refine on zoom* off draws,
+   * read in place when it changes. Absent or `null` is the open map, at
+   * {@link binsPerCell}.
+   */
+  picked?: () => PickedResolution | null
   genome: string
   level: 'bin' | 'contig'
   scale: PanelSeed
@@ -331,6 +346,7 @@ export class GenomeView {
       // The grid the reader declared (§3.4), so a zoom cannot quietly read past
       // the resolution the axis is labelled with.
       floor: () => this.props.binsPerCell ?? 1,
+      ...(this.props.picked === undefined ? {} : { picked: this.props.picked }),
       read: (rows, cols, rung, binsPerCell) => {
         const own = this.props.client.cancellable<'matrix'>({
           kind: 'matrix',
@@ -359,14 +375,20 @@ export class GenomeView {
    * allows when it is off.
    */
   private firstPlan(span: number): { rung?: string; binsPerCell?: number } {
-    if (!refineEnabled()) return this.pooled()
+    if (!refineEnabled()) {
+      // The resolution picked, as memory allows (§3.4).
+      const pick = this.props.picked?.() ?? null
+      return pick === null ? this.pooled() : pickedRead(pick, rungsOf(this.props.rungs ?? []), this.props.binsize, span)
+    }
+    const rungs = rungsOf(this.props.rungs ?? [])
     const plan = screenPlan({
-      rungs: rungsOf(this.props.rungs ?? []),
+      rungs,
       binsize: this.props.binsize,
       view: span,
       read: span,
       screen: this.panel.screenWidth(),
-      floor: this.props.binsPerCell ?? 1,
+      // Down to the finest rung, as the zoom after it goes (§2).
+      floor: finestFloor(rungs, this.props.binsize),
     })
     return {
       ...(plan.rung === undefined ? {} : { rung: plan.rung }),
@@ -382,7 +404,7 @@ export class GenomeView {
   private renderSummary(result: MatrixResult): void {
     const pooled = result.level === 'bin' ? poolingNote(result.nrows, result.ncols) : null
     this.summary.replaceChildren(
-      ...blockSummary(this.props.binsize, result, 'contig'),
+      ...blockSummary(this.props.binsize, result, 'contig', refineEnabled() ? undefined : (this.props.picked?.()?.binsize ?? this.props.binsize * (this.props.binsPerCell ?? 1))),
       ...(pooled === null ? [] : [` · ${pooled.phrase}`]),
       ' · ',
       this.panel.viewNote,

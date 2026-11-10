@@ -762,46 +762,14 @@ const DOUBLE_CLICK_MS = 250
 const KEY_ZOOM = 1.25
 
 /**
- * How long a wait lasts before it shows a spinner.
- *
- * Most refines are served out of the byte source's chunk cache and land in a few
- * milliseconds; a spinner that flashed on every one would be noise about
- * something that did not happen. Long enough that a cached read is silent, short
- * enough that a real one is announced before the reader wonders.
- */
-const SPINNER_DELAY_MS = 140
-
-/** The spinner's ring radius, and how far its disc sits off the plot corner. */
-const SPINNER_RADIUS = 9
-const SPINNER_INSET = 10
-
-/**
  * How far up from the data's bottom edge the column labels reach, which is
- * where the row labels stop ({@link HeatmapView.drawTicks}) and the spinner
- * stands clear of.
+ * where the row labels stop ({@link HeatmapView.drawTicks}).
  */
 const COL_LABEL_BAND = 20
 
-/** `performance.now` where there is one, so a spinner turns evenly. */
+/** `performance.now` where there is one. */
 function now(): number {
   return typeof performance === 'undefined' ? Date.now() : performance.now()
-}
-
-/**
- * `requestAnimationFrame`, where there is one.
- *
- * There is not, in two places this class already runs: the export path builds a
- * view against an offscreen canvas, and the test suite runs under Node. Neither
- * has anything to animate, so the honest answer is not to schedule — a spinner
- * that never turns is exactly right for a figure and for a headless draw, and
- * the alternative is a `ReferenceError` from a decoration.
- */
-function frameLoop(run: () => void): number | null {
-  return typeof requestAnimationFrame === 'undefined' ? null : requestAnimationFrame(run)
-}
-
-function cancelFrameLoop(handle: number): void {
-  if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(handle)
 }
 
 /** Space reserved outside the plot area for tick labels, in CSS pixels. */
@@ -1941,18 +1909,6 @@ export class HeatmapView {
    * How many times this view has built a raster — see {@link rasterisations}.
    */
   private rasterCount = 0
-  /** The animation loop that turns the spinner; `null` when it is not turning. */
-  private spinTimer: number | null = null
-  /**
-   * How far the axis labels drawn inside the data reach from its left and
-   * bottom edges, as the last {@link drawTicks} laid them out; none where it
-   * drew none. What the spinner stands clear of ({@link drawSpinner}).
-   */
-  private labelReach = { left: 0, bottom: 0 }
-  /** Whether the spinner turns over a view that still takes gestures — see {@link setWaiting}. */
-  private waiting = false
-  /** When the current wait began, for the spinner's grace period. */
-  private waitingAt = 0
   private plot: PlotOptions
   /**
    * A cell being pointed at on **another** map, for a deck (§16).
@@ -2032,8 +1988,8 @@ export class HeatmapView {
    */
   private pageOrigin: { x: number; y: number } = { x: 0, y: 0 }
   /**
-   * Draw the cells and stop — no divider, label, overlay, tick, guide, frame
-   * or spinner. Only for {@link dataImage}, and only for the one pass it asks.
+   * Draw the cells and stop — no divider, label, overlay, tick, guide or
+   * frame. Only for {@link dataImage}, and only for the one pass it asks.
    */
   private bare = false
 
@@ -2915,44 +2871,6 @@ export class HeatmapView {
   }
 
   /**
-   * Turn the spinner without holding the view.
-   *
-   * For a picture standing in for one on its way: the coarse rung drawn while
-   * the asked block reads (`MatrixPanel.setPreview`, SPECS §7.2). The reader
-   * may pan, zoom and hover it, and the block lands on whatever window they
-   * arrive at, so nothing is refused: the spinner in the corner is the whole
-   * of it, and says the sharper picture is coming. The pointer is left alone
-   * for the same reason. It says what a drag does, and a drag does it. And for
-   * the same reason while a finer block is read for the window on screen
-   * (`ui/refine.ts`): the zoom goes on, and the block lands wherever it has got
-   * to (SPECS §2). The map used to hold still for that read, refusing every
-   * gesture until the block came — which was safe, and was the lag a reader
-   * felt on every crossing of the edge of what a block could show.
-   *
-   * The spinner does not appear for {@link SPINNER_DELAY_MS}, because most
-   * reads are served out of the chunk cache in a few milliseconds and a
-   * spinner that flashes on every wheel notch is worse than none.
-   */
-  setWaiting(on: boolean): void {
-    if (this.waiting === on) return
-    this.waiting = on
-    this.waitingAt = on ? now() : 0
-    if (this.spinning) this.spin()
-    else this.stopSpin()
-    this.changed()
-  }
-
-  /** Whether the spinner is turning over a view that still takes gestures. */
-  get isWaiting(): boolean {
-    return this.waiting
-  }
-
-  /** Whether anything keeps the spinner turning. */
-  private get spinning(): boolean {
-    return this.waiting
-  }
-
-  /**
    * Whether the view is at fit zoom: the whole block, placed where
    * {@link setAnchor} puts it. Nothing can be panned at that zoom, so it is the
    * one view a reader cannot have moved without zooming.
@@ -2964,76 +2882,6 @@ export class HeatmapView {
   /** The zoom that fits the whole block, in CSS pixels per cell; see {@link fitted}. */
   get fitZoom(): number {
     return this.baseZoom
-  }
-
-  private spin(): void {
-    if (this.spinTimer !== null) return
-    const tick = (): void => {
-      if (!this.spinning) {
-        this.spinTimer = null
-        return
-      }
-      this.spinTimer = frameLoop(tick)
-      // A redraw, not a re-raster: `draw` blits the raster it already has, which
-      // is what makes a turning spinner cost a `drawImage` rather than a pass
-      // over the block (see {@link rasterisations}).
-      this.draw()
-    }
-    this.spinTimer = frameLoop(tick)
-  }
-
-  private stopSpin(): void {
-    if (this.spinTimer !== null) cancelFrameLoop(this.spinTimer)
-    this.spinTimer = null
-  }
-
-  /**
-   * The spinner, in the bottom-left corner of the plot.
-   *
-   * Bottom-left because every other corner is taken: the key is top-right, the
-   * scale bar and the readout sit along the bottom edge outside the plot, and
-   * the top-left is where a turned map's diagonal comes to a point. Inside the
-   * plot rather than beside it, because what it is about is the picture. And
-   * clear of the axis labels drawn inside it: above the column labels and to
-   * the right of the row labels, so it covers the corner's data, the least
-   * read part of a map, and never the first label on either axis — which is
-   * what a reader zooming a preview while it spins is reading (§7.2).
-   */
-  private drawSpinner(): void {
-    if (!this.spinning) return
-    const elapsed = now() - this.waitingAt
-    if (elapsed < SPINNER_DELAY_MS) return
-    const plot = this.plotRect
-    const data = this.dataRect
-    const reach = this.labelReach
-    const left = reach.left > 0 ? Math.max(plot.x, data.x + reach.left) : plot.x
-    const floor =
-      reach.bottom > 0 ? Math.min(plot.y + plot.height, data.y + data.height - reach.bottom) : plot.y + plot.height
-    const r = SPINNER_RADIUS
-    const cx = left + SPINNER_INSET + r
-    const cy = floor - SPINNER_INSET - r
-    const ctx = this.ctx
-    ctx.save()
-    // A disc behind it, for the same reason the key has one: this is drawn over
-    // data, and a ring over a dark map is a ring nobody sees.
-    ctx.beginPath()
-    ctx.arc(cx, cy, r + 5, 0, Math.PI * 2)
-    ctx.fillStyle = this.opts.labelHaloColor
-    ctx.globalAlpha = 0.88
-    ctx.fill()
-    ctx.globalAlpha = 1
-    ctx.lineWidth = 2
-    ctx.lineCap = 'round'
-    ctx.strokeStyle = this.opts.plotBorderColor
-    ctx.beginPath()
-    ctx.arc(cx, cy, r, 0, Math.PI * 2)
-    ctx.stroke()
-    const from = ((elapsed / 900) % 1) * Math.PI * 2
-    ctx.strokeStyle = this.opts.labelColor
-    ctx.beginPath()
-    ctx.arc(cx, cy, r, from, from + Math.PI * 0.7)
-    ctx.stroke()
-    ctx.restore()
   }
 
   /**
@@ -4040,7 +3888,6 @@ export class HeatmapView {
     this.drawLabels()
     this.drawBandLabels()
     this.drawOverlay()
-    this.labelReach = { left: 0, bottom: 0 }
     if (this.plot.ticks) this.drawTicks()
     if (this.plot.crosshair) {
       this.drawCrosshair()
@@ -4050,9 +3897,6 @@ export class HeatmapView {
     }
     this.drawSelection()
     this.drawPlotBorder()
-    // Last, so it is over everything including the border: it is not part of the
-    // picture, it is a statement about the picture's state.
-    this.drawSpinner()
   }
 
   /**
@@ -5863,7 +5707,6 @@ export class HeatmapView {
     // printing on top of it. Its mark stays: the position is still marked, it is
     // the second copy of the number that goes.
     const corner = cols.length === 0 ? bottom : bottom - COL_LABEL_BAND
-    if (cols.length > 0) this.labelReach.bottom = COL_LABEL_BAND
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
     const rowStep = stepOf(rows)
@@ -5875,9 +5718,6 @@ export class HeatmapView {
       const text = formatBpTick(tick.bp, tick.step ?? rowStep)
       ctx.strokeText(text, data.x + TICK_LENGTH + 3, at)
       ctx.fillText(text, data.x + TICK_LENGTH + 3, at)
-      // Its halo included, which reaches a stroke's half-width past the text.
-      const reach = TICK_LENGTH + 3 + ctx.measureText(text).width + 2
-      if (reach > this.labelReach.left) this.labelReach.left = reach
     }
     ctx.restore()
   }
@@ -6543,23 +6383,7 @@ export class HeatmapView {
 
   /** Remove every listener {@link attach} installed. Idempotent. */
   detach(): void {
-    // End the wait first, because a view torn down mid-wait cannot end one on
-    // its own: {@link stopSpin} is reachable only from `setWaiting(false)`, and
-    // no teardown path calls it — the ladder that started the wait is
-    // *destroyed* rather than finished, so the `onBusy(false)` that would have
-    // ended it never runs (`ui/refine.ts`). The spinner's `tick` then re-armed
-    // `requestAnimationFrame` and called `draw()` on a canvas no longer in the
-    // document, for the life of the tab, holding this view's matrix, raster and
-    // offscreen canvas with it.
-    //
-    // Cleared field by field rather than through `setWaiting(false)`, which
-    // would call `changed()` and schedule the very frame the lines below are
-    // cancelling. The flag has to go too, not just the timer: left `true`, any
-    // later `draw()` on this instance would draw the spinner again.
-    this.waiting = false
-    this.waitingAt = 0
-    this.stopSpin()
-    // And a level being painted between frames for a view nobody will draw.
+    // A level being painted between frames for a view nobody will draw.
     this.cancelMaking()
 
     for (const fn of this.detachFns) fn()

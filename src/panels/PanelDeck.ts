@@ -4120,7 +4120,6 @@ export class PanelDeck {
       format === 'pdf' ? 'application/pdf' : 'image/png',
     )
     if (target === null) return
-    await this.prepareFigures()
     const figures = this.deckFigures(now)
     if (format === 'pdf') {
       const page = vectorDeck(figures, this.columnsNow(), FIGURE_BACKGROUND)
@@ -4400,55 +4399,17 @@ export class PanelDeck {
    * a PDF pasted into a slide arrives as a file attachment instead of a picture.
    */
   async copyDeck(dpi = DECK_EXPORT_DPI): Promise<void> {
-    // The clipboard is given a promise of the image inside the press, and the
-    // image follows once every map's block for the figure is in — the reason
-    // a single map's copy gives (`ui/MapFigure.ts`).
-    let empty = false
-    const png = this.prepareFigures().then(() => {
-      const out = rasterDeck(this.deckFigures(new Date()), this.columnsNow(), FIGURE_BACKGROUND, dpi)
-      if (out === null) {
-        empty = true
-        throw new Error('nothing to copy')
-      }
-      return canvasToPng(out)
-    })
+    const out = rasterDeck(this.deckFigures(new Date()), this.columnsNow(), FIGURE_BACKGROUND, dpi)
+    if (out === null) return
     try {
-      await copyPngToClipboard(png)
+      await copyPngToClipboard(canvasToPng(out))
       this.warn('')
     } catch (err) {
-      if (empty) return
       // In the deck's own bar, where its other refusals go — see {@link NO_ROOM}.
       // A clipboard write can be refused outright by a browser that has not been
       // given permission, and a key that silently does nothing reads as broken.
       this.warn(err instanceof Error ? `copy failed: ${err.message}` : 'copy failed')
     }
-  }
-
-  /**
-   * Have every map in the deck put on screen the block its figure is drawn
-   * from (`MatrixPanel.prepareFigure`, §19.2), saying so in the deck's bar while
-   * any of them reads.
-   *
-   * A screen-sized block is as fine as the screen, and the deck's figure is a
-   * page: each map reads its framed window at the grid its reader chose, all of
-   * them at once, and the figure is composed when the last is in. A map whose
-   * read fails is drawn as it is on screen.
-   */
-  private async prepareFigures(): Promise<void> {
-    const maps = [this.lead, ...this.slots.map((slot) => slot.panel?.map ?? null)].filter(
-      (map): map is MatrixPanel => map !== null,
-    )
-    let reading = false
-    await Promise.all(
-      maps.map((map) =>
-        map.prepareFigure(() => {
-          if (reading) return
-          reading = true
-          this.warn('reading the maps at their resolution for the figure…')
-        }),
-      ),
-    )
-    if (reading) this.warn('')
   }
 
   /**

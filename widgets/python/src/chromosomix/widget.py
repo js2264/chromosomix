@@ -45,9 +45,9 @@ from .viewer import TAKES_FILES, release_of, resolve_viewer, takes_files
 #: The view state's keys, in the order the app writes them (`state/ViewState.ts`).
 KEY_ORDER = (
     'uri', 'uri2', 'maps', 'view', 'genome', 'genome2', 'genomes', 'region', 'region2', 'focus',
-    'regions', 'cells', 'contacts', 'locus', 'level', 'coarsen', 'transform', 'colormap', 'vmin',
-    'vmax', 'balance', 'score', 'oe', 'arms', 'smooth', 'op', 'flip', 'lower', 'score2', 'oe2', 'smooth2',
-    'transform2', 'colormap2', 'vmin2', 'vmax2',
+    'regions', 'cells', 'contacts', 'locus', 'level', 'coarsen', 'resolution', 'transform', 'colormap',
+    'vmin', 'vmax', 'balance', 'score', 'oe', 'arms', 'smooth', 'op', 'flip', 'lower', 'score2', 'oe2',
+    'smooth2', 'transform2', 'colormap2', 'vmin2', 'vmax2',
 )
 
 #: The keys whose value is a file, each served from the kernel when it is a path; `maps` holds several, split by `|`.

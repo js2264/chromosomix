@@ -13,7 +13,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { MatrixPanel } from '@/ui/MatrixPanel'
-import type { RefineView } from '@/ui/refine'
 import type { MatrixResult } from '@/worker/protocol'
 import { setUpDom, type DomTeardown } from '../support/dom'
 
@@ -129,72 +128,24 @@ function block(): MatrixResult {
   } as unknown as MatrixResult
 }
 
-describe('a figure of a screen-sized block (§19.2)', () => {
-  /** The card's status line. */
-  const status = (panel: MatrixPanel): string => panel.exportEl.querySelector('.export-note')?.textContent ?? ''
-
-  /** A prep that reads, and lands when the test says. */
-  function reading(panel: MatrixPanel) {
-    const asked: RefineView[] = []
-    let land: (placed: boolean) => void = () => {}
-    panel.setFigurePrep((view, onReading) => {
-      asked.push(view)
-      onReading()
-      return new Promise<boolean>((resolve) => (land = resolve))
+describe('a figure is the picture on screen (§19.2)', () => {
+  it('is drawn from the block on screen at once, reading nothing', async () => {
+    // A figure used to read the framed window at the resolution picked before
+    // it drew. It is what the reader sees: the block on screen, its grid and its
+    // colours, whatever the picker says.
+    const panel = map()
+    panel.setData(block(), 'IV')
+    const said: string[] = []
+    const note = panel.exportEl.querySelector('.export-note')
+    if (note === null) throw new Error('no note')
+    new MutationObserver(() => said.push(note.textContent ?? '')).observe(note, {
+      childList: true,
+      characterData: true,
+      subtree: true,
     })
-    return { asked, land: (placed: boolean) => land(placed) }
-  }
-
-  it('chooses the file, then waits for the figure’s block, saying it is reading', async () => {
-    const panel = map()
-    panel.setData(block(), 'IV')
-    const prep = reading(panel)
-    const names = savePicker()
-    panel.savePlot()
-    await vi.waitFor(() => expect(status(panel)).toMatch(/reading the map at its resolution/))
-    // The file first, inside the press, which is when a browser will still ask.
-    expect(names).toHaveLength(1)
-    // Asked for the window on screen, in the open map's bins.
-    expect(prep.asked).toHaveLength(1)
-    expect(prep.asked[0].rows).toEqual([0, 64])
-    prep.land(true)
-    await vi.waitFor(() => expect(status(panel)).toMatch(/\.pdf · /))
-    expect(status(panel)).not.toMatch(/finer read failed/)
-  })
-
-  it('draws what is on screen when that read fails, and says so', async () => {
-    const panel = map()
-    panel.setData(block(), 'IV')
-    const prep = reading(panel)
     savePicker()
     panel.savePlot()
-    await vi.waitFor(() => expect(prep.asked).toHaveLength(1))
-    prep.land(false)
-    await vi.waitFor(() => expect(status(panel)).toMatch(/drawn as on screen: the finer read failed/))
-  })
-
-  it('waits for it on a copy too, inside the press that asked', async () => {
-    const panel = map()
-    panel.setData(block(), 'IV')
-    const prep = reading(panel)
-    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(function (done) {
-      done(new Blob([]) as unknown as globalThis.Blob)
-    })
-    panel.copyPlot()
-    await vi.waitFor(() => expect(status(panel)).toMatch(/reading the map/))
-    expect(prep.asked).toHaveLength(1)
-    prep.land(true)
-    // jsdom has no image clipboard: what matters is that the copy went on to
-    // the clipboard once the block was in, rather than drawing the screen's.
-    await vi.waitFor(() => expect(status(panel)).toMatch(/copy failed: This browser will not let a page put an image/))
-  })
-
-  it('reads nothing, and says nothing about reading, on a panel with no ladder', async () => {
-    const panel = map()
-    panel.setData(block(), 'IV')
-    savePicker()
-    panel.savePlot()
-    await vi.waitFor(() => expect(status(panel)).toMatch(/\.pdf · /))
-    expect(status(panel)).not.toMatch(/reading/)
+    await vi.waitFor(() => expect(note.textContent).toMatch(/\.pdf · /))
+    expect(said.some((line) => /reading/.test(line))).toBe(false)
   })
 })

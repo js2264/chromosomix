@@ -1370,27 +1370,6 @@ describe('showing a window that came from outside', () => {
     expect(shown.cols[0]).toBeGreaterThanOrEqual(0)
   })
 
-  it('moves a waiting view as it moves any other', () => {
-    // A stand-in on screen while its block reads (§7.2): the spinner turns, and
-    // nothing is refused. The reader's gestures and a locked deck's windows
-    // both move it, because the block lands wherever it was left.
-    const heatmap = view(400, 100)
-    heatmap.setWaiting(true)
-    expect(heatmap.isWaiting).toBe(true)
-    expect(heatmap.fitted).toBe(true)
-    heatmap.zoomAt(200, 200, 2)
-    expect(heatmap.fitted).toBe(false)
-    const zoomed = heatmap.cellWindow()
-    heatmap.panBy(40, 0)
-    expect(heatmap.cellWindow().cols[0]).toBeLessThan(zoomed.cols[0])
-    heatmap.showCellWindow([10, 30], [10, 30])
-    expect(heatmap.cellWindow().cols[0]).toBeCloseTo(10, 6)
-    heatmap.fit()
-    expect(heatmap.fitted).toBe(true)
-    heatmap.setWaiting(false)
-    expect(heatmap.isWaiting).toBe(false)
-  })
-
   it('refuses a span of nothing rather than dividing by it', () => {
     const heatmap = view(400, 100)
     const before = heatmap.zoomLevel

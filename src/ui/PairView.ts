@@ -28,7 +28,16 @@ import { MatrixPanel,
 import { axisRegion } from './mapSelection'
 import { blockSummary } from './mapSummary'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
-import { attachRefine, refineEnabled, rungsOf, screenPlan, type BlockLadder } from './refine'
+import {
+  attachRefine,
+  finestFloor,
+  pickedRead,
+  refineEnabled,
+  rungsOf,
+  screenPlan,
+  type BlockLadder,
+  type PickedResolution,
+} from './refine'
 import { typedLocusToRegion } from '../genome/assembly'
 import { SearchBox, locusPlaceholder } from './SearchBox'
 
@@ -51,6 +60,12 @@ export interface PairViewProps {
    * Absent, or 1, is every view of every file until somebody adds one.
    */
   binsPerCell?: number
+  /**
+   * The resolution picked (§3.4), asked live: what *Refine on zoom* off draws,
+   * read in place when it changes. Absent or `null` is the open map, at
+   * {@link binsPerCell}.
+   */
+  picked?: () => PickedResolution | null
   /** Selectable genomes — `__unbinned__` is not among them (§7.4). */
   genomeNames: string[]
   rowGenome: string
@@ -289,6 +304,7 @@ export class PairView {
       // The grid the reader declared (§3.4), so a zoom cannot quietly read past
       // the resolution the axis is labelled with.
       floor: () => this.props.binsPerCell ?? 1,
+      ...(this.props.picked === undefined ? {} : { picked: this.props.picked }),
       read: (rows, cols, rung, binsPerCell) => {
         const own = this.props.client.cancellable<'matrix'>({
           kind: 'matrix',
@@ -321,17 +337,18 @@ export class PairView {
       }
       // The declared grid on the bin-level read alone: a contig-level roll-up's
       // cells *are* sequences, and there is no bin size to hold it to. While
-      // *Refine on zoom* is on the read is screen-sized (`screenPlan`, §2), the
-      // declared grid its floor.
+      // *Refine on zoom* is on the read is screen-sized (`screenPlan`, §2),
+      // down to the finest rung the file stores.
       const span = Math.max(rows.extent[1] - rows.extent[0], cols.extent[1] - cols.extent[0])
+      const rungs = rungsOf(this.props.rungs ?? [])
       const screen = refineEnabled()
         ? screenPlan({
-            rungs: rungsOf(this.props.rungs ?? []),
+            rungs,
             binsize: this.props.binsize,
             view: span,
             read: span,
             screen: this.panel.screenWidth(),
-            floor: this.props.binsPerCell ?? 1,
+            floor: finestFloor(rungs, this.props.binsize),
           })
         : null
       const pooled =
@@ -340,9 +357,12 @@ export class PairView {
               ...(screen.rung === undefined ? {} : { rung: screen.rung }),
               ...(screen.binsPerCell === undefined ? {} : { binsPerCell: screen.binsPerCell }),
             }
-          : (this.props.binsPerCell ?? 1) > 1
-            ? { binsPerCell: this.props.binsPerCell }
-            : {}
+          : (this.props.picked?.() ?? null) !== null
+            ? // The resolution picked, as memory allows (§3.4).
+              pickedRead(this.props.picked?.() as PickedResolution, rungs, this.props.binsize, span)
+            : (this.props.binsPerCell ?? 1) > 1
+              ? { binsPerCell: this.props.binsPerCell }
+              : {}
       const result: MatrixResult =
         this.level === 'bin'
           ? await this.props.client.request<'matrix'>({ kind: 'matrix', ...query, ...pooled })
@@ -380,7 +400,7 @@ export class PairView {
     // can say that they cannot: that the two never touch in this file. An empty
     // square is otherwise indistinguishable from one that failed to load.
     this.summary.replaceChildren(
-      ...blockSummary(this.props.binsize, result, 'contig'),
+      ...blockSummary(this.props.binsize, result, 'contig', refineEnabled() ? undefined : (this.props.picked?.()?.binsize ?? this.props.binsize * (this.props.binsPerCell ?? 1))),
       ' · ',
       this.panel.viewNote,
       ...(nonZero === 0 ? [' — these two genomes share no contacts in this file.'] : []),

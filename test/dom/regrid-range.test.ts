@@ -96,33 +96,68 @@ describe('the colour range across a refine', () => {
     expect(seen[1]).toBe('kept')
   })
 
-  it('is measured on a figure’s block, which is the same window read finer', () => {
-    // A whole chromosome saved from its 250 kb picture is read finer — here at
-    // 50 kb. The 250 kb range is a range for cells 25 times the size: kept, the
-    // figure came out white but for its diagonal.
+  it('is measured again on a block coarser than the one it came from', () => {
+    // Back to auto on a zoomed 100 kb view measures 100 kb cells. A coarser
+    // block of no wider a window holds numbers several times larger, and kept,
+    // that range saturates it.
     const it = panel()
     it.setData(block(785, 250_000, 100), 'chr1')
+    it.setResolution(100_000)
+    it.regrid(block(1_963, 100_000, 4), 100_000)
+    it.controlsEl.querySelector<HTMLButtonElement>('.clip-auto')?.click()
     const seen = gauges(it)
-    it.setResolution(50_000)
-    expect(it.regrid(block(3_925, 50_000, 4), 50_000, undefined, { measure: true })).toBe(true)
+    it.setResolution(250_000)
+    expect(it.regrid(block(785, 250_000, 8), 250_000)).toBe(true)
     expect(seen[0]).toBe('measured')
+    // And finer from there is a zoom again: the range is kept.
+    it.setResolution(100_000)
+    expect(it.regrid(block(1_963, 100_000, 1), 100_000)).toBe(true)
+    expect(seen[1]).toBe('square of 785')
   })
 
-  it('is measured again on a block coarser than the one it came from', () => {
-    // After a figure's 50 kb block, a zoom's 100 kb block of no wider a window:
-    // the figure's range would be a range for cells a quarter of the size.
+  it('is measured again on the block of a resolution picked, finer or not, and only once', () => {
+    // A pick is the reader changing the resolution rather than the
+    // magnification (§3.4): read in place, its block is measured as a map
+    // opened at that rung was — kept, a 250 kb range left a picked 25 kb
+    // map pale but for its diagonal.
     const it = panel()
     it.setData(block(785, 250_000, 100), 'chr1')
     const seen = gauges(it)
-    it.setResolution(50_000)
-    it.regrid(block(3_925, 50_000, 4), 50_000, undefined, { measure: true })
+    it.refineNow({ measure: true })
+    it.setResolution(25_000)
+    expect(it.regrid(block(7_850, 25_000, 1), 25_000)).toBe(true)
+    expect(seen[0]).toBe('measured')
+    // The next refine is a zoom again, and keeps it.
+    it.setResolution(10_000)
+    expect(it.regrid(block(2_000, 10_000, 1), 10_000)).toBe(true)
+    expect(seen[1]).not.toBe('measured')
+  })
+
+  it('is measured on the cells in view when the reader asks for auto, and kept', () => {
+    // Kept across a refine, the range is a range for wherever the reader was
+    // when it was measured; auto is a range for where they are now.
+    const it = panel()
+    it.setData(block(785, 250_000, 100), 'chr1')
+    const view = (it as unknown as { heatmap: HeatmapView }).heatmap
+    const measured: Array<{ nrows: number; ncols: number } | null> = []
+    const setGauge = view.setGauge.bind(view)
+    vi.spyOn(view, 'setGauge').mockImplementation((gauge) => {
+      measured.push(gauge === null ? null : { nrows: gauge.nrows, ncols: gauge.ncols })
+      setGauge(gauge)
+    })
+    view.showCellWindow([100, 200], [100, 200])
+    const shown = view.cellWindow()
+    it.controlsEl.querySelector<HTMLButtonElement>('.clip-auto')?.click()
+    expect(measured).toHaveLength(1)
+    // The window's cells, and not the block's 785.
+    const across = Math.ceil(shown.cols[1]) - Math.floor(shown.cols[0])
+    expect(measured[0]?.ncols).toBe(across)
+    expect(measured[0]?.nrows).toBeLessThan(785)
+    // A refine of that window keeps it, as it keeps any range.
+    const seen = gauges(it)
     it.setResolution(100_000)
-    expect(it.regrid(block(1_963, 100_000, 8), 100_000)).toBe(true)
-    expect(seen[1]).toBe('measured')
-    // And finer from there is a zoom again: the range is kept.
-    it.setResolution(20_000)
-    expect(it.regrid(block(2_000, 20_000, 1), 20_000)).toBe(true)
-    expect(seen[2]).toBe('square of 1963')
+    expect(it.regrid(block(1_963, 100_000, 1), 100_000)).toBe(true)
+    expect(seen[0]).toBe('kept')
   })
 
   it('is measured again on a block wider by more than a cell', () => {

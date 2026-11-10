@@ -61,8 +61,11 @@ import {
   previewRung,
   refineEnabled,
   rungsOf,
+  finestFloor,
+  pickedRead,
   screenPlan,
   type BlockLadder,
+  type PickedResolution,
 } from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox, featureSuggestions, locusPlaceholder } from './SearchBox'
@@ -87,6 +90,12 @@ export interface RegionViewProps {
    * Absent, or 1, is every view of every file until somebody adds one.
    */
   binsPerCell?: number
+  /**
+   * The resolution picked (§3.4), asked live: what *Refine on zoom* off draws,
+   * read in place when it changes. Absent or `null` is the open map, at
+   * {@link binsPerCell}.
+   */
+  picked?: () => PickedResolution | null
   /**
    * A control the session puts on the title line, after the box.
    *
@@ -956,8 +965,9 @@ export class RegionView {
       binsize: this.props.binsize,
       rungs: rungsOf(this.props.rungs ?? []),
       // The grid the reader declared (§3.4), so a zoom cannot quietly read past
-      // the resolution the axis is labelled with.
+      // the resolution the axis is labelled with — and the pick, asked live.
       floor: () => this.props.binsPerCell ?? 1,
+      ...(this.props.picked === undefined || this.props.compare !== undefined ? {} : { picked: this.props.picked }),
       read: (rowExtent, colExtent, rung, binsPerCell) => {
         const own = this.props.client.cancellable<'matrix'>(
           query(rowExtent, colExtent, rung, binsPerCell),
@@ -1030,15 +1040,25 @@ export class RegionView {
    * reason {@link firstRung} gives.
    */
   private firstPlan(rows: [number, number], cols: [number, number]): { rung?: string; binsPerCell?: number } {
-    if (!refineEnabled()) return { ...this.firstRung(rows, cols), ...this.pooled() }
+    if (!refineEnabled()) {
+      // The resolution picked, as memory allows (§3.4).
+      const pick = this.props.picked?.() ?? null
+      if (pick !== null && this.props.compare === undefined) {
+        const span = Math.max(rows[1] - rows[0], cols[1] - cols[0])
+        return pickedRead(pick, rungsOf(this.props.rungs ?? []), this.props.binsize, span)
+      }
+      return { ...this.firstRung(rows, cols), ...this.pooled() }
+    }
     const span = Math.max(rows[1] - rows[0], cols[1] - cols[0])
+    const rungs = this.props.compare === undefined ? rungsOf(this.props.rungs ?? []) : []
     const plan = screenPlan({
-      rungs: this.props.compare === undefined ? rungsOf(this.props.rungs ?? []) : [],
+      rungs,
       binsize: this.props.binsize,
       view: span,
       read: span,
       screen: this.panel.screenWidth(),
-      floor: this.props.binsPerCell ?? 1,
+      // Down to the finest rung, as the zoom after it goes (§2).
+      floor: finestFloor(rungs, this.props.binsize),
     })
     return {
       ...(plan.rung === undefined ? {} : { rung: plan.rung }),
@@ -1083,7 +1103,9 @@ export class RegionView {
       wrap !== undefined ||
       this.props.compare !== undefined ||
       this.props.lowerRead !== undefined ||
-      (this.props.binsPerCell ?? 1) > 1
+      (this.props.binsPerCell ?? 1) > 1 ||
+      // Nor at a picked rung: the stand-in is a coarser rung of the open one.
+      (this.props.picked?.() ?? null) !== null
     ) {
       return null
     }
@@ -1336,15 +1358,46 @@ export class RegionView {
     }
   }
 
+  /**
+   * The resolution picked, which with *Refine on zoom* off is the one drawn
+   * wherever the window allows (§3.4); `undefined` while the zoom picks it.
+   */
+  private picked(): number | undefined {
+    if (refineEnabled()) return undefined
+    return this.props.picked?.()?.binsize ?? this.props.binsize * (this.props.binsPerCell ?? 1)
+  }
+
+  /**
+   * The resolution picked changed (§3.4): read it where the reader stands, as
+   * a refine is read, rather than rebuilding the view from its named region —
+   * which threw the zoom away — and say on the line at once what is drawn.
+   */
+  resolutionChanged(): void {
+    const held = this.armed
+    const shown = this.panel.block
+    if (held !== null && shown !== null) {
+      if (held.cols === undefined) this.describeMatch(held.rows, shown)
+      else this.describePair(shown)
+    }
+    // A pick of another grid than the one drawn is the reader changing the
+    // resolution, not the magnification: its block is measured for a range of
+    // its own (§7.1), as a map opened at that rung always was. Unticking, which
+    // picks the rung already drawn, keeps the range on screen.
+    const pick = this.picked()
+    const drawn =
+      shown === null ? undefined : (shown.binsize ?? this.props.binsize) * Math.max(1, shown.binsPerCell ?? 1)
+    this.panel.refineNow({ measure: pick !== undefined && drawn !== undefined && Math.abs(pick - drawn) > 1e-6 * drawn })
+  }
+
   /** The readout for a rectangular block between two ranges. */
   private describePair(result: MatrixResult): void {
     this.matched.classList.remove('is-genome')
-    this.matched.replaceChildren(...blockSummary(this.props.binsize, result), ' · ', this.panel.viewNote)
+    this.matched.replaceChildren(...blockSummary(this.props.binsize, result, 'sequence', this.picked()), ' · ', this.panel.viewNote)
   }
 
   private describeMatch(parsed: ParsedRange, result: MatrixResult): void {
     this.matched.classList.toggle('is-genome', parsed.kind === 'genome')
-    const parts = blockSummary(this.props.binsize, result)
+    const parts = blockSummary(this.props.binsize, result, 'sequence', this.picked())
     // The one part of the line that moves, and last, so a pan changes only the
     // tail of it — see `MatrixPanel.viewNote`.
     parts.push(' · ', this.panel.viewNote)

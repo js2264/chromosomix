@@ -141,6 +141,13 @@ export const LINK_KEYS: readonly LinkKey[] = [
       'summed as they are read. A value the file cannot reach is ignored.',
   },
   {
+    key: 'resolution',
+    values: 'a bin size in bp',
+    meaning:
+      'A resolution the file stores, picked with Refine on zoom off: the map is drawn at it, coarser only ' +
+      'where the window is too wide for it. A value the file does not store is ignored.',
+  },
+  {
     key: 'transform',
     values: either(TRANSFORMS),
     meaning: 'How values are mapped to colour.',
