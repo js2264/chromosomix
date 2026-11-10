@@ -68,7 +68,7 @@ rather than beside it:
 
 - **a gesture still costs nothing**, and cannot continue into one. Crossing the edge of what the
   block in hand can show *freezes* the map — pan, zoom and refit refused, a spinner in the corner of
-  the plot — until the new grid lands. One crossing is one read, by construction rather than by
+  the plot, clear of the axis labels drawn inside it — until the new grid lands. One crossing is one read, by construction rather than by
   timing, and the reader is shown the moment their resolution changes instead of having it happen
   under them. Escape calls the read off and gives the gestures back, because a picture that is
   already complete is never worth locking the map for;
@@ -2506,11 +2506,20 @@ read is preceded by one from the **coarsest stored rung that still puts 256 cell
 where the block asked for is **at least four times finer** than that along its wider axis — measured
 against the grid the reader will actually read, so a pooled first read is not "previewed" by a picture
 as coarse as itself. That preview is drawn as the block it is: its own cells, its own resolution in the
-key, its own colour range. It is held still with the spinner turning, as the refine ladder holds a
-picture it is sharpening (`ui/refine.ts`), until the block itself replaces it — refitted, its range
-measured afresh, exactly the picture there was before there were previews. The tracks, the census and
-the circularity check the session holds behind its first picture (§8.6) wait for that block, not for
-its stand-in. None is read for a window already about as coarse as a preview would be, a file with no
+key, its own colour range. **It is live**: the reader can pan, zoom and hover it at once, nothing is held
+still, and the spinner turning in its corner (`HeatmapView.setWaiting`) is the one sign that the block
+is on its way. The block then replaces it **on the window the reader arrived at**, carried in base pairs
+— to the base pair rather than rounded out to the preview's cells, and past the block's own edges where
+they zoomed out beyond it (`viewedPlaces`, `ui/blockAxes.ts`) — or refitted where nobody moved it, which
+is exactly the picture there was before there were previews. Either way its colour range is measured
+afresh, as any new block's is. A view opened on a bookmark goes to the bookmark only if the preview was
+not moved: a reader who moved it has gone somewhere else. What has no business acting on a stand-in waits
+for the block. The zoom ladder is armed only then, so nothing refines the preview; the Export card's
+buttons, and the keys that press them, are held with a line saying why; and no analysis is framed on the
+preview or borrows it, not even when the block's read fails and the preview stays as the picture there
+is, because its extents are in another rung's bins under the name of the file the view reads. The tracks,
+the census and the circularity check the session holds behind its first picture (§8.6) wait for that
+block too, not for its stand-in. None is read for a window already about as coarse as a preview would be, a file with no
 coarser rung, a grid the reader chose (`binsPerCell`), a window across a circle's origin, or a map
 under a second file or a second reading; a preview that fails is a picture that comes later, never an
 error.
@@ -6206,7 +6215,7 @@ requests and bytes in total and for the last view; these are also paper figures.
 | Pan/zoom within the block in hand | 0 requests, 60 fps |
 | First frame of a block of 2,048² cells or more | one pass over its values on the main thread — listing the cells that carry something where they are no more than one in four — the colour range and the level the frame draws read from that list, and no image at matrix resolution (§7.2) |
 | A zoom past the levels a large block has made | 0 requests and no re-colouring: the level it wants painted between frames, the nearest made drawn meanwhile |
-| First picture of a window four times finer than a stored rung with 256 cells across it | one read of that rung, drawn and held while the window's own block reads after it — chicken chr1 at 25 kb on screen in 0.2 s, mouse chr1 at 80 kb in 0.7 s, from a 40 ms, 25 MiB/s link (§7.2) |
+| First picture of a window four times finer than a stored rung with 256 cells across it | one read of that rung, drawn live while the window's own block reads after it and lands on whatever window the reader has moved it to — chicken chr1 at 25 kb on screen in 0.2 s, mouse chr1 at 80 kb in 0.7 s, from a 40 ms, 25 MiB/s link (§7.2) |
 | Refine, on crossing the block's grid (§2) | ≤ 5 range requests, one bounded read |
 | Pan to the edge of the block in hand | one read, **at the same resolution** |
 | Zoom out to a block already read | 0 requests |
@@ -8200,7 +8209,10 @@ which would neuter the array the heatmap is drawing from.
 row and column bin extents, the bin size, any pooling in force, the score column, whether balancing
 is on, the total the map is drawn to (§6.5), the sequences declared circular and their origins
 (§8.15), the edit of the reference it is drawn through (§27.7), and the resolution the reader added
-that it is drawn at (§3.4) — which is then the bin size, its bins the ones the extents count.
+that it is drawn at (§3.4) — which is then the bin size, its bins the ones the extents count. **A
+preview has no framing** (§7.2): while a coarser rung stands in for the block being read, or stays on
+screen after that read failed, a press of **Run** is refused as on a view with no map, and no task
+borrows the block, because its extents count another rung's bins under the file the view reads.
 
 **The framing line is one string in one grammar.** The window it names is the display form (§26.1),
 written by `formatLocus` — so the drawer's *will run on*, the figure's caption and the cell's

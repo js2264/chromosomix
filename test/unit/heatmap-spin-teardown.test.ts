@@ -82,7 +82,13 @@ afterEach(() => {
   blits = 0
 })
 
-function stubCanvas(size = 400): HTMLCanvasElement {
+/** What the stub context was asked to draw, for the spinner's placement. */
+interface Drawn {
+  arcs: Array<{ x: number; y: number; r: number }>
+  texts: Array<{ text: string; x: number; y: number; align: string }>
+}
+
+function stubCanvas(size = 400, drawn: Drawn | null = null): HTMLCanvasElement {
   const ctx = {
     font: '',
     fillStyle: '',
@@ -104,10 +110,14 @@ function stubCanvas(size = 400): HTMLCanvasElement {
     beginPath: () => {},
     moveTo: () => {},
     lineTo: () => {},
-    arc: () => {},
+    arc: (x: number, y: number, r: number) => {
+      drawn?.arcs.push({ x, y, r })
+    },
     stroke: () => {},
     fill: () => {},
-    fillText: () => {},
+    fillText(this: { textAlign: string }, text: string, x: number, y: number) {
+      drawn?.texts.push({ text, x, y, align: this.textAlign })
+    },
     strokeText: () => {},
     clip: () => {},
     rect: () => {},
@@ -192,6 +202,83 @@ describe('a view torn down while it is frozen', () => {
     heatmap.detach()
     expect(queued.size).toBe(0)
     expect(heatmap.isFrozen).toBe(false)
+  })
+
+  it('turns the same spinner for a wait, and stops it the same ways', () => {
+    // A stand-in on screen while its block reads (§7.2) turns the spinner
+    // without holding the view; the loop must end with the wait, and with the
+    // view.
+    const heatmap = new HeatmapView(stubCanvas(), { devicePixelRatio: 1 })
+    heatmap.setMatrix(block(64))
+    heatmap.draw()
+    heatmap.setWaiting(true)
+    pump(5)
+    expect(queued.size, 'the loop re-arms itself every frame').toBe(1)
+    heatmap.setWaiting(false)
+    pump(2)
+    expect(queued.size, 'a wait that ended stops the loop').toBe(0)
+
+    heatmap.setWaiting(true)
+    pump(2)
+    heatmap.detach()
+    expect(queued.size).toBe(0)
+    expect(heatmap.isWaiting).toBe(false)
+    heatmap.draw()
+    pump(30)
+    expect(queued.size, 'a draw after detach must not restart the loop').toBe(0)
+  })
+
+  it('keeps turning while a freeze or a wait remains', () => {
+    // The two are independent: a refine freezing the view under a stand-in's
+    // wait, or the other way round, must not stop the spinner when one ends.
+    const heatmap = new HeatmapView(stubCanvas(), { devicePixelRatio: 1 })
+    heatmap.setMatrix(block(64))
+    heatmap.draw()
+    heatmap.setWaiting(true)
+    heatmap.setFrozen(true)
+    heatmap.setFrozen(false)
+    pump(3)
+    expect(queued.size, 'still waiting').toBe(1)
+    heatmap.setFrozen(true)
+    heatmap.setWaiting(false)
+    pump(3)
+    expect(queued.size, 'still frozen').toBe(1)
+    heatmap.setFrozen(false)
+    pump(2)
+    expect(queued.size).toBe(0)
+  })
+
+  it('stands the spinner clear of the axis labels drawn inside the plot', async () => {
+    // A preview spins while the reader zooms it (§7.2), and the first label on
+    // each axis is the one they read. Each label is boxed as the stub measures
+    // it, 7 px a character, 12 px tall above its baseline for a column label
+    // and centred on its row for a row label; the spinner's disc must meet none.
+    const drawn: Drawn = { arcs: [], texts: [] }
+    const heatmap = new HeatmapView(stubCanvas(400, drawn), { devicePixelRatio: 1 })
+    heatmap.setMatrix(block(64))
+    heatmap.setAxisCoords({ rows: { bpPerCell: 1000, bpAtOrigin: 0 }, cols: { bpPerCell: 1000, bpAtOrigin: 0 } })
+    heatmap.setWaiting(true)
+    // Past the grace period, so the spinner is drawn at all.
+    await new Promise((resolve) => setTimeout(resolve, 180))
+    drawn.arcs.length = 0
+    drawn.texts.length = 0
+    heatmap.draw()
+    expect(drawn.texts.length).toBeGreaterThan(2)
+    const disc = drawn.arcs.at(0)
+    expect(disc, 'the spinner was drawn').toBeDefined()
+    if (disc === undefined) return
+    const reach = disc.r
+    for (const label of drawn.texts) {
+      const width = label.text.length * 7
+      const box =
+        label.align === 'center'
+          ? { left: label.x - width / 2, right: label.x + width / 2, top: label.y - 12, bottom: label.y }
+          : { left: label.x, right: label.x + width, top: label.y - 6, bottom: label.y + 6 }
+      const nearX = Math.max(box.left, Math.min(disc.x, box.right))
+      const nearY = Math.max(box.top, Math.min(disc.y, box.bottom))
+      expect(Math.hypot(disc.x - nearX, disc.y - nearY), `the spinner over “${label.text}”`).toBeGreaterThan(reach)
+    }
+    heatmap.setWaiting(false)
   })
 
   it('leaves an unfrozen view’s teardown exactly as it was', () => {

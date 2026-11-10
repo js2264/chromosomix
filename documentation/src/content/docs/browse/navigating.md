@@ -109,8 +109,11 @@ Before that, while such a block is still being read, the window is shown from a 
 the file stores, when it has one: clicking a whole chromosome puts a coarse map on screen in a
 fraction of a second, with a spinner in its corner, and the map at the resolution you chose replaces
 it when it arrives. The coarse map's key says its own resolution. Its cells are sums of many finer
-ones, so its compartments look stronger than they will in the finer map. It takes no gestures until
-it has been replaced. A window that is already about as coarse as that is read once, as before.
+ones, so its compartments look stronger than they will in the finer map. You can scroll, drag and
+hover it straight away: the finer map lands on the stretch you have moved to, or fills the panel if
+you have not moved. Saving or copying the figure, and running an analysis, wait for the finer map,
+and the Export card says so. A window that is already about as coarse as that is read once, as
+before.
 
 To see finer data, narrow the window, down to the resolution chosen. Or turn on **Refine on zoom**
 in the command palette (<kbd>⌘ P</kbd> or <kbd>Ctrl P</kbd>): zooming in past what the block can

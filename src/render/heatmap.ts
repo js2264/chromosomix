@@ -775,6 +775,13 @@ const SPINNER_DELAY_MS = 140
 const SPINNER_RADIUS = 9
 const SPINNER_INSET = 10
 
+/**
+ * How far up from the data's bottom edge the column labels reach, which is
+ * where the row labels stop ({@link HeatmapView.drawTicks}) and the spinner
+ * stands clear of.
+ */
+const COL_LABEL_BAND = 20
+
 /** `performance.now` where there is one, so a spinner turns evenly. */
 function now(): number {
   return typeof performance === 'undefined' ? Date.now() : performance.now()
@@ -1942,6 +1949,16 @@ export class HeatmapView {
   private spinTimer: number | null = null
   /** What Escape calls, while frozen — see {@link setFrozen}. */
   private onCancelFreeze: (() => void) | null = null
+  /**
+   * How far the axis labels drawn inside the data reach from its left and
+   * bottom edges, as the last {@link drawTicks} laid them out; none where it
+   * drew none. What the spinner stands clear of ({@link drawSpinner}).
+   */
+  private labelReach = { left: 0, bottom: 0 }
+  /** Whether the spinner turns over a view that still takes gestures — see {@link setWaiting}. */
+  private waiting = false
+  /** When the current wait began, for the spinner's grace period. */
+  private waitingAt = 0
   private plot: PlotOptions
   /**
    * A cell being pointed at on **another** map, for a deck (§16).
@@ -2282,7 +2299,7 @@ export class HeatmapView {
     // after the scan, and its zoom, worked out against a one-pixel plot, was
     // then pinned by `clampView` at a quarter of the fit: a 2,048-contig map
     // drawn in the middle of a panel four times its size.
-    const wasFitted = this.matrix === null || Math.abs(this.zoom - this.baseZoom) < 1e-9
+    const wasFitted = this.fitted
     // The cap is a fraction of the canvas, so a resize can change the gutters
     // even though the labels have not changed.
     this.measureMargin()
@@ -2938,7 +2955,7 @@ export class HeatmapView {
     this.onCancelFreeze = on ? (onCancel ?? null) : null
     this.frozenAt = on ? now() : 0
     this.canvas.classList.toggle('is-frozen', on)
-    if (on) this.spin()
+    if (this.spinning) this.spin()
     else this.stopSpin()
     this.changed()
   }
@@ -2948,10 +2965,51 @@ export class HeatmapView {
     return this.frozen
   }
 
+  /**
+   * Turn the spinner without holding the view.
+   *
+   * For a picture standing in for one on its way: the coarse rung drawn while
+   * the asked block reads (`MatrixPanel.setPreview`, SPECS §7.2). The reader
+   * may pan, zoom and hover it, and the block lands on whatever window they
+   * arrive at, so nothing is refused: the spinner in the corner is the whole
+   * of it, and says the sharper picture is coming. The pointer is left alone
+   * for the same reason. It says what a drag does, and a drag does it.
+   *
+   * Independent of {@link setFrozen}: either keeps the spinner turning, and the
+   * grace period runs from whichever began first.
+   */
+  setWaiting(on: boolean): void {
+    if (this.waiting === on) return
+    this.waiting = on
+    this.waitingAt = on ? now() : 0
+    if (this.spinning) this.spin()
+    else this.stopSpin()
+    this.changed()
+  }
+
+  /** Whether the spinner is turning over a view that still takes gestures. */
+  get isWaiting(): boolean {
+    return this.waiting
+  }
+
+  /** Whether anything keeps the spinner turning: a freeze, or a wait. */
+  private get spinning(): boolean {
+    return this.frozen || this.waiting
+  }
+
+  /**
+   * Whether the view is at fit zoom: the whole block, placed where
+   * {@link setAnchor} puts it. Nothing can be panned at that zoom, so it is the
+   * one view a reader cannot have moved without zooming.
+   */
+  get fitted(): boolean {
+    return this.matrix === null || Math.abs(this.zoom - this.baseZoom) < 1e-9
+  }
+
   private spin(): void {
     if (this.spinTimer !== null) return
     const tick = (): void => {
-      if (!this.frozen) {
+      if (!this.spinning) {
         this.spinTimer = null
         return
       }
@@ -2975,16 +3033,31 @@ export class HeatmapView {
    * Bottom-left because every other corner is taken: the key is top-right, the
    * scale bar and the readout sit along the bottom edge outside the plot, and
    * the top-left is where a turned map's diagonal comes to a point. Inside the
-   * plot rather than beside it, because what it is about is the picture.
+   * plot rather than beside it, because what it is about is the picture. And
+   * clear of the axis labels drawn inside it: above the column labels and to
+   * the right of the row labels, so it covers the corner's data, the least
+   * read part of a map, and never the first label on either axis — which is
+   * what a reader zooming a preview while it spins is reading (§7.2).
    */
   private drawSpinner(): void {
-    if (!this.frozen) return
-    const elapsed = now() - this.frozenAt
+    if (!this.spinning) return
+    const since =
+      this.frozen && this.waiting
+        ? Math.min(this.frozenAt, this.waitingAt)
+        : this.frozen
+          ? this.frozenAt
+          : this.waitingAt
+    const elapsed = now() - since
     if (elapsed < SPINNER_DELAY_MS) return
     const plot = this.plotRect
+    const data = this.dataRect
+    const reach = this.labelReach
+    const left = reach.left > 0 ? Math.max(plot.x, data.x + reach.left) : plot.x
+    const floor =
+      reach.bottom > 0 ? Math.min(plot.y + plot.height, data.y + data.height - reach.bottom) : plot.y + plot.height
     const r = SPINNER_RADIUS
-    const cx = plot.x + SPINNER_INSET + r
-    const cy = plot.y + plot.height - SPINNER_INSET - r
+    const cx = left + SPINNER_INSET + r
+    const cy = floor - SPINNER_INSET - r
     const ctx = this.ctx
     ctx.save()
     // A disc behind it, for the same reason the key has one: this is drawn over
@@ -3159,7 +3232,7 @@ export class HeatmapView {
    */
   setFitAxis(axis: FitAxis): void {
     if (axis === this.fitAxis) return
-    const wasFitted = this.matrix === null || Math.abs(this.zoom - this.baseZoom) < 1e-9
+    const wasFitted = this.fitted
     this.fitAxis = axis
     this.recomputeBaseZoom()
     if (wasFitted) this.zoom = this.baseZoom
@@ -3298,7 +3371,7 @@ export class HeatmapView {
    * reader asked for. A zoom someone chose is kept.
    */
   private remeasure(): void {
-    const wasFitted = this.matrix === null || Math.abs(this.zoom - this.baseZoom) < 1e-9
+    const wasFitted = this.fitted
     this.measureMargin()
     this.recomputeBaseZoom()
     if (wasFitted) this.zoom = this.baseZoom
@@ -4015,6 +4088,7 @@ export class HeatmapView {
     this.drawLabels()
     this.drawBandLabels()
     this.drawOverlay()
+    this.labelReach = { left: 0, bottom: 0 }
     if (this.plot.ticks) this.drawTicks()
     if (this.plot.crosshair) {
       this.drawCrosshair()
@@ -5836,7 +5910,8 @@ export class HeatmapView {
     // the last row label steps aside for the row of column labels rather than
     // printing on top of it. Its mark stays: the position is still marked, it is
     // the second copy of the number that goes.
-    const corner = cols.length === 0 ? bottom : bottom - 20
+    const corner = cols.length === 0 ? bottom : bottom - COL_LABEL_BAND
+    if (cols.length > 0) this.labelReach.bottom = COL_LABEL_BAND
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
     const rowStep = stepOf(rows)
@@ -5848,6 +5923,9 @@ export class HeatmapView {
       const text = formatBpTick(tick.bp, tick.step ?? rowStep)
       ctx.strokeText(text, data.x + TICK_LENGTH + 3, at)
       ctx.fillText(text, data.x + TICK_LENGTH + 3, at)
+      // Its halo included, which reaches a stroke's half-width past the text.
+      const reach = TICK_LENGTH + 3 + ctx.measureText(text).width + 2
+      if (reach > this.labelReach.left) this.labelReach.left = reach
     }
     ctx.restore()
   }
@@ -6544,6 +6622,9 @@ export class HeatmapView {
     this.frozenAt = 0
     this.onCancelFreeze = null
     this.canvas.classList.remove('is-frozen')
+    // A wait turns the same spinner, and is torn down the same way.
+    this.waiting = false
+    this.waitingAt = 0
     this.stopSpin()
     // And a level being painted between frames for a view nobody will draw.
     this.cancelMaking()

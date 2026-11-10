@@ -1020,25 +1020,29 @@ export class RegionView {
    * against the rung it is asked at. A stand-in that fails is a picture that
    * comes later, never an error: the asked read follows it either way.
    *
-   * Returns whether one is on screen, for the caller to let go if the asked
-   * read fails in its turn.
+   * The stand-in takes gestures (`MatrixPanel.setPreview`), but the zoom ladder
+   * is armed only once the block is in ({@link load}), so nothing refines a
+   * picture that is about to be replaced.
+   *
+   * Returns the stand-in on screen, or `null`, for the caller to describe and
+   * to let go if the asked read fails in its turn.
    */
   private async preview(
     rows: [number, number],
     cols: [number, number] | undefined,
     title: string,
     wrap: [number, number] | undefined,
-  ): Promise<boolean> {
+  ): Promise<MatrixResult | null> {
     if (
       wrap !== undefined ||
       this.props.compare !== undefined ||
       this.props.lowerRead !== undefined ||
       (this.props.binsPerCell ?? 1) > 1
     ) {
-      return false
+      return null
     }
     const rung = previewRung(rungsOf(this.props.rungs ?? []), rows, cols ?? rows, this.props.binsize)
-    if (rung === undefined) return false
+    if (rung === undefined) return null
     try {
       const coarse: MatrixResult = await this.props.client.request<'matrix'>({
         kind: 'matrix',
@@ -1049,12 +1053,12 @@ export class RegionView {
         balance: this.props.balance,
         ...(this.props.value === undefined ? {} : { value: this.props.value }),
       })
-      if (this.disposed) return false
+      if (this.disposed) return null
       this.panel.setResolution((coarse.binsize ?? this.props.binsize) * (coarse.binsPerCell ?? 1))
       this.panel.setPreview(coarse, title)
-      return true
+      return coarse
     } catch {
-      return false
+      return null
     }
   }
 
@@ -1165,8 +1169,13 @@ export class RegionView {
           balance: this.props.balance,
           ...(this.props.value === undefined ? {} : { value: this.props.value }),
         }
-        if (await this.preview([lo, hi], undefined, regionLabel(this.props.region), wrap)) {
+        const standIn = await this.preview([lo, hi], undefined, regionLabel(this.props.region), wrap)
+        if (standIn !== null) {
           this.title.textContent = regionLabel(this.props.region)
+          // The line under the box is about the picture on screen: the
+          // stand-in's grid, and the window the reader moves it to, until the
+          // block's own replaces it.
+          this.describeMatch(parsed, standIn)
         }
         if (this.disposed) return
         // Both maps' blocks at once (§11, §12): two readers, two walks, and the
@@ -1184,6 +1193,10 @@ export class RegionView {
         // every coordinate on screen is the bin size times a cell offset, so the
         // panel is told before it is given the block.
         this.panel.setResolution((result.binsize ?? this.props.binsize) * (result.binsPerCell ?? 1))
+        // Asked before the block replaces the stand-in, which is what it is
+        // about: a reader who moved the preview has gone somewhere, and the
+        // block lands there (§7.2) rather than on the bookmark they left.
+        const moved = this.panel.previewMoved
         // The panel names its figure after this (`exportBaseName`), so it is
         // given the window as the heading prints it, 1-based, rather than the
         // state's 0-based string — a saved PDF was otherwise named one base off
@@ -1194,7 +1207,7 @@ export class RegionView {
         // reads the window that is on screen, so focusing first means the finer
         // block that arrives is a finer block of the bookmark rather than of the
         // fitted chromosome nobody is looking at any more.
-        this.applyFocus()
+        if (!moved) this.applyFocus()
         await this.armRefine(parsed, result, undefined, ceiling)
         return
       }
@@ -1213,8 +1226,10 @@ export class RegionView {
         balance: this.props.balance,
         ...(this.props.value === undefined ? {} : { value: this.props.value }),
       }
-      if (await this.preview([lo, hi], [lo2, hi2], pairLabel(this.props.region, this.props.region2), undefined)) {
+      const standIn = await this.preview([lo, hi], [lo2, hi2], pairLabel(this.props.region, this.props.region2), undefined)
+      if (standIn !== null) {
         this.title.textContent = pairLabel(this.props.region, this.props.region2)
+        this.describePair(standIn)
       }
       if (this.disposed) return
       // Both maps' blocks at once, as above.
