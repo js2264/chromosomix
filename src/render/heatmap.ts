@@ -762,7 +762,7 @@ const DOUBLE_CLICK_MS = 250
 const KEY_ZOOM = 1.25
 
 /**
- * How long a freeze lasts before it shows a spinner.
+ * How long a wait lasts before it shows a spinner.
  *
  * Most refines are served out of the byte source's chunk cache and land in a few
  * milliseconds; a spinner that flashed on every one would be noise about
@@ -1941,14 +1941,8 @@ export class HeatmapView {
    * How many times this view has built a raster — see {@link rasterisations}.
    */
   private rasterCount = 0
-  /** Whether gestures are held — see {@link setFrozen}. */
-  private frozen = false
-  /** When the current freeze began, for the spinner's grace period. */
-  private frozenAt = 0
   /** The animation loop that turns the spinner; `null` when it is not turning. */
   private spinTimer: number | null = null
-  /** What Escape calls, while frozen — see {@link setFrozen}. */
-  private onCancelFreeze: (() => void) | null = null
   /**
    * How far the axis labels drawn inside the data reach from its left and
    * bottom edges, as the last {@link drawTicks} laid them out; none where it
@@ -2331,7 +2325,6 @@ export class HeatmapView {
     separators: Separator[] | SeparatorSet = [],
     gauge?: DenseMatrix,
   ): void {
-    this.setFrozen(false)
     this.matrix = matrix
     this.separators = Array.isArray(separators)
       ? { rows: separators, cols: separators }
@@ -2865,7 +2858,6 @@ export class HeatmapView {
    * edge {@link setAnchor} named, which is what a turned band asks for.
    */
   fit(): void {
-    if (this.frozen) return
     this.recomputeBaseZoom()
     this.zoom = this.baseZoom
     const plot = this.plotRect
@@ -2885,7 +2877,6 @@ export class HeatmapView {
    * the same distance on each — the mean of the two.
    */
   panBy(dx: number, dy: number): void {
-    if (this.frozen) return
     if (this.heldOnDiagonal) dx = dy = (dx + dy) / 2
     this.originX -= dx / this.zoom
     this.originY -= dy / this.zoom
@@ -2902,7 +2893,6 @@ export class HeatmapView {
    * zoom about a point of the line keeps a view centred on it centred on it.
    */
   zoomAt(x: number, y: number, factor: number): void {
-    if (this.frozen) return
     if (!(factor > 0)) throw new RangeError(`Zoom factor must be positive, got ${factor}`)
     const [ax, ay] = this.heldOnDiagonal ? this.onDiagonal(x, y) : [x, y]
     const plot = this.plotRect
@@ -2925,47 +2915,6 @@ export class HeatmapView {
   }
 
   /**
-   * Hold the view still, and say so.
-   *
-   * Set while a finer block is being read for the window on screen
-   * (`ui/refine.ts`). Two things happen and both are the point.
-   *
-   * **The gestures stop.** Pan, zoom and refit are refused for the duration, so
-   * the picture is exactly where the reader left it when the new grid arrives
-   * and the swap is a change of *sharpness* and nothing else. Letting the zoom
-   * run on underneath would mean the block landed against a window that had
-   * moved since it was asked for — the reader would see it jump, and the jump
-   * would be the app catching up rather than anything in the data.
-   *
-   * **And it is visible.** The edge of what a block can show is a real boundary
-   * and until now it was an invisible one: the picture simply stopped improving,
-   * and whether that was the file's limit or the app's was not something the
-   * screen said. A held frame with a spinner in the corner says *this is the
-   * edge, and going past it costs a read* — at the moment it costs it.
-   *
-   * The spinner does not appear for {@link SPINNER_DELAY_MS}, because most
-   * refines are served out of the chunk cache in a few milliseconds and a
-   * spinner that flashes on every wheel notch is worse than none. The freeze
-   * itself is immediate either way: a fast read is imperceptible, and a slow one
-   * is announced.
-   */
-  setFrozen(on: boolean, onCancel?: () => void): void {
-    if (this.frozen === on) return
-    this.frozen = on
-    this.onCancelFreeze = on ? (onCancel ?? null) : null
-    this.frozenAt = on ? now() : 0
-    this.canvas.classList.toggle('is-frozen', on)
-    if (this.spinning) this.spin()
-    else this.stopSpin()
-    this.changed()
-  }
-
-  /** Whether gestures are currently held. */
-  get isFrozen(): boolean {
-    return this.frozen
-  }
-
-  /**
    * Turn the spinner without holding the view.
    *
    * For a picture standing in for one on its way: the coarse rung drawn while
@@ -2973,10 +2922,16 @@ export class HeatmapView {
    * may pan, zoom and hover it, and the block lands on whatever window they
    * arrive at, so nothing is refused: the spinner in the corner is the whole
    * of it, and says the sharper picture is coming. The pointer is left alone
-   * for the same reason. It says what a drag does, and a drag does it.
+   * for the same reason. It says what a drag does, and a drag does it. And for
+   * the same reason while a finer block is read for the window on screen
+   * (`ui/refine.ts`): the zoom goes on, and the block lands wherever it has got
+   * to (SPECS §2). The map used to hold still for that read, refusing every
+   * gesture until the block came — which was safe, and was the lag a reader
+   * felt on every crossing of the edge of what a block could show.
    *
-   * Independent of {@link setFrozen}: either keeps the spinner turning, and the
-   * grace period runs from whichever began first.
+   * The spinner does not appear for {@link SPINNER_DELAY_MS}, because most
+   * reads are served out of the chunk cache in a few milliseconds and a
+   * spinner that flashes on every wheel notch is worse than none.
    */
   setWaiting(on: boolean): void {
     if (this.waiting === on) return
@@ -2992,9 +2947,9 @@ export class HeatmapView {
     return this.waiting
   }
 
-  /** Whether anything keeps the spinner turning: a freeze, or a wait. */
+  /** Whether anything keeps the spinner turning. */
   private get spinning(): boolean {
-    return this.frozen || this.waiting
+    return this.waiting
   }
 
   /**
@@ -3004,6 +2959,11 @@ export class HeatmapView {
    */
   get fitted(): boolean {
     return this.matrix === null || Math.abs(this.zoom - this.baseZoom) < 1e-9
+  }
+
+  /** The zoom that fits the whole block, in CSS pixels per cell; see {@link fitted}. */
+  get fitZoom(): number {
+    return this.baseZoom
   }
 
   private spin(): void {
@@ -3041,13 +3001,7 @@ export class HeatmapView {
    */
   private drawSpinner(): void {
     if (!this.spinning) return
-    const since =
-      this.frozen && this.waiting
-        ? Math.min(this.frozenAt, this.waitingAt)
-        : this.frozen
-          ? this.frozenAt
-          : this.waitingAt
-    const elapsed = now() - since
+    const elapsed = now() - this.waitingAt
     if (elapsed < SPINNER_DELAY_MS) return
     const plot = this.plotRect
     const data = this.dataRect
@@ -3133,7 +3087,6 @@ export class HeatmapView {
    * `ViewportLock` expects to come back.
    */
   showCellWindow(rows: [number, number], cols: [number, number]): void {
-    if (this.frozen) return
     this.placeCellWindow(rows, cols)
     this.clampView()
     this.syncScales()
@@ -3154,7 +3107,6 @@ export class HeatmapView {
    * magnification as the picture allows.
    */
   showCellSpan(cols: [number, number]): void {
-    if (this.frozen) return
     const plot = this.plotRect
     const span = Math.max(1e-6, cols[1] - cols[0])
     const wanted = plot.width / span
@@ -5962,20 +5914,6 @@ export class HeatmapView {
    * has already been prevented. The caller still has to redraw.
    */
   handleKeyDown(event: KeyboardEvent): boolean {
-    // Escape, while the map is held for a read, calls the read off and gives
-    // the gestures back. It is checked before anything else because it is the
-    // only key that means something *different* while frozen — and because a
-    // held map with no way out is the one failure mode this feature could
-    // plausibly have on a large file (see {@link setFrozen}).
-    if (this.frozen) {
-      if (event.key === 'Escape' && this.onCancelFreeze !== null) {
-        const cancel = this.onCancelFreeze
-        event.preventDefault()
-        cancel()
-        return true
-      }
-      return false
-    }
     const plot = this.plotRect
     const step = event.shiftKey ? 0.5 : 0.1
     let handled = true
@@ -6605,24 +6543,19 @@ export class HeatmapView {
 
   /** Remove every listener {@link attach} installed. Idempotent. */
   detach(): void {
-    // End the freeze first, because a view torn down mid-freeze cannot escape
-    // one on its own: {@link stopSpin} is reachable only from
-    // `setFrozen(false)`, and no teardown path unfreezes — the ladder that
-    // froze this view is *destroyed* rather than aborted, so the `onBusy(false)`
-    // that would have released it never runs (`ui/refine.ts`). The spinner's
-    // `tick` then re-armed `requestAnimationFrame` and called `draw()` on a
-    // canvas no longer in the document, for the life of the tab, holding this
-    // view's matrix, raster and offscreen canvas with it.
+    // End the wait first, because a view torn down mid-wait cannot end one on
+    // its own: {@link stopSpin} is reachable only from `setWaiting(false)`, and
+    // no teardown path calls it — the ladder that started the wait is
+    // *destroyed* rather than finished, so the `onBusy(false)` that would have
+    // ended it never runs (`ui/refine.ts`). The spinner's `tick` then re-armed
+    // `requestAnimationFrame` and called `draw()` on a canvas no longer in the
+    // document, for the life of the tab, holding this view's matrix, raster and
+    // offscreen canvas with it.
     //
-    // Cleared field by field rather than through `setFrozen(false)`, which
+    // Cleared field by field rather than through `setWaiting(false)`, which
     // would call `changed()` and schedule the very frame the lines below are
     // cancelling. The flag has to go too, not just the timer: left `true`, any
-    // later `draw()` on this instance would take the frozen branch again.
-    this.frozen = false
-    this.frozenAt = 0
-    this.onCancelFreeze = null
-    this.canvas.classList.remove('is-frozen')
-    // A wait turns the same spinner, and is torn down the same way.
+    // later `draw()` on this instance would draw the spinner again.
     this.waiting = false
     this.waitingAt = 0
     this.stopSpin()

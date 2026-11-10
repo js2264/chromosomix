@@ -35,7 +35,8 @@ A button's tooltip names its key.
 
 **Search commands…**, or <kbd>Ctrl</kbd>+<kbd>P</kbd> (<kbd>⌘</kbd><kbd>P</kbd> on a Mac), finds any
 action by name, with its key; one that cannot act on what is open is greyed. Only here are
-*Refine on zoom*, which reads a window again at a finer grid as you zoom past what was read, and,
+*Refine on zoom*, on by default, which reads a map at about the size of the screen and finer as you
+zoom (off, it reads a window once, as finely as memory allows), and,
 under Help, *What this browser is remembering*, with a button that forgets it all
 ([Keyboard and command palette](/browse/keyboard/)).
 

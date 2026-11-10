@@ -14,6 +14,29 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **A map opens at the screen's resolution and sharpens as you zoom: *Refine on zoom* is on by default
+  (§2, §7.2, §12).** A view's first read is the coarsest stored rung that puts about a cell on each
+  pixel of the plot, so a chromosome opens quickly whatever resolution the file was opened at —
+  chicken chr1 at 10 kb in 0.34 s, 785 cells of its 250 kb rung in one 2.1 MB request, where it took
+  1.9 s; mouse chr1 at 10 kb in 1.7 s where it took 4.8 — and every zoom reads the next grid down to
+  the file's own bins.
+  Every refine read is screen-sized too. A refine used to read as much as memory allowed: the same zoom
+  read a 15,027-bin square (226 M cells) at its second wheel notch. *Refine on zoom* in the palette
+  turns it off, and off is what the app always did: the window read once as finely as memory allows,
+  a preview first where that is slow, and zooming free of reads.
+- **Zooming never freezes the map (§2).** A refine read used to hold the map still, refusing every
+  gesture for the seconds it took; now the block on screen keeps every pan and zoom while the next one
+  is read, a spinner turns in its corner, and the sharper block lands wherever you have got to. A zoom
+  that outruns its read calls it off for the window it ends on; a zoom still going inward reads its
+  next step early, a pan reads ahead of the edge of its block, and the last step onto the file's own
+  bins is always taken. Sixteen wheel notches into chicken chr1 at 10 kb froze the map for 2.0 s and
+  stalled the page 1.9 s at once; they now stall it 0.18 s at most. The freeze and the Escape that
+  ended it are gone.
+- **A figure is drawn at the resolution you chose (§7.2, §16.5).** Saving or copying a map's figure,
+  or the deck's, first reads the framed window as finely as memory allows, as every view was read
+  before reads were sized to the screen, and measures its colour range on it, as that window read at
+  its resolution always was; the Export card says it is reading, and the sharper block stays on screen
+  until you next move the map.
 - **The lab's bucket holds only `demo/yeast/`, `demo/store/` and `demo/reassemblies/`, and everything
   that read the rest reads the store (§24.3).** The lab deleted the bucket's other demo folders and
   the DNA Bacterial Zoo's. The store's files copied from them — the Gibcus et al. maps from
@@ -90,9 +113,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   screen in 4.4 s where it took 4.9, its main-thread work 0.6 s where it was 1.3; yeast chrIV at
   100 bp in 3.4 s where it took 4.1; chicken chr1 at 25 kb in 2.1 s where it took 2.5. A block in
   which more than one cell in four carries something is read whole, as before.
-- **A chromosome is shown first from a coarser rung, while its own block reads (§7.2, §12, §18.4).**
-  Where a stored rung puts at least 256 cells across the window and the block asked for is at least
-  four times finer, that rung is read first and drawn — its own cells, resolution and colour range —
+- **With *Refine on zoom* off, a chromosome is shown first from a coarser rung while its own block
+  reads (§7.2, §12, §18.4).** Where a stored rung puts at least 256 cells across the window and the
+  block asked for is at least four times finer, that rung is read first and drawn — its own cells, resolution and colour range —
   and it is live: pan, zoom and hover work on it at once, with a spinner turning in its corner. The
   block lands on the window the reader moved it to, carried to the base pair, or refitted where nobody
   moved it, its colour range measured afresh either way. The zoom ladder, the Export card and every
@@ -138,6 +161,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **An analysis run on a map read from a coarser rung reads the stretch on screen (§18.4).** Its
+  framing counted the rung's bins under the open map's name, so a task read the wrong window of the
+  map and took the rung's block for the file's own bins; it is framed in the open map's bins now, and
+  never borrows such a block. A pooled view's framing also printed its cell as the bin size —
+  `80 kb bins · 4 per drawn cell` for a 20 kb file — and names the file's own now.
+- **A region opened on part of a sequence no longer reads nine times its window the moment it opens,
+  with *Refine on zoom* on (§2).** A view showing its whole block is pressed against every edge of it,
+  and that was taken for a reader pushing against one.
 - **A float-count map's `sum` is its sum, not its floor (§3.2).** The File card read a `.metacool`'s
   counted attributes through Python's `int()`, as metacooler's `MetaCooler.info` did, and so showed
   60816 for a map whose counts sum to 60816.5. metacooler now keeps a fractional value (its `c3d91ce`),

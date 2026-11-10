@@ -18,27 +18,36 @@
  *
  * Two things make it much smaller here than a tile pyramid would be.
  *
- * **The reader already chooses the grid.** `fitPlan` (`worker/reader.worker.ts`)
- * binary-searches the finest grid whose cell count fits {@link POOLED_CELL_CAP}
- * for whatever bin range a request names, and `snapToGrid` anchors that grid to
- * the *sequence* rather than to the request. So a refine is the same `matrix`
- * request with narrower extents, and two blocks of the same region at the same
- * grid agree cell for cell wherever they overlap. Nothing is composited and
- * there is no seam.
+ * **The grid is the sequence's.** `snapToGrid` (`worker/reader.worker.ts`)
+ * anchors whatever grid a read is asked at to the *sequence* rather than to the
+ * request, so a refine is the same `matrix` request with narrower extents, and
+ * two blocks of the same region at the same grid agree cell for cell wherever
+ * they overlap. Nothing is composited and there is no seam.
+ *
+ * **And the ladder sizes it to the screen** ({@link screenPlan}): about a cell
+ * to each CSS pixel of the view, from the coarsest stored rung that gives it.
+ * Every read used to be as large as memory allowed — the reader's own plan,
+ * `fitPlan`, fills the device's budget, a window of sixteen thousand bins read a
+ * bin to a cell — which made each refine a gigabyte of values and seconds of
+ * reading for a picture seven hundred pixels across, and the map held still for
+ * all of it. A screen-sized read is a few hundred milliseconds, so the map never
+ * holds still: a gesture goes on over the block in hand, the next block is read
+ * a little ahead of it, and lands on wherever the gesture has got to (SPECS §2).
+ * The reader's own plan is still what a read with no screen gets — a figure's
+ * ({@link BlockLadder.sharpen}), and every read with *Refine on zoom* off.
  *
  * This module used to say it must **never** send `binsPerCell`, because a request
  * carrying an explicit plan bypassed `snapToGrid` and the cell values would then
  * change as the reader panned. The reader snaps an explicit plan too now, which
- * is what lets {@link LadderOptions.floor} exist: a reader who has asked for a
- * resolution the file does not store (§3.4) has committed to a grid, and the
- * refine has to hold it rather than quietly reading past it on the next zoom.
+ * is what lets the screen plan exist, and {@link LadderOptions.floor}: a reader
+ * who has asked for a resolution the file does not store (§3.4) has committed to
+ * a grid, and the refine has to hold it rather than quietly reading past it on
+ * the next zoom.
  *
  * **It terminates.** There is no grid below the file's own bins, so the ladder
- * has a floor and reaches it: `⌈log₂(k₀)⌉` steps, where `k₀` is what the widest
- * view was pooled by. One step for a whole yeast genome at 1 kb, three for a
- * human chromosome at 5 kb, none at all for a MAG — whose block already *is* the
- * finest data in the file, which is why the app's primary case is untouched by
- * any of this.
+ * has a floor and reaches it: about `⌈log₂(k₀)⌉` steps, where `k₀` is what the
+ * widest view was read at — a step each time the zoom doubles, and the last one
+ * onto the file's own bins, which a view that can show them is always given.
  *
  * Zooming **out** is served the same way and is usually free: the blocks already
  * read are kept, so leaving the window a fine block covers falls back to a
@@ -71,13 +80,18 @@ export const REFINE_PAD = 0.5
  *
  * Bigger than {@link REFINE_PAD} because zooming out is a gesture rather than a
  * step: a reader who has started pulling back is usually going somewhere, and
- * buying four times what the frame needs turns the several reads the rest of the
- * gesture would have asked for into one. It is the same trade `syncTurnDepth`
- * makes when it re-cuts a band twice as deep as the box wants
- * (`ui/MatrixPanel.ts`), and it costs nothing in resolution, because a wider
- * view was going to be coarser anyway.
+ * buying more than the frame needs turns several of the reads the rest of the
+ * gesture would have asked for into one. It costs nothing in resolution, because
+ * a wider view was going to be coarser anyway.
+ *
+ * One view each side, so three across. It was four each side, nine across, when
+ * every read was as large as memory allowed and the point was to read rarely. A
+ * screen-sized read puts a cell on each pixel of the view (§2), so it reads the
+ * window it is given at the view's grid, and nine views across would be nine
+ * times the cells on each axis for a gesture that read-ahead now keeps up with
+ * ({@link READ_AHEAD_EDGE}).
  */
-export const WIDEN_REACH = 4
+export const WIDEN_REACH = 1
 
 /**
  * A grid this much coarser than the picture could show is worth replacing.
@@ -90,8 +104,49 @@ export const WIDEN_REACH = 4
  */
 export const REFINE_FACTOR = 2
 
-/** Blocks kept so that zooming back out costs nothing. */
-export const HELD_BLOCKS = 3
+/**
+ * The factor of {@link REFINE_FACTOR}, while the reader is zooming **in**.
+ *
+ * A read the reader waits for is a read that started too late. A zoom that is
+ * still going inward will cross the factor of two in a moment, so the read for
+ * it starts here, at about the square root of two, and is usually in by the time
+ * the cells would have been big enough to see (§2). Standing still, or zooming
+ * out, keeps the factor of two: a reader who stopped half way has nothing more
+ * to read.
+ */
+export const READ_AHEAD_FACTOR = 1.4
+
+/**
+ * How close, as a fraction of the view, the view may come to an edge of its
+ * block before the block is read again around it.
+ *
+ * The pan's read-ahead. A block is padded half a view on each side, so a reader
+ * panning towards its edge used to meet a wall there — the view cannot be
+ * dragged past the data it has — and wait at it for the next block. Reading
+ * when the margin falls below a quarter of a view starts that read while there
+ * is still ground to cover, so the next block is usually in before the edge is.
+ */
+export const READ_AHEAD_EDGE = 0.25
+
+/**
+ * How many screen widths of cells any screen-sized read may carry across its
+ * wider axis.
+ *
+ * A zoom's read is two views across, a widening one three; this is above both,
+ * so it bites only on a read much wider than the view it is for, and coarsens
+ * that one rather than letting it grow with its window.
+ */
+export const SCREEN_READ_CAP = 3.2
+
+/**
+ * Blocks kept so that zooming back out costs nothing.
+ *
+ * Eight now that a block is about the size of the screen: a zoom from a whole
+ * chromosome to its own bins is about that many steps, and every one of them is
+ * then a step back out that reads nothing. {@link HELD_BYTES} still bounds the
+ * memory, which is what bounded it when there were three of them.
+ */
+export const HELD_BLOCKS = 8
 
 /**
  * Bytes of held blocks above which the oldest are dropped.
@@ -110,9 +165,40 @@ export interface RefineView {
   cols: Extent
   /** Bins summed into one drawn cell — `MatrixResult.binsPerCell`, or 1. */
   binsPerCell: number
+  /**
+   * CSS pixels across the plot's wider side: what a **screen-sized** read is
+   * sized to (§2). Absent is a view with no screen to measure, read as memory
+   * allows — the plan every read had before reads were sized to the screen.
+   */
+  screen?: number
+  /**
+   * The zoom, as a multiple of the zoom that fits the block: `1` showing the
+   * whole block, above it zoomed in, below it zoomed out past the block into
+   * the paper round it. What tells a fitted view, which is pressed against
+   * every edge of its block because it shows all of it, from a reader pushing
+   * against one. Absent is read as zoomed in.
+   */
+  fit?: number
+}
+
+/**
+ * How a read is asked for: the rung it comes from, the bins of that rung each
+ * cell sums, and the grid that comes to in bins of the open map — the unit
+ * every block the ladder holds is compared in.
+ */
+export interface ReadPlan {
+  rung?: string
+  binsPerCell?: number
+  grid: number
 }
 
 /** What a ladder needs of the world. */
+/** How a block is handed over; see {@link LadderOptions.onBlock}. */
+export interface BlockHandover {
+  /** Measure the colour range on this block, as a window read once always was. */
+  measure?: boolean
+}
+
 export interface LadderOptions {
   /**
    * Read a block. The ladder never builds a request itself, so each view keeps
@@ -123,8 +209,21 @@ export interface LadderOptions {
    * called off rather than raced: the worker checks between pixel windows
    * (`worker/reader.worker.ts`), so a cancel that is never sent is a scan that
    * runs to the end for a picture nobody is waiting for.
+   *
+   * `plan` is a screen-sized read's rung and grid ({@link planFor}). Absent,
+   * the read is planned as memory allows: the reader fits the finest grid the
+   * device's budget affords, which is every read of a view with no screen, and
+   * the read a figure is drawn from ({@link BlockLadder.sharpen}).
    */
-  read(rows: Extent, cols: Extent): Cancellable<MatrixResult>
+  read(rows: Extent, cols: Extent, plan?: ReadPlan): Cancellable<MatrixResult>
+  /**
+   * The screen-sized plan for reading `window` while `view` is on screen
+   * ({@link screenPlan}, which knows the file's rungs and the declared grid).
+   * Absent, a plan with no rungs: the open map, pooled to the view's grid.
+   */
+  planFor?(window: { rows: Extent; cols: Extent }, view: RefineView): ReadPlan
+  /** The clock read-ahead times a zoom by; `performance.now` when absent. */
+  now?(): number
   /**
    * The widest this ladder may ever ask for, per axis: the view's own domain.
    *
@@ -143,8 +242,12 @@ export interface LadderOptions {
    * also why it is a return value rather than a `void` callback: a ladder whose
    * idea of what is drawn is wrong stops reading, and stops for a reason nobody
    * can see.
+   *
+   * `how.measure` is a block {@link BlockLadder.sharpen} puts on screen: the
+   * window already there, on a finer grid, whose colour range is measured on
+   * the block itself rather than kept from the one it replaces (§7.1).
    */
-  onBlock(result: MatrixResult): boolean
+  onBlock(result: MatrixResult, how?: BlockHandover): boolean
   /**
    * The memory budget the view's reads carry, where it is not the device's own.
    *
@@ -174,10 +277,16 @@ export interface LadderOptions {
    * Absent, or 1, is every view of every file until somebody presses `+`.
    */
   floor?(): number
-  /** Told when a read is outstanding, for whatever the view shows meanwhile. */
+  /**
+   * Told when a read is outstanding, for whatever the view shows meanwhile —
+   * the spinner in the plot's corner, over a view that still takes every
+   * gesture (`HeatmapView.setWaiting`).
+   */
   onBusy?(busy: boolean): void
   /** Told when a read fails, so the view can say so once rather than per frame. */
   onError?(err: unknown): void
+  /** Told when the ladder is destroyed, for whatever its wiring must let go of. */
+  dispose?(): void
 }
 
 interface Held {
@@ -198,11 +307,31 @@ interface Held {
   bytes: number
 }
 
+/**
+ * How long after the view last shrank a zoom still counts as going inward, for
+ * {@link READ_AHEAD_FACTOR}. A wheel's notches arrive tens of milliseconds
+ * apart and a trackpad's more often, so this spans the gaps of one gesture and
+ * not a reader who has stopped to look.
+ */
+export const INWARD_MS = 400
+
+/**
+ * How much wider than the framed window a figure's block is read, each side, as
+ * a fraction of it ({@link BlockLadder.sharpen}).
+ */
+const SHARPEN_PAD = 0.05
+
+/**
+ * How far from `1` a view's {@link RefineView.fit} may be and still be fitted:
+ * the zoom is a float, and a fit recomputed after a resize lands a hair off it.
+ */
+const FIT_SLACK = 0.02
+
 export class BlockLadder {
   private readonly options: LadderOptions
   private held: Held[] = []
   private current: MatrixResult | null = null
-  private inflight: { key: string; rows: Extent; cols: Extent; cancel(): void } | null = null
+  private inflight: { key: string; rows: Extent; cols: Extent; grid: number; cancel(): void } | null = null
   private pending: { rows: Extent; cols: Extent; key: string } | null = null
   /**
    * Reads that failed, by key.
@@ -215,15 +344,27 @@ export class BlockLadder {
    */
   private readonly refused = new Set<string>()
   /**
-   * A read the reader called off, by key.
-   *
-   * Not the same thing as {@link refused}: that is the reader's *machine*
-   * declining, and it never changes its mind. This is the reader declining, and
-   * it must not be retried on the very next frame — which is what would happen,
-   * since the window they abandoned it at is the window they are still looking
-   * at. Cleared the moment they move, because moving is asking again.
+   * The read a figure is waiting on ({@link sharpen}). Nothing else is read
+   * while it runs: every other read would be for a picture it is about to
+   * replace, and one that landed after it would take the figure's block away.
    */
-  private abandoned: string | null = null
+  private sharpening: Promise<boolean> | null = null
+  /**
+   * A figure's block ({@link sharpen}), and the view it was first drawn for.
+   *
+   * It stays on screen until the reader moves, whatever the rules would read
+   * instead. It is finer than the screen needs and only a twentieth wider than
+   * the frame, so the next frame would otherwise read a screen-sized block around
+   * the view at once: a second read for a reader who has not moved, and the line
+   * above the map naming a grid other than the one the figure was drawn on.
+   */
+  private standing: { result: MatrixResult; view: RefineView | null } | null = null
+  /** The view's span on the last frame, for whether a zoom is going inward. */
+  private lastSpan = 0
+  /** When the last frame was considered. */
+  private lastAt = Number.NEGATIVE_INFINITY
+  /** When the view last shrank between two frames of one gesture; see {@link INWARD_MS}. */
+  private inwardAt = Number.NEGATIVE_INFINITY
   private disposed = false
 
   constructor(options: LadderOptions) {
@@ -249,11 +390,11 @@ export class BlockLadder {
     )
   }
 
-  /** The finest block held that covers `view`, or `null`. */
-  private bestFor(view: RefineView): Held | null {
+  /** The finest block held that covers `window`, or `null`. */
+  private bestFor(window: { rows: Extent; cols: Extent }): Held | null {
     let best: Held | null = null
     for (const held of this.held) {
-      if (!covers(held.rows, view.rows) || !covers(held.cols, view.cols)) continue
+      if (!covers(held.rows, window.rows) || !covers(held.cols, window.cols)) continue
       if (best === null || held.grid < best.grid) best = held
     }
     return best
@@ -265,57 +406,202 @@ export class BlockLadder {
   }
 
   /**
+   * The block in hand to put on screen for `view`: the finest one good enough to
+   * stay there ({@link fits}) — and, where none is, the finest that covers the
+   * view at all, to look at while the read it wants is made.
+   *
+   * Good enough *to stay* is the point. A finer block whose edge the view is
+   * within reach of would be handed over, read around at the screen's grid,
+   * handed back for being finer than what that read brought, and read around
+   * again, for as long as the reader stood there: a block that a zoom has left
+   * behind is finer than the screen needs, which is exactly what made it look
+   * like the better answer.
+   *
+   * The block on screen gives way only to a finer one while it is still a whole
+   * picture of the view — nothing pressed against, nothing past its edge, a grid
+   * still fine enough. A reader nearing its edge is read ahead of; handing them
+   * a coarser block that happens to reach further would coarsen the picture of
+   * where they already are.
+   */
+  private handOver(view: RefineView, inward: boolean): Held | null {
+    const wanted = this.gridWanted(view)
+    let good: Held | null = null
+    let covering: Held | null = null
+    for (const held of this.held) {
+      if (!covers(held.rows, view.rows) || !covers(held.cols, view.cols)) continue
+      if (covering === null || held.grid < covering.grid) covering = held
+      if ((good === null || held.grid < good.grid) && this.fits(held, view, inward, wanted)) good = held
+    }
+    const shown = this.held0()
+    const finer = good !== null && shown !== null && good.grid < shown.grid
+    if (shown !== null && !finer && this.fits(shown, view, inward, wanted, false)) return shown
+    return good ?? covering
+  }
+
+  /**
+   * Whether a figure's block is to stay on screen this frame
+   * ({@link standing}): it is the block on screen, and the view is the one it
+   * was first drawn for. The first frame after it lands says which view that
+   * is, since the panel carries the window onto the block as it puts it there.
+   */
+  private stands(view: RefineView): boolean {
+    const standing = this.standing
+    if (standing === null) return false
+    if (standing.result === this.current) {
+      if (standing.view === null) {
+        standing.view = view
+        return true
+      }
+      if (sameWindow(standing.view, view)) return true
+    }
+    this.standing = null
+    return false
+  }
+
+  /**
    * Consider the window on screen: hand over a better block if one is already
    * held, and start a read if none is good enough.
    *
    * Called once per frame from the panel's own rAF, so it must be cheap when
    * nothing has moved — which is every frame of a pan inside what was fetched.
-   * It never waits and never takes the picture away: the worst it does is leave
-   * the coarse block up for another 120 ms.
+   * It never waits, never takes the picture away and never holds the view
+   * still: the block on screen stays up and takes every gesture while a better
+   * one is read, and the better one lands on wherever the reader has got to
+   * (`MatrixPanel.regrid`).
    */
   consider(view: RefineView): void {
-    if (this.disposed) return
-    // Issued on the **first frame that needs one**, not after a pause. This was
-    // a trailing debounce — watch the window, read once it stops moving —
-    // because there is no gesture-end hook in the pan/zoom path and a read per
-    // frame of a drag would be twenty reads per wheel spin. What replaced it is
-    // better at the same job: the view *freezes* for the duration of the read
-    // (`HeatmapView.setFrozen`), so the gesture cannot continue and there is no
-    // second frame to debounce. One crossing is one read, by construction rather
-    // than by timing — and the `inflight` guard below is what makes that safe
-    // rather than the freeze, since only one read is ever outstanding.
+    if (this.disposed || this.sharpening !== null) return
+    const inward = this.zoomingIn(view)
+    if (this.stands(view)) return
     const wanted = this.plan(view)
     const key = keyOf(wanted.rows, wanted.cols)
 
     // Something already in hand may be a better answer than what is drawn —
     // which is the whole of what makes zooming back out free.
-    const best = this.bestFor(view)
+    const best = this.handOver(view, inward)
     if (best !== null && best.result !== this.current) {
       if (this.options.onBlock(best.result)) this.current = best.result
       else this.drop(best.result)
     }
 
-    if (this.satisfied(view)) {
+    if (this.satisfied(view, inward)) {
       this.pending = null
       return
     }
     if (this.refused.has(key)) return
-    if (this.abandoned === key) return
-    this.abandoned = null
 
-    // A read already going for this window, or for one that still contains what
-    // is on screen, is the read this frame wants. One that no longer contains it
-    // is finishing a picture of somewhere else, and is called off.
+    // A read already going for a window that still contains what is on screen,
+    // on a grid the screen is still within a factor of two of, is the read this
+    // frame wants. One that no longer contains it is finishing a picture of
+    // somewhere else, and one the zoom has outrun would land already too coarse
+    // to keep: either is called off for the read the view wants now. That is
+    // what replaces the freeze that used to make a gesture wait for its read —
+    // the gesture goes on, and only its latest window is read.
     const flight = this.inflight
     if (flight !== null) {
-      if (covers(flight.rows, view.rows) && covers(flight.cols, view.cols)) return
+      const inside = covers(flight.rows, view.rows) && covers(flight.cols, view.cols)
+      if (inside && flight.grid <= this.gridWanted(view) * REFINE_FACTOR) return
       flight.cancel()
       this.inflight = null
       this.options.onBusy?.(false)
     }
 
     this.pending = { ...wanted, key }
-    this.fire()
+    this.fire(view)
+  }
+
+  /**
+   * Read `window` as memory allows and put it on screen — unless a block held
+   * is already that fine — and say whether that is what is on screen now.
+   *
+   * What a figure is drawn from. A screen-sized block is about as fine as the
+   * screen, and a figure is a page at 300 dpi: so saving one reads the framed
+   * window as the view would have read it before reads were sized to the screen,
+   * and the figure keeps the grid the reader chose (§19.2). It is also what
+   * turning *Refine on zoom* off asks for, with the view's whole domain: the one
+   * large block that reading once and zooming freely has always meant.
+   *
+   * Every read in flight is called off and no other starts until this lands:
+   * each would be for a picture this is about to replace. `onReading` is told
+   * when a read is actually made, so a figure that is already fine enough says
+   * nothing about reading.
+   */
+  sharpen(window: { rows: Extent; cols: Extent }, onReading?: () => void): Promise<boolean> {
+    if (this.disposed) return Promise.resolve(false)
+    if (this.sharpening !== null) return this.sharpening
+    // A little wider than the framed window, so the view carried onto the block
+    // stays inside it: a view that came out a bin wider than its block would
+    // be put back on a coarser one that covers it, on the very next frame.
+    const rows = clip(pad(window.rows, SHARPEN_PAD), this.options.ceiling.rows)
+    const cols = clip(pad(window.cols, SHARPEN_PAD), this.options.ceiling.cols)
+    const grid = this.memoryGrid({ rows, cols })
+    const held = this.bestFor({ rows, cols })
+    if (held !== null && held.grid <= grid) {
+      // A block in hand already that fine. The one on screen stays as it is, its
+      // colours the ones the reader framed; another is handed over to be
+      // measured, as the figure's own read would be.
+      if (held.result === this.current || this.options.onBlock(held.result, { measure: true })) {
+        this.current = held.result
+        this.standing = { result: held.result, view: null }
+        return Promise.resolve(true)
+      }
+      this.drop(held.result)
+    }
+    if (this.inflight !== null) {
+      this.inflight.cancel()
+      this.inflight = null
+      this.options.onBusy?.(false)
+    }
+    this.pending = null
+    onReading?.()
+    const key = keyOf(rows, cols)
+    const { promise, cancel } = this.options.read(rows, cols)
+    this.inflight = { key, rows, cols, grid, cancel }
+    this.options.onBusy?.(true)
+    const run: Promise<boolean> = promise
+      .then(
+        (result) => {
+          if (this.disposed || this.inflight?.key !== key) return false
+          this.inflight = null
+          this.options.onBusy?.(false)
+          this.keep(result, rows, cols)
+          if (this.options.onBlock(result, { measure: true })) {
+            this.current = result
+            this.standing = { result, view: null }
+            return true
+          }
+          this.drop(result)
+          return false
+        },
+        (err: unknown) => {
+          if (this.disposed || this.inflight?.key !== key) return false
+          this.inflight = null
+          this.options.onBusy?.(false)
+          if (!isAbort(err)) this.options.onError?.(err)
+          return false
+        },
+      )
+      .finally(() => {
+        if (this.sharpening === run) this.sharpening = null
+      })
+    this.sharpening = run
+    return run
+  }
+
+  /**
+   * Whether the zoom is going inward: the view narrower than on a frame just
+   * before it, now or within the last {@link INWARD_MS}. A wider one ends it at
+   * once, and so does a narrower one after a pause — that is a jump, a
+   * bookmark or a typed window, not a zoom that is still going.
+   */
+  private zoomingIn(view: RefineView): boolean {
+    const span = Math.max(view.rows[1] - view.rows[0], view.cols[1] - view.cols[0])
+    const now = this.options.now?.() ?? clock()
+    if (span < this.lastSpan && now - this.lastAt < INWARD_MS) this.inwardAt = now
+    else if (span !== this.lastSpan) this.inwardAt = Number.NEGATIVE_INFINITY
+    this.lastSpan = span
+    this.lastAt = now
+    return now - this.inwardAt < INWARD_MS
   }
 
   /**
@@ -342,15 +628,16 @@ export class BlockLadder {
    * the only thing the view can say once `clampView` has confined it:
    *
    * - **Neither edge** — the reader is looking around inside what they have, so
-   *   this is a zoom. Pad by half a window and let the grid fall where it may.
+   *   this is a zoom, or a pan read ahead of its edge. Pad by half a window and
+   *   let the grid fall where it may.
    * - **One edge** — they are *travelling*, and have run out of block in the
    *   direction they are going. Same span, recentred: panning changes place, not
    *   scale, and padding it the way a zoom does was what handed a reader back a
    *   4× coarser map for the crime of dragging left.
    * - **Both edges** — the block is entirely on screen and they are still
    *   pulling back, which is the only way an axis can be pressed at both ends at
-   *   once. That is a zoom *out*, so buy several windows at a stroke rather than
-   *   stopping again on the next notch.
+   *   once. That is a zoom *out*, so buy more than one window at a stroke rather
+   *   than stopping again on the next notch.
    */
   private axisPlan(view: Extent, block: Extent | null, bound: Extent): Extent {
     // A circle is not special here (SPECS §8.15). A window across its origin is
@@ -373,22 +660,59 @@ export class BlockLadder {
    *
    * Two questions, and both have to be yes: does it *cover* what is being
    * looked at, and is its grid within a factor of {@link REFINE_FACTOR} of the
-   * one this window could be read at. The second is what stops a slow zoom from
-   * reading continuously, and it is what makes the ladder terminate — once the
-   * block is at the file's own bins, `wanted` can never be finer, so the answer
-   * is yes forever.
+   * one this window could be read at — {@link READ_AHEAD_FACTOR} while a zoom
+   * is still going inward. The factor is what stops a slow zoom from reading
+   * continuously, and it is what makes the ladder terminate — once the block is
+   * at the file's own bins, `wanted` can never be finer, so the answer is yes
+   * forever.
    */
-  private satisfied(view: RefineView): boolean {
+  private satisfied(view: RefineView, inward = false): boolean {
     const block = this.held0()
-    if (block === null) return false
-    if (!covers(block.rows, view.rows) || !covers(block.cols, view.cols)) return false
-    if (this.atEdge(view, block)) return false
-    const wanted = this.plan(view)
-    return block.grid <= this.gridWanted(wanted) * REFINE_FACTOR
+    return block !== null && this.fits(block, view, inward)
   }
 
   /**
-   * The grid a read for this window would come back on, the floor applied.
+   * {@link satisfied}, for any block in hand: whether it would be. Without
+   * `ahead`, whether it is a whole picture of the view as it stands, with no
+   * thought for where the reader is heading ({@link edgeWanted}).
+   */
+  private fits(
+    block: Held,
+    view: RefineView,
+    inward: boolean,
+    wanted = this.gridWanted(view),
+    ahead = true,
+  ): boolean {
+    if (!covers(block.rows, view.rows) || !covers(block.cols, view.cols)) return false
+    if (this.edgeWanted(view, block, ahead)) return false
+    // At the floor the factor is one. It is there to stop a slow zoom reading
+    // for every small step, and at the file's own bins there is no step after
+    // this one: a view that can show them is shown them, rather than left a
+    // factor of two short of the resolution the reader opened the file at.
+    const factor = wanted <= this.floor() ? 1 : inward ? READ_AHEAD_FACTOR : REFINE_FACTOR
+    return block.grid <= wanted * factor
+  }
+
+  /**
+   * The plan for reading `window` while `view` is on screen: screen-sized where
+   * the view says how big its screen is, and `undefined` — read as memory
+   * allows — where it does not.
+   */
+  private planned(window: { rows: Extent; cols: Extent }, view: RefineView): ReadPlan | undefined {
+    if (view.screen === undefined || !(view.screen > 0)) return undefined
+    if (this.options.planFor !== undefined) return this.options.planFor(window, view)
+    return screenPlan({
+      rungs: [],
+      binsize: 1,
+      view: spanOf(view),
+      read: spanOf(window),
+      screen: view.screen,
+      floor: this.floor(),
+    })
+  }
+
+  /**
+   * The grid a read of `window` would come back on, in bins of the open map.
    *
    * One place, so *what is good enough* and *what to ask for* cannot disagree:
    * without the floor here a declared 10 kb view would be permanently
@@ -396,8 +720,18 @@ export class BlockLadder {
    * read, get 5 bins back because the floor bound the reader, and ask again on
    * the next frame forever.
    */
-  private gridWanted(wanted: { rows: Extent; cols: Extent }): number {
-    return Math.max(this.floor(), gridFor(wanted.rows, wanted.cols, this.options.budget?.()))
+  private gridOf(window: { rows: Extent; cols: Extent }, view: RefineView): number {
+    return this.planned(window, view)?.grid ?? this.memoryGrid(window)
+  }
+
+  /** The grid the view's own next read would come back on. */
+  private gridWanted(view: RefineView): number {
+    return this.gridOf(this.plan(view), view)
+  }
+
+  /** The grid the reader fits a window to as memory allows, the floor applied. */
+  private memoryGrid(window: { rows: Extent; cols: Extent }): number {
+    return Math.max(this.floor(), gridFor(window.rows, window.cols, this.options.budget?.()))
   }
 
   /** The declared grid, as a whole number of the open map's bins per cell. */
@@ -407,47 +741,62 @@ export class BlockLadder {
   }
 
   /**
-   * Whether the reader has pushed the map up against an edge of its own block
-   * that is **not** an edge of the world.
+   * Whether where the view sits in its block is itself a reason to read.
    *
-   * This is the one thing coverage cannot say, and leaving it unsaid was a hole
-   * a reader falls straight into. `HeatmapView.clampView` treats the block in
-   * hand as the whole world — which is right, and is what keeps a map from
-   * being panned off into nothing — so a block covering 0–52 kb of a chromosome
-   * is a wall at 52 kb. The view can never report a window past it, so
-   * {@link covers} is always satisfied, so nothing is ever read, so the reader
-   * is *stuck*: they zoomed into the start of a sequence, got a finer grid for
-   * it, and thereby lost the ability to pan to the rest of it.
+   * **Zoomed in**, it is when the view comes within {@link READ_AHEAD_EDGE} of a
+   * view of an edge of its block that is not an edge of the world — the read
+   * then starts before the reader arrives. `HeatmapView.clampView` treats the
+   * block in hand as the whole world, which is right, and is what keeps a map
+   * from being panned off into nothing; but it makes a block covering 0–52 kb
+   * of a chromosome a wall at 52 kb. The view can never report a window past
+   * it, so {@link covers} is always satisfied, and without this the reader
+   * would be *stuck*: they zoomed into the start of a sequence, got a finer
+   * grid for it, and thereby lost the ability to pan to the rest of it.
    *
-   * Pressed against the edge is therefore its own reason to read, and the read
-   * that answers it is the same one every other trigger asks for — a window
-   * centred on the view, padded, clipped to the ceiling — which recentres the
-   * block and gives the ground back.
+   * **Fitted**, never: a view showing its whole block is pressed against every
+   * edge of it because it shows all of it, and reading on that alone read nine
+   * times the window the moment a region opened. **Zoomed out** past the block,
+   * when any of its edges is not the world's, which is a reader pulling back.
+   *
+   * A view that does not say how it is zoomed is read as zoomed in, with no
+   * reach: pressed against the edge, as before there was read-ahead. So is any
+   * view when `ahead` is false, which asks what the view needs now rather than
+   * where it is going.
    *
    * It terminates for the same reason the rest does: an edge that *is* the
    * ceiling's edge is not pressed, so a block spanning the whole domain never
-   * asks for anything, and a block recentred on the view has the reader in its
+   * asks for anything, and a block read around the view has the reader in its
    * middle rather than at its rim.
    */
-  private atEdge(view: RefineView, block: Held): boolean {
-    const pressed = (at: Extent, held: Extent, bound: Extent): boolean =>
-      (at[0] <= held[0] && held[0] > bound[0]) || (at[1] >= held[1] && held[1] < bound[1])
+  private edgeWanted(view: RefineView, block: Held, ahead = true): boolean {
+    const { ceiling } = this.options
+    // The view's fit is to the block on screen. Another block in hand covers
+    // the view, and the view would be fitted to it by how much wider it is.
+    const fit = view.fit === undefined || block.result === this.current ? view.fit : fitTo(view, block)
+    if (fit !== undefined && fit <= 1 + FIT_SLACK) {
+      if (fit >= 1 - FIT_SLACK) return false
+      return near(view.rows, block.rows, ceiling.rows, 0) || near(view.cols, block.cols, ceiling.cols, 0)
+    }
+    const reach = (axis: Extent): number =>
+      fit === undefined || !ahead ? 0 : READ_AHEAD_EDGE * (axis[1] - axis[0])
     return (
-      pressed(view.rows, block.rows, this.options.ceiling.rows) ||
-      pressed(view.cols, block.cols, this.options.ceiling.cols)
+      near(view.rows, block.rows, ceiling.rows, reach(view.rows)) ||
+      near(view.cols, block.cols, ceiling.cols, reach(view.cols))
     )
   }
 
   /** Issue the pending read. */
-  private fire(): void {
+  private fire(view: RefineView): void {
     if (this.disposed) return
     const pending = this.pending
     if (pending === null) return
     this.pending = null
     if (this.inflight !== null || this.refused.has(pending.key)) return
 
-    const { promise, cancel } = this.options.read(pending.rows, pending.cols)
-    this.inflight = { key: pending.key, rows: pending.rows, cols: pending.cols, cancel }
+    const plan = this.planned(pending, view)
+    const grid = plan?.grid ?? this.memoryGrid(pending)
+    const { promise, cancel } = this.options.read(pending.rows, pending.cols, plan)
+    this.inflight = { key: pending.key, rows: pending.rows, cols: pending.cols, grid, cancel }
     this.options.onBusy?.(true)
     void promise
       .then((result) => {
@@ -501,52 +850,139 @@ export class BlockLadder {
     }
   }
 
-  /**
-   * Call off the read in flight, at the reader's request.
-   *
-   * The way out of a freeze. A refine is normally over before it is noticed, but
-   * *normally* is not a guarantee: a coarse window of a large cooler is a real
-   * scan, and a map held for a minute with no way to take it back is an app that
-   * has stopped working as far as anybody using it is concerned. Escape gives it
-   * back — the picture that was already there is still a complete picture, which
-   * is the whole reason this feature could be built without a tile server.
-   *
-   * The window is remembered as {@link abandoned} so the next frame does not
-   * simply ask again. Moving clears it, because moving is asking again.
-   */
-  abort(): void {
-    const flight = this.inflight
-    if (flight === null) return
-    this.abandoned = flight.key
-    flight.cancel()
-    this.inflight = null
-    this.pending = null
-    this.options.onBusy?.(false)
-  }
-
   destroy(): void {
     this.disposed = true
     this.pending = null
-    // The freeze belongs to the read, so it has to be given back with it.
-    // `abort` already does this and this did not, which left the panel frozen —
-    // gestures held, spinner turning — for a read that had been cancelled and
-    // would never report. It matters only when the panel outlives the ladder,
-    // because a panel torn down in the same breath clears its own freeze in
-    // `detach`; but that is exactly the case a caller reaching for `destroy`
-    // rather than for the view's own teardown is in.
+    // The spinner belongs to the read, so it has to be given back with it. It
+    // matters only when the panel outlives the ladder, because a panel torn
+    // down in the same breath clears its own wait in `detach`; but that is
+    // exactly the case a caller reaching for `destroy` rather than for the
+    // view's own teardown is in.
     //
-    // Conditional on there having *been* a read, mirroring `abort`, so the
-    // number of `onBusy(false)` calls matches the number of `onBusy(true)`
-    // calls and a listener counting them is not driven negative. Safe in either
-    // teardown order: `HeatmapView.setFrozen` returns immediately when the flag
-    // already holds the value asked for, so a panel that has already detached
-    // is not woken to repaint.
+    // Conditional on there having *been* a read, so the number of
+    // `onBusy(false)` calls matches the number of `onBusy(true)` calls and a
+    // listener counting them is not driven negative.
     const wasReading = this.inflight !== null
     this.inflight?.cancel()
     this.inflight = null
     this.held = []
     this.current = null
+    this.sharpening = null
+    this.standing = null
     if (wasReading) this.options.onBusy?.(false)
+    this.options.dispose?.()
+  }
+}
+
+/**
+ * Whether `at` is within `margin` of an edge of `held` that is not an edge of
+ * `bound` — pressed against it, with no margin.
+ */
+function near(at: Extent, held: Extent, bound: Extent, margin: number): boolean {
+  return (at[0] - held[0] <= margin && held[0] > bound[0]) || (held[1] - at[1] <= margin && held[1] < bound[1])
+}
+
+/**
+ * How far `view` is zoomed into a block that covers it, as `RefineView.fit` says
+ * of the block on screen: the zoom over the one that fits the block, which is
+ * how many times the view goes into the block along the axis that fits.
+ */
+function fitTo(view: RefineView, block: { rows: Extent; cols: Extent }): number {
+  return Math.max(
+    (block.rows[1] - block.rows[0]) / Math.max(Number.EPSILON, view.rows[1] - view.rows[0]),
+    (block.cols[1] - block.cols[0]) / Math.max(Number.EPSILON, view.cols[1] - view.cols[0]),
+  )
+}
+
+/** Whether two views show the same window, to a millionth of it. */
+function sameWindow(a: RefineView, b: RefineView): boolean {
+  const close = (x: Extent, y: Extent): boolean => {
+    const slack = 1e-6 * Math.max(1, x[1] - x[0])
+    return Math.abs(x[0] - y[0]) <= slack && Math.abs(x[1] - y[1]) <= slack
+  }
+  return close(a.rows, b.rows) && close(a.cols, b.cols)
+}
+
+/** The wider of a window's two spans, in bins. */
+function spanOf(window: { rows: Extent; cols: Extent }): number {
+  return Math.max(window.rows[1] - window.rows[0], window.cols[1] - window.cols[0])
+}
+
+/** `performance.now` where there is one. */
+function clock(): number {
+  return typeof performance === 'undefined' ? Date.now() : performance.now()
+}
+
+/**
+ * A **screen-sized** read of a window (§2): the stored rung, and the pooling
+ * within it, that puts about one cell on each CSS pixel of the view.
+ *
+ * The grid is the view's span over the screen's width, so the block a read
+ * brings back is about as fine as the picture can show and no finer — which is
+ * what makes a read of a whole chromosome a few hundred milliseconds rather
+ * than seconds, and a refine a step rather than a wait. It is the coarsest
+ * stored rung whose bins are no bigger than that cell, because a rung is the
+ * fewest stored pixels for the picture and its balanced values are balanced at
+ * its own resolution ({@link chooseRung}), pooled within that rung to the cell.
+ *
+ * - **Never finer than the open rung**, nor than the grid the reader declared
+ *   (`floor`, §3.4), which also takes the rung choice away, for the reason
+ *   {@link attachRefine} gives: a declared grid is a whole number of the open
+ *   map's bins, and a rung's bins do not divide it in general.
+ * - **Never more than {@link SCREEN_READ_CAP} screens across**, whatever window
+ *   it is for, so a read much wider than its view is coarsened rather than
+ *   allowed to grow with it.
+ *
+ * `view` and `read` are the wider spans of the view and of the window to read,
+ * in bins of the open map; `screen` is the plot's wider side in CSS pixels.
+ */
+export function screenPlan(options: {
+  rungs: ReadonlyArray<{ name: string; binsize: number }>
+  binsize: number
+  view: number
+  read: number
+  screen: number
+  floor?: number
+}): ReadPlan {
+  const floor = Math.max(1, Math.floor(options.floor ?? 1))
+  const screen = Math.max(1, options.screen)
+  // Two bounds on the cell, in bins of the open map: about a pixel of the
+  // view, *rounded* to a whole number of the bins it is pooled from, so the
+  // block has between three quarters of a cell and a cell and a half to each
+  // pixel — floored, a rung just finer than the pixel came back with nearly
+  // two, and every landing coloured twice the cells the screen could show; and
+  // no smaller than the cap allows, rounded *up* so the cap holds.
+  const sharp = Math.max(options.view / screen, floor)
+  const capped = options.read / (SCREEN_READ_CAP * screen)
+  const target = Math.max(sharp, capped)
+  if (floor > 1) {
+    const k = floor * Math.max(1, Math.round(sharp / floor), Math.ceil(capped / floor))
+    return k > 1 ? { binsPerCell: k, grid: k } : { grid: 1 }
+  }
+  const binsize = options.binsize > 0 ? options.binsize : 1
+  const most = target * binsize
+  let best: { name: string; binsize: number } | null = null
+  for (const rung of options.rungs) {
+    if (rung.binsize < binsize || rung.binsize > most) continue
+    if (best === null || rung.binsize > best.binsize) best = rung
+  }
+  const from = best?.binsize ?? binsize
+  const pooled = Math.max(1, Math.round((sharp * binsize) / from), Math.ceil((capped * binsize) / from))
+  // The cell those bins make, read from the coarsest rung that divides it: a
+  // `zoomify` ladder doubles, so the cell two 160 kb bins make is the 320 kb
+  // rung's own bin, stored, in a quarter of the pixels the 160 kb rung pools
+  // it from.
+  const cell = pooled * from
+  let read = best ?? { name: '', binsize }
+  for (const rung of options.rungs) {
+    if (rung.binsize <= read.binsize || rung.binsize > cell || cell % rung.binsize !== 0) continue
+    read = rung
+  }
+  const k = Math.round(cell / read.binsize)
+  return {
+    ...(read.binsize === binsize || read.name === '' ? {} : { rung: read.name }),
+    ...(k > 1 ? { binsPerCell: k } : {}),
+    grid: cell / binsize,
   }
 }
 
@@ -643,18 +1079,24 @@ function isAbort(err: unknown): boolean {
 const REFINE_KEY = 'chromosomix:refine'
 
 /**
- * Off.
+ * On.
  *
- * A zoom that reads is a zoom that can *wait*, and on a large cooler the wait is
- * real: the map holds still, a spinner turns, and what the reader gets back is a
- * different grid from the one they were reading. That is a good trade when it is
- * asked for and a surprising one when it is not — and §2's promise, that pan and
- * zoom perform no I/O, is the promise the app has always made. So the default is
- * the behaviour that keeps it, and the feature is one command away: the
- * palette's *Refine on zoom*, a palette command only because it is one
- * preference across a whole deck rather than a switch on one map (§2).
+ * It was off, and for a reason that no longer holds: a zoom that read was a zoom
+ * that *waited*. Each read was as large as memory allowed — a window of sixteen
+ * thousand bins read a bin to a cell, a gigabyte of values for a picture seven
+ * hundred pixels across — and the map held still, refusing every gesture, until
+ * it came. Reads are now sized to the screen and the map never holds still (§2):
+ * a block is a few hundred milliseconds of reading, the picture on screen keeps
+ * every gesture meanwhile, and the next block is read ahead of the zoom. So the
+ * map opens at the screen's resolution and sharpens as the reader zooms, down to
+ * the file's own bins.
+ *
+ * Off is still one command away — the palette's *Refine on zoom*, a palette
+ * command because it is one preference across a whole deck rather than a switch
+ * on one map — and it is the old promise, kept: the window read once, as finely
+ * as memory allows, and every pan and zoom after it free of reads.
  */
-export const REFINE_DEFAULT = false
+export const REFINE_DEFAULT = true
 
 let refining: boolean | null = null
 const refineListeners = new Set<(on: boolean) => void>()
@@ -873,8 +1315,18 @@ export function previewRung(
  */
 export interface RefinablePanel {
   setRefineListener(listener: ((view: RefineView) => void) | null): void
-  regrid(data: MatrixResult, binsize: number, second?: MatrixResult): boolean
-  setFrozen(on: boolean, onCancel?: () => void): void
+  regrid(data: MatrixResult, binsize: number, second?: MatrixResult, how?: BlockHandover): boolean
+  /**
+   * Say a read is outstanding for the window on screen — the spinner in the
+   * plot's corner, over a view that still takes every gesture (§2).
+   */
+  setWaiting(on: boolean): void
+  /**
+   * What a figure waits for before it is drawn ({@link BlockLadder.sharpen}),
+   * or `null` to take it back. Optional so a panel with no figure need not
+   * implement it.
+   */
+  setFigurePrep?(prep: ((view: RefineView, onReading: () => void) => Promise<boolean>) | null): void
 }
 
 /**
@@ -946,23 +1398,28 @@ export function attachRefine(options: {
     ceiling: options.ceiling,
     ...(options.floor === undefined ? {} : { floor: options.floor }),
     ...(options.budget === undefined ? {} : { budget: options.budget }),
-    read: (rows, cols) => {
+    read: (rows, cols, plan) => {
+      // A screen-sized read says its own rung and grid (`screenPlan`, below). A
+      // read with no plan is read as memory allows, as every read was before.
       const held = Math.max(1, Math.floor(options.floor?.() ?? 1))
       // A declared grid takes the rung choice with it, for the reason
       // {@link attachRefine}'s `floor` gives: the cell the reader was promised is
       // a whole number of the *open* map's bins, and a coarser rung's bins do
       // not divide it in general.
       const rung =
-        held > 1
-          ? undefined
-          : chooseRung(
-              options.rungs ?? [],
-              Math.max(rows[1] - rows[0], cols[1] - cols[0]),
-              options.binsize,
-              undefined,
-              options.budget?.(),
-            )
-      const { promise, cancel } = options.read(rows, cols, rung, held > 1 ? held : undefined)
+        plan !== undefined
+          ? plan.rung
+          : held > 1
+            ? undefined
+            : chooseRung(
+                options.rungs ?? [],
+                Math.max(rows[1] - rows[0], cols[1] - cols[0]),
+                options.binsize,
+                undefined,
+                options.budget?.(),
+              )
+      const binsPerCell = plan !== undefined ? plan.binsPerCell : held > 1 ? held : undefined
+      const { promise, cancel } = options.read(rows, cols, rung, binsPerCell)
       return {
         cancel,
         promise: promise.then(({ result, second }) => {
@@ -971,7 +1428,7 @@ export function attachRefine(options: {
         }),
       }
     },
-    onBlock: (result) => {
+    onBlock: (result, how) => {
       const placed = options.panel.regrid(
         result,
         // The bin size of the map that answered, which is the open one unless a
@@ -979,22 +1436,45 @@ export function attachRefine(options: {
         // caller that assumed otherwise would caption a 5 kb picture as 1 kb.
         Math.max(1, result.binsize ?? options.binsize) * Math.max(1, result.binsPerCell ?? 1),
         seconds.get(result),
+        how,
       )
       if (placed) options.onInstalled?.(result)
       return placed
     },
-    // The freeze, and the caller's own hook after it. Wired here rather than
+    planFor: (window, view) =>
+      screenPlan({
+        rungs: options.rungs ?? [],
+        binsize: options.binsize,
+        view: Math.max(view.rows[1] - view.rows[0], view.cols[1] - view.cols[0]),
+        read: Math.max(window.rows[1] - window.rows[0], window.cols[1] - window.cols[0]),
+        screen: view.screen ?? 1,
+        floor: options.floor?.() ?? 1,
+      }),
+    // The spinner, and the caller's own hook after it. Wired here rather than
     // left to each view because it is not a view's decision: a read is in
-    // flight for the window on screen, and the window on screen must therefore
-    // stop moving. A view that wants to say something as well still can.
+    // flight for the window on screen, and the picture says so — without
+    // holding the view, which goes on taking every gesture (§2).
     onBusy: (busy) => {
-      options.panel.setFrozen(busy, () => ladder.abort())
+      options.panel.setWaiting(busy)
       options.onBusy?.(busy)
     },
     ...(options.onError === undefined ? {} : { onError: options.onError }),
+    dispose: () => {
+      stopRefine()
+      options.panel.setFigurePrep?.(null)
+    },
   })
   options.panel.setRefineListener((view) => {
     if (refineEnabled()) ladder.consider(view)
+  })
+  // A figure is drawn from the block it sharpens to: the framed window at the
+  // grid the reader chose, as memory allows (§19.2).
+  options.panel.setFigurePrep?.((view, onReading) => ladder.sharpen(view, onReading))
+  // Turning *Refine on zoom* off is asking to read once and zoom freely: the
+  // view's whole domain, read as memory allows, as every view was read before
+  // reads were sized to the screen (§2).
+  const stopRefine = subscribeRefine((on) => {
+    if (!on) void ladder.sharpen(options.ceiling)
   })
   return ladder
 }

@@ -1370,17 +1370,6 @@ describe('showing a window that came from outside', () => {
     expect(shown.cols[0]).toBeGreaterThanOrEqual(0)
   })
 
-  it('leaves a frozen view alone, as every other gesture does', () => {
-    // Held while a finer block is being read: the picture must be exactly where
-    // the reader left it when the swap happens.
-    const heatmap = view(400, 100)
-    const before = heatmap.cellWindow()
-    heatmap.setFrozen(true)
-    heatmap.showCellSpan([20, 40])
-    expect(heatmap.cellWindow()).toEqual(before)
-    heatmap.setFrozen(false)
-  })
-
   it('moves a waiting view as it moves any other', () => {
     // A stand-in on screen while its block reads (§7.2): the spinner turns, and
     // nothing is refused. The reader's gestures and a locked deck's windows
@@ -1388,7 +1377,6 @@ describe('showing a window that came from outside', () => {
     const heatmap = view(400, 100)
     heatmap.setWaiting(true)
     expect(heatmap.isWaiting).toBe(true)
-    expect(heatmap.isFrozen).toBe(false)
     expect(heatmap.fitted).toBe(true)
     heatmap.zoomAt(200, 200, 2)
     expect(heatmap.fitted).toBe(false)

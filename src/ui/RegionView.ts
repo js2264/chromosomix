@@ -55,7 +55,15 @@ import { blockSummary } from './mapSummary'
 import { icon, iconButton } from './icons'
 import { presentationOf, secondBlock, type CompareRead, type LowerRead } from './compare'
 import type { LowerPresentation } from './LowerReading'
-import { attachRefine, poolingRung, previewRung, rungsOf, type BlockLadder } from './refine'
+import {
+  attachRefine,
+  poolingRung,
+  previewRung,
+  refineEnabled,
+  rungsOf,
+  screenPlan,
+  type BlockLadder,
+} from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox, featureSuggestions, locusPlaceholder } from './SearchBox'
 import { stepper } from './Stepper'
@@ -1007,12 +1015,46 @@ export class RegionView {
   }
 
   /**
+   * How the first read of a window is asked for.
+   *
+   * **Screen-sized** while *Refine on zoom* is on, which is the default (§2):
+   * the stored rung and the pooling within it that put about a cell on each
+   * pixel of the panel ({@link screenPlan}), so a chromosome is read in a few
+   * hundred milliseconds whatever resolution the file was opened at, and the
+   * ladder reads finer as the reader zooms, down to that resolution. Off, the
+   * window is read as memory allows — from the rung that pools it for nothing
+   * ({@link firstRung}), at the grid the reader declared ({@link pooled}) —
+   * once, and every zoom after it is free of reads.
+   *
+   * Never a rung beside a second file, whose ladder need not have it, for the
+   * reason {@link firstRung} gives.
+   */
+  private firstPlan(rows: [number, number], cols: [number, number]): { rung?: string; binsPerCell?: number } {
+    if (!refineEnabled()) return { ...this.firstRung(rows, cols), ...this.pooled() }
+    const span = Math.max(rows[1] - rows[0], cols[1] - cols[0])
+    const plan = screenPlan({
+      rungs: this.props.compare === undefined ? rungsOf(this.props.rungs ?? []) : [],
+      binsize: this.props.binsize,
+      view: span,
+      read: span,
+      screen: this.panel.screenWidth(),
+      floor: this.props.binsPerCell ?? 1,
+    })
+    return {
+      ...(plan.rung === undefined ? {} : { rung: plan.rung }),
+      ...(plan.binsPerCell === undefined ? {} : { binsPerCell: plan.binsPerCell }),
+    }
+  }
+
+  /**
    * Draw the window from a coarser rung while the asked block reads, where
    * that is worth a read of its own (§7.2, {@link previewRung}): the block of a
    * whole chromosome at the rung a file lands on is the slowest first picture a
    * reader is given, and the same window a few rungs up is a fraction of its
    * reads and of its cells.
    *
+   * Only with *Refine on zoom* off, whose first read is as large as memory
+   * allows: on, the first read is already screen-sized ({@link firstPlan}).
    * Only for one map read whole: not under a second file or a second reading
    * below the diagonal, which would each want a stand-in of their own; not on a
    * grid the reader chose (`binsPerCell`), which is a resolution they have
@@ -1034,6 +1076,10 @@ export class RegionView {
     wrap: [number, number] | undefined,
   ): Promise<MatrixResult | null> {
     if (
+      // A screen-sized first read is already the cheapest picture of the
+      // window there is ({@link firstPlan}): a stand-in for it would be a
+      // second read of the same thing, coarser.
+      refineEnabled() ||
       wrap !== undefined ||
       this.props.compare !== undefined ||
       this.props.lowerRead !== undefined ||
@@ -1163,9 +1209,8 @@ export class RegionView {
         const ask = {
           kind: 'matrix' as const,
           rows: [lo, hi] as [number, number],
-          ...this.firstRung([lo, hi], [lo, hi]),
+          ...this.firstPlan([lo, hi], [lo, hi]),
           ...(wrap === undefined ? {} : { wrap }),
-          ...this.pooled(),
           balance: this.props.balance,
           ...(this.props.value === undefined ? {} : { value: this.props.value }),
         }
@@ -1221,8 +1266,7 @@ export class RegionView {
         kind: 'matrix' as const,
         rows: [lo, hi] as [number, number],
         cols: [lo2, hi2] as [number, number],
-        ...this.firstRung([lo, hi], [lo2, hi2]),
-        ...this.pooled(),
+        ...this.firstPlan([lo, hi], [lo2, hi2]),
         balance: this.props.balance,
         ...(this.props.value === undefined ? {} : { value: this.props.value }),
       }

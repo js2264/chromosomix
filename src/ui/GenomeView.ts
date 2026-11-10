@@ -22,7 +22,7 @@ import { MatrixPanel,
 import { axisRegion } from './mapSelection'
 import { blockSummary, poolingNote } from './mapSummary'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
-import { attachRefine, rungsOf, type BlockLadder } from './refine'
+import { attachRefine, refineEnabled, rungsOf, screenPlan, type BlockLadder } from './refine'
 import { SearchBox, locusPlaceholder } from './SearchBox'
 import { stepper } from './Stepper'
 
@@ -282,7 +282,7 @@ export class GenomeView {
           ? await this.props.client.request<'matrix'>({
               kind: 'matrix',
               rows: [lo, hi],
-              ...this.pooled(),
+              ...this.firstPlan(hi - lo),
             })
           : await this.props.client.request<'aggregate'>({
               kind: 'aggregate',
@@ -294,7 +294,8 @@ export class GenomeView {
       // knows how many contigs are in one (`worker/reader.worker.ts`). A cell of
       // six bins is a six-bin bin, and every coordinate on screen is that
       // multiplication — so the panel is told before it is given the block.
-      this.panel.setResolution(this.props.binsize * (result.binsPerCell ?? 1))
+      // The bin size of the map that answered: a rung's, where one was read.
+      this.panel.setResolution((result.binsize ?? this.props.binsize) * (result.binsPerCell ?? 1))
       this.panel.setData(result, this.props.genome)
       this.renderSummary(result)
       this.armRefine([lo, hi], result)
@@ -352,6 +353,27 @@ export class GenomeView {
    * *choose one* — which is what a genome-wide read has always relied on, since
    * the side that knows how many contigs are in a genome is the reader.
    */
+  /**
+   * How the first read is asked for: **screen-sized** while *Refine on zoom* is
+   * on (`screenPlan`, §2), at the declared grid ({@link pooled}) as memory
+   * allows when it is off.
+   */
+  private firstPlan(span: number): { rung?: string; binsPerCell?: number } {
+    if (!refineEnabled()) return this.pooled()
+    const plan = screenPlan({
+      rungs: rungsOf(this.props.rungs ?? []),
+      binsize: this.props.binsize,
+      view: span,
+      read: span,
+      screen: this.panel.screenWidth(),
+      floor: this.props.binsPerCell ?? 1,
+    })
+    return {
+      ...(plan.rung === undefined ? {} : { rung: plan.rung }),
+      ...(plan.binsPerCell === undefined ? {} : { binsPerCell: plan.binsPerCell }),
+    }
+  }
+
   private pooled(): { binsPerCell?: number } {
     const k = this.props.binsPerCell ?? 1
     return k > 1 ? { binsPerCell: k } : {}

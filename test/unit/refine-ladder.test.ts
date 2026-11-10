@@ -24,7 +24,10 @@ import { denseCellCap } from '@/metacooler/matrix'
 import { POOLED_CELL_CAP } from '@/metacooler/pooling'
 import {
   BlockLadder,
+  INWARD_MS,
+  READ_AHEAD_EDGE,
   REFINE_DEFAULT,
+  SCREEN_READ_CAP,
   chooseRung,
   clip,
   covers,
@@ -34,8 +37,11 @@ import {
   recentre,
   refineEnabled,
   rungsOf,
+  screenPlan,
   setRefineEnabled,
   subscribeRefine,
+  type BlockHandover,
+  type ReadPlan,
 } from '@/ui/refine'
 import type { Extent } from '@/types'
 import type { MatrixResult } from '@/worker/protocol'
@@ -57,11 +63,14 @@ function block(rows: Extent, binsPerCell: number, cols: Extent = rows): MatrixRe
   }
 }
 
-/** A ladder with a fake clock, a fake timer and a recording reader. */
-function ladder(options: { ceiling?: Extent; reads?: Array<Extent>; budget?: number } = {}) {
+/** A ladder with a fake clock and a recording reader. */
+function ladder(
+  options: { ceiling?: Extent; reads?: Array<Extent>; budget?: number; now?: () => number } = {},
+) {
   const ceiling: Extent = options.ceiling ?? [0, 50_000]
-  const asked: Array<{ rows: Extent; cols: Extent }> = []
+  const asked: Array<{ rows: Extent; cols: Extent; plan?: ReadPlan }> = []
   const given: MatrixResult[] = []
+  const hows: Array<BlockHandover | undefined> = []
   const busy: boolean[] = []
   let settle: ((result: MatrixResult) => void) | null = null
   let refuse: ((err: unknown) => void) | null = null
@@ -69,8 +78,8 @@ function ladder(options: { ceiling?: Extent; reads?: Array<Extent>; budget?: num
 
   const it = new BlockLadder({
     ceiling: { rows: ceiling, cols: ceiling },
-    read: (rows, cols) => {
-      asked.push({ rows, cols })
+    read: (rows, cols, plan) => {
+      asked.push({ rows, cols, ...(plan === undefined ? {} : { plan }) })
       return {
         promise: new Promise<MatrixResult>((resolve, reject) => {
           settle = resolve
@@ -81,18 +90,21 @@ function ladder(options: { ceiling?: Extent; reads?: Array<Extent>; budget?: num
         },
       }
     },
-    onBlock: (result) => {
+    onBlock: (result, how) => {
       given.push(result)
+      hows.push(how)
       return true
     },
     onBusy: (on) => busy.push(on),
     ...(options.budget === undefined ? {} : { budget: () => options.budget }),
+    ...(options.now === undefined ? {} : { now: options.now }),
   })
 
   return {
     it,
     asked,
     given,
+    hows,
     busy,
     get cancels() {
       return cancels
@@ -114,13 +126,13 @@ function ladder(options: { ceiling?: Extent; reads?: Array<Extent>; budget?: num
 const WHOLE: Extent = [0, 50_000]
 
 describe('the preference', () => {
-  it('is off until somebody asks for it', () => {
-    // §2's promise is that pan and zoom perform no I/O, and that is the promise
-    // the app has always made. A zoom that reads is a zoom that can wait, and on
-    // a large cooler the wait is real — a good trade when it is asked for and a
-    // surprising one when it is not. So the default is the behaviour that keeps
-    // the promise, and the switch is on the map's own controls.
-    expect(REFINE_DEFAULT).toBe(false)
+  it('is on until somebody turns it off', () => {
+    // It was off while a zoom that read was a zoom that waited, the map held
+    // still for a read as large as memory allowed. Reads are sized to the
+    // screen now and the map never holds still (§2), so the map opens at the
+    // screen's resolution and sharpens as the reader zooms. Off keeps the old
+    // promise — one read, and no I/O while panning and zooming.
+    expect(REFINE_DEFAULT).toBe(true)
   })
 
   it('answers the default where there is no storage to read', () => {
@@ -264,7 +276,7 @@ describe('when the ladder reads', () => {
     // The whole domain, drawn at the grid the whole domain gets.
     l.it.consider({ rows: WHOLE, cols: WHOLE, binsPerCell: 13 })
     expect(l.asked).toHaveLength(0)
-    expect(l.busy, 'and never freezes the map').toHaveLength(0)
+    expect(l.busy, 'and never shows the spinner').toHaveLength(0)
   })
 
   it('does not read for less than a factor of two', () => {
@@ -279,46 +291,46 @@ describe('when the ladder reads', () => {
     expect(l.busy).toHaveLength(0)
   })
 
-  it('reads on the frame that crosses, and freezes the map while it does', () => {
+  it('reads on the frame that crosses, and says so while it does', () => {
     const l = ladder()
     l.it.adopt(block(WHOLE, 13))
     const view: Extent = [10_000, 22_000]
     l.it.consider({ rows: view, cols: view, binsPerCell: 13 })
-    // Immediately, not after a settle: the freeze is what ends the gesture, so
-    // there is no second frame to debounce and the reader sees the hold at the
-    // moment they crossed the edge.
+    // Immediately, not after a settle: the sooner it starts the sooner it is
+    // in, and one read for the frames that follow is the in-flight guard's job.
+    // `busy` turns the spinner, over a view that holds nothing still.
     expect(l.asked).toHaveLength(1)
     expect(l.busy).toEqual([true])
     // Padded by half a window on each side, and inside the ceiling.
     expect(l.asked[0].rows).toEqual([4_000, 28_000])
   })
 
-  it('releases the map when the block lands', async () => {
+  it('stops the spinner when the block lands', async () => {
     const l = ladder()
     l.it.adopt(block(WHOLE, 13))
     l.it.consider({ rows: [10_000, 22_000], cols: [10_000, 22_000], binsPerCell: 13 })
     expect(l.busy).toEqual([true])
     await l.land(block([4_000, 28_000], 6))
-    expect(l.busy, 'held, then released').toEqual([true, false])
+    expect(l.busy, 'turning, then stopped').toEqual([true, false])
   })
 
-  it('releases the map when the read is refused', async () => {
+  it('stops the spinner when the read is refused', async () => {
     const l = ladder()
     l.it.adopt(block(WHOLE, 13))
     l.it.consider({ rows: [10_000, 22_000], cols: [10_000, 22_000], binsPerCell: 13 })
     await l.fail(new Error('too large'))
-    // A refusal that left the view frozen would be an app that had stopped
-    // responding, which is the worst way to report one.
+    // A refusal that left the spinner turning would be a read that never ends,
+    // which is the worst way to report one.
     expect(l.busy).toEqual([true, false])
   })
 
   it('issues one read for a gesture, however many frames it lasts', () => {
     const l = ladder()
     l.it.adopt(block(WHOLE, 13))
-    // A wheel spin. In the app the freeze stops this after the first crossing
-    // frame; here the frames keep coming, which is the harder case and the one
-    // that has to stay bounded — a view that somehow did not freeze must still
-    // not turn a gesture into a burst of reads.
+    // A wheel spin, which goes on while its read is in flight: nothing holds
+    // the view still. The frames keep coming and must not turn a gesture into
+    // a burst of reads — the read in flight still covers each window, on a grid
+    // the zoom has not outrun, so it is the read every one of them wants.
     for (let i = 0; i < 8; i++) {
       const half = 20_000 - i * 2_000
       l.it.consider({
@@ -327,7 +339,7 @@ describe('when the ladder reads', () => {
         binsPerCell: 13,
       })
     }
-    expect(l.asked, 'the inflight guard, not the timing').toHaveLength(1)
+    expect(l.asked, 'the in-flight guard, not the timing').toHaveLength(1)
     expect(l.busy).toEqual([true])
   })
 
@@ -343,17 +355,22 @@ describe('when the ladder reads', () => {
       l.it.consider({ rows: [at - span / 2, at + span / 2], cols: [at - span / 2, at + span / 2], binsPerCell: 1 })
     }
     expect(l.asked).toHaveLength(0)
-    expect(l.busy, 'and the map is never held for a read it will not make').toHaveLength(0)
+    expect(l.busy, 'and the spinner never turns for a read it will not make').toHaveLength(0)
   })
 
   it('never asks for more than the view’s own domain', () => {
     const l = ladder({ ceiling: [0, 50_000] })
     l.it.adopt(block([24_000, 26_000], 1))
-    // Zooming out hard: the reach is four windows on each side, which would run
-    // to [-6000, 56000] and is clipped to what this view was allowed to read.
-    l.it.consider({ rows: [22_000, 28_000], cols: [22_000, 28_000], binsPerCell: 1 })
-    expect(l.asked).toHaveLength(1)
-    expect(l.asked[0].rows).toEqual([0, 50_000])
+    // Zooming out hard, past a block that is not the whole domain: the reach
+    // is a window on each side, every one of them clipped to what this view was
+    // allowed to read.
+    l.it.consider({ rows: [24_000, 26_000], cols: [24_000, 26_000], binsPerCell: 1, fit: 0.5 })
+    l.it.consider({ rows: [0, 50_000], cols: [0, 50_000], binsPerCell: 1 })
+    for (const read of l.asked) {
+      expect(read.rows[0]).toBeGreaterThanOrEqual(0)
+      expect(read.rows[1]).toBeLessThanOrEqual(50_000)
+    }
+    expect(l.asked[0].rows).toEqual([22_000, 28_000])
   })
 })
 
@@ -497,43 +514,307 @@ describe('what the ladder holds', () => {
   })
 })
 
-describe('the way out of a freeze', () => {
-  it('gives the map back and does not immediately ask again', () => {
-    const l = ladder()
-    l.it.adopt(block(WHOLE, 13))
-    const view = { rows: [10_000, 22_000] as Extent, cols: [10_000, 22_000] as Extent, binsPerCell: 13 }
-    l.it.consider(view)
-    expect(l.busy).toEqual([true])
+/** A view as `MatrixPanel.refineWindow` reports it: square, on a screen `screen` pixels wide. */
+function seen(at: Extent, options: { screen?: number; fit?: number; binsPerCell?: number } = {}) {
+  return {
+    rows: at,
+    cols: at,
+    binsPerCell: options.binsPerCell ?? 1,
+    ...(options.screen === undefined ? {} : { screen: options.screen }),
+    ...(options.fit === undefined ? {} : { fit: options.fit }),
+  }
+}
 
-    l.it.abort()
-    expect(l.cancels).toBe(1)
-    expect(l.busy, 'released').toEqual([true, false])
-
-    // The window they abandoned it at is the window they are still looking at,
-    // so without a memory of the abort the very next frame would re-freeze.
-    const asked = l.asked.length
-    for (let i = 0; i < 5; i++) l.it.consider(view)
-    expect(l.asked).toHaveLength(asked)
-    expect(l.busy).toEqual([true, false])
+describe('a screen-sized read', () => {
+  it('puts a cell on each pixel of the view, from the coarsest rung that does', () => {
+    // A whole chromosome of 7,849 bins at 25 kb on a 700-pixel plot: a cell of
+    // 280 kb, which the 250 kb rung stores — read as it is, not pooled out of
+    // the 25 kb map's seven thousand rows.
+    const rungs = rungsOf(['25000', '50000', '100000', '250000', '500000'])
+    const plan = screenPlan({ rungs, binsize: 25_000, view: 7_849, read: 7_849, screen: 700 })
+    expect(plan.rung).toBe('250000')
+    expect(plan.binsPerCell).toBeUndefined()
+    expect(plan.grid).toBe(10)
   })
 
-  it('asks again once the reader moves', () => {
-    const l = ladder()
-    l.it.adopt(block(WHOLE, 13))
-    l.it.consider({ rows: [10_000, 22_000], cols: [10_000, 22_000], binsPerCell: 13 })
-    l.it.abort()
-    const asked = l.asked.length
-    // Moving is asking again.
-    l.it.consider({ rows: [30_000, 42_000], cols: [30_000, 42_000], binsPerCell: 13 })
-    expect(l.asked).toHaveLength(asked + 1)
+  it('pools within the rung to the cell where the rung is finer', () => {
+    const rungs = rungsOf(['25000', '100000'])
+    // A cell of 280 kb out of 100 kb bins: three of them, the nearest whole
+    // number, a 300 kb grid — not two, which would put nearly one and a half
+    // cells on each pixel and colour twice what the screen can show.
+    const plan = screenPlan({ rungs, binsize: 25_000, view: 7_849, read: 7_849, screen: 700 })
+    expect(plan.rung).toBe('100000')
+    expect(plan.binsPerCell).toBe(3)
+    expect(plan.grid).toBe(12)
   })
 
-  it('is a no-op when nothing is in flight', () => {
+  it('reads the stored rung that is the cell, rather than pooling a finer one into it', () => {
+    // A mouse chr1 of 19,547 bins at 10 kb on 690 pixels: a cell of 283 kb is
+    // two of the 160 kb rung's bins — which is the 320 kb rung's own bin,
+    // stored in a quarter of the pixels.
+    const rungs = rungsOf(['10000', '20000', '40000', '80000', '160000', '320000', '640000'])
+    const plan = screenPlan({ rungs, binsize: 10_000, view: 19_547, read: 19_547, screen: 690 })
+    expect(plan).toEqual({ rung: '320000', grid: 32 })
+  })
+
+  it('reads the open map itself, a bin to a cell, once the view is narrower than the screen', () => {
+    const rungs = rungsOf(['25000', '100000'])
+    const plan = screenPlan({ rungs, binsize: 25_000, view: 400, read: 800, screen: 700 })
+    expect(plan).toEqual({ grid: 1 })
+  })
+
+  it('pools the open map where there is no ladder', () => {
+    const plan = screenPlan({ rungs: [], binsize: 1_000, view: 15_300, read: 15_300, screen: 690 })
+    expect(plan.rung).toBeUndefined()
+    expect(plan.binsPerCell).toBe(22)
+    expect(plan.grid).toBe(22)
+  })
+
+  it('holds the grid the reader declared, and names no rung under it', () => {
+    // A 10 kb* resolution added over a 2 kb map is five of its bins (§3.4): the
+    // screen's grid is a whole number of those, never a rung's.
+    const rungs = rungsOf(['2000', '10000', '50000'])
+    const wide = screenPlan({ rungs, binsize: 2_000, view: 60_000, read: 60_000, screen: 600, floor: 5 })
+    expect(wide.rung).toBeUndefined()
+    expect(wide.binsPerCell).toBe(100)
+    const close = screenPlan({ rungs, binsize: 2_000, view: 300, read: 600, screen: 600, floor: 5 })
+    expect(close).toEqual({ binsPerCell: 5, grid: 5 })
+  })
+
+  it('coarsens a read much wider than its view rather than letting it grow with it', () => {
+    const plan = screenPlan({ rungs: [], binsize: 1, view: 1_000, read: 20_000, screen: 500 })
+    // A cell per pixel of the view would be 20,000 / 2 = 10,000 cells across.
+    expect(20_000 / plan.grid).toBeLessThanOrEqual(SCREEN_READ_CAP * 500)
+  })
+
+  it('is what the ladder asks for once the view says how wide its screen is', () => {
     const l = ladder()
-    l.it.adopt(block(WHOLE, 13))
-    l.it.abort()
+    l.it.adopt(block(WHOLE, 72))
+    l.it.consider(seen([10_000, 22_000], { screen: 690, fit: 4, binsPerCell: 72 }))
+    expect(l.asked).toHaveLength(1)
+    const read = l.asked[0]
+    // Padded half a window each side, at a cell to a pixel of the view: 12,000
+    // bins over 690 pixels is 17 bins a cell.
+    expect(read.rows).toEqual([4_000, 28_000])
+    expect(read.plan).toEqual({ binsPerCell: 17, grid: 17 })
+  })
+
+  it('takes the last step to the file’s own bins, factor of two or not', () => {
+    // A block of two bins a cell under a view narrow enough to show every bin:
+    // the factor of two is there to stop a slow zoom reading at every step, and
+    // at the file's own bins there is no step after this one.
+    const l = ladder()
+    l.it.adopt(block([20_000, 24_000], 2))
+    l.it.consider(seen([21_000, 22_000], { screen: 690, fit: 4, binsPerCell: 2 }))
+    expect(l.asked).toHaveLength(1)
+    expect(l.asked[0].plan).toEqual({ grid: 1 })
+  })
+
+  it('reads nothing while the view still has a cell to each pixel or two', () => {
+    const l = ladder()
+    l.it.adopt(block(WHOLE, 72))
+    // The whole domain on 690 pixels wants 72 bins a cell — what it has.
+    l.it.consider(seen(WHOLE, { screen: 690, fit: 1, binsPerCell: 72 }))
+    expect(l.asked).toHaveLength(0)
+  })
+})
+
+describe('a gesture that outruns its read', () => {
+  it('calls the read off for a finer one once the zoom is twice past it', () => {
+    const l = ladder()
+    l.it.adopt(block(WHOLE, 72))
+    l.it.consider(seen([10_000, 22_000], { screen: 690, fit: 4, binsPerCell: 72 }))
+    expect(l.asked).toHaveLength(1)
+    // Still zooming, inside the window being read: a grid it has not outrun.
+    l.it.consider(seen([12_000, 20_000], { screen: 690, fit: 6, binsPerCell: 72 }))
     expect(l.cancels).toBe(0)
-    expect(l.busy).toHaveLength(0)
+    // Zoomed on, to a window the read in flight would land three times too
+    // coarse for: the latest window wins.
+    l.it.consider(seen([15_000, 17_000], { screen: 690, fit: 24, binsPerCell: 72 }))
+    expect(l.cancels).toBe(1)
+    expect(l.asked).toHaveLength(2)
+    expect(l.asked[1].plan?.grid).toBeLessThan(l.asked[0].plan!.grid / 2)
+  })
+
+  it('never holds the view: the spinner turns, and nothing else is asked of it', () => {
+    const l = ladder()
+    l.it.adopt(block(WHOLE, 72))
+    l.it.consider(seen([10_000, 22_000], { screen: 690, fit: 4, binsPerCell: 72 }))
+    // `busy` is the whole of what a read in flight says to the panel.
+    expect(l.busy).toEqual([true])
+  })
+})
+
+describe('reading ahead', () => {
+  // A block of 40 bins a cell; on a 460-pixel screen a 12,000-bin view wants
+  // 26 — between a factor of 1.4 and of 2 of what is on screen.
+  it('waits for the factor of two while the view stands still', () => {
+    const l = ladder({ now: () => 0 })
+    l.it.adopt(block([0, 24_000], 40))
+    l.it.consider(seen([6_000, 18_000], { screen: 460, fit: 2, binsPerCell: 40 }))
+    expect(l.asked).toHaveLength(0)
+  })
+
+  it('reads sooner while the zoom is going inward', () => {
+    let now = 0
+    const l = ladder({ now: () => now })
+    l.it.adopt(block([0, 24_000], 40))
+    l.it.consider(seen([5_000, 19_000], { screen: 460, fit: 1.7, binsPerCell: 40 }))
+    expect(l.asked).toHaveLength(0)
+    now += 30
+    l.it.consider(seen([6_000, 18_000], { screen: 460, fit: 2, binsPerCell: 40 }))
+    expect(l.asked, 'read before the factor of two').toHaveLength(1)
+  })
+
+  it('takes a narrower view after a pause for a jump, not a zoom', () => {
+    let now = 0
+    const l = ladder({ now: () => now })
+    l.it.adopt(block([0, 24_000], 40))
+    l.it.consider(seen([5_000, 19_000], { screen: 460, fit: 1.7, binsPerCell: 40 }))
+    now += INWARD_MS + 1
+    l.it.consider(seen([6_000, 18_000], { screen: 460, fit: 2, binsPerCell: 40 }))
+    expect(l.asked).toHaveLength(0)
+  })
+
+  it('reads around the view before a pan reaches the edge of its block', () => {
+    const l = ladder()
+    l.it.adopt(block([10_000, 20_000], 1))
+    // Zoomed in, a whole view from the right edge: nothing.
+    l.it.consider(seen([13_000, 15_000], { screen: 2_000, fit: 5 }))
+    expect(l.asked).toHaveLength(0)
+    // Within a quarter of a view of it, still not touching it: read.
+    const margin = READ_AHEAD_EDGE * 2_000
+    l.it.consider(seen([18_000 - margin + 100, 20_000 - margin + 100], { screen: 2_000, fit: 5 }))
+    expect(l.asked).toHaveLength(1)
+    const read = l.asked[0]
+    expect(read.rows[0]).toBeLessThan(18_000)
+    expect(read.rows[1]).toBeGreaterThan(20_000)
+  })
+
+  it('does not hand back a finer block whose edge the reader stands near', async () => {
+    // A block a zoom has left behind is finer than the screen needs, which is
+    // what made it look like the better answer: handed back, it was read around
+    // at the screen's grid, handed back again for being finer than that read,
+    // and read around again — frame after frame, for a reader standing still.
+    const l = ladder()
+    l.it.adopt(block([10_000, 20_000], 1))
+    const view = seen([11_000, 16_000], { screen: 1_000, fit: 2 })
+    l.it.consider(view)
+    expect(l.asked).toHaveLength(1)
+    const around = block(l.asked[0].rows, l.asked[0].plan?.grid ?? 1)
+    await l.land(around)
+    for (let frame = 0; frame < 5; frame++) l.it.consider(view)
+    expect(l.asked).toHaveLength(1)
+    expect(l.given.at(-1)).toBe(around)
+  })
+
+  it('keeps a finer block near whose edge the reader is, and reads ahead of it', () => {
+    // A coarser block in hand reaches further, and is within a factor of two
+    // of what the screen wants: but handing it over would coarsen the picture
+    // of where the reader already is, for want of where they are going.
+    const l = ladder()
+    l.it.adopt(block([0, 40_000], 4))
+    l.it.adopt(block([10_000, 14_000], 1))
+    l.it.consider(seen([11_700, 13_700], { screen: 1_000, fit: 2 }))
+    expect(l.given, 'nothing handed over').toHaveLength(0)
+    expect(l.asked, 'read ahead').toHaveLength(1)
+  })
+
+  it('still hands back a finer block that is good enough to stay', async () => {
+    const l = ladder()
+    const fine = block([10_000, 20_000], 1)
+    l.it.adopt(fine)
+    l.it.consider(seen([11_000, 16_000], { screen: 1_000, fit: 2 }))
+    await l.land(block(l.asked[0].rows, l.asked[0].plan?.grid ?? 1))
+    // Back in, to the middle of the finer block: it is the picture, for free.
+    l.it.consider(seen([14_000, 16_000], { screen: 1_000, fit: 2.5 }))
+    expect(l.given.at(-1)).toBe(fine)
+    expect(l.asked).toHaveLength(1)
+  })
+})
+
+describe('a view showing its whole block', () => {
+  it('reads nothing for the block’s edges while it is fitted', () => {
+    // A region opened on part of a sequence: the block is the region, and the
+    // fitted view is pressed against every edge of it because it shows all of
+    // it. That used to read nine times the window the moment the region opened.
+    const l = ladder()
+    l.it.adopt(block([20_000, 22_000], 1))
+    l.it.consider(seen([20_000, 22_000], { screen: 4_000, fit: 1 }))
+    expect(l.asked).toHaveLength(0)
+  })
+
+  it('widens once the reader pulls back past the block', () => {
+    const l = ladder()
+    l.it.adopt(block([20_000, 22_000], 1))
+    l.it.consider(seen([20_000, 22_000], { screen: 4_000, fit: 0.6 }))
+    expect(l.asked).toHaveLength(1)
+    expect(l.asked[0].rows).toEqual([18_000, 24_000])
+  })
+})
+
+describe('a figure’s block', () => {
+  it('reads the framed window as memory allows, and nothing else meanwhile', async () => {
+    const l = ladder()
+    l.it.adopt(block(WHOLE, 72))
+    let reading = 0
+    const done = l.it.sharpen({ rows: [10_000, 14_000], cols: [10_000, 14_000] }, () => (reading += 1))
+    expect(reading).toBe(1)
+    expect(l.asked).toHaveLength(1)
+    expect(l.asked[0].plan, 'no screen plan: as memory allows').toBeUndefined()
+    // The framed window and a twentieth of it each side, so the view carried
+    // onto the block stays inside it.
+    expect(l.asked[0].rows).toEqual([9_800, 14_200])
+    // A frame meanwhile asks for nothing: a read now would be for a picture the
+    // figure's block is about to replace.
+    l.it.consider(seen([11_000, 12_000], { screen: 600, fit: 10, binsPerCell: 72 }))
+    expect(l.asked).toHaveLength(1)
+    await l.land(block([9_800, 14_200], 1))
+    expect(await done).toBe(true)
+    expect(l.given.at(-1)?.binsPerCell).toBe(1)
+    // The same window on a finer grid, not a zoom: its colours are measured on
+    // itself, where a zoom's are kept from the block it replaces.
+    expect(l.hows.at(-1)).toEqual({ measure: true })
+  })
+
+  it('stays on screen until the reader moves', async () => {
+    // Finer than the screen needs and only a twentieth wider than the frame:
+    // left to the rules for a view, the next frame would read a screen-sized
+    // block around it, for a reader who has not moved.
+    const l = ladder()
+    l.it.adopt(block(WHOLE, 72))
+    const done = l.it.sharpen({ rows: [10_000, 14_000], cols: [10_000, 14_000] })
+    const figure = block([9_800, 14_200], 1)
+    await l.land(figure)
+    expect(await done).toBe(true)
+    const framed = seen([10_000, 14_000], { screen: 600, fit: 1.1 })
+    for (let frame = 0; frame < 3; frame++) l.it.consider(framed)
+    expect(l.asked).toHaveLength(1)
+    expect(l.given.at(-1)).toBe(figure)
+    // A pan: the view's own rules again, which read around where it went.
+    l.it.consider(seen([10_100, 14_100], { screen: 600, fit: 1.1 }))
+    expect(l.asked).toHaveLength(2)
+    expect(l.asked[1].plan).toBeDefined()
+  })
+
+  it('reads nothing where the block on screen is already that fine', async () => {
+    const l = ladder()
+    l.it.adopt(block([10_000, 14_000], 1))
+    let reading = 0
+    expect(await l.it.sharpen({ rows: [11_000, 12_000], cols: [11_000, 12_000] }, () => (reading += 1))).toBe(true)
+    expect(reading).toBe(0)
+    expect(l.asked).toHaveLength(0)
+    // Nor handed over again: the figure is the picture the reader framed.
+    expect(l.given).toHaveLength(0)
+  })
+
+  it('says so when its read fails, and leaves the picture as it was', async () => {
+    const l = ladder()
+    l.it.adopt(block(WHOLE, 72))
+    const done = l.it.sharpen({ rows: [10_000, 14_000], cols: [10_000, 14_000] })
+    await l.fail(new Error('too large'))
+    expect(await done).toBe(false)
+    expect(l.given).toHaveLength(0)
   })
 })
 

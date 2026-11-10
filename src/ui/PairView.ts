@@ -28,7 +28,7 @@ import { MatrixPanel,
 import { axisRegion } from './mapSelection'
 import { blockSummary } from './mapSummary'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
-import { attachRefine, rungsOf, type BlockLadder } from './refine'
+import { attachRefine, refineEnabled, rungsOf, screenPlan, type BlockLadder } from './refine'
 import { typedLocusToRegion } from '../genome/assembly'
 import { SearchBox, locusPlaceholder } from './SearchBox'
 
@@ -320,9 +320,29 @@ export class PairView {
         ...(this.props.value === undefined ? {} : { value: this.props.value }),
       }
       // The declared grid on the bin-level read alone: a contig-level roll-up's
-      // cells *are* sequences, and there is no bin size to hold it to.
+      // cells *are* sequences, and there is no bin size to hold it to. While
+      // *Refine on zoom* is on the read is screen-sized (`screenPlan`, §2), the
+      // declared grid its floor.
+      const span = Math.max(rows.extent[1] - rows.extent[0], cols.extent[1] - cols.extent[0])
+      const screen = refineEnabled()
+        ? screenPlan({
+            rungs: rungsOf(this.props.rungs ?? []),
+            binsize: this.props.binsize,
+            view: span,
+            read: span,
+            screen: this.panel.screenWidth(),
+            floor: this.props.binsPerCell ?? 1,
+          })
+        : null
       const pooled =
-        (this.props.binsPerCell ?? 1) > 1 ? { binsPerCell: this.props.binsPerCell } : {}
+        screen !== null
+          ? {
+              ...(screen.rung === undefined ? {} : { rung: screen.rung }),
+              ...(screen.binsPerCell === undefined ? {} : { binsPerCell: screen.binsPerCell }),
+            }
+          : (this.props.binsPerCell ?? 1) > 1
+            ? { binsPerCell: this.props.binsPerCell }
+            : {}
       const result: MatrixResult =
         this.level === 'bin'
           ? await this.props.client.request<'matrix'>({ kind: 'matrix', ...query, ...pooled })
@@ -332,7 +352,8 @@ export class PairView {
       // whole chromosome at 10 kb is more cells than any picture holds — and
       // every coordinate on screen is the bin size times a cell offset, so the
       // panel is told before it is given the block.
-      this.panel.setResolution(this.props.binsize * (result.binsPerCell ?? 1))
+      // The bin size of the map that answered: a rung's, where one was read.
+      this.panel.setResolution((result.binsize ?? this.props.binsize) * (result.binsPerCell ?? 1))
       this.panel.setData(result, `${this.props.rowGenome} × ${this.props.colGenome}`)
       this.renderSummary(result)
       this.armRefine(rows.extent, cols.extent, result)
