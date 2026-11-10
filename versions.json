@@ -257,10 +257,10 @@
   "pulls": [
     {
       "number": 170,
-      "commit": "7bc05c8",
-      "title": "Open a map at the screen's resolution, and sharpen it as you zoom without freezing",
+      "commit": "2d74240",
+      "title": "Open a map at the screen's resolution, sharpen it as you zoom, and give the resolution a row of its own",
       "branch": "js/adaptive-resolution",
-      "date": "2026-11-10T10:50:49Z"
+      "date": "2026-11-10T16:14:38Z"
     },
     {
       "number": 168,
