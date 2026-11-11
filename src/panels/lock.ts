@@ -30,7 +30,7 @@
  * **The feedback loop.** A panel that is moved programmatically redraws, and
  * redrawing is how a panel reports where it is — so every push comes back as a
  * report one frame later, and a lock that acted on it would broadcast the
- * widened window, which would come back wider still. Three guards, and each
+ * widened window, which would come back wider still. Four guards, and each
  * catches a different shape of echo:
  *
  * 1. {@link ViewportLock.driving} swallows the reports a push provokes
@@ -41,7 +41,11 @@
  *    drags the lead back to where the companion stopped;
  * 3. {@link windowsAgree} swallows anything that arrives later at what is, to
  *    within half a cell of the reporting panel, the window already broadcast —
- *    a resize, a re-fit, a second frame of the same gesture.
+ *    a resize, a re-fit, a second frame of the same gesture;
+ * 4. a report of the window a push would give this panel *now* — the deck's
+ *    window clamped or slid into its block — is swallowed however late it
+ *    comes, because (2) forgives a clamp once and a panel redraws more often
+ *    than that: a zoom landing a sharper block on it is a redraw, not a move.
  *
  * Without (3) a two-panel deck at two resolutions drifts one coarse cell per
  * frame until it hits a wall. With them the round trip converges in one
@@ -219,6 +223,18 @@ export interface LockMember {
   bpPerCell(): number
   /** Cells per axis in the block this panel is showing. */
   cells(): { rows: number; cols: number }
+  /**
+   * Where the first cell of this panel's block sits in its sequence, in base
+   * pairs, per axis — read only where {@link LockMember.unit} is `'bp'`.
+   *
+   * What makes the currency a **place** rather than an offset into a block. A
+   * block read whole begins its sequence and answers zero, which is the lock as
+   * it always was; a block a zoom refined is a window read from somewhere inside
+   * it (§2), and two maps whose zooms read different windows — one map's at
+   * 87.7 Mb, the other's at 88.0 — were put at the same offset into each, which
+   * is two places 300 kb apart. Absent is zero.
+   */
+  origin?(): { rows: number; cols: number }
   /** Whether this panel is following the deck, or has been let off the lead. */
   locked(): boolean
   /**
@@ -241,6 +257,21 @@ export interface LockMember {
  */
 function stepOf(member: LockMember): number {
   return member.unit() === 'cell' ? 1 : member.bpPerCell()
+}
+
+/** Where a member's block begins, in the currency it locks in: zero counting cells. */
+function originOf(member: LockMember): { rows: number; cols: number } {
+  return member.unit() === 'cell' ? { rows: 0, cols: 0 } : (member.origin?.() ?? { rows: 0, cols: 0 })
+}
+
+/** A window moved along its axis by `by`. */
+function shifted(window: AxisWindow, by: number): AxisWindow {
+  return by === 0 ? window : { lo: window.lo + by, hi: window.hi + by }
+}
+
+/** Whether two spans of one panel's cells are the same within half a cell. */
+function cellsAgree(a: CellSpan, b: CellSpan): boolean {
+  return Math.abs(a[0] - b[0]) <= 0.5 && Math.abs(a[1] - b[1]) <= 0.5
 }
 
 /**
@@ -317,9 +348,25 @@ export class ViewportLock {
     const source = this.members.find((member) => member.id === id)
     if (source === undefined || !source.locked()) return
     const step = stepOf(source)
+    const origin = originOf(source)
+    // **The deck's window as this panel can show it is not a movement**, however
+    // often it is reported. A block narrower than the deck's window holds it
+    // clamped or slid (`bpToCells`), and guard (2) forgives one report of that
+    // and no more — so the panel's next redraw of the same clamp, a zoom's
+    // sharper block landing on it, was taken for a gesture and dragged every
+    // other map onto the stretch this one happened to hold. Asked in this
+    // panel's own cells, half a cell either way, exactly as a push would put it.
+    if (this.current !== null && this.current.unit === source.unit()) {
+      const extent = source.cells()
+      const pushed = {
+        rows: bpToCells(shifted(this.current.rows, -origin.rows), step, extent.rows),
+        cols: bpToCells(shifted(this.current.cols, -origin.cols), step, extent.cols),
+      }
+      if (cellsAgree(pushed.rows, rows) && cellsAgree(pushed.cols, cols)) return
+    }
     const window: LockWindow = {
-      rows: cellsToBp(rows, step),
-      cols: cellsToBp(cols, step),
+      rows: shifted(cellsToBp(rows, step), origin.rows),
+      cols: shifted(cellsToBp(cols, step), origin.cols),
       unit: source.unit(),
     }
     // Half a cell of the *reporting* panel: the report is quantised to this
@@ -365,9 +412,20 @@ export class ViewportLock {
    * Only where there is no window — an established one is a reader's choice and
    * outranks whatever the lead happens to be showing.
    */
-  seed(rows: CellSpan, cols: CellSpan, step: number, unit: LockUnit): void {
+  seed(
+    rows: CellSpan,
+    cols: CellSpan,
+    step: number,
+    unit: LockUnit,
+    origin: { rows: number; cols: number } = { rows: 0, cols: 0 },
+  ): void {
     if (this.current !== null) return
-    this.current = { rows: cellsToBp(rows, step), cols: cellsToBp(cols, step), unit }
+    const at = unit === 'cell' ? { rows: 0, cols: 0 } : origin
+    this.current = {
+      rows: shifted(cellsToBp(rows, step), at.rows),
+      cols: shifted(cellsToBp(cols, step), at.cols),
+      unit,
+    }
   }
 
   /**
@@ -399,13 +457,14 @@ export class ViewportLock {
         if (member.unit() !== window.unit) continue
         const step = stepOf(member)
         const extent = member.cells()
+        const origin = originOf(member)
         // A report is owed only where the panel actually moved. A panel whose
         // block has not arrived cannot, and never reports — so recording the
         // debt anyway left it owed forever and threw away that panel's first
         // real gesture once its block landed.
         const moved = member.show(
-          bpToCells(window.rows, step, extent.rows),
-          bpToCells(window.cols, step, extent.cols),
+          bpToCells(shifted(window.rows, -origin.rows), step, extent.rows),
+          bpToCells(shifted(window.cols, -origin.cols), step, extent.cols),
         )
         if (moved) this.pending.add(member.id)
       }

@@ -2,8 +2,10 @@
  * Pictures for browse/deck.md: a 2 × 2 deck of four yeast contact maps at one
  * locus, IV:1.0–1.4 Mb, each with the ATAC-seq track under it — the lab's
  * G2/M Micro-C cooler at 1 kb, the Micro-C of Costantino et al. 2020 (GEO
- * GSE151553), whose sequences are spelt `chrIV`, at 1.6 kb, and the G1 and G2/M
- * Hi-C of Meneu et al. 2025 at 2 kb — every file read from the lab's bucket.
+ * GSE151553), whose sequences are spelt `chrIV`, opened at 1.6 kb, and the G1
+ * and G2/M Hi-C of Meneu et al. 2025 opened at 2 kb — every file read from the
+ * lab's bucket. Each is drawn at the deck's resolution, the first map's 1 kb,
+ * where its file has it, and Costantino's at its nearest, 800 bp (§16.2).
  *
  * The deck is a workspace, written here and handed to the page at an address
  * of the dev server's (a route, so nothing is written to disk): its `maps`

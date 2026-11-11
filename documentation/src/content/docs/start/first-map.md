@@ -36,8 +36,9 @@ and **Comparing data** come with their lists, so they open quickly the first tim
 
 ## Pick a resolution and open a chromosome
 
-1. After **resolution**, at the end of the bar above the table, choose **250 kb**: a dropdown here, a
-   slider on a file with nine bin sizes or fewer.
+1. At the end of the bar above the table, untick **refine on zoom**, then choose **250 kb** in the
+   box beside the slider (or click its slot). Ticked, the map would be read at the resolution of the
+   screen and finer as you zoom; unticked, the resolution is yours to pick.
 2. In the Chromosomes table, press **chr15**.
 
 The blank square at the start is the short arm, with no unique sequence for reads to map to; the
@@ -62,8 +63,9 @@ checkerboard off the diagonal is the long arm's compartments.
 Open chr15 from 30 to 60 Mb and choose **5 kb**. Closer in, at `chr15:38,100,001-50,025,000`, the
 squares along the diagonal are domains, mostly nested, and the dots at their corners are loops.
 
-A window with more bins than the picture has room for is drawn coarser, at the *effective resolution*
-given under the title. <kbd>-</kbd> and <kbd>+</kbd> step coarser or finer.
+A window too wide for the resolution picked, 8,192 bins a side, is drawn coarser, and the
+line under the title says so; zoom in and it is drawn at the one picked. <kbd>-</kbd> and <kbd>+</kbd>
+step coarser or finer.
 
 ![chr15:38,100,001-50,025,000 at 5 kb, balanced on a log10 scale, with 4DN's compartment eigenvector, insulation score and boundaries drawn under the map.](../../../assets/screens/start/chr15-5kb.webp)
 

@@ -48,13 +48,11 @@ describe('filesLabel', () => {
 
   it('shows the file name rather than the URL it was read from', () => {
     // Through `fileLabel`, so the banner names a file the way every other
-    // surface in the app names it: the bucket path dropped, and the entry
-    // shortened to the resolution. A banner three lines deep in URLs is one
-    // nobody reads, and one that invented its own shortening would be the one
-    // place a file is called something different.
-    expect(filesLabel(['https://bucket.example.org/data/yeast.mcool::resolutions/1000'])).toBe(
-      'yeast.mcool::1000',
-    )
+    // surface in the app names it: the bucket path dropped, and the rung it was
+    // opened at left out, which is no part of its name. A banner three lines
+    // deep in URLs is one nobody reads, and one that invented its own
+    // shortening would be the one place a file is called something different.
+    expect(filesLabel(['https://bucket.example.org/data/yeast.mcool::resolutions/1000'])).toBe('yeast.mcool')
   })
 })
 

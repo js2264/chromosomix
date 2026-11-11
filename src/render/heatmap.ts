@@ -103,12 +103,13 @@ export interface Raster {
  * Chosen at or below every desktop browser's canvas cap (Firefox stops at
  * 32,767 px per side, Chrome's *area* cap is 2^28 px, which is exactly 16,384²).
  * Not a display bound: the raster is drawn once and then scaled, so a zoomed-in
- * view of it re-rasterises nothing, and a raster this wide is what lets a whole
- * yeast chromosome IV be read at 100 bp (15,320 bins) and then zoomed to single
- * bins without another read. It used to be 4,096, which pooled that chromosome
- * to 400 bp. What it caps are the allocations that scale with the *picture*:
- * at the cap, 1 GB each of pooled values, RGBA and canvas — which is why how
- * close a block may come to it is the memory guard's call
+ * view of it re-rasterises nothing. It used to be 4,096, which pooled a whole
+ * yeast chromosome IV read at 100 bp (15,320 bins) to 400 bp; at this width that
+ * block was read whole and zoomed to single bins without another read, until a
+ * block read bin for bin was held to 8,192 a side ({@link denseCellCap}, SPECS
+ * §7.2), which now binds first. What it caps are the allocations that scale
+ * with the *picture*: at the cap, 1 GB each of pooled values, RGBA and canvas —
+ * which is why how close a block may come to it is the memory guard's call
  * ({@link denseCellCap}), not this constant's.
  */
 export const RASTER_MAX_DIM = 16384
@@ -762,46 +763,23 @@ const DOUBLE_CLICK_MS = 250
 const KEY_ZOOM = 1.25
 
 /**
- * How long a freeze lasts before it shows a spinner.
- *
- * Most refines are served out of the byte source's chunk cache and land in a few
- * milliseconds; a spinner that flashed on every one would be noise about
- * something that did not happen. Long enough that a cached read is silent, short
- * enough that a real one is announced before the reader wonders.
+ * How near the diagonal, in CSS pixels, a zoom's pointer has to be for the
+ * zoom to be about the diagonal rather than about the pointer
+ * ({@link HeatmapView.zoomAnchor}): about how closely a hand aims, and at a
+ * megabase on a laptop's map under 6 kb, so nothing a reader could tell from
+ * the line is pulled onto it.
  */
-const SPINNER_DELAY_MS = 140
-
-/** The spinner's ring radius, and how far its disc sits off the plot corner. */
-const SPINNER_RADIUS = 9
-const SPINNER_INSET = 10
+const DIAGONAL_PULL_PX = 4
 
 /**
  * How far up from the data's bottom edge the column labels reach, which is
- * where the row labels stop ({@link HeatmapView.drawTicks}) and the spinner
- * stands clear of.
+ * where the row labels stop ({@link HeatmapView.drawTicks}).
  */
 const COL_LABEL_BAND = 20
 
-/** `performance.now` where there is one, so a spinner turns evenly. */
+/** `performance.now` where there is one. */
 function now(): number {
   return typeof performance === 'undefined' ? Date.now() : performance.now()
-}
-
-/**
- * `requestAnimationFrame`, where there is one.
- *
- * There is not, in two places this class already runs: the export path builds a
- * view against an offscreen canvas, and the test suite runs under Node. Neither
- * has anything to animate, so the honest answer is not to schedule — a spinner
- * that never turns is exactly right for a figure and for a headless draw, and
- * the alternative is a `ReferenceError` from a decoration.
- */
-function frameLoop(run: () => void): number | null {
-  return typeof requestAnimationFrame === 'undefined' ? null : requestAnimationFrame(run)
-}
-
-function cancelFrameLoop(handle: number): void {
-  if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(handle)
 }
 
 /** Space reserved outside the plot area for tick labels, in CSS pixels. */
@@ -1941,24 +1919,6 @@ export class HeatmapView {
    * How many times this view has built a raster — see {@link rasterisations}.
    */
   private rasterCount = 0
-  /** Whether gestures are held — see {@link setFrozen}. */
-  private frozen = false
-  /** When the current freeze began, for the spinner's grace period. */
-  private frozenAt = 0
-  /** The animation loop that turns the spinner; `null` when it is not turning. */
-  private spinTimer: number | null = null
-  /** What Escape calls, while frozen — see {@link setFrozen}. */
-  private onCancelFreeze: (() => void) | null = null
-  /**
-   * How far the axis labels drawn inside the data reach from its left and
-   * bottom edges, as the last {@link drawTicks} laid them out; none where it
-   * drew none. What the spinner stands clear of ({@link drawSpinner}).
-   */
-  private labelReach = { left: 0, bottom: 0 }
-  /** Whether the spinner turns over a view that still takes gestures — see {@link setWaiting}. */
-  private waiting = false
-  /** When the current wait began, for the spinner's grace period. */
-  private waitingAt = 0
   private plot: PlotOptions
   /**
    * A cell being pointed at on **another** map, for a deck (§16).
@@ -2038,8 +1998,8 @@ export class HeatmapView {
    */
   private pageOrigin: { x: number; y: number } = { x: 0, y: 0 }
   /**
-   * Draw the cells and stop — no divider, label, overlay, tick, guide, frame
-   * or spinner. Only for {@link dataImage}, and only for the one pass it asks.
+   * Draw the cells and stop — no divider, label, overlay, tick, guide or
+   * frame. Only for {@link dataImage}, and only for the one pass it asks.
    */
   private bare = false
 
@@ -2331,7 +2291,6 @@ export class HeatmapView {
     separators: Separator[] | SeparatorSet = [],
     gauge?: DenseMatrix,
   ): void {
-    this.setFrozen(false)
     this.matrix = matrix
     this.separators = Array.isArray(separators)
       ? { rows: separators, cols: separators }
@@ -2865,7 +2824,6 @@ export class HeatmapView {
    * edge {@link setAnchor} named, which is what a turned band asks for.
    */
   fit(): void {
-    if (this.frozen) return
     this.recomputeBaseZoom()
     this.zoom = this.baseZoom
     const plot = this.plotRect
@@ -2885,7 +2843,6 @@ export class HeatmapView {
    * the same distance on each — the mean of the two.
    */
   panBy(dx: number, dy: number): void {
-    if (this.frozen) return
     if (this.heldOnDiagonal) dx = dy = (dx + dy) / 2
     this.originX -= dx / this.zoom
     this.originY -= dy / this.zoom
@@ -2898,13 +2855,13 @@ export class HeatmapView {
    * Zoom about a point given in canvas CSS pixels, keeping the matrix cell
    * under it fixed. `factor > 1` zooms in.
    *
-   * Held on the diagonal, about the point of the line nearest the one given: a
-   * zoom about a point of the line keeps a view centred on it centred on it.
+   * About the point of the diagonal nearest the one given where that is the
+   * point meant ({@link zoomAnchor}): a zoom about a point of the line keeps a
+   * view centred on it centred on it.
    */
   zoomAt(x: number, y: number, factor: number): void {
-    if (this.frozen) return
     if (!(factor > 0)) throw new RangeError(`Zoom factor must be positive, got ${factor}`)
-    const [ax, ay] = this.heldOnDiagonal ? this.onDiagonal(x, y) : [x, y]
+    const [ax, ay] = this.zoomAnchor(x, y)
     const plot = this.plotRect
     const px = ax - plot.x
     const py = ay - plot.y
@@ -2919,82 +2876,32 @@ export class HeatmapView {
     this.changed()
   }
 
+  /**
+   * The point a zoom is about: the nearest point of the diagonal while the view
+   * is held on it ({@link setDiagonalLock}), and wherever the point given is
+   * within {@link DIAGONAL_PULL_PX} of it; the point itself otherwise.
+   *
+   * **The diagonal pulls**, because a reader cannot point at it more closely
+   * than a pixel, and a zoom multiplies whatever they miss it by. At a whole
+   * human chromosome a pixel is a quarter of a megabase: a pointer 0.8 px off
+   * the line, zoomed to a megabase, left the picture 200 kb off the diagonal —
+   * a fifth of the window, the diagonal sliding out of the corner of a view the
+   * reader had aimed straight down it. Measured, that was the whole of the drift
+   * a zoom seemed to have as it sharpened: every block a refine lands is placed
+   * on the window to the base pair (`MatrixPanel.regrid`), and the offset grew
+   * smoothly on the first block, before any landed. A pointer further off is a
+   * reader aiming at something beside the line, and the zoom is about it.
+   */
+  private zoomAnchor(x: number, y: number): [number, number] {
+    if (this.heldOnDiagonal) return this.onDiagonal(x, y)
+    if (this.spanGestures || this.diagonalOffset() === null) return [x, y]
+    const [fx, fy] = this.onDiagonal(x, y)
+    return Math.hypot(fx - x, fy - y) <= DIAGONAL_PULL_PX ? [fx, fy] : [x, y]
+  }
+
   /** Current zoom, in CSS pixels per matrix cell. */
   get zoomLevel(): number {
     return this.zoom
-  }
-
-  /**
-   * Hold the view still, and say so.
-   *
-   * Set while a finer block is being read for the window on screen
-   * (`ui/refine.ts`). Two things happen and both are the point.
-   *
-   * **The gestures stop.** Pan, zoom and refit are refused for the duration, so
-   * the picture is exactly where the reader left it when the new grid arrives
-   * and the swap is a change of *sharpness* and nothing else. Letting the zoom
-   * run on underneath would mean the block landed against a window that had
-   * moved since it was asked for — the reader would see it jump, and the jump
-   * would be the app catching up rather than anything in the data.
-   *
-   * **And it is visible.** The edge of what a block can show is a real boundary
-   * and until now it was an invisible one: the picture simply stopped improving,
-   * and whether that was the file's limit or the app's was not something the
-   * screen said. A held frame with a spinner in the corner says *this is the
-   * edge, and going past it costs a read* — at the moment it costs it.
-   *
-   * The spinner does not appear for {@link SPINNER_DELAY_MS}, because most
-   * refines are served out of the chunk cache in a few milliseconds and a
-   * spinner that flashes on every wheel notch is worse than none. The freeze
-   * itself is immediate either way: a fast read is imperceptible, and a slow one
-   * is announced.
-   */
-  setFrozen(on: boolean, onCancel?: () => void): void {
-    if (this.frozen === on) return
-    this.frozen = on
-    this.onCancelFreeze = on ? (onCancel ?? null) : null
-    this.frozenAt = on ? now() : 0
-    this.canvas.classList.toggle('is-frozen', on)
-    if (this.spinning) this.spin()
-    else this.stopSpin()
-    this.changed()
-  }
-
-  /** Whether gestures are currently held. */
-  get isFrozen(): boolean {
-    return this.frozen
-  }
-
-  /**
-   * Turn the spinner without holding the view.
-   *
-   * For a picture standing in for one on its way: the coarse rung drawn while
-   * the asked block reads (`MatrixPanel.setPreview`, SPECS §7.2). The reader
-   * may pan, zoom and hover it, and the block lands on whatever window they
-   * arrive at, so nothing is refused: the spinner in the corner is the whole
-   * of it, and says the sharper picture is coming. The pointer is left alone
-   * for the same reason. It says what a drag does, and a drag does it.
-   *
-   * Independent of {@link setFrozen}: either keeps the spinner turning, and the
-   * grace period runs from whichever began first.
-   */
-  setWaiting(on: boolean): void {
-    if (this.waiting === on) return
-    this.waiting = on
-    this.waitingAt = on ? now() : 0
-    if (this.spinning) this.spin()
-    else this.stopSpin()
-    this.changed()
-  }
-
-  /** Whether the spinner is turning over a view that still takes gestures. */
-  get isWaiting(): boolean {
-    return this.waiting
-  }
-
-  /** Whether anything keeps the spinner turning: a freeze, or a wait. */
-  private get spinning(): boolean {
-    return this.frozen || this.waiting
   }
 
   /**
@@ -3006,80 +2913,9 @@ export class HeatmapView {
     return this.matrix === null || Math.abs(this.zoom - this.baseZoom) < 1e-9
   }
 
-  private spin(): void {
-    if (this.spinTimer !== null) return
-    const tick = (): void => {
-      if (!this.spinning) {
-        this.spinTimer = null
-        return
-      }
-      this.spinTimer = frameLoop(tick)
-      // A redraw, not a re-raster: `draw` blits the raster it already has, which
-      // is what makes a turning spinner cost a `drawImage` rather than a pass
-      // over the block (see {@link rasterisations}).
-      this.draw()
-    }
-    this.spinTimer = frameLoop(tick)
-  }
-
-  private stopSpin(): void {
-    if (this.spinTimer !== null) cancelFrameLoop(this.spinTimer)
-    this.spinTimer = null
-  }
-
-  /**
-   * The spinner, in the bottom-left corner of the plot.
-   *
-   * Bottom-left because every other corner is taken: the key is top-right, the
-   * scale bar and the readout sit along the bottom edge outside the plot, and
-   * the top-left is where a turned map's diagonal comes to a point. Inside the
-   * plot rather than beside it, because what it is about is the picture. And
-   * clear of the axis labels drawn inside it: above the column labels and to
-   * the right of the row labels, so it covers the corner's data, the least
-   * read part of a map, and never the first label on either axis — which is
-   * what a reader zooming a preview while it spins is reading (§7.2).
-   */
-  private drawSpinner(): void {
-    if (!this.spinning) return
-    const since =
-      this.frozen && this.waiting
-        ? Math.min(this.frozenAt, this.waitingAt)
-        : this.frozen
-          ? this.frozenAt
-          : this.waitingAt
-    const elapsed = now() - since
-    if (elapsed < SPINNER_DELAY_MS) return
-    const plot = this.plotRect
-    const data = this.dataRect
-    const reach = this.labelReach
-    const left = reach.left > 0 ? Math.max(plot.x, data.x + reach.left) : plot.x
-    const floor =
-      reach.bottom > 0 ? Math.min(plot.y + plot.height, data.y + data.height - reach.bottom) : plot.y + plot.height
-    const r = SPINNER_RADIUS
-    const cx = left + SPINNER_INSET + r
-    const cy = floor - SPINNER_INSET - r
-    const ctx = this.ctx
-    ctx.save()
-    // A disc behind it, for the same reason the key has one: this is drawn over
-    // data, and a ring over a dark map is a ring nobody sees.
-    ctx.beginPath()
-    ctx.arc(cx, cy, r + 5, 0, Math.PI * 2)
-    ctx.fillStyle = this.opts.labelHaloColor
-    ctx.globalAlpha = 0.88
-    ctx.fill()
-    ctx.globalAlpha = 1
-    ctx.lineWidth = 2
-    ctx.lineCap = 'round'
-    ctx.strokeStyle = this.opts.plotBorderColor
-    ctx.beginPath()
-    ctx.arc(cx, cy, r, 0, Math.PI * 2)
-    ctx.stroke()
-    const from = ((elapsed / 900) % 1) * Math.PI * 2
-    ctx.strokeStyle = this.opts.labelColor
-    ctx.beginPath()
-    ctx.arc(cx, cy, r, from, from + Math.PI * 0.7)
-    ctx.stroke()
-    ctx.restore()
+  /** The zoom that fits the whole block, in CSS pixels per cell; see {@link fitted}. */
+  get fitZoom(): number {
+    return this.baseZoom
   }
 
   /**
@@ -3133,7 +2969,6 @@ export class HeatmapView {
    * `ViewportLock` expects to come back.
    */
   showCellWindow(rows: [number, number], cols: [number, number]): void {
-    if (this.frozen) return
     this.placeCellWindow(rows, cols)
     this.clampView()
     this.syncScales()
@@ -3154,7 +2989,6 @@ export class HeatmapView {
    * magnification as the picture allows.
    */
   showCellSpan(cols: [number, number]): void {
-    if (this.frozen) return
     const plot = this.plotRect
     const span = Math.max(1e-6, cols[1] - cols[0])
     const wanted = plot.width / span
@@ -4088,7 +3922,6 @@ export class HeatmapView {
     this.drawLabels()
     this.drawBandLabels()
     this.drawOverlay()
-    this.labelReach = { left: 0, bottom: 0 }
     if (this.plot.ticks) this.drawTicks()
     if (this.plot.crosshair) {
       this.drawCrosshair()
@@ -4098,9 +3931,6 @@ export class HeatmapView {
     }
     this.drawSelection()
     this.drawPlotBorder()
-    // Last, so it is over everything including the border: it is not part of the
-    // picture, it is a statement about the picture's state.
-    this.drawSpinner()
   }
 
   /**
@@ -5911,7 +5741,6 @@ export class HeatmapView {
     // printing on top of it. Its mark stays: the position is still marked, it is
     // the second copy of the number that goes.
     const corner = cols.length === 0 ? bottom : bottom - COL_LABEL_BAND
-    if (cols.length > 0) this.labelReach.bottom = COL_LABEL_BAND
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
     const rowStep = stepOf(rows)
@@ -5923,9 +5752,6 @@ export class HeatmapView {
       const text = formatBpTick(tick.bp, tick.step ?? rowStep)
       ctx.strokeText(text, data.x + TICK_LENGTH + 3, at)
       ctx.fillText(text, data.x + TICK_LENGTH + 3, at)
-      // Its halo included, which reaches a stroke's half-width past the text.
-      const reach = TICK_LENGTH + 3 + ctx.measureText(text).width + 2
-      if (reach > this.labelReach.left) this.labelReach.left = reach
     }
     ctx.restore()
   }
@@ -5962,20 +5788,6 @@ export class HeatmapView {
    * has already been prevented. The caller still has to redraw.
    */
   handleKeyDown(event: KeyboardEvent): boolean {
-    // Escape, while the map is held for a read, calls the read off and gives
-    // the gestures back. It is checked before anything else because it is the
-    // only key that means something *different* while frozen — and because a
-    // held map with no way out is the one failure mode this feature could
-    // plausibly have on a large file (see {@link setFrozen}).
-    if (this.frozen) {
-      if (event.key === 'Escape' && this.onCancelFreeze !== null) {
-        const cancel = this.onCancelFreeze
-        event.preventDefault()
-        cancel()
-        return true
-      }
-      return false
-    }
     const plot = this.plotRect
     const step = event.shiftKey ? 0.5 : 0.1
     let handled = true
@@ -6605,28 +6417,7 @@ export class HeatmapView {
 
   /** Remove every listener {@link attach} installed. Idempotent. */
   detach(): void {
-    // End the freeze first, because a view torn down mid-freeze cannot escape
-    // one on its own: {@link stopSpin} is reachable only from
-    // `setFrozen(false)`, and no teardown path unfreezes — the ladder that
-    // froze this view is *destroyed* rather than aborted, so the `onBusy(false)`
-    // that would have released it never runs (`ui/refine.ts`). The spinner's
-    // `tick` then re-armed `requestAnimationFrame` and called `draw()` on a
-    // canvas no longer in the document, for the life of the tab, holding this
-    // view's matrix, raster and offscreen canvas with it.
-    //
-    // Cleared field by field rather than through `setFrozen(false)`, which
-    // would call `changed()` and schedule the very frame the lines below are
-    // cancelling. The flag has to go too, not just the timer: left `true`, any
-    // later `draw()` on this instance would take the frozen branch again.
-    this.frozen = false
-    this.frozenAt = 0
-    this.onCancelFreeze = null
-    this.canvas.classList.remove('is-frozen')
-    // A wait turns the same spinner, and is torn down the same way.
-    this.waiting = false
-    this.waitingAt = 0
-    this.stopSpin()
-    // And a level being painted between frames for a view nobody will draw.
+    // A level being painted between frames for a view nobody will draw.
     this.cancelMaking()
 
     for (const fn of this.detachFns) fn()

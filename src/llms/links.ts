@@ -138,11 +138,13 @@ export const LINK_KEYS: readonly LinkKey[] = [
     meaning: 'What one row of the matrix is: a bin (the default), or a whole sequence summed into one cell.',
   },
   {
-    key: 'coarsen',
+    key: 'resolution',
     values: 'a bin size in bp',
     meaning:
-      'A resolution the file does not store, a whole multiple of the one `uri` names: the stored bins are ' +
-      'summed as they are read. A value the file cannot reach is ignored.',
+      'The resolution the map is drawn at: a rung the file stores, or a whole multiple of one, whose ' +
+      'stored bins are summed as they are read. It wins over Refine on zoom: the map is drawn at it, ' +
+      'coarser only where the window is too wide for it, and absent the map is read at the resolution ' +
+      'of the screen. `coarsen=`, an older name, is read the same. A value the file cannot reach is ignored.',
   },
   {
     key: 'transform',

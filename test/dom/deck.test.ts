@@ -131,6 +131,14 @@ function leadPanel(
     // (`panels/lock.ts`), and `test/dom/deck-lock-level.test.ts` is where that
     // half is pinned.
     blockLevel: () => 'bin',
+    // The region as first drawn, and where its first cell sits (`panels/lock.ts`):
+
+    // a block read whole, as every block here is.
+
+    frameSpan: () => null,
+
+    lockOrigin: () => ({ rows: 0, cols: 0 }),
+
     blockSpan: () => ({
       rows: cells * bpPerCell,
       cols: cells * bpPerCell,
@@ -177,11 +185,10 @@ interface Made {
   noted: Array<string[]>
   /** Every `map=uri` the deck asked the store to give a parked lane back to. */
   adopted: string[]
-  /** What the session's own map is at, and what the deck asked it to move to. */
+  /** The rung the session's own file is open at. */
   leadBinsize: number | undefined
-  askedBinsize: number[]
-  /** Whether the session's own file can answer a rung the deck asks for. */
-  leadCanMove: boolean
+  /** What every map of the deck is read at (§16.2), as `Session.deckResolution` answers. */
+  resolution: { binsize: number; zoom: boolean } | null
   scales: unknown[]
   /** The cell a track is drawn in, for the store's `entriesOn`; none by default. */
   tracksOn?: MapId
@@ -198,8 +205,7 @@ function make(
     noted: [],
     adopted: [],
     leadBinsize: undefined,
-    askedBinsize: [],
-    leadCanMove: true,
+    resolution: null,
     scales: [],
   }
   const store = {
@@ -229,12 +235,8 @@ function make(
       made.stars++
     },
     binsize: () => made.leadBinsize,
+    resolution: () => made.resolution,
     onLeadScale: (scale) => made.scales.push(scale),
-    onLeadBinsize: (binsize) => {
-      made.askedBinsize.push(binsize)
-      if (made.leadCanMove) made.leadBinsize = binsize
-      return made.leadCanMove
-    },
     ...(props.withStore === false
       ? {}
       : { annotations: () => ({ store }) as unknown as AnnotationContext }),
@@ -319,7 +321,7 @@ function leadChain(deck: PanelDeck): HTMLButtonElement {
 describe('the deck’s bar', () => {
   it('holds the controls that are about the deck rather than about one map', () => {
     const { deck } = make()
-    for (const kind of ['columns', 'share', 'resolutions', 'save', 'copy', 'close']) {
+    for (const kind of ['columns', 'share', 'save', 'copy', 'close']) {
       expect(barButton(deck, kind)).not.toBeNull()
     }
     // …and the chain is not one of them: it takes one cell off the navigation,
@@ -327,14 +329,18 @@ describe('the deck’s bar', () => {
     // beside its star and the bar has none.
     expect(deck.el.querySelector('.deck-bar .deck-lock')).toBeNull()
     expect(leadChain(deck)).not.toBeNull()
+    // Nor *match all resolutions*: every map is read at the deck's one
+    // resolution already (§16.2), so a press to match them had nothing to do.
+    expect(deck.el.querySelector('.deck-bar .deck-resolutions')).toBeNull()
   })
 
   /**
-   * The two presses that put a deck on one footing.
+   * The press that puts a deck on one scale — and there was a second, *match all
+   * resolutions*, until every map was read at the deck's resolution (§16.2).
    *
-   * Named *match all scales* and *match all resolutions*, because `fix` reads as
-   * repair to a reader arriving from Juicebox or HiGlass and nothing here is
-   * broken — `match` is the verb §5.7 already uses for the same one-off act.
+   * Named *match all scales*, because `fix` reads as repair to a reader arriving
+   * from Juicebox or HiGlass and nothing here is broken — `match` is the verb
+   * §5.7 already uses for the same one-off act.
    *
    * They were switches, and a switch here made a promise it could not keep:
    * `one scale`, left on, meant every later nudge of any panel's clip either had
@@ -342,30 +348,29 @@ describe('the deck’s bar', () => {
    * press says a thing that stays true — *these are all on that one's numbers
    * now* — and the very next nudge is honestly the reader's own again.
    */
-  describe('the two presses that put a deck on one footing', () => {
-    it('are bordered, like everything else in the bar and not like a link', () => {
+  describe('the press that puts a deck on one scale', () => {
+    it('is bordered, like everything else in the bar and not like a link', () => {
       const { deck } = make()
-      for (const kind of ['share', 'resolutions']) {
+      for (const kind of ['share']) {
         const node = barButton(deck, kind)
         expect(node.classList.contains('btn')).toBe(true)
         expect(node.classList.contains('btn-quiet')).toBe(false)
       }
     })
 
-    it('are named for the act, not for a repair', () => {
+    it('is named for the act, not for a repair', () => {
       const { deck } = make()
       expect(barButton(deck, 'share').textContent).toBe('match all scales')
-      expect(barButton(deck, 'resolutions').textContent).toBe('match all resolutions')
-      // One sentence each, and no spec citation: the reasoning is the module
+      // One sentence, and no spec citation: the reasoning is the module
       // header's and the contract's, not the cursor's (§26.4).
-      for (const kind of ['share', 'resolutions']) {
+      for (const kind of ['share']) {
         expect(barButton(deck, kind).title).not.toContain('§')
       }
     })
 
-    it('are actions, so they never come back lit', () => {
+    it('is an action, so it never comes back lit', () => {
       const { deck } = make()
-      for (const kind of ['share', 'resolutions']) {
+      for (const kind of ['share']) {
         barButton(deck, kind).click()
         const after = barButton(deck, kind)
         expect(after.classList.contains('is-on')).toBe(false)
@@ -381,9 +386,9 @@ describe('the deck’s bar', () => {
       const bar = all<HTMLElement>(deck.el, '.deck-bar > *').map((node) => node.className)
       expect(bar[0]).toContain('deck-add-toggle')
       expect(bar[1]).toContain('deck-share')
-      expect(bar[2]).toContain('deck-resolutions')
-      // The chain used to sit here, fourth; it is the lead cell's own control now.
-      expect(bar[3]).toContain('deck-columns')
+      // *Match all resolutions* used to sit here, and the chain after it; the
+      // chain is the lead cell's own control now.
+      expect(bar[2]).toContain('deck-columns')
       expect(bar[bar.length - 1]).toContain('deck-close')
       // The one that ends the deck is a bordered word rather than a bare mark,
       // so it is not the twin of the × on the cell a finger's width below it.
@@ -393,29 +398,25 @@ describe('the deck’s bar', () => {
       expect(close.classList.contains('btn-close')).toBe(false)
     })
 
-    it('name the starred map in what they promise to do', () => {
+    it('names the starred map in what it promises to do', () => {
       const { deck } = make({ leadName: 'first.cool' })
       expect(barButton(deck, 'share').title).toContain('first.cool')
-      expect(barButton(deck, 'resolutions').title).toContain('first.cool')
 
       deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
       all<HTMLButtonElement>(deck.el, '.deck-star')[1].click()
       // The star moved, so the sentence is about the other file now: it is the
-      // map both presses are read *from*, which is the whole of what changed
-      // when they stopped being read from the first one.
+      // map the press is read *from*, which is the whole of what changed when it
+      // stopped being read from the first one.
       expect(barButton(deck, 'share').title).toContain('b.cool')
-      expect(barButton(deck, 'resolutions').title).toContain('b.cool')
     })
 
-    it('remember nothing between decks, because there is no setting to keep', () => {
+    it('remembers nothing between decks, because there is no setting to keep', () => {
       const first = make()
       barButton(first.deck, 'share').click()
-      barButton(first.deck, 'resolutions').click()
       first.deck.destroy()
 
       const next = make()
       expect(barButton(next.deck, 'share').classList.contains('is-on')).toBe(false)
-      expect(barButton(next.deck, 'resolutions').classList.contains('is-on')).toBe(false)
     })
   })
 
@@ -484,10 +485,13 @@ describe('the list of maps a track can be drawn on', () => {
     expect(deck.mapList[1].id).not.toBe('rep2.cool')
   })
 
-  it('names a remote companion by its file and its entry', () => {
+  it('names a remote companion by its file, and not by the rung it was opened at', () => {
     const { deck } = make()
     deck.add({ kind: 'remote', uri: 'https://x.example.org/rep2.mcool::resolutions/1000' })
-    expect(deck.mapList[1].label).toBe('rep2.mcool::1000')
+    // The rung is where the file was opened, and the map is drawn at the deck's
+    // resolution whatever it is (§16.2): naming it read as a resolution that was
+    // not on screen.
+    expect(deck.mapList[1].label).toBe('rep2.mcool')
   })
 
   it('leaves out a cell that has no file in it', () => {
@@ -709,11 +713,11 @@ describe('the star', () => {
     expect(deck.mapCard()).toBeNull()
   })
 
-  it('greys the two presses while no map is starred, with the reason on them', () => {
+  it('greys the press while no map is starred, with the reason on it', () => {
     const { deck } = make()
     deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
     all<HTMLButtonElement>(deck.el, '.deck-star')[0].click()
-    for (const kind of ['share', 'resolutions']) {
+    for (const kind of ['share']) {
       expect(barButton(deck, kind).disabled).toBe(true)
       expect(barButton(deck, kind).title).toContain('No map is starred')
     }
@@ -987,34 +991,37 @@ describe('the size the deck lays its cells out from', () => {
 
 /**
  * One resolution across the deck, and what happens to a file that has not got
- * it.
+ * it (§16.2).
  *
  * The claim a deck makes is that its pictures are of one place and can be read
- * against each other, and half of them at 1 kb beside the rest at 10 kb is a
- * claim it is no longer making. So the first map's rung takes every companion
- * with it — and a file without that level stays where it is and says so, rather
- * than being moved to the nearest thing and leaving the deck at two resolutions
- * without a word.
+ * against each other, and one file beside itself at 5 kb and 10 kb after one
+ * zoom is a claim it is no longer making. So every map is read at the deck's
+ * resolution — the first map's pick, the bin size its zoom reads at, or its
+ * open rung — **in place**, on its own ladder: the companion's address is left
+ * as it was, and a file without that level is drawn at its nearest and says so.
  *
- * The companions here **open**, unlike everywhere else in this file, and that
- * is the point of the swap: a panel that has not opened knows nothing about its
- * own ladder, and reading its empty entry list as "this file carries one
- * resolution only" accused a still-fetching `.mcool` of lacking the very rung it
- * was about to land on — a sentence its own next read disproved, and which
- * nothing on that path cleared. Refusing is a claim about a file, so it is made
- * from a file that has answered. The last test here is the other half of that
- * rule: a companion pressed *while* it fetches is held, not accused.
+ * The companions here **open**, unlike everywhere else in this file, because
+ * what a file has is only known once it answers: a panel that has not opened
+ * says nothing, and a claim about its ladder is made from the ladder.
  */
 describe('one resolution across the deck', () => {
+  /** Every block a companion asked its worker for, as the request went out. */
+  const asked: Array<{ rung?: string; binsPerCell?: number }> = []
+  /** What `chr1` resolves to in every file here: the whole of its 400 bins. */
+  const RANGE = { kind: 'contig', label: 'chr1', extent: [0, 400] }
+
   /** A plain `.cool`: one rung, at 1 kb, and no block behind it. */
   class OneRungWorker {
     onmessage: ((event: { data: unknown }) => void) | null = null
     onerror: unknown = null
-    postMessage(message: { kind: string; id: number; uri?: string }): void {
+    postMessage(message: { kind: string; id: number; uri?: string; rung?: string; binsPerCell?: number }): void {
+      if (message.kind === 'matrix') asked.push({ ...(message.rung === undefined ? {} : { rung: message.rung }), ...(message.binsPerCell === undefined ? {} : { binsPerCell: message.binsPerCell }) })
       const reply =
         message.kind === 'open'
           ? { type: 'result', id: message.id, payload: openedAt(message.uri ?? '', 1000, []) }
-          : {
+          : message.kind === 'range'
+            ? { type: 'result', id: message.id, payload: RANGE }
+            : {
               type: 'error',
               id: message.id,
               error: { name: 'Error', code: null, message: 'no block here', detail: {} },
@@ -1029,16 +1036,19 @@ describe('one resolution across the deck', () => {
   /**
    * A remote `.mcool`: the root is a collection and refuses, and the rung under
    * it opens — which is the shape that makes the ladder unknowable until the
-   * *second* round trip, and the case the held press is about.
+   * *second* round trip.
    */
   class McoolWorker {
     static readonly rungs = ['1000', '5000', '10000']
     onmessage: ((event: { data: unknown }) => void) | null = null
     onerror: unknown = null
-    postMessage(message: { kind: string; id: number; uri?: string }): void {
+    postMessage(message: { kind: string; id: number; uri?: string; rung?: string; binsPerCell?: number }): void {
       const uri = message.uri ?? ''
+      if (message.kind === 'matrix') asked.push({ ...(message.rung === undefined ? {} : { rung: message.rung }), ...(message.binsPerCell === undefined ? {} : { binsPerCell: message.binsPerCell }) })
       const reply =
-        message.kind !== 'open'
+        message.kind === 'range'
+          ? { type: 'result', id: message.id, payload: RANGE }
+          : message.kind !== 'open'
           ? {
               type: 'error',
               id: message.id,
@@ -1101,11 +1111,12 @@ describe('one resolution across the deck', () => {
   }
 
   beforeEach(() => {
+    asked.length = 0
     ;(globalThis as Record<string, unknown>).Worker = OneRungWorker
   })
 
   /**
-   * What each companion is saying about the resolution it was asked for.
+   * What each companion is saying about the resolution it is read at.
    *
    * Its own line, and read on its own: the line above it is about the *read* and
    * is cleared by the next successful one, which for a panel whose worker never
@@ -1117,122 +1128,87 @@ describe('one resolution across the deck', () => {
       .filter((text) => text !== '')
   }
 
-  it('takes every companion with the first map when its rung changes', async () => {
+  it('reads a companion at the deck’s resolution, in place, keeping its address', async () => {
+    ;(globalThis as Record<string, unknown>).Worker = McoolWorker
     const made = make()
     made.leadBinsize = 1000
+    made.resolution = { binsize: 5000, zoom: true }
     made.deck.apply(view(made))
-    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.mcool' })
     await opened()
-    expect(notesUnder(made.deck).join(' ')).not.toContain('level')
-
-    // The breadcrumb's own picker, a link, or this deck's button: all three end
-    // in the session reopening its file at another bin size.
-    made.leadBinsize = 5000
-    made.deck.apply(view(made))
-    // A bin size is spelled by `resolutionLabel` — `5 kb`, not `5.0 kb` —
-    // because a resolution is a round number by construction (§26.2); the
-    // decimal belongs to a measured span.
-    expect(notesUnder(made.deck).join(' ')).toContain('no 5 kb level')
-  })
-
-  it('says nothing on the first view, where nothing has moved yet', () => {
-    // A companion opens on the first map's bin size (§3.4), so the first sighting
-    // records the number and moves nobody.
-    const made = make()
-    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
-    made.leadBinsize = 1000
-    made.deck.apply(view(made))
+    // Opened at the first map's rung, read at the deck's: its 5 kb rung, named
+    // in the request rather than reopened as the panel's address.
+    expect(asked.at(-1)?.rung).toBe('5000')
     expect(notesUnder(made.deck)).toEqual([])
+    // So the link keeps the file, as the reader gave it (§16.6).
+    expect(made.published.at(-1)).toBe('https://x.example.org/b.mcool')
+    expect(made.deck.mapList[1].label).toBe('b.mcool')
   })
 
-  it('names the file’s own resolution and what it has instead', async () => {
+  it('draws a file without that level at its nearest, and says so', async () => {
     const made = make()
     made.leadBinsize = 1000
+    made.resolution = { binsize: 5000, zoom: true }
     made.deck.apply(view(made))
     made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
     await opened()
-    made.leadBinsize = 20_000
-    made.deck.apply(view(made))
-    const note = notesUnder(made.deck).join(' ')
-    // Its own resolution, and a real one: `0 bp` is what this used to read for
-    // a panel with no answer yet, which is a measurement in a sentence about
-    // what a file has and is not one this panel had.
-    expect(note).toContain('staying at 1 kb')
-    expect(note).toContain('carries one resolution only')
+    // A bin size is spelled by `resolutionLabel` — `5 kb`, not `5.0 kb` —
+    // because a resolution is a round number by construction (§26.2).
+    expect(notesUnder(made.deck).join(' ')).toBe('drawn at 1 kb, the one resolution this file has, not 5 kb')
+    // Said as the deck working rather than as a map refusing to follow it.
+    const line = made.deck.el.querySelector('.deck-panel:not(.is-lead) .deck-res-note')
+    expect(line?.classList.contains('deck-unlocked')).toBe(false)
+    expect(line?.getAttribute('title')).toMatch(/^This file stores one resolution, 1 kb\./)
   })
 
-  describe('the press', () => {
-    it('reads the bin size from the starred map', async () => {
-      const made = make()
-      made.leadBinsize = 2000
-      made.deck.apply(view(made))
-      made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
-      await opened()
-      barButton(made.deck, 'resolutions').click()
-      // The star is on the first map, so nothing was asked of the session — it
-      // is already where the deck is going.
-      expect(made.askedBinsize).toEqual([])
-      expect(notesUnder(made.deck).join(' ')).toContain('no 2 kb level')
-    })
+  it('sums a picked resolution out of a rung that divides it, as the first map does', async () => {
+    const made = make()
+    made.leadBinsize = 1000
+    made.resolution = { binsize: 5000, zoom: false }
+    made.deck.apply(view(made))
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    await opened()
+    // A pick is the reader's, and the first map sums one where it must (§3.4);
+    // the zoom's own choice is a stored rung, and is never summed.
+    expect(notesUnder(made.deck)).toEqual([])
+    expect(asked.at(-1)?.binsPerCell).toBe(5)
+  })
 
-    it('moves the first map too, when the star is on a companion', () => {
-      const made = make()
-      made.leadBinsize = 1000
-      made.deck.apply(view(made))
-      made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
-      all<HTMLButtonElement>(made.deck.el, '.deck-star')[1].click()
-      barButton(made.deck, 'resolutions').click()
-      // The starred companion has never opened, so it has no bin size to offer
-      // and the press has nothing to do — which is the honest answer, not a
-      // fallback to the first map's.
-      expect(made.askedBinsize).toEqual([])
-    })
+  it('follows the zoom only on the chain, and a pick wherever it is', async () => {
+    const made = make()
+    made.leadBinsize = 1000
+    made.resolution = { binsize: 2500, zoom: true }
+    made.deck.apply(view(made))
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    await opened()
+    expect(notesUnder(made.deck).join(' ')).toContain('not 2.5 kb')
 
-    it('names in the deck’s own line the maps that could not follow', async () => {
-      const made = make()
-      made.leadBinsize = 4000
-      made.deck.apply(view(made))
-      made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
-      await opened()
-      barButton(made.deck, 'resolutions').click()
-      const warning = made.deck.el.querySelector('.deck-warning')
-      expect(warning?.classList.contains('hidden')).toBe(false)
-      expect(warning?.textContent).toContain('b.cool')
-      expect(warning?.textContent).toContain('4 kb')
-    })
+    // Off the chain, a map reads its own window at its own zoom's resolution:
+    // the first map's zoom is about a window it is not showing.
+    all<HTMLButtonElement>(made.deck.el, '.deck-panel:not(.is-lead) .deck-lock')[0].click()
+    expect(notesUnder(made.deck)).toEqual([])
 
-    /**
-     * The press that arrives before the bytes do.
-     *
-     * A remote `.mcool` is two round trips from knowing its own ladder — the
-     * root refuses with the list of rungs, and only then does one of them
-     * open — and the button is live throughout. Pressed in that window the
-     * panel used to answer out of an empty `entries`: "staying at 0 bp: this
-     * file has no 5 kb level, and carries one resolution only", under a
-     * three-rung file whose descent was already heading for 5 kb because
-     * `preferBinsize` is that very number. Nothing on that path calls
-     * `sayResolution(null)`, so the sentence stood over a panel sitting at the
-     * rung it was said to lack, and the deck's own line named the file in the
-     * bar. Held instead: no claim is made about a file that has not answered,
-     * and the press is settled from the ladder when it lands.
-     */
-    it('holds a press that a companion is still too early to answer', async () => {
-      ;(globalThis as Record<string, unknown>).Worker = McoolWorker
-      const made = make()
-      made.leadBinsize = 5000
-      made.deck.apply(view(made))
-      made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.mcool' })
-      // Pressed while the root open is still in flight — nothing has arrived,
-      // so nothing is known, so nothing may be said.
-      barButton(made.deck, 'resolutions').click()
-      expect(made.deck.el.querySelector('.deck-warning')?.classList.contains('hidden')).toBe(true)
+    // A pick is a resolution the reader asked of every map, chained or not.
+    made.resolution = { binsize: 2500, zoom: false }
+    made.deck.followResolution()
+    expect(notesUnder(made.deck).join(' ')).toContain('not 2.5 kb')
+  })
 
-      await opened()
-      // …and the answer, once the ladder is known: it had the rung all along
-      // and is sitting on it, so there is nothing to say afterwards either.
-      expect(notesUnder(made.deck)).toEqual([])
-      expect(made.deck.mapList[1].label).toBe('b.mcool::5000')
-    })
+  it('says nothing about a file that has not answered yet', async () => {
+    ;(globalThis as Record<string, unknown>).Worker = McoolWorker
+    const made = make()
+    made.leadBinsize = 1000
+    made.resolution = { binsize: 5000, zoom: true }
+    made.deck.apply(view(made))
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.mcool' })
+    // The root open is still in flight — nothing has arrived, so nothing is
+    // known, so nothing may be said.
+    made.deck.followResolution()
+    expect(notesUnder(made.deck)).toEqual([])
+    await opened()
+    // …and it had the rung all along.
+    expect(notesUnder(made.deck)).toEqual([])
+    expect(asked.at(-1)?.rung).toBe('5000')
   })
 })
 

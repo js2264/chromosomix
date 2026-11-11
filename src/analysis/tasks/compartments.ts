@@ -441,8 +441,8 @@ function estimateCis(
       note: 'Nothing to read.',
       refusal:
         `Every ticked sequence is past the ${MAX_CORRELATION_BINS.toLocaleString()}-bin limit on ` +
-        `${cooltools ? 'the matrix it decomposes' : 'a correlation matrix'}. Open the file at a ` +
-        'coarser resolution.',
+        `${cooltools ? 'the matrix it decomposes' : 'a correlation matrix'}. Pick a coarser ` +
+        'resolution in the crumb row or on the task’s Resolution row.',
     }
   }
   const widestContig = usable.reduce<ContextContig | undefined>(
@@ -520,8 +520,8 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
         `${cooltools ? '' : 'correlation '}matrix (${(bytes / 1e9).toFixed(1)} GB) over ` +
         `${chosen.length.toLocaleString()} ticked ` +
         `${chosen.length === 1 ? 'sequence' : 'sequences'}. The limit is ` +
-        `${MAX_CORRELATION_BINS.toLocaleString()} bins a side — untick some, open the file at a ` +
-        `coarser resolution, or read the cis contacts alone, which ${cooltools ? 'decomposes' : 'correlates'} ` +
+        `${MAX_CORRELATION_BINS.toLocaleString()} bins a side — untick some, pick a coarser resolution ` +
+        `on the task’s Resolution row, or read the cis contacts alone, which ${cooltools ? 'decomposes' : 'correlates'} ` +
         'each sequence on its own.',
     }
   }

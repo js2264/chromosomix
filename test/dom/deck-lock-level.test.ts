@@ -250,6 +250,14 @@ function leadRollUp() {
     bpPerCell: () => 1000,
     cellCount: () => ({ rows: CONTIGS, cols: CONTIGS }),
     blockLevel: () => 'contig',
+    // The region as first drawn, and where its first cell sits (`panels/lock.ts`):
+
+    // a block read whole, as every block here is.
+
+    frameSpan: () => null,
+
+    lockOrigin: () => ({ rows: 0, cols: 0 }),
+
     blockSpan: () => ({
       rows: CONTIGS * binsPer(1000) * 1000,
       cols: CONTIGS * binsPer(1000) * 1000,

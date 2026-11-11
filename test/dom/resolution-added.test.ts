@@ -2,9 +2,9 @@
 /**
  * Resolutions the reader adds to a file's ladder (§3.4), as DOM.
  *
- * Two surfaces and one idea between them. The **picker** has to treat an added
- * rung as a rung — in bin-size order, pickable, marked as current when it is —
- * while still saying, in the label itself, that it is not in the file. The
+ * Two surfaces and one idea between them. The **row** has to treat an added
+ * rung as a rung — a slot in bin-size order, pickable, marked as current when it
+ * is — while still saying, in its name, that it is not in the file. The
  * **dialog** has to answer *as the number is typed*, because the one thing a
  * reader cannot be expected to know in advance is which resolutions a given
  * ladder can reach.
@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Breadcrumb, type BreadcrumbProps } from '@/ui/Breadcrumb'
 import { openResolutionDialog } from '@/ui/ResolutionDialog'
 import { ladderWith, type DerivedRung } from '@/metacooler/coarsen'
+import { REFINE_DEFAULT, setRefineEnabled } from '@/ui/refine'
 import type { ViewState } from '@/types'
 import { all, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
@@ -42,6 +43,7 @@ const REGION: ViewState = { uri: 'f::resolutions/1000', view: 'region', region: 
 interface Built {
   crumb: Breadcrumb
   entries: string[]
+  /** Every pick, stored or added, by bin size (`onPickResolution`). */
   derived: number[]
   dropped: number[]
   adds: number
@@ -62,7 +64,7 @@ function build(over: Partial<BreadcrumbProps> = {}): Built {
     onNavigate: () => {},
     onOpenFile: () => {},
     onSelectEntry: (entry) => entries.push(entry),
-    onSelectDerived: (binsize) => derived.push(binsize),
+    onPickResolution: (binsize) => derived.push(binsize),
     onDropResolution: (binsize) => dropped.push(binsize),
     onAddResolution: () => {
       adds++
@@ -86,11 +88,43 @@ function withThreeKb(over: Partial<BreadcrumbProps> = {}): Built {
   return build({ ladder: () => ladderWith(RUNGS, [3_000]), ...over })
 }
 
-describe('an added resolution in the picker', () => {
-  it('sits where its number says — 3 kb before 5 kb, not in a group at the end', () => {
+/** The slots, by what each says under the pointer, left (coarsest) to right. */
+function slots(crumb: Breadcrumb): string[] {
+  return all<HTMLButtonElement>(crumb.el, '.res-slot')
+    .sort((a, b) => parseFloat(a.style.left) - parseFloat(b.style.left))
+    .map((slot) => slot.getAttribute('aria-label') ?? '')
+}
+
+function slot(crumb: Breadcrumb, label: string): HTMLButtonElement {
+  const found = all<HTMLButtonElement>(crumb.el, '.res-slot').find(
+    (each) => each.getAttribute('aria-label') === label,
+  )
+  if (found === undefined) throw new Error(`no slot ${label}`)
+  return found
+}
+
+const picker = (crumb: Breadcrumb): HTMLSelectElement =>
+  crumb.el.querySelector('.res-pick') as HTMLSelectElement
+
+/** The box's options a reader can choose, as it lists them. */
+function options(crumb: Breadcrumb): HTMLOptionElement[] {
+  return [...picker(crumb).options].filter((option) => !option.hidden)
+}
+
+/** What the box says. */
+const shown = (crumb: Breadcrumb): string => picker(crumb).selectedOptions[0]?.textContent ?? ''
+
+describe('an added resolution on the row', () => {
+  // With *Refine on zoom* off, so the row stands on the rung it is given rather
+  // than following the map; a pick is the reader's either way.
+  beforeEach(() => setRefineEnabled(false))
+  afterEach(() => setRefineEnabled(REFINE_DEFAULT))
+
+  it('sits where its number says — 3 kb between 5 kb and 2 kb, not in a group at the end', () => {
     const { crumb } = withThreeKb()
     crumb.render(REGION)
-    expect(textsOf(crumb.el, '.res-stop span')).toEqual([
+    expect(slots(crumb)).toEqual(['10 kb', '5 kb', '3 kb*', '2 kb', '1 kb'])
+    expect(options(crumb).map((option) => option.text)).toEqual([
       '1 kb',
       '2 kb',
       '3 kb*',
@@ -99,95 +133,108 @@ describe('an added resolution in the picker', () => {
     ])
   })
 
-  it('wears the star in the label, where a number is quoted from', () => {
+  it('wears the star in its name, where a number is quoted from', () => {
     const { crumb } = withThreeKb()
     crumb.render(REGION)
-    const added = all(crumb.el, '.res-stop.res-added span').map((node) => node.textContent)
+    const added = all(crumb.el, '.res-slot.is-added').map((node) => node.getAttribute('aria-label'))
     expect(added).toEqual(['3 kb*'])
     // …and the file's own rungs do not.
-    expect(textsOf(crumb.el, '.res-stop span').filter((text) => text.endsWith('*'))).toEqual([
-      '3 kb*',
-    ])
+    expect(slots(crumb).filter((text) => text.endsWith('*'))).toEqual(['3 kb*'])
   })
 
   it('says in its tooltip what it is made of', () => {
     const { crumb } = withThreeKb()
     crumb.render(REGION)
-    const stop = crumb.el.querySelector('.res-stop.res-added') as HTMLElement
-    expect(stop.title).toContain('not in this file')
-    expect(stop.title).toContain('3 of its 1,000 bp bins')
+    const option = options(crumb).find((each) => each.text === '3 kb*') as HTMLOptionElement
+    expect(option.title).toContain('not in this file')
+    expect(option.title).toContain('3 of its 1,000 bp bins')
   })
 
-  it('is picked through its own road, not through the entry picker', () => {
+  it('is picked by its bin size, not through the entry picker', () => {
     const built = withThreeKb()
     built.crumb.render(REGION)
-    const radios = all<HTMLInputElement>(built.crumb.el, '.res-radio')
-    radios[2].checked = true
-    radios[2].dispatchEvent(new Event('change'))
+    slot(built.crumb, '3 kb*').click()
     // Re-opening the file at an entry called `3000` would fail: there is no
     // such entry, and there never will be.
     expect(built.entries).toEqual([])
     expect(built.derived).toEqual([3_000])
   })
 
-  it('leaves the file’s own rungs going through the entry picker', () => {
+  it('picks the file’s own rungs by their bin size too, read in place', () => {
     const built = withThreeKb()
     built.crumb.render(REGION)
-    const radios = all<HTMLInputElement>(built.crumb.el, '.res-radio')
-    radios[3].checked = true
-    radios[3].dispatchEvent(new Event('change'))
-    expect(built.entries).toEqual(['5000'])
-    expect(built.derived).toEqual([])
+    slot(built.crumb, '5 kb').click()
+    expect(built.entries).toEqual([])
+    expect(built.derived).toEqual([5_000])
   })
 
-  it('is what the slider walks onto too', () => {
+  it('is what the box picks too', () => {
     const built = withThreeKb()
     built.crumb.render(REGION)
-    const slider = built.crumb.el.querySelector('.res-slider') as HTMLInputElement
-    expect(slider.max).toBe('4')
-    slider.value = '2'
-    slider.dispatchEvent(new Event('change'))
+    const list = picker(built.crumb)
+    list.value = String(options(built.crumb).findIndex((option) => option.text === '3 kb*'))
+    list.dispatchEvent(new Event('change'))
+    expect(built.derived).toEqual([3_000])
+  })
+
+  it('is a step of the keys, one coarser than 2 kb', () => {
+    const built = withThreeKb({ currentEntry: '2000' })
+    built.crumb.render({ ...REGION, uri: 'f::resolutions/2000' })
+    const track = built.crumb.el.querySelector('.res-track') as HTMLElement
+    track.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
     expect(built.derived).toEqual([3_000])
   })
 })
 
 describe('standing on an added resolution', () => {
+  beforeEach(() => setRefineEnabled(false))
+  afterEach(() => setRefineEnabled(REFINE_DEFAULT))
+
   it('marks it current rather than the rung the file is open at', () => {
     // The file is open at 1 kb — it has to be, since 3 kb is three of its bins
-    // — and the axis says 3 kb. Marking the base would put the highlight on a
+    // — and the axis says 3 kb. Marking the base would put the thumb on a
     // number nothing on screen is drawn at.
-    const { crumb } = withThreeKb({ coarsen: () => 3_000 })
+    const { crumb } = withThreeKb({ standing: () => 3_000 })
     crumb.render(REGION)
-    expect(textsOf(crumb.el, '.res-stop.current span')).toEqual(['3 kb*'])
+    expect(shown(crumb)).toBe('3 kb*')
+    expect(all(crumb.el, '.res-slot.is-current').map((node) => node.getAttribute('aria-label'))).toEqual([
+      '3 kb*',
+    ])
   })
 
   it('goes back to the open rung when the reader asks for nothing', () => {
     const { crumb } = withThreeKb()
     crumb.render(REGION)
-    expect(textsOf(crumb.el, '.res-stop.current span')).toEqual(['1 kb'])
+    expect(shown(crumb)).toBe('1 kb')
   })
 
-  it('says nothing when the stop already showing is picked again', () => {
-    const built = withThreeKb({ coarsen: () => 3_000 })
+  it('says nothing when the slot already showing is picked again', () => {
+    const built = withThreeKb({ standing: () => 3_000 })
     built.crumb.render(REGION)
-    const slider = built.crumb.el.querySelector('.res-slider') as HTMLInputElement
-    slider.dispatchEvent(new Event('change'))
+    slot(built.crumb, '3 kb*').click()
     expect(built.derived).toEqual([])
     expect(built.entries).toEqual([])
   })
 })
 
 describe('taking one back off', () => {
-  it('offers a × on an added stop and on no other', () => {
-    const { crumb } = withThreeKb()
-    crumb.render(REGION)
-    expect(all(crumb.el, '.res-drop')).toHaveLength(1)
-    const stop = crumb.el.querySelector('.res-stop.res-added') as HTMLElement
-    expect(stop.querySelector('.res-drop')).not.toBeNull()
+  afterEach(() => setRefineEnabled(REFINE_DEFAULT))
+
+  it('offers a × beside the box while it is the one picked, and at no other time', () => {
+    setRefineEnabled(false)
+    const standing = withThreeKb({ standing: () => 3_000 })
+    standing.crumb.render(REGION)
+    expect(all(standing.crumb.el, '.res-drop')).toHaveLength(1)
+    expect(standing.crumb.el.querySelector('.res-pick-wrap > .res-drop')).not.toBeNull()
+    // On the file's own rung there is nothing to take off.
+    const open = withThreeKb()
+    open.crumb.render(REGION)
+    expect(open.crumb.el.querySelector('.res-drop')).toBeNull()
   })
 
-  it('removes rather than selects, though it sits inside the label', () => {
-    const built = withThreeKb()
+  it('removes rather than selects', () => {
+    setRefineEnabled(false)
+    const built = withThreeKb({ standing: () => 3_000 })
     built.crumb.render(REGION)
     const off = built.crumb.el.querySelector('.res-drop') as HTMLButtonElement
     off.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
@@ -195,81 +242,101 @@ describe('taking one back off', () => {
     expect(built.derived).toEqual([])
     expect(built.entries).toEqual([])
   })
+
+  it('is put away while the zoom picks, when the box names another resolution', () => {
+    setRefineEnabled(true)
+    const built = withThreeKb({ standing: () => 3_000 })
+    built.crumb.render(REGION)
+    built.crumb.showResolution(10_000)
+    expect(shown(built.crumb)).toBe('10 kb')
+    expect((built.crumb.el.querySelector('.res-drop') as HTMLElement).hidden).toBe(true)
+    // …and back with the pick, beside the 3 kb the reader added.
+    setRefineEnabled(false)
+    expect((built.crumb.el.querySelector('.res-drop') as HTMLElement).hidden).toBe(false)
+  })
 })
 
-describe('a ladder too long to chip', () => {
-  /** Twelve rungs, which is past `MAX_STOPS` — a 4DN-shaped `.mcool`. */
+describe('a long ladder with one of the reader’s own', () => {
+  /** Eleven rungs — a 4DN-shaped `.mcool` — and the reader's 3 kb among them. */
   const MANY = [
     500, 1_000, 2_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000,
   ].map((binsize) => ({ name: String(binsize), binsize }))
 
-  it('chips a nine-rung ladder in full, which is most of them', () => {
-    // The cap was six, and an eight-rung file — the commonest shape there is —
-    // collapsed to a bare slider the moment somebody added a ninth rung to it,
-    // which is exactly the reader this feature is for.
-    const nine = MANY.slice(0, 8)
-    const built = build({
-      ladder: () => ladderWith(nine, [3_000]),
-      entries: nine.map((rung) => rung.name),
-    })
-    built.crumb.render(REGION)
-    expect(textsOf(built.crumb.el, '.res-stop span')).toEqual([
-      '500 bp',
-      '1 kb',
-      '2 kb',
-      '3 kb*',
-      '5 kb',
-      '10 kb',
-      '25 kb',
-      '50 kb',
-      '100 kb',
-    ])
-  })
+  beforeEach(() => setRefineEnabled(false))
+  afterEach(() => setRefineEnabled(REFINE_DEFAULT))
 
-  it('still lets the reader take their own resolution back off', () => {
-    // Above the cap the row is a dropdown of every rung, and a `<select>` cannot
-    // hold a button — so the × follows the picker when the rung being read is
-    // the reader's own. A nine-rung file is exactly the one somebody adds a
-    // resolution to, and a rung with no way back off it would be a declaration
-    // that could only be undone by clearing storage.
+  it('slots every rung on the one track, the reader’s own in its place', () => {
     const built = build({
       ladder: () => ladderWith(MANY, [3_000]),
-      coarsen: () => 3_000,
       entries: MANY.map((rung) => rung.name),
     })
     built.crumb.render(REGION)
-    const picker = built.crumb.el.querySelector('.res-pick') as HTMLSelectElement
-    expect(picker.options[picker.selectedIndex]?.text).toBe('3 kb*')
+    expect(slots(built.crumb)).toEqual([
+      '1 Mb',
+      '500 kb',
+      '250 kb',
+      '100 kb',
+      '50 kb',
+      '25 kb',
+      '10 kb',
+      '5 kb',
+      '3 kb*',
+      '2 kb',
+      '1 kb',
+      '500 bp',
+    ])
+    expect(textsOf(built.crumb.el, '.res-end')).toEqual(['1 Mb', '500 bp'])
+  })
+
+  it('still lets the reader take their own resolution back off', () => {
+    const built = build({
+      ladder: () => ladderWith(MANY, [3_000]),
+      standing: () => 3_000,
+      entries: MANY.map((rung) => rung.name),
+    })
+    built.crumb.render(REGION)
+    expect(shown(built.crumb)).toBe('3 kb*')
     const off = built.crumb.el.querySelector('.res-pick-wrap > .res-drop') as HTMLButtonElement
     expect(off).not.toBeNull()
     off.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     expect(built.dropped).toEqual([3_000])
   })
 
-  it('offers no × on the file’s own rung, however it is drawn', () => {
+  it('offers no × on the file’s own rung', () => {
     const built = build({
       ladder: () => ladderWith(MANY, [3_000]),
       entries: MANY.map((rung) => rung.name),
       currentEntry: '2000',
     })
     built.crumb.render(REGION)
-    const picker = built.crumb.el.querySelector('.res-pick') as HTMLSelectElement
-    expect(picker.options[picker.selectedIndex]?.text).toBe('2 kb')
+    expect(shown(built.crumb)).toBe('2 kb')
     // The rung it is standing on is the file's own, so nothing to take off —
-    // and the rung the reader added is still in the list, one option along.
+    // and the rung the reader added is still in the box, one option along.
     expect(built.crumb.el.querySelector('.res-drop')).toBeNull()
-    expect([...picker.options].map((option) => option.text)).toContain('3 kb*')
+    expect(options(built.crumb).map((option) => option.text)).toContain('3 kb*')
   })
 })
 
-describe('the + past the coarse end', () => {
+describe('the + past the box', () => {
+  afterEach(() => setRefineEnabled(REFINE_DEFAULT))
+
   it('is offered beside the ladder', () => {
+    setRefineEnabled(false)
     const built = withThreeKb()
     built.crumb.render(REGION)
     const add = built.crumb.el.querySelector('.res-add') as HTMLButtonElement
     expect(add).not.toBeNull()
     add.click()
     expect(built.adds).toBe(1)
+  })
+
+  it('is greyed with the rest of the row while the zoom picks', () => {
+    // An added resolution is one to pick, and while the zoom picks there is
+    // nothing a new rung would change on screen.
+    setRefineEnabled(true)
+    const built = withThreeKb()
+    built.crumb.render(REGION)
+    expect((built.crumb.el.querySelector('.res-add') as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('is the whole control on a plain .cool, which has one resolution', () => {
@@ -282,12 +349,12 @@ describe('the + past the coarse end', () => {
     built.crumb.render({ uri: 'f.cool', view: 'region', region: 'I' })
     expect(built.crumb.el.querySelector('.crumb-res')).not.toBeNull()
     expect(built.crumb.el.querySelector('.res-add')).not.toBeNull()
-    // …and the slider is **not drawn at all**. It used to be drawn disabled,
-    // which the code's own comment called furniture: a greyed track beside a
-    // single stop invites a drag that does nothing, and §8.5's rule is that a
-    // control which cannot keep its promise is absent. It returns with the
-    // second rung, which is what the `+` beside it makes.
-    expect(built.crumb.el.querySelector('.res-slider')).toBeNull()
+    // …and the slider is **not drawn at all**: a track beside a single slot
+    // invites a drag that does nothing, and §8.5's rule is that a control which
+    // cannot keep its promise is absent. It returns with the second rung, which
+    // is what the `+` beside it makes.
+    expect(built.crumb.el.querySelector('.res-track')).toBeNull()
+    expect(built.crumb.el.querySelector('.res-scale')).toBeNull()
   })
 
   it('is absent where the session offers no way to add one', () => {

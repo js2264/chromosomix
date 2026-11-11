@@ -34,10 +34,11 @@ A button's tooltip names its key.
 ### The command search
 
 **Search commands…**, or <kbd>Ctrl</kbd>+<kbd>P</kbd> (<kbd>⌘</kbd><kbd>P</kbd> on a Mac), finds any
-action by name, with its key; one that cannot act on what is open is greyed. Only here are
-*Refine on zoom*, which reads a window again at a finer grid as you zoom past what was read, and,
-under Help, *What this browser is remembering*, with a button that forgets it all
-([Keyboard and command palette](/browse/keyboard/)).
+action by name, with its key; one that cannot act on what is open is greyed. Here too is
+*Refine on zoom*, which does what the tick at the head of a map's resolution row does: on by default,
+it reads a map at about the size of the screen and finer as you zoom; off, the map is drawn at the
+resolution you pick. Only here, under Help, is *What this browser is remembering*, with a button
+that forgets it all ([Keyboard and command palette](/browse/keyboard/)).
 
 ## Tabs
 
@@ -53,31 +54,35 @@ its file, such as a sequence that reads as circular, until you dismiss it.
 ## Over the picture: the trail and the heading
 
 **The trail** — the file, the table or the whole genome, the sequence, the window — says where you
-are and takes you back up; click the file to open another in its place. At its end, **resolution**
-picks a bin size the file stores (<kbd>-</kbd> and <kbd>+</kbd> step), and its **+** adds one summed
-from the file's bins, marked `*`. **contacts** draws every map in the tab at the number of contacts
-you type, `10M` say, to compare libraries at one depth.
+are and takes you back up; click the file to open another in its place. At its end, the
+**resolution** row: **refine on zoom**, ticked so that the map is read at the screen's resolution and
+finer as you zoom, with a slider and a box that follow it, greyed; unticked, they pick a bin size the
+file stores (<kbd>-</kbd> and <kbd>+</kbd> step), and its **+** adds one summed from the file's bins,
+marked `*`.
+**contacts** draws every map in the tab at the number of contacts you type, `10M` say, to compare
+libraries at one depth.
 
 **The heading** has the title, with `‹` and `›` for the previous and next sequence; the locus box
 and **go**; arrows and zoom steps; and a bookmark of the view (<kbd>B</kbd>). The line under it gives
-the *effective resolution*, coarser than the file's when the window holds more bins than the picture
-has room for ([Moving around](/browse/navigating/)).
+the *effective resolution*, the size of one cell as drawn: the screen's while *refine on zoom* picks
+it, and coarser than the one picked when the window holds more bins than a block can
+([Moving around](/browse/navigating/#resolution-and-the-zoom)).
 
 ## The picture, and the deck of cells
 
 A tab shows **a contact map**, with tracks on its edges and marks on it
 ([Reading a contact map](/browse/contact-maps/)); **the genome browser**, tracks along the genome with
 no map, which a tab opens as when its first file is a track
-([The genome browser](/browse/genome-browser/)); or **a deck** of cells, panned and zoomed together.
+([The genome browser](/browse/genome-browser/)); or **a deck** of cells, panned and zoomed together,
+its maps drawn at one resolution.
 
 The **+** down the map's right edge or along its bottom opens a column or a row of empty cells, for
 a map, a track or a 3D structure; a map dropped on an open map opens beside it too. Each cell has a
 grip to swap it, a **star** for the map the Map card sets and analyses run on, and a **chain**, lit
-while it follows the others. The deck's bar has **add a cell…**, **match all scales**,
-**match all resolutions**, the number of cells across, the deck as one figure and **close deck**
-([Maps side by side](/browse/deck/)).
+while it follows the others. The deck's bar has **add a cell…**, **match all scales**, the number of
+cells across, the deck as one figure and **close deck** ([Maps side by side](/browse/deck/)).
 
-![A deck of three cells on the whole of yeast chromosome IV: a micro-C cooler and a Hi-C .hic side by side, the first starred and with its genes and ATAC lanes, and the yeast model beside them with chromosome IV lit and the rest ghosted, under the deck's bar from add a cell… to close deck.](../../../assets/screens/start/deck.webp)
+![A deck of three cells on the whole of yeast chromosome IV: a micro-C cooler and a Hi-C .hic side by side, both at 2 kb, the first starred and with its genes and ATAC lanes, and the yeast model beside them with chromosome IV lit and the rest ghosted, under the deck's bar from add a cell… to close deck.](../../../assets/screens/start/deck.webp)
 
 The pictures keep their light colours in the dark theme, as in a figure.
 

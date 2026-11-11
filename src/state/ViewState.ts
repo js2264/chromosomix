@@ -62,7 +62,7 @@ export const KEY_ORDER = [
   'locus',
   'ideogram',
   'level',
-  'coarsen',
+  'resolution',
   'transform',
   'colormap',
   'vmin',
@@ -100,7 +100,7 @@ const OPTIONAL_KEYS = [
   'locus',
   'ideogram',
   'level',
-  'coarsen',
+  'resolution',
   'transform',
   'colormap',
   'vmin',
@@ -251,17 +251,18 @@ export function parseViewState(hash: string): ViewState | null {
     state.level = level as 'bin' | 'contig'
   }
 
-  // The resolution the reader **added**, in base pairs (§3.4). Believed only as
-  // a positive whole number, and never re-derived here: whether this file can
-  // actually be read at it is a question about the ladder that is open, which
-  // this parser has not got and which `metacooler/coarsen.ts` answers where it
-  // does. A link naming one the recipient's file cannot reach falls back to that
-  // file's own grid, which is the behaviour every unreachable value in this hash
-  // already has.
-  const coarsen = raw.get('coarsen')
-  if (coarsen !== undefined && coarsen !== '') {
-    const parsed = Number(coarsen)
-    if (Number.isInteger(parsed) && parsed > 0) state.coarsen = parsed
+  // The resolution picked, in base pairs (§3.4): a rung the file stores or one
+  // the reader added. Believed only as a positive whole number, and never
+  // resolved here: whether this file can be read at it is a question about the
+  // ladder that is open, which this parser has not got and which the session
+  // answers where it does (`Session.pickedResolution`). A value the
+  // recipient's file cannot reach is ignored there, which is the behaviour
+  // every unreachable value in this hash already has. `coarsen=` is the name an
+  // added resolution had, and an old link's is read as this key.
+  const resolution = raw.get('resolution') ?? raw.get('coarsen')
+  if (resolution !== undefined && resolution !== '') {
+    const parsed = Number(resolution)
+    if (Number.isInteger(parsed) && parsed > 0) state.resolution = parsed
   }
 
   const transform = raw.get('transform')
@@ -395,6 +396,8 @@ export function viewStateOf(value: unknown): ViewState | null {
     if (typeof one === 'number' || typeof one === 'boolean') kept[key] = one
     else if (typeof one === 'string' && !LONE_SURROGATE.test(one)) kept[key] = one
   }
+  // A tab or a session stored while an added resolution had a key of its own.
+  if (kept['resolution'] === undefined && typeof held['coarsen'] === 'number') kept['resolution'] = held['coarsen']
   return parseViewState(serialiseViewState(kept as unknown as ViewState))
 }
 
@@ -530,7 +533,7 @@ export const READING_KEYS = ['flip', 'oe', 'arms', 'smooth'] as const
  * The keys that say **which data the file is being read through**, and outlive
  * a navigation for a different reason than {@link READING_KEYS} do.
  *
- * Two members. The cell set of an `.scool` (§3.8) is carried not
+ * Three members. The cell set of an `.scool` (§3.8) is carried not
  * because it is a preference — it is the opposite, it is the subject — but
  * because a container of four thousand cells is browsed the way a file is: you
  * choose the cells once, in the cells table, and then look at chromosome 3, and
@@ -540,12 +543,16 @@ export const READING_KEYS = ['flip', 'oe', 'arms', 'smooth'] as const
  * are drawn to (§6.5) is the same kind of fact: the reader draws the maps to one
  * depth once and then goes to look at things, and a chromosome opened from the
  * table at the file's own depth would be a different library under the same
- * number in the box.
+ * number in the box. And the resolution picked (§3.4), for the same reason: a
+ * reader who picked 25 kb and then opened another chromosome from the table
+ * asked for 25 kb once, and a map that went back to the screen's resolution on
+ * the way would be a different picture under the same pick. Carried within one
+ * file only, as all three are — another file's ladder is another question.
  *
  * The same believe-what-was-said rule as the other two: a state that names a
  * cell set has one, including the sentinel that names all of them.
  */
-export const SUBJECT_KEYS = ['cells', 'contacts'] as const
+export const SUBJECT_KEYS = ['cells', 'contacts', 'resolution'] as const
 
 /**
  * The keys of the lower triangle's own reading (§5.10): the switch, and the
@@ -641,6 +648,15 @@ export function differsOnlyInPresentationOrScore(a: ViewState, b: ViewState): bo
  */
 export function differsOnlyInFocus(a: ViewState, b: ViewState): boolean {
   return a.focus !== b.focus && differsOnly(a, b, ['focus'])
+}
+
+/**
+ * `true` when two states differ only in **the resolution picked** (§3.4) — a
+ * stored rung or one the reader added — which a mounted view reads in place,
+ * where the reader stands, rather than being rebuilt from its named region.
+ */
+export function differsOnlyInResolution(a: ViewState, b: ViewState): boolean {
+  return a.resolution !== b.resolution && differsOnly(a, b, ['resolution'])
 }
 
 function differsOnly(a: ViewState, b: ViewState, allowed: readonly string[]): boolean {

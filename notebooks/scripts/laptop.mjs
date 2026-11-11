@@ -637,9 +637,7 @@ async function drawnAt(page, binsize, after) {
         const found = (text ?? '').trim().match(/^([\d.]+)\s*(bp|kb|Mb)\b/)
         return found === null ? NaN : Math.round(Number(found[1]) * { bp: 1, kb: 1e3, Mb: 1e6 }[found[2]])
       }
-      const select = document.querySelector('.crumb-res select.res-pick')
-      const standing = select !== null ? select.selectedOptions[0]?.text
-        : document.querySelector('.crumb-res label.res-stop.current')?.innerText
+      const standing = document.querySelector('.crumb-res select.res-pick')?.selectedOptions[0]?.text
       return size(standing) === binsize && performance.getEntriesByName('chromosomix:rendered', 'mark').some((mark) =>
         (mark.detail?.seq ?? 0) > after && mark.detail.status === 'drawn' && mark.detail.maps.length > 0)
     },
@@ -650,27 +648,30 @@ async function drawnAt(page, binsize, after) {
 }
 
 /**
- * The rung of `binsize` picked in the crumb row's resolution, as a reader picks it: from its dropdown
- * where the file has more rungs than the row lists as stops, as a 4DN `.mcool` has, else its stop.
+ * The rung of `binsize` picked in the crumb row's resolution, as a reader picks it: *Refine on zoom*
+ * unticked, which is what makes the resolution the reader's to pick (the row is greyed while the zoom
+ * picks it), then the rung chosen in the box beside the slider, which lists every rung the file has.
+ * The pick is the resolution every task reads (SPECS §3.4, §18.4).
  */
 async function pickRung(page, binsize) {
+  const refine = page.locator('.crumb-res .res-refine input').first()
+  if (await refine.isChecked().catch(() => false)) {
+    await refine.click()
+    await sleep(500)
+  }
   const picked = await page.evaluate((binsize) => {
     const size = (text) => {
       const found = text.trim().match(/^([\d.]+)\s*(bp|kb|Mb)\b/)
       return found === null ? NaN : Math.round(Number(found[1]) * { bp: 1, kb: 1e3, Mb: 1e6 }[found[2]])
     }
     const select = document.querySelector('.crumb-res select.res-pick')
-    if (select !== null) {
-      const option = [...select.options].find((one) => size(one.text) === binsize)
-      if (option === undefined) return null
+    const option = [...(select?.options ?? [])].find((one) => !one.hidden && size(one.text) === binsize)
+    if (select === null || option === undefined) return null
+    if (select.value !== option.value) {
       select.value = option.value
       select.dispatchEvent(new Event('change', { bubbles: true }))
-      return option.text
     }
-    const stop = [...document.querySelectorAll('.crumb-res label.res-stop')].find((one) => size(one.innerText) === binsize)
-    if (stop === undefined) return null
-    stop.querySelector('input').click()
-    return stop.innerText.trim()
+    return option.text
   }, binsize)
   if (picked === null) throw new Error(`the resolution offers no rung of ${binsize} bp`)
 }

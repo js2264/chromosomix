@@ -53,7 +53,16 @@ import { blockSummary, poolingNote } from './mapSummary'
 import { REMOTE_SCAN_BYTE_LIMIT, overviewTarget } from './Overview'
 import { presentationOf, secondBlock, type CompareRead, type LowerRead } from './compare'
 import type { LowerPresentation } from './LowerReading'
-import { attachRefine, rungsOf, type BlockLadder } from './refine'
+import {
+  attachRefine,
+  planFields,
+  readPlan,
+  refineEnabled,
+  rungsOf,
+  type BlockLadder,
+  type PickedResolution,
+  type ReadPlan,
+} from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox, featureSuggestions, locusPlaceholder } from './SearchBox'
 
@@ -63,19 +72,15 @@ export interface WholeViewProps {
   /** Sibling rungs of a laddered file (§3.4); absent for a plain one. */
   rungs?: readonly string[]
   /**
-   * Bins of this map summed into one drawn cell, because the reader asked for a
-   * resolution the file does not store (§3.4).
-   *
-   * The factor, not the bin size: a 10 kb rung derived from a 2 kb map is `5`,
-   * and the effective resolution on screen is this map's bin size times it. The
-   * base rung is the map that is *open* — picking a derived resolution navigates
-   * to it — so every read here is an ordinary one carrying an explicit plan,
-   * and the worker snaps that plan to each sequence's own grid so the cells hold
-   * the same sums wherever the reader pans (`worker/reader.worker.ts`).
-   *
-   * Absent, or 1, is every view of every file until somebody adds one.
+   * The resolution picked (§3.4), asked live, and read in place when it
+   * changes; a pick wins over *Refine on zoom*. Absent or `null` is no pick.
    */
-  binsPerCell?: number
+  picked?: () => PickedResolution | null
+  /**
+   * Told the bin size this view's zoom is reading at, whenever it changes: what
+   * the other maps of a deck follow while the zoom picks (§16.2).
+   */
+  onZoomTarget?: (binsize: number | null) => void
   /**
    * Open the file at another rung, by entry name — the gate's second button.
    *
@@ -366,17 +371,16 @@ export class WholeView {
             POOLED_CELL_CAP,
           )
         : IDENTITY_PLAN
-    // **The reader's declared resolution is a floor, never a ceiling** (§3.4).
+    // **A resolution added over the open rung is a floor, never a ceiling**
+    // (§3.4), for the reads that keep this plan — a selection, a second file.
     // A whole genome at 10 kb is a picture; a whole genome at the 3 kb somebody
     // added for a locus view is a hundred thousand cells a side, which is not a
     // picture and which this view's own plan exists to refuse. So the coarser of
-    // the two wins, the summary says which, and a reader who came here from a
-    // 3 kb region view is told *cells of about 40 kb* rather than handed a
-    // number that was quietly ignored.
+    // the two wins, and the summary says which.
+    const pick = props.picked?.() ?? null
+    const declared = pick !== null && pick.rung.binsize === props.binsize ? pick.factor : 1
     this.plan =
-      fitted.contigsPerCell > 1
-        ? fitted
-        : { ...fitted, binsPerCell: Math.max(fitted.binsPerCell, props.binsPerCell ?? 1) }
+      fitted.contigsPerCell > 1 ? fitted : { ...fitted, binsPerCell: Math.max(fitted.binsPerCell, declared) }
     this.summary = el('p', { class: 'summary' })
     // One line under the title, with the whole of it in a tooltip where it is cut.
     titleWhenCut(this.summary)
@@ -639,13 +643,53 @@ export class WholeView {
   private gated(): boolean {
     const { nnz, wholeFileLevel } = this.props
     if (wholeFileLevel !== undefined) return true
-    // A coarser rung that draws the same cells is read instead of the open
-    // one's every pixel ({@link rungRead}), and that is a bounded read.
-    if (this.rungRead() !== null) return false
+    // A coarser stored rung read instead of the open one's every pixel is a
+    // bounded read ({@link firstPlan}, {@link rungRead}) — a coarser one only:
+    // a pick finer than the open rung is more pixels than the count below, not
+    // fewer.
+    const first = this.firstPlan()
+    if (first !== null ? this.coarserThanOpen(first) : this.rungRead() !== null) return false
     // A file that states no pixel count is measured by its bins instead — a
     // `.hic` at 1 kb walks every block of the file whatever it declares.
     if (nnz === null) return this.props.nBins > WHOLE_VIEW_GATE_BINS
     return nnz > WHOLE_VIEW_GATE_PIXELS
+  }
+
+  /**
+   * The plain whole-genome picture's first read, by the rule every map view's
+   * is ({@link readPlan}, §2, §3.4): with *Refine on zoom* on and nothing picked,
+   * the stored rung nearest a cell to each pixel of the panel — so the picture,
+   * and what it costs, no longer depend on which entry the link opened the file
+   * at; a K562 `.mcool` was drawn at 1 Mb from its 1 Mb entry and at 500 kb,
+   * 6,188 bins a side and 57 MB, from its 25 kb one. Otherwise the resolution
+   * picked — the open map's where none is — as memory allows, from the finest
+   * stored rung that fits where it does not.
+   *
+   * `null` for every read with a grid of its own, which keeps the plan this
+   * view was built with: a selection, a second file, a metagenome's whole-file
+   * level (§7.3). A second reading below the diagonal (§5.10) is read by the
+   * same plan as the block above it ({@link load}).
+   */
+  private firstPlan(): ReadPlan | null {
+    if (this.level !== 'bin' || this.props.selection !== undefined) return null
+    if (this.props.wholeFileLevel !== undefined || this.props.compare !== undefined) return null
+    const span = this.props.displayExtent[1] - this.props.displayExtent[0]
+    return readPlan({
+      rungs: rungsOf(this.props.rungs ?? []),
+      binsize: this.props.binsize,
+      view: span,
+      read: span,
+      screen: this.panel.screenWidth(),
+      pick: this.props.picked?.() ?? null,
+      refining: refineEnabled(),
+    })
+  }
+
+  /** Whether a plan reads a stored rung coarser than the open one. */
+  private coarserThanOpen(plan: ReadPlan): boolean {
+    if (plan.rung === undefined) return false
+    const rung = rungsOf(this.props.rungs ?? []).find((each) => each.name === plan.rung)
+    return rung !== undefined && rung.binsize > this.props.binsize
   }
 
   /**
@@ -884,7 +928,21 @@ export class WholeView {
     // because a request type is a discriminated union and narrowing it through
     // a ternary argument loses the discriminant.
     const selection = this.props.selection
-    const fromRung = this.rungRead()
+    const first = this.firstPlan()
+    const fromRung = first === null ? this.rungRead() : null
+    // The plain picture by the rule every view's first read is ({@link
+    // firstPlan}); a grid of its own otherwise — the plan the panel was built
+    // for, from a coarser rung where one draws it ({@link rungRead}), its cells
+    // counted in that rung's bins. **One plan for both triangles**: the second
+    // reading below the diagonal (§5.10) is the same file read the same way,
+    // and read on a grid of its own it was a block of another shape, its cells
+    // laid under the wrong half of the picture.
+    const plan =
+      first !== null
+        ? planFields(first)
+        : fromRung === null
+          ? this.wire()
+          : { rung: fromRung.name, ...(fromRung.binsPerCell > 1 ? { binsPerCell: fromRung.binsPerCell } : {}) }
     const task: Cancellable<MatrixResult> =
       selection !== undefined && this.level === 'bin'
         ? client.cancellable<'selection'>(
@@ -903,16 +961,7 @@ export class WholeView {
               kind: 'matrix',
               rows,
               balance,
-              // An identity plan asks for the ordinary dense read; above that
-              // the block comes back on the coarser grid the panel was built
-              // for — from a coarser rung where one draws it ({@link rungRead}),
-              // its cells counted in that rung's bins.
-              ...(fromRung === null
-                ? this.wire()
-                : {
-                    rung: fromRung.name,
-                    ...(fromRung.binsPerCell > 1 ? { binsPerCell: fromRung.binsPerCell } : {}),
-                  }),
+              ...plan,
               ...budget,
               ...genomes,
             },
@@ -944,7 +993,7 @@ export class WholeView {
               kind: 'matrix',
               rows,
               balance,
-              ...this.wire(),
+              ...plan,
               ...budget,
               ...genomes,
             })
@@ -1011,10 +1060,10 @@ export class WholeView {
    * level or over a selection: a cell there is a whole sequence and there is no
    * finer grid under it. It does not send `this.wire()` — the plan this view
    * chose for the *whole file* is the answer to a different question, and a
-   * window inside it deserves the finest grid its own cell count allows. (The
-   * reader's **declared** resolution is not that plan and does travel, as the
-   * `floor` below; it is a number somebody typed rather than one this view fitted,
-   * and the worker snaps it to each sequence's own grid so panning holds it
+   * window inside it deserves the grid its own plan gives ({@link readPlan}).
+   * (The resolution **picked** is not that plan and does travel, as `picked`
+   * below; it is a number somebody chose rather than one this view fitted, and
+   * the worker snaps it to each sequence's own grid so panning holds it
    * still.) And it does not run another full pass: every read it makes is a
    * bounded window inside the extent the gate already allowed.
    */
@@ -1034,7 +1083,9 @@ export class WholeView {
       ceiling: { rows: ceiling, cols: ceiling },
       binsize: this.props.binsize,
       rungs: rungsOf(this.props.rungs ?? []),
-      floor: () => this.props.binsPerCell ?? 1,
+      second: this.props.compare !== undefined,
+      ...(this.props.picked === undefined ? {} : { picked: this.props.picked }),
+      ...(this.props.onZoomTarget === undefined ? {} : { onTarget: this.props.onZoomTarget }),
       budget: () => budget.budgetBytes,
       read: (rows, cols, rung, binsPerCell) => {
         const own = client.cancellable<'matrix'>({
@@ -1122,10 +1173,36 @@ export class WholeView {
    * reading. `poolingNote` still speaks for the raster, which pools again above
    * 4096 cells and, at this cap, never does.
    */
+  /**
+   * The resolution asked for (§3.4): the pick, or the open map's with *Refine on
+   * zoom* off and nothing picked; `undefined` while the zoom picks it.
+   */
+  private picked(): number | undefined {
+    const pick = this.props.picked?.() ?? null
+    if (pick !== null) return pick.binsize
+    return refineEnabled() ? undefined : this.props.binsize
+  }
+
+  /**
+   * The resolution picked changed (§3.4): read it where the reader stands, as a
+   * refine is read. `false` where there is no block in hand with a ladder on it
+   * — a gate, a read still going, a picture of whole sequences — and the view is
+   * rebuilt instead.
+   */
+  resolutionChanged(): boolean {
+    const shown = this.panel.block
+    if (this.ladder === null || shown === null) return false
+    this.summary.replaceChildren(...this.summarise(shown))
+    const pick = this.picked()
+    const drawn = (shown.binsize ?? this.props.binsize) * Math.max(1, shown.binsPerCell ?? 1)
+    this.panel.refineNow(pick !== undefined && Math.abs(pick - drawn) > 1e-6 * drawn ? { measureAt: pick } : {})
+    return true
+  }
+
   private summarise(result: MatrixResult): Array<string | HTMLElement> {
     const raster = this.level === 'bin' ? poolingNote(result.nrows, result.ncols) : null
     return [
-      ...blockSummary(this.props.binsize, result, this.props.noun),
+      ...blockSummary(this.props.binsize, result, this.props.noun, this.picked()),
       ...(raster === null ? [] : [` · ${raster.phrase}`]),
       ' · ',
       this.panel.viewNote,

@@ -115,6 +115,7 @@ import { canvasToPng, chooseSaveTarget, copyPngToClipboard, copyTextToClipboard,
 import { icon, iconButton } from './icons'
 import { messageToast } from './toast'
 import { ParamForm } from './ParamForm'
+import type { TaskResolutions } from '../analysis/workspace'
 import { resizeHandle } from './resizeHandle'
 import { VectorPage } from './vector'
 
@@ -156,6 +157,8 @@ const FIGURE_EXPORT_DPI = 300
 
 /** Distinguishes the ids of two drawers mounted at once — a session, and a test. */
 let drawers = 0
+/** Ids for the *Resolution* row's `<label for>`, one per form built. */
+let resolutionRows = 0
 
 export interface AnalysisDrawerOptions {
   runner: AnalysisRunner
@@ -172,6 +175,10 @@ export interface AnalysisDrawerOptions {
   blocked?(): string | null
   /** The framing a run started now would be a record of (§18.4). */
   framing(): AnalysisFraming | null
+  /** A task's *Resolution* row, where there is a choice ({@link TaskResolutions}). */
+  resolutions?(task: AnalysisTask): TaskResolutions | null
+  /** The reader chose a resolution on a task's *Resolution* row. */
+  chooseResolution?(task: AnalysisTask, binsize: number): void
   /** The close button was pressed. The owner clears its own idea of what is open. */
   onClose(): void
   /**
@@ -964,15 +971,18 @@ export class AnalysisDrawer {
   private syncForm(task: AnalysisTask, context: AnalysisContext | null): void {
     if (context === null) return
     if (this.form !== null) {
+      this.paintResolution(task)
       this.form.setContext(context)
       return
     }
     this.params = recallParamsFor(task, memoryOf(context))
     const runner = this.options.runner
+    const lead = this.resolutionRow(task)
     const form = new ParamForm({
       specs: task.params,
       context,
       value: this.params,
+      ...(lead === null ? {} : { lead }),
       onChange: (next) => this.onParams(next),
       // The runner's, because this form is rebuilt whenever the task changes
       // and a `.pairs` dropped on P(s) must still be there on the way back —
@@ -988,6 +998,58 @@ export class AnalysisDrawer {
     // choices reach the estimate.
     this.params = form.value
     this.formSlot.replaceChildren(form.el)
+  }
+
+  /** The *Resolution* row's select, while the form in the drawer has one. */
+  private resolutionSelect: HTMLSelectElement | null = null
+
+  /**
+   * The *Resolution* row (§18.4): the resolution the task reads the map at,
+   * first in the form because every row after it that counts in bins counts in
+   * its bins. The one the file was opened at unless the crumb row picks
+   * another, and any rung of the ladder for this task alone. `null` where there
+   * is nothing to choose.
+   */
+  private resolutionRow(task: AnalysisTask): HTMLElement | null {
+    this.resolutionSelect = null
+    const choice = this.options.resolutions?.(task) ?? null
+    if (choice === null) return null
+    const id = `analysis-resolution-${resolutionRows++}`
+    const select = el('select', { class: 'select res-task', attrs: { id } }) as HTMLSelectElement
+    select.addEventListener('change', () => {
+      const binsize = Number(select.value)
+      if (Number.isFinite(binsize) && binsize > 0) this.options.chooseResolution?.(task, binsize)
+    })
+    this.resolutionSelect = select
+    this.paintResolution(task)
+    return el(
+      'div',
+      { class: 'param-row' },
+      el(
+        'label',
+        { class: 'field param-field', attrs: { for: id } },
+        el('span', { class: 'field-label', text: 'Resolution' }),
+        select,
+      ),
+      el('div', {
+        class: 'hint',
+        text: 'The bin size the map is read at; every setting in bins below counts these.',
+      }),
+    )
+  }
+
+  /** Fill the *Resolution* row from the host's answer now. */
+  private paintResolution(task: AnalysisTask): void {
+    const select = this.resolutionSelect
+    if (select === null) return
+    const choice = this.options.resolutions?.(task) ?? null
+    if (choice === null) return
+    select.replaceChildren(
+      ...choice.options.map((option) =>
+        el('option', { value: String(option.binsize), text: option.label, attrs: { title: option.title } }),
+      ),
+    )
+    select.value = String(choice.value)
   }
 
   private onParams(next: Params): void {

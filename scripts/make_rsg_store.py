@@ -882,8 +882,8 @@ def yeast_landscape() -> dict:
 def yeast_deck() -> dict:
     """Hi-C, micro-C and PCP of one locus, three across, with MNase and the genes under each."""
     # One kilobase each: the three files share no rung (micro-C halves from 50 bp, the Hi-C doubles from
-    # 1 kb, PCP runs 5 bp to 25 kb), so each cell is named at the closest it has to the others, and the
-    # deck's own *match all resolutions* has nothing to move. A lane is matched to its cell by this very
+    # 1 kb, PCP runs 5 bp to 25 kb), so each cell is named at the closest it has to the others; the deck
+    # reads every map at the first map's resolution on its own ladder. A lane is matched to its cell by this very
     # string, which is why it is written once here and used for both.
     hic, pcp = f"{HIC_MYCO_G1}::resolutions/1000", f"{PCP}::resolutions/1000"
     maps = {hic: "Hi-C · Meneu et al. 2025, G1", pcp: "PCP · Delamarre et al. 2025, G1"}

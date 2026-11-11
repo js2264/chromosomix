@@ -55,7 +55,17 @@ import { blockSummary } from './mapSummary'
 import { icon, iconButton } from './icons'
 import { presentationOf, secondBlock, type CompareRead, type LowerRead } from './compare'
 import type { LowerPresentation } from './LowerReading'
-import { attachRefine, poolingRung, previewRung, rungsOf, type BlockLadder } from './refine'
+import {
+  attachRefine,
+  planFields,
+  previewRung,
+  readPlan,
+  refineEnabled,
+  rungsOf,
+  type BlockLadder,
+  type PickedResolution,
+  type ReadPlan,
+} from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox, featureSuggestions, locusPlaceholder } from './SearchBox'
 import { stepper } from './Stepper'
@@ -66,19 +76,19 @@ export interface RegionViewProps {
   /** Sibling rungs of a laddered file (§3.4); absent for a plain one. */
   rungs?: readonly string[]
   /**
-   * Bins of this map summed into one drawn cell, because the reader asked for a
-   * resolution the file does not store (§3.4).
-   *
-   * The factor, not the bin size: a 10 kb rung derived from a 2 kb map is `5`,
-   * and the effective resolution on screen is this map's bin size times it. The
-   * base rung is the map that is *open* — picking a derived resolution navigates
-   * to it — so every read here is an ordinary one carrying an explicit plan,
-   * and the worker snaps that plan to each sequence's own grid so the cells hold
-   * the same sums wherever the reader pans (`worker/reader.worker.ts`).
-   *
-   * Absent, or 1, is every view of every file until somebody adds one.
+   * The resolution picked (§3.4), asked live, and read in place when it
+   * changes: a rung the file stores, or one the reader added — that rung's bins
+   * summed `factor` to a cell, a plan the worker snaps to each sequence's own
+   * grid so the cells hold the same sums wherever the reader pans. A pick wins
+   * over *Refine on zoom*. Absent or `null` is no pick: the screen's resolution
+   * while the preference is ticked, the open map as memory allows while not.
    */
-  binsPerCell?: number
+  picked?: () => PickedResolution | null
+  /**
+   * Told the bin size this view's zoom is reading at, whenever it changes: what
+   * the other maps of a deck follow while the zoom picks (§16.2).
+   */
+  onZoomTarget?: (binsize: number | null) => void
   /**
    * A control the session puts on the title line, after the box.
    *
@@ -947,9 +957,12 @@ export class RegionView {
       ceiling,
       binsize: this.props.binsize,
       rungs: rungsOf(this.props.rungs ?? []),
-      // The grid the reader declared (§3.4), so a zoom cannot quietly read past
-      // the resolution the axis is labelled with.
-      floor: () => this.props.binsPerCell ?? 1,
+      // Beside a second file, the open rung only (§5.7).
+      second: this.props.compare !== undefined,
+      // The pick, asked live (§3.4), so a zoom cannot quietly read past the
+      // resolution the axis is labelled with.
+      ...(this.props.picked === undefined ? {} : { picked: this.props.picked }),
+      ...(this.props.onZoomTarget === undefined ? {} : { onTarget: this.props.onZoomTarget }),
       read: (rowExtent, colExtent, rung, binsPerCell) => {
         const own = this.props.client.cancellable<'matrix'>(
           query(rowExtent, colExtent, rung, binsPerCell),
@@ -980,30 +993,24 @@ export class RegionView {
   }
 
   /**
-   * `{ binsPerCell }` where the reader declared a resolution, else nothing.
+   * How a window is read (§2, §3.4): screen-sized while the zoom picks the
+   * resolution, as memory allows at the pick — or the open map — otherwise
+   * ({@link readPlan}, one rule for this view's first read and its ladder's).
    *
-   * Spread into every `matrix` request this view makes, so the first read and
-   * every refine after it are on one grid. Absent rather than `1` on the
-   * ordinary path, because `1` is a plan and absent is *choose one*: the reader
-   * fits the finest grid the window's cell count allows, which is what a view of
-   * a whole chromosome has always relied on.
+   * Never a rung beside a second file, whose ladder need not have it (§5.7):
+   * its window is read at the open map's bins, pooled where it must be.
    */
-  /**
-   * `{ rung }` where a sibling rung draws this window's first picture from
-   * fewer pixels with nothing lost ({@link poolingRung}), else nothing.
-   *
-   * Not with a declared grid, which is a whole number of the *open* map's bins
-   * (§3.4), nor beside a second file, whose ladder need not have the rung.
-   */
-  private firstRung(rows: [number, number], cols: [number, number]): { rung?: string } {
-    if ((this.props.binsPerCell ?? 1) > 1 || this.props.compare !== undefined) return {}
-    const rung = poolingRung(rungsOf(this.props.rungs ?? []), rows, cols, this.props.binsize)
-    return rung === undefined ? {} : { rung }
-  }
-
-  private pooled(): { binsPerCell?: number } {
-    const k = this.props.binsPerCell ?? 1
-    return k > 1 ? { binsPerCell: k } : {}
+  private planOf(rows: [number, number], cols: [number, number]): ReadPlan {
+    const span = Math.max(rows[1] - rows[0], cols[1] - cols[0])
+    return readPlan({
+      rungs: this.props.compare === undefined ? rungsOf(this.props.rungs ?? []) : [],
+      binsize: this.props.binsize,
+      view: span,
+      read: span,
+      screen: this.panel.screenWidth(),
+      pick: this.props.picked?.() ?? null,
+      refining: refineEnabled(),
+    })
   }
 
   /**
@@ -1013,10 +1020,12 @@ export class RegionView {
    * reader is given, and the same window a few rungs up is a fraction of its
    * reads and of its cells.
    *
-   * Only for one map read whole: not under a second file or a second reading
-   * below the diagonal, which would each want a stand-in of their own; not on a
-   * grid the reader chose (`binsPerCell`), which is a resolution they have
-   * committed to; and not across a circle's origin, whose read is planned
+   * Only for the open map read as memory allows — *Refine on zoom* off and
+   * nothing picked: on, the first read is already screen-sized ({@link
+   * planOf}), and a pick is a resolution the reader has committed to. Only for
+   * one map read whole: not under a second file or a second reading below the
+   * diagonal, which would each want a stand-in of their own; and not across a
+   * circle's origin, whose read is planned
    * against the rung it is asked at. A stand-in that fails is a picture that
    * comes later, never an error: the asked read follows it either way.
    *
@@ -1034,14 +1043,21 @@ export class RegionView {
     wrap: [number, number] | undefined,
   ): Promise<MatrixResult | null> {
     if (
+      // A screen-sized first read is already the cheapest picture of the
+      // window there is ({@link planOf}): a stand-in for it would be a
+      // second read of the same thing, coarser.
+      refineEnabled() ||
       wrap !== undefined ||
       this.props.compare !== undefined ||
       this.props.lowerRead !== undefined ||
-      (this.props.binsPerCell ?? 1) > 1
+      // Nor at a pick: the stand-in is a coarser rung of the open one, and a
+      // pick is a resolution the reader has committed to.
+      (this.props.picked?.() ?? null) !== null
     ) {
       return null
     }
-    const rung = previewRung(rungsOf(this.props.rungs ?? []), rows, cols ?? rows, this.props.binsize)
+    const asked = this.planOf(rows, cols ?? rows)
+    const rung = previewRung(rungsOf(this.props.rungs ?? []), rows, cols ?? rows, this.props.binsize, asked.grid)
     if (rung === undefined) return null
     try {
       const coarse: MatrixResult = await this.props.client.request<'matrix'>({
@@ -1086,7 +1102,7 @@ export class RegionView {
       this.props.onChangeRegion(region)
       return
     }
-    const bin = this.props.binsize * (this.props.binsPerCell ?? 1)
+    const bin = this.props.picked?.()?.binsize ?? this.props.binsize
     const pad = SEARCH_CONTEXT_BINS * bin
     const last = Math.max(window.end, (bins - 1) * this.props.binsize)
     const start = Math.max(0, window.start - pad)
@@ -1163,9 +1179,8 @@ export class RegionView {
         const ask = {
           kind: 'matrix' as const,
           rows: [lo, hi] as [number, number],
-          ...this.firstRung([lo, hi], [lo, hi]),
+          ...planFields(this.planOf([lo, hi], [lo, hi])),
           ...(wrap === undefined ? {} : { wrap }),
-          ...this.pooled(),
           balance: this.props.balance,
           ...(this.props.value === undefined ? {} : { value: this.props.value }),
         }
@@ -1221,8 +1236,7 @@ export class RegionView {
         kind: 'matrix' as const,
         rows: [lo, hi] as [number, number],
         cols: [lo2, hi2] as [number, number],
-        ...this.firstRung([lo, hi], [lo2, hi2]),
-        ...this.pooled(),
+        ...planFields(this.planOf([lo, hi], [lo2, hi2])),
         balance: this.props.balance,
         ...(this.props.value === undefined ? {} : { value: this.props.value }),
       }
@@ -1292,15 +1306,50 @@ export class RegionView {
     }
   }
 
+  /**
+   * The resolution asked for, which is the one drawn wherever the window allows
+   * (§3.4): the pick, or the open map's with *Refine on zoom* off and nothing
+   * picked; `undefined` while the zoom picks it.
+   */
+  private picked(): number | undefined {
+    const pick = this.props.picked?.() ?? null
+    if (pick !== null) return pick.binsize
+    return refineEnabled() ? undefined : this.props.binsize
+  }
+
+  /**
+   * The resolution picked changed (§3.4): read it where the reader stands, as
+   * a refine is read, rather than rebuilding the view from its named region —
+   * which threw the zoom away — and say on the line at once what is drawn.
+   *
+   * @returns whether it was read in place: `false` before a block is on screen,
+   *   where there is no window to keep and the view is rebuilt instead.
+   */
+  resolutionChanged(): boolean {
+    const held = this.armed
+    const shown = this.panel.block
+    if (held === null || shown === null || this.ladder === null) return false
+    if (held.cols === undefined) this.describeMatch(held.rows, shown)
+    else this.describePair(shown)
+    // A pick of another grid than the one drawn is the reader changing the
+    // resolution, not the magnification: its block is measured for a range of
+    // its own when it lands (§7.1), as a map opened at that rung always was.
+    // Unticking, which picks the rung already drawn, keeps the range on screen.
+    const pick = this.picked()
+    const drawn = (shown.binsize ?? this.props.binsize) * Math.max(1, shown.binsPerCell ?? 1)
+    this.panel.refineNow(pick !== undefined && Math.abs(pick - drawn) > 1e-6 * drawn ? { measureAt: pick } : {})
+    return true
+  }
+
   /** The readout for a rectangular block between two ranges. */
   private describePair(result: MatrixResult): void {
     this.matched.classList.remove('is-genome')
-    this.matched.replaceChildren(...blockSummary(this.props.binsize, result), ' · ', this.panel.viewNote)
+    this.matched.replaceChildren(...blockSummary(this.props.binsize, result, 'sequence', this.picked()), ' · ', this.panel.viewNote)
   }
 
   private describeMatch(parsed: ParsedRange, result: MatrixResult): void {
     this.matched.classList.toggle('is-genome', parsed.kind === 'genome')
-    const parts = blockSummary(this.props.binsize, result)
+    const parts = blockSummary(this.props.binsize, result, 'sequence', this.picked())
     // The one part of the line that moves, and last, so a pan changes only the
     // tail of it — see `MatrixPanel.viewNote`.
     parts.push(' · ', this.panel.viewNote)

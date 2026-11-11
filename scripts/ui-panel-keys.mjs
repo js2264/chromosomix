@@ -69,19 +69,22 @@ const browser = await chromium.launch({
 })
 const errors = []
 
-async function scene(name, run, { azerty = false, scale = 1 } = {}) {
+async function scene(name, run, { azerty = false, scale = 1, pick = false } = {}) {
   console.log(`\n== ${name}`)
   const context = await browser.newContext({ viewport: { width: 1920, height: 1100 }, deviceScaleFactor: scale })
   await context.addInitScript(
-    ({ azerty, map }) => {
+    ({ azerty, map, pick }) => {
       // A browser with no directory picker connects a folder as a snapshot,
       // which an input — and so Playwright — can answer.
       delete window.showDirectoryPicker
+      // The resolution keys and the bar's `+` pick a resolution, and a pick is
+      // the reader's with *Refine on zoom* off (§2): greyed while it is on.
+      if (pick) window.localStorage.setItem('chromosomix:refine', 'off')
       if (!azerty) return
       const keyboard = { getLayoutMap: () => Promise.resolve(new Map(Object.entries(map))), lock: () => Promise.resolve(), unlock: () => {} }
       Object.defineProperty(Navigator.prototype, 'keyboard', { configurable: true, get: () => keyboard })
     },
-    { azerty, map: AZERTY },
+    { azerty, map: AZERTY, pick },
   )
   const page = await context.newPage()
   page.on('pageerror', (e) => errors.push(`${name}: ${String(e)}`))
@@ -136,10 +139,10 @@ function columns(page) {
   )
 }
 
-/** The lit stop of the resolution bar, the file's entry in the hash, and the map's window. */
+/** The resolution the bar's box names, the file's entry in the hash, and the map's window. */
 function where(page) {
   return page.evaluate(() => {
-    const lit = document.querySelector('.res-stop.current span')?.textContent ?? document.querySelector('.res-pick')?.selectedOptions?.[0]?.textContent
+    const lit = document.querySelector('.res-pick')?.selectedOptions?.[0]?.textContent
     const hash = decodeURIComponent(location.hash)
     const entry = /resolutions\/(\d+)/.exec(hash)?.[1]
     const coarsen = /coarsen=(\d+)/.exec(hash)?.[1]
@@ -170,12 +173,12 @@ async function connectFolder(page) {
   await sleep(1500)
 }
 
-/** Wait for the resolution bar to light a stop other than `was`. */
+/** Wait for the resolution bar's box to name a rung other than `was`. */
 async function steppedFrom(page, was) {
   await page
     .waitForFunction(
       (was) => {
-        const lit = document.querySelector('.res-stop.current span')?.textContent ?? document.querySelector('.res-pick')?.selectedOptions?.[0]?.textContent
+        const lit = document.querySelector('.res-pick')?.selectedOptions?.[0]?.textContent
         return lit !== undefined && lit !== was && document.querySelector('.heatmap-canvas') !== null && !document.body.textContent.includes('Opening ')
       },
       was,
@@ -185,9 +188,9 @@ async function steppedFrom(page, was) {
   await sleep(2000)
 }
 
-/** The rung the bar has lit: a stop, or the dropdown's choice on a ladder past nine rungs. */
+/** The rung the bar's box names. */
 const litStop = (page) =>
-  page.evaluate(() => document.querySelector('.res-stop.current span')?.textContent ?? document.querySelector('.res-pick')?.selectedOptions?.[0]?.textContent)
+  page.evaluate(() => document.querySelector('.res-pick')?.selectedOptions?.[0]?.textContent)
 
 /** Add a resolution through the bar's `+`, as a reader types one. */
 async function addRung(page, kb) {
@@ -311,14 +314,14 @@ try {
     console.log('palette:', await page.evaluate(() =>
       [...document.querySelectorAll('.palette-row, .cmd-row, [role="option"]')].map((row) => row.textContent?.replace(/\s+/g, ' ').trim()).slice(0, 6).join(' | ')))
     await shot('pk10-ecoli-palette')
-  })
+  }, { pick: true })
 
   await scene('QWERTY: − and + over rungs the reader added', async ({ page, shot, shotOf }) => {
     // The yeast cooler stores one resolution, so the two keys start greyed;
     // each rung added through the `+` is one more stop for them to walk.
     await page.goto(YEAST)
     await opened(page)
-    console.log('one rung  ', await litStop(page), await page.evaluate(() => document.querySelector('.res-stop')?.textContent))
+    console.log('one rung  ', await litStop(page), await page.evaluate(() => document.querySelector('.res-pick')?.selectedOptions?.[0]?.textContent))
     // Each rung added is stood on as it is added, so the walk starts back at the file's own.
     for (const kb of [2, 5]) await addRung(page, kb)
     let was = await litStop(page)
@@ -345,7 +348,7 @@ try {
     await steppedFrom(page, was)
     console.log('+         ', await litStop(page))
     await shotOf('pk21-yeast-dropdown-bar', '.crumb-res')
-  })
+  }, { pick: true })
 
   // ------------------------------------------------------------ AZERTY
   await scene('AZERTY: the row and the key left of 1', async ({ page, shot, shotOf }) => {
@@ -414,7 +417,7 @@ try {
     await azerty(page, { key: '+', code: 'Equal', shiftKey: true })
     await steppedFrom(page, was)
     console.log('+ ⇧       ', await where(page))
-  }, { azerty: true })
+  }, { azerty: true, pick: true })
   // ------------------------------------------------------------ close-ups
   // The badges at three times their size, where a superscript `²` can be told
   // from the `2` of the column beside it: the Files and General headings, and

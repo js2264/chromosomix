@@ -29,6 +29,7 @@ import { el } from '../ui/dom'
 import { begin } from '../perf/rendered'
 import {
   differsOnlyInFocus,
+  differsOnlyInResolution,
   differsOnlyInPresentation,
   differsOnlyInPresentationOrScore,
   hasLower,
@@ -111,6 +112,7 @@ export class SessionRouter {
       this.session.assembly = null
       this.session.assemblySource = null
       this.session.mounted = null
+      this.session.breadcrumb?.destroy()
       this.session.breadcrumb = null
       this.session.breadcrumbHost.replaceChildren()
       // The annotation worker belongs to the open file, and there is no longer
@@ -405,6 +407,25 @@ export class SessionRouter {
       this.session.current.showFocus?.(state.focus)
       this.session.mounted = state
       this.session.breadcrumb?.render(state)
+      this.session.host.activity(this.session)
+      return
+    }
+
+    // **A resolution picked is read in place** (§3.4), where the view can: the
+    // block on screen is swapped where the reader stands, as a refine swaps
+    // one. Rebuilt from its named region, the view threw away the window the
+    // reader had zoomed to, so every pick was a jump back to the whole sequence.
+    // A view that cannot — no block in hand yet, a gate — says so, and is
+    // rebuilt below.
+    if (
+      this.mounting === null &&
+      this.session.mounted !== null &&
+      differsOnlyInResolution(this.session.mounted, state) &&
+      this.session.current?.resolutionChanged?.() === true
+    ) {
+      this.session.mounted = state
+      this.session.breadcrumb?.render(state)
+      this.session.analysisResolutionMoved()
       this.session.host.activity(this.session)
       return
     }

@@ -1155,8 +1155,12 @@ export class MetaCooler {
    * Load one dense block (§5.2, §5.3). Async only because the byte source may
    * be; the read itself is four slices and no scan.
    */
-  async matrix(q: MatrixQuery, hint: string = DENSE_HINTS.range): Promise<DenseMatrix> {
-    return readDenseMatrix(this, q, hint)
+  async matrix(
+    q: MatrixQuery,
+    hint: string = DENSE_HINTS.range,
+    cancelled?: () => boolean,
+  ): Promise<DenseMatrix> {
+    return readDenseMatrix(this, q, hint, cancelled)
   }
 
   /** The whole intra-genome matrix of one MAG — the §5.2 genome view. */

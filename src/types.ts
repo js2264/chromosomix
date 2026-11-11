@@ -478,28 +478,28 @@ export interface ViewState {
    */
   level?: 'bin' | 'contig' | 'genome'
   /**
-   * The effective bin size, in bp, where the reader asked for one the file does
-   * not store (§3.4).
+   * The resolution the reader **picked**, in bp (§3.4): a rung the file stores,
+   * or one they added — a whole number of a stored rung's bins summed, which a
+   * reader who wants a 10 kb picture of a file that stops at 4 kb can have for
+   * free. Resolved against the file's ladder wherever it is read
+   * (`Session.pickedResolution`): the stored rung of that size, else the
+   * coarsest stored rung that divides it (`metacooler/coarsen.ts`), so a link
+   * naming an added resolution reads the same on a machine that never added it.
    *
-   * A `.mcool` carries the rungs whoever ran `cooler zoomify` chose to write,
-   * and a reader who wants a 10 kb picture of a file that stops at 4 kb can have
-   * one for free: a 10 kb bin is a whole number of stored bins added up. This
-   * says which resolution they asked for; `metacooler/coarsen.ts` says which rung
-   * it is summed from and by how much, and the {@link uri} names that rung.
+   * **A pick in the link wins** over *Refine on zoom*: the map is drawn at it,
+   * coarser only where the window is too wide for it, and the row shows the
+   * tick off. Absent, the preference decides — the screen's resolution while
+   * it is ticked, the rung `uri` names as memory allows while it is not.
    *
-   * **Part of the shared view**, for the reason {@link balance} is: a 10 kb map
-   * and a 1 kb map of the same window are different pictures, and a link that
-   * dropped which one you were looking at would send its recipient a blockier or
-   * a finer map with nothing on screen saying so. Which resolutions a reader has
-   * *added to the ladder* is a different question and travels with the tracks
-   * they loaded (`state/resolutions.ts`).
-   *
-   * Absent is the open rung's own bins, which is every view of every file until
-   * somebody presses `+`. A value this file cannot be read at is ignored rather
-   * than refused — a link is a string a stranger can edit, and the answer closest
-   * to what was asked for is the file's own grid.
+   * Its own key rather than a new entry in `uri`, because picking a rung is a
+   * change of the picture and not of the file: the block on screen is swapped
+   * where the reader stands. **Part of the shared view**, for the reason
+   * {@link balance} is: a 10 kb map and a 1 kb map of the same window are
+   * different pictures. `coarsen=`, the name an added resolution had, is read
+   * as this key. A value the file cannot reach is ignored rather than refused —
+   * a link is a string a stranger can edit.
    */
-  coarsen?: number
+  resolution?: number
   /**
    * Multiply counts by their bin weights — cooler's balanced matrix (§6.4).
    *
