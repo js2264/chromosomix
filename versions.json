@@ -257,10 +257,10 @@
   "pulls": [
     {
       "number": 170,
-      "commit": "2d74240",
+      "commit": "d8ec4f0",
       "title": "Open a map at the screen's resolution, sharpen it as you zoom, and give the resolution a row of its own",
       "branch": "js/adaptive-resolution",
-      "date": "2026-11-10T16:14:38Z"
+      "date": "2026-11-11T05:17:42Z"
     },
     {
       "number": 168,
